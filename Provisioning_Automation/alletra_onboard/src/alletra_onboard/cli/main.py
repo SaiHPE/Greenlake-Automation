@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import uvicorn
@@ -51,16 +52,24 @@ def status() -> None:
 
 
 @app.command("preflight")
-def preflight(file: str = typer.Option(..., "--file", help="CSV file with array work items.")) -> None:
+def preflight(
+    file: str = typer.Option(..., "--file", help="CSV file with array work items."),
+    live_greenlake: bool = typer.Option(
+        False,
+        "--live-greenlake",
+        help="Run live read-only GreenLake checks after local validation.",
+    ),
+) -> None:
     settings = load_settings()
     service = PreflightService(settings)
     items = load_work_items_csv(Path(file))
     for item in items:
-        report = service.run_local(item)
+        report = asyncio.run(service.run(item, live_greenlake=live_greenlake))
         table = Table(title=f"Preflight {item.serial_number} ({report.overall_status.value})")
         table.add_column("Check")
         table.add_column("Status")
         table.add_column("Message")
+        table.add_column("Remediation")
         for check in report.checks:
-            table.add_row(check.name, check.status.value, check.message)
+            table.add_row(check.name, check.status.value, check.message, check.remediation or "")
         console.print(table)
