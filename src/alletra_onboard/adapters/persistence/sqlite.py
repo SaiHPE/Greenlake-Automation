@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+from pathlib import Path
+
+from alletra_onboard.domain.models import RunEvent, RunRecord
+
+
+class SqliteRunStore:
+    def __init__(self, database_path: Path) -> None:
+        self.database_path = database_path
+
+    def initialize(self) -> None:
+        self.database_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._connect() as connection:
+            connection.execute("PRAGMA journal_mode=WAL;")
+            connection.execute("PRAGMA busy_timeout=5000;")
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS runs (
+                    run_id TEXT PRIMARY KEY,
+                    serial_number TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    current_phase TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS run_events (
+                    event_id TEXT PRIMARY KEY,
+                    run_id TEXT NOT NULL,
+                    phase TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+
+    def upsert_run(self, run: RunRecord) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO runs (run_id, serial_number, status, current_phase, payload, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id) DO UPDATE SET
+                    status = excluded.status,
+                    current_phase = excluded.current_phase,
+                    payload = excluded.payload,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    run.run_id,
+                    run.serial_number,
+                    run.status.value,
+                    run.current_phase.value,
+                    run.model_dump_json(),
+                    run.updated_at.isoformat(),
+                ),
+            )
+
+    def get_run(self, run_id: str) -> RunRecord | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT payload FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+        if row is None:
+            return None
+        return RunRecord.model_validate(json.loads(row[0]))
+
+    def list_runs(self) -> list[RunRecord]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT payload FROM runs ORDER BY updated_at DESC").fetchall()
+        return [RunRecord.model_validate(json.loads(row[0])) for row in rows]
+
+    def append_event(self, event: RunEvent) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO run_events (event_id, run_id, phase, event_type, payload, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.event_id,
+                    event.run_id,
+                    event.phase.value,
+                    event.event_type,
+                    event.model_dump_json(),
+                    event.created_at.isoformat(),
+                ),
+            )
+
+    def _connect(self) -> sqlite3.Connection:
+        return sqlite3.connect(self.database_path, timeout=5)
