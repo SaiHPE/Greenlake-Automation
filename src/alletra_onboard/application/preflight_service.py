@@ -1,12 +1,33 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
+from alletra_onboard.application.greenlake_preflight import (
+    GreenLakePreflightRunner,
+    build_greenlake_read_preflight,
+)
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import ArrayWorkItem, CheckStatus, PreflightCheck, PreflightReport
 
 
 class PreflightService:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        greenlake_factory: Callable[[Settings], GreenLakePreflightRunner] | None = None,
+    ) -> None:
         self.settings = settings
+        self.greenlake_factory = greenlake_factory or build_greenlake_read_preflight
+
+    async def run(self, item: ArrayWorkItem, *, live_greenlake: bool = False) -> PreflightReport:
+        report = self.run_local(item)
+        if not live_greenlake:
+            return report
+
+        checks = [*report.checks]
+        checks.extend(await self.greenlake_factory(self.settings).run(item))
+        overall = self._overall(checks)
+        return PreflightReport(serial_number=item.serial_number, overall_status=overall, checks=checks)
 
     def run_local(self, item: ArrayWorkItem) -> PreflightReport:
         checks = [

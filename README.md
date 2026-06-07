@@ -19,6 +19,8 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .[dev]
 onboard status
+onboard preflight --file config\arrays.example.csv
+onboard preflight --file config\arrays.example.csv --live-greenlake
 onboard api
 ```
 
@@ -33,3 +35,5 @@ Copy `config/settings.example.toml` to `config/settings.toml` and provide secret
 - `GL_MEMBER_WORKSPACE_ID`
 
 Do not commit secrets or real subscription keys.
+
+`--live-greenlake` performs read-only checks against GreenLake: OAuth token fetch, Service Catalog provision lookup, Device Management serial lookup, and Subscription Management key lookup. Without the flag, preflight remains fully local/offline.
