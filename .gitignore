@@ -1,0 +1,26 @@
+# Sensitive / lab-specific — never commit
+*.docx
+docx_images/
+*.csv
+*.json
+*.env
+.env.*
+
+# Raw research scratch files
+*.txt
+*.html
+*.yaml
+*.pdf
+*.db
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.bak
+
+# Claude internal
+.claude/
