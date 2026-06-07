@@ -1,7 +1,7 @@
 ---
 title: "System Webhook API - v1beta1"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/event/public/openapi/webhook-v1beta1/system-webhook-v1beta1-nbapi.md"
-scraped_at: "2026-06-07T05:46:31.359355+00:00Z"
+scraped_at: "2026-06-07T06:13:36.543026+00:00Z"
 ---
 
 # System Webhook API - v1beta1

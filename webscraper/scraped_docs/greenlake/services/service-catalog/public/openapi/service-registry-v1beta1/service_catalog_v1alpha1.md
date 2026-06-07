@@ -1,7 +1,7 @@
 ---
 title: "Service Registry"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/openapi/service-registry-v1beta1/service_catalog_v1alpha1.md"
-scraped_at: "2026-06-07T05:46:37.967793+00:00Z"
+scraped_at: "2026-06-07T06:13:39.820134+00:00Z"
 ---
 
 # Service Registry

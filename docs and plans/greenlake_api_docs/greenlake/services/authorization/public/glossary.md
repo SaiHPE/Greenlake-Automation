@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Authorization glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/authorization/public/glossary.md"
-scraped_at: "2026-06-07T05:45:57.532288+00:00Z"
+scraped_at: "2026-06-07T06:13:21.666275+00:00Z"
 ---
 
 # HPE GreenLake for Authorization glossary

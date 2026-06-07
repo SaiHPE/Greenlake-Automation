@@ -1,7 +1,7 @@
 ---
 title: "Manage webhooks and events in the HPE GreenLake cloud UI"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/event/public/ui.md"
-scraped_at: "2026-06-07T05:46:10.014073+00:00Z"
+scraped_at: "2026-06-07T06:13:27.544505+00:00Z"
 ---
 
 # Manage webhooks and events in the HPE GreenLake cloud UI

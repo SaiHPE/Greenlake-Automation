@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Service Catalog"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public.md"
-scraped_at: "2026-06-07T05:46:13.827196+00:00Z"
+scraped_at: "2026-06-07T06:13:28.887463+00:00Z"
 ---
 
 # HPE GreenLake for Service Catalog

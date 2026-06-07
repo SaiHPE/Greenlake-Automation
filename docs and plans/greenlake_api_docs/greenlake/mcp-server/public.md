@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake MCP Servers"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/mcp-server/public.md"
-scraped_at: "2026-06-07T05:45:53.774219+00:00Z"
+scraped_at: "2026-06-07T06:13:19.834595+00:00Z"
 ---
 
 # HPE GreenLake MCP Servers

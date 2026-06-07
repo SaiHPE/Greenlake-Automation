@@ -1,7 +1,7 @@
 ---
 title: "Group Operating System Installation Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/group-os-install.md"
-scraped_at: "2026-06-07T05:46:02.240991+00:00Z"
+scraped_at: "2026-06-07T06:13:23.466585+00:00Z"
 ---
 
 # Group Operating System Installation Job

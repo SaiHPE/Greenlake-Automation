@@ -1,7 +1,7 @@
 ---
 title: "HPE Greenlake For Object Storage REST APIs."
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/object-storage/public/openapi/object-storage-public-v1alpha1.md"
-scraped_at: "2026-06-07T05:46:34.244561+00:00Z"
+scraped_at: "2026-06-07T06:13:38.021085+00:00Z"
 ---
 
 # HPE Greenlake For Object Storage REST APIs.

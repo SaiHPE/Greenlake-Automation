@@ -1,7 +1,7 @@
 ---
 title: "TEMPLATE Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/template.md"
-scraped_at: "2026-06-07T05:46:06.163407+00:00Z"
+scraped_at: "2026-06-07T06:13:25.192439+00:00Z"
 ---
 
 # TEMPLATE Job

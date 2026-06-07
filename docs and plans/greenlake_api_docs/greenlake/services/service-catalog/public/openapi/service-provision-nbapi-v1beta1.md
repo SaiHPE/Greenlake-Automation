@@ -1,7 +1,7 @@
 ---
 title: "Service provision management"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/openapi/service-provision-nbapi-v1beta1.md"
-scraped_at: "2026-06-07T05:46:37.064891+00:00Z"
+scraped_at: "2026-06-07T06:13:39.417529+00:00Z"
 ---
 
 # Service provision management

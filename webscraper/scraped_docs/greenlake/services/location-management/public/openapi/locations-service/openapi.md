@@ -1,7 +1,7 @@
 ---
 title: "Locations API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/location-management/public/openapi/locations-service/openapi.md"
-scraped_at: "2026-06-07T05:46:33.405118+00:00Z"
+scraped_at: "2026-06-07T06:13:37.456558+00:00Z"
 ---
 
 # Locations API

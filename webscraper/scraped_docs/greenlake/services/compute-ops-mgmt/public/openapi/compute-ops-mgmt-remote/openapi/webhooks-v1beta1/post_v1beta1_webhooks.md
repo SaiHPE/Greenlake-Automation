@@ -1,0 +1,234 @@
+---
+title: "POST /compute-ops-mgmt/v1beta1/webhooks"
+source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/public/openapi/compute-ops-mgmt-remote/openapi/webhooks-v1beta1/post_v1beta1_webhooks.md"
+scraped_at: "2026-06-07T06:14:55.697836+00:00Z"
+---
+
+# Create a webhook
+
+Creates a webhook.
+
+Endpoint: POST /compute-ops-mgmt/v1beta1/webhooks
+Version: latest
+Security: Bearer
+
+## Request fields (application/json):
+
+  - `name` (string, required)
+    The name associated with the webhook.
+    Example: "Server Webhook"
+
+  - `destination` (string, required)
+    User configurable https endpoint that is able to receive HTTP GET and POST requests.
+    Example: "https://example.com/webhookDestination"
+
+  - `state` (string, required)
+    The state is managed by both Compute Ops Management and the user. If the handshake fails or deliveries are consistently failing this will be set to DISABLED by the system.
+* DISABLED - Set by the user to disable the endpoint without losing configuration. Additionally can be set by the System when the handshake fails or multiple 4xx/5xx responses are received. Events are not sent while in this state.
+* ENABLED - Shows that the user has enabled the endpoint. Can only be set to ENABLED by the user which will cause the webhook to re-initiate the verification handshake, even if it has succeeded in the past.
+    Enum: "DISABLED", "ENABLED"
+
+  - `eventFilter` (string, required)
+    The OData configuration of events to receive. For more information, expand the Event Webhook section and refer to the Filtering page.
+    Example: "type eq 'compute-ops/server'"
+
+  - `headers` (object, required)
+    The set of HTTP request headers that will be included in the GET and POST requests sent to the destination.
+
+Compute Ops Management reserves any headers that begin with x-compute-ops-mgmt and will deny requests that attempt to use that value.
+    Example: {"exampleHeader":"hlCiqcLeZVPOtJNzdGqF"}
+
+## Response 201 fields (application/json):
+
+  - `name` (string)
+    The name associated with the webhook.
+    Example: "Server Webhook"
+
+  - `id` (string)
+    Unique webhook identifier.
+    Example: "36e00ac2-16fb-4dd5-8495-7e6df82fc15e"
+
+  - `type` (string)
+    The type of the resource.
+
+  - `generation` (integer)
+    Monotonically increasing update counter.
+    Example: 1
+
+  - `createdAt` (string)
+    Time of the webhook's creation in UTC.
+    Example: "2022-02-11T01:04:20.799937+00:00"
+
+  - `updatedAt` (string)
+    Time of the webhook's last update in UTC.
+    Example: "2022-03-11T01:06:30.799489+00:00"
+
+  - `destination` (string)
+    User configurable https endpoint that is able to receive HTTP GET and POST requests.
+    Example: "https://example.com/webhookDestination"
+
+  - `eventFilter` (string)
+    The OData configuration of events to receive. For more information, expand the Event Webhook section and refer to Filtering.
+    Example: "type eq 'compute-ops/server'"
+
+  - `state` (string)
+    The state is managed by both Compute Ops Management and the user. If the handshake fails or deliveries are consistently failing this will be set to DISABLED by the system.
+* DISABLED - Set by the user to disable the endpoint without losing configuration. Additionally can be set by the System when the handshake fails or multiple 4xx/5xx responses are received. Events are not sent while in this state.
+* ENABLED - Shows that the user has enabled the endpoint. Can only be set to ENABLED by the user which will cause the webhook to re-initiate the verification handshake, even if it has succeeded in the past.
+    Enum: "DISABLED", "ENABLED"
+
+  - `status` (string)
+    The current status of the webhook. This status is controlled by Compute Ops Management and is read-only for the user.
+* DISABLED - This is a result of the webhook's state being set to DISABLED by the user.
+* ACTIVE - Acknowledgment of the endpoint has succeeded, will send any events matching the webhook's eventFilter to the destination.
+* PENDING - Handshake process has begun but acknowledgement has not yet completed for the endpoint.
+* WARNING - Indicates an issue with webhook communications. Either there have been multiple recent failed deliveries or the endpoint has failed the handshake. Look at the webhook's statusReason for more information.
+* ERROR - Multiple 4xx or 5xx responses have been received from the endpoint. Reaching this status will disable the webhook.
+    Enum: "DISABLED", "ACTIVE", "PENDING", "WARNING", "ERROR"
+
+  - `statusReason` (string)
+    A description of the last status change.
+    Example: "Created"
+
+  - `resourceUri` (string)
+    The URI of this resource.
+    Example: "/compute-ops-mgmt/v1beta1/webhooks/b870f080-6448-48c5-b23a-d04f2d489174"
+
+  - `deliveriesUri` (string)
+    The URI for the deliveries associated with this resource.
+    Example: "/compute-ops-mgmt/v1beta1/webhooks/b870f080-6448-48c5-b23a-d04f2d489174/deliveries"
+
+## Response 400 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 401 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 403 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 404 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 406 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 415 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 500 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+

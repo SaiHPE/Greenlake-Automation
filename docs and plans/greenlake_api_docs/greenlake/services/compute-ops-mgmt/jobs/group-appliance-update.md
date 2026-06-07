@@ -1,7 +1,7 @@
 ---
 title: "Group Appliance Update Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/group-appliance-update.md"
-scraped_at: "2026-06-07T05:46:00.423500+00:00Z"
+scraped_at: "2026-06-07T06:13:22.513255+00:00Z"
 ---
 
 # Group Appliance Update Job

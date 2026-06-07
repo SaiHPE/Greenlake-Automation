@@ -1,7 +1,7 @@
 ---
 title: "HPE Sustainability Insight Center API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/sustainability/public.md"
-scraped_at: "2026-06-07T05:46:14.908790+00:00Z"
+scraped_at: "2026-06-07T06:13:29.651533+00:00Z"
 ---
 
 # HPE Sustainability Insight Center API

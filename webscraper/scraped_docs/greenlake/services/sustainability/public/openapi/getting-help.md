@@ -1,7 +1,7 @@
 ---
 title: "Getting help"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/sustainability/public/openapi/getting-help.md"
-scraped_at: "2026-06-07T05:46:25.274281+00:00Z"
+scraped_at: "2026-06-07T06:13:33.712686+00:00Z"
 ---
 
 # Getting help

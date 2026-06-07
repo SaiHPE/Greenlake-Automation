@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake API for Audit Logs"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/audit-logs/public/openapi/audit-logs-public/v1/audit-trail-fetch.md"
-scraped_at: "2026-06-07T05:46:44.765782+00:00Z"
+scraped_at: "2026-06-07T06:13:42.788063+00:00Z"
 ---
 
 # HPE GreenLake API for Audit Logs

@@ -1,7 +1,7 @@
 ---
 title: "Server iLO Firmware Update Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/server-ilo-firmware-update.md"
-scraped_at: "2026-06-07T05:46:04.148370+00:00Z"
+scraped_at: "2026-06-07T06:13:24.602901+00:00Z"
 ---
 
 # Server iLO Firmware Update Job

@@ -1,7 +1,7 @@
 ---
 title: "Compute Ops Management Scope Based Access Control (SBAC) - Enhanced IAM"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/authz/com_enhanced_iam_sbac.md"
-scraped_at: "2026-06-07T05:45:59.384491+00:00Z"
+scraped_at: "2026-06-07T06:13:22.412491+00:00Z"
 ---
 
 # Compute Ops Management Scope Based Access Control (SBAC) - Enhanced IAM

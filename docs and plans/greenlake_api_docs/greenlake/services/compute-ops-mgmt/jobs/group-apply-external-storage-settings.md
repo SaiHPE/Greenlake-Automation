@@ -1,7 +1,7 @@
 ---
 title: "Group Apply External Storage Settings Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/group-apply-external-storage-settings.md"
-scraped_at: "2026-06-07T05:46:00.381047+00:00Z"
+scraped_at: "2026-06-07T06:13:22.580921+00:00Z"
 ---
 
 # Group Apply External Storage Settings Job

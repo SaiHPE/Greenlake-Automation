@@ -1,7 +1,7 @@
 ---
 title: "HPE Compute Ops Management API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/public/openapi/compute-ops-mgmt-latest.md"
-scraped_at: "2026-06-07T05:46:29.487763+00:00Z"
+scraped_at: "2026-06-07T06:13:35.900087+00:00Z"
 ---
 
 # HPE Compute Ops Management API

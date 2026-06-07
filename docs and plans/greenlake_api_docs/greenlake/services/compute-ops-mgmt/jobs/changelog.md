@@ -1,7 +1,7 @@
 ---
 title: "Changelog"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/changelog.md"
-scraped_at: "2026-06-07T05:45:59.579948+00:00Z"
+scraped_at: "2026-06-07T06:13:22.457097+00:00Z"
 ---
 
 # Changelog

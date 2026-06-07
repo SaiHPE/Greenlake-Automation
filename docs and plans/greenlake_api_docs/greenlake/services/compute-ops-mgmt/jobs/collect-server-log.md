@@ -1,7 +1,7 @@
 ---
 title: "Collect Server log Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/collect-server-log.md"
-scraped_at: "2026-06-07T05:46:00.272619+00:00Z"
+scraped_at: "2026-06-07T06:13:22.517955+00:00Z"
 ---
 
 # Collect Server log Job

@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Webhooks"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/event/public.md"
-scraped_at: "2026-06-07T05:46:10.128723+00:00Z"
+scraped_at: "2026-06-07T06:13:27.109290+00:00Z"
 ---
 
 # HPE GreenLake for Webhooks

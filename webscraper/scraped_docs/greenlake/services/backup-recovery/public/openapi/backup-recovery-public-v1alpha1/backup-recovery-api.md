@@ -1,7 +1,7 @@
 ---
 title: "Backup and Recovery API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/backup-recovery/public/openapi/backup-recovery-public-v1alpha1/backup-recovery-api.md"
-scraped_at: "2026-06-07T05:46:27.982222+00:00Z"
+scraped_at: "2026-06-07T06:13:34.980722+00:00Z"
 ---
 
 # Backup and Recovery API

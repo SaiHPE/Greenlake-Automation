@@ -1,7 +1,7 @@
 ---
 title: "Group Apply OneView appliance settings job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/group-apply-oneview-appliance-settings.md"
-scraped_at: "2026-06-07T05:46:01.240411+00:00Z"
+scraped_at: "2026-06-07T06:13:23.281980+00:00Z"
 ---
 
 # Group Apply OneView appliance settings job

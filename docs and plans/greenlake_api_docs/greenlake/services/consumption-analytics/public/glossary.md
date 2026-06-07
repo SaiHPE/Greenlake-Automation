@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake Consumption Analytics Glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/consumption-analytics/public/glossary.md"
-scraped_at: "2026-06-07T05:46:07.948683+00:00Z"
+scraped_at: "2026-06-07T06:13:26.126435+00:00Z"
 ---
 
 # HPE GreenLake Consumption Analytics Glossary

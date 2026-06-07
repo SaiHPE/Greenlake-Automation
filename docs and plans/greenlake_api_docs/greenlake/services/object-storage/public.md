@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Object Storage"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/object-storage/public.md"
-scraped_at: "2026-06-07T05:46:12.835441+00:00Z"
+scraped_at: "2026-06-07T06:13:28.641484+00:00Z"
 ---
 
 # HPE GreenLake for Object Storage

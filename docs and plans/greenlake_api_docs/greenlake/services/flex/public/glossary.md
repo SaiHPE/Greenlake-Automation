@@ -1,7 +1,7 @@
 ---
 title: "HPE Flex Solutions glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/flex/public/glossary.md"
-scraped_at: "2026-06-07T05:46:10.782883+00:00Z"
+scraped_at: "2026-06-07T06:13:27.656696+00:00Z"
 ---
 
 # HPE Flex Solutions glossary

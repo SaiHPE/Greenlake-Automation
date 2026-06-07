@@ -1,7 +1,7 @@
 ---
 title: "GreenLake Resource Notation | HPE GreenLake"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/iam/greenlake-resource-notation.md"
-scraped_at: "2026-06-07T05:45:54.770411+00:00Z"
+scraped_at: "2026-06-07T06:13:19.829426+00:00Z"
 ---
 
 # HPE GreenLake Resource Notation (GRN)

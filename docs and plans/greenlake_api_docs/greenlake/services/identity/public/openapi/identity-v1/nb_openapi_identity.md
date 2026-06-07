@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for User Management API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/identity/public/openapi/identity-v1/nb_openapi_identity.md"
-scraped_at: "2026-06-07T05:46:33.078687+00:00Z"
+scraped_at: "2026-06-07T06:13:37.324335+00:00Z"
 ---
 
 # HPE GreenLake for User Management API

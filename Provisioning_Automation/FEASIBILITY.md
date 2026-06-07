@@ -1,6 +1,6 @@
 # HPE Alletra MP B10000 → GreenLake / DSCC Onboarding Automation — Feasibility Report
 
-_Researched 2026-06-05. 6 search angles → 27 sources → 102 claims → 25 adversarially verified (25 confirmed, 0 refuted). Confidence noted per item._
+_Researched 2026-06-05. Updated 2026-06-07 against the full local GreenLake API scrape. Confidence noted per item._
 
 ---
 
@@ -11,19 +11,20 @@ _Researched 2026-06-05. 6 search angles → 27 sources → 102 claims → 25 adv
 | **Add subscription to workspace** | ✅ Yes | REST — `POST /subscriptions/v1/subscriptions` (async) |
 | **Register storage array to inventory** (fixes `fail-prov-no-device`) | ✅ Yes | REST — `POST /devices/v1/devices` (async) |
 | **Assign device → Data Services application instance + region** (fixes `fail-prov-no-rule`) | ✅ Yes | REST — `PATCH /devices/v1/devices?id={id}` |
-| **Apply subscription to the device** | ✅ Yes | REST — same `PATCH` |
+| **Apply subscription to the device** | ✅ Yes | REST — same `PATCH` endpoint, separate call |
 | **Verify state at each gate** | ✅ Yes | `GET` (or read-only GreenLake MCP) |
+| **Post-initialization storage settings / verification** | ✅ Yes | REST — Storage Fleet regional APIs after the system exists |
 | **Create the primary workspace** | ❌ No API | Console UI / prerequisite input (only MSP *tenant* workspaces have a POST) |
 | **On-array first boot** (Discovery Tool + Cloud Connectivity Wizard / `cloudinit`) | ⚠️ No REST API found | GUI / browser automation from the jump box (not separately verified — see §7) |
 | **DSCC "Setup system" initialization of the B10000** | ❌ No REST API (verified) | GUI / browser automation |
 
-**Bottom line:** the *GreenLake control-plane registration + subscription + application binding* is a clean, scriptable async REST pipeline. The *first-boot array initialization* and the *DSCC "Setup system" wizard* are **not exposed via REST** and must be driven through the UI (browser automation). So a "fully automated" solution is necessarily **hybrid: REST for the cloud control plane + browser automation for two GUI islands.**
+**Bottom line:** the *GreenLake control-plane registration + subscription + application binding* is a clean, scriptable async REST pipeline. The *first-boot array connectivity wizard* and the *DSCC "Setup system" wizard* are **not exposed via REST** and must be driven through the UI (browser automation). Storage Fleet adds useful REST automation **after** the system exists, but it does not replace first-time setup. So a "fully automated" solution is necessarily **hybrid: REST for the cloud control plane + post-init checks/settings, browser automation for two GUI islands.**
 
 ---
 
 ## 2. The automatable cloud core (HIGH confidence)
 
-Base host: `https://global.api.greenlake.hpe.com`. All edit calls require OAuth scope **`ccs.device-management.edit`** (reads require `ccs.device-management.view`). Device Management and Subscription Management share this scope namespace.
+Base host for Devices, Subscriptions, and Service Catalog: `https://global.api.greenlake.hpe.com`. Device and Subscription writes require **`ccs.device-management.edit`**; reads require **`ccs.device-management.view`**. Service Catalog discovery requires **`ccs.app-catalog.view`** and **`ccs.app-provision.view`**. Optional Storage Fleet calls use regional GreenLake API hosts and Storage Fleet permissions.
 
 ### Step 1 — Add the subscription key
 ```
@@ -40,7 +41,7 @@ POST https://global.api.greenlake.hpe.com/devices/v1/devices
 Authorization: Bearer <greenlake-token>
 Body: {
   "storage": [
-    { "serialNumber": "<SERIAL>", "subscriptionKey": "<SUBSCRIPTION_KEY>", "tags": { ... } }
+    { "serialNumber": "<SERIAL>", "partNumber": "<PART_NUMBER>", "tags": { ... } }
   ]
 }                                                   # network[]/compute[]/storage[]; max 5 total
 ```
@@ -48,23 +49,53 @@ Body: {
 - Poll `GET /devices/v1/async-operations/{id}` → terminal `SUCCEEDED | FAILED | TIMEOUT`; resource expires 24h; multi-device responses give a per-serial succeeded/failed breakdown.
 - ✅ **Field ambiguity RESOLVED by the source docx screenshots (§8c):** the GreenLake "Add devices" Storage form uses **Serial number + Product (part) number** (e.g. `SGHD44LQLS` / `S0B84A`) — **not** the subscription key. The subscription key is added to the workspace **separately** (`POST /subscriptions`) and then **applied to the device** via the `PATCH` (see Step 3). So the storage `POST /devices/v1/devices` body should send **`serialNumber` + `partNumber`** (the OpenAPI-example form), not subscriptionKey.
 
-### Step 3 — Bind device to application instance + region, and/or apply subscription (fix `fail-prov-no-rule`)
+### Step 3 — Bind device to application instance + region, then apply subscription (fix `fail-prov-no-rule`)
+
+Device Management v1 PATCH supports both capabilities, but **only one operation is allowed per PATCH call**. The implementation must use two sequential async PATCH calls.
+
+#### Step 3a — assign device → application instance + region
 ```
 PATCH https://global.api.greenlake.hpe.com/devices/v1/devices?id={device_id}
 Authorization: Bearer <greenlake-token>
 Content-Type: application/merge-patch+json
 Body: {
-  "subscription": [ { "id": "<subscription_id>" } ],
-  "application":  { "id": "<application_id>" },
-  "region": "<region>"
+  "application":  { "id": "<service_manager_id>" },
+  "region": "<service_catalog_region_id>"
 }                                                   # max 5 devices/req; dry-run query param supported
 ```
-- Documented capabilities of this one endpoint: assign device→application, remove from application (set `application.id`+`region` to null), apply subscription, remove subscription (empty array).
-- `region` = "the region of the application the device is provisioned in."
+- Async: **202** + `Location: /devices/v1/async-operations/{id}`. Rate limit **20 req/min/workspace**.
 
-> **Resolved (2nd pass, §7b):** discover `application.id` + `region` via the GreenLake **Service Catalog API** — `GET /service-catalog/v1/service-manager-provisions` returns the workspace's provisioned services, each exposing its identifier as **`application_id`** (status `PROVISIONED`); `GET /service-catalog/v1/per-region-service-managers` / `…/service-managers` give the GreenLake-defined `region`. Feed those into the PATCH.
+#### Step 3b — apply subscription to the already-assigned device
+```
+PATCH https://global.api.greenlake.hpe.com/devices/v1/devices?id={device_id}
+Authorization: Bearer <greenlake-token>
+Content-Type: application/merge-patch+json
+Body: {
+  "subscription": [ { "id": "<subscription_id>" } ]
+}
+```
+- Async: **202** + `Location: /devices/v1/async-operations/{id}`. Poll both PATCH operations to terminal state.
+- Documented capabilities of this endpoint: assign/remove device→application, apply/remove subscription, and dry-run. The operations cannot be combined in one call.
+- `region` = "the region of the application the device is provisioned in." For Service Catalog this is the region id such as `ap-northeast`, not the DSCC host code `jp1`.
+
+> **Resolved (2nd pass, corrected against the full scrape):** discover `application.id` + `region` via the GreenLake **Service Catalog API**. `GET /service-catalog/v1/per-region-service-managers` maps "Data Services" to a GreenLake region id and service-manager id. `GET /service-catalog/v1/service-manager-provisions` returns provision entries with **`serviceManager.id`**, `region`, and **`provisionStatus`**. Filter by `status eq 'PROVISIONED'` / `region eq '<region>'`, then feed `serviceManager.id` into Device PATCH as `application.id`.
 >
-> **Field-level confirmations (HPE GreenLake doc assistant, 2026-06-06):** storage add requires `serialNumber` + `partNumber` (v2beta1 also requires `deviceType:"STORAGE"`); the v1 guide's `subscriptionKey` storage example is a doc artifact (subscription applied separately). The device's `application.resourceUri` points to `/service-catalog/.../service-managers/…` — cross-confirms `application.id` IS a Service-Catalog service-manager. Verify success via the device's `assignedState` (`UNASSIGNED → ASSIGNED_TO_SERVICE`); ids are `application.id` and `subscription[].id`. Pre-flight a key with `GET /subscriptions/v2beta1/{key}/preclaim` (→ `claimStatus`, `aaSType`, associated devices). Rate limits: add-devices **25/min**, subscriptions ~4/min per workspace. Caveat: the assistant's retrieval surfaced only POST/GET (not PATCH) — the **assignment-call form** (PATCH vs bundled into v2beta1 POST vs subscription-claim) is the #1 thing to confirm live. Service Catalog is **read-only** in this flow (view scope; no writes).
+> **Field-level confirmations:** storage add requires `serialNumber` + `partNumber` (v2beta1 also requires `deviceType:"STORAGE"`); the v1 guide's `subscriptionKey` storage example is a doc artifact (subscription applied separately). The device's `application.resourceUri` points to `/service-catalog/.../service-managers/…` — cross-confirms the Service Catalog relationship. Verify success via the device's `assignedState` (`UNASSIGNED → ASSIGNED_TO_SERVICE`), `application.id`, `region`, and `subscription[].id`. Rate limits: add-devices **25/min**, update-devices/PATCH **20/min**, subscriptions **4/min** per workspace. Service Catalog read permissions are exact: `ccs.app-catalog.view` and `ccs.app-provision.view`.
+>
+> **Preclaim caveat:** `GET /subscriptions/v2beta1/{key}/preclaim` appears in the scraped **internal** Subscription OpenAPI bundle. Keep it as a useful optional pre-flight, but do not make it the only path; fall back to `POST /subscriptions/v1/subscriptions` + `GET /subscriptions/v1/subscriptions?filter=key eq ...` if preclaim is unavailable.
+
+### Step 4 — Optional post-initialization Storage Fleet REST
+After the system is connected/initialized, the richer GreenLake scrape exposes regional Storage Fleet APIs for B10000 (`devtype4`) inventory and settings:
+```
+GET https://{gl-region}.api.greenlake.hpe.com/storage-fleet/v1alpha1/devtype4-storage-systems
+GET/PUT .../devtype4-storage-systems/{systemId}/system-settings
+GET/POST .../devtype4-storage-systems/{systemId}/network-settings
+GET/POST/PUT .../devtype4-storage-systems/{systemId}/support-settings
+GET/POST .../devtype4-storage-systems/{systemId}/licenses
+```
+- Regional hosts use GreenLake region ids such as `ap-northeast.api.greenlake.hpe.com`.
+- Useful for post-setup verification, settings drift correction, NTP/timezone/name, support/contact metadata, network/proxy settings, and license visibility.
+- Not a first-boot or DSCC "Setup system" substitute: all routes require an existing `systemId`; the only `initialize` found is port-level (`.../ports/{id}/initialize`), not system initialization.
 
 ---
 
@@ -84,16 +115,17 @@ This is the decisive finding. A verifier downloaded the **live DSCC Data Service
 
 ---
 
-## 4. Authentication model (HIGH confidence) — two tokens, one identity provider
+## 4. Authentication model (HIGH confidence) — one identity provider, several API hosts
 
-| | GreenLake global APIs | DSCC regional APIs |
-|---|---|---|
-| Host | `https://global.api.greenlake.hpe.com` | `https://{region}.data.cloud.hpe.com` (`/api/v1/...`) |
-| Token endpoint | client-credentials via GreenLake API client | `POST https://sso.common.cloud.hpe.com/as/token.oauth2` (`grant_type=client_credentials`) |
-| Token | OAuth2 bearer | JWT bearer (`aud: external_api`, RS256, issuer `sso.common.cloud.hpe.com`) |
-| Lifetime | — | ~7200s (~2h); 401 on expiry → re-auth |
+| | GreenLake global APIs | Storage Fleet regional APIs | DSCC regional APIs |
+|---|---|---|---|
+| Host | `https://global.api.greenlake.hpe.com` | `https://{gl-region}.api.greenlake.hpe.com` | `https://{dscc-region}.data.cloud.hpe.com` (`/api/v1/...`) |
+| Used for | Devices, Subscriptions, Service Catalog | B10000 post-init inventory/settings | DSCC storage verification/management |
+| Token endpoint | `POST https://sso.common.cloud.hpe.com/as/token.oauth2` (`grant_type=client_credentials`) | same identity layer | same identity layer |
+| Token | OAuth2/JWT bearer from GreenLake API client | same bearer model | JWT bearer (`aud: external_api`, RS256, issuer `sso.common.cloud.hpe.com`) |
+| Lifetime | GreenLake tokens documented as short-lived; refresh on expiry/401 | same | ~7200s (~2h); refresh on expiry/401 |
 
-Both authenticate against the **same common-cloud identity layer** with the client-credentials grant; they differ only in target host/scope. The DSCC storage API only *consumes* a bearer JWT "obtained from the HPE GreenLake console" — it does not mint its own. Regions are `{region}.data.cloud.hpe.com`: **us1** (US West), **eu1** (EU Central), **jp1** (AP Northeast — *not* "ap1"), **uk1** (EU West, added later). Live API doc: `https://console-us1.data.cloud.hpe.com/doc/api/v1/`. The list grows — pick the host for your workspace's region, don't assume it's exhaustive.
+All authenticate against the **same common-cloud identity layer** with the client-credentials grant; they differ by host and required permissions. DSCC region codes are `{region}.data.cloud.hpe.com`: **us1** (US West), **eu1** (EU Central), **jp1** (AP Northeast — *not* "ap1"), **uk1** (EU West, added later). GreenLake/Storage Fleet region ids use values such as `us-west`, `eu-west`, `eu-central`, and `ap-northeast`. Keep both region vocabularies in config.
 
 ---
 
@@ -103,9 +135,10 @@ Both authenticate against the **same common-cloud identity layer** with the clie
                 ┌─────────────────────────── PRE-STAGE (cloud, REST, headless) ───────────────────────────┐
  inputs:        │  token = client_credentials(GreenLake API client)                                        │
   serial,       │  1. POST /subscriptions/v1/subscriptions      → 202 → poll async-op → SUCCEEDED          │
-  subKey,       │  2. POST /devices/v1/devices  (serial+subKey) → 202 → poll /async-operations/{id}        │  ← fixes fail-prov-no-device
-  workspaceId,  │  3. GET /service-catalog/v1/service-manager-provisions → application_id + region         │
-  region        │  4. PATCH /devices/v1/devices?id= {subscription, application, region}                     │  ← fixes fail-prov-no-rule
+  partNumber,   │  2. POST /devices/v1/devices (serial+partNumber) → 202 → poll /async-operations/{id}     │  ← fixes fail-prov-no-device
+  workspaceId,  │  3. GET /service-catalog/v1/... → serviceManager.id + region + provisionStatus           │
+  glRegion      │  4a. PATCH /devices/v1/devices?id= {application, region} → poll                           │
+                │  4b. PATCH /devices/v1/devices?id= {subscription} → poll                                  │  ← fixes fail-prov-no-rule
                 └──────────────────────────────────────────────────────────────────────────────────────────┘
                                                    │  (array is now pre-registered, so it won't hit the two errors)
                 ┌─────────────────────── ON-ARRAY FIRST BOOT (jump box, GUI/browser) ──────────────────────┐
@@ -116,7 +149,7 @@ Both authenticate against the **same common-cloud identity layer** with the clie
                 │  7. DSCC Setup Service wizard (blueprints can pre-fill many systems) — NO REST           │
                 └──────────────────────────────────────────────────────────────────────────────────────────┘
                 ┌─────────────────────────────── VERIFY (REST / MCP) ─────────────────────────────────────┐
-                │  GET /devices/v1/devices  &  DSCC /api/v1/storage-systems  (or read-only gl-mcp)         │
+                │  GET /devices/v1/devices, Storage Fleet devtype4 systems, DSCC /api/v1/storage-systems   │
                 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -124,41 +157,41 @@ Both authenticate against the **same common-cloud identity layer** with the clie
 
 ---
 
-## 6. Reusable HPE automation assets (found; details unverified — see §7)
+## 6. Reusable HPE automation assets
 
-These official repos were surfaced and fetched during research (claims extracted but dropped in synthesis budget, so treat as leads to validate, not verified facts):
+These official repos are useful, but none replace the control-plane onboarding flow for a B10000. Use direct REST for the GreenLake cloud trio; use SDKs/toolkits mainly for verification or later management.
 
-- **`github.com/HewlettPackard/gl-mcp`** — the read-only GreenLake MCP servers (for verification gates).
-- **`github.com/HewlettPackard/HPEDSCC-PowerShell-Toolkit`** — DSCC PowerShell toolkit.
-- **`github.com/HewlettPackard/greenlake-data-services-ansible`** — Data Services Ansible collection.
-- **`github.com/HewlettPackard/greenlake-data-services-python`** — Data Services Python SDK.
+- **`github.com/HewlettPackard/gl-mcp`** — useful for read-only GreenLake verification gates.
+- **`github.com/HewlettPackard/HPEDSCC-PowerShell-Toolkit`** — useful for already-onboarded DSCC/storage management, not B10000 onboarding.
+- **`github.com/HewlettPackard/greenlake-data-services-ansible`** — useful for already-onboarded Data Services resources, not B10000 onboarding.
+- **`github.com/HewlettPackard/greenlake-data-services-python`** — useful as an HTTP/client reference for Data Services verification and later management.
 
-These would accelerate the implementation (Python SDK / Ansible for the cloud REST trio; PowerShell toolkit + DSCC API for verification).
+Implementation decision: build the GreenLake registration/subscription/assignment path with `httpx` direct REST calls so endpoint contracts, async polling, idempotency, and rate limits stay explicit.
 
 ---
 
 ## 7. Confidence, caveats & open questions
 
-**Source-retrieval caveat:** `developer.greenlake.hpe.com` is a client-side-rendered SPA that 404s to non-browser fetchers, so the GreenLake-*platform* claims (§2) were verified from **search-engine-indexed snapshots** of the official pages — corroboration was strong (verbatim quotes recurring across 3–5 independent + adversarial queries) but not a live rendered capture. The **DSCC** findings (§3, §4) are stronger: the live spec and developer.hpe.com blogs were fetched directly.
+**Source-retrieval note:** the original 2026-06-05 pass had weaker GreenLake-platform capture because the developer portal is a client-rendered SPA. That caveat is now mostly superseded for Devices, Subscriptions, Service Catalog, and Storage Fleet because the 2026-06-07 local scrape includes rendered markdown and raw OpenAPI YAML. The remaining weaker areas are external HPE support pages for the official onboarding sequence and some first-boot hardware/network details.
 
-**URL drift:** some cited paths use stale segments (`devices-v1beta1` → `devices-v1/postdevicesv1`; subscriptions `v1beta1` deprecated → `v1`). Content is identical/current on the GA pages; use the `nbapi-inventory-latest` / `nbapi-subscription-latest` paths.
+**URL/version note:** use GA GreenLake paths where available: `/devices/v1/...`, `/subscriptions/v1/...`, `/service-catalog/v1/...`. Some scraped folders include historical names such as `service-catalog-v1beta1`, but the contained endpoint paths are `v1`.
 
 **Status of the original open gaps (updated after the 2nd pass — see §7b):**
-1. ✅ **Service-catalog discovery** of `application.id` + `region` — **RESOLVED** (Service Catalog `service-manager-provisions`).
-2. ⚠️ **On-array first boot (Section C)** — **partly resolved:** connection model + "no on-array init API" confirmed; Discovery-Tool headless mode and a `cloudinit` REST API remain **undocumented → treat as GUI/browser-only.**
+1. ✅ **Service-catalog discovery** of `application.id` + `region` — **RESOLVED with correction**: use `service-manager-provisions.items.serviceManager.id`, `items.region`, and `items.provisionStatus`.
+2. ⚠️ **On-array first boot (Section C)** — **partly resolved:** connection model + "no on-array init API" confirmed; Discovery-Tool headless mode and a `cloudinit` REST API remain **undocumented → treat as GUI/browser-only.** Storage Fleet can manage settings after a system exists, but it does not expose first-boot/system setup.
 3. ❌ HPE's officially-named **onboarding sequence** + the subscription-before-device dependency — **still open** (authoritative support docs are JS-rendered and weren't captured).
 4. ⚠️ **Reusable assets** — validated enough to know the **PowerShell toolkit / Ansible collection do _not_ onboard** a B10000 (manage-only) → the cloud trio needs **direct REST**.
 
 ---
 
-## 7b. Second-pass gap-closing findings (2026-06-06)
+## 7b. Updated gap-closing findings
 
-_Focused pass: 5 angles → 23 sources → 25 claims verified (24 confirmed, 1 refuted). The final synthesis stage returned degraded/stub output, so the items below were reconstructed from the verification log and confirmed with two direct searches; treat exact wording as HIGH-confidence where a clean endpoint/quote was recovered, MEDIUM where reconstructed._
+These are the current working conclusions after the 2026-06-07 local GreenLake scrape and the earlier DSCC/API research pass.
 
-**GAP 1 — Discover `application.id` + `region` → RESOLVED (HIGH).** Use the GreenLake **Service Catalog API** (base `https://global.api.greenlake.hpe.com`):
-- `GET /service-catalog/v1/service-manager-provisions` (+ `/{id}`) — lists the workspace's **provisioned services**; each provisioned service exposes its identifier as **`application_id`** (the value for `application.id` in the device PATCH); status `PROVISIONED`. `POST`/`DELETE` also exist to provision/remove.
-- `GET /service-catalog/v1/service-managers` (+`/{id}`) and `GET /service-catalog/v1/per-region-service-managers` (+`/{id}`) — return the GreenLake-defined **`region`** where the service manager (Data Services) is available.
-- A GreenLake **"service-manager provision" / "provisioned service" *is* the application instance** you bind the device to. The device-management API itself does **not** enumerate these (confirmed). `v1` is GA (`v1beta1` deprecated).
+**GAP 1 — Discover `application.id` + `region` → RESOLVED (HIGH, corrected against full scrape).** Use the GreenLake **Service Catalog API** (base `https://global.api.greenlake.hpe.com`):
+- `GET /service-catalog/v1/per-region-service-managers` — lists region ids and service managers available in each region. Match `serviceManagers.name` to **Data Services** and keep `serviceManagers.id`.
+- `GET /service-catalog/v1/service-manager-provisions` (+ `/{id}`) — lists the workspace's provisioned service-manager entries; response fields are **`serviceManager.id`**, `region`, and **`provisionStatus`**. The filter parameter uses `status eq 'PROVISIONED'`, but the response field is `provisionStatus`.
+- The Device PATCH `application.id` should use the Service Catalog **`serviceManager.id`**, and `region` should use the Service Catalog region id such as `ap-northeast`. The public v1 service-manager-provision endpoint does **not** return `application_id`; older/private UI endpoints may expose that name, but do not build the main flow on it.
 
 **GAP 2 — On-array first boot → PARTLY RESOLVED.**
 - ✅ The array→DSCC connection is a **secure tunnel (mTLS) over outbound TCP 443** (confirmed).
@@ -186,10 +219,10 @@ Legend: ✅ REST (headless API) · 🟡 GUI-only (scriptable via browser/desktop
 | 4 | Enter network info in Cloud Connectivity Wizard | 🟡 | same `cloudinit` UI → browser automation |
 | 5 | Array "Checking DSCC connection" → `fail-prov-no-device` | — | symptom, not a step — eliminated by registering first |
 | 6 | "Create new workspace" | 🔴 | no REST for primary workspace (UI-only) → `workspaceId` is an input |
-| 7 | Register/add storage system to inventory _(fixes `fail-prov-no-device`)_ | ✅ | `POST /devices/v1/devices` (serial + subscriptionKey), async |
+| 7 | Register/add storage system to inventory _(fixes `fail-prov-no-device`)_ | ✅ | `POST /devices/v1/devices` (serial + partNumber), async |
 | 8 | Add subscription key to workspace | ✅ | `POST /subscriptions/v1/subscriptions` |
 | 9 | Find Data Services application instance + region | ✅ | `GET /service-catalog/v1/service-manager-provisions` (+ `/service-managers`) |
-| 10 | Assign device → application instance + region, apply subscription _(fixes `fail-prov-no-rule`)_ | ✅ | `PATCH /devices/v1/devices?id=` |
+| 10 | Assign device → application instance + region, then apply subscription _(fixes `fail-prov-no-rule`)_ | ✅ | two sequential `PATCH /devices/v1/devices?id=` calls; one operation per call |
 | 11 | "Retry" connection | ✅ | no manual retry if #7–10 ran first; array connects first try |
 | 12 | "Launch DSCC from the Array" | 🟡 | navigation — or open the DSCC console URL directly |
 | 13 | "Setup service needs to be clicked" | 🟡 | DSCC Setup Service wizard — no REST for B10000 |
@@ -197,7 +230,7 @@ Legend: ✅ REST (headless API) · 🟡 GUI-only (scriptable via browser/desktop
 | 15 | "Apply the subscription" (in DSCC) | ✅/🟡 | binding is REST (#10); inside the wizard it's a GUI field |
 | 16 | _(implied)_ verify registered + subscribed | ✅ | `GET /devices`, DSCC `GET /storage-systems`, or read-only MCP |
 
-**Buckets.** ✅ REST: add subscription → register device → discover app instance/region → assign + apply → verify (the entire `fail-prov-*` fix). 🟡 GUI-only: Discovery Tool, on-array `cloudinit` wizard, DSCC "Setup service → Setup system". 🔴 not automatable: physical install, subscription-key acquisition, primary-workspace creation, jump-box connectivity + firewall allowlist, valid API-client credentials.
+**Buckets.** ✅ REST: add subscription → register device → discover app instance/region → assign → apply subscription → verify (the entire `fail-prov-*` fix), plus post-initialization Storage Fleet settings/verification. 🟡 GUI-only: Discovery Tool, on-array `cloudinit` wizard, DSCC "Setup service → Setup system". 🔴 not automatable: physical install, subscription-key acquisition, primary-workspace creation, jump-box connectivity + firewall allowlist, valid API-client credentials.
 
 **Reorder insight:** running the ✅ REST bucket (#7–10) before the array phones home eliminates both `fail-prov-no-device` and `fail-prov-no-rule`, collapsing the docx's fail→fix→retry loop.
 
@@ -249,7 +282,7 @@ Each embedded screenshot (`imageN.jpeg`, document order = file order) mapped to 
 | 40 | Setup Service: Setup Status "Initialized", blueprint set | 14 done | 🟡 |
 | 41 | Array mgmt UI https://10.64.122.140/system/overview — Normal, OS 10.5.51 | 16 verify | 🟡/✅ |
 
-**Screenshot-derived refinements:** (1) storage device-add = **serial + part number**, subscription added & applied **separately**; (2) the application instance = **"Data Services"**, region = **"AP NorthEast" (jp1)**; (3) DSCC **"Setup system" enforces an attached subscription before finalizing** (confirms ordering); (4) the Setup wizard **creates a reusable Blueprint** (batch lever); (5) the array genuinely needs **DNS + NTP + Proxy** outbound (confirms ">443" allowlist); (6) physical gotcha: a **CDM cabling warning** can fail initialization regardless of automation.
+**Screenshot-derived refinements:** (1) storage device-add = **serial + part number**, subscription added & applied **separately**; (2) the application instance = **"Data Services"**; map display region **"AP NorthEast"** to GreenLake region id `ap-northeast` and DSCC host code `jp1`; (3) DSCC **"Setup system" enforces an attached subscription before finalizing** (confirms ordering); (4) the Setup wizard **creates a reusable Blueprint** (batch lever); (5) the array genuinely needs **DNS + NTP + Proxy** outbound (confirms ">443" allowlist); (6) physical gotcha: a **CDM cabling warning** can fail initialization regardless of automation.
 
 ---
 
@@ -259,6 +292,7 @@ Each embedded screenshot (`imageN.jpeg`, document order = file order) mapped to 
 - GreenLake Subscription Management — [Add subscriptions](https://developer.greenlake.hpe.com/docs/greenlake/services/subscription-management/public/openapi/nbapi-subscription-latest/operation/postSubscriptions/)
 - GreenLake Workspace Management — [API](https://developer.greenlake.hpe.com/docs/greenlake/services/workspace/public/openapi/workspace-management-v1/nb-api-workspaces)
 - GreenLake Service Catalog (app instance + region) — [developer guide](https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/guide) · [Service Manager API](https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/openapi/service-catalog-v1beta1/v1/service-manager) · [glossary](https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/glossary)
+- GreenLake Storage Fleet (post-init B10000 settings/verification) — [developer guide](https://developer.greenlake.hpe.com/docs/greenlake/services/storage-fleet/public) · [API reference](https://developer.greenlake.hpe.com/docs/greenlake/services/storage-fleet/public/openapi/storage-fleet-public-v1alpha1)
 - Alletra MP B10000 connectivity — [Network requirement details (sd00002385)](https://support.hpe.com/hpesc/public/docDisplay?docId=sd00002385en_us&page=GUID-24BE868B-C227-4A87-8727-93A11831E38A.html&docLocale=en_US) · [Cloud Enablement Quick Start / Websites (sd00002403)](https://support.hpe.com/hpesc/public/docDisplay?docId=sd00002403en_us&page=GUID-A1201D1E-6CB8-4647-AA3D-EBCB405C51FC.html&docLocale=en_US) · [Configuring ports (sd00002429)](https://support.hpe.com/hpesc/public/docDisplay?docId=sd00002429en_us&page=GUID-29E578B3-4CED-4A92-BF88-04ECCC8166E7.html&docLocale=en_US)
 - GreenLake [Authentication guide](https://developer.greenlake.hpe.com/docs/greenlake/guides/public/authentication/authentication) · [API client credentials guide](https://developer.greenlake.hpe.com/docs/greenlake/services/credentials/public/guide)
 - DSCC — [live storage API spec (storage-api.yaml)](https://console-us1.data.cloud.hpe.com/doc/api/v1/storage-api.yaml) · [OAuth2 for DSCC](https://developer.hpe.com/blog/oauth2-for-hpe-greenlake-data-services-cloud-console/) · [Getting started with the DSCC public REST API](https://developer.hpe.com/blog/getting-started-with-the-hpe-data-services-cloud-console-public-rest-api/)

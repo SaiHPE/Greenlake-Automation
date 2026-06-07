@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake APIs for Subscription Management"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/subscription-management/public/openapi/nbapi-subscription.md"
-scraped_at: "2026-06-07T05:46:40.085683+00:00Z"
+scraped_at: "2026-06-07T06:13:40.810978+00:00Z"
 ---
 
 # HPE GreenLake APIs for Subscription Management

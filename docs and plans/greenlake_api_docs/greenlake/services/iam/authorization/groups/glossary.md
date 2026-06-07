@@ -1,7 +1,7 @@
 ---
 title: "Workspace Groups Management Glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/iam/authorization/groups/glossary.md"
-scraped_at: "2026-06-07T05:46:21.381972+00:00Z"
+scraped_at: "2026-06-07T06:13:32.073733+00:00Z"
 ---
 
 # Workspace Groups Management Glossary

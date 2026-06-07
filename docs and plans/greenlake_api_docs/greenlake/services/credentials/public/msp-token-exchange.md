@@ -1,7 +1,7 @@
 ---
 title: "MSP access token exchange"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/credentials/public/msp-token-exchange.md"
-scraped_at: "2026-06-07T05:46:09.003298+00:00Z"
+scraped_at: "2026-06-07T06:13:26.815488+00:00Z"
 ---
 
 # MSP access token exchange

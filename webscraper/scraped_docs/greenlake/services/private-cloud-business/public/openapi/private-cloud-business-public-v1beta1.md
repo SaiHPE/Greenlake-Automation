@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Private Cloud Business Edition System APIs"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/private-cloud-business/public/openapi/private-cloud-business-public-v1beta1.md"
-scraped_at: "2026-06-07T05:46:34.404846+00:00Z"
+scraped_at: "2026-06-07T06:13:38.094219+00:00Z"
 ---
 
 # HPE GreenLake for Private Cloud Business Edition System APIs

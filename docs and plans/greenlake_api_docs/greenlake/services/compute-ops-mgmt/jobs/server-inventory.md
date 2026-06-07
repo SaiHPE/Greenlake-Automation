@@ -1,7 +1,7 @@
 ---
 title: "Collect Server Inventory"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/server-inventory.md"
-scraped_at: "2026-06-07T05:46:04.179930+00:00Z"
+scraped_at: "2026-06-07T06:13:24.602353+00:00Z"
 ---
 
 # Collect Server Inventory

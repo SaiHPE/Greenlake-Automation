@@ -1,0 +1,206 @@
+---
+title: "GET /compute-ops-mgmt/v1beta2/schedules/{id}"
+source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/public/openapi/compute-ops-mgmt-remote/openapi/schedules-v1beta2/get_v1beta2_schedule.md"
+scraped_at: "2026-06-07T06:14:49.975736+00:00Z"
+---
+
+# Get a schedule
+
+Retrieve a single schedule resource by ID.
+
+
+URI PATH PREFIX RENAME
+
+This API now supports the URI path prefix /compute-ops-mgmt which used to be /compute-ops. The /compute-ops prefix is deprecated
+and might become unresponsive after Tuesday, April 1, 2025. The Guide
+provides more information about this change.
+
+Endpoint: GET /compute-ops-mgmt/v1beta2/schedules/{id}
+Version: latest
+Security: Bearer
+
+## Path parameters:
+
+  - `id` (string, required)
+    Schedule ID
+
+## Query parameters:
+
+  - `select` (string)
+    Limit the properties of the resource returned in a successful response.  When applied to
+write operations, select controls only the properties that are returned, not which
+properties are operated on. All properties are returned if the select parameter is omitted.
+
+The value of the select query parameter is a comma separated list of properties to include
+in the response. Nested properties use / as a separator, e.g. select=interfaces/name
+selects the name property within an interfaces object.
+
+For operations that return paginated collections, select operates on the resources in
+the collection. The pagination properties like count and items are always included even
+when select is specified.
+
+## Header parameters:
+
+  - `Tenant-Acid` (string)
+    Tenant-Acid header can be used by an MSP workspace to make API calls on behalf of their tenant by specifying the tenant's application customer ID.
+
+In order to make such an API call, the Bearer token must belong to an MSP workspace and this header value must be the application customer ID of a tenant within the MSP workspace. Use the /compute-ops-mgmt/v1beta1/accounts API to determine the application customer IDs for your tenant accounts.
+
+## Response 200 fields (application/json):
+
+  - `id` (string, required)
+    Primary identifier for the schedule resource given by the system.
+    Example: "37f66ae4-20a1-48f1-b552-b515457639ca"
+
+  - `type` (string, required)
+    The type of the resource.
+
+  - `name` (string, required)
+    The display name of the schedule. Note that multiple schedules can have the same name, so schedules should likely always also be displayed with their start time.
+
+  - `schedule` (object, required)
+    When to execute the scheduled operation.
+
+  - `schedule.startAt` (string, required)
+    For a one-time schedule, the time the schedule should be executed. For a fixed interval schedule, the time the schedule should first be executed. The start must be within a year of the current time.
+    Example: "2022-02-14T04:35:00.000000+00:00"
+
+  - `schedule.interval` (string,null)
+    How long between successive executions for a recurring schedule, or null for a one-time schedule. PT15M < interval < P1Y
+    Example: "P7D"
+
+  - `operation` (any, required)
+
+  - `description` (string,null)
+    A longer description of the schedule provided by the client.
+
+  - `purpose` (string,null)
+    A machine-readable category for the schedule.
+
+  - `associatedResourceUri` (string,null)
+    Another compute-ops resource the schedule is associated with. If the resource associated with a schedule is deleted, the schedule is also deleted.
+    Example: "/compute-ops/v1beta2/groups/cad23390-5209-43d1-b38d-bc96258b47e5"
+
+  - `generation` (integer)
+    Monotonically increasing update counter.
+    Example: 1
+
+  - `createdAt` (string)
+    Time of schedule resource creation.
+    Example: "2022-02-11T01:04:20.799937+00:00"
+
+  - `updatedAt` (string)
+    Time of the last update to the schedule resource.
+    Example: "2022-02-11T01:04:20.799937+00:00"
+
+  - `resourceUri` (string)
+    URI to the schedule resource itself (i.e. a self link).
+    Example: "/compute-ops-mgmt/v1beta2/schedules/37f66ae4-20a1-48f1-b552-b515457639ca"
+
+  - `historyUri` (string)
+    URI of collection of history entries for the schedule.
+    Example: "/compute-ops-mgmt/v1beta2/schedules/37f66ae4-20a1-48f1-b552-b515457639ca/history"
+
+  - `nextStartAt` (string,null)
+    The time the operation is scheduled to execute next, or null if no future executions are scheduled.
+    Example: "2022-02-14T04:35:00.000000+00:00"
+
+  - `lastRun` (any)
+    The most recent execution of the schedule, or null if the schedule has not yet executed.
+
+## Response 401 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 403 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 404 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 406 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 500 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+

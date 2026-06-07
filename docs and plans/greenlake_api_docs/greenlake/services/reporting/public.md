@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Reporting"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/reporting/public.md"
-scraped_at: "2026-06-07T05:46:13.009845+00:00Z"
+scraped_at: "2026-06-07T06:13:28.789122+00:00Z"
 ---
 
 # HPE GreenLake for Reporting

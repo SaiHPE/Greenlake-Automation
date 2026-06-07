@@ -1,7 +1,7 @@
 ---
 title: "IAM Glossary | HPE GreenLake"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/iam/glossary.md"
-scraped_at: "2026-06-07T05:45:54.741876+00:00Z"
+scraped_at: "2026-06-07T06:13:19.841855+00:00Z"
 ---
 
 # IAM, or Identity and Access Management Glossary

@@ -1,7 +1,7 @@
 ---
 title: "Delete vCenter Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/vcenter-delete.md"
-scraped_at: "2026-06-07T05:46:06.061464+00:00Z"
+scraped_at: "2026-06-07T06:13:25.387947+00:00Z"
 ---
 
 # Delete vCenter Job

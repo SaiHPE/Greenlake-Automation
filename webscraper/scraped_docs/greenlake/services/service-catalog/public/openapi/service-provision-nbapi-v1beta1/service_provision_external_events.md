@@ -1,7 +1,7 @@
 ---
 title: "External Events For Service Provision"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/openapi/service-provision-nbapi-v1beta1/service_provision_external_events.md"
-scraped_at: "2026-06-07T05:46:36.102850+00:00Z"
+scraped_at: "2026-06-07T06:13:38.490153+00:00Z"
 ---
 
 # External Events For Service Provision

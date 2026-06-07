@@ -1,7 +1,7 @@
 ---
 title: "Service Registry Internal Events"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/openapi/service-registry-v1beta1/service_catalog_internal_events.md"
-scraped_at: "2026-06-07T05:46:37.714584+00:00Z"
+scraped_at: "2026-06-07T06:13:39.525864+00:00Z"
 ---
 
 # Service Registry Internal Events

@@ -1,7 +1,7 @@
 ---
 title: "Configure Ignore Risk settings"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/configure-ignore-ilo-security-risk-settings.md"
-scraped_at: "2026-06-07T05:46:00.376772+00:00Z"
+scraped_at: "2026-06-07T06:13:22.516674+00:00Z"
 ---
 
 # Configure Ignore Risk settings

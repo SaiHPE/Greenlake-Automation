@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake Authorization Management API Guide"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/iam/authorization/authz-v2/guide.md"
-scraped_at: "2026-06-07T05:46:20.776940+00:00Z"
+scraped_at: "2026-06-07T06:13:31.986894+00:00Z"
 ---
 
 # HPE GreenLake Authorization Management API Guide

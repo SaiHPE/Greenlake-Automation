@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Tags glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/tags/public/glossary.md"
-scraped_at: "2026-06-07T05:46:14.758539+00:00Z"
+scraped_at: "2026-06-07T06:13:29.517809+00:00Z"
 ---
 
 # HPE GreenLake for Tags glossary

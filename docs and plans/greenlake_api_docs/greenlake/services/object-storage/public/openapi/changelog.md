@@ -1,7 +1,7 @@
 ---
 title: "Changelog"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/object-storage/public/openapi/changelog.md"
-scraped_at: "2026-06-07T05:46:23.215163+00:00Z"
+scraped_at: "2026-06-07T06:13:32.886693+00:00Z"
 ---
 
 # Changelog
