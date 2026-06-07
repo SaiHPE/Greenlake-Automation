@@ -23,6 +23,7 @@ class RunListResponse(BaseModel):
 
 class PreflightRequest(BaseModel):
     work_item: ArrayWorkItem
+    live_greenlake: bool = False
 
 
 class PreflightResponse(BaseModel):

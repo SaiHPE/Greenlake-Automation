@@ -38,7 +38,8 @@ def create_app() -> FastAPI:
 
     @app.post("/preflight", response_model=PreflightResponse)
     async def preflight(request: PreflightRequest) -> PreflightResponse:
-        return PreflightResponse(report=preflight_service.run_local(request.work_item))
+        report = await preflight_service.run(request.work_item, live_greenlake=request.live_greenlake)
+        return PreflightResponse(report=report)
 
     @app.get("/runs/{run_id}", response_model=CreateRunResponse)
     async def get_run(run_id: str) -> CreateRunResponse:
