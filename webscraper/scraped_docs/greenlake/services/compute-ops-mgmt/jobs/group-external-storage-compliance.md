@@ -1,7 +1,7 @@
 ---
 title: "Group External Storage Compliance Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/group-external-storage-compliance.md"
-scraped_at: "2026-06-07T05:46:01.359673+00:00Z"
+scraped_at: "2026-06-07T06:13:23.499109+00:00Z"
 ---
 
 # Group External Storage Compliance Job

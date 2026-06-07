@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.alletra_onboard/
+dist/
+build/
+node_modules/
+frontend/dist/
+.env

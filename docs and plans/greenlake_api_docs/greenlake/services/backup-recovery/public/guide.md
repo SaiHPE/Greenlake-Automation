@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Backup and Recovery Developer Guide"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/backup-recovery/public/guide.md"
-scraped_at: "2026-06-07T05:45:58.489626+00:00Z"
+scraped_at: "2026-06-07T06:13:21.834304+00:00Z"
 ---
 
 # HPE GreenLake for Backup and Recovery Developer Guide

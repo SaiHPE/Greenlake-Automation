@@ -1,7 +1,7 @@
 ---
 title: "Server UID Indicator On Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/server-uid-indicator-on.md"
-scraped_at: "2026-06-07T05:46:05.216679+00:00Z"
+scraped_at: "2026-06-07T06:13:25.280054+00:00Z"
 ---
 
 # Server UID Indicator On Job

@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for User Management glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/identity/public/glossary.md"
-scraped_at: "2026-06-07T05:46:11.040402+00:00Z"
+scraped_at: "2026-06-07T06:13:27.697676+00:00Z"
 ---
 
 # HPE GreenLake for User Management glossary

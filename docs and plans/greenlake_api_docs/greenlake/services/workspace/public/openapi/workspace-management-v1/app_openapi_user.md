@@ -1,7 +1,7 @@
 ---
 title: "App instance openapi specification"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/workspace/public/openapi/workspace-management-v1/app_openapi_user.md"
-scraped_at: "2026-06-07T05:46:41.998188+00:00Z"
+scraped_at: "2026-06-07T06:13:41.544392+00:00Z"
 ---
 
 # App instance openapi specification

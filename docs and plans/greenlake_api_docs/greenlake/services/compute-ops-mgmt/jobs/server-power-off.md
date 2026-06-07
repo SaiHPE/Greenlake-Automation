@@ -1,7 +1,7 @@
 ---
 title: "Server Power Off Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/server-power-off.md"
-scraped_at: "2026-06-07T05:46:04.282301+00:00Z"
+scraped_at: "2026-06-07T06:13:24.984953+00:00Z"
 ---
 
 # Server Power Off Job

@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake API Versioning Basics"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/guides/public/standards/snippets/_versioning-basics.md"
-scraped_at: "2026-06-07T05:46:16.823791+00:00Z"
+scraped_at: "2026-06-07T06:13:30.300708+00:00Z"
 ---
 
 # HPE GreenLake API Versioning Basics

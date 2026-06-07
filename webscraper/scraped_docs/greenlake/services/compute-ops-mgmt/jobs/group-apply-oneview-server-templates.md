@@ -1,7 +1,7 @@
 ---
 title: "Group Apply OneView Server Templates Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/group-apply-oneview-server-templates.md"
-scraped_at: "2026-06-07T05:46:01.274421+00:00Z"
+scraped_at: "2026-06-07T06:13:23.255285+00:00Z"
 ---
 
 # Group Apply OneView Server Templates Job

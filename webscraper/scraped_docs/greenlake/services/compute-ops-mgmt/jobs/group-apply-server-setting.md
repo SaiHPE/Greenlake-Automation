@@ -1,7 +1,7 @@
 ---
 title: "Group Apply Server Settings Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/group-apply-server-setting.md"
-scraped_at: "2026-06-07T05:46:01.264179+00:00Z"
+scraped_at: "2026-06-07T06:13:23.290723+00:00Z"
 ---
 
 # Group Apply Server Settings Job

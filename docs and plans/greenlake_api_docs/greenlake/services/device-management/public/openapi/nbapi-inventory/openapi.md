@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake APIs for Device Management"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/device-management/public/openapi/nbapi-inventory/openapi.md"
-scraped_at: "2026-06-07T05:46:31.424716+00:00Z"
+scraped_at: "2026-06-07T06:13:36.531355+00:00Z"
 ---
 
 # HPE GreenLake APIs for Device Management

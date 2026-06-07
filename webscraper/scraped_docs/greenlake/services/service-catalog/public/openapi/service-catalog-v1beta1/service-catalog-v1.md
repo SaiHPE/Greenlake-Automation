@@ -1,7 +1,7 @@
 ---
 title: "Service Manager Management"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/openapi/service-catalog-v1beta1/service-catalog-v1.md"
-scraped_at: "2026-06-07T05:46:34.880034+00:00Z"
+scraped_at: "2026-06-07T06:13:38.566810+00:00Z"
 ---
 
 # Service Manager Management

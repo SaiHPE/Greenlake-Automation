@@ -1,7 +1,7 @@
 ---
 title: "Refresh OneView appliance settings"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/refresh-oneview-appliance-settings.md"
-scraped_at: "2026-06-07T05:46:02.373170+00:00Z"
+scraped_at: "2026-06-07T06:13:23.881059+00:00Z"
 ---
 
 # Refresh OneView appliance settings

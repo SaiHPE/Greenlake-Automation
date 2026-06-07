@@ -1,7 +1,7 @@
 ---
 title: "Server Restart Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/server-restart.md"
-scraped_at: "2026-06-07T05:46:05.178136+00:00Z"
+scraped_at: "2026-06-07T06:13:25.187534+00:00Z"
 ---
 
 # Server Restart Job

@@ -1,7 +1,7 @@
 ---
 title: "Server Firmware Update Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/server-firmware-update.md"
-scraped_at: "2026-06-07T05:46:04.100562+00:00Z"
+scraped_at: "2026-06-07T06:13:24.226290+00:00Z"
 ---
 
 # Server Firmware Update Job

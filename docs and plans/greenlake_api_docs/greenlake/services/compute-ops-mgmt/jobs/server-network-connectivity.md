@@ -1,7 +1,7 @@
 ---
 title: "Collect Server Network Connectivity"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/server-network-connectivity.md"
-scraped_at: "2026-06-07T05:46:04.194018+00:00Z"
+scraped_at: "2026-06-07T06:13:24.602671+00:00Z"
 ---
 
 # Collect Server Network Connectivity

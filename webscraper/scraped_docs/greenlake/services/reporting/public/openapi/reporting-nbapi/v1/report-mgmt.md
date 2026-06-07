@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Reporting"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/reporting/public/openapi/reporting-nbapi/v1/report-mgmt.md"
-scraped_at: "2026-06-07T05:46:45.689966+00:00Z"
+scraped_at: "2026-06-07T06:13:43.043482+00:00Z"
 ---
 
 # HPE GreenLake for Reporting

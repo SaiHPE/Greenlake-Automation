@@ -1,7 +1,7 @@
 ---
 title: "Group Apply Internal Storage Settings Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/group-apply-internal-storage-settings.md"
-scraped_at: "2026-06-07T05:46:00.483499+00:00Z"
+scraped_at: "2026-06-07T06:13:22.567259+00:00Z"
 ---
 
 # Group Apply Internal Storage Settings Job

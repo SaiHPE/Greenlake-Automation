@@ -1,7 +1,7 @@
 ---
 title: "App instance openapi specification"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/identity/public/openapi/identity-v1/app_openapi_user.md"
-scraped_at: "2026-06-07T05:46:32.437213+00:00Z"
+scraped_at: "2026-06-07T06:13:37.093407+00:00Z"
 ---
 
 # App instance openapi specification

@@ -1,7 +1,7 @@
 ---
 title: "Workspace Groups Management API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/authorization/public/openapi/groups-v1beta1/external-groups-v1beta1.md"
-scraped_at: "2026-06-07T05:46:27.545269+00:00Z"
+scraped_at: "2026-06-07T06:13:34.966025+00:00Z"
 ---
 
 # Workspace Groups Management API

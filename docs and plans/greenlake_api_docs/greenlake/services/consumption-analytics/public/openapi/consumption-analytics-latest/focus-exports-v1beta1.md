@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake Consumption Analytics FOCUS Exports API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/consumption-analytics/public/openapi/consumption-analytics-latest/focus-exports-v1beta1.md"
-scraped_at: "2026-06-07T05:46:29.444906+00:00Z"
+scraped_at: "2026-06-07T06:13:35.712744+00:00Z"
 ---
 
 # HPE GreenLake Consumption Analytics FOCUS Exports API

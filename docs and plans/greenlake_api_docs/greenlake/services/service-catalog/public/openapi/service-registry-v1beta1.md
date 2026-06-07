@@ -1,7 +1,7 @@
 ---
 title: "Service offer management"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/openapi/service-registry-v1beta1.md"
-scraped_at: "2026-06-07T05:46:38.060416+00:00Z"
+scraped_at: "2026-06-07T06:13:40.100206+00:00Z"
 ---
 
 # Service offer management

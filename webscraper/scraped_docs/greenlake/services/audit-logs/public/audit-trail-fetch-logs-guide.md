@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake Audit Logs fetch logs developer guide"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/audit-logs/public/audit-trail-fetch-logs-guide.md"
-scraped_at: "2026-06-07T05:45:56.682110+00:00Z"
+scraped_at: "2026-06-07T06:13:20.961467+00:00Z"
 ---
 
 # HPE GreenLake Audit Logs fetch logs developer guide

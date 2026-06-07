@@ -1,7 +1,7 @@
 ---
 title: "Appliance Software Update Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/appliance-software-update.md"
-scraped_at: "2026-06-07T05:45:59.481980+00:00Z"
+scraped_at: "2026-06-07T06:13:22.406870+00:00Z"
 ---
 
 # Appliance Software Update Job

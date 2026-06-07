@@ -1,0 +1,247 @@
+---
+title: "GET /compute-ops-mgmt/v1beta1/async-operations"
+source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/public/openapi/compute-ops-mgmt-latest/async-operations-v1beta1/get_v1beta1_async_operations.md"
+scraped_at: "2026-06-07T06:15:00.367575+00:00Z"
+---
+
+# List all async operations
+
+Retrieve a list of async operations for the last 7 days
+
+Endpoint: GET /compute-ops-mgmt/v1beta1/async-operations
+Version: latest
+Security: Bearer
+
+## Query parameters:
+
+  - `limit` (integer)
+    The maximum number of records to return.
+    Example: 10
+
+  - `next` (string)
+    The pagination cursor for the next page of resources.
+    Example: "b4cf1a6f-1a1f-11ef-9856-20155d97c234"
+
+  - `filter` (string)
+    Limit the resources operated on by an endpoint or when used with a multiple-GET endpoint,
+return only the subset of resources that match the filter. The filter grammar is a subset
+of OData 4.0.
+
+NOTE: The filter query parameter must use URL encoding.
+Most clients do this automatically with inputs provided to them specifically as query parameters. Encoding must be done manually for any query parameters provided as part of the URL.  
+The reserved characters ! # $ & ' ( ) * + , / : ; = ? @ [ ] must be encoded with percent encoded equivalents.
+Server IDs contain a +, which must be encoded as %2B.  
+For example: the value P06760-B21+2M212504P8 must be encoded as P06760-B21%2B2M212504P8 when it is used in a query parameter.
+
+| CLASS     |  EXAMPLES                                          |
+|-----------|----------------------------------------------------|
+| Types     | integer, decimal, timestamp, string, boolean, null |
+| Operations| eq, ne, gt, ge, lt, le, in                         |
+| Logic     | and, or, not                                       |
+
+Async Operations can be filtered by:
+- createdAt
+- endedAt
+- error
+- generation
+- id
+- logMessages
+- progressPercent
+- recommendations
+- results
+- sourceResourceUri
+- startedAt
+- state
+- updatedAt
+
+The following examples are not an exhaustive list of all possible filtering options.
+
+## Header parameters:
+
+  - `Tenant-Acid` (string)
+    Tenant-Acid header can be used by an MSP workspace to make API calls on behalf of their tenant by specifying the tenant's application customer ID.
+
+In order to make such an API call, the Bearer token must belong to an MSP workspace and this header value must be the application customer ID of a tenant within the MSP workspace. Use the /compute-ops-mgmt/v1beta1/accounts API to determine the application customer IDs for your tenant accounts.
+
+## Response 200 fields (application/json):
+
+  - `count` (integer, required)
+    Number of items returned
+    Example: 1
+
+  - `next` (string, required)
+    The pagination cursor for the next page of resources.
+    Example: "b4cf1a6f-1a1f-11ef-9856-20155d97c234"
+
+  - `total` (integer, required)
+    Total number of items in the collection that match the filter query, if one was provided in the request
+    Example: 12
+
+  - `items` (array, required)
+
+  - `items.id` (string)
+    Primary identifier for the async operation given by the system
+
+  - `items.type` (string)
+    Type of the resource
+
+  - `items.generation` (integer)
+    Monotonically increasing update counter
+
+  - `items.createdAt` (string)
+    Time of async operation creation
+
+  - `items.updatedAt` (string)
+    Time of the last async operation update
+
+  - `items.resourceUri` (string)
+    URI to the async operation itself (i.e. a self link)
+    Example: "/compute-ops-mgmt/v1beta1/async-operations/22602690-193a-11ef-b56a-20155d97c234"
+
+  - `items.sourceResourceUri` (string)
+    URI reference to the resource or resource collection that initiated the async operation
+    Example: "/compute-ops-mgmt/v1beta3/groups/9ac30e2e-0241-4fd2-aa73-8b1a6f3f5faf/devices"
+
+  - `items.state` (string)
+    The current state of an async operation. This value is controlled by Compute Ops Management and is read-only for the user.
+
+* INITIALIZED - Active, not terminal. The async operation has been created and is waiting to be started.
+* RUNNING - Active, not terminal. The async operation is running.
+* PAUSED - Active, not terminal. The async operation has been paused by the system and requires user input.
+* TIMEDOUT - Inactive, not terminal. The async operation did not receive an update in the last timeoutMinutes.
+* SUCCEEDED - Inactive, terminal. The async operation is complete and succeeded.
+* FAILED - Inactive, terminal. The async operation is complete and failed.
+* CANCELLED - Inactive, terminal. The async operation was cancelled.
+    Enum: "INITIALIZED", "RUNNING", "PAUSED", "TIMEDOUT", "SUCCEEDED", "FAILED", "CANCELLED"
+
+  - `items.startedAt` (string)
+    Time at which the async operation began
+
+  - `items.endedAt` (string)
+    Time when the async operation reached a terminal state (SUCCEEDED, FAILED, or CANCELLED)
+
+  - `items.logMessages` (array)
+    A list of progress update objects which may be empty
+
+  - `items.logMessages.message` (string, required)
+    The log message generated by the system
+    Example: "The async operation has started"
+
+  - `items.logMessages.timestamp` (string)
+
+  - `items.progressPercent` (integer)
+    The percent progress of the async operation
+
+  - `items.operationType` (string)
+    The type of async operation.
+    Enum: "UNKNOWN", "INTERNAL_ASYNC_OPERATION", "SUSTAINABILITY_METRICS_COLLECTION", "ADD_DEVICE_TO_GROUP", "REMOVE_DEVICE_FROM_GROUP"
+
+  - `items.error` (any)
+
+  - `items.recommendations` (array)
+    List of recommendations for resolving the error(s)
+    Example: ["Examine the error field for information and retry the operation."]
+
+  - `items.results` (array)
+    List of references to resources (other than the source resource) which were created, updated, or deleted during the async operation
+
+  - `items.results.resourceUri` (string, required)
+    The URIs for any resources that were modified during the operation
+    Example: "/compute-ops-mgmt/v1beta3/groups/9ac30e2e-0241-4fd2-aa73-8b1a6f3f5faf/devices/074115-049+8899074115649269"
+
+## Response 401 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 403 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 404 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 412 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+## Response 500 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    HTTP equivalent status code
+    Example: 400
+
+  - `errorCode` (string, required)
+    Unique machine-friendly identifier for the error
+    Example: "HPE-GL-COMPUTE_OPS-0500001"
+
+  - `message` (string, required)
+    User-friendly error message
+
+  - `debugId` (string, required)
+    Unique identifier for the instance of this error
+
+  - `errorDetails` (array)
+    Additional detailed information about the error
+
+

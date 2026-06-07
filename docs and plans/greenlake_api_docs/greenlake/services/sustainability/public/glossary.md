@@ -1,7 +1,7 @@
 ---
 title: "HPE Sustainability Insight Center glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/sustainability/public/glossary.md"
-scraped_at: "2026-06-07T05:46:14.668332+00:00Z"
+scraped_at: "2026-06-07T06:13:29.473740+00:00Z"
 ---
 
 # HPE Sustainability Insight Center glossary

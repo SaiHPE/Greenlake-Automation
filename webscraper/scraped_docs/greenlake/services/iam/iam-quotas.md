@@ -1,7 +1,7 @@
 ---
 title: "IAM Resource Quotas | HPE GreenLake"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/iam/iam-quotas.md"
-scraped_at: "2026-06-07T05:45:54.714551+00:00Z"
+scraped_at: "2026-06-07T06:13:19.794839+00:00Z"
 ---
 
 # IAM Resource Quotas

@@ -1,7 +1,7 @@
 ---
 title: "Workspace Groups Management"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/iam/authorization/groups.md"
-scraped_at: "2026-06-07T05:46:21.452001+00:00Z"
+scraped_at: "2026-06-07T06:13:32.084872+00:00Z"
 ---
 
 # Workspace Groups Management

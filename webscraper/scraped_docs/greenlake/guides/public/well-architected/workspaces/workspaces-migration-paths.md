@@ -1,7 +1,7 @@
 ---
 title: "Migrating to Workspace Architecture Best Practices"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/guides/public/well-architected/workspaces/workspaces-migration-paths.md"
-scraped_at: "2026-06-07T05:46:17.717870+00:00Z"
+scraped_at: "2026-06-07T06:13:30.615211+00:00Z"
 ---
 
 # Migrating to Workspace Architecture Best Practices

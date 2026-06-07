@@ -1,7 +1,7 @@
 ---
 title: "GreenLake webhooks and events FAQ"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/guides/public/frequently_asked_questions/webhook_faq.md"
-scraped_at: "2026-06-07T05:45:55.726573+00:00Z"
+scraped_at: "2026-06-07T06:13:20.980090+00:00Z"
 ---
 
 # GreenLake webhooks and events FAQ

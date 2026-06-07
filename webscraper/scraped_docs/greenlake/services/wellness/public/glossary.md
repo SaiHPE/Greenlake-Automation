@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Wellness glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/wellness/public/glossary.md"
-scraped_at: "2026-06-07T05:46:15.793417+00:00Z"
+scraped_at: "2026-06-07T06:13:30.132981+00:00Z"
 ---
 
 # HPE GreenLake for Wellness glossary

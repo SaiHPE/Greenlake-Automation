@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Subscription Management glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/subscription-management/public/glossary.md"
-scraped_at: "2026-06-07T05:46:13.905986+00:00Z"
+scraped_at: "2026-06-07T06:13:29.393661+00:00Z"
 ---
 
 # HPE GreenLake for Subscription Management glossary

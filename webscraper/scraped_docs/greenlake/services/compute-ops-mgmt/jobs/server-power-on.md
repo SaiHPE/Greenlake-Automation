@@ -1,7 +1,7 @@
 ---
 title: "Server Power On Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/server-power-on.md"
-scraped_at: "2026-06-07T05:46:05.203720+00:00Z"
+scraped_at: "2026-06-07T06:13:25.176839+00:00Z"
 ---
 
 # Server Power On Job

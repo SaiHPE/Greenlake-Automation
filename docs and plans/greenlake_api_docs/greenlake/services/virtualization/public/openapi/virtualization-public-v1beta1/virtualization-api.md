@@ -1,7 +1,7 @@
 ---
 title: "Virtualization API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/virtualization/public/openapi/virtualization-public-v1beta1/virtualization-api.md"
-scraped_at: "2026-06-07T05:46:41.083112+00:00Z"
+scraped_at: "2026-06-07T06:13:41.423145+00:00Z"
 ---
 
 # Virtualization API

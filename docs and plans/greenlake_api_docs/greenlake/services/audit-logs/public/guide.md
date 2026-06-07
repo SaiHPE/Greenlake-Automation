@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Audit Logs developer guide"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/audit-logs/public/guide.md"
-scraped_at: "2026-06-07T05:45:56.674363+00:00Z"
+scraped_at: "2026-06-07T06:13:20.948964+00:00Z"
 ---
 
 # HPE GreenLake for Audit Logs developer guide

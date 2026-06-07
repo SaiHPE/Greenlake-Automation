@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Service Catalog glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/glossary.md"
-scraped_at: "2026-06-07T05:46:13.774889+00:00Z"
+scraped_at: "2026-06-07T06:13:28.721945+00:00Z"
 ---
 
 # HPE GreenLake for Service Catalog glossary

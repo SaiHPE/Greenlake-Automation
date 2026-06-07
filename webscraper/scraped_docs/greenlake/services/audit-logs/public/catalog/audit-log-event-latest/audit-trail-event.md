@@ -1,7 +1,7 @@
 ---
 title: "Audit Log Events"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/audit-logs/public/catalog/audit-log-event-latest/audit-trail-event.md"
-scraped_at: "2026-06-07T05:46:26.558664+00:00Z"
+scraped_at: "2026-06-07T06:13:34.462846+00:00Z"
 ---
 
 # Audit Log Events

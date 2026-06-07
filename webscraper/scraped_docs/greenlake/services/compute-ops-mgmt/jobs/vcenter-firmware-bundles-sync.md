@@ -1,7 +1,7 @@
 ---
 title: "vCenter Firmware Bundles Sync Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/vcenter-firmware-bundles-sync.md"
-scraped_at: "2026-06-07T05:46:06.101462+00:00Z"
+scraped_at: "2026-06-07T06:13:25.365923+00:00Z"
 ---
 
 # vCenter Firmware Bundles Sync Job

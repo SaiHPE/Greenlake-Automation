@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake Consumption Analytics Reports API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/consumption-analytics/public/openapi/consumption-analytics-latest/v2/public-reports-v2.md"
-scraped_at: "2026-06-07T05:46:30.444752+00:00Z"
+scraped_at: "2026-06-07T06:13:36.225761+00:00Z"
 ---
 
 # HPE GreenLake Consumption Analytics Reports API

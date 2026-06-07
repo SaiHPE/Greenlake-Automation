@@ -1,7 +1,7 @@
 ---
 title: "Available Resources"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/webhooks/resources.md"
-scraped_at: "2026-06-07T05:46:08.014293+00:00Z"
+scraped_at: "2026-06-07T06:13:26.097223+00:00Z"
 ---
 
 # Available Resources

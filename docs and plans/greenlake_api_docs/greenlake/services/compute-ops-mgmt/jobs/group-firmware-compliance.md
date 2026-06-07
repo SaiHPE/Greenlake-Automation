@@ -1,7 +1,7 @@
 ---
 title: "Group Firmware Compliance Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/group-firmware-compliance.md"
-scraped_at: "2026-06-07T05:46:01.431338+00:00Z"
+scraped_at: "2026-06-07T06:13:23.327163+00:00Z"
 ---
 
 # Group Firmware Compliance Job

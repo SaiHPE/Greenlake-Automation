@@ -1,0 +1,377 @@
+---
+title: "PATCH /private-cloud-business/v1beta1/systems/{id}"
+source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/private-cloud-business/public/openapi/private-cloud-business-public-v1beta1/private-cloud-business-api/systems/patchsystem.md"
+scraped_at: "2026-06-07T06:15:37.018665+00:00Z"
+---
+
+# Modifies the system specified by systemId.
+
+Modify specified system.
+
+Endpoint: PATCH /private-cloud-business/v1beta1/systems/{id}
+Version: 1.1.0
+Security: bearer
+
+## Path parameters:
+
+  - `id` (string, required)
+    Unique Identifier of the system, usually a UUID.
+
+## Request fields (application/merge-patch+json):
+
+  - `location` (object)
+    Location details to be updated on the system
+
+  - `location.city` (string)
+    City
+
+  - `location.countryCode` (string)
+    Country Code
+
+  - `location.stateCode` (string)
+    State Code
+
+  - `location.zipCode` (string)
+    Zip Code
+
+## Response 200 fields (application/json):
+
+  - `id` (string, required)
+    An identifier for the resource, usually a UUID.
+
+  - `type` (string, required)
+    The type of resource.
+
+  - `generation` (integer, required)
+    A monotonically increasing value. This value updates when the resource is updated and can be used as a short way to determine if a resource has changed or which of two different copies of a resource is more up to date.
+
+  - `createdAt` (string, required)
+
+  - `updatedAt` (string, required)
+
+  - `resourceUri` (string, required)
+    The self reference for this resource.
+
+  - `customerId` (string, required)
+    The customer application identifier
+
+  - `associatedResourceCounts` (object)
+    Associated Resource Information of system.
+
+  - `associatedResourceCounts.datastoreCount` (number)
+    Total Datastore Count of the system
+
+  - `associatedResourceCounts.hypervisorClusterCount` (number)
+    Total Hypervisor Cluster Count of the system
+
+  - `associatedResourceCounts.serversCount` (number)
+    Total Servers Count of the system
+
+  - `associatedResourceCounts.storageArrayCount` (number)
+    Total Storage Array Count of the system
+
+  - `associatedResourceCounts.switchesCount` (number)
+    Total Switches Count of the system
+
+  - `associatedResourceCounts.vmCount` (number)
+    Total Virtual Machine Count of the system
+
+  - `computeUsage` (object)
+    System Compute Usage Information.
+
+  - `computeUsage.cpuCapacityMhz` (number)
+    CPU Capacity in Mhz of system
+
+  - `computeUsage.cpuUsedMhz` (number)
+    CPU Usage in Mhz by system
+
+  - `computeUsage.memoryCapacityBytes` (number)
+    Memory Capacity in Bytes of system
+
+  - `computeUsage.memoryUsedBytes` (number)
+    Memory Usage in Bytes by system
+
+  - `configAnalysisStatus` (object)
+    Status of last run of configuration analysis job.
+
+  - `configAnalysisStatus.createdAt` (string)
+    Time when configuration analysis job was created.
+
+  - `configAnalysisStatus.createdBy` (string)
+    Configuration analysis job was created by.
+
+  - `configAnalysisStatus.nextScheduledRunTime` (string)
+    Time when configuration analysis job was next scheduled.
+
+  - `configAnalysisStatus.ruleRunStartTime` (string)
+    Time when configuration analysis job was started.
+
+  - `configAnalysisStatus.totalFailed` (number)
+    Count of failed checks.
+
+  - `configAnalysisStatus.totalPassed` (number)
+    Count of passed checks.
+
+  - `configAnalysisStatus.totalWarning` (number)
+    Count of warning checks.
+
+  - `health` (object)
+    Aspects of system health.
+
+Deduced health of storage subsystem based on associated arrays, controllers, disks,
+shelves, power supply, network interfaces, fan and temperature sensors.
+
+Aggregated health of servers based on health statuses of multiple servers in the system.
+
+Aggregated health of network based on health statues of multiple switches used in the system.
+
+Deduced/Aggregated overall health of the system based on storage, servers and networking health.
+
+  - `health.network` (string)
+    Enum: "OK", "WARNING", "CRITICAL", "MISSING"
+
+  - `health.overallHealth` (string)
+    Enum: "OK", "WARNING", "CRITICAL", "MISSING"
+
+  - `health.servers` (string)
+    Enum: "OK", "WARNING", "CRITICAL", "MISSING"
+
+  - `health.storage` (string)
+    Enum: "OK", "WARNING", "CRITICAL", "MISSING"
+
+  - `hypervisorClusters` (array)
+    List of hypervisor clusters in the system with their software details.
+
+  - `hypervisorClusters.hypervisorManagerAddress` (string)
+    Address of Hypervisor Cluster Manager.
+
+  - `hypervisorClusters.hypervisorManagerId` (string)
+    Unique Identifier of Hypervisor Cluster Manager.
+
+  - `hypervisorClusters.hypervisorManagerName` (string)
+    Name of Hypervisor Cluster Manager.
+
+  - `hypervisorClusters.id` (string)
+    Unique Identifier of the Hypervisor Cluster, usually a UUID.
+
+  - `hypervisorClusters.name` (string)
+    Name of the Hypervisor Cluster
+
+  - `hypervisorClusters.resourceUri` (string)
+    Resource URI of the Hypervisor Cluster.
+
+  - `location` (object)
+    System Location Information.
+
+  - `location.city` (string)
+    City
+
+  - `location.countryCode` (string)
+    Country Code
+
+  - `location.latitude` (string)
+    Latitude coordinate of the system location
+
+  - `location.longitude` (string)
+    Longitude coordinate of the system location
+
+  - `location.stateCode` (string)
+    State Code
+
+  - `location.zipCode` (string)
+    Zip Code
+
+  - `softwareInfo` (object)
+    system software information.
+
+  - `softwareInfo.currentUpdateStatus` (object)
+    Details of the current software update status
+
+  - `softwareInfo.currentUpdateStatus.catalogVersion` (string)
+    Software Catalog version to which the update operation is in progress, if any.
+
+  - `softwareInfo.currentUpdateStatus.parentTaskUri` (string)
+    Uniform Resource Identifier (URI) of the parent software update task (asynchronous operation).
+
+  - `softwareInfo.currentUpdateStatus.percentage` (integer)
+    Percentage of the software update progress.
+
+  - `softwareInfo.currentUpdateStatus.state` (string)
+    Status of the software update:
+  * UP_TO_DATE - Already up to date
+  * UPDATE_AVAILABLE - One or more updates are available
+  * PENDING - Waiting for update operation (precheck or update) to begin
+  * PRECHECK_IN_PROGRESS - A software update precheck operation is in progress
+  * PRECHECK_FAILED - The previous software update precheck operation has failed
+  * PRECHECK_COMPLETE - The previous software update precheck operation has completed successfully
+  * UPDATE_IN_PROGRESS - A software update operation is in progress
+  * UPDATE_COMPLETE - The previous software update operation has completed successfully
+  * UPDATE_FAILED - The previous software update operation has failed
+  * NOT_READY - Not ready for update (e.g. when current version is not available, so no update paths exist)
+    Enum: "UP_TO_DATE", "UPDATE_AVAILABLE", "PENDING", "PRECHECK_IN_PROGRESS", "PRECHECK_FAILED", "PRECHECK_COMPLETE", "UPDATE_IN_PROGRESS", "UPDATE_COMPLETE", "UPDATE_FAILED", "NOT_READY"
+
+  - `softwareInfo.currentUpdateStatus.taskUri` (string)
+    Uniform Resource Identifier (URI) of the software update task (asynchronous operation).
+
+  - `softwareInfo.lastUpdatedOn` (string)
+    Date on which the last software update was performed on this system.
+
+  - `softwareInfo.precheckValidUntil` (string)
+    If a software update precheck is completed recently, time until which that precheck is valid for software update to be initiated.
+
+  - `stackType` (string)
+    Stack Type of the system
+    Enum: "DHCI", "SIMPLIVITY"
+
+  - `state` (string)
+    Current state of the system
+    Enum: "OFFLINE", "ONLINE", "INITIALIZED", "UNINITIALIZED"
+
+  - `storageSystem` (object)
+    Storage Information of system.
+
+  - `storageSystem.compressionRatio` (number)
+    Compression ratio of the storage system.
+
+  - `storageSystem.dedupeRatio` (number)
+    Deduplication ratio of the storage system.
+
+  - `storageSystem.groupLeaderName` (string)
+    Name of the storage system array group leader.
+
+  - `storageSystem.groupLeaderSerialNumber` (string)
+    Serial number of the storage system array group leader.
+
+  - `storageSystem.groupName` (string)
+    Name of the storage system array group.
+
+  - `storageSystem.groupState` (string)
+    State of the storage system array group.
+
+  - `storageSystem.id` (string)
+    Storage system array Identifier, usually a UUID.
+
+  - `storageSystem.name` (string)
+    Name of the Storage system Array
+
+  - `storageSystem.resourceUri` (string)
+    Resource URI of the Storage system Array
+
+  - `storageUsage` (object)
+    Storage Usage Information of system.
+
+  - `storageUsage.sizeInBytes` (number)
+    Storage Capacity of the system
+
+  - `storageUsage.usageInBytes` (number)
+    Storage Usage of the system
+
+  - `systemVms` (array)
+    List of system virtual machine information.
+
+  - `systemVms.name` (string)
+    Name of the system Virtual Machine.
+
+  - `systemVms.uuid` (string)
+    Unique Identifier of the system virtual machine, usually a UUID.
+
+  - `name` (string)
+    A system specified name for the resource.
+
+## Response 400 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    The HTTP status code of the response
+
+  - `message` (string, required)
+    A user-friendly error message
+    Example: "An example error message"
+
+  - `errorCode` (string, required)
+    A machine friendly identifier for the error response
+
+  - `debugId` (string, required)
+    A unique identifier for the request
+    Example: "f57dcca3345820eb579c9317ce36dd92"
+
+## Response 401 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    The HTTP status code of the response
+
+  - `message` (string, required)
+    A user-friendly error message
+    Example: "An example error message"
+
+  - `errorCode` (string, required)
+    A machine friendly identifier for the error response
+
+  - `debugId` (string, required)
+    A unique identifier for the request
+    Example: "f57dcca3345820eb579c9317ce36dd92"
+
+## Response 403 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    The HTTP status code of the response
+
+  - `message` (string, required)
+    A user-friendly error message
+    Example: "An example error message"
+
+  - `errorCode` (string, required)
+    A machine friendly identifier for the error response
+
+  - `debugId` (string, required)
+    A unique identifier for the request
+    Example: "f57dcca3345820eb579c9317ce36dd92"
+
+## Response 404 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    The HTTP status code of the response
+
+  - `message` (string, required)
+    A user-friendly error message
+    Example: "An example error message"
+
+  - `errorCode` (string, required)
+    A machine friendly identifier for the error response
+
+  - `debugId` (string, required)
+    A unique identifier for the request
+    Example: "f57dcca3345820eb579c9317ce36dd92"
+
+## Response 500 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    The HTTP status code of the response
+
+  - `message` (string, required)
+    A user-friendly error message
+    Example: "An example error message"
+
+  - `errorCode` (string, required)
+    A machine friendly identifier for the error response
+
+  - `debugId` (string, required)
+    A unique identifier for the request
+    Example: "f57dcca3345820eb579c9317ce36dd92"
+
+## Response 503 fields (application/json):
+
+  - `httpStatusCode` (integer, required)
+    The HTTP status code of the response
+
+  - `message` (string, required)
+    A user-friendly error message
+    Example: "An example error message"
+
+  - `errorCode` (string, required)
+    A machine friendly identifier for the error response
+
+  - `debugId` (string, required)
+    A unique identifier for the request
+    Example: "f57dcca3345820eb579c9317ce36dd92"
+
+

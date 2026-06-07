@@ -1,7 +1,7 @@
 ---
 title: "HPE Greenlake For Block Storage REST APIs."
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/block-storage/public/openapi/block-storage-public-v1alpha1/block-storage-api.md"
-scraped_at: "2026-06-07T05:46:28.514905+00:00Z"
+scraped_at: "2026-06-07T06:13:35.548784+00:00Z"
 ---
 
 # HPE Greenlake For Block Storage REST APIs.

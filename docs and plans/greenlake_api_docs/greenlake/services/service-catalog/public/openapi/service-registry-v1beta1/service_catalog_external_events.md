@@ -1,7 +1,7 @@
 ---
 title: "Service Registry External Events"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/service-catalog/public/openapi/service-registry-v1beta1/service_catalog_external_events.md"
-scraped_at: "2026-06-07T05:46:37.125341+00:00Z"
+scraped_at: "2026-06-07T06:13:39.423957+00:00Z"
 ---
 
 # Service Registry External Events

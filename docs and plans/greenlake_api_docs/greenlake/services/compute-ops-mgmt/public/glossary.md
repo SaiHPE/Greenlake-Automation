@@ -1,7 +1,7 @@
 ---
 title: "HPE Compute Ops Management Glossary"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/public/glossary.md"
-scraped_at: "2026-06-07T05:46:06.153345+00:00Z"
+scraped_at: "2026-06-07T06:13:25.388465+00:00Z"
 ---
 
 # HPE Compute Ops Management Glossary

@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Authorization API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/iam/authorization/authz-v2/external/openapi/authz-v2alpha2.md"
-scraped_at: "2026-06-07T05:46:47.559881+00:00Z"
+scraped_at: "2026-06-07T06:13:44.205552+00:00Z"
 ---
 
 # HPE GreenLake for Authorization API

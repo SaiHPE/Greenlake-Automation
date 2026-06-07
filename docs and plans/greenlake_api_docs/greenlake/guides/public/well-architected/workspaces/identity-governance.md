@@ -1,7 +1,7 @@
 ---
 title: "Identity Governance Essentials"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/guides/public/well-architected/workspaces/identity-governance.md"
-scraped_at: "2026-06-07T05:46:16.912730+00:00Z"
+scraped_at: "2026-06-07T06:13:30.419657+00:00Z"
 ---
 
 # Identity Governance Essentials

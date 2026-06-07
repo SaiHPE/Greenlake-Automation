@@ -1,7 +1,7 @@
 ---
 title: "Sustainability-Insight-Center"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/sustainability/public/openapi/sustainability-insight-ctr-latest/openapi.md"
-scraped_at: "2026-06-07T05:46:40.080574+00:00Z"
+scraped_at: "2026-06-07T06:13:40.772707+00:00Z"
 ---
 
 # Sustainability-Insight-Center

@@ -1,7 +1,7 @@
 ---
 title: "Group Firmware Download Job"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/compute-ops-mgmt/jobs/group-firmware-download.md"
-scraped_at: "2026-06-07T05:46:02.240878+00:00Z"
+scraped_at: "2026-06-07T06:13:23.428222+00:00Z"
 ---
 
 # Group Firmware Download Job

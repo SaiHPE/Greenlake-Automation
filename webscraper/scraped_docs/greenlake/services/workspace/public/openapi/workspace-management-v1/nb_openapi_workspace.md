@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake for Workspace Management API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/workspace/public/openapi/workspace-management-v1/nb_openapi_workspace.md"
-scraped_at: "2026-06-07T05:46:42.321409+00:00Z"
+scraped_at: "2026-06-07T06:13:41.810801+00:00Z"
 ---
 
 # HPE GreenLake for Workspace Management API

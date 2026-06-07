@@ -1,7 +1,7 @@
 ---
 title: "HPE GreenLake SCIM User and Group Management APIs"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/scim/public/openapi/user-group-management-public/openapibeta.md"
-scraped_at: "2026-06-07T05:46:34.764824+00:00Z"
+scraped_at: "2026-06-07T06:13:38.056748+00:00Z"
 ---
 
 # HPE GreenLake SCIM User and Group Management APIs

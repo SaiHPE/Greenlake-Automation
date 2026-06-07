@@ -1,7 +1,7 @@
 ---
 title: "GLCP Audit Logs Internal API"
 source_url: "https://developer.greenlake.hpe.com/docs/greenlake/services/audit-logs/public/openapi/audit-logs/v1/audit-trail-internal.md"
-scraped_at: "2026-06-07T05:46:42.900415+00:00Z"
+scraped_at: "2026-06-07T06:13:42.154734+00:00Z"
 ---
 
 # GLCP Audit Logs Internal API

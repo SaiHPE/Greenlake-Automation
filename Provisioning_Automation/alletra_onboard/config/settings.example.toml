@@ -1,0 +1,27 @@
+[api]
+host = "127.0.0.1"
+port = 8765
+
+[greenlake]
+base_url = "https://global.api.greenlake.hpe.com"
+token_url = "https://sso.common.cloud.hpe.com/as/token.oauth2"
+
+[regions.dscc]
+ap-northeast = "jp1"
+us-west = "us1"
+eu-central = "eu1"
+eu-west = "uk1"
+
+[regions.storage_fleet]
+ap-northeast = "https://ap-northeast.api.greenlake.hpe.com"
+us-west = "https://us-west.api.greenlake.hpe.com"
+eu-central = "https://eu-central.api.greenlake.hpe.com"
+eu-west = "https://eu-west.api.greenlake.hpe.com"
+
+[state]
+database_path = ".alletra_onboard/state.db"
+artifact_dir = ".alletra_onboard/artifacts"
+
+[browser]
+cdp_url = "http://localhost:9222"
+headless = false
