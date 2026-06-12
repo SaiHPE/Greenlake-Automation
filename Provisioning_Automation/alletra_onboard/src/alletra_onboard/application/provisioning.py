@@ -142,9 +142,11 @@ class GreenLakeProvisioningService:
             self._record(result, phase, SKIPPED, f"device already registered as {result.device_id}")
             return
         if dry_run:
+            # Validate the device payload against GreenLake (dry-run=true) without creating it.
+            await self.devices.add_storage_device(item.serial_number, item.part_number, item.tags, dry_run=True)
             self._record(
                 result, phase, WOULD_DO,
-                f"would register device serial={item.serial_number} part={item.part_number}, then poll",
+                f"device payload validated by API (dry-run); would register serial={item.serial_number}",
             )
             return
         location = await self.devices.add_storage_device(item.serial_number, item.part_number, item.tags)
@@ -294,8 +296,35 @@ def _exception_detail(exc: Exception) -> str:
     import httpx
 
     if isinstance(exc, httpx.HTTPStatusError):
-        return f"HTTP {exc.response.status_code} from {exc.request.method} {exc.request.url.path}"
+        base = f"HTTP {exc.response.status_code} from {exc.request.method} {exc.request.url.path}"
+        body = _greenlake_error_text(exc.response)
+        return f"{base} — {body}" if body else base
     return redact(str(exc) or exc.__class__.__name__)
+
+
+def _greenlake_error_text(response: Any) -> str:
+    """Pull the human-readable message + field issues out of a GreenLake error body."""
+    try:
+        data = response.json()
+    except Exception:  # noqa: BLE001 - error bodies are not always JSON.
+        return redact((response.text or "").strip()[:300])
+    if not isinstance(data, dict):
+        return ""
+    parts: list[str] = []
+    if data.get("message"):
+        parts.append(str(data["message"]))
+    if data.get("errorCode"):
+        parts.append(f"[{data['errorCode']}]")
+    for detail in data.get("badRequestErrorDetails") or []:
+        issues = detail.get("issues") if isinstance(detail, dict) else None
+        for issue in issues or []:
+            if not isinstance(issue, dict):
+                continue
+            description = issue.get("description") or issue.get("subject")
+            source = issue.get("source")
+            if description:
+                parts.append(f"{source + ': ' if source else ''}{description}")
+    return redact("; ".join(parts))[:500]
 
 
 def _res_id(value: dict[str, Any]) -> str:

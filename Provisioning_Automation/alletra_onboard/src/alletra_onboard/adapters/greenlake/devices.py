@@ -7,7 +7,17 @@ if TYPE_CHECKING:
 
 
 def storage_device_payload(serial_number: str, part_number: str, tags: dict[str, str] | None = None) -> dict[str, Any]:
-    return {"storage": [{"serialNumber": serial_number, "partNumber": part_number, "tags": tags or {}}]}
+    # POST /devices/v2beta1/devices flat schema: serialNumber + deviceType + partNumber
+    # (partNumber required for STORAGE). The v1 `{storage:[...]}` form requires
+    # compute/network arrays too and 400s for a storage-only add.
+    payload: dict[str, Any] = {
+        "serialNumber": serial_number,
+        "deviceType": "STORAGE",
+        "partNumber": part_number,
+    }
+    if tags:
+        payload["tags"] = tags
+    return payload
 
 
 def assign_application_payload(service_manager_id: str, region: str) -> dict[str, Any]:
@@ -22,11 +32,17 @@ class DevicesClient:
     def __init__(self, http: "GreenLakeHttpClient") -> None:
         self.http = http
 
-    async def add_storage_device(self, serial_number: str, part_number: str, tags: dict[str, str]) -> str | None:
+    async def add_storage_device(
+        self, serial_number: str, part_number: str, tags: dict[str, str], *, dry_run: bool = False
+    ) -> str | None:
+        # dry_run=True asks GreenLake to validate the payload without creating the device
+        # (the endpoint's documented `dry-run` query param). Used by `provision --dry-run`.
+        params = {"dry-run": "true"} if dry_run else None
         response = await self.http.request(
             "POST",
-            "/devices/v1/devices",
+            "/devices/v2beta1/devices",
             bucket="device_add",
+            params=params,
             json=storage_device_payload(serial_number, part_number, tags),
         )
         return response.headers.get("Location")
