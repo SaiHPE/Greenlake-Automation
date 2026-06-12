@@ -5,9 +5,14 @@ from alletra_onboard.adapters.greenlake.devices import (
 )
 
 
-def test_storage_device_payload_uses_serial_and_part_number():
+def test_storage_device_payload_uses_v2beta1_flat_schema():
     payload = storage_device_payload("SGHD44LQLS", "S0B84A")
-    assert payload == {"storage": [{"serialNumber": "SGHD44LQLS", "partNumber": "S0B84A", "tags": {}}]}
+    assert payload == {"serialNumber": "SGHD44LQLS", "deviceType": "STORAGE", "partNumber": "S0B84A"}
+
+
+def test_storage_device_payload_includes_tags_only_when_present():
+    assert "tags" not in storage_device_payload("SGHD44LQLS", "S0B84A")
+    assert storage_device_payload("SGHD44LQLS", "S0B84A", {"site": "lab"})["tags"] == {"site": "lab"}
 
 
 def test_assignment_payload_does_not_include_subscription():
