@@ -9,3 +9,8 @@ build/
 node_modules/
 frontend/dist/
 .env
+
+# Real work items contain a subscription key — keep the example only
+config/arrays.csv
+config/arrays*.csv
+!config/arrays.example.csv
