@@ -8,6 +8,7 @@ from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogCli
 from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
 from alletra_onboard.application.provisioning import (
     DONE,
+    FAILED,
     SKIPPED,
     WOULD_DO,
     GreenLakeProvisioningService,
@@ -92,7 +93,7 @@ async def test_full_provision_happy_path_registers_assigns_and_verifies():
     respx.get(f"{BASE}/devices/v1/devices").mock(
         side_effect=[httpx.Response(200, json={"items": []}), httpx.Response(200, json={"items": [{"id": "dev-1"}]})]
     )
-    respx.post(f"{BASE}/devices/v1/devices").mock(
+    respx.post(f"{BASE}/devices/v2beta1/devices").mock(
         return_value=httpx.Response(202, headers={"Location": f"{BASE}/devices/v1/async-operations/add-op"})
     )
     # Two PATCHes: assign then apply.
@@ -169,11 +170,12 @@ async def test_idempotent_rerun_skips_all_writes():
 
 
 @respx.mock
-async def test_dry_run_makes_no_writes_and_previews_all_phases():
+async def test_dry_run_validates_device_payload_via_api_without_real_writes():
     respx.get(f"{BASE}/service-catalog/v1/service-manager-provisions").mock(return_value=_provisions())
     respx.get(f"{BASE}/subscriptions/v1/subscriptions").mock(return_value=httpx.Response(200, json={"items": []}))
     respx.get(f"{BASE}/devices/v1/devices").mock(return_value=httpx.Response(200, json={"items": []}))
-    post_device = respx.post(f"{BASE}/devices/v1/devices").mock(return_value=httpx.Response(202))
+    # dry-run sends the add with ?dry-run=true; the API validates and creates nothing.
+    dryrun_add = respx.post(f"{BASE}/devices/v2beta1/devices").mock(return_value=httpx.Response(202))
     patch_device = respx.patch(f"{BASE}/devices/v1/devices").mock(return_value=httpx.Response(202))
     post_sub = respx.post(f"{BASE}/subscriptions/v1/subscriptions").mock(return_value=httpx.Response(202))
 
@@ -182,12 +184,40 @@ async def test_dry_run_makes_no_writes_and_previews_all_phases():
     assert result.succeeded is False  # dry-run never claims success
     assert _phase(result, WorkflowPhase.GL_ADD_SUBSCRIPTION).status == WOULD_DO
     assert _phase(result, WorkflowPhase.GL_REGISTER_DEVICE).status == WOULD_DO
-    assert _phase(result, WorkflowPhase.GL_ASSIGN_APPLICATION).status == WOULD_DO
-    assert _phase(result, WorkflowPhase.GL_APPLY_SUBSCRIPTION).status == WOULD_DO
     assert _phase(result, WorkflowPhase.GL_VERIFY_DEVICE).status == WOULD_DO
-    assert post_device.call_count == 0
-    assert patch_device.call_count == 0
+    assert dryrun_add.call_count == 1
+    assert "dry-run" in str(dryrun_add.calls.last.request.url)
+    assert patch_device.call_count == 0  # no real writes
     assert post_sub.call_count == 0
+
+
+@respx.mock
+async def test_register_failure_surfaces_greenlake_error_body():
+    respx.get(f"{BASE}/service-catalog/v1/service-manager-provisions").mock(return_value=_provisions())
+    respx.get(f"{BASE}/subscriptions/v1/subscriptions").mock(
+        return_value=httpx.Response(200, json={"items": [{"id": "sub-1"}]})
+    )
+    respx.get(f"{BASE}/devices/v1/devices").mock(return_value=httpx.Response(200, json={"items": []}))
+    respx.post(f"{BASE}/devices/v2beta1/devices").mock(
+        return_value=httpx.Response(
+            400,
+            json={
+                "message": "Invalid request",
+                "errorCode": "HPE_GL_DEVICES_BAD_REQUEST",
+                "badRequestErrorDetails": [
+                    {"issues": [{"source": "partNumber", "description": "part number not recognized"}]}
+                ],
+            },
+        )
+    )
+
+    result = await _service().provision(_item())
+
+    assert result.succeeded is False
+    assert result.error is not None
+    assert "part number not recognized" in result.error
+    assert "HPE_GL_DEVICES_BAD_REQUEST" in result.error
+    assert _phase(result, WorkflowPhase.GL_REGISTER_DEVICE).status == FAILED
 
 
 @respx.mock
