@@ -51,26 +51,25 @@ async def test_subscription_find_by_key_uses_read_filter():
     ]
 
 
-async def test_service_catalog_provisions_use_provisioned_region_filter():
+async def test_service_catalog_provisions_filter_client_side_by_region_and_status():
+    # The endpoint 400s on server-side status/combined filters, so the client fetches
+    # unfiltered and filters in Python: only PROVISIONED items in the target region.
     http = RecordingHttp(
         {
             "items": [
-                {
-                    "serviceManager": {"id": "svc-123"},
-                    "region": "ap-northeast",
-                    "provisionStatus": "PROVISIONED",
-                }
+                {"serviceManager": {"id": "svc-123"}, "region": "ap-northeast", "provisionStatus": "PROVISIONED"},
+                {"serviceManager": {"id": "svc-other"}, "region": "us-west", "provisionStatus": "PROVISIONED"},
+                {"serviceManager": {"id": "svc-unprov"}, "region": "ap-northeast", "provisionStatus": "UNPROVISIONED"},
             ]
         }
     )
     result = await ServiceCatalogClient(http).service_manager_provisions("ap-northeast")
 
-    assert result[0].service_manager_id == "svc-123"
+    assert [provision.service_manager_id for provision in result] == ["svc-123"]
     assert http.calls == [
         {
             "method": "GET",
             "path": "/service-catalog/v1/service-manager-provisions",
             "bucket": "service_catalog_read",
-            "params": {"filter": "status eq 'PROVISIONED' and region eq 'ap-northeast'"},
         }
     ]
