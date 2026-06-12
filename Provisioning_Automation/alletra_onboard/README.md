@@ -66,4 +66,25 @@ is provisioned.
 - `onboard configure` — store/update GreenLake credentials in `.env`. `--show` prints current values (secret masked).
 - `onboard preflight --file <csv> [--live-greenlake]` — local validation; `--live-greenlake` adds read-only GreenLake checks (token, service-catalog, device, subscription).
 - `onboard provision --file <csv> [--serial <S>] [--dry-run]` — Component A pipeline: discover -> add subscription -> register device -> assign application -> apply subscription -> verify. Idempotent and resumable; every write is GET-guarded and every async operation is polled. `--dry-run` performs only the read/guard calls and prints what the live run would do.
+- `onboard check` — read-only health check: GreenLake auth + which Data Services regions are provisioned. Use it to confirm an install (e.g. on the jump box) can reach GreenLake.
 - `onboard status` / `onboard api` — run state table / local control API.
+
+## Install on the jump box
+
+Component A (GreenLake REST) needs only internet egress to GreenLake — not the array's
+link-local network and not the Playwright browser — so it can run from the jump box (or any
+box with internet + the credentials).
+
+1. **Python 3.12+** — install from python.org if missing (`python --version` to check).
+2. **Get the code** — clone the repo, or copy this `alletra_onboard` folder over via RDP
+   (do not copy `.venv`; it is recreated below).
+3. **Run the setup script** from the package directory (the one with `pyproject.toml`):
+   ```powershell
+   # add -Proxy http://<lab-proxy>:<port> if the jump box reaches the internet via a proxy
+   .\scripts\setup_jumpbox.ps1 -Proxy http://Proxy.bgl1.global.tslabs.hpecorp.net:8080
+   ```
+   It creates the venv, installs the package, and runs `onboard check`.
+4. **Credentials** are NOT in git (`.env` is gitignored). On the jump box run
+   `.\.venv\Scripts\onboard.exe configure` to enter them, then `onboard check` to verify.
+5. If the jump box uses a proxy, also set it for the API calls in the same shell:
+   `$env:HTTPS_PROXY = "http://<lab-proxy>:<port>"` (httpx honors it).

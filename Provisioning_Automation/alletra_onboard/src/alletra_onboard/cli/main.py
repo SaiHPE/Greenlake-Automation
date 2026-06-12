@@ -159,6 +159,66 @@ def configure(
     console.print(f"[green]Saved {env_path.resolve()}[/green] (gitignored). Secret stored locally; not printed.")
 
 
+@app.command("check")
+def check() -> None:
+    """Read-only health check: GreenLake auth + which Data Services regions are provisioned.
+
+    Use this to confirm an install (e.g. on the jump box) can reach GreenLake and that the
+    workspace has a provisioned Data Services instance to assign devices to. No writes.
+    """
+    settings = load_settings()
+    missing = missing_credentials(settings)
+    if missing:
+        console.print(f"[red]Missing GreenLake credentials:[/red] {', '.join(missing)}")
+        console.print("Run [bold]onboard configure[/bold] first.")
+        raise typer.Exit(code=2)
+
+    async def run():
+        service = build_provisioning_service(settings)
+        items = await service.service_catalog.per_region_service_managers()
+        ds_ids = {
+            sm.get("id")
+            for region in items
+            for sm in region.get("serviceManagers", [])
+            if "data service" in str(sm.get("name", "")).lower()
+        }
+        response = await service.http.request(
+            "GET", "/service-catalog/v1/service-manager-provisions", bucket="service_catalog_read"
+        )
+        return ds_ids, response.json().get("items", [])
+
+    console.print(f"[bold]GreenLake health check[/bold]  base={settings.gl_base_url}")
+    try:
+        ds_ids, provisions = asyncio.run(run())
+    except Exception as exc:  # noqa: BLE001 - operator-facing health check reports, not crashes.
+        console.print(f"[red]FAILED:[/red] {type(exc).__name__}: {str(exc)[:200]}")
+        console.print("[dim]On the jump box this is often egress/proxy — set HTTPS_PROXY and retry.[/dim]")
+        raise typer.Exit(code=1)
+
+    console.print("[green]OK[/green] — token fetched and GreenLake is reachable.")
+    table = Table(title="Provisioned services in this workspace")
+    table.add_column("Region")
+    table.add_column("Status")
+    table.add_column("Service manager id")
+    table.add_column("Data Services?")
+    for provision in provisions:
+        sm_id = (provision.get("serviceManager") or {}).get("id") or ""
+        is_ds = "YES" if sm_id in ds_ids else ""
+        table.add_row(str(provision.get("region")), str(provision.get("provisionStatus")), sm_id, is_ds)
+    console.print(table)
+    ready = any(
+        (p.get("serviceManager") or {}).get("id") in ds_ids and p.get("provisionStatus") == "PROVISIONED"
+        for p in provisions
+    )
+    if ready:
+        console.print("[green]Data Services is provisioned — the assign step can run.[/green]")
+    else:
+        console.print(
+            "[yellow]No PROVISIONED Data Services found. Add it in the workspace "
+            "(Manage Workspace -> Services) before the assign step.[/yellow]"
+        )
+
+
 _STATUS_STYLE = {DONE: "green", SKIPPED: "cyan", WOULD_DO: "yellow", FAILED: "red"}
 
 
