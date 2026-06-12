@@ -119,6 +119,10 @@ def _async_error_detail(payload: dict[str, Any]) -> str:
     failed = result.get("failedDevices") if isinstance(result, dict) else None
     parts: list[str] = []
     for device in failed or []:
+        if isinstance(device, str):
+            # PATCH (apply-subscription) async ops list bare device ids with no message.
+            parts.append(f"device {device} failed (API returned no reason)")
+            continue
         if not isinstance(device, dict):
             continue
         serial = device.get("serialNumber", "")

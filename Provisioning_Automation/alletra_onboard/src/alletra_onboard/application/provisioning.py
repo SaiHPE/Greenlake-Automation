@@ -18,9 +18,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+import httpx
+
 from alletra_onboard.adapters.greenlake.auth import OAuthClientCredentials
 from alletra_onboard.adapters.greenlake.devices import DevicesClient
-from alletra_onboard.adapters.greenlake.http_client import GreenLakeHttpClient
+from alletra_onboard.adapters.greenlake.http_client import GreenLakeAsyncOperationError, GreenLakeHttpClient
 from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogClient
 from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
 from alletra_onboard.config import Settings
@@ -33,6 +35,7 @@ ASSIGNED_STATE_TARGET = "ASSIGNED_TO_SERVICE"
 DONE = "done"
 SKIPPED = "skipped"
 WOULD_DO = "would-do"  # dry-run: a write the live run would perform
+WARNING = "warning"  # non-fatal: the run continues and is still considered a success
 FAILED = "failed"
 
 
@@ -51,6 +54,7 @@ class ProvisionResult:
     phases: list[PhaseOutcome] = field(default_factory=list)
     device_id: str | None = None
     subscription_id: str | None = None
+    subscription_available_quantity: str | None = None
     service_manager_id: str | None = None
     region: str | None = None
     assigned_state: str | None = None
@@ -120,6 +124,7 @@ class GreenLakeProvisioningService:
         existing = await self.subscriptions.find_by_key(key)
         if existing:
             result.subscription_id = _res_id(existing)
+            result.subscription_available_quantity = _available_quantity(existing)
             self._record(result, phase, SKIPPED, f"subscription already present as {result.subscription_id}")
             return
         if dry_run:
@@ -132,6 +137,7 @@ class GreenLakeProvisioningService:
         if not added:
             raise ProvisioningError("Subscription add completed but the key is still not queryable.")
         result.subscription_id = _res_id(added)
+        result.subscription_available_quantity = _available_quantity(added)
         self._record(result, phase, DONE, f"subscription added as {result.subscription_id}")
 
     async def _register_device(self, item: ArrayWorkItem, result: ProvisionResult, *, dry_run: bool) -> None:
@@ -194,9 +200,26 @@ class GreenLakeProvisioningService:
         if dry_run:
             self._record(result, phase, WOULD_DO, f"would apply subscription {result.subscription_id}")
             return
-        location = await self.devices.apply_subscription(result.device_id, result.subscription_id)
-        if location:
-            await self.http.poll_async(location, bucket="device_async_poll")
+        # Non-fatal: the device is already registered + ASSIGNED_TO_SERVICE (which is what
+        # clears cloudinit's fail-prov gates). The subscription is also applied by the DSCC
+        # Setup wizard, so a failure here is a warning, not a blocker for connectivity.
+        try:
+            location = await self.devices.apply_subscription(result.device_id, result.subscription_id)
+            if location:
+                await self.http.poll_async(location, bucket="device_async_poll")
+        except (GreenLakeAsyncOperationError, httpx.HTTPStatusError) as exc:
+            hint = ""
+            if str(result.subscription_available_quantity) == "0":
+                hint = (
+                    " — subscription availableQuantity is 0 (its seat is allocated elsewhere); "
+                    "free a seat, or apply it in the DSCC Setup wizard"
+                )
+            self._record(
+                result, phase, WARNING,
+                f"subscription apply failed (device is registered + assigned, so it can still "
+                f"connect){hint}: {_exception_detail(exc)}",
+            )
+            return
         self._record(result, phase, DONE, f"subscription {result.subscription_id} applied")
 
     async def _verify(self, result: ProvisionResult, *, dry_run: bool) -> None:
@@ -208,15 +231,22 @@ class GreenLakeProvisioningService:
             raise ProvisioningError("Cannot verify: no device id resolved.")
         device = await self.devices.get(result.device_id)
         result.assigned_state = _assigned_state(device)
+        # Connectivity-critical (these clear cloudinit's fail-prov gates): hard-fail if missing.
         problems = []
         if result.assigned_state != ASSIGNED_STATE_TARGET:
             problems.append(f"assignedState={result.assigned_state!r} (expected {ASSIGNED_STATE_TARGET})")
         if not _application_id(device):
             problems.append("application.id is empty")
-        if not _subscription_ids(device):
-            problems.append("no subscription on device")
         if problems:
             raise ProvisioningError("Verification failed: " + "; ".join(problems))
+        # Subscription is licensing, not connectivity — missing it is a warning, not a failure.
+        if not _subscription_ids(device):
+            self._record(
+                result, phase, WARNING,
+                "registered + ASSIGNED_TO_SERVICE (the array can connect); subscription not yet "
+                "applied — apply it in the DSCC Setup wizard or once a seat is free",
+            )
+            return
         self._record(result, phase, DONE, "assignedState=ASSIGNED_TO_SERVICE, application + subscription present")
 
     # ----------------------------------------------------------------- helpers
@@ -329,6 +359,11 @@ def _greenlake_error_text(response: Any) -> str:
 
 def _res_id(value: dict[str, Any]) -> str:
     return str(value.get("id") or value.get("resourceId") or value.get("deviceId") or "unknown")
+
+
+def _available_quantity(subscription: dict[str, Any]) -> str | None:
+    value = subscription.get("availableQuantity")
+    return str(value) if value is not None else None
 
 
 def _application_id(device: dict[str, Any]) -> str | None:
