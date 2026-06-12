@@ -11,6 +11,15 @@ from rich.table import Table
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.application.intake import load_work_items_csv
 from alletra_onboard.application.preflight_service import PreflightService
+from alletra_onboard.application.provisioning import (
+    DONE,
+    FAILED,
+    SKIPPED,
+    WOULD_DO,
+    ProvisionResult,
+    build_provisioning_service,
+    missing_credentials,
+)
 from alletra_onboard.application.run_service import RunService
 from alletra_onboard.config import load_settings
 
@@ -49,6 +58,146 @@ def status() -> None:
     for run in runs:
         table.add_row(run.run_id, run.serial_number, run.status.value, run.current_phase.value)
     console.print(table)
+
+
+@app.command("provision")
+def provision(
+    file: str = typer.Option(..., "--file", help="CSV file with array work items."),
+    serial: str | None = typer.Option(None, "--serial", help="Only provision the matching serial number."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview every call; perform no writes."),
+) -> None:
+    """Component A — GreenLake REST: discover, add subscription, register device, assign, verify."""
+    settings = load_settings()
+    missing = missing_credentials(settings)
+    if missing:
+        console.print(f"[red]Missing GreenLake credentials:[/red] {', '.join(missing)}")
+        console.print("Run [bold]onboard configure[/bold] (or set them in .env), then retry.")
+        raise typer.Exit(code=2)
+
+    items = load_work_items_csv(Path(file))
+    if serial:
+        items = [item for item in items if item.serial_number == serial]
+    if not items:
+        console.print("[red]No matching work items found in the CSV.[/red]")
+        raise typer.Exit(code=2)
+
+    mode = "DRY-RUN (no writes)" if dry_run else "LIVE"
+    console.print(f"[bold]GreenLake provisioning — {mode}[/bold]  base={settings.gl_base_url}")
+
+    results: list[ProvisionResult] = []
+    for item in items:
+        console.rule(f"{item.serial_number}  ({item.part_number})")
+
+        def progress(phase, message):
+            console.print(f"  [dim]{phase.value:<22}[/dim] {message}")
+
+        service = build_provisioning_service(settings, progress=progress)
+        result = asyncio.run(service.provision(item, dry_run=dry_run))
+        results.append(result)
+        _print_result_table(result)
+
+    console.print()
+    if dry_run:
+        blocked = [r for r in results if r.error]
+        if blocked:
+            console.print(
+                f"[yellow]Dry-run complete (no changes made), but {len(blocked)} array(s) hit a "
+                f"blocking issue above — resolve before the live run.[/yellow]"
+            )
+        else:
+            console.print("[green]Dry-run complete — no changes made; the live run would proceed.[/green]")
+        return
+    failures = [r for r in results if not r.succeeded]
+    if failures:
+        console.print(f"[red]{len(failures)} of {len(results)} array(s) did not complete.[/red]")
+        raise typer.Exit(code=1)
+    console.print(f"[green]All {len(results)} array(s) provisioned and verified.[/green]")
+
+
+@app.command("configure")
+def configure(
+    client_id: str | None = typer.Option(None, "--client-id"),
+    client_secret: str | None = typer.Option(None, "--client-secret"),
+    token_url: str | None = typer.Option(None, "--token-url"),
+    base_url: str | None = typer.Option(None, "--base-url"),
+    workspace_id: str | None = typer.Option(None, "--workspace-id"),
+    env_file: str = typer.Option(".env", "--env-file", help="Path to the .env to write (gitignored)."),
+    show: bool = typer.Option(False, "--show", help="Print current values (secret masked) and exit."),
+) -> None:
+    """Store GreenLake API credentials in a local .env — the interface to add them."""
+    env_path = Path(env_file)
+    current = _read_env(env_path)
+
+    if show:
+        for key in ("GL_CLIENT_ID", "GL_TOKEN_URL", "GL_BASE_URL", "GL_MEMBER_WORKSPACE_ID"):
+            console.print(f"{key}={current.get(key) or '(unset)'}")
+        console.print(f"GL_CLIENT_SECRET={'**** (set)' if current.get('GL_CLIENT_SECRET') else '(unset)'}")
+        return
+
+    client_id = client_id or typer.prompt("GreenLake Client ID", default=current.get("GL_CLIENT_ID", ""))
+    client_secret = client_secret or typer.prompt(
+        "GreenLake Client Secret", hide_input=True, show_default=False, default=current.get("GL_CLIENT_SECRET", "")
+    )
+    token_url = token_url or typer.prompt("Token URL", default=current.get("GL_TOKEN_URL", ""))
+    base_url = base_url or typer.prompt(
+        "API base URL", default=current.get("GL_BASE_URL", "https://global.api.greenlake.hpe.com")
+    )
+    workspace_id = workspace_id or typer.prompt(
+        "Member workspace ID", default=current.get("GL_MEMBER_WORKSPACE_ID", "")
+    )
+
+    current.update(
+        {
+            "GL_CLIENT_ID": client_id,
+            "GL_CLIENT_SECRET": client_secret,
+            "GL_TOKEN_URL": token_url,
+            "GL_BASE_URL": base_url,
+            "GL_MEMBER_WORKSPACE_ID": workspace_id,
+        }
+    )
+    _write_env(env_path, current)
+    console.print(f"[green]Saved {env_path.resolve()}[/green] (gitignored). Secret stored locally; not printed.")
+
+
+_STATUS_STYLE = {DONE: "green", SKIPPED: "cyan", WOULD_DO: "yellow", FAILED: "red"}
+
+
+def _print_result_table(result: ProvisionResult) -> None:
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Phase")
+    table.add_column("Status")
+    table.add_column("Detail")
+    for phase in result.phases:
+        style = _STATUS_STYLE.get(phase.status, "white")
+        table.add_row(phase.phase.value, f"[{style}]{phase.status}[/{style}]", phase.detail)
+    console.print(table)
+    ids = [
+        f"device={result.device_id}" if result.device_id else "",
+        f"subscription={result.subscription_id}" if result.subscription_id else "",
+        f"app={result.service_manager_id}" if result.service_manager_id else "",
+    ]
+    ids = [value for value in ids if value]
+    if ids:
+        console.print(f"  [dim]{'  '.join(ids)}[/dim]")
+    if result.error:
+        console.print(f"  [red]error: {result.error}[/red]")
+
+
+def _read_env(path: Path) -> dict[str, str]:
+    data: dict[str, str] = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            data[key.strip()] = value.strip()
+    return data
+
+
+def _write_env(path: Path, data: dict[str, str]) -> None:
+    lines = [f"{key}={value}" for key, value in data.items() if value != ""]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 @app.command("preflight")
