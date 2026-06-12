@@ -50,6 +50,37 @@ async def test_poll_async_raises_on_terminal_failure(monkeypatch):
 
 
 @respx.mock
+async def test_poll_async_surfaces_failed_device_detail(monkeypatch):
+    async def _no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr("alletra_onboard.adapters.greenlake.http_client.asyncio.sleep", _no_sleep)
+    op = "https://api.example/devices/v1/async-operations/op-3"
+    respx.get(op).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "status": "FAILED",
+                "result": {
+                    "failedDevices": [
+                        {"serialNumber": "SGHD45FF0Y", "errorCode": "HPE_GL_ERROR_NOT_FOUND", "message": "Device not found"}
+                    ]
+                },
+            },
+        )
+    )
+    http = GreenLakeHttpClient("https://api.example", StaticToken())
+
+    with pytest.raises(GreenLakeAsyncOperationError) as exc:
+        await http.poll_async(op)
+
+    message = str(exc.value)
+    assert "SGHD45FF0Y" in message
+    assert "Device not found" in message
+    assert "HPE_GL_ERROR_NOT_FOUND" in message
+
+
+@respx.mock
 async def test_request_retries_on_429_then_succeeds(monkeypatch):
     async def _no_sleep(_seconds):
         return None
