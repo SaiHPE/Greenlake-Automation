@@ -15,6 +15,7 @@ from alletra_onboard.application.provisioning import (
     DONE,
     FAILED,
     SKIPPED,
+    WARNING,
     WOULD_DO,
     ProvisionResult,
     build_provisioning_service,
@@ -111,6 +112,13 @@ def provision(
     if failures:
         console.print(f"[red]{len(failures)} of {len(results)} array(s) did not complete.[/red]")
         raise typer.Exit(code=1)
+    warned = [r for r in results if any(p.status == WARNING for p in r.phases)]
+    if warned:
+        console.print(
+            f"[yellow]{len(results)} array(s) completed with warnings — device registered + "
+            f"ASSIGNED_TO_SERVICE (the array can connect via cloudinit); see warnings above.[/yellow]"
+        )
+        return
     console.print(f"[green]All {len(results)} array(s) provisioned and verified.[/green]")
 
 
@@ -219,7 +227,7 @@ def check() -> None:
         )
 
 
-_STATUS_STYLE = {DONE: "green", SKIPPED: "cyan", WOULD_DO: "yellow", FAILED: "red"}
+_STATUS_STYLE = {DONE: "green", SKIPPED: "cyan", WOULD_DO: "yellow", WARNING: "yellow", FAILED: "red"}
 
 
 def _print_result_table(result: ProvisionResult) -> None:
