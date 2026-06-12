@@ -114,8 +114,27 @@ def _retry_delay(response: httpx.Response, attempt: int) -> float:
 
 
 def _async_error_detail(payload: dict[str, Any]) -> str:
+    # Device add/update async ops report per-device failures under result.failedDevices[].
+    result = payload.get("result")
+    failed = result.get("failedDevices") if isinstance(result, dict) else None
+    parts: list[str] = []
+    for device in failed or []:
+        if not isinstance(device, dict):
+            continue
+        serial = device.get("serialNumber", "")
+        message = device.get("message", "")
+        code = device.get("errorCode", "")
+        segment = ": ".join(p for p in (serial, message) if p)
+        if code:
+            segment = f"{segment} [{code}]" if segment else f"[{code}]"
+        if segment:
+            parts.append(segment)
+    if parts:
+        return "; ".join(parts)
     for key in ("error", "message", "detail", "failureReason", "errorDetails"):
         value = payload.get(key)
         if value:
             return str(value)
+    if payload.get("logMessages"):
+        return str(payload["logMessages"])
     return "no error detail in async-operation payload"
