@@ -1,0 +1,2 @@
+serial_number,part_number,subscription_key,service_catalog_region_id,dscc_region_code,cloudinit_url,mgmt_ipv4,mask,gateway,dns,ntp,timezone,proxy_host,proxy_port,dscc_system_name,dscc_country,blueprint_name,apply_blueprint
+SGHD00EXAMPLE,R7C75-63004,EXAMPLEKEY1234567890,ap-northeast,jp1,https://169.254.239.27/cloudinit,10.64.154.225,255.255.248.0,10.64.159.254,10.203.96.10;10.203.96.9,ntp1.example.net,Asia/Tokyo,proxy.example.net,8080,MPB10K-EXAMPLE,Japan,,false
