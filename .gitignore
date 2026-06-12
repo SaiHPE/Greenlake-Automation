@@ -25,5 +25,8 @@ desktop.ini
 # Claude internal
 .claude/
 
+# UI capture output (console screenshots/HTML — may contain sensitive UI)
+.alletra_onboard/
+
 # Committed templates (no secrets) — exceptions to the broad ignores above
 !**/config/arrays.example.csv
