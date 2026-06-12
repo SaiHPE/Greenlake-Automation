@@ -10,6 +10,7 @@ from alletra_onboard.application.provisioning import (
     DONE,
     FAILED,
     SKIPPED,
+    WARNING,
     WOULD_DO,
     GreenLakeProvisioningService,
 )
@@ -218,6 +219,39 @@ async def test_register_failure_surfaces_greenlake_error_body():
     assert "part number not recognized" in result.error
     assert "HPE_GL_DEVICES_BAD_REQUEST" in result.error
     assert _phase(result, WorkflowPhase.GL_REGISTER_DEVICE).status == FAILED
+
+
+@respx.mock
+async def test_apply_subscription_failure_is_warning_not_fatal():
+    respx.get(f"{BASE}/service-catalog/v1/service-manager-provisions").mock(return_value=_provisions())
+    respx.get(f"{BASE}/subscriptions/v1/subscriptions").mock(
+        return_value=httpx.Response(200, json={"items": [{"id": "sub-1", "availableQuantity": "0"}]})
+    )
+    respx.get(f"{BASE}/devices/v1/devices").mock(return_value=httpx.Response(200, json={"items": [{"id": "dev-1"}]}))
+    # Device already registered + assigned, but no subscription on it yet.
+    assigned_no_sub = {
+        "id": "dev-1",
+        "assignedState": "ASSIGNED_TO_SERVICE",
+        "application": {"id": "svc-1"},
+        "region": "ap-northeast",
+        "subscription": [],
+    }
+    respx.get(f"{BASE}/devices/v1/devices/dev-1").mock(return_value=httpx.Response(200, json=assigned_no_sub))
+    respx.patch(f"{BASE}/devices/v1/devices").mock(
+        return_value=httpx.Response(202, headers={"Location": f"{BASE}/devices/v1/async-operations/apply-op"})
+    )
+    respx.get(f"{BASE}/devices/v1/async-operations/apply-op").mock(
+        return_value=httpx.Response(
+            200, json={"status": "FAILED", "result": {"failedDevices": ["dev-1"]}, "resultType": "PatchDeviceResponse"}
+        )
+    )
+
+    result = await _service().provision(_item())
+
+    assert result.succeeded is True  # apply failure is non-fatal
+    assert _phase(result, WorkflowPhase.GL_APPLY_SUBSCRIPTION).status == WARNING
+    assert _phase(result, WorkflowPhase.GL_VERIFY_DEVICE).status == WARNING
+    assert "availableQuantity is 0" in _phase(result, WorkflowPhase.GL_APPLY_SUBSCRIPTION).detail
 
 
 @respx.mock
