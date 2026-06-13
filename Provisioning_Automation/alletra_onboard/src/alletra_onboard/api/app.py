@@ -219,7 +219,13 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     @app.post("/browser/launch", response_model=BrowserLaunchResponse)
     async def browser_launch(request: BrowserLaunchRequest) -> BrowserLaunchResponse:
         try:
-            info = launch_debug_browser(port=request.port, url=request.url)
+            info = launch_debug_browser(
+                port=request.port,
+                url=request.url,
+                proxy=request.proxy or settings.browser_proxy,
+                proxy_bypass=settings.browser_proxy_bypass,
+                auto_proxy=not request.no_proxy,
+            )
         except RuntimeError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         return BrowserLaunchResponse(**info)
