@@ -183,7 +183,13 @@ class CloudinitWizardAdapter:
     # ------------------------------------------------------------------ helpers
 
     async def _next(self, page) -> None:
-        await page.locator(CLOUDINIT["next"]).click()
+        # Responsive wizard: maximized -> footer "Continue" (setup-next-button); narrow viewport
+        # -> header arrow (setup-next-icon). Combined CSS matches whichever the layout renders;
+        # wait for it to be visible (it can be briefly disabled until the page validates).
+        selector = ", ".join(CLOUDINIT["next"])
+        button = page.locator(selector).first
+        await button.wait_for(state="visible")
+        await button.click()
 
     async def _fill(self, page, selector: str, value: str) -> None:
         field = page.locator(selector)
