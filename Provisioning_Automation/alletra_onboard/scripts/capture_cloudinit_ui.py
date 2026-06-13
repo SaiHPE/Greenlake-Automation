@@ -61,8 +61,11 @@ def main() -> int:
     print_safety_notice(output_dir)
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=args.headless)
-        context = browser.new_context(ignore_https_errors=True, viewport={"width": 1440, "height": 1000})
+        # Start maximized with no fixed viewport so the window fits the screen and the
+        # bottom controls (EULA accept, Submit) stay on-screen and clickable. A fixed tall
+        # viewport pushes the window's bottom below the screen edge on the jump box.
+        browser = playwright.chromium.launch(headless=args.headless, args=["--start-maximized"])
+        context = browser.new_context(ignore_https_errors=True, no_viewport=True)
         page = context.new_page()
 
         try:
