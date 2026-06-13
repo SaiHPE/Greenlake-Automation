@@ -30,7 +30,6 @@ CLOUDINIT = {
     "time_region_select": '[data-test-id="timeRegion"]',
     "time_zone_select": '[data-test-id="timeZone"]',
     "submit": "Submit",
-    "modify": "Modify",  # on the connected screen — re-enter the wizard to re-apply config
 }
 
 DSCC_TEXT = {
