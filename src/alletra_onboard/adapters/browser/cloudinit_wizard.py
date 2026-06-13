@@ -173,37 +173,29 @@ class CloudinitWizardAdapter:
         await field.fill(value)
 
     async def _select(self, page, trigger_selector: str, option_text: str, *, exact: bool) -> None:
-        # Open the Grommet drop, then click the option. Notes:
-        #  - Use a STRING name (not a regex): a regex with "/" (e.g. Asia/Kolkata) breaks
-        #    Playwright's role-selector parser. exact=False does a substring match.
-        #  - Long lists (timezones, ~400) are virtualized, so the target isn't in the DOM until
-        #    the list is scrolled. Scroll the drop's own list container (NOT the page, which
-        #    would close the drop) until the option renders, then click it.
-        await page.locator(trigger_selector).click()
-        await page.wait_for_timeout(300)  # let the drop render
-        options = page.get_by_role("option", name=option_text, exact=exact)
-        for _ in range(40):
-            if await options.count() > 0:
+        # Open the Grommet drop and click the option by VISIBLE TEXT (the plain options don't
+        # reliably expose role=option). Long lists (timezones, ~400) are virtualized + have no
+        # search box, so the target isn't in the DOM until scrolled. Park the mouse over the
+        # open drop and use the native wheel to scroll the LIST (won't close it or scroll the
+        # page), checking for the option each step. exact=False = substring (City).
+        trigger = page.locator(trigger_selector)
+        await trigger.click()
+        await page.wait_for_timeout(300)
+        box = await trigger.bounding_box()
+        if box:  # hover ~150px below the trigger -> inside the drop that opened beneath it
+            await page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] + 150)
+        target = page.get_by_text(option_text, exact=exact)
+        for _ in range(60):
+            if await target.count() > 0:
                 try:
-                    await options.first.scroll_into_view_if_needed(timeout=500)
-                    await options.first.click(timeout=1_500)
+                    await target.first.scroll_into_view_if_needed(timeout=500)
+                    await target.first.click(timeout=1_500)
                     return
                 except Exception:  # noqa: BLE001 - may be re-virtualized; scroll more and retry
                     pass
-            scrolled = await page.evaluate(
-                """() => {
-                    let el = document.querySelector('[role="option"]');
-                    while (el && el !== document.body) {
-                        if (el.scrollHeight > el.clientHeight + 8) { el.scrollTop += 400; return true; }
-                        el = el.parentElement;
-                    }
-                    return false;
-                }"""
-            )
-            if not scrolled:
-                break
-            await page.wait_for_timeout(150)
-        await page.get_by_text(option_text, exact=exact).first.click()
+            await page.mouse.wheel(0, 400)
+            await page.wait_for_timeout(100)
+        await target.first.click()
 
     async def _scroll_eula_to_end(self, page) -> None:
         # Scroll every scrollable container to its bottom and fire a scroll event, so the
