@@ -141,15 +141,14 @@ The jump box has a helper: `.\scripts\setup_jumpbox.ps1 -Proxy http://<lab-proxy
 Redistributable** (else greenlet fails to import) and a persisted proxy
 (`setx HTTPS_PROXY http://<lab-proxy>:<port>`).
 
-**Clock (jump box):** DSCC login fails with `iat is in the future` if the host clock has
-drifted, and NTP can't fix it here (UDP 123 is firewalled; the proxy doesn't carry NTP). Run
-**`.\scripts\sync-clock.ps1`** (as Administrator) — it sets the clock from an HTTPS `Date`
-header through the proxy. Schedule it to keep the clock from drifting:
-```powershell
-$a = New-ScheduledTaskAction -Execute powershell.exe -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$PWD\scripts\sync-clock.ps1`" -Proxy `"$env:HTTPS_PROXY`""
-$t = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Hours 6)
-Register-ScheduledTask -TaskName AlletraClockSync -Action $a -Trigger $t -RunLevel Highest -User SYSTEM -Force
-```
+**Clock skew & DSCC sign-in.** DSCC login fails with `iat is in the future` if the host clock
+has drifted, and NTP can't always fix it (UDP 123 is firewalled in locked environments; proxies
+don't carry NTP). The app handles this itself: the **DSCC step shows a "Sync system clock"
+button** when it detects skew, and there's a CLI equivalent **`onboard sync-clock`**. Both read
+the time from an HTTPS `Date` header through the proxy (works wherever the app has HTTPS egress),
+so no NTP, scripts, or scheduled tasks are needed. **Setting the clock needs Administrator**, so
+launch the app elevated (`onboard ui` / `start.ps1` from an Administrator shell) for the button
+to work.
 
 Credentials (`.env`) are never in git. Enter them with `onboard configure` (or in the web
 app's Configure screen). DSCC (C) does **not** need GreenLake credentials.
@@ -225,13 +224,13 @@ Gotchas:
    array is obtained, the apply-subscription phase warns (non-fatal; register + assign still
    succeed). **Action:** get/confirm the array's own GreenLake subscription key from HPE.
 
-2. **DSCC on the jump box — two fixes in, final confirmation pending.** The "Authenticating…"
-   hang had two causes, both now addressed: (a) Chrome ignores `HTTPS_PROXY`, so the launcher
-   passes `--proxy-server` automatically (all requests now flow through the proxy); (b) a host
-   **clock drift** made the login JWT fail `iat is in the future` — fixed with
-   `scripts/sync-clock.ps1` (HTTPS time-sync, since NTP/UDP is blocked). After syncing the clock
-   and logging in fresh, the jump box should reach the DSCC console — verify, then the whole
-   flow (A + B + C) runs on one host. Until confirmed, DSCC can also run on the laptop.
+2. **DSCC on the jump box — resolved (single host).** The "Authenticating…" hang had two
+   causes, both fixed: (a) Chrome ignores `HTTPS_PROXY`, so the launcher passes `--proxy-server`
+   automatically; (b) host **clock drift** failed the login JWT (`iat is in the future`) — fixed
+   by the in-app **"Sync system clock"** button / `onboard sync-clock` (HTTPS time-sync, since
+   NTP/UDP is blocked). With the proxy flag and a synced clock, the jump box reaches the DSCC
+   console, so **A + B + C all run on the jump box** from the one web app. (The clock button
+   needs the app run as Administrator.)
 
 3. **Run state does not cross machines.** Each machine has its own SQLite DB, so a web-app run
    started on the jump box (A + B) can't be continued for DSCC on the laptop — DSCC is a
