@@ -241,19 +241,17 @@ def cloudinit(
         console.print("[red]No matching work item in the CSV.[/red]")
         raise typer.Exit(code=2)
 
-    console.print(f"[bold]Cloudinit wizard[/bold] for {serial}  cdp={settings.browser_cdp_url}")
-    console.print(
-        "[dim]Prerequisite: start Chrome with --remote-debugging-port=9222 and open the array's "
-        "https://169.254.x.x/cloudinit (accept the cert) before running this.[/dim]"
-    )
-    adapter = CloudinitWizardAdapter(cdp_url=settings.browser_cdp_url, artifact_dir=settings.artifact_dir)
-    result = asyncio.run(adapter.run(matches[0], run_id=serial))
+    item = matches[0]
+    console.print(f"[bold]Cloudinit wizard[/bold] for {serial}  ->  {item.cloudinit_url}")
+    console.print("[dim]Launches its own browser, navigates to the cloudinit URL, and drives the wizard.[/dim]")
+    adapter = CloudinitWizardAdapter(headless=settings.browser_headless, artifact_dir=settings.artifact_dir)
+    result = asyncio.run(adapter.run(item, run_id=serial))
 
     ok = result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE)
     style = "green" if ok else ("yellow" if result == BrowserResultStatus.WAITING_FOR_OPERATOR else "red")
     console.print(f"Result: [{style}]{result.value}[/{style}]")
     if result == BrowserResultStatus.WAITING_FOR_OPERATOR:
-        console.print("[yellow]No attached browser on the CDP port, or no cloudinit tab is open.[/yellow]")
+        console.print("[yellow]Browser unavailable — run: .\\.venv\\Scripts\\python.exe -m playwright install chromium[/yellow]")
     if not ok:
         raise typer.Exit(code=1)
 
