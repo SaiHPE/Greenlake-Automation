@@ -90,8 +90,9 @@ git log -1 --oneline
 
 Three ways, easiest first. The full repo is deeply nested; you don't need to navigate it.
 
-**1. Release zip (operators — no git, no Node).** Download `alletra-onboard-<version>.zip` from
-the repo's [Releases](https://github.com/SaiHPE/Greenlake-Automation/releases), extract, and run:
+**1. Release zip (operators — no git, no Node).** Download **`alletra-onboard-latest.zip`** from
+the [latest release](https://github.com/SaiHPE/Greenlake-Automation/releases/latest) (rebuilt
+automatically on every push to `main` — see *Releasing* below), extract, and run:
 ```powershell
 .\start.ps1                                  # first run sets up the venv; then launches the UI
 .\start.ps1 -Proxy http://proxy.example.net:8080   # on the jump box (behind a proxy)
@@ -109,15 +110,20 @@ cd alletra-onboard; .\start.ps1
 **3. Full repo (developers).** `git clone` `main`; the app is under
 `Provisioning_Automation/alletra_onboard/`.
 
-### Building a release (dev workstation — needs Node + Python)
+### Releasing (automated)
 
+Every push/merge to `main` that touches the app runs **`.github/workflows/release.yml`** on a
+Windows runner: it builds the UI, runs `scripts/build_release.ps1`, and refreshes a single
+rolling **`latest`** GitHub Release with `alletra-onboard-latest.zip` (+ a versioned copy and
+SHA256). So `/releases/latest` is always the newest `main` build — nothing manual to do.
+
+To build the zip locally (dev workstation, needs Node):
 ```powershell
-.\scripts\build_release.ps1                  # builds the UI, stages runtime files, writes release\*.zip + .sha256
-gh release create v0.2.0 release\alletra-onboard-0.2.0.zip release\alletra-onboard-0.2.0.zip.sha256 `
-  --title "Alletra Onboard v0.2.0" --notes "..."
+.\scripts\build_release.ps1     # -> release\alletra-onboard-<version>.zip + .sha256
 ```
 The zip excludes `node_modules`, `.venv`, tests, and captures — just `src/`, the prebuilt
-`frontend/dist/`, `config/arrays.example.csv`, the scripts, and `start.ps1` (~210 KB).
+`frontend/dist/`, `config/arrays.example.csv`, the scripts, and `start.ps1` (~210 KB). Bump the
+version in `pyproject.toml` to change the versioned asset name.
 
 ---
 
@@ -228,10 +234,10 @@ Gotchas:
    captured, and the array admin password is sensitive, so the operator enters it in the
    wizard. Could be automated later if the modal selectors are captured.
 
-6. **Packaging.** A self-contained **release zip + one-click `start.ps1`** now exists
-   (`scripts/build_release.ps1`) — see *Getting the app onto a machine*. Remaining: actually
-   **publish a GitHub Release** (the repo has none yet) and wire it into CI. A signed `.exe`
-   (PyInstaller, like the SAP automation framework) is a later option — heavier, bundles Chromium.
+6. **Packaging — done for v1.** Self-contained **release zip + one-click `start.ps1`**, and a
+   GitHub Actions workflow auto-refreshes the rolling **`latest`** release on every push to
+   `main`. A signed `.exe` (PyInstaller, like the SAP automation framework) is a later option —
+   heavier, bundles Chromium.
 
 ---
 
