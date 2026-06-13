@@ -334,19 +334,32 @@ def browser(
     port: int = typer.Option(9222, "--port", help="CDP remote-debugging port."),
     profile: str = typer.Option(None, "--profile", help="User-data dir (persists the SSO login). Default: a temp dir."),
     url: str = typer.Option(None, "--url", help="Optional URL to open (e.g. the DSCC console or cloudinit URL)."),
+    proxy: str = typer.Option(None, "--proxy", help="Proxy for the browser. Default: BROWSER_PROXY or the HTTPS_PROXY env."),
+    no_proxy: bool = typer.Option(False, "--no-proxy", help="Force a direct connection (ignore HTTPS_PROXY)."),
 ) -> None:
     """Launch a CDP-enabled Chrome for the cloudinit / DSCC wizards to attach to.
 
     Starts Chrome with remote debugging on a persistent profile (so your GreenLake login
     survives across steps) and prints the --attach URL to pass to `onboard cloudinit`/`onboard dscc`.
+    Behind a lab proxy it auto-applies HTTPS_PROXY so DSCC SSO can complete (use --no-proxy to skip).
     """
+    settings = load_settings()
     try:
-        info = launch_debug_browser(port=port, profile_dir=profile, url=url)
+        info = launch_debug_browser(
+            port=port,
+            profile_dir=profile,
+            url=url,
+            proxy=proxy or settings.browser_proxy,
+            proxy_bypass=settings.browser_proxy_bypass,
+            auto_proxy=not no_proxy,
+        )
     except RuntimeError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
     console.print(f"[green]Launched[/green] {info['executable']}")
     console.print(f"  profile : {info['profile_dir']}")
+    if info["proxy"]:
+        console.print(f"  proxy   : {info['proxy']}")
     console.print(f"  attach  : [bold]{info['cdp_url']}[/bold]")
     console.print(
         "[dim]Log into DSCC (and/or open the cloudinit URL) in this window, then run:\n"
