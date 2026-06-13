@@ -233,8 +233,11 @@ def check() -> None:
 def cloudinit(
     file: str = typer.Option(..., "--file", help="CSV file with array work items."),
     serial: str = typer.Option(..., "--serial", help="Array serial number."),
+    reconfigure: bool = typer.Option(
+        False, "--reconfigure", help="If the array is already connected, click Modify and re-apply the config."
+    ),
 ) -> None:
-    """Component B — drive the on-array Cloud Connectivity Wizard (attaches over CDP)."""
+    """Component B — launch a browser, navigate to the cloudinit URL, and drive the wizard."""
     settings = load_settings()
     matches = [item for item in load_work_items_csv(Path(file)) if item.serial_number == serial]
     if not matches:
@@ -245,7 +248,7 @@ def cloudinit(
     console.print(f"[bold]Cloudinit wizard[/bold] for {serial}  ->  {item.cloudinit_url}")
     console.print("[dim]Launches its own browser, navigates to the cloudinit URL, and drives the wizard.[/dim]")
     adapter = CloudinitWizardAdapter(headless=settings.browser_headless, artifact_dir=settings.artifact_dir)
-    result = asyncio.run(adapter.run(item, run_id=serial))
+    result = asyncio.run(adapter.run(item, run_id=serial, reconfigure=reconfigure))
 
     ok = result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE)
     style = "green" if ok else ("yellow" if result == BrowserResultStatus.WAITING_FOR_OPERATOR else "red")
