@@ -86,7 +86,42 @@ git log -1 --oneline
 
 ---
 
-## First-time setup (jump box and laptop)
+## Getting the app onto a machine
+
+Three ways, easiest first. The full repo is deeply nested; you don't need to navigate it.
+
+**1. Release zip (operators — no git, no Node).** Download `alletra-onboard-<version>.zip` from
+the repo's [Releases](https://github.com/SaiHPE/Greenlake-Automation/releases), extract, and run:
+```powershell
+.\start.ps1                                  # first run sets up the venv; then launches the UI
+.\start.ps1 -Proxy http://proxy.example.net:8080   # on the jump box (behind a proxy)
+```
+`start.ps1` creates the venv, installs the package + Playwright's Chromium on first run, then
+opens the web app at `http://127.0.0.1:8765`. The built UI is in the zip, so no Node is needed.
+
+**2. Clean flat clone (just the app, no other folders).** The `jumpbox-package` branch is a
+`subtree split` of only this package, with the built UI included:
+```powershell
+git clone -b jumpbox-package https://github.com/SaiHPE/Greenlake-Automation.git alletra-onboard
+cd alletra-onboard; .\start.ps1
+```
+
+**3. Full repo (developers).** `git clone` `main`; the app is under
+`Provisioning_Automation/alletra_onboard/`.
+
+### Building a release (dev workstation — needs Node + Python)
+
+```powershell
+.\scripts\build_release.ps1                  # builds the UI, stages runtime files, writes release\*.zip + .sha256
+gh release create v0.2.0 release\alletra-onboard-0.2.0.zip release\alletra-onboard-0.2.0.zip.sha256 `
+  --title "Alletra Onboard v0.2.0" --notes "..."
+```
+The zip excludes `node_modules`, `.venv`, tests, and captures — just `src/`, the prebuilt
+`frontend/dist/`, `config/arrays.example.csv`, the scripts, and `start.ps1` (~210 KB).
+
+---
+
+## First-time setup (manual — `start.ps1` does this for you)
 
 ```powershell
 # from the package dir (the one with pyproject.toml)
@@ -193,9 +228,10 @@ Gotchas:
    captured, and the array admin password is sensitive, so the operator enters it in the
    wizard. Could be automated later if the modal selectors are captured.
 
-6. **Packaging.** Distribution is "pull + `onboard ui`" today. A one-click PowerShell installer
-   (extend `setup_jumpbox.ps1`) is the planned v1; a signed `.exe` (PyInstaller, like the SAP
-   automation framework) is a later option — note it would bundle Chromium and is heavier.
+6. **Packaging.** A self-contained **release zip + one-click `start.ps1`** now exists
+   (`scripts/build_release.ps1`) — see *Getting the app onto a machine*. Remaining: actually
+   **publish a GitHub Release** (the repo has none yet) and wire it into CI. A signed `.exe`
+   (PyInstaller, like the SAP automation framework) is a later option — heavier, bundles Chromium.
 
 ---
 
