@@ -34,63 +34,92 @@ except ImportError:  # pragma: no cover - browser deps optional until B/C run.
 
 STEP_TIMEOUT_MS = 30_000
 CONNECT_TIMEOUT_S = 300.0
+REVIEW_WAIT_S = 1_800.0  # how long to keep the browser open for the operator to review + Submit
 
 
 class CloudinitWizardAdapter:
-    def __init__(self, headless: bool = False, artifact_dir: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        headless: bool = False,
+        cdp_url: str | None = None,
+        artifact_dir: str | Path | None = None,
+    ) -> None:
         self.headless = headless
+        # cdp_url set -> ATTACH to an already-open browser and drive its current cloudinit
+        # tab (the operator navigated/clicked Modify themselves). None -> LAUNCH our own.
+        self.cdp_url = cdp_url
         self.artifact_dir = Path(artifact_dir) if artifact_dir else None
 
-    async def run(self, item: ArrayWorkItem, run_id: str, *, reconfigure: bool = False) -> BrowserResultStatus:
+    async def run(self, item: ArrayWorkItem, run_id: str, *, auto_submit: bool = False) -> BrowserResultStatus:
         if not item.cloudinit_url.startswith("https://169.254."):
             return BrowserResultStatus.FAILED_TERMINAL
         if async_playwright is None:
             return BrowserResultStatus.WAITING_FOR_OPERATOR  # playwright not installed
 
+        attached = self.cdp_url is not None
         async with async_playwright() as pw:
             try:
-                browser = await pw.chromium.launch(
-                    headless=self.headless,
-                    args=[] if self.headless else ["--start-maximized"],
-                )
-            except Exception:  # noqa: BLE001 - chromium missing: run `playwright install chromium`.
+                if attached:
+                    browser = await pw.chromium.connect_over_cdp(self.cdp_url)
+                else:
+                    browser = await pw.chromium.launch(
+                        headless=self.headless,
+                        args=[] if self.headless else ["--start-maximized"],
+                    )
+            except Exception:  # noqa: BLE001 - no browser (chromium missing, or CDP unreachable).
                 return BrowserResultStatus.WAITING_FOR_OPERATOR
 
-            context = await browser.new_context(
-                ignore_https_errors=True,  # the array serves a self-signed cert
-                no_viewport=not self.headless,
-            )
-            page = await context.new_page()
-            page.set_default_timeout(STEP_TIMEOUT_MS)
+            context = None
             try:
-                await page.goto(item.cloudinit_url, wait_until="domcontentloaded")
+                if attached:
+                    page = await self._pick_open_page(browser, item.cloudinit_url)
+                    if page is None:
+                        return BrowserResultStatus.WAITING_FOR_OPERATOR  # no open tab to drive
+                else:
+                    context = await browser.new_context(
+                        ignore_https_errors=True,  # the array serves a self-signed cert
+                        no_viewport=not self.headless,
+                    )
+                    page = await context.new_page()
+                    await page.goto(item.cloudinit_url, wait_until="domcontentloaded")
+
+                page.set_default_timeout(STEP_TIMEOUT_MS)
                 if await self._page_has_any(page, CLOUDINIT_TEXT["success"]):
-                    if not (reconfigure and await self._click_modify(page)):
-                        return BrowserResultStatus.ALREADY_DONE
+                    return BrowserResultStatus.ALREADY_DONE  # connected; never touches Modify/Launch
                 await self._welcome(page)
                 await self._eula(page)
                 await self._network(page, item.network)
                 await self._proxy(page, item.network)
-                await self._time(page, item.network)
-                await page.get_by_role("button", name=CLOUDINIT["submit"], exact=True).click()
-                return await self._await_result(page, run_id)
+                await self._time(page, item.network)  # advancing from Time lands on the Review screen
+                if auto_submit:
+                    await page.get_by_role("button", name=CLOUDINIT["submit"], exact=True).click()
+                    return await self._await_result(page, run_id)
+                # Default: stop at Review. Submit applies config + connects, so the operator
+                # reviews the filled values and clicks Submit themselves. Keep the browser open
+                # and watch for the result they trigger.
+                return await self._wait_for_operator_submit(page, run_id)
             except PlaywrightTimeoutError:
                 await self._dump(page, run_id, "timeout")
                 return BrowserResultStatus.FAILED_RETRYABLE
             finally:
-                await context.close()
-                await browser.close()
+                if not attached:  # only close what we launched; never close the operator's browser
+                    if context is not None:
+                        await context.close()
+                    await browser.close()
 
     # ------------------------------------------------------------------ screens
 
-    async def _click_modify(self, page) -> bool:
-        """On the connected screen, click Modify to re-enter the wizard (reconfigure)."""
-        modify = page.get_by_role("button", name=CLOUDINIT["modify"], exact=True)
-        try:
-            await modify.click(timeout=5_000)
-            return True
-        except PlaywrightTimeoutError:
-            return False
+    async def _pick_open_page(self, browser, cloudinit_url: str):
+        host = cloudinit_url.split("://", 1)[-1].split("/", 1)[0]
+        for context in browser.contexts:
+            for page in context.pages:
+                if host in page.url:
+                    await page.bring_to_front()
+                    return page
+        for context in browser.contexts:
+            if context.pages:
+                return context.pages[0]
+        return None
 
     async def _welcome(self, page) -> None:
         get_started = page.get_by_role("button", name=CLOUDINIT["get_started"])
@@ -160,6 +189,24 @@ class CloudinitWizardAdapter:
                 }
             }"""
         )
+
+    async def _wait_for_operator_submit(self, page, run_id: str) -> BrowserResultStatus:
+        """Filled through Review; leave the browser open and watch for the operator's Submit."""
+        deadline = time.monotonic() + REVIEW_WAIT_S
+        while time.monotonic() < deadline:
+            if page.is_closed():
+                return BrowserResultStatus.WAITING_FOR_OPERATOR  # operator closed it / cancelled
+            text = (await self._body_text(page)).lower()
+            if any(sig in text for sig in CLOUDINIT_TEXT["success"]):
+                return BrowserResultStatus.SUCCEEDED
+            if any(sig in text for sig in CLOUDINIT_TEXT["fail_prov"]):
+                await self._dump(page, run_id, "fail-prov")
+                return BrowserResultStatus.FAILED_RETRYABLE
+            try:
+                await page.wait_for_timeout(2_000)
+            except Exception:  # noqa: BLE001 - the page may close mid-wait.
+                return BrowserResultStatus.WAITING_FOR_OPERATOR
+        return BrowserResultStatus.WAITING_FOR_OPERATOR
 
     async def _await_result(self, page, run_id: str) -> BrowserResultStatus:
         deadline = time.monotonic() + CONNECT_TIMEOUT_S
