@@ -170,7 +170,15 @@ class CloudinitWizardAdapter:
     async def _fill(self, page, selector: str, value: str) -> None:
         field = page.locator(selector)
         await field.wait_for()
+        await field.click()
+        await field.press("Control+a")
+        await field.press("Delete")  # clear any pre-filled value (also proves the empty-field path)
         await field.fill(value)
+        if (await field.input_value()) != value:
+            await field.type(value, delay=15)  # Grommet fallback if fill() is ignored
+        got = await field.input_value()
+        if got != value:
+            raise PlaywrightTimeoutError(f"Field {selector} did not accept value: got {got!r}, wanted {value!r}")
 
     async def _select(self, page, trigger_selector: str, option_text: str, *, exact: bool) -> None:
         # Open the Grommet drop and click the option by VISIBLE TEXT (the plain options don't
