@@ -110,16 +110,13 @@ class CloudinitWizardAdapter:
     # ------------------------------------------------------------------ screens
 
     async def _pick_open_page(self, browser, cloudinit_url: str):
-        host = cloudinit_url.split("://", 1)[-1].split("/", 1)[0]
-        for context in browser.contexts:
-            for page in context.pages:
-                if host in page.url:
-                    await page.bring_to_front()
-                    return page
-        for context in browser.contexts:
-            if context.pages:
-                return context.pages[0]
-        return None
+        # The link-local IP changes per boot, so match the /cloudinit path, not the exact host.
+        pages = [page for context in browser.contexts for page in context.pages]
+        for page in pages:
+            if "cloudinit" in (page.url or ""):
+                await page.bring_to_front()
+                return page
+        return pages[0] if pages else None
 
     async def _welcome(self, page) -> None:
         get_started = page.get_by_role("button", name=CLOUDINIT["get_started"])
