@@ -50,24 +50,27 @@ class DsccSetupAdapter:
         self.artifact_dir = Path(artifact_dir) if artifact_dir else None
 
     async def run(self, item: ArrayWorkItem, run_id: str) -> BrowserResultStatus:
+        # WAITING_FOR_OPERATOR is reserved for the genuine operator gate (stopped at the System
+        # credential). Anything that prevented attaching is FAILED_RETRYABLE so callers (CLI/UI)
+        # can show "fix the browser and retry" instead of a false "filled" message.
         if not item.dscc_region_code:
             return BrowserResultStatus.FAILED_TERMINAL
         if async_playwright is None:
-            return BrowserResultStatus.WAITING_FOR_OPERATOR  # playwright not installed
+            return BrowserResultStatus.FAILED_RETRYABLE  # playwright not installed
         if not self.cdp_url:
-            return BrowserResultStatus.WAITING_FOR_OPERATOR  # DSCC must attach to a logged-in browser
+            return BrowserResultStatus.FAILED_RETRYABLE  # DSCC must attach to a logged-in browser
 
         self._ensure_localhost_no_proxy()
         async with async_playwright() as pw:
             try:
                 browser = await pw.chromium.connect_over_cdp(self.cdp_url)
             except Exception:  # noqa: BLE001 - CDP unreachable / no debug browser.
-                return BrowserResultStatus.WAITING_FOR_OPERATOR
+                return BrowserResultStatus.FAILED_RETRYABLE
 
             try:
                 page = await self._pick_open_page(browser)
                 if page is None:
-                    return BrowserResultStatus.WAITING_FOR_OPERATOR  # no DSCC tab to drive
+                    return BrowserResultStatus.FAILED_RETRYABLE  # no DSCC tab to drive
                 page.set_default_timeout(STEP_TIMEOUT_MS)
 
                 frame = page.frame_locator(DSCC["iframe"])
@@ -86,8 +89,9 @@ class DsccSetupAdapter:
                 await frame.locator(DSCC["credentials_select"]).wait_for(state="visible")
                 return BrowserResultStatus.WAITING_FOR_OPERATOR
             except DsccSetupError:
+                # Bad/missing work-item input (e.g. no contact name) — fix the data, then re-run.
                 await self._dump(page, run_id, "operator-action")
-                return BrowserResultStatus.WAITING_FOR_OPERATOR
+                return BrowserResultStatus.FAILED_TERMINAL
             except PlaywrightTimeoutError:
                 await self._dump(page, run_id, "timeout")
                 return BrowserResultStatus.FAILED_RETRYABLE

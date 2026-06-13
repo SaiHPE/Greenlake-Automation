@@ -5,10 +5,37 @@ from pathlib import Path
 
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig
 
+# Single source of truth for the operator-facing CSV columns (template download + loader).
+CSV_COLUMNS = (
+    "serial_number,part_number,subscription_key,service_catalog_region_id,dscc_region_code,"
+    "cloudinit_url,mgmt_ipv4,mask,gateway,dns,ntp,timezone,proxy_host,proxy_port,"
+    "dscc_system_name,dscc_country,contact_first_name,contact_last_name,contact_language,"
+    "contact_company,contact_phone,contact_email,secret_name,secret_username,secret_password,"
+    "blueprint_name,apply_blueprint"
+)
+
+_CSV_EXAMPLE_ROW = (
+    "SGHD00EXAMPLE,S0B84A,EXAMPLEKEY1234567890,ap-northeast,jp1,https://169.254.239.27/cloudinit,"
+    "10.64.154.225,255.255.248.0,10.64.159.254,10.203.96.10;10.203.96.9,ntp1.example.net,Asia/Tokyo,"
+    "proxy.example.net,8080,MPB10K-EXAMPLE,India,Jane,Doe,English,HPE,8000000000,jane.doe@example.com,"
+    "b10000-admin,3paradm,,,false"
+)
+
+
+def csv_template() -> str:
+    """The downloadable arrays.csv template (header + one illustrative row)."""
+    return f"{CSV_COLUMNS}\n{_CSV_EXAMPLE_ROW}\n"
+
 
 def load_work_items_csv(path: Path) -> list[ArrayWorkItem]:
     with path.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
+    return [_row_to_work_item(row) for row in rows]
+
+
+def load_work_items_csv_text(text: str) -> list[ArrayWorkItem]:
+    """Parse uploaded CSV content (the API's upload path — no temp file needed)."""
+    rows = list(csv.DictReader(text.lstrip("﻿").splitlines()))
     return [_row_to_work_item(row) for row in rows]
 
 
