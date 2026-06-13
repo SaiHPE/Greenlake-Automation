@@ -368,6 +368,30 @@ def browser(
     )
 
 
+@app.command("sync-clock")
+def sync_clock_cmd() -> None:
+    """Correct the system clock from an HTTPS time source (fixes DSCC 'iat is in the future').
+
+    Works where NTP/UDP is blocked, since it rides the HTTPS proxy. Needs Administrator.
+    """
+    from alletra_onboard.adapters.system.clock import sync_clock
+
+    try:
+        result = asyncio.run(sync_clock())
+    except PermissionError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except Exception as exc:  # noqa: BLE001
+        console.print(f"[red]Clock sync failed:[/red] {type(exc).__name__}: {str(exc)[:200]}")
+        raise typer.Exit(code=1) from exc
+
+    if result.changed:
+        console.print(f"[green]Clock corrected[/green] (was off by {result.skew_seconds_before:+.0f}s).")
+        console.print(f"  now: {result.local_utc_after} UTC (source {result.source})")
+    else:
+        console.print(f"[green]Clock already in sync[/green] ({result.skew_seconds_before:+.1f}s vs {result.source}).")
+
+
 _STATUS_STYLE = {DONE: "green", SKIPPED: "cyan", WOULD_DO: "yellow", WARNING: "yellow", FAILED: "red"}
 
 
