@@ -233,11 +233,25 @@ def check() -> None:
 def cloudinit(
     file: str = typer.Option(..., "--file", help="CSV file with array work items."),
     serial: str = typer.Option(..., "--serial", help="Array serial number."),
-    reconfigure: bool = typer.Option(
-        False, "--reconfigure", help="If the array is already connected, click Modify and re-apply the config."
+    attach: str = typer.Option(
+        None,
+        "--attach",
+        metavar="CDP_URL",
+        help="Attach to an already-open browser (e.g. http://localhost:9222) and drive its current "
+        "cloudinit tab, instead of launching a new browser. For testing on an already-connected "
+        "array: open the wizard, click Modify yourself to reach page 1, then run with --attach.",
+    ),
+    auto_submit: bool = typer.Option(
+        False, "--auto-submit", help="Also click Submit. Default: stop at Review so the operator submits."
     ),
 ) -> None:
-    """Component B — launch a browser, navigate to the cloudinit URL, and drive the wizard."""
+    """Component B — fill the on-array Cloud Connectivity Wizard.
+
+    Default: launches its own browser, navigates to the cloudinit URL, fills every screen and
+    STOPS at Review (does NOT click Submit) so you review + submit yourself; the browser stays
+    open and it reports the result you trigger. The automation never clicks Modify or Launch
+    DSCC. Use --attach to drive a browser you already have open; --auto-submit for unattended.
+    """
     settings = load_settings()
     matches = [item for item in load_work_items_csv(Path(file)) if item.serial_number == serial]
     if not matches:
@@ -246,9 +260,19 @@ def cloudinit(
 
     item = matches[0]
     console.print(f"[bold]Cloudinit wizard[/bold] for {serial}  ->  {item.cloudinit_url}")
-    console.print("[dim]Launches its own browser, navigates to the cloudinit URL, and drives the wizard.[/dim]")
-    adapter = CloudinitWizardAdapter(headless=settings.browser_headless, artifact_dir=settings.artifact_dir)
-    result = asyncio.run(adapter.run(item, run_id=serial, reconfigure=reconfigure))
+    if auto_submit:
+        console.print("[yellow]--auto-submit: will click Submit and apply the config automatically.[/yellow]")
+    else:
+        console.print(
+            "[dim]Fills every screen and STOPS at Review. Review the values in the browser and click "
+            "Submit yourself (or close the browser to cancel). The browser stays open while it waits.[/dim]"
+        )
+    if attach:
+        console.print(f"[dim]Attaching to {attach} and driving its open cloudinit tab (no new browser).[/dim]")
+    adapter = CloudinitWizardAdapter(
+        headless=settings.browser_headless, cdp_url=attach, artifact_dir=settings.artifact_dir
+    )
+    result = asyncio.run(adapter.run(item, run_id=serial, auto_submit=auto_submit))
 
     ok = result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE)
     style = "green" if ok else ("yellow" if result == BrowserResultStatus.WAITING_FOR_OPERATOR else "red")
