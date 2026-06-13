@@ -113,17 +113,20 @@ class PreflightService:
         )
 
     def _check_dscc_credentials(self, item: ArrayWorkItem) -> PreflightCheck:
-        if not item.dscc_setup.password_ref:
+        if not item.dscc_setup.password:
             return PreflightCheck(
                 name="dscc_setup_secret",
                 status=CheckStatus.WARN,
-                message="No DSCC setup credential secret reference configured.",
-                remediation="Set dscc_setup.password_ref before DSCC Setup automation.",
+                message="No DSCC system credential password configured.",
+                remediation=(
+                    "Set secret_password in arrays.csv, or create the secret "
+                    f"{item.dscc_setup.credential_name!r} in DSCC once and the adapter will reuse it."
+                ),
             )
         return PreflightCheck(
             name="dscc_setup_secret",
             status=CheckStatus.PASS,
-            message="DSCC setup credential is referenced, not stored inline.",
+            message="DSCC system credential password is configured.",
         )
 
     def _overall(self, checks: list[PreflightCheck]) -> CheckStatus:
