@@ -16,7 +16,7 @@ CSV_COLUMNS = (
 
 _CSV_EXAMPLE_ROW = (
     "SGHD00EXAMPLE,S0B84A,EXAMPLEKEY1234567890,ap-northeast,jp1,https://169.254.239.27/cloudinit,"
-    "10.64.154.225,255.255.248.0,10.64.159.254,10.203.96.10;10.203.96.9,ntp1.example.net,Asia/Tokyo,"
+    "10.0.0.10,255.255.255.0,10.0.0.1,10.0.0.2;10.0.0.3,ntp1.example.net,Asia/Tokyo,"
     "proxy.example.net,8080,MPB10K-EXAMPLE,India,Jane,Doe,English,HPE,8000000000,jane.doe@example.com,"
     "b10000-admin,3paradm,,,false"
 )
