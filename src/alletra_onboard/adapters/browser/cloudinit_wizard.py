@@ -15,6 +15,7 @@ Selectors live in ``locators.CLOUDINIT`` (HPE exposes stable name / data-test-id
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -55,6 +56,7 @@ class CloudinitWizardAdapter:
         if async_playwright is None:
             return BrowserResultStatus.WAITING_FOR_OPERATOR  # playwright not installed
 
+        self._ensure_localhost_no_proxy()  # keep the local CDP connect off a lab proxy
         attached = self.cdp_url is not None
         async with async_playwright() as pw:
             try:
@@ -259,6 +261,18 @@ class CloudinitWizardAdapter:
     async def _page_has_any(self, page, signals) -> bool:
         text = (await self._body_text(page)).lower()
         return any(signal in text for signal in signals)
+
+    @staticmethod
+    def _ensure_localhost_no_proxy() -> None:
+        """Add localhost to NO_PROXY so the CDP connection isn't routed through a lab proxy."""
+        existing = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
+        hosts = [h.strip() for h in existing.split(",") if h.strip()]
+        for host in ("localhost", "127.0.0.1"):
+            if host not in hosts:
+                hosts.append(host)
+        value = ",".join(hosts)
+        os.environ["NO_PROXY"] = value
+        os.environ["no_proxy"] = value
 
     async def _dump(self, page, run_id: str, label: str) -> None:
         if not self.artifact_dir:
