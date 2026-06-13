@@ -17,7 +17,10 @@ CLOUDINIT = {
     "get_started": "Get Started",
     "eula_accept_input": 'input[name="acceptEULA"]',
     "eula_accept_label": "I have read and accept the agreement",
-    "next": '[data-test-id="setup-next-icon"]',
+    # The wizard is responsive: a maximized window renders a footer "Continue" button
+    # (setup-next-button), a narrow viewport renders a header next-arrow (setup-next-icon).
+    # Only ONE is in the DOM at a time, so _next() clicks whichever this layout exposes.
+    "next": ('[data-test-id="setup-next-button"]', '[data-test-id="setup-next-icon"]'),
     "mgmt_ip": 'input[name="mgmtIp"]',
     "netmask": 'input[name="netmask"]',
     "gateway": 'input[name="defaultGateway"]',
