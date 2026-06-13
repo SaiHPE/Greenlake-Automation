@@ -9,11 +9,11 @@
 
 .PARAMETER Proxy
   Optional proxy URL for pip AND the GreenLake API calls, e.g.
-  http://Proxy.bgl1.global.tslabs.hpecorp.net:8080
+  http://proxy.example.net:8080
   (httpx honors HTTPS_PROXY, which this script sets for the health check.)
 
 .EXAMPLE
-  .\scripts\setup_jumpbox.ps1 -Proxy http://Proxy.bgl1.global.tslabs.hpecorp.net:8080
+  .\scripts\setup_jumpbox.ps1 -Proxy http://proxy.example.net:8080
 #>
 param([string]$Proxy = "")
 

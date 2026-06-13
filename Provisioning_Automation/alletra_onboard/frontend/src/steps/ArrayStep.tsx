@@ -97,7 +97,7 @@ export function ArrayStep({ form, setForm, onRunCreated }: Props) {
 
       <Section title="Identity & subscription">
         <Grid columns={{ count: 3, size: 'auto' }} gap="small">
-          <Field label="Serial number" value={form.serial_number} onChange={set('serial_number')} placeholder="SGHD45FF0Y" />
+          <Field label="Serial number" value={form.serial_number} onChange={set('serial_number')} placeholder="SGHDxxxxxxxx" />
           <Field
             label="Part number (product SKU)"
             value={form.part_number}
