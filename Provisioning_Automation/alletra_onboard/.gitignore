@@ -14,6 +14,7 @@ node_modules/
 !frontend/**/*.json
 !frontend/**/*.html
 ui-smoke/
+release/
 .env
 
 # Real work items contain a subscription key — keep the example only
