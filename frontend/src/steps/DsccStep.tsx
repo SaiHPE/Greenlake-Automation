@@ -1,6 +1,6 @@
 import { Box, Button, Notification, Spinner, Text } from 'grommet';
-import { useState } from 'react';
-import { RunEvent, RunRecord, launchBrowser, markComplete, startDscc } from '../api';
+import { useEffect, useState } from 'react';
+import { ClockStatus, RunEvent, RunRecord, getClock, launchBrowser, markComplete, startDscc, syncClock } from '../api';
 import { EventLog, Instructions, Section, StatusTag } from '../components';
 
 interface Props {
@@ -15,6 +15,27 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
   const [cdpUrl, setCdpUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [clock, setClock] = useState<ClockStatus | null>(null);
+  const [clockMsg, setClockMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    getClock().then(setClock).catch(() => undefined);
+  }, []);
+
+  const fixClock = async () => {
+    setBusy('clock');
+    setError(null);
+    setClockMsg(null);
+    try {
+      const r = await syncClock();
+      setClockMsg(r.changed ? `Clock corrected (was off by ${Math.round(r.skew_seconds_before)}s).` : 'Clock already in sync.');
+      setClock(await getClock());
+    } catch (exc: any) {
+      setError(String(exc.message ?? exc));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const consoleUrl = `https://console-${dsccRegion || 'jp1'}.data.cloud.hpe.com`;
   const stepEvents = events.filter((e) => e.phase === 'DSCC_SETUP_SYSTEM' || e.phase === 'COMPLETE');
@@ -63,6 +84,29 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
 
   return (
     <Box gap="medium">
+      {clock && !clock.in_sync && clock.skew_seconds != null && (
+        <Section title="System clock">
+          <Notification
+            status="warning"
+            title={`Clock is off by ~${Math.abs(Math.round(clock.skew_seconds))}s — DSCC sign-in will fail`}
+            message="DSCC's login rejects a skewed clock (&quot;iat is in the future&quot;). Sync it before opening the DSCC browser. Uses a trusted HTTPS time source, so it works where NTP is blocked."
+          />
+          <Box direction="row" gap="small" align="center">
+            <Button primary label={busy === 'clock' ? 'Syncing…' : 'Sync system clock'} disabled={busy !== null} onClick={fixClock} />
+            {!clock.is_admin && (
+              <Text size="small" color="text-weak">
+                Run the app as Administrator for this to set the clock.
+              </Text>
+            )}
+          </Box>
+          {clockMsg && (
+            <Text size="small" color="status-ok">
+              {clockMsg}
+            </Text>
+          )}
+        </Section>
+      )}
+
       <Section title="1 · Open DSCC and start the Set Up System wizard">
         <Instructions
           items={[
