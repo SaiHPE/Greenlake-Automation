@@ -92,13 +92,17 @@ Three ways, easiest first. The full repo is deeply nested; you don't need to nav
 
 **1. Release zip (operators — no git, no Node).** Download **`alletra-onboard-latest.zip`** from
 the [latest release](https://github.com/SaiHPE/Greenlake-Automation/releases/latest) (rebuilt
-automatically on every push to `main` — see *Releasing* below), extract, and run:
+automatically on every push to `main` — see *Releasing* below), extract, and **double-click
+`start.cmd`** (or run it from a terminal). It bypasses the PowerShell execution policy that blocks
+unsigned/downloaded scripts and self-elevates (so the in-app clock-sync works), then runs the
+launcher. The PowerShell-native equivalent:
 ```powershell
-.\start.ps1                                  # first run sets up the venv; then launches the UI
-.\start.ps1 -Proxy http://proxy.example.net:8080   # on the jump box (behind a proxy)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start.ps1
+.\start.ps1 -Proxy http://proxy.example.net:8080   # on the jump box (pass the proxy if not in env)
 ```
-`start.ps1` creates the venv, installs the package + Playwright's Chromium on first run, then
-opens the web app at `http://127.0.0.1:8765`. The built UI is in the zip, so no Node is needed.
+First run creates the venv, installs the package + Playwright's Chromium, then opens the web app
+at `http://127.0.0.1:8765`. The built UI is in the zip, so no Node is needed. (Plain `.\start.ps1`
+may be blocked by the execution policy — use `start.cmd` or the `-ExecutionPolicy Bypass` form.)
 
 **2. Clean flat clone (just the app, no other folders).** The `jumpbox-package` branch is a
 `subtree split` of only this package, with the built UI included:
