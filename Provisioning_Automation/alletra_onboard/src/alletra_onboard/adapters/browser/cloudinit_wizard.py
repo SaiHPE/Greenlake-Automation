@@ -145,6 +145,22 @@ class CloudinitWizardAdapter:
         await self._fill(page, CLOUDINIT["gateway"], net.gateway)
         for selector, value in zip(CLOUDINIT["dns_inputs"], net.dns):
             await self._fill(page, selector, value)
+        # Blur the last field, then re-read the three IP boxes. These are React-controlled and
+        # are PRE-FILLED with the array's link-local default; if our typed value didn't stick in
+        # React state it re-renders the old value on blur. Catch that here (fast-fail) so a wrong
+        # value never reaches the Review page where the operator might submit it.
+        await page.evaluate("() => document.activeElement && document.activeElement.blur()")
+        for selector, value in (
+            (CLOUDINIT["mgmt_ip"], net.mgmt_ipv4),
+            (CLOUDINIT["netmask"], net.mask),
+            (CLOUDINIT["gateway"], net.gateway),
+        ):
+            got = await page.locator(selector).input_value()
+            if got != value:
+                raise PlaywrightTimeoutError(
+                    f"Network field {selector} reverted after blur: got {got!r}, wanted {value!r} "
+                    "(the wizard kept its link-local default — value did not commit)."
+                )
         await self._next(page)
 
     async def _proxy(self, page, net: NetworkConfig) -> None:
@@ -174,10 +190,10 @@ class CloudinitWizardAdapter:
         await field.wait_for()
         await field.click()
         await field.press("Control+a")
-        await field.press("Delete")  # clear any pre-filled value (also proves the empty-field path)
-        await field.fill(value)
-        if (await field.input_value()) != value:
-            await field.type(value, delay=15)  # Grommet fallback if fill() is ignored
+        await field.press("Delete")  # clear any pre-filled value (e.g. the link-local default)
+        # Type key-by-key (not fill()): fill() sets the DOM value but not React's controlled
+        # state, so a pre-filled box keeps its old value on Review. Real keystrokes fire onChange.
+        await field.press_sequentially(value, delay=20)
         got = await field.input_value()
         if got != value:
             raise PlaywrightTimeoutError(f"Field {selector} did not accept value: got {got!r}, wanted {value!r}")
