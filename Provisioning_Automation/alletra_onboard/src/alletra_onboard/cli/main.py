@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAdapter
+from alletra_onboard.adapters.browser.debug_browser import launch_debug_browser
 from alletra_onboard.adapters.browser.dscc_setup import DsccSetupAdapter
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.application.intake import load_work_items_csv
@@ -296,15 +297,13 @@ def dscc(
         "DSCC needs your GreenLake SSO session, so this adapter never logs in — open the "
         "Set Up System wizard for the array (on Welcome), then run this.",
     ),
-    auto_submit: bool = typer.Option(
-        False, "--auto-submit", help="Also click Submit on Review. Default: stop at Review for the operator."
-    ),
 ) -> None:
-    """Component C — fill the DSCC "Set Up System" wizard and STOP at Review and Finalize.
+    """Component C — fill the DSCC "Set Up System" wizard up to the System credential.
 
     Attaches to your logged-in Chrome, drives the wizard inside the setup iframe
-    (Welcome -> Network Domain -> Time -> Attributes -> System), and stops at Review so you
-    finalize yourself. Never clicks Submit (default) and never touches the blueprint.
+    (Welcome -> Network Domain -> Time -> Attributes -> System name/country), and STOPS on the
+    System screen so you add the credential (secret), then Continue -> review -> Submit yourself.
+    Never enters the secret, never Submits, never touches the blueprint.
     """
     settings = load_settings()
     matches = [item for item in load_work_items_csv(Path(file)) if item.serial_number == serial]
@@ -314,24 +313,48 @@ def dscc(
 
     item = matches[0]
     console.print(f"[bold]DSCC Set Up System[/bold] for {serial}  ->  console-{item.dscc_region_code}.data.cloud.hpe.com")
-    console.print(f"[dim]Attaching to {attach}; fills the wizard and STOPS at Review and Finalize.[/dim]")
-    if auto_submit:
-        console.print("[yellow]--auto-submit: will click Submit on Review.[/yellow]")
+    console.print(f"[dim]Attaching to {attach}; fills the wizard and STOPS on the System screen at Credentials.[/dim]")
 
     adapter = DsccSetupAdapter(cdp_url=attach, artifact_dir=settings.artifact_dir)
-    result = asyncio.run(adapter.run(item, run_id=serial, auto_submit=auto_submit))
+    result = asyncio.run(adapter.run(item, run_id=serial))
 
-    ok = result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE)
     waiting = result == BrowserResultStatus.WAITING_FOR_OPERATOR
-    style = "green" if ok else ("yellow" if waiting else "red")
+    style = "green" if waiting else "red"
     console.print(f"Result: [{style}]{result.value}[/{style}]")
     if waiting:
         console.print(
-            "[yellow]Filled and stopped at Review and Finalize (or no DSCC tab found). Review the "
-            "values in the browser and click Submit yourself.[/yellow]"
+            "[green]Filled through System name + country.[/green] In the browser: add the System "
+            "[bold]Credentials[/bold] secret, then Continue -> review the values -> Submit yourself."
         )
-    if not ok and not waiting:
+    else:
+        console.print("[yellow]Did not reach the System screen — check the artifact screenshot.[/yellow]")
         raise typer.Exit(code=1)
+
+
+@app.command("browser")
+def browser(
+    port: int = typer.Option(9222, "--port", help="CDP remote-debugging port."),
+    profile: str = typer.Option(None, "--profile", help="User-data dir (persists the SSO login). Default: a temp dir."),
+    url: str = typer.Option(None, "--url", help="Optional URL to open (e.g. the DSCC console or cloudinit URL)."),
+) -> None:
+    """Launch a CDP-enabled Chrome for the cloudinit / DSCC wizards to attach to.
+
+    Starts Chrome with remote debugging on a persistent profile (so your GreenLake login
+    survives across steps) and prints the --attach URL to pass to `onboard cloudinit`/`onboard dscc`.
+    """
+    try:
+        info = launch_debug_browser(port=port, profile_dir=profile, url=url)
+    except RuntimeError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[green]Launched[/green] {info['executable']}")
+    console.print(f"  profile : {info['profile_dir']}")
+    console.print(f"  attach  : [bold]{info['cdp_url']}[/bold]")
+    console.print(
+        "[dim]Log into DSCC (and/or open the cloudinit URL) in this window, then run:\n"
+        f"  onboard dscc      --file config\\arrays.csv --serial <SERIAL> --attach {info['cdp_url']}\n"
+        f"  onboard cloudinit --file config\\arrays.csv --serial <SERIAL> --attach {info['cdp_url']}[/dim]"
+    )
 
 
 _STATUS_STYLE = {DONE: "green", SKIPPED: "cyan", WOULD_DO: "yellow", WARNING: "yellow", FAILED: "red"}

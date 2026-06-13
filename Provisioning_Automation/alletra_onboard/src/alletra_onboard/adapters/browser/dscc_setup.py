@@ -49,7 +49,7 @@ class DsccSetupAdapter:
         self.cdp_url = cdp_url
         self.artifact_dir = Path(artifact_dir) if artifact_dir else None
 
-    async def run(self, item: ArrayWorkItem, run_id: str, *, auto_submit: bool = False) -> BrowserResultStatus:
+    async def run(self, item: ArrayWorkItem, run_id: str) -> BrowserResultStatus:
         if not item.dscc_region_code:
             return BrowserResultStatus.FAILED_TERMINAL
         if async_playwright is None:
@@ -80,12 +80,11 @@ class DsccSetupAdapter:
                 await self._support_contact(frame, item.dscc_setup)
                 await self._system(frame, item.dscc_setup)
 
-                # Advancing from System lands on Review. Confirm we're there and STOP.
-                await frame.locator(DSCC["review_nav_button"]).wait_for(state="visible")
-                if auto_submit:
-                    await frame.locator(DSCC["continue"]).click()  # the button reads "Submit" here
-                    return BrowserResultStatus.SUCCEEDED
-                return BrowserResultStatus.WAITING_FOR_OPERATOR  # filled; operator reviews + Submits
+                # STOP on the System screen with everything filled EXCEPT the credential. The
+                # operator picks/creates the system secret (sensitive, and not reliably scriptable),
+                # then clicks Continue -> reviews -> Submits. Confirm we're on System and return.
+                await frame.locator(DSCC["credentials_select"]).wait_for(state="visible")
+                return BrowserResultStatus.WAITING_FOR_OPERATOR
             except DsccSetupError:
                 await self._dump(page, run_id, "operator-action")
                 return BrowserResultStatus.WAITING_FOR_OPERATOR
@@ -161,41 +160,10 @@ class DsccSetupAdapter:
         await self._continue(frame)
 
     async def _system(self, frame, cfg: DsccSetupConfig) -> None:
+        # Fill system name + country only. The System Credentials secret is left to the operator
+        # (it's sensitive and the Create-Secret modal is not reliably scriptable), so we stop here.
         await self._fill(frame, DSCC["system_name"], cfg.system_name)
         await self._select(frame, DSCC["system_country_select"], cfg.country, cfg.country, exact=True)
-        await self._credentials(frame, cfg)
-        await self._continue(frame)
-
-    async def _credentials(self, frame, cfg: DsccSetupConfig) -> None:
-        """Select the named secret if it already exists; otherwise create it (needs a password)."""
-        await frame.locator(DSCC["credentials_select"]).click()
-        search = frame.locator(DSCC["select_search"]).first
-        try:
-            await search.wait_for(state="visible", timeout=5_000)
-            await search.fill("")
-            await search.press_sequentially(cfg.credential_name, delay=20)
-        except PlaywrightTimeoutError:
-            pass  # some builds open straight to the list with no search box
-        existing = frame.get_by_role("option", name=cfg.credential_name, exact=True)
-        if not await existing.count():
-            existing = frame.get_by_text(cfg.credential_name, exact=True)
-        if await existing.count():
-            await existing.first.click()
-            return
-
-        # No matching secret — create it (only possible with a password in the work item).
-        if not cfg.password:
-            raise DsccSetupError(
-                f"DSCC secret {cfg.credential_name!r} not found and no password configured. "
-                "Create the secret once in DSCC (or set secret_password in arrays.csv), then re-run."
-            )
-        await frame.locator(DSCC["credentials_create"]).click()
-        secret = cfg.password.get_secret_value()
-        await self._fill(frame, DSCC["secret_name"], cfg.credential_name)
-        await self._fill(frame, DSCC["secret_username"], cfg.username)
-        await self._fill(frame, DSCC["secret_password"], secret)
-        await self._fill(frame, DSCC["secret_verify"], secret)
-        await frame.get_by_role("button", name=DSCC["secret_save"], exact=True).click()
 
     # ------------------------------------------------------------------ helpers
 
