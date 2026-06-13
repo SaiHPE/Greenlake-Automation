@@ -175,8 +175,15 @@ class CloudinitWizardAdapter:
 
     async def _select(self, page, trigger_selector: str, option_pattern: re.Pattern[str]) -> None:
         # Grommet Select: click the (readonly) value box to open the drop, then click the option.
+        # Options may or may not expose role=option, so try that, then fall back to visible text.
         await page.locator(trigger_selector).click()
-        await page.get_by_role("option", name=option_pattern).first.click()
+        await page.wait_for_timeout(300)  # let the drop render
+        try:
+            await page.get_by_role("option", name=option_pattern).first.click(timeout=3_000)
+            return
+        except PlaywrightTimeoutError:
+            pass
+        await page.get_by_text(option_pattern).first.click()
 
     async def _scroll_eula_to_end(self, page) -> None:
         # Scroll every scrollable container to its bottom and fire a scroll event, so the
