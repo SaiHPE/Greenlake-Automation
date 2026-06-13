@@ -41,7 +41,7 @@ class CloudinitWizardAdapter:
         self.headless = headless
         self.artifact_dir = Path(artifact_dir) if artifact_dir else None
 
-    async def run(self, item: ArrayWorkItem, run_id: str) -> BrowserResultStatus:
+    async def run(self, item: ArrayWorkItem, run_id: str, *, reconfigure: bool = False) -> BrowserResultStatus:
         if not item.cloudinit_url.startswith("https://169.254."):
             return BrowserResultStatus.FAILED_TERMINAL
         if async_playwright is None:
@@ -65,7 +65,8 @@ class CloudinitWizardAdapter:
             try:
                 await page.goto(item.cloudinit_url, wait_until="domcontentloaded")
                 if await self._page_has_any(page, CLOUDINIT_TEXT["success"]):
-                    return BrowserResultStatus.ALREADY_DONE
+                    if not (reconfigure and await self._click_modify(page)):
+                        return BrowserResultStatus.ALREADY_DONE
                 await self._welcome(page)
                 await self._eula(page)
                 await self._network(page, item.network)
@@ -81,6 +82,15 @@ class CloudinitWizardAdapter:
                 await browser.close()
 
     # ------------------------------------------------------------------ screens
+
+    async def _click_modify(self, page) -> bool:
+        """On the connected screen, click Modify to re-enter the wizard (reconfigure)."""
+        modify = page.get_by_role("button", name=CLOUDINIT["modify"], exact=True)
+        try:
+            await modify.click(timeout=5_000)
+            return True
+        except PlaywrightTimeoutError:
+            return False
 
     async def _welcome(self, page) -> None:
         get_started = page.get_by_role("button", name=CLOUDINIT["get_started"])
