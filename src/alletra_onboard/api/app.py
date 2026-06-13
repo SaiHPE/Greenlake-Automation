@@ -134,8 +134,16 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             items = load_work_items_csv_text(request.csv_text)
         except (ValidationError, KeyError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=f"CSV did not parse: {exc}") from exc
-        # SecretStr fields serialize masked; the UI re-submits full values on POST /runs.
-        return {"work_items": [item.model_dump(mode="json") for item in items]}
+
+        def unmasked(item) -> dict:
+            # The values came from the client's own uploaded file; masking them here would
+            # break the upload -> editable form -> POST /runs round-trip. Localhost-only API.
+            data = item.model_dump(mode="json")
+            data["subscription_key"] = item.subscription_key.get_secret_value()
+            data["dscc_setup"].pop("password", None)  # never echo a password to the UI
+            return data
+
+        return {"work_items": [unmasked(item) for item in items]}
 
     # ------------------------------------------------------------------ runs + steps
 
@@ -221,10 +229,12 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         report = await preflight_service.run(request.work_item, live_greenlake=request.live_greenlake)
         return PreflightResponse(report=report)
 
-    # Serve the built frontend when present (single-host product mode).
-    dist = Path("frontend/dist")
-    if dist.is_dir():
-        app.mount("/", StaticFiles(directory=str(dist), html=True), name="ui")
+    # Serve the built frontend when present (single-host product mode). Look in the working
+    # directory first, then relative to the package root (editable install layout).
+    for dist in (Path("frontend/dist"), Path(__file__).resolve().parents[3] / "frontend" / "dist"):
+        if dist.is_dir():
+            app.mount("/", StaticFiles(directory=str(dist), html=True), name="ui")
+            break
 
     return app
 
