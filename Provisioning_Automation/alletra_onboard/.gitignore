@@ -7,7 +7,13 @@ __pycache__/
 dist/
 build/
 node_modules/
-frontend/dist/
+# frontend/dist IS committed: the jump box has no Node, so the built UI ships via git.
+!frontend/dist/
+# The repo-root .gitignore drops *.json/*.html as research scratch — the frontend needs them
+# (node_modules stays out: the directory itself is excluded above, so nothing in it re-includes).
+!frontend/**/*.json
+!frontend/**/*.html
+ui-smoke/
 .env
 
 # Real work items contain a subscription key — keep the example only

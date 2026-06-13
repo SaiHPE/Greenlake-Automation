@@ -47,6 +47,19 @@ def api() -> None:
     uvicorn.run("alletra_onboard.api.app:app", host=settings.api_host, port=settings.api_port, reload=False)
 
 
+@app.command("ui")
+def ui() -> None:
+    """Start the onboarding web app and open it in the default browser (operator entry point)."""
+    import threading
+    import webbrowser
+
+    settings = load_settings()
+    address = f"http://{settings.api_host}:{settings.api_port}"
+    console.print(f"[bold]Alletra Onboard[/bold] — serving the web app at [green]{address}[/green] (Ctrl+C to stop)")
+    threading.Timer(1.5, lambda: webbrowser.open(address)).start()
+    uvicorn.run("alletra_onboard.api.app:app", host=settings.api_host, port=settings.api_port, reload=False)
+
+
 @app.command("run")
 def create_run(serial: str = typer.Option(..., "--array", help="Array serial number.")) -> None:
     service = RunService(_store())
