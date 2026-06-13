@@ -4,7 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from alletra_onboard.domain.models import RunEvent, RunRecord
+from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunRecord
 
 
 class SqliteRunStore:
@@ -37,6 +37,14 @@ class SqliteRunStore:
                     event_type TEXT NOT NULL,
                     payload TEXT NOT NULL,
                     created_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS work_items (
+                    run_id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL
                 )
                 """
             )
@@ -92,5 +100,40 @@ class SqliteRunStore:
                 ),
             )
 
+    def list_events(self, run_id: str) -> list[RunEvent]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM run_events WHERE run_id = ? ORDER BY created_at ASC",
+                (run_id,),
+            ).fetchall()
+        return [RunEvent.model_validate(json.loads(row[0])) for row in rows]
+
+    def save_work_item(self, run_id: str, item: ArrayWorkItem) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO work_items (run_id, payload) VALUES (?, ?)
+                ON CONFLICT(run_id) DO UPDATE SET payload = excluded.payload
+                """,
+                (run_id, _work_item_json(item)),
+            )
+
+    def get_work_item(self, run_id: str) -> ArrayWorkItem | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT payload FROM work_items WHERE run_id = ?", (run_id,)).fetchone()
+        if row is None:
+            return None
+        return ArrayWorkItem.model_validate(json.loads(row[0]))
+
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.database_path, timeout=5)
+
+
+def _work_item_json(item: ArrayWorkItem) -> str:
+    """Serialize a work item PRESERVING secrets (model_dump_json masks SecretStr to '********',
+    which would corrupt the round-trip). The DB lives in the gitignored .alletra_onboard dir."""
+    data = item.model_dump(mode="json")
+    data["subscription_key"] = item.subscription_key.get_secret_value()
+    if item.dscc_setup.password is not None:
+        data["dscc_setup"]["password"] = item.dscc_setup.password.get_secret_value()
+    return json.dumps(data)
