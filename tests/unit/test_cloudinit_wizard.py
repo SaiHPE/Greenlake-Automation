@@ -26,15 +26,9 @@ def _item(cloudinit_url: str) -> ArrayWorkItem:
 
 
 async def test_non_link_local_url_is_terminal():
-    result = await CloudinitWizardAdapter().run(_item("https://10.0.0.1/cloudinit"), run_id="r1")
+    # Guarded before any browser launch — a non-link-local URL is a config error.
+    result = await CloudinitWizardAdapter(headless=True).run(_item("https://10.0.0.1/cloudinit"), run_id="r1")
     assert result == BrowserResultStatus.FAILED_TERMINAL
-
-
-async def test_link_local_with_no_attached_browser_waits_for_operator():
-    # Nothing listening on this CDP port (or Playwright unavailable) -> operator must act.
-    adapter = CloudinitWizardAdapter(cdp_url="http://127.0.0.1:9")
-    result = await adapter.run(_item("https://169.254.184.89/cloudinit"), run_id="r1")
-    assert result == BrowserResultStatus.WAITING_FOR_OPERATOR
 
 
 def test_locators_cover_every_wizard_field():
