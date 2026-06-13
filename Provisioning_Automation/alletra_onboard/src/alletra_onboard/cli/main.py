@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAdapter
+from alletra_onboard.adapters.browser.dscc_setup import DsccSetupAdapter
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.application.intake import load_work_items_csv
 from alletra_onboard.domain.models import BrowserResultStatus
@@ -280,6 +281,56 @@ def cloudinit(
     if result == BrowserResultStatus.WAITING_FOR_OPERATOR:
         console.print("[yellow]Browser unavailable — run: .\\.venv\\Scripts\\python.exe -m playwright install chromium[/yellow]")
     if not ok:
+        raise typer.Exit(code=1)
+
+
+@app.command("dscc")
+def dscc(
+    file: str = typer.Option(..., "--file", help="CSV file with array work items."),
+    serial: str = typer.Option(..., "--serial", help="Array serial number."),
+    attach: str = typer.Option(
+        ...,
+        "--attach",
+        metavar="CDP_URL",
+        help="Attach to a Chrome you already logged into DSCC with (e.g. http://localhost:9222). "
+        "DSCC needs your GreenLake SSO session, so this adapter never logs in — open the "
+        "Set Up System wizard for the array (on Welcome), then run this.",
+    ),
+    auto_submit: bool = typer.Option(
+        False, "--auto-submit", help="Also click Submit on Review. Default: stop at Review for the operator."
+    ),
+) -> None:
+    """Component C — fill the DSCC "Set Up System" wizard and STOP at Review and Finalize.
+
+    Attaches to your logged-in Chrome, drives the wizard inside the setup iframe
+    (Welcome -> Network Domain -> Time -> Attributes -> System), and stops at Review so you
+    finalize yourself. Never clicks Submit (default) and never touches the blueprint.
+    """
+    settings = load_settings()
+    matches = [item for item in load_work_items_csv(Path(file)) if item.serial_number == serial]
+    if not matches:
+        console.print("[red]No matching work item in the CSV.[/red]")
+        raise typer.Exit(code=2)
+
+    item = matches[0]
+    console.print(f"[bold]DSCC Set Up System[/bold] for {serial}  ->  console-{item.dscc_region_code}.data.cloud.hpe.com")
+    console.print(f"[dim]Attaching to {attach}; fills the wizard and STOPS at Review and Finalize.[/dim]")
+    if auto_submit:
+        console.print("[yellow]--auto-submit: will click Submit on Review.[/yellow]")
+
+    adapter = DsccSetupAdapter(cdp_url=attach, artifact_dir=settings.artifact_dir)
+    result = asyncio.run(adapter.run(item, run_id=serial, auto_submit=auto_submit))
+
+    ok = result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE)
+    waiting = result == BrowserResultStatus.WAITING_FOR_OPERATOR
+    style = "green" if ok else ("yellow" if waiting else "red")
+    console.print(f"Result: [{style}]{result.value}[/{style}]")
+    if waiting:
+        console.print(
+            "[yellow]Filled and stopped at Review and Finalize (or no DSCC tab found). Review the "
+            "values in the browser and click Submit yourself.[/yellow]"
+        )
+    if not ok and not waiting:
         raise typer.Exit(code=1)
 
 

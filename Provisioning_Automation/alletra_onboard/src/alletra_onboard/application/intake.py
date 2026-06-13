@@ -32,6 +32,17 @@ def _row_to_work_item(row: dict[str, str]) -> ArrayWorkItem:
     dscc_setup = DsccSetupConfig(
         system_name=row["dscc_system_name"],
         country=row["dscc_country"],
+        # DSCC-only columns are optional so existing GreenLake/cloudinit CSVs still load;
+        # the dscc command validates that the ones it needs are present before running.
+        credential_name=row.get("secret_name") or "b10000-admin",
+        username=row.get("secret_username") or "3paradm",
+        password=row.get("secret_password") or None,
+        contact_first_name=row.get("contact_first_name") or None,
+        contact_last_name=row.get("contact_last_name") or None,
+        contact_language=row.get("contact_language") or "English",
+        contact_company=row.get("contact_company") or None,
+        contact_phone=row.get("contact_phone") or None,
+        contact_email=row.get("contact_email") or None,
         blueprint_name=row.get("blueprint_name") or None,
         apply_blueprint=(row.get("apply_blueprint") or "").lower() in {"1", "true", "yes"},
     )
