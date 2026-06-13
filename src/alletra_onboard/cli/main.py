@@ -12,6 +12,8 @@ from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAda
 from alletra_onboard.adapters.browser.debug_browser import launch_debug_browser
 from alletra_onboard.adapters.browser.dscc_setup import DsccSetupAdapter
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
+from alletra_onboard.application.configuring import read_env, write_env
+from alletra_onboard.application.health import greenlake_check
 from alletra_onboard.application.intake import load_work_items_csv
 from alletra_onboard.domain.models import BrowserResultStatus
 from alletra_onboard.application.preflight_service import PreflightService
@@ -138,7 +140,7 @@ def configure(
 ) -> None:
     """Store GreenLake API credentials in a local .env — the interface to add them."""
     env_path = Path(env_file)
-    current = _read_env(env_path)
+    current = read_env(env_path)
 
     if show:
         for key in ("GL_CLIENT_ID", "GL_TOKEN_URL", "GL_BASE_URL", "GL_MEMBER_WORKSPACE_ID"):
@@ -167,7 +169,7 @@ def configure(
             "GL_MEMBER_WORKSPACE_ID": workspace_id,
         }
     )
-    _write_env(env_path, current)
+    write_env(env_path, current)
     console.print(f"[green]Saved {env_path.resolve()}[/green] (gitignored). Secret stored locally; not printed.")
 
 
@@ -179,31 +181,15 @@ def check() -> None:
     workspace has a provisioned Data Services instance to assign devices to. No writes.
     """
     settings = load_settings()
-    missing = missing_credentials(settings)
-    if missing:
-        console.print(f"[red]Missing GreenLake credentials:[/red] {', '.join(missing)}")
+    console.print(f"[bold]GreenLake health check[/bold]  base={settings.gl_base_url}")
+    report = asyncio.run(greenlake_check(settings))
+
+    if report.missing_credentials:
+        console.print(f"[red]Missing GreenLake credentials:[/red] {', '.join(report.missing_credentials)}")
         console.print("Run [bold]onboard configure[/bold] first.")
         raise typer.Exit(code=2)
-
-    async def run():
-        service = build_provisioning_service(settings)
-        items = await service.service_catalog.per_region_service_managers()
-        ds_ids = {
-            sm.get("id")
-            for region in items
-            for sm in region.get("serviceManagers", [])
-            if "data service" in str(sm.get("name", "")).lower()
-        }
-        response = await service.http.request(
-            "GET", "/service-catalog/v1/service-manager-provisions", bucket="service_catalog_read"
-        )
-        return ds_ids, response.json().get("items", [])
-
-    console.print(f"[bold]GreenLake health check[/bold]  base={settings.gl_base_url}")
-    try:
-        ds_ids, provisions = asyncio.run(run())
-    except Exception as exc:  # noqa: BLE001 - operator-facing health check reports, not crashes.
-        console.print(f"[red]FAILED:[/red] {type(exc).__name__}: {str(exc)[:200]}")
+    if not report.ok:
+        console.print(f"[red]FAILED:[/red] {report.error}")
         console.print("[dim]On the jump box this is often egress/proxy — set HTTPS_PROXY and retry.[/dim]")
         raise typer.Exit(code=1)
 
@@ -213,16 +199,15 @@ def check() -> None:
     table.add_column("Status")
     table.add_column("Service manager id")
     table.add_column("Data Services?")
-    for provision in provisions:
-        sm_id = (provision.get("serviceManager") or {}).get("id") or ""
-        is_ds = "YES" if sm_id in ds_ids else ""
-        table.add_row(str(provision.get("region")), str(provision.get("provisionStatus")), sm_id, is_ds)
+    for provision in report.provisions:
+        table.add_row(
+            provision.region,
+            provision.status,
+            provision.service_manager_id,
+            "YES" if provision.is_data_services else "",
+        )
     console.print(table)
-    ready = any(
-        (p.get("serviceManager") or {}).get("id") in ds_ids and p.get("provisionStatus") == "PROVISIONED"
-        for p in provisions
-    )
-    if ready:
+    if report.ready:
         console.print("[green]Data Services is provisioned — the assign step can run.[/green]")
     else:
         console.print(
@@ -381,21 +366,6 @@ def _print_result_table(result: ProvisionResult) -> None:
         console.print(f"  [red]error: {result.error}[/red]")
 
 
-def _read_env(path: Path) -> dict[str, str]:
-    data: dict[str, str] = {}
-    if path.exists():
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            data[key.strip()] = value.strip()
-    return data
-
-
-def _write_env(path: Path, data: dict[str, str]) -> None:
-    lines = [f"{key}={value}" for key, value in data.items() if value != ""]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 @app.command("preflight")

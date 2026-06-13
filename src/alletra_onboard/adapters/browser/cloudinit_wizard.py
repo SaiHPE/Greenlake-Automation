@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
+from typing import Callable
 
 from alletra_onboard.adapters.browser.locators import CLOUDINIT, CLOUDINIT_TEXT
 from alletra_onboard.domain.models import ArrayWorkItem, BrowserResultStatus, NetworkConfig
@@ -43,12 +44,16 @@ class CloudinitWizardAdapter:
         headless: bool = False,
         cdp_url: str | None = None,
         artifact_dir: str | Path | None = None,
+        on_status: Callable[[str], None] | None = None,
     ) -> None:
         self.headless = headless
         # cdp_url set -> ATTACH to an already-open browser and drive its current cloudinit
         # tab (the operator navigated/clicked Modify themselves). None -> LAUNCH our own.
         self.cdp_url = cdp_url
         self.artifact_dir = Path(artifact_dir) if artifact_dir else None
+        # Mid-run progress hook for the API/UI (e.g. "review_ready" once the wizard is filled
+        # and the adapter starts waiting for the operator's Submit).
+        self._on_status = on_status or (lambda message: None)
 
     async def run(self, item: ArrayWorkItem, run_id: str, *, auto_submit: bool = False) -> BrowserResultStatus:
         if not item.cloudinit_url.startswith("https://169.254."):
@@ -98,6 +103,7 @@ class CloudinitWizardAdapter:
                 # Default: stop at Review. Submit applies config + connects, so the operator
                 # reviews the filled values and clicks Submit themselves. Keep the browser open
                 # and watch for the result they trigger.
+                self._on_status("review_ready")
                 return await self._wait_for_operator_submit(page, run_id)
             except PlaywrightTimeoutError:
                 await self._dump(page, run_id, "timeout")
