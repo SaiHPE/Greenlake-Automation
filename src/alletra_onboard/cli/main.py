@@ -8,8 +8,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAdapter
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.application.intake import load_work_items_csv
+from alletra_onboard.domain.models import BrowserResultStatus
 from alletra_onboard.application.preflight_service import PreflightService
 from alletra_onboard.application.provisioning import (
     DONE,
@@ -225,6 +227,35 @@ def check() -> None:
             "[yellow]No PROVISIONED Data Services found. Add it in the workspace "
             "(Manage Workspace -> Services) before the assign step.[/yellow]"
         )
+
+
+@app.command("cloudinit")
+def cloudinit(
+    file: str = typer.Option(..., "--file", help="CSV file with array work items."),
+    serial: str = typer.Option(..., "--serial", help="Array serial number."),
+) -> None:
+    """Component B — drive the on-array Cloud Connectivity Wizard (attaches over CDP)."""
+    settings = load_settings()
+    matches = [item for item in load_work_items_csv(Path(file)) if item.serial_number == serial]
+    if not matches:
+        console.print("[red]No matching work item in the CSV.[/red]")
+        raise typer.Exit(code=2)
+
+    console.print(f"[bold]Cloudinit wizard[/bold] for {serial}  cdp={settings.browser_cdp_url}")
+    console.print(
+        "[dim]Prerequisite: start Chrome with --remote-debugging-port=9222 and open the array's "
+        "https://169.254.x.x/cloudinit (accept the cert) before running this.[/dim]"
+    )
+    adapter = CloudinitWizardAdapter(cdp_url=settings.browser_cdp_url, artifact_dir=settings.artifact_dir)
+    result = asyncio.run(adapter.run(matches[0], run_id=serial))
+
+    ok = result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE)
+    style = "green" if ok else ("yellow" if result == BrowserResultStatus.WAITING_FOR_OPERATOR else "red")
+    console.print(f"Result: [{style}]{result.value}[/{style}]")
+    if result == BrowserResultStatus.WAITING_FOR_OPERATOR:
+        console.print("[yellow]No attached browser on the CDP port, or no cloudinit tab is open.[/yellow]")
+    if not ok:
+        raise typer.Exit(code=1)
 
 
 _STATUS_STYLE = {DONE: "green", SKIPPED: "cyan", WOULD_DO: "yellow", WARNING: "yellow", FAILED: "red"}
