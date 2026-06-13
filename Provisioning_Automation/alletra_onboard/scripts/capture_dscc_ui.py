@@ -231,6 +231,7 @@ def control_candidates(page: Any) -> list[dict[str, Any]]:
                 labelFor: element.getAttribute('for') || '',
                 name: element.getAttribute('name') || '',
                 id: element.id || '',
+                dataTestId: element.getAttribute('data-test-id') || '',
                 placeholder: element.getAttribute('placeholder') || '',
                 title: element.getAttribute('title') || '',
                 href: href.split('?')[0],
