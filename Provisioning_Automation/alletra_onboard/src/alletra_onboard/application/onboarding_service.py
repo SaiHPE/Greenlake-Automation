@@ -1,0 +1,301 @@
+"""Run orchestration for the A -> B -> C onboarding flow — the service the API (and later the
+frontend) drives.
+
+Each component runs as a background asyncio task that updates the persisted RunRecord and
+emits RunEvents (stored + fanned out live to SSE subscribers). The flow is operator-gated, so
+the service exposes one start_* per step instead of a fire-and-forget pipeline:
+
+    create_run(work_item)                       status=READY,   phase=PREFLIGHT
+    start_provision(dry_run?)        -> A       status=RUNNING, then READY (next: cloudinit)
+    start_cloudinit(cloudinit_url?)  -> B       fills, emits operator.review_ready, waits for
+                                                the operator's Submit in the launched browser
+    start_dscc(cdp_url)              -> C       fills through System, stops at the credential
+    mark_complete()                             operator confirms they finalized in DSCC
+
+The cloudinit URL is a RUNTIME parameter (the link-local IP changes every boot) — passing it
+to start_cloudinit overrides the work item's stored value.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import UTC, datetime
+from typing import Any, Callable
+
+from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAdapter
+from alletra_onboard.adapters.browser.dscc_setup import DsccSetupAdapter
+from alletra_onboard.application.event_bus import InMemoryEventBus
+from alletra_onboard.application.provisioning import (
+    FAILED,
+    WARNING,
+    build_provisioning_service,
+)
+from alletra_onboard.config import Settings
+from alletra_onboard.domain.models import (
+    ArrayWorkItem,
+    BrowserResultStatus,
+    RunEvent,
+    RunRecord,
+    RunStatus,
+    WorkflowPhase,
+)
+from alletra_onboard.domain.ports import RunStore
+
+
+class RunNotFoundError(LookupError):
+    pass
+
+
+class RunBusyError(RuntimeError):
+    """A background step is already executing for this run."""
+
+
+def _default_provision_factory(settings: Settings, progress: Callable) -> Any:
+    return build_provisioning_service(settings, progress=progress)
+
+
+def _default_cloudinit_factory(settings: Settings, on_status: Callable[[str], None]) -> Any:
+    # Launch mode: the product flow opens its own browser at the pasted cloudinit URL.
+    return CloudinitWizardAdapter(
+        headless=settings.browser_headless,
+        cdp_url=None,
+        artifact_dir=settings.artifact_dir,
+        on_status=on_status,
+    )
+
+
+def _default_dscc_factory(settings: Settings, cdp_url: str) -> Any:
+    return DsccSetupAdapter(cdp_url=cdp_url, artifact_dir=settings.artifact_dir)
+
+
+class OnboardingService:
+    def __init__(
+        self,
+        settings: Settings,
+        store: RunStore,
+        events: InMemoryEventBus,
+        *,
+        provision_factory: Callable = _default_provision_factory,
+        cloudinit_factory: Callable = _default_cloudinit_factory,
+        dscc_factory: Callable = _default_dscc_factory,
+    ) -> None:
+        self.settings = settings
+        self.store = store
+        self.events = events
+        self._provision_factory = provision_factory
+        self._cloudinit_factory = cloudinit_factory
+        self._dscc_factory = dscc_factory
+        self._tasks: dict[str, asyncio.Task] = {}
+
+    # ------------------------------------------------------------------ run lifecycle
+
+    def create_run(self, item: ArrayWorkItem) -> RunRecord:
+        run = RunRecord(
+            serial_number=item.serial_number,
+            status=RunStatus.READY,
+            current_phase=WorkflowPhase.PREFLIGHT,
+        )
+        self.store.upsert_run(run)
+        self.store.save_work_item(run.run_id, item)
+        self._emit(run.run_id, WorkflowPhase.PREFLIGHT, "run.created", f"Run created for {item.serial_number}")
+        return run
+
+    def get_run(self, run_id: str) -> RunRecord:
+        run = self.store.get_run(run_id)
+        if run is None:
+            raise RunNotFoundError(run_id)
+        return run
+
+    def get_work_item(self, run_id: str) -> ArrayWorkItem:
+        item = self.store.get_work_item(run_id)
+        if item is None:
+            raise RunNotFoundError(run_id)
+        return item
+
+    def list_runs(self) -> list[RunRecord]:
+        return self.store.list_runs()
+
+    def list_events(self, run_id: str) -> list[RunEvent]:
+        return self.store.list_events(run_id)
+
+    def mark_complete(self, run_id: str) -> RunRecord:
+        run = self.get_run(run_id)
+        self._set(run, RunStatus.SUCCEEDED, WorkflowPhase.COMPLETE)
+        self._emit(run_id, WorkflowPhase.COMPLETE, "run.completed", "Operator confirmed DSCC finalize — onboarding complete")
+        return run
+
+    async def wait(self, run_id: str) -> None:
+        """Await the run's active background task (used by tests and graceful shutdown)."""
+        task = self._tasks.get(run_id)
+        if task is not None:
+            await task
+
+    # ------------------------------------------------------------------ step A: GreenLake
+
+    def start_provision(self, run_id: str, *, dry_run: bool = False) -> RunRecord:
+        run, item = self.get_run(run_id), self.get_work_item(run_id)
+        self._spawn(run_id, self._run_provision(run, item, dry_run))
+        return run
+
+    async def _run_provision(self, run: RunRecord, item: ArrayWorkItem, dry_run: bool) -> None:
+        self._set(run, RunStatus.RUNNING, WorkflowPhase.GL_DISCOVER_SERVICE)
+        label = "GreenLake provisioning (dry-run)" if dry_run else "GreenLake provisioning"
+        self._emit(run.run_id, WorkflowPhase.GL_DISCOVER_SERVICE, "step.started", f"{label} started")
+
+        def progress(phase: WorkflowPhase, message: str) -> None:
+            run.current_phase = phase
+            self.store.upsert_run(run)
+            self._emit(run.run_id, phase, "phase.progress", message)
+
+        service = self._provision_factory(self.settings, progress)
+        result = await service.provision(item, dry_run=dry_run)
+
+        for outcome in result.phases:
+            if outcome.status == WARNING:
+                run.warnings.append(f"{outcome.phase.value}: {outcome.detail}")
+        failed = result.error is not None or any(p.status == FAILED for p in result.phases)
+        if failed:
+            self._set(run, RunStatus.RETRYABLE_FAILURE)
+            self._emit(run.run_id, run.current_phase, "step.failed", result.error or f"{label} failed")
+        elif dry_run:
+            self._set(run, RunStatus.READY, WorkflowPhase.PREFLIGHT)
+            self._emit(run.run_id, WorkflowPhase.PREFLIGHT, "step.completed", f"{label} completed — no writes made")
+        else:
+            self._set(run, RunStatus.READY, WorkflowPhase.CLOUDINIT_CONNECT)
+            self._emit(
+                run.run_id,
+                WorkflowPhase.GL_VERIFY_DEVICE,
+                "step.completed",
+                f"{label} completed — next: Cloud Connectivity Wizard",
+            )
+
+    # ------------------------------------------------------------------ step B: cloudinit
+
+    def start_cloudinit(self, run_id: str, *, cloudinit_url: str | None = None) -> RunRecord:
+        run, item = self.get_run(run_id), self.get_work_item(run_id)
+        if cloudinit_url:
+            # The link-local URL changes per boot — the operator pastes the fresh one at runtime.
+            item = item.model_copy(update={"cloudinit_url": cloudinit_url})
+            self.store.save_work_item(run_id, item)
+        self._spawn(run_id, self._run_cloudinit(run, item))
+        return run
+
+    async def _run_cloudinit(self, run: RunRecord, item: ArrayWorkItem) -> None:
+        self._set(run, RunStatus.RUNNING, WorkflowPhase.CLOUDINIT_CONNECT)
+        self._emit(
+            run.run_id,
+            WorkflowPhase.CLOUDINIT_CONNECT,
+            "step.started",
+            f"Cloud Connectivity Wizard started -> {item.cloudinit_url}",
+        )
+        review_ready = False
+
+        def on_status(message: str) -> None:
+            nonlocal review_ready
+            if message == "review_ready":
+                review_ready = True
+                self._set(run, RunStatus.WAITING_FOR_OPERATOR)
+                self._emit(
+                    run.run_id,
+                    WorkflowPhase.CLOUDINIT_CONNECT,
+                    "operator.review_ready",
+                    "Wizard filled — review the values in the browser and click Submit",
+                )
+
+        adapter = self._cloudinit_factory(self.settings, on_status)
+        result = await adapter.run(item, run_id=run.run_id)
+
+        if result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE):
+            self._set(run, RunStatus.READY, WorkflowPhase.DSCC_SETUP_SYSTEM)
+            self._emit(run.run_id, WorkflowPhase.CLOUDINIT_CONNECT, "step.completed", "Array connected — next: DSCC Setup")
+        elif result == BrowserResultStatus.WAITING_FOR_OPERATOR and review_ready:
+            self._set(run, RunStatus.WAITING_FOR_OPERATOR)
+            self._emit(
+                run.run_id,
+                WorkflowPhase.CLOUDINIT_CONNECT,
+                "step.stalled",
+                "Submit was not detected (browser closed or review window expired) — re-run the step to retry",
+            )
+        elif result == BrowserResultStatus.FAILED_TERMINAL:
+            self._set(run, RunStatus.TERMINAL_FAILURE)
+            self._emit(run.run_id, WorkflowPhase.CLOUDINIT_CONNECT, "step.failed", "Invalid cloudinit URL (must be https://169.254.x.x/cloudinit)")
+        else:
+            self._set(run, RunStatus.RETRYABLE_FAILURE)
+            self._emit(
+                run.run_id,
+                WorkflowPhase.CLOUDINIT_CONNECT,
+                "step.failed",
+                "Browser automation did not complete — check the artifact screenshot and retry",
+            )
+
+    # ------------------------------------------------------------------ step C: DSCC
+
+    def start_dscc(self, run_id: str, *, cdp_url: str) -> RunRecord:
+        run, item = self.get_run(run_id), self.get_work_item(run_id)
+        self._spawn(run_id, self._run_dscc(run, item, cdp_url))
+        return run
+
+    async def _run_dscc(self, run: RunRecord, item: ArrayWorkItem, cdp_url: str) -> None:
+        self._set(run, RunStatus.RUNNING, WorkflowPhase.DSCC_SETUP_SYSTEM)
+        self._emit(run.run_id, WorkflowPhase.DSCC_SETUP_SYSTEM, "step.started", "DSCC Set Up System wizard started")
+
+        adapter = self._dscc_factory(self.settings, cdp_url)
+        result = await adapter.run(item, run_id=run.run_id)
+
+        if result == BrowserResultStatus.WAITING_FOR_OPERATOR:
+            self._set(run, RunStatus.WAITING_FOR_OPERATOR)
+            self._emit(
+                run.run_id,
+                WorkflowPhase.DSCC_SETUP_SYSTEM,
+                "operator.credentials_ready",
+                "Filled through System — add the Credentials secret in the browser, Continue, "
+                "review, Submit, then mark the run complete",
+            )
+        elif result == BrowserResultStatus.FAILED_TERMINAL:
+            self._set(run, RunStatus.TERMINAL_FAILURE)
+            self._emit(run.run_id, WorkflowPhase.DSCC_SETUP_SYSTEM, "step.failed", "Work item is missing required DSCC fields — fix it and re-run")
+        else:
+            self._set(run, RunStatus.RETRYABLE_FAILURE)
+            self._emit(
+                run.run_id,
+                WorkflowPhase.DSCC_SETUP_SYSTEM,
+                "step.failed",
+                "Could not drive the DSCC browser — make sure the debug Chrome is open on the "
+                "Set Up System wizard (Welcome), then retry",
+            )
+
+    # ------------------------------------------------------------------ internals
+
+    def _spawn(self, run_id: str, coro) -> None:
+        existing = self._tasks.get(run_id)
+        if existing is not None and not existing.done():
+            coro.close()
+            raise RunBusyError(run_id)
+        self._tasks[run_id] = asyncio.create_task(self._guarded(run_id, coro))
+
+    async def _guarded(self, run_id: str, coro) -> None:
+        # A crash must never leave a run stuck in RUNNING with no trace.
+        try:
+            await coro
+        except Exception as exc:  # noqa: BLE001 - background task; record, don't crash the app.
+            run = self.store.get_run(run_id)
+            if run is not None:
+                self._set(run, RunStatus.RETRYABLE_FAILURE)
+            self._emit(
+                run_id,
+                run.current_phase if run else WorkflowPhase.NOT_STARTED,
+                "step.crashed",
+                f"{type(exc).__name__}: {str(exc)[:300]}",
+            )
+
+    def _set(self, run: RunRecord, status: RunStatus, phase: WorkflowPhase | None = None) -> None:
+        run.status = status
+        if phase is not None:
+            run.current_phase = phase
+        run.updated_at = datetime.now(UTC)
+        self.store.upsert_run(run)
+
+    def _emit(self, run_id: str, phase: WorkflowPhase, event_type: str, message: str) -> None:
+        event = RunEvent(run_id=run_id, phase=phase, event_type=event_type, message=message)
+        self.store.append_event(event)
+        self.events.publish_sync(event)
