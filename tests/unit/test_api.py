@@ -85,6 +85,10 @@ def test_template_and_parse_round_trip(tmp_path):
     assert parsed.status_code == 200
     items = parsed.json()["work_items"]
     assert len(items) == 1 and items[0]["serial_number"] == "SGHD00EXAMPLE"
+    # parse echoes back what the operator uploaded (for the editable form) — NOT masked...
+    assert items[0]["subscription_key"] == "EXAMPLEKEY1234567890"
+    # ...except passwords, which are never echoed.
+    assert "password" not in items[0]["dscc_setup"]
 
     bad = client.post("/work-items/parse", json={"csv_text": "not,a,real\nheader,row,x"})
     assert bad.status_code == 422
