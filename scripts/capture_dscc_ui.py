@@ -55,6 +55,11 @@ def parse_args() -> argparse.Namespace:
         default=90000,
         help="Navigation timeout in milliseconds.",
     )
+    parser.add_argument(
+        "--no-navigate",
+        action="store_true",
+        help="Do not navigate; capture the DSCC tab you already have open (use once you're on the wizard).",
+    )
     return parser.parse_args()
 
 
@@ -76,13 +81,16 @@ def main() -> int:
             print("No browser context was available from CDP. Open Chrome/Edge first, then retry.", file=sys.stderr)
             return 2
 
-        context = browser.contexts[0]
-        page = context.pages[0] if context.pages else context.new_page()
+        page = pick_page(browser, target_url)
+        if page is None:
+            print("No open tab found in the attached browser. Open a DSCC tab, then retry.", file=sys.stderr)
+            return 2
 
-        try:
-            page.goto(target_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
-        except PlaywrightTimeoutError:
-            print("Navigation timed out. Capturing the current browser state if available.")
+        if not args.no_navigate:
+            try:
+                page.goto(target_url, wait_until="domcontentloaded", timeout=args.timeout_ms)
+            except PlaywrightTimeoutError:
+                print("Navigation timed out. Capturing the current browser state if available.")
 
         if looks_like_login(page.url):
             print("The current page looks like a login/SSO page.")
@@ -107,6 +115,26 @@ def main() -> int:
 
     print(f"Capture complete. Artifacts are under: {output_dir.resolve()}")
     return 0
+
+
+def pick_page(browser: Any, target_url: str) -> Any:
+    """Prefer a tab already on the DSCC host (data.cloud.hpe.com); else the last real tab."""
+    pages = [p for ctx in browser.contexts for p in ctx.pages]
+    host = urlparse(target_url).hostname or ""
+    base = host.split(".", 1)[-1] if "." in host else host  # data.cloud.hpe.com
+    for page in pages:
+        if base and base in (urlparse(page.url).hostname or ""):
+            try:
+                page.bring_to_front()
+            except Exception:  # noqa: BLE001
+                pass
+            return page
+    real = [p for p in pages if p.url and not p.url.startswith(("about:", "edge:", "chrome:"))]
+    if real:
+        return real[-1]
+    if pages:
+        return pages[-1]
+    return browser.contexts[0].new_page() if browser.contexts else None
 
 
 def print_safety_notice(output_dir: Path, cdp_url: str, target_url: str) -> None:
