@@ -127,11 +127,14 @@ class CloudinitWizardAdapter:
         await get_started.click()
 
     async def _eula(self, page) -> None:
-        accept = page.locator(CLOUDINIT["eula_accept_input"])
-        await accept.wait_for()
+        # The real checkbox input is visually hidden (Grommet), so key off the visible label.
+        label = page.get_by_text(CLOUDINIT["eula_accept_label"], exact=False)
+        await label.wait_for()
         await self._scroll_eula_to_end(page)  # accept is enabled only after scrolling to the end
+        await page.wait_for_timeout(500)
+        accept = page.locator(CLOUDINIT["eula_accept_input"])
         if not await accept.is_checked():
-            await page.get_by_text(CLOUDINIT["eula_accept_label"], exact=False).click()
+            await label.click()
         await self._next(page)
 
     async def _network(self, page, net: NetworkConfig) -> None:
@@ -176,12 +179,14 @@ class CloudinitWizardAdapter:
         await page.get_by_role("option", name=option_pattern).first.click()
 
     async def _scroll_eula_to_end(self, page) -> None:
+        # Scroll every scrollable container to its bottom and fire a scroll event, so the
+        # "scroll to the end to accept" gate is satisfied however the EULA box is built.
         await page.evaluate(
             """() => {
-                for (const el of document.querySelectorAll('div, section')) {
-                    if (el.scrollHeight > el.clientHeight + 20
-                        && /End User License Agreement/i.test(el.textContent || '')) {
+                for (const el of document.querySelectorAll('*')) {
+                    if (el.clientHeight > 40 && el.scrollHeight > el.clientHeight + 8) {
                         el.scrollTop = el.scrollHeight;
+                        el.dispatchEvent(new Event('scroll', { bubbles: true }));
                     }
                 }
             }"""
