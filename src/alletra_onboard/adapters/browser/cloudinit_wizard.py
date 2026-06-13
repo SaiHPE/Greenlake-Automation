@@ -15,7 +15,6 @@ Selectors live in ``locators.CLOUDINIT`` (HPE exposes stable name / data-test-id
 
 from __future__ import annotations
 
-import re
 import time
 from pathlib import Path
 
@@ -158,9 +157,9 @@ class CloudinitWizardAdapter:
 
     async def _time(self, page, net: NetworkConfig) -> None:
         await self._fill(page, CLOUDINIT["ntp"], net.ntp)
-        region = net.timezone.split("/", 1)[0]
-        await self._select(page, CLOUDINIT["time_region_select"], re.compile(rf"^{re.escape(region)}$"))
-        await self._select(page, CLOUDINIT["time_zone_select"], re.compile(rf"^{re.escape(net.timezone)}\b"))
+        region = net.timezone.split("/", 1)[0]  # "Asia/Kolkata" -> "Asia"
+        await self._select(page, CLOUDINIT["time_region_select"], region, exact=True)
+        await self._select(page, CLOUDINIT["time_zone_select"], net.timezone, exact=False)
         await self._next(page)
 
     # ------------------------------------------------------------------ helpers
@@ -173,17 +172,18 @@ class CloudinitWizardAdapter:
         await field.wait_for()
         await field.fill(value)
 
-    async def _select(self, page, trigger_selector: str, option_pattern: re.Pattern[str]) -> None:
-        # Grommet Select: click the (readonly) value box to open the drop, then click the option.
-        # Options may or may not expose role=option, so try that, then fall back to visible text.
+    async def _select(self, page, trigger_selector: str, option_text: str, *, exact: bool) -> None:
+        # Open the Grommet drop, then click the option. Use a STRING name (not a regex): a regex
+        # containing "/" (e.g. Asia/Kolkata) breaks Playwright's role-selector parser. exact=False
+        # does a substring match, so "Asia/Kolkata" hits the "Asia/Kolkata (UTC+05:30)" option.
         await page.locator(trigger_selector).click()
         await page.wait_for_timeout(300)  # let the drop render
         try:
-            await page.get_by_role("option", name=option_pattern).first.click(timeout=3_000)
+            await page.get_by_role("option", name=option_text, exact=exact).first.click(timeout=3_000)
             return
-        except PlaywrightTimeoutError:
+        except Exception:  # noqa: BLE001 - fall back to clicking the visible option text
             pass
-        await page.get_by_text(option_pattern).first.click()
+        await page.get_by_text(option_text, exact=exact).first.click()
 
     async def _scroll_eula_to_end(self, page) -> None:
         # Scroll every scrollable container to its bottom and fire a scroll event, so the
