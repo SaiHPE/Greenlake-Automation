@@ -71,7 +71,7 @@ def main() -> int:
             print("Navigation timed out. Capturing the current browser state if available.")
 
         capture_index = 1
-        capture_snapshot(page, output_dir, capture_index, "initial")
+        safe_capture(page, output_dir, capture_index, "initial")
         capture_index += 1
 
         while True:
@@ -82,7 +82,7 @@ def main() -> int:
                 break
             if not label:
                 label = f"screen-{capture_index}"
-            capture_snapshot(page, output_dir, capture_index, label)
+            safe_capture(page, output_dir, capture_index, label)
             capture_index += 1
 
         context.close()
@@ -99,6 +99,14 @@ def print_safety_notice(output_dir: Path) -> None:
     print("Do not enter real passwords, MFA codes, real subscription keys, or customer secrets before capturing.")
     print("HTML/control metadata blanks input values, but screenshots capture whatever is visible on screen.")
     print()
+
+
+def safe_capture(page: Any, output_dir: Path, index: int, label: str) -> None:
+    """Capture one screen; never let a single bad screen crash the whole session."""
+    try:
+        capture_snapshot(page, output_dir, index, label)
+    except Exception as exc:  # noqa: BLE001 - capture must survive odd page states.
+        print(f"WARNING: capture of {label!r} hit an error and was partially skipped: {exc}")
 
 
 def capture_snapshot(page: Any, output_dir: Path, index: int, label: str) -> None:
@@ -145,7 +153,7 @@ def sanitized_html(page: Any) -> str:
                     element.setAttribute('value', '<redacted>');
                 }
             });
-            return '<!doctype html>\n' + clone.outerHTML;
+            return '<!doctype html>\\n' + clone.outerHTML;
         }
         """
     )
