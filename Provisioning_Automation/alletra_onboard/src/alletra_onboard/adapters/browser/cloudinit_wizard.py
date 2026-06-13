@@ -1,8 +1,9 @@
 """Component B — drive the on-array HPE Cloud Connectivity Wizard (Playwright).
 
-Attaches over CDP to an already-open Chrome (the operator starts Chrome with
-``--remote-debugging-port`` and navigates to the array's ``https://169.254.x.x/cloudinit``,
-accepting the self-signed cert). No auth. Steps mirror the live capture:
+Launches its own Chromium, navigates to the array's ``https://169.254.x.x/cloudinit``
+(self-signed cert handled via ``ignore_https_errors``), and drives the wizard. No auth.
+The operator supplies the cloudinit URL (from the HPE Discovery Tool); the frontend will
+pass it the same way. Steps mirror the live capture:
 
     Welcome -> EULA(1) -> Network(2) -> Proxy(3) -> Time(4) -> Review(5) -> Submit
 
@@ -36,28 +37,33 @@ CONNECT_TIMEOUT_S = 300.0
 
 
 class CloudinitWizardAdapter:
-    def __init__(self, cdp_url: str = "http://localhost:9222", artifact_dir: str | Path | None = None) -> None:
-        self.cdp_url = cdp_url
+    def __init__(self, headless: bool = False, artifact_dir: str | Path | None = None) -> None:
+        self.headless = headless
         self.artifact_dir = Path(artifact_dir) if artifact_dir else None
 
     async def run(self, item: ArrayWorkItem, run_id: str) -> BrowserResultStatus:
         if not item.cloudinit_url.startswith("https://169.254."):
             return BrowserResultStatus.FAILED_TERMINAL
         if async_playwright is None:
-            return BrowserResultStatus.WAITING_FOR_OPERATOR
+            return BrowserResultStatus.WAITING_FOR_OPERATOR  # playwright not installed
 
         async with async_playwright() as pw:
             try:
-                browser = await pw.chromium.connect_over_cdp(self.cdp_url)
-            except Exception:  # noqa: BLE001 - no attached browser to drive.
+                browser = await pw.chromium.launch(
+                    headless=self.headless,
+                    args=[] if self.headless else ["--start-maximized"],
+                )
+            except Exception:  # noqa: BLE001 - chromium missing: run `playwright install chromium`.
                 return BrowserResultStatus.WAITING_FOR_OPERATOR
 
-            page = await self._pick_page(browser, item.cloudinit_url)
-            if page is None:
-                return BrowserResultStatus.WAITING_FOR_OPERATOR
-
+            context = await browser.new_context(
+                ignore_https_errors=True,  # the array serves a self-signed cert
+                no_viewport=not self.headless,
+            )
+            page = await context.new_page()
             page.set_default_timeout(STEP_TIMEOUT_MS)
             try:
+                await page.goto(item.cloudinit_url, wait_until="domcontentloaded")
                 if await self._page_has_any(page, CLOUDINIT_TEXT["success"]):
                     return BrowserResultStatus.ALREADY_DONE
                 await self._welcome(page)
@@ -70,6 +76,9 @@ class CloudinitWizardAdapter:
             except PlaywrightTimeoutError:
                 await self._dump(page, run_id, "timeout")
                 return BrowserResultStatus.FAILED_RETRYABLE
+            finally:
+                await context.close()
+                await browser.close()
 
     # ------------------------------------------------------------------ screens
 
@@ -164,18 +173,6 @@ class CloudinitWizardAdapter:
     async def _page_has_any(self, page, signals) -> bool:
         text = (await self._body_text(page)).lower()
         return any(signal in text for signal in signals)
-
-    async def _pick_page(self, browser, cloudinit_url: str):
-        host = cloudinit_url.split("://", 1)[-1].split("/", 1)[0]
-        for context in browser.contexts:
-            for page in context.pages:
-                if host in page.url:
-                    await page.bring_to_front()
-                    return page
-        for context in browser.contexts:
-            if context.pages:
-                return context.pages[0]
-        return None
 
     async def _dump(self, page, run_id: str, label: str) -> None:
         if not self.artifact_dir:
