@@ -65,11 +65,21 @@ class NetworkConfig(BaseModel):
 
 
 class DsccSetupConfig(BaseModel):
+    # System step
     system_name: str
     country: str
+    # System Credentials (the array admin secret DSCC stores; reused if present, else created)
     credential_name: str = "b10000-admin"
     username: str = "3paradm"
-    password_ref: str | None = None
+    password: SecretStr | None = None
+    # Attributes -> Support Contact step
+    contact_first_name: str | None = None
+    contact_last_name: str | None = None
+    contact_language: str = "English"
+    contact_company: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
+    # Review -> blueprint (left off by default; revisit later)
     blueprint_name: str | None = None
     apply_blueprint: bool = False
 
