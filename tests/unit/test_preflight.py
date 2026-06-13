@@ -24,7 +24,7 @@ def _item(**overrides):
         "dscc_setup": DsccSetupConfig(
             system_name="array01",
             country="India",
-            password_ref="env:DSCC_SETUP_PASSWORD",
+            password="env:DSCC_SETUP_PASSWORD",
         ),
     }
     data.update(overrides)
