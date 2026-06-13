@@ -159,33 +159,47 @@ def safe_capture(page: Any, output_dir: Path, index: int, label: str) -> None:
 
 def capture_snapshot(page: Any, output_dir: Path, index: int, label: str) -> None:
     name = f"{index:02d}-{slug(label)}"
-    screenshot_path = output_dir / f"{name}.png"
+    # The screenshot is page-level (it already shows iframe content visually).
+    page.screenshot(path=str(output_dir / f"{name}.png"), full_page=True)
+    _dump_document(page, output_dir, name, label, page.url, screenshot=f"{name}.png")
+
+    # The DSCC Setup wizard renders inside a micro-app IFRAME (data-test-id="setup-iframe",
+    # name="micro-app-setup"), so the real form fields are NOT in the top document — they live
+    # in a child frame. Dump every http(s) child frame so locators are actually captured.
+    frames = [f for f in page.frames if f is not page.main_frame and str(f.url).startswith("http")]
+    for i, frame in enumerate(frames, start=1):
+        try:
+            _dump_document(frame, output_dir, f"{name}.frame{i}", f"{label} (frame {i})", frame.url)
+        except Exception as exc:  # noqa: BLE001 - one odd frame must not abort the capture.
+            print(f"  WARNING: frame {i} ({str(frame.url)[:60]}) skipped: {exc}")
+    print(f"Saved {name}: screenshot + top document + {len(frames)} frame document(s)")
+
+
+def _dump_document(
+    target: Any, output_dir: Path, name: str, label: str, url: str, screenshot: str | None = None
+) -> None:
+    """Dump HTML + visible text + control candidates for one document (a page OR a frame)."""
     html_path = output_dir / f"{name}.html"
     text_path = output_dir / f"{name}.txt"
     controls_path = output_dir / f"{name}.controls.json"
     metadata_path = output_dir / f"{name}.metadata.json"
 
-    page.screenshot(path=str(screenshot_path), full_page=True)
-    html_path.write_text(sanitized_html(page), encoding="utf-8")
-    text_path.write_text(visible_text(page), encoding="utf-8")
-    write_json(controls_path, control_candidates(page))
+    html_path.write_text(sanitized_html(target), encoding="utf-8")
+    text_path.write_text(visible_text(target), encoding="utf-8")
+    write_json(controls_path, control_candidates(target))
+    files = {"html": html_path.name, "text": text_path.name, "controls": controls_path.name}
+    if screenshot:
+        files["screenshot"] = screenshot
     write_json(
         metadata_path,
         {
             "captured_at": datetime.now(UTC).isoformat(),
             "label": label,
-            "url": page.url,
-            "title": safe_title(page),
-            "login_like_url": looks_like_login(page.url),
-            "files": {
-                "screenshot": screenshot_path.name,
-                "html": html_path.name,
-                "text": text_path.name,
-                "controls": controls_path.name,
-            },
+            "url": url,
+            "login_like_url": looks_like_login(url),
+            "files": files,
         },
     )
-    print(f"Saved {name}: screenshot, HTML, visible text, controls, metadata")
 
 
 def sanitized_html(page: Any) -> str:
@@ -254,13 +268,6 @@ def is_local_cdp_url(value: str) -> bool:
 def looks_like_login(url: str) -> bool:
     lowered = url.lower()
     return any(marker in lowered for marker in ("login", "signin", "sso", "oauth", "authorize"))
-
-
-def safe_title(page: Any) -> str:
-    try:
-        return page.title()
-    except Exception:  # noqa: BLE001 - capture should continue even on odd browser states.
-        return ""
 
 
 def write_json(path: Path, value: Any) -> None:
