@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     artifact_dir: Path = Field(default=Path(".alletra_onboard/artifacts"))
     browser_cdp_url: str = "http://localhost:9222"
     browser_headless: bool = False
+    # Proxy for the launched DSCC debug browser. None -> use the HTTPS_PROXY env var (the jump
+    # box sets it). Set BROWSER_PROXY=direct:// in .env to force no proxy on a machine that has
+    # HTTPS_PROXY set but reaches DSCC directly.
+    browser_proxy: str | None = None
+    browser_proxy_bypass: str = "localhost;127.0.0.1;169.254.*"
 
 
 def load_settings() -> Settings:

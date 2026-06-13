@@ -79,12 +79,15 @@ class DsccStepRequest(BaseModel):
 class BrowserLaunchRequest(BaseModel):
     port: int = 9222
     url: str | None = None  # e.g. the DSCC console URL or a cloudinit URL
+    proxy: str | None = None  # override; default applies BROWSER_PROXY / HTTPS_PROXY
+    no_proxy: bool = False  # force a direct connection
 
 
 class BrowserLaunchResponse(BaseModel):
     cdp_url: str
     profile_dir: str
     executable: str
+    proxy: str = ""
 
 
 # ------------------------------------------------------------------ preflight (existing)
