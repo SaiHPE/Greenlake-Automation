@@ -67,3 +67,17 @@ export const markComplete = (runId: string) => request<{ run: RunRecord }>('POST
 
 export const launchBrowser = (url?: string) =>
   request<{ cdp_url: string; profile_dir: string; executable: string }>('POST', '/browser/launch', { port: 9222, url });
+
+export interface ClockStatus {
+  in_sync: boolean;
+  skew_seconds: number | null;
+  local_utc: string;
+  server_utc: string | null;
+  is_admin: boolean;
+  source: string;
+  error: string | null;
+}
+
+export const getClock = () => request<ClockStatus>('GET', '/system/clock');
+export const syncClock = () =>
+  request<{ changed: boolean; skew_seconds_before: number; local_utc_after: string }>('POST', '/system/clock/sync');

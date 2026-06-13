@@ -27,6 +27,7 @@ from pydantic import BaseModel, ValidationError
 
 from alletra_onboard.adapters.browser.debug_browser import launch_debug_browser
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
+from alletra_onboard.adapters.system.clock import ClockStatus, ClockSyncResult, clock_status, sync_clock
 from alletra_onboard.api.schemas import (
     BrowserLaunchRequest,
     BrowserLaunchResponse,
@@ -229,6 +230,19 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         except RuntimeError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         return BrowserLaunchResponse(**info)
+
+    @app.get("/system/clock", response_model=ClockStatus)
+    async def get_clock() -> ClockStatus:
+        return await clock_status()
+
+    @app.post("/system/clock/sync", response_model=ClockSyncResult)
+    async def post_clock_sync() -> ClockSyncResult:
+        try:
+            return await sync_clock()
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except (RuntimeError, OSError) as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.post("/preflight", response_model=PreflightResponse)
     async def preflight(request: PreflightRequest) -> PreflightResponse:
