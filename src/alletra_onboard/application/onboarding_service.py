@@ -30,7 +30,7 @@ from alletra_onboard.application.provisioning import (
     WARNING,
     build_provisioning_service,
 )
-from alletra_onboard.config import Settings
+from alletra_onboard.config import Settings, load_settings
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
     BrowserResultStatus,
@@ -86,6 +86,15 @@ class OnboardingService:
         self._cloudinit_factory = cloudinit_factory
         self._dscc_factory = dscc_factory
         self._tasks: dict[str, asyncio.Task] = {}
+
+    def _current_settings(self) -> Settings:
+        # Re-read settings (incl. .env) at each step so GreenLake credentials entered in the
+        # Configure screen AFTER the server started take effect without a restart. The startup
+        # snapshot (self.settings) is only a fallback if reloading ever fails.
+        try:
+            return load_settings()
+        except Exception:  # noqa: BLE001
+            return self.settings
 
     # ------------------------------------------------------------------ run lifecycle
 
@@ -147,7 +156,7 @@ class OnboardingService:
             self.store.upsert_run(run)
             self._emit(run.run_id, phase, "phase.progress", message)
 
-        service = self._provision_factory(self.settings, progress)
+        service = self._provision_factory(self._current_settings(), progress)
         result = await service.provision(item, dry_run=dry_run)
 
         for outcome in result.phases:
@@ -202,7 +211,7 @@ class OnboardingService:
                     "Wizard filled — review the values in the browser and click Submit",
                 )
 
-        adapter = self._cloudinit_factory(self.settings, on_status)
+        adapter = self._cloudinit_factory(self._current_settings(), on_status)
         result = await adapter.run(item, run_id=run.run_id)
 
         if result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE):
@@ -239,7 +248,7 @@ class OnboardingService:
         self._set(run, RunStatus.RUNNING, WorkflowPhase.DSCC_SETUP_SYSTEM)
         self._emit(run.run_id, WorkflowPhase.DSCC_SETUP_SYSTEM, "step.started", "DSCC Set Up System wizard started")
 
-        adapter = self._dscc_factory(self.settings, cdp_url)
+        adapter = self._dscc_factory(self._current_settings(), cdp_url)
         result = await adapter.run(item, run_id=run.run_id)
 
         if result == BrowserResultStatus.WAITING_FOR_OPERATOR:
