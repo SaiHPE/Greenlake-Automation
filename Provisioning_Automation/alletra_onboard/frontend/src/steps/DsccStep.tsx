@@ -82,30 +82,48 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
     }
   };
 
+  const skewOff = clock?.skew_seconds != null && !clock.in_sync;
+
   return (
     <Box gap="medium">
-      {clock && !clock.in_sync && clock.skew_seconds != null && (
-        <Section title="System clock">
+      {/* Always shown — a skewed clock fails DSCC sign-in, so the sync control must be findable
+          even when the clock currently looks fine. */}
+      <Section title="System clock (required for DSCC sign-in)">
+        {clock === null ? (
+          <Text size="small" color="text-weak">Checking the clock…</Text>
+        ) : skewOff ? (
           <Notification
             status="warning"
-            title={`Clock is off by ~${Math.abs(Math.round(clock.skew_seconds))}s — DSCC sign-in will fail`}
-            message="DSCC's login rejects a skewed clock (&quot;iat is in the future&quot;). Sync it before opening the DSCC browser. Uses a trusted HTTPS time source, so it works where NTP is blocked."
+            title={`Clock is off by ~${Math.abs(Math.round(clock.skew_seconds as number))}s — DSCC sign-in will fail`}
+            message='DSCC rejects a skewed clock ("iat is in the future"). Sync it before opening the DSCC browser.'
           />
-          <Box direction="row" gap="small" align="center">
-            <Button primary label={busy === 'clock' ? 'Syncing…' : 'Sync system clock'} disabled={busy !== null} onClick={fixClock} />
-            {!clock.is_admin && (
-              <Text size="small" color="text-weak">
-                Run the app as Administrator for this to set the clock.
-              </Text>
-            )}
-          </Box>
-          {clockMsg && (
-            <Text size="small" color="status-ok">
-              {clockMsg}
-            </Text>
-          )}
-        </Section>
-      )}
+        ) : clock.skew_seconds == null ? (
+          <Text size="small" color="text-weak">
+            Couldn&apos;t reach a time source to check ({clock.error ?? 'unknown'}). You can still sync below.
+          </Text>
+        ) : (
+          <Text size="small" color="status-ok">
+            ✓ Clock is in sync (±{Math.abs(Math.round(clock.skew_seconds))}s vs {clock.source}).
+          </Text>
+        )}
+        <Box direction="row" gap="small" align="center">
+          <Button
+            primary={skewOff}
+            label={busy === 'clock' ? 'Syncing…' : 'Sync system clock'}
+            disabled={busy !== null}
+            onClick={fixClock}
+          />
+          <Text size="small" color="text-weak">Uses an HTTPS time source — works where NTP is blocked.</Text>
+        </Box>
+        {clock && !clock.is_admin && (
+          <Text size="small" color="text-weak">Run the app as Administrator for the sync to set the clock.</Text>
+        )}
+        {clockMsg && (
+          <Text size="small" color="status-ok">
+            {clockMsg}
+          </Text>
+        )}
+      </Section>
 
       <Section title="1 · Open DSCC and start the Set Up System wizard">
         <Instructions
