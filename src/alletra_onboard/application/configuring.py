@@ -29,19 +29,35 @@ def read_env(path: Path) -> dict[str, str]:
     return data
 
 
-def write_env(path: Path, data: dict[str, str]) -> None:
-    lines = [f"{key}={value}" for key, value in data.items() if value != ""]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+def set_env_values(path: Path, updates: dict[str, str | None]) -> None:
+    """Upsert KEY=VALUE lines IN PLACE, preserving comments, blank lines, and other keys.
+
+    Replaces an existing key's line where it is, appends new keys at the end. Empty/None update
+    values are ignored (the existing value is kept) so a blank field never wipes a saved secret.
+    """
+    effective = {key: value for key, value in updates.items() if value}
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    out: list[str] = []
+    written: set[str] = set()
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in effective:
+                out.append(f"{key}={effective[key]}")
+                written.add(key)
+                continue
+        out.append(line)  # preserve comments / blanks / untouched keys verbatim
+    for key, value in effective.items():
+        if key not in written:
+            out.append(f"{key}={value}")
+    content = "\n".join(out)
+    path.write_text(content + "\n" if content else "", encoding="utf-8")
 
 
 def update_gl_credentials(path: Path, values: dict[str, str | None]) -> None:
-    """Merge the provided GL_* values (None/empty = keep existing) into the .env."""
-    current = read_env(path)
-    for key in GL_ENV_KEYS:
-        value = values.get(key)
-        if value:
-            current[key] = value
-    write_env(path, current)
+    """Merge the provided GL_* values (None/empty = keep existing) into the .env, in place."""
+    set_env_values(path, {key: values.get(key) for key in GL_ENV_KEYS})
 
 
 def masked_gl_credentials(path: Path) -> dict[str, str]:

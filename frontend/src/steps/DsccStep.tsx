@@ -18,26 +18,26 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
   const [clock, setClock] = useState<ClockStatus | null>(null);
   const [clockMsg, setClockMsg] = useState<string | null>(null);
 
+  const consoleUrl = `https://console-${dsccRegion || 'jp1'}.data.cloud.hpe.com`;
+
   useEffect(() => {
-    getClock().then(setClock).catch(() => undefined);
-  }, []);
+    getClock(consoleUrl).then(setClock).catch(() => undefined);
+  }, [consoleUrl]);
 
   const fixClock = async () => {
     setBusy('clock');
     setError(null);
     setClockMsg(null);
     try {
-      const r = await syncClock();
+      const r = await syncClock(consoleUrl);
       setClockMsg(r.changed ? `Clock corrected (was off by ${Math.round(r.skew_seconds_before)}s).` : 'Clock already in sync.');
-      setClock(await getClock());
+      setClock(await getClock(consoleUrl));
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
     } finally {
       setBusy(null);
     }
   };
-
-  const consoleUrl = `https://console-${dsccRegion || 'jp1'}.data.cloud.hpe.com`;
   const stepEvents = events.filter((e) => e.phase === 'DSCC_SETUP_SYSTEM' || e.phase === 'COMPLETE');
   const running = run?.status === 'running' && run?.current_phase === 'DSCC_SETUP_SYSTEM';
   const credentialsReady = stepEvents.some((e) => e.event_type === 'operator.credentials_ready');

@@ -19,7 +19,10 @@ from email.utils import parsedate_to_datetime
 import httpx
 from pydantic import BaseModel
 
-DEFAULT_TIME_URL = "https://www.hpe.com"
+# Tried in order; the caller's preferred source (e.g. the DSCC console, known reachable in
+# context) is tried first, then these fall-backs, so the check works wherever the host has
+# HTTPS egress — not just where one specific host is reachable.
+TIME_SOURCES = ("https://www.hpe.com", "https://www.microsoft.com", "https://www.cloudflare.com")
 IN_SYNC_THRESHOLD_S = 5.0
 ERROR_PRIVILEGE_NOT_HELD = 1314
 
@@ -53,20 +56,33 @@ def is_elevated() -> bool:
         return False
 
 
-async def _server_utc(url: str) -> datetime:
-    # trust_env (default) makes httpx use HTTPS_PROXY, so this works behind the lab proxy.
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-        resp = await client.get(url)
-    date = resp.headers.get("date")
-    if not date:
-        raise RuntimeError(f"No Date header returned from {url}")
-    return parsedate_to_datetime(date).astimezone(UTC)
+def _candidates(preferred: str | None) -> list[str]:
+    ordered = [preferred] if preferred else []
+    ordered += [s for s in TIME_SOURCES if s != preferred]
+    return ordered
 
 
-async def clock_status(url: str = DEFAULT_TIME_URL) -> ClockStatus:
+async def _server_utc(preferred: str | None = None) -> tuple[datetime, str]:
+    """Return (UTC now, source URL used), trying candidates until one yields a Date header.
+    trust_env (default) makes httpx use HTTPS_PROXY, so this works behind the lab proxy."""
+    last = "no time sources tried"
+    for url in _candidates(preferred):
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.get(url)
+            date = resp.headers.get("date")
+            if date:
+                return parsedate_to_datetime(date).astimezone(UTC), url
+            last = f"no Date header from {url}"
+        except Exception as exc:  # noqa: BLE001 - try the next source
+            last = f"{type(exc).__name__} from {url}: {str(exc)[:80]}"
+    raise RuntimeError(last)
+
+
+async def clock_status(url: str | None = None) -> ClockStatus:
     local = datetime.now(UTC)
     try:
-        server = await _server_utc(url)
+        server, source = await _server_utc(url)
     except Exception as exc:  # noqa: BLE001 - status must never raise; the UI just won't warn.
         return ClockStatus(
             in_sync=True,
@@ -74,7 +90,7 @@ async def clock_status(url: str = DEFAULT_TIME_URL) -> ClockStatus:
             local_utc=local.isoformat(),
             server_utc=None,
             is_admin=is_elevated(),
-            source=url,
+            source=url or "(none reachable)",
             error=f"{type(exc).__name__}: {str(exc)[:200]}",
         )
     skew = (local - server).total_seconds()
@@ -84,7 +100,7 @@ async def clock_status(url: str = DEFAULT_TIME_URL) -> ClockStatus:
         local_utc=local.isoformat(),
         server_utc=server.isoformat(),
         is_admin=is_elevated(),
-        source=url,
+        source=source,
     )
 
 
@@ -117,10 +133,10 @@ def _set_system_utc(when: datetime) -> None:
         raise OSError(f"SetSystemTime failed (WinError {err}).")
 
 
-async def sync_clock(url: str = DEFAULT_TIME_URL) -> ClockSyncResult:
+async def sync_clock(url: str | None = None) -> ClockSyncResult:
     """Set the system clock from the HTTPS time source if it has drifted past the threshold."""
     before = datetime.now(UTC)
-    server = await _server_utc(url)
+    server, source = await _server_utc(url)
     skew = (before - server).total_seconds()
     changed = abs(skew) > IN_SYNC_THRESHOLD_S
     if changed:
@@ -132,5 +148,5 @@ async def sync_clock(url: str = DEFAULT_TIME_URL) -> ClockSyncResult:
         local_utc_before=before.isoformat(),
         local_utc_after=after.isoformat(),
         server_utc=server.isoformat(),
-        source=url,
+        source=source,
     )
