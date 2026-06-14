@@ -12,7 +12,7 @@ from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAda
 from alletra_onboard.adapters.browser.debug_browser import launch_debug_browser
 from alletra_onboard.adapters.browser.dscc_setup import DsccSetupAdapter
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
-from alletra_onboard.application.configuring import read_env, write_env
+from alletra_onboard.application.configuring import read_env, set_env_values
 from alletra_onboard.application.health import greenlake_check
 from alletra_onboard.application.intake import load_work_items_csv
 from alletra_onboard.domain.models import BrowserResultStatus
@@ -173,16 +173,16 @@ def configure(
         "Member workspace ID", default=current.get("GL_MEMBER_WORKSPACE_ID", "")
     )
 
-    current.update(
+    set_env_values(
+        env_path,
         {
             "GL_CLIENT_ID": client_id,
             "GL_CLIENT_SECRET": client_secret,
             "GL_TOKEN_URL": token_url,
             "GL_BASE_URL": base_url,
             "GL_MEMBER_WORKSPACE_ID": workspace_id,
-        }
+        },
     )
-    write_env(env_path, current)
     console.print(f"[green]Saved {env_path.resolve()}[/green] (gitignored). Secret stored locally; not printed.")
 
 
