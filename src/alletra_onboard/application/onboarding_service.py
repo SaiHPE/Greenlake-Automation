@@ -159,9 +159,14 @@ class OnboardingService:
         service = self._provision_factory(self._current_settings(), progress)
         result = await service.provision(item, dry_run=dry_run)
 
-        for outcome in result.phases:
-            if outcome.status == WARNING:
-                run.warnings.append(f"{outcome.phase.value}: {outcome.detail}")
+        # Recompute from scratch (don't accumulate across re-runs of this step).
+        run.warnings = [
+            f"{outcome.phase.value}: {outcome.detail}" for outcome in result.phases if outcome.status == WARNING
+        ]
+        run.resources.device_id = result.device_id or run.resources.device_id
+        run.resources.subscription_id = result.subscription_id or run.resources.subscription_id
+        run.resources.service_manager_id = result.service_manager_id or run.resources.service_manager_id
+        run.resources.service_catalog_region_id = result.region or run.resources.service_catalog_region_id
         failed = result.error is not None or any(p.status == FAILED for p in result.phases)
         if failed:
             self._set(run, RunStatus.RETRYABLE_FAILURE)

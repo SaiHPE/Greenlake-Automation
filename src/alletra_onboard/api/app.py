@@ -71,7 +71,6 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         store = SqliteRunStore(settings.state_database_path)
         store.initialize()
         service = OnboardingService(settings, store, InMemoryEventBus())
-    preflight_service = PreflightService(settings)
     env_path = Path(".env")
 
     app = FastAPI(title="Alletra Onboard", version="0.2.0")
@@ -246,7 +245,8 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.post("/preflight", response_model=PreflightResponse)
     async def preflight(request: PreflightRequest) -> PreflightResponse:
-        report = await preflight_service.run(request.work_item, live_greenlake=request.live_greenlake)
+        # Fresh settings so credentials entered in Configure after startup are honored.
+        report = await PreflightService(load_settings()).run(request.work_item, live_greenlake=request.live_greenlake)
         return PreflightResponse(report=report)
 
     # Serve the built frontend when present (single-host product mode). Look in the working

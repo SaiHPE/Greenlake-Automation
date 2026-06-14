@@ -12,6 +12,7 @@ export function ConfigureStep({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<CheckReport | null>(null);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     getConfig()
@@ -27,15 +28,18 @@ export function ConfigureStep({ onDone }: { onDone: () => void }) {
   const save = async () => {
     setBusy('save');
     setError(null);
+    setSaved(false);
     try {
-      const saved = await saveConfig({
+      const result = await saveConfig({
         gl_client_id: clientId || null,
         gl_client_secret: clientSecret || null,
         gl_token_url: tokenUrl || null,
         gl_member_workspace_id: workspaceId || null,
       });
-      setConfigured(saved.configured);
+      setConfigured(result.configured);
       setClientSecret('');
+      setReport(null); // creds changed — old readiness result is stale
+      setSaved(true);
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
     } finally {
@@ -87,6 +91,14 @@ export function ConfigureStep({ onDone }: { onDone: () => void }) {
       </Section>
 
       {error && <Notification status="critical" title="Request failed" message={error} onClose={() => setError(null)} />}
+      {saved && !error && (
+        <Notification
+          status="normal"
+          title="Credentials saved"
+          message={configured ? 'Click Test connection, or continue to Array details.' : 'Client ID and Secret are required to proceed.'}
+          onClose={() => setSaved(false)}
+        />
+      )}
 
       {report && (
         <Section title="GreenLake readiness">
