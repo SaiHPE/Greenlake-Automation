@@ -1,8 +1,9 @@
 import { Box, Heading, Text } from 'grommet';
 import { Checkmark } from 'grommet-icons';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { getRun } from './api';
 import { useRunEvents } from './useRunEvents';
-import { EMPTY_FORM, WorkItemForm } from './workItem';
+import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
 import { ArrayStep } from './steps/ArrayStep';
 import { CloudinitStep } from './steps/CloudinitStep';
 import { ConfigureStep } from './steps/ConfigureStep';
@@ -19,12 +20,50 @@ const STEPS = [
   { title: 'Finish', subtitle: 'summary' },
 ];
 
+const RUN_ID_KEY = 'alletra.runId';
+
+// Which step a persisted run resumes to, from its phase.
+function stepForPhase(phase: string): number {
+  if (phase === 'CLOUDINIT_CONNECT') return 3;
+  if (phase === 'DSCC_SETUP_SYSTEM') return 4;
+  if (phase === 'COMPLETE') return 5;
+  return 2; // PREFLIGHT / GL_*
+}
+
 export default function App() {
-  const [step, setStep] = useState(0);
-  const [maxStep, setMaxStep] = useState(0);
+  const storedRunId = localStorage.getItem(RUN_ID_KEY);
+  const [step, setStep] = useState(storedRunId ? 2 : 0);
+  const [maxStep, setMaxStep] = useState(storedRunId ? 5 : 0);
   const [form, setForm] = useState<WorkItemForm>(EMPTY_FORM);
-  const [runId, setRunId] = useState<string | null>(null);
+  const [runId, setRunId] = useState<string | null>(storedRunId);
   const { run, events } = useRunEvents(runId);
+
+  // Persist the active run so a browser refresh / reopen doesn't lose it.
+  useEffect(() => {
+    if (runId) localStorage.setItem(RUN_ID_KEY, runId);
+    else localStorage.removeItem(RUN_ID_KEY);
+  }, [runId]);
+
+  // On first load, if a run was persisted, restore its work-item form and jump to the right
+  // step. If it no longer exists in the backend, drop it.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    const stored = localStorage.getItem(RUN_ID_KEY);
+    if (!stored) return;
+    getRun(stored)
+      .then((detail) => {
+        if (detail.work_item) setForm(fromParsedWorkItem(detail.work_item));
+        const resumeAt = stepForPhase(detail.run.current_phase);
+        setStep(resumeAt);
+        setMaxStep(5); // the run exists — let every step be navigable
+      })
+      .catch(() => {
+        localStorage.removeItem(RUN_ID_KEY);
+        setRunId(null);
+      });
+  }, []);
 
   const advance = (to: number) => {
     setStep(to);
