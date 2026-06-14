@@ -78,6 +78,7 @@ export interface ClockStatus {
   error: string | null;
 }
 
-export const getClock = () => request<ClockStatus>('GET', '/system/clock');
-export const syncClock = () =>
-  request<{ changed: boolean; skew_seconds_before: number; local_utc_after: string }>('POST', '/system/clock/sync');
+const clockQuery = (url?: string) => (url ? `?url=${encodeURIComponent(url)}` : '');
+export const getClock = (url?: string) => request<ClockStatus>('GET', `/system/clock${clockQuery(url)}`);
+export const syncClock = (url?: string) =>
+  request<{ changed: boolean; skew_seconds_before: number; local_utc_after: string }>('POST', `/system/clock/sync${clockQuery(url)}`);

@@ -231,13 +231,13 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         return BrowserLaunchResponse(**info)
 
     @app.get("/system/clock", response_model=ClockStatus)
-    async def get_clock() -> ClockStatus:
-        return await clock_status()
+    async def get_clock(url: str | None = None) -> ClockStatus:
+        return await clock_status(url)
 
     @app.post("/system/clock/sync", response_model=ClockSyncResult)
-    async def post_clock_sync() -> ClockSyncResult:
+    async def post_clock_sync(url: str | None = None) -> ClockSyncResult:
         try:
-            return await sync_clock()
+            return await sync_clock(url)
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except (RuntimeError, OSError) as exc:
