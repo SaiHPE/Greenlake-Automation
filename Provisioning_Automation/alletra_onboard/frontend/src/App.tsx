@@ -56,7 +56,9 @@ export default function App() {
       .then((detail) => {
         if (detail.work_item) setForm(fromParsedWorkItem(detail.work_item));
         const resumeAt = stepForPhase(detail.run.current_phase);
-        setStep(resumeAt);
+        // Only adjust from the initial restore step (2). If getRun was slow and the operator
+        // already navigated, respect their choice instead of yanking them back.
+        setStep((current) => (current === 2 ? resumeAt : current));
         setMaxStep(5); // the run exists — let every step be navigable
       })
       .catch(() => {
