@@ -59,8 +59,11 @@ export const getEvents = (runId: string) => request<{ events: RunEvent[] }>('GET
 
 export const startProvision = (runId: string, dryRun: boolean) =>
   request<{ run: RunRecord }>('POST', `/runs/${runId}/provision`, { dry_run: dryRun });
-export const startCloudinit = (runId: string, cloudinitUrl: string) =>
-  request<{ run: RunRecord }>('POST', `/runs/${runId}/cloudinit`, { cloudinit_url: cloudinitUrl });
+export const startCloudinit = (runId: string, cloudinitUrl: string, autoSubmit = true) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/cloudinit`, {
+    cloudinit_url: cloudinitUrl,
+    auto_submit: autoSubmit,
+  });
 export const startDscc = (runId: string, cdpUrl: string) =>
   request<{ run: RunRecord }>('POST', `/runs/${runId}/dscc`, { cdp_url: cdpUrl });
 export const markComplete = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/complete`);

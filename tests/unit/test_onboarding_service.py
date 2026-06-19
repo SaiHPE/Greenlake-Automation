@@ -64,7 +64,7 @@ def _browser_factory(result: BrowserResultStatus, *, status_message: str | None 
         on_status = arg if callable(arg) else (lambda message: None)
 
         class Adapter:
-            async def run(self, item, run_id):
+            async def run(self, item, run_id, *, auto_submit=False):
                 if status_message:
                     on_status(status_message)
                 return result
@@ -139,6 +139,23 @@ async def test_cloudinit_browser_problem_is_retryable(tmp_path):
     service.start_cloudinit(run.run_id)
     await service.wait(run.run_id)
     assert service.get_run(run.run_id).status == RunStatus.RETRYABLE_FAILURE
+
+
+async def test_cloudinit_refused_submit_is_retryable_with_clear_reason(tmp_path):
+    # The Review guard re-filled but the Network values kept decaying, so it never submitted.
+    # Nothing was applied -> retryable, with a message that says exactly that.
+    service = _service(
+        tmp_path,
+        cloudinit_factory=_browser_factory(BrowserResultStatus.FAILED_RETRYABLE, status_message="refused"),
+    )
+    run = service.create_run(_item())
+    service.start_cloudinit(run.run_id)
+    await service.wait(run.run_id)
+
+    updated = service.get_run(run.run_id)
+    assert updated.status == RunStatus.RETRYABLE_FAILURE
+    messages = [e.message for e in service.list_events(run.run_id)]
+    assert any("Refused to submit" in m and "nothing was applied" in m for m in messages)
 
 
 async def test_dscc_stops_at_credentials_gate(tmp_path):
