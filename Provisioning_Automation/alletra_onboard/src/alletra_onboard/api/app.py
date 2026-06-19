@@ -28,6 +28,7 @@ from pydantic import BaseModel, ValidationError
 from alletra_onboard.adapters.browser.debug_browser import launch_debug_browser
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.adapters.system.clock import ClockStatus, ClockSyncResult, clock_status, sync_clock
+from alletra_onboard.adapters.system.discovery_tool import launch_discovery_tool
 from alletra_onboard.api.schemas import (
     BrowserLaunchRequest,
     BrowserLaunchResponse,
@@ -36,6 +37,7 @@ from alletra_onboard.api.schemas import (
     ConfigStatusResponse,
     ConfigureRequest,
     CreateRunRequest,
+    DiscoveryToolResponse,
     DsccStepRequest,
     EventListResponse,
     HealthResponse,
@@ -234,6 +236,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         except RuntimeError as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         return BrowserLaunchResponse(**info)
+
+    @app.post("/tools/discovery/launch", response_model=DiscoveryToolResponse)
+    async def discovery_launch() -> DiscoveryToolResponse:
+        # Runs on the jump box; opens the on-Desktop HPE Discovery Tool .exe for the operator.
+        return DiscoveryToolResponse(**launch_discovery_tool())
 
     @app.get("/system/clock", response_model=ClockStatus)
     async def get_clock(url: str | None = None) -> ClockStatus:
