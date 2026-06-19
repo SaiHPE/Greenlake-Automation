@@ -96,6 +96,13 @@ class BrowserLaunchResponse(BaseModel):
     proxy: str = ""
 
 
+class DiscoveryToolResponse(BaseModel):
+    launched: bool
+    path: str | None = None
+    searched: list[str] = []
+    error: str | None = None
+
+
 # ------------------------------------------------------------------ preflight (existing)
 
 class PreflightRequest(BaseModel):
