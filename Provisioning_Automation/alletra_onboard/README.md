@@ -170,7 +170,7 @@ cd C:\Users\Administrator\Downloads\alletra_onboard
 1. **Configure GreenLake** — enter the API client (Client ID/Secret + per-workspace token URL), **Test connection**.
 2. **Array details** — **Download CSV template**, fill it, **upload** → values land in an editable form → **Create run**.
 3. **GreenLake registration** — **Run** (live phase log streams in). A subscription-apply warning is non-fatal.
-4. **Cloud Connectivity** — get the `169.254.x` URL from the Discovery Tool, **paste it**, **Launch & Fill** → review the values in the browser → **Submit yourself**.
+4. **Cloud Connectivity** — get the `169.254.x` URL from the Discovery Tool, **paste it**, **review the Network values shown in the app**, then **Fill & connect**. The automation fills the on-array wizard and submits in one motion (it never pauses on the wizard's Review screen, where typed Network values decay back to the link-local default after ~10s idle). A guard re-reads the wizard's Review and refuses to submit if the management IP doesn't match — a wrong IP is never applied.
 5. **DSCC Setup** — (see two-machine note) on the jump box only once DSCC auth is confirmed there; otherwise use the laptop CLI below.
 
 ### CLI — DSCC on the laptop (proven path)
@@ -241,7 +241,7 @@ Gotchas:
    separate CLI step there. Resolved automatically once #2 lets one host do all three.
 
 4. **The web-app path for steps 3–5 hasn't had a full live pass.** The automations are proven
-   via CLI; the UI buttons (GreenLake Run, Cloud Connectivity Launch & Fill) need one
+   via CLI; the UI buttons (GreenLake Run, Cloud Connectivity Fill & connect) need one
    end-to-end run on the jump box against the real array.
 
 5. **DSCC credential entry is manual by design.** The "Create Secret" modal was never reliably

@@ -98,11 +98,13 @@ class CloudinitWizardAdapter:
                 await self._proxy(page, item.network)
                 await self._time(page, item.network)  # advancing from Time lands on the Review screen
                 if auto_submit:
-                    await page.get_by_role("button", name=CLOUDINIT["submit"], exact=True).click()
-                    return await self._await_result(page, run_id)
-                # Default: stop at Review. Submit applies config + connects, so the operator
-                # reviews the filled values and clicks Submit themselves. Keep the browser open
-                # and watch for the result they trigger.
+                    # Operator already reviewed the values in the web app; fill + submit in one
+                    # motion (no idle window), but verify the Review screen first — see below.
+                    return await self._guarded_submit(page, item.network, run_id)
+                # Manual mode (CLI without --auto-submit): stop at Review and let the operator
+                # Submit themselves. NOTE: the wizard decays the Network boxes to the array's
+                # link-local default after ~10s idle, so this path can show stale values — the
+                # product flow uses auto_submit, which re-verifies right before Submit.
                 self._on_status("review_ready")
                 return await self._wait_for_operator_submit(page, run_id)
             except PlaywrightTimeoutError:
@@ -185,6 +187,71 @@ class CloudinitWizardAdapter:
         await self._select(page, CLOUDINIT["time_region_select"], region, exact=True)
         await self._select(page, CLOUDINIT["time_zone_select"], net.timezone, exact=False)
         await self._next(page)
+
+    # ------------------------------------------------------------------ Review guard + Submit
+
+    async def _guarded_submit(self, page, net: NetworkConfig, run_id: str) -> BrowserResultStatus:
+        """Verify the Review screen still shows our Network values, then Submit.
+
+        The Network boxes start EMPTY with the array's current (link-local) config shown only as
+        placeholder; if the form sits idle the typed values decay back to that default, so a blind
+        Submit could apply link-local and strand the array. We re-read the Review summary, re-fill
+        once if the values decayed, and REFUSE to submit if they still don't match — a wrong
+        management IP is never applied, on any install.
+        """
+        if not await self._review_network_ok(page, net):
+            self._on_status("reasserted")
+            await self._reassert_network(page, net)
+        if not await self._review_network_ok(page, net):
+            await self._dump(page, run_id, "review-mismatch")
+            self._on_status("refused")
+            return BrowserResultStatus.FAILED_RETRYABLE
+        self._on_status("applying")
+        await page.get_by_role("button", name=CLOUDINIT["submit"], exact=True).click()
+        return await self._await_result(page, run_id)
+
+    async def _review_network_ok(self, page, net: NetworkConfig) -> bool:
+        values = await self._review_network_values(page)
+        return (
+            values.get("ip") == net.mgmt_ipv4
+            and values.get("mask") == net.mask
+            and values.get("gateway") == net.gateway
+        )
+
+    async def _review_network_values(self, page) -> dict[str, str]:
+        # The Review screen lists each field as a label followed by its value. inner_text usually
+        # puts them on separate lines ("IP address:" then the value), but tolerate "label: value"
+        # on one line too. Exact full-label match avoids catching "DNS server IP address 1".
+        text = await self._body_text(page)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        labels = {"ip address": "ip", "netmask": "mask", "gateway": "gateway"}
+        out: dict[str, str] = {}
+        for index, line in enumerate(lines):
+            lowered = line.lower()
+            for label, key in labels.items():
+                if lowered in (label, label + ":"):
+                    if index + 1 < len(lines):
+                        out[key] = lines[index + 1]
+                elif lowered.startswith(label + ":"):
+                    value = line.split(":", 1)[1].strip()
+                    if value:
+                        out[key] = value
+        return out
+
+    async def _reassert_network(self, page, net: NetworkConfig) -> None:
+        # Review -> Back to the Network screen (Review/Time/Proxy/Network = 3 Backs), re-fill, and
+        # walk forward again. _network re-fills + advances to Proxy; two more Continues reach Review.
+        for _ in range(3):
+            await self._back(page)
+            await page.wait_for_timeout(300)
+        await self._network(page, net)
+        await self._next(page)  # Proxy -> Time
+        await self._next(page)  # Time -> Review
+
+    async def _back(self, page) -> None:
+        button = page.get_by_role("button", name=CLOUDINIT["back"], exact=True).first
+        await button.wait_for(state="visible")
+        await button.click()
 
     # ------------------------------------------------------------------ helpers
 
