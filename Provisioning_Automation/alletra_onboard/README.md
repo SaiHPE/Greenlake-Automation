@@ -16,17 +16,17 @@ and served by the FastAPI backend.
 
 ---
 
-## ⚠️ Two-machine reality (read this first)
+## Where it runs (the jump box does everything)
 
-The work is currently split across two machines because no single one can do everything:
+The **jump box is the primary host** and runs the whole flow (A + B + C) from the one web app:
 
+- **A (GreenLake REST)** — needs internet + credentials (the jump box has both via the lab proxy).
 - **B (cloudinit) must run on the jump box** — only it sits on the array's link-local subnet and can reach `https://169.254.x.x/cloudinit`.
-- **C (DSCC) currently runs on the laptop** — DSCC SSO would hang on the jump box behind the lab proxy. A fix is in place (the launcher now applies the proxy automatically) but is **not yet confirmed on the jump box**; until then, do DSCC on the laptop.
-- **A (GreenLake REST) runs anywhere** with internet + credentials.
+- **C (DSCC)** — used to hang on the jump box ("Authenticating…"); both causes are fixed: the browser launcher now passes the proxy to Chrome, and the in-app **Sync system clock** button corrects the drift that broke the login JWT. So DSCC works on the jump box too.
 
-So today: **jump box does A + B**, **laptop does C**. The run state is a per-machine SQLite
-DB, so the DSCC step on the laptop is a separate CLI step, not a continuation of the jump
-box's run. Once DSCC-on-jump-box is confirmed working, the whole flow collapses onto one host.
+**Laptop = fallback for C only.** If DSCC sign-in ever hangs on the jump box, run the DSCC step
+from the laptop CLI (see *Fallback — DSCC on the laptop*). Note run state is a per-machine SQLite
+DB, so a laptop DSCC run is a separate CLI step, not a continuation of the jump box's web-app run.
 
 ---
 
@@ -42,8 +42,8 @@ GitHub: `github.com/SaiHPE/Greenlake-Automation`. There are **two branches** tha
 | Machine | Path | Pulls from | Role |
 |---|---|---|---|
 | Dev workstation | `…\Documents\Greenlake-Automation` (full clone) | `main` | builds/commits; has Node for the frontend |
-| Jump box | `C:\Users\Administrator\Downloads\alletra_onboard` (flat copy) | `jumpbox-package` | A + B |
-| Laptop | `C:\Users\gsairoop\Downloads\storage automation` (full clone) | `main` | C (DSCC) |
+| Jump box | `C:\Users\Administrator\Downloads\alletra_onboard` (flat copy) | `jumpbox-package` | A + B + C (primary host) |
+| Laptop | `C:\Users\gsairoop\Downloads\storage automation` (full clone) | `main` | C (DSCC) fallback only |
 
 **The built UI (`frontend/dist`) is committed to git**, so neither the jump box nor the laptop
 needs Node — they just pull and run.
@@ -159,21 +159,60 @@ app's Configure screen). DSCC (C) does **not** need GreenLake credentials.
 
 ---
 
-## Running it
+## Running it — on the jump box (A + B + C)
 
-### Web app (recommended) — on the jump box for A + B
+The jump box runs the **entire flow from the web app**. Full procedure from a fresh login:
 
+#### 1. Get the latest build
 ```powershell
 cd C:\Users\Administrator\Downloads\alletra_onboard
-.\.venv\Scripts\onboard.exe ui          # starts the server + opens http://127.0.0.1:8765
+git fetch origin jumpbox-package
+git reset --hard origin/jumpbox-package     # keeps your .env / .venv / config\arrays.csv
+git log -1 --oneline                         # confirm you're on the newest commit
 ```
-1. **Configure GreenLake** — enter the API client (Client ID/Secret + per-workspace token URL), **Test connection**.
-2. **Array details** — **Download CSV template**, fill it, **upload** → values land in an editable form → **Create run**.
-3. **GreenLake registration** — **Run** (live phase log streams in). A subscription-apply warning is non-fatal.
-4. **Cloud Connectivity** — get the `169.254.x` URL from the Discovery Tool, **paste it**, **review the Network values shown in the app**, then **Fill & connect**. The automation fills the on-array wizard and submits in one motion (it never pauses on the wizard's Review screen, where typed Network values decay back to the link-local default after ~10s idle). A guard re-reads the wizard's Review and refuses to submit if the management IP doesn't match — a wrong IP is never applied.
-5. **DSCC Setup** — (see two-machine note) on the jump box only once DSCC auth is confirmed there; otherwise use the laptop CLI below.
+First time on a fresh machine? Install first — see **First-time setup** above, or just run
+`.\start.ps1 -Proxy http://<lab-proxy>:<port>` (creates the venv + installs Chromium).
 
-### CLI — DSCC on the laptop (proven path)
+#### 2. Launch the web app — **as Administrator**
+Open an **elevated** PowerShell (right-click → *Run as administrator*) so the clock-sync can set
+the system time, then:
+```powershell
+cd C:\Users\Administrator\Downloads\alletra_onboard
+.\.venv\Scripts\onboard.exe ui              # serves http://127.0.0.1:8765 and opens the browser
+```
+**After updating, hard-refresh the tab (`Ctrl+Shift+R`)** — an already-open tab keeps running the
+old UI. (To confirm you're on the new build: step 4 shows an **Open Discovery Tool** button and a
+**Fill & connect** button.)
+
+#### 3. Walk the six steps in the browser
+1. **Configure GreenLake** — enter the API client (Client ID / Secret + the **per-workspace token
+   URL**), click **Test connection** (expect Data Services *PROVISIONED* in `ap-northeast`).
+2. **Array details** — **Download CSV template** and fill it (or upload your prepared
+   `config\arrays.csv`) → values appear in an editable form → **Create run**.
+3. **GreenLake registration** — click **Run**; the live phase log streams in. A subscription-apply
+   *warning* is non-fatal (register + assign are the success criteria).
+4. **Cloud Connectivity** —
+   - Click **Open Discovery Tool** (launches the HPE Discovery Tool from the Desktop).
+   - Find the array's serial in it and copy its **`https://169.254.x.x/cloudinit`** link (changes every boot).
+   - **Paste** the link, **review the Network values** shown in the app, then **Fill & connect**.
+     The automation fills the on-array wizard and submits in one motion; a guard refuses to submit
+     if the management IP doesn't match (so a wrong/link-local IP is never applied). Wait for
+     **"Array connected."**
+5. **DSCC Setup** —
+   - If the **System clock** card shows skew, click **Sync system clock** first.
+   - Click **Open DSCC browser** → sign in with your HPE GreenLake account (SSO) → open **Setup**,
+     find the serial, click **Set Up System**, and stay on the **Welcome** screen.
+   - Back in the app, click **Run DSCC automation** (fills through to System, stops at credentials).
+   - In the browser: under **System Credentials** add the array admin secret, **Continue**, review,
+     **Submit**.
+   - Back in the app, click **mark complete**.
+6. **Finish** — summary of the run.
+
+> Two reminders: run the app **as Administrator** (for the clock-sync button), and **hard-refresh**
+> the browser after every update. If DSCC sign-in ever hangs on the jump box, use the laptop CLI
+> fallback below.
+
+### Fallback — DSCC on the laptop (CLI)
 
 ```powershell
 cd "C:\Users\gsairoop\Downloads\storage automation\Provisioning_Automation\alletra_onboard"
