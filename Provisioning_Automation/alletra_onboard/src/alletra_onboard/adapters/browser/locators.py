@@ -32,6 +32,7 @@ CLOUDINIT = {
     "ntp": 'input[name="ntpServer"]',
     "time_region_select": '[data-test-id="timeRegion"]',
     "time_zone_select": '[data-test-id="timeZone"]',
+    "back": "Back",
     "submit": "Submit",
 }
 
