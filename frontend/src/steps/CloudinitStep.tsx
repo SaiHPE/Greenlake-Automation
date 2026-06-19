@@ -2,32 +2,54 @@ import { Box, Button, Notification, Spinner, Text, TextInput } from 'grommet';
 import { useState } from 'react';
 import { RunEvent, RunRecord, startCloudinit } from '../api';
 import { EventLog, Instructions, Section, StatusTag } from '../components';
+import { WorkItemForm } from '../workItem';
 
 interface Props {
   runId: string;
   run: RunRecord | null;
   events: RunEvent[];
-  defaultUrl: string;
+  form: WorkItemForm;
   onDone: () => void;
 }
 
-export function CloudinitStep({ runId, run, events, defaultUrl, onDone }: Props) {
-  const [url, setUrl] = useState(defaultUrl);
+function ReviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <Box direction="row" gap="small">
+      <Box width="180px" flex={false}>
+        <Text size="small" color="text-weak">
+          {label}
+        </Text>
+      </Box>
+      <Text size="small" weight="bold">
+        {value || '—'}
+      </Text>
+    </Box>
+  );
+}
+
+export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
+  const [url, setUrl] = useState(form.cloudinit_url);
   const [error, setError] = useState<string | null>(null);
 
   const stepEvents = events.filter((e) => e.phase === 'CLOUDINIT_CONNECT');
   const running = run?.status === 'running' && run?.current_phase === 'CLOUDINIT_CONNECT';
-  const reviewReady = stepEvents.some((e) => e.event_type === 'operator.review_ready');
   const connected = run?.current_phase === 'DSCC_SETUP_SYSTEM' && run?.status === 'ready';
   const failed =
     run?.current_phase === 'CLOUDINIT_CONNECT' &&
     (run?.status === 'retryable_failure' || run?.status === 'terminal_failure');
   const validUrl = url.trim().startsWith('https://169.254.');
 
+  const dns = form.dns
+    .split(';')
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(', ');
+  const proxy = form.proxy_host ? `${form.proxy_host}:${form.proxy_port || '8080'}` : 'none';
+
   const start = async () => {
     setError(null);
     try {
-      await startCloudinit(runId, url.trim());
+      await startCloudinit(runId, url.trim(), true);
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
     }
@@ -35,20 +57,17 @@ export function CloudinitStep({ runId, run, events, defaultUrl, onDone }: Props)
 
   return (
     <Box gap="medium">
-      <Section title="Get the wizard URL from the Discovery Tool">
+      <Section title="1 · Get the wizard URL from the Discovery Tool">
         <Instructions
           items={[
             <>Open the <b>HPE Storage Discovery Tool</b> on this jump box.</>,
             <>Search for the array&apos;s serial number ({run?.serial_number ?? '…'}).</>,
             <>Copy the wizard link — it looks like <b>https://169.254.x.x/cloudinit</b> (it changes every boot).</>,
-            <>Paste it below and click <b>Launch &amp; Fill</b>. A browser opens and the form fills itself.</>,
+            <>Paste it below.</>,
           ]}
         />
         <Box direction="row" gap="small" align="center" width="large">
           <TextInput placeholder="https://169.254.x.x/cloudinit" value={url} onChange={(e) => setUrl(e.target.value)} />
-          <Button primary disabled={!validUrl || running} label={running ? 'Filling…' : 'Launch & Fill'} onClick={start} />
-          {running && <Spinner />}
-          <StatusTag status={run?.current_phase === 'CLOUDINIT_CONNECT' ? run?.status : undefined} />
         </Box>
         {!validUrl && url.trim() !== '' && (
           <Text size="small" color="status-critical">
@@ -57,20 +76,50 @@ export function CloudinitStep({ runId, run, events, defaultUrl, onDone }: Props)
         )}
       </Section>
 
-      {error && <Notification status="critical" title="Could not start" message={error} onClose={() => setError(null)} />}
-
-      {reviewReady && !connected && (
+      <Section title="2 · Review the values that will be applied">
+        <Text size="small">
+          The automation fills these and Submits in one motion — review them <b>here</b>, not in the
+          wizard. (The on-array wizard discards typed Network values if it sits idle on its Review
+          screen, so we don&apos;t pause there.)
+        </Text>
+        <Box gap="xsmall" pad={{ vertical: 'small' }}>
+          <ReviewRow label="Management IP" value={form.mgmt_ipv4} />
+          <ReviewRow label="Netmask" value={form.mask} />
+          <ReviewRow label="Gateway" value={form.gateway} />
+          <ReviewRow label="DNS" value={dns} />
+          <ReviewRow label="NTP" value={form.ntp} />
+          <ReviewRow label="Timezone" value={form.timezone} />
+          <ReviewRow label="Proxy" value={proxy} />
+        </Box>
         <Notification
-          status="warning"
-          title="Action needed: review and Submit in the wizard browser"
-          message="The wizard is filled and stopped at Review. Check the values (especially the Network section), then click Submit yourself. This page updates automatically when the array connects."
+          status="info"
+          message="A safety check re-reads the wizard's Review screen right before Submit and refuses to apply if the Network IP doesn't match these values — so a wrong (link-local) IP can never be applied. To change anything, go back to Array details."
         />
-      )}
+      </Section>
+
+      <Section title="3 · Fill & connect">
+        <Text size="small">
+          A browser opens at the URL above, fills the wizard, and connects the array. This page
+          updates live and continues automatically once the array reports connected.
+        </Text>
+        <Box direction="row" gap="small" align="center">
+          <Button
+            primary
+            disabled={!validUrl || running || connected}
+            label={running ? 'Filling & connecting…' : 'Fill & connect'}
+            onClick={start}
+          />
+          {running && <Spinner />}
+          <StatusTag status={run?.current_phase === 'CLOUDINIT_CONNECT' ? run?.status : undefined} />
+        </Box>
+      </Section>
+
+      {error && <Notification status="critical" title="Could not start" message={error} onClose={() => setError(null)} />}
       {failed && (
         <Notification
           status="critical"
           title="The wizard run did not complete"
-          message="Check the screenshot in .alletra_onboard/artifacts, fix the cause, and Launch & Fill again."
+          message="Nothing was applied. Check the message in Progress (and the screenshot in .alletra_onboard/artifacts), then click Fill & connect again."
         />
       )}
       {connected && (
@@ -78,7 +127,7 @@ export function CloudinitStep({ runId, run, events, defaultUrl, onDone }: Props)
       )}
 
       <Section title="Progress">
-        <EventLog events={stepEvents} emptyText="Paste the URL and click Launch & Fill to start." />
+        <EventLog events={stepEvents} emptyText="Paste the URL and click Fill & connect to start." />
       </Section>
 
       <Button primary label="Continue → DSCC Setup" disabled={!connected} onClick={onDone} alignSelf="start" />

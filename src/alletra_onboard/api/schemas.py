@@ -65,6 +65,12 @@ class CloudinitStepRequest(BaseModel):
         description="Fresh https://169.254.x.x/cloudinit URL from the Discovery Tool; "
         "overrides the work item's stored value (the link-local IP changes per boot).",
     )
+    auto_submit: bool = Field(
+        default=True,
+        description="Product flow: the operator reviews the values in the web app, then the "
+        "automation fills + Submits in one motion (the on-array wizard decays typed Network "
+        "values on idle). A guard re-verifies the Review screen and refuses to submit a wrong IP.",
+    )
 
 
 class DsccStepRequest(BaseModel):

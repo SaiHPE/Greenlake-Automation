@@ -161,7 +161,7 @@ export default function App() {
           )}
           {step === 2 && runId && <GreenLakeStep runId={runId} run={run} events={events} onDone={() => advance(3)} />}
           {step === 3 && runId && (
-            <CloudinitStep runId={runId} run={run} events={events} defaultUrl={form.cloudinit_url} onDone={() => advance(4)} />
+            <CloudinitStep runId={runId} run={run} events={events} form={form} onDone={() => advance(4)} />
           )}
           {step === 4 && runId && (
             <DsccStep runId={runId} run={run} events={events} dsccRegion={form.dscc_region_code} onDone={() => advance(5)} />

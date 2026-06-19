@@ -177,7 +177,12 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.post("/runs/{run_id}/cloudinit", response_model=RunResponse)
     async def run_cloudinit(run_id: str, request: CloudinitStepRequest) -> RunResponse:
-        return _start_step(run_id, lambda: service.start_cloudinit(run_id, cloudinit_url=request.cloudinit_url))
+        return _start_step(
+            run_id,
+            lambda: service.start_cloudinit(
+                run_id, cloudinit_url=request.cloudinit_url, auto_submit=request.auto_submit
+            ),
+        )
 
     @app.post("/runs/{run_id}/dscc", response_model=RunResponse)
     async def run_dscc(run_id: str, request: DsccStepRequest) -> RunResponse:

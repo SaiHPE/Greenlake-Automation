@@ -185,16 +185,16 @@ class OnboardingService:
 
     # ------------------------------------------------------------------ step B: cloudinit
 
-    def start_cloudinit(self, run_id: str, *, cloudinit_url: str | None = None) -> RunRecord:
+    def start_cloudinit(self, run_id: str, *, cloudinit_url: str | None = None, auto_submit: bool = True) -> RunRecord:
         run, item = self.get_run(run_id), self.get_work_item(run_id)
         if cloudinit_url:
             # The link-local URL changes per boot — the operator pastes the fresh one at runtime.
             item = item.model_copy(update={"cloudinit_url": cloudinit_url})
             self.store.save_work_item(run_id, item)
-        self._spawn(run_id, self._run_cloudinit(run, item))
+        self._spawn(run_id, self._run_cloudinit(run, item, auto_submit))
         return run
 
-    async def _run_cloudinit(self, run: RunRecord, item: ArrayWorkItem) -> None:
+    async def _run_cloudinit(self, run: RunRecord, item: ArrayWorkItem, auto_submit: bool) -> None:
         self._set(run, RunStatus.RUNNING, WorkflowPhase.CLOUDINIT_CONNECT)
         self._emit(
             run.run_id,
@@ -203,9 +203,10 @@ class OnboardingService:
             f"Cloud Connectivity Wizard started -> {item.cloudinit_url}",
         )
         review_ready = False
+        refused = False
 
         def on_status(message: str) -> None:
-            nonlocal review_ready
+            nonlocal review_ready, refused
             if message == "review_ready":
                 review_ready = True
                 self._set(run, RunStatus.WAITING_FOR_OPERATOR)
@@ -215,9 +216,25 @@ class OnboardingService:
                     "operator.review_ready",
                     "Wizard filled — review the values in the browser and click Submit",
                 )
+            elif message == "reasserted":
+                self._emit(
+                    run.run_id,
+                    WorkflowPhase.CLOUDINIT_CONNECT,
+                    "phase.progress",
+                    "Network values had decayed to the link-local default — re-filled and re-verifying before submit",
+                )
+            elif message == "applying":
+                self._emit(
+                    run.run_id,
+                    WorkflowPhase.CLOUDINIT_CONNECT,
+                    "phase.progress",
+                    "Network values verified on the Review screen — applying configuration and connecting the array…",
+                )
+            elif message == "refused":
+                refused = True
 
         adapter = self._cloudinit_factory(self._current_settings(), on_status)
-        result = await adapter.run(item, run_id=run.run_id)
+        result = await adapter.run(item, run_id=run.run_id, auto_submit=auto_submit)
 
         if result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE):
             self._set(run, RunStatus.READY, WorkflowPhase.DSCC_SETUP_SYSTEM)
@@ -229,6 +246,17 @@ class OnboardingService:
                 WorkflowPhase.CLOUDINIT_CONNECT,
                 "step.stalled",
                 "Submit was not detected (browser closed or review window expired) — re-run the step to retry",
+            )
+        elif refused:
+            # The guard re-filled the Network fields but they kept decaying to link-local, so it
+            # never clicked Submit. Nothing was applied — safe to just retry.
+            self._set(run, RunStatus.RETRYABLE_FAILURE)
+            self._emit(
+                run.run_id,
+                WorkflowPhase.CLOUDINIT_CONNECT,
+                "step.failed",
+                "Refused to submit: the wizard kept reverting the Network IP to its link-local "
+                "default, so nothing was applied. Re-run to retry.",
             )
         elif result == BrowserResultStatus.FAILED_TERMINAL:
             self._set(run, RunStatus.TERMINAL_FAILURE)
