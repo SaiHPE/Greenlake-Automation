@@ -66,8 +66,7 @@ SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
     ]),
     ("DSCC Setup — System Credentials", [
         ("secret_name", "Credential name", True, "e.g. b10000-admin"),
-        ("secret_username", "Administrator name", True, "e.g. 3paradm"),
-        ("secret_password", "Administrator password", True, "array admin password; used to create the DSCC secret"),
+        ("secret_username", "Administrator name", True, "e.g. 3paradm — you enter the PASSWORD in the DSCC wizard, not here"),
     ]),
 ]
 

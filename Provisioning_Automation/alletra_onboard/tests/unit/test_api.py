@@ -120,7 +120,7 @@ def test_init_sheet_template_and_upload(tmp_path, monkeypatch):
         "contact_first_name": "Jane", "contact_last_name": "Doe", "contact_language": "English",
         "contact_company": "HPE", "contact_phone": "8000000000", "contact_email": "jane@example.com",
         "dscc_system_name": "MPB10K-TEST", "dscc_country": "India",
-        "secret_name": "b10000-admin", "secret_username": "3paradm", "secret_password": "Sup3rSecret!",
+        "secret_name": "b10000-admin", "secret_username": "3paradm",
     }
     label_to_key = {label: key for _, fields in SECTIONS for key, label, _, _ in fields}
     wb = load_workbook(io.BytesIO(template.content))
@@ -139,8 +139,7 @@ def test_init_sheet_template_and_upload(tmp_path, monkeypatch):
     body = resp.json()
     assert body["run"]["serial_number"] == "SGHD45FF0Y"
     assert body["credentials_saved"] is True
-    # the admin password must never be echoed back to the UI
-    assert "Sup3rSecret" not in resp.text
+    # the admin password is not in the sheet at all, and is never echoed to the UI
     assert "password" not in body["work_item"]["dscc_setup"]
     # GreenLake credentials from the sheet were written to .env
     env = read_env(tmp_path / ".env")

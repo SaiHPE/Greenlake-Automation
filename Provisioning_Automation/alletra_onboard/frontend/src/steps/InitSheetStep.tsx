@@ -60,14 +60,14 @@ export function InitSheetStep({ setForm, onRunCreated }: Props) {
               <Anchor href={`${API}/init-sheet/template`} label="Download Initialisation_sheet.xlsx" download="Initialisation_sheet.xlsx" />
               {' '}— or use the copy the customer already filled.
             </>,
-            <>Fill the <b>Value</b> column for every required field (marked <b>*</b>): GreenLake API credentials, serial, subscription key, network, DSCC details, and the admin credential.</>,
+            <>Fill the <b>Value</b> column for every required field (marked <b>*</b>): GreenLake API credentials, serial, subscription key, network, and DSCC details (the admin <b>password</b> is entered later in the DSCC wizard, not here).</>,
             <>One workbook = one array. Don't rename the <b>Field</b> column.</>,
           ]}
         />
-        <Notification
-          status="info"
-          message="The sheet holds the API Client Secret and the array admin password — treat it like a password file (don't email or commit it). On upload, credentials are written to this machine's local .env only."
-        />
+        <Text size="small" color="text-weak">
+          On upload, the GreenLake API credentials in the sheet are saved to this machine&apos;s local
+          .env. The array admin password is <b>not</b> in the sheet — you enter it in the DSCC wizard.
+        </Text>
       </Section>
 
       <Section title="2 · Upload the filled sheet">
