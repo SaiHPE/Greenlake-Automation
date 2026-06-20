@@ -4,16 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { getRun } from './api';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
-import { ArrayStep } from './steps/ArrayStep';
 import { CloudinitStep } from './steps/CloudinitStep';
-import { ConfigureStep } from './steps/ConfigureStep';
 import { DoneStep } from './steps/DoneStep';
 import { DsccStep } from './steps/DsccStep';
 import { GreenLakeStep } from './steps/GreenLakeStep';
+import { InitSheetStep } from './steps/InitSheetStep';
+import { PrereqStep } from './steps/PrereqStep';
 
 const STEPS = [
-  { title: 'Configure GreenLake', subtitle: 'API client credentials' },
-  { title: 'Array details', subtitle: 'CSV template or form' },
+  { title: 'Prerequisites', subtitle: 'what to do first' },
+  { title: 'Initialisation sheet', subtitle: 'download · fill · upload' },
   { title: 'GreenLake registration', subtitle: 'register · assign · subscribe' },
   { title: 'Cloud Connectivity', subtitle: 'on-array wizard' },
   { title: 'DSCC Setup', subtitle: 'Set Up System wizard' },
@@ -148,10 +148,9 @@ export default function App() {
           <Heading level={2} margin="none">
             {STEPS[step].title}
           </Heading>
-          {step === 0 && <ConfigureStep onDone={() => advance(1)} />}
+          {step === 0 && <PrereqStep onDone={() => advance(1)} />}
           {step === 1 && (
-            <ArrayStep
-              form={form}
+            <InitSheetStep
               setForm={setForm}
               onRunCreated={(id) => {
                 setRunId(id);
