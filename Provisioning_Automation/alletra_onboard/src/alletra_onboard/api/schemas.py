@@ -103,6 +103,19 @@ class DiscoveryToolResponse(BaseModel):
     error: str | None = None
 
 
+# ------------------------------------------------------------------ initialisation sheet
+
+class InitSheetUploadRequest(BaseModel):
+    content_b64: str = Field(description="Base64-encoded Initialisation_sheet.xlsx contents.")
+
+
+class InitSheetUploadResponse(BaseModel):
+    run: RunRecord
+    # The parsed work item for review (subscription_key shown; admin password never echoed).
+    work_item: dict
+    credentials_saved: bool = True
+
+
 # ------------------------------------------------------------------ preflight (existing)
 
 class PreflightRequest(BaseModel):

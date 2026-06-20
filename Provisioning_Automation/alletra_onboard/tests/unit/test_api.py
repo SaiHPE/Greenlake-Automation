@@ -94,6 +94,64 @@ def test_template_and_parse_round_trip(tmp_path):
     assert bad.status_code == 422
 
 
+def test_init_sheet_template_and_upload(tmp_path, monkeypatch):
+    import base64
+    import io
+
+    from openpyxl import load_workbook
+
+    from alletra_onboard.application.configuring import read_env
+    from alletra_onboard.application.init_sheet import SECTIONS
+
+    monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
+    client = _client(tmp_path)
+
+    template = client.get("/init-sheet/template")
+    assert template.status_code == 200
+    assert "spreadsheetml" in template.headers["content-type"]
+
+    values = {
+        "gl_client_id": "client-123", "gl_client_secret": "secret-xyz",
+        "gl_token_url": "https://global.api.greenlake.hpe.com/authorization/v2/oauth2/t/token",
+        "serial_number": "SGHD45FF0Y", "part_number": "S0B84A", "subscription_key": "YHHDKEY123",
+        "service_catalog_region_id": "ap-northeast", "dscc_region_code": "jp1",
+        "mgmt_ipv4": "10.64.154.225", "mask": "255.255.248.0", "gateway": "10.64.159.254",
+        "dns1": "10.203.96.10", "ntp": "ntp1.example.net", "timezone": "Asia/Kolkata",
+        "contact_first_name": "Jane", "contact_last_name": "Doe", "contact_language": "English",
+        "contact_company": "HPE", "contact_phone": "8000000000", "contact_email": "jane@example.com",
+        "dscc_system_name": "MPB10K-TEST", "dscc_country": "India",
+        "secret_name": "b10000-admin", "secret_username": "3paradm", "secret_password": "Sup3rSecret!",
+    }
+    label_to_key = {label: key for _, fields in SECTIONS for key, label, _, _ in fields}
+    wb = load_workbook(io.BytesIO(template.content))
+    for row in wb.active.iter_rows(min_row=2):
+        if row[0].value is None:
+            continue
+        key = label_to_key.get(str(row[0].value).strip().removesuffix("*").strip())
+        if key in values:
+            row[1].value = values[key]
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    b64 = base64.b64encode(buffer.getvalue()).decode()
+
+    resp = client.post("/init-sheet/upload", json={"content_b64": b64})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["run"]["serial_number"] == "SGHD45FF0Y"
+    assert body["credentials_saved"] is True
+    # the admin password must never be echoed back to the UI
+    assert "Sup3rSecret" not in resp.text
+    assert "password" not in body["work_item"]["dscc_setup"]
+    # GreenLake credentials from the sheet were written to .env
+    env = read_env(tmp_path / ".env")
+    assert env["GL_CLIENT_ID"] == "client-123"
+    assert env["GL_CLIENT_SECRET"] == "secret-xyz"
+
+    # a non-xlsx upload is a clean 422
+    bad = client.post("/init-sheet/upload", json={"content_b64": base64.b64encode(b"nope").decode()})
+    assert bad.status_code == 422
+
+
 def test_config_roundtrip_masks_secret(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
     client = _client(tmp_path)
