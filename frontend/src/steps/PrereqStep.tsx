@@ -1,15 +1,23 @@
 import { Anchor, Box, Button, Notification, Text } from 'grommet';
+import { ReactNode } from 'react';
 import { ClockSync } from '../ClockSync';
 import { Instructions, Section } from '../components';
 
-// A short walkthrough clip (frames from HPE's official onboarding videos).
-function Clip({ src, caption }: { src: string; caption: string }) {
+function Video({ src }: { src: string }) {
   return (
-    <Box gap="xxsmall" width={{ max: '560px' }} flex={false}>
-      <Text size="small" weight="bold">{caption}</Text>
-      <Box border round="xsmall" overflow="hidden" background="black">
-        <video src={src} controls preload="metadata" style={{ width: '100%', display: 'block' }} />
-      </Box>
+    <Box border round="xsmall" overflow="hidden" background="black" width={{ max: '560px' }} flex={false}>
+      <video src={src} controls preload="metadata" style={{ width: '100%', display: 'block' }} />
+    </Box>
+  );
+}
+
+// A numbered sub-step: its instructions plus the matching HPE walkthrough clip.
+function StepClip({ title, steps, src }: { title: string; steps: ReactNode[]; src: string }) {
+  return (
+    <Box gap="xsmall" pad={{ top: 'small' }} flex={false}>
+      <Text weight="bold">{title}</Text>
+      <Instructions items={steps} />
+      <Video src={src} />
     </Box>
   );
 }
@@ -29,27 +37,48 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
         <Instructions
           items={[
             <>Activate your software subscriptions from the <b>Electronic Software Delivery (ESD) Receipt</b> email.</>,
-            <>Create (or sign in to) your <Anchor href="https://console.greenlake.hpe.com" target="_blank" label="HPE GreenLake" /> account, then follow the clips below <b>in order</b>.</>,
+            <>Create (or sign in to) your <Anchor href="https://console.greenlake.hpe.com" target="_blank" label="HPE GreenLake" /> account, then do the three steps below <b>in order</b>.</>,
           ]}
         />
-        <Box direction="row" gap="medium" wrap pad={{ top: 'small' }}>
-          <Clip src="/prereq/videos/create-workspace.mp4" caption="1. Create the workspace" />
-          <Clip src="/prereq/videos/deploy-dscc.mp4" caption="2. Deploy Data Services Cloud Console (region nearest the array)" />
-          <Clip src="/prereq/videos/assign-admin.mp4" caption="3. Assign yourself the Data Services Administrator role" />
-        </Box>
+        <StepClip
+          title="1. Create the workspace"
+          src="/prereq/videos/create-workspace.mp4"
+          steps={[
+            <>Click <b>Create Workspace</b> and provide the workspace name, country, street address, city/state, ZIP, phone and email.</>,
+            <>Accept the legal terms and click <b>Create Workspace</b> — you become the workspace Administrator and your dashboard opens.</>,
+          ]}
+        />
+        <StepClip
+          title="2. Deploy Data Services Cloud Console"
+          src="/prereq/videos/deploy-dscc.mp4"
+          steps={[
+            <>On the workspace <b>Home</b>, click <b>Find Services</b> → scroll to <b>Storage</b> → <b>Data Services</b> → <b>Provision</b>.</>,
+            <>Select the <b>Deployment Region nearest the array</b>, accept the Terms of Service, and click <b>Deploy</b>.</>,
+            <>At the top of the page, click <b>Launch</b> to open Data Services Cloud Console.</>,
+          ]}
+        />
+        <StepClip
+          title="3. Assign yourself the Data Services Administrator role"
+          src="/prereq/videos/assign-admin.mp4"
+          steps={[
+            <><b>Manage Workspace → Identity &amp; Access → Assign Role</b>: select your user, set <b>Service Manager = Data Services</b> and <b>Role = Administrator</b>, leave <b>Limit Resource Access</b> off, and click <b>Assign Role</b>.</>,
+            <>Launch Data Services and confirm the <b>Setup</b>, <b>Block Storage</b> and <b>Data Ops Manager</b> services appear.</>,
+          ]}
+        />
       </Section>
 
       <Section title="2 · Create the API client (for this tool)">
-        <Instructions
-          items={[
-            <>In GreenLake, go to <b>Manage Workspace → API</b> and create a personal API client for the <b>HPE GreenLake Cloud Platform</b> service (see clip).</>,
+        <StepClip
+          title="4. Create a personal API client"
+          src="/prereq/videos/api-client-credentials.mp4"
+          steps={[
+            <>In GreenLake, go to <b>Manage Workspace → API</b> and click <b>Create personal API client</b>.</>,
+            <>Give it a name and select the <b>HPE GreenLake Cloud Platform</b> service, then click <b>Create</b>.</>,
             <>Copy the <b>Client ID</b>, <b>Client Secret</b>, and the per-workspace <b>token URL</b> (…/authorization/v2/oauth2/&lt;tenant&gt;/token) — you only see the secret once.</>,
             <>Put those three into the <b>Initialisation sheet</b> (next step) — that's how this tool authenticates to GreenLake.</>,
           ]}
         />
-        <Box pad={{ top: 'small' }}>
-          <Clip src="/prereq/videos/api-client-credentials.mp4" caption="4. Create a personal API client (clip stops before the secret is shown)" />
-        </Box>
+        <Text size="xsmall" color="text-weak">The clip stops before the Client ID / secret are shown.</Text>
       </Section>
 
       <Section title="3 · Network & time prerequisites">
