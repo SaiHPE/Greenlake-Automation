@@ -39,8 +39,18 @@ jobs:
       - name: Build slim (Chromium fetched on first run)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -SkipInstall
 
+      - name: Smoke-test slim (Playwright launches Chromium from the user cache)
+        run: |
+          dist\AlletraOnboard\AlletraOnboard.exe selftest
+          if ($LASTEXITCODE -ne 0) { throw "slim selftest failed" }
+
       - name: Build offline (Chromium bundled)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -SkipInstall -Chromium
+
+      - name: Smoke-test offline (the bundled Chromium launches)
+        run: |
+          dist\AlletraOnboard\AlletraOnboard.exe selftest
+          if ($LASTEXITCODE -ne 0) { throw "offline selftest failed" }
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
