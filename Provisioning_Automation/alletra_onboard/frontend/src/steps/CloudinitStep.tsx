@@ -28,7 +28,9 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
 }
 
 export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
-  const [url, setUrl] = useState(form.cloudinit_url);
+  // 169.254.0.0 is the placeholder the work item carries when no per-boot URL was set — start
+  // with an empty box so the operator must paste the real one from the Discovery Tool.
+  const [url, setUrl] = useState(form.cloudinit_url.includes('169.254.0.0') ? '' : form.cloudinit_url);
   const [error, setError] = useState<string | null>(null);
   const [discoveryBusy, setDiscoveryBusy] = useState(false);
   const [discovery, setDiscovery] = useState<{ ok: boolean; text: string } | null>(null);
@@ -39,7 +41,8 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
   const failed =
     run?.current_phase === 'CLOUDINIT_CONNECT' &&
     (run?.status === 'retryable_failure' || run?.status === 'terminal_failure');
-  const validUrl = url.trim().startsWith('https://169.254.');
+  // Must be a real link-local URL — reject the 169.254.0.0 placeholder (it's not a host).
+  const validUrl = url.trim().startsWith('https://169.254.') && !url.trim().includes('169.254.0.0');
 
   const dns = form.dns
     .split(';')
@@ -100,11 +103,15 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
         <Box direction="row" gap="small" align="center" width="large">
           <TextInput placeholder="https://169.254.x.x/cloudinit" value={url} onChange={(e) => setUrl(e.target.value)} />
         </Box>
-        {!validUrl && url.trim() !== '' && (
-          <Text size="small" color="status-critical">
-            The wizard URL must start with https://169.254.
+        {url.trim() === '' ? (
+          <Text size="small" color="text-weak">
+            Paste the array&apos;s <b>https://169.254.x.x/cloudinit</b> URL from the Discovery Tool (it changes every boot).
           </Text>
-        )}
+        ) : !validUrl ? (
+          <Text size="small" color="status-critical">
+            That isn&apos;t a usable array URL — paste the link-local <b>https://169.254.x.x/cloudinit</b> from the Discovery Tool (not 169.254.0.0).
+          </Text>
+        ) : null}
       </Section>
 
       <Section title="2 · Review the values that will be applied">
