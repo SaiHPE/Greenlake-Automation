@@ -15,8 +15,16 @@ param([switch]$SkipInstall, [switch]$Chromium)
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
 
-$py = '.\.venv\Scripts\python.exe'
-if (-not (Test-Path $py)) { python -m venv .venv }
+# Use the project .venv if it exists (local dev); otherwise the Python on PATH (CI installs the
+# deps into the system Python). Only create a .venv when we're going to populate it.
+if (Test-Path '.\.venv\Scripts\python.exe') {
+  $py = '.\.venv\Scripts\python.exe'
+} elseif (-not $SkipInstall) {
+  python -m venv .venv
+  $py = '.\.venv\Scripts\python.exe'
+} else {
+  $py = 'python'
+}
 
 if (-not $SkipInstall) {
   & $py -m pip install --upgrade pip | Out-Null
