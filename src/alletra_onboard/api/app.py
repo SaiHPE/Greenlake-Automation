@@ -17,9 +17,10 @@ When frontend/dist exists it is served at / (the packaged single-host product).
 from __future__ import annotations
 
 import asyncio
+import base64
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,6 +40,8 @@ from alletra_onboard.api.schemas import (
     CreateRunRequest,
     DiscoveryToolResponse,
     DsccStepRequest,
+    InitSheetUploadRequest,
+    InitSheetUploadResponse,
     EventListResponse,
     HealthResponse,
     PreflightRequest,
@@ -51,6 +54,7 @@ from alletra_onboard.api.schemas import (
 from alletra_onboard.application.configuring import masked_gl_credentials, update_gl_credentials
 from alletra_onboard.application.event_bus import InMemoryEventBus
 from alletra_onboard.application.health import greenlake_check
+from alletra_onboard.application.init_sheet import build_template_bytes, parse_workbook_bytes
 from alletra_onboard.application.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.onboarding_service import (
     OnboardingService,
@@ -146,6 +150,44 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             return data
 
         return {"work_items": [unmasked(item) for item in items]}
+
+    # ------------------------------------------------------------------ initialisation sheet
+
+    XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+    @app.get("/init-sheet/template")
+    async def init_sheet_template() -> Response:
+        return Response(
+            content=build_template_bytes(),
+            media_type=XLSX_MEDIA,
+            headers={"Content-Disposition": 'attachment; filename="Initialisation_sheet.xlsx"'},
+        )
+
+    @app.post("/init-sheet/upload", response_model=InitSheetUploadResponse)
+    async def init_sheet_upload(request: InitSheetUploadRequest) -> InitSheetUploadResponse:
+        try:
+            raw = base64.b64decode(request.content_b64, validate=True)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail="Upload was not valid base64") from exc
+        try:
+            parsed = parse_workbook_bytes(raw)
+        except Exception as exc:  # noqa: BLE001 - bad xlsx / missing fields -> a clear 422
+            raise HTTPException(status_code=422, detail=f"Initialisation sheet did not parse: {exc}") from exc
+
+        # Workspace API credentials from the sheet land in the gitignored .env (no manual typing).
+        update_gl_credentials(
+            env_path,
+            {
+                "GL_CLIENT_ID": parsed.gl_client_id,
+                "GL_CLIENT_SECRET": parsed.gl_client_secret,
+                "GL_TOKEN_URL": parsed.gl_token_url,
+            },
+        )
+        run = service.create_run(parsed.work_item)
+        data = parsed.work_item.model_dump(mode="json")
+        data["subscription_key"] = parsed.work_item.subscription_key.get_secret_value()
+        data["dscc_setup"].pop("password", None)  # never echo the admin password to the UI
+        return InitSheetUploadResponse(run=run, work_item=data)
 
     # ------------------------------------------------------------------ runs + steps
 
