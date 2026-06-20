@@ -54,6 +54,16 @@ export const checkConfig = () => request<{ report: CheckReport }>('POST', '/conf
 
 export const parseCsv = (csvText: string) => request<{ work_items: any[] }>('POST', '/work-items/parse', { csv_text: csvText });
 export const createRun = (workItem: any) => request<{ run: RunRecord }>('POST', '/runs', { work_item: workItem });
+
+export interface InitSheetUploadResult {
+  run: RunRecord;
+  work_item: any; // parsed values for review (admin password never included)
+  credentials_saved: boolean;
+}
+// Upload the filled Initialisation_sheet.xlsx (base64). The server parses it, writes the GreenLake
+// API creds to .env, and creates the run — so the secret never round-trips through the browser.
+export const uploadInitSheet = (contentB64: string) =>
+  request<InitSheetUploadResult>('POST', '/init-sheet/upload', { content_b64: contentB64 });
 export const getRun = (runId: string) => request<{ run: RunRecord; work_item: any }>('GET', `/runs/${runId}`);
 export const getEvents = (runId: string) => request<{ events: RunEvent[] }>('GET', `/runs/${runId}/events`);
 
