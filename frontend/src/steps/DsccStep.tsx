@@ -1,6 +1,7 @@
 import { Box, Button, Notification, Spinner, Text } from 'grommet';
-import { useEffect, useState } from 'react';
-import { ClockStatus, RunEvent, RunRecord, getClock, launchBrowser, markComplete, startDscc, syncClock } from '../api';
+import { useState } from 'react';
+import { RunEvent, RunRecord, launchBrowser, markComplete, startDscc } from '../api';
+import { ClockSync } from '../ClockSync';
 import { EventLog, Instructions, Section, StatusTag } from '../components';
 
 interface Props {
@@ -15,29 +16,9 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
   const [cdpUrl, setCdpUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [clock, setClock] = useState<ClockStatus | null>(null);
-  const [clockMsg, setClockMsg] = useState<string | null>(null);
 
   const consoleUrl = `https://console-${dsccRegion || 'jp1'}.data.cloud.hpe.com`;
 
-  useEffect(() => {
-    getClock(consoleUrl).then(setClock).catch(() => undefined);
-  }, [consoleUrl]);
-
-  const fixClock = async () => {
-    setBusy('clock');
-    setError(null);
-    setClockMsg(null);
-    try {
-      const r = await syncClock(consoleUrl);
-      setClockMsg(r.changed ? `Clock corrected (was off by ${Math.round(r.skew_seconds_before)}s).` : 'Clock already in sync.');
-      setClock(await getClock(consoleUrl));
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
-    } finally {
-      setBusy(null);
-    }
-  };
   const stepEvents = events.filter((e) => e.phase === 'DSCC_SETUP_SYSTEM' || e.phase === 'COMPLETE');
   const running = run?.status === 'running' && run?.current_phase === 'DSCC_SETUP_SYSTEM';
   const credentialsReady = stepEvents.some((e) => e.event_type === 'operator.credentials_ready');
@@ -82,48 +63,10 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
     }
   };
 
-  const skewOff = clock?.skew_seconds != null && !clock.in_sync;
-
   return (
     <Box gap="medium">
-      {/* Always shown — a skewed clock fails DSCC sign-in, so the sync control must be findable
-          even when the clock currently looks fine. */}
-      <Section title="System clock (required for DSCC sign-in)">
-        {clock === null ? (
-          <Text size="small" color="text-weak">Checking the clock…</Text>
-        ) : skewOff ? (
-          <Notification
-            status="warning"
-            title={`Clock is off by ~${Math.abs(Math.round(clock.skew_seconds as number))}s — DSCC sign-in will fail`}
-            message='DSCC rejects a skewed clock ("iat is in the future"). Sync it before opening the DSCC browser.'
-          />
-        ) : clock.skew_seconds == null ? (
-          <Text size="small" color="text-weak">
-            Couldn&apos;t reach a time source to check ({clock.error ?? 'unknown'}). You can still sync below.
-          </Text>
-        ) : (
-          <Text size="small" color="status-ok">
-            ✓ Clock is in sync (±{Math.abs(Math.round(clock.skew_seconds))}s vs {clock.source}).
-          </Text>
-        )}
-        <Box direction="row" gap="small" align="center">
-          <Button
-            primary={skewOff}
-            label={busy === 'clock' ? 'Syncing…' : 'Sync system clock'}
-            disabled={busy !== null}
-            onClick={fixClock}
-          />
-          <Text size="small" color="text-weak">Uses an HTTPS time source — works where NTP is blocked.</Text>
-        </Box>
-        {clock && !clock.is_admin && (
-          <Text size="small" color="text-weak">Run the app as Administrator for the sync to set the clock.</Text>
-        )}
-        {clockMsg && (
-          <Text size="small" color="status-ok">
-            {clockMsg}
-          </Text>
-        )}
-      </Section>
+      {/* Re-check (and re-sync) the clock here too — DSCC sign-in fails on a skewed clock. */}
+      <ClockSync consoleUrl={consoleUrl} title="System clock (required for DSCC sign-in)" />
 
       <Section title="1 · Open DSCC and start the Set Up System wizard">
         <Instructions
