@@ -1,5 +1,17 @@
 import { Anchor, Box, Button, Notification, Text } from 'grommet';
+import { ClockSync } from '../ClockSync';
 import { Instructions, Section } from '../components';
+
+function Shot({ src, caption }: { src: string; caption: string }) {
+  return (
+    <Box gap="xxsmall" width="320px" flex={false}>
+      <Box border round="xsmall" overflow="hidden">
+        <img src={src} alt={caption} style={{ width: '100%', display: 'block' }} />
+      </Box>
+      <Text size="xsmall" color="text-weak">{caption}</Text>
+    </Box>
+  );
+}
 
 // What the HPE engineer must do BEFORE running the automation — the manual steps from HPE's
 // official onboarding checklist that this tool does not (and should not) perform.
@@ -21,6 +33,11 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
             <>Assign yourself the <b>Data Services Administrator</b> role (Manage Workspace → Identity &amp; Access → Assign Role), and verify the Setup / Block Storage / Data Ops Manager services appear.</>,
           ]}
         />
+        <Box direction="row" gap="medium" wrap pad={{ top: 'small' }}>
+          <Shot src="/prereq/create-workspace.jpg" caption="Create Workspace" />
+          <Shot src="/prereq/deploy-dscc.jpg" caption="Deploy / launch Data Services" />
+          <Shot src="/prereq/assign-admin.jpg" caption="Assign the Administrator role" />
+        </Box>
       </Section>
 
       <Section title="2 · Create the API client (for this tool)">
@@ -38,10 +55,12 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
           items={[
             <>Allow the firewall/proxy to reach: <b>console.greenlake.hpe.com</b>, <b>device.cloud.hpe.com</b>, <b>console-&lt;region&gt;.data.cloud.hpe.com</b>, <b>tunnel-&lt;region&gt;.data.cloud.hpe.com</b> (all TCP 443).</>,
             <>DNS on the array must resolve global names (e.g. <b>device.cloud.hpe.com</b>).</>,
-            <><b>System time must be within 2 minutes</b> of correct, or the array can't connect to DSCC — use NTP (this app also has a clock-sync button on the DSCC step).</>,
+            <><b>System time must be within 2 minutes</b> of correct, or the array can't connect to DSCC. Use NTP, or the <b>Sync system clock</b> control below.</>,
           ]}
         />
       </Section>
+
+      <ClockSync title="System clock (must be within 2 minutes of correct)" />
 
       <Section title="4 · Physical install & this jump box">
         <Instructions
