@@ -24,12 +24,16 @@ from alletra_onboard.adapters.browser.locators import CLOUDINIT, CLOUDINIT_TEXT
 from alletra_onboard.domain.models import ArrayWorkItem, BrowserResultStatus, NetworkConfig
 
 try:
+    from playwright.async_api import Error as PlaywrightError
     from playwright.async_api import TimeoutError as PlaywrightTimeoutError
     from playwright.async_api import async_playwright
 except ImportError:  # pragma: no cover - browser deps optional until B/C run.
     async_playwright = None
 
-    class PlaywrightTimeoutError(Exception):
+    class PlaywrightError(Exception):
+        pass
+
+    class PlaywrightTimeoutError(PlaywrightError):
         pass
 
 
@@ -56,7 +60,8 @@ class CloudinitWizardAdapter:
         self._on_status = on_status or (lambda message: None)
 
     async def run(self, item: ArrayWorkItem, run_id: str, *, auto_submit: bool = False) -> BrowserResultStatus:
-        if not item.cloudinit_url.startswith("https://169.254."):
+        # Reject a non-link-local URL and the 169.254.0.0 placeholder (not a real host).
+        if not item.cloudinit_url.startswith("https://169.254.") or "169.254.0.0" in item.cloudinit_url:
             return BrowserResultStatus.FAILED_TERMINAL
         if async_playwright is None:
             return BrowserResultStatus.WAITING_FOR_OPERATOR  # playwright not installed
@@ -76,6 +81,7 @@ class CloudinitWizardAdapter:
                 return BrowserResultStatus.WAITING_FOR_OPERATOR
 
             context = None
+            page = None
             try:
                 if attached:
                     page = await self._pick_open_page(browser, item.cloudinit_url)
@@ -109,6 +115,13 @@ class CloudinitWizardAdapter:
                 return await self._wait_for_operator_submit(page, run_id)
             except PlaywrightTimeoutError:
                 await self._dump(page, run_id, "timeout")
+                return BrowserResultStatus.FAILED_RETRYABLE
+            except PlaywrightError as exc:
+                # Navigation / cert / driver errors (e.g. ERR_ADDRESS_UNREACHABLE on a wrong or
+                # offline URL): capture an artifact, relay the message, and fail cleanly — don't
+                # let it escape as an uncaught crash with no screenshot.
+                await self._dump(page, run_id, "error")
+                self._on_status(f"error:{str(exc).splitlines()[0][:200]}")
                 return BrowserResultStatus.FAILED_RETRYABLE
             finally:
                 if not attached:  # only close what we launched; never close the operator's browser
@@ -370,7 +383,7 @@ class CloudinitWizardAdapter:
         os.environ["no_proxy"] = value
 
     async def _dump(self, page, run_id: str, label: str) -> None:
-        if not self.artifact_dir:
+        if not self.artifact_dir or page is None:
             return
         try:
             self.artifact_dir.mkdir(parents=True, exist_ok=True)

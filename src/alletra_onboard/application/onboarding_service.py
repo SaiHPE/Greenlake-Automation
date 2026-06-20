@@ -204,10 +204,13 @@ class OnboardingService:
         )
         review_ready = False
         refused = False
+        last_error: str | None = None
 
         def on_status(message: str) -> None:
-            nonlocal review_ready, refused
-            if message == "review_ready":
+            nonlocal review_ready, refused, last_error
+            if message.startswith("error:"):
+                last_error = message[len("error:") :].strip()
+            elif message == "review_ready":
                 review_ready = True
                 self._set(run, RunStatus.WAITING_FOR_OPERATOR)
                 self._emit(
@@ -267,7 +270,7 @@ class OnboardingService:
                 run.run_id,
                 WorkflowPhase.CLOUDINIT_CONNECT,
                 "step.failed",
-                "Browser automation did not complete — check the artifact screenshot and retry",
+                last_error or "Browser automation did not complete — check the artifact screenshot and retry",
             )
 
     # ------------------------------------------------------------------ step C: DSCC
