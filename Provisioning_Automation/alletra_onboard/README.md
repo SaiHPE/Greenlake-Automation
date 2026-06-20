@@ -114,6 +114,23 @@ cd alletra-onboard; .\start.ps1
 **3. Full repo (developers).** `git clone` `main`; the app is under
 `Provisioning_Automation/alletra_onboard/`.
 
+**4. Packaged `.exe` (customers — no Python, no git, no Node).** Two self-contained Windows builds
+are attached to a **tagged** GitHub Release (push a `vX.Y.Z` tag → `.github/workflows/exe.yml`
+builds both on a Windows runner):
+- **`alletra-onboard-win64.zip`** (~60 MB) — the **slim** build; downloads Chromium (~150 MB) on
+  first launch through the proxy. Use this by default.
+- **`alletra-onboard-offline-win64.zip`** (~210 MB) — **bundles Chromium**; use it where the proxy
+  blocks Playwright's browser CDN.
+
+Extract the zip and **double-click `AlletraOnboard.exe`** (inside the `AlletraOnboard\` folder).
+It serves the web app at `http://127.0.0.1:8765` and opens the browser. Run it **as Administrator**
+for the clock-sync; the Discovery Tool is bundled (SHA256-verified). **Prerequisite: the Microsoft
+Visual C++ Redistributable (x64)** must be installed — Chromium won't start without it (a
+"side-by-side configuration is incorrect" error). Most Windows boxes already have it; otherwise
+install [`vc_redist.x64.exe`](https://aka.ms/vs/17/release/vc_redist.x64.exe). On first launch
+Windows SmartScreen may warn (the build is unsigned) — click **More info → Run anyway**. Build
+locally with `scripts\build_exe.ps1` (slim) or `scripts\build_exe.ps1 -Chromium` (offline).
+
 ### Releasing (automated)
 
 Every push/merge to `main` that touches the app runs **`.github/workflows/release.yml`** on a

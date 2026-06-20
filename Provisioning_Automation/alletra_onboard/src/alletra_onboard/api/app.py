@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
@@ -303,9 +304,13 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         report = await PreflightService(load_settings()).run(request.work_item, live_greenlake=request.live_greenlake)
         return PreflightResponse(report=report)
 
-    # Serve the built frontend when present (single-host product mode). Look in the working
-    # directory first, then relative to the package root (editable install layout).
-    for dist in (Path("frontend/dist"), Path(__file__).resolve().parents[3] / "frontend" / "dist"):
+    # Serve the built frontend when present (single-host product mode). Frozen .exe first
+    # (PyInstaller extracts data under sys._MEIPASS), then the working directory, then the
+    # package root (editable install layout).
+    dist_candidates = [Path("frontend/dist"), Path(__file__).resolve().parents[3] / "frontend" / "dist"]
+    if getattr(sys, "frozen", False):
+        dist_candidates.insert(0, Path(getattr(sys, "_MEIPASS", ".")) / "frontend" / "dist")
+    for dist in dist_candidates:
         if dist.is_dir():
             app.mount("/", StaticFiles(directory=str(dist), html=True), name="ui")
             break
