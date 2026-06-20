@@ -55,7 +55,6 @@ _COMPLETE = {
     "dscc_country": "India",
     "secret_name": "b10000-admin",
     "secret_username": "3paradm",
-    "secret_password": "Sup3rSecret!",
 }
 
 
@@ -80,9 +79,8 @@ def test_round_trip_parses_creds_and_work_item():
     assert item.network.mgmt_ipv4 == "10.64.154.225"
     assert item.network.dns == ["10.203.96.10", "10.203.96.9"]
     assert item.network.proxy_port == 8080
-    # admin password is carried for the (now automated) DSCC credential step
-    assert item.dscc_setup.password is not None
-    assert item.dscc_setup.password.get_secret_value() == "Sup3rSecret!"
+    # the admin password is NOT in the sheet — the operator types it in the DSCC wizard
+    assert item.dscc_setup.password is None
     assert item.dscc_setup.system_name == "MPB10K-TEST"
 
 

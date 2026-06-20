@@ -1,8 +1,7 @@
 # Alletra Onboard
 
 Operator automation for onboarding an **HPE Alletra MP B10000** into **HPE GreenLake + DSCC**.
-It runs as a local web app (`onboard ui`) and as a CLI (`onboard …`). Both drive the same
-three components:
+It runs as a local web app (`onboard ui`, or the packaged `.exe`) that drives three components:
 
 | Step | Component | What it does | How it runs |
 |---|---|---|---|
@@ -24,9 +23,7 @@ The **jump box is the primary host** and runs the whole flow (A + B + C) from th
 - **B (cloudinit) must run on the jump box** — only it sits on the array's link-local subnet and can reach `https://169.254.x.x/cloudinit`.
 - **C (DSCC)** — used to hang on the jump box ("Authenticating…"); both causes are fixed: the browser launcher now passes the proxy to Chrome, and the in-app **Sync system clock** button corrects the drift that broke the login JWT. So DSCC works on the jump box too.
 
-**Laptop = fallback for C only.** If DSCC sign-in ever hangs on the jump box, run the DSCC step
-from the laptop CLI (see *Fallback — DSCC on the laptop*). Note run state is a per-machine SQLite
-DB, so a laptop DSCC run is a separate CLI step, not a continuation of the jump box's web-app run.
+So the **jump box runs the entire flow (A + B + C) from the one web app** — no second machine needed.
 
 ---
 
@@ -164,15 +161,14 @@ Redistributable** (else greenlet fails to import) and a persisted proxy
 
 **Clock skew & DSCC sign-in.** DSCC login fails with `iat is in the future` if the host clock
 has drifted, and NTP can't always fix it (UDP 123 is firewalled in locked environments; proxies
-don't carry NTP). The app handles this itself: the **DSCC step shows a "Sync system clock"
-button** when it detects skew, and there's a CLI equivalent **`onboard sync-clock`**. Both read
-the time from an HTTPS `Date` header through the proxy (works wherever the app has HTTPS egress),
-so no NTP, scripts, or scheduled tasks are needed. **Setting the clock needs Administrator**, so
-launch the app elevated (`onboard ui` / `start.ps1` from an Administrator shell) for the button
-to work.
+don't carry NTP). The app handles this itself: the **Prerequisites and DSCC steps show a "Sync
+system clock"** control. It reads the time from an HTTPS `Date` header through the proxy (works
+wherever the app has HTTPS egress), so no NTP, scripts, or scheduled tasks are needed. **Setting
+the clock needs Administrator**, so launch the app elevated (`onboard ui` / `start.ps1` from an
+Administrator shell, or the `.exe` as admin) for the button to work.
 
-Credentials (`.env`) are never in git. Enter them with `onboard configure` (or in the web
-app's Configure screen). DSCC (C) does **not** need GreenLake credentials.
+Credentials (`.env`) are never in git. Enter them in the web app — on upload of the Initialisation
+sheet (which carries the API Client ID/Secret/token URL), or the Configure screen.
 
 ---
 
@@ -226,32 +222,15 @@ old UI. (To confirm you're on the new build: step 4 shows an **Open Discovery To
 6. **Finish** — summary of the run.
 
 > Two reminders: run the app **as Administrator** (for the clock-sync button), and **hard-refresh**
-> the browser after every update. If DSCC sign-in ever hangs on the jump box, use the laptop CLI
-> fallback below.
+> the browser after every update.
 
-### Fallback — DSCC on the laptop (CLI)
+### CLI
 
-```powershell
-cd "C:\Users\gsairoop\Downloads\storage automation\Provisioning_Automation\alletra_onboard"
-# 1) open a logged-in DSCC browser (auto-applies the proxy if HTTPS_PROXY is set)
-.\.venv\Scripts\onboard.exe browser --url https://console-jp1.data.cloud.hpe.com
-#    -> log into DSCC, open Setup -> <serial> -> Set Up System, stay on Welcome
-# 2) fill the wizard up to the System credential, then stop
-.\.venv\Scripts\onboard.exe dscc --file config\arrays.csv --serial <SERIAL> --attach http://localhost:9222
-#    -> in the browser: add the credential, Continue, review, Submit
-```
+The onboarding runs entirely from the web app; the CLI is just the launcher plus a health check:
 
-### All CLI commands
-
-- `onboard ui` — start the web app and open the browser.
-- `onboard configure [--show]` — store/inspect GreenLake credentials in `.env`.
+- `onboard ui` — start the web app and open the browser (operator entry point).
+- `onboard api` — start the API server without opening a browser.
 - `onboard check` — read-only GreenLake readiness (auth + provisioned Data Services regions).
-- `onboard preflight --file <csv> [--live-greenlake]` — validate a work item.
-- `onboard provision --file <csv> --serial <S> [--dry-run]` — Component A.
-- `onboard cloudinit --file <csv> --serial <S> [--attach <cdp>]` — Component B.
-- `onboard dscc --file <csv> --serial <S> --attach <cdp>` — Component C.
-- `onboard browser [--url <u>] [--no-proxy]` — launch a CDP debug Chrome (applies `HTTPS_PROXY` unless `--no-proxy`).
-- `onboard api` / `onboard status` — raw API server / run table.
 
 ---
 
@@ -287,7 +266,7 @@ Gotchas:
 2. **DSCC on the jump box — resolved (single host).** The "Authenticating…" hang had two
    causes, both fixed: (a) Chrome ignores `HTTPS_PROXY`, so the launcher passes `--proxy-server`
    automatically; (b) host **clock drift** failed the login JWT (`iat is in the future`) — fixed
-   by the in-app **"Sync system clock"** button / `onboard sync-clock` (HTTPS time-sync, since
+   by the in-app **"Sync system clock"** button (HTTPS time-sync, since
    NTP/UDP is blocked). With the proxy flag and a synced clock, the jump box reaches the DSCC
    console, so **A + B + C all run on the jump box** from the one web app. (The clock button
    needs the app run as Administrator.)
