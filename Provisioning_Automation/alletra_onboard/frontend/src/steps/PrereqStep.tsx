@@ -99,6 +99,7 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
             <>The array is racked, cabled, <b>powered on</b>, and its admin ports are on the management network.</>,
             <>This jump box is on the <b>same subnet</b> as the array (so it can reach the link-local <b>169.254.x</b> Cloud Connectivity URL).</>,
             <>Run this app <b>as Administrator</b> (so the clock-sync can set the system time).</>,
+            <>The <b>Microsoft Visual C++ Redistributable (x64)</b> is installed — the browser needs it (most Windows boxes already have it).</>,
           ]}
         />
       </Section>

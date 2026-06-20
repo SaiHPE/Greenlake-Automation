@@ -1,0 +1,71 @@
+name: Build Windows EXE
+
+# The packaged .exe is large (the offline build bundles Chromium) and slow to build, so it is
+# produced on demand: push a version tag (v1.2.3) to publish a GitHub Release with both builds,
+# or run it manually from the Actions tab (workflow_dispatch) to get the zips as build artifacts.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-exe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-exe:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Provisioning_Automation/alletra_onboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies + Chromium
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+          python -m playwright install chromium
+
+      - name: Build slim (Chromium fetched on first run)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -SkipInstall
+
+      - name: Build offline (Chromium bundled)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -SkipInstall -Chromium
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: alletra-onboard-exe-win64
+          path: |
+            Provisioning_Automation/alletra_onboard/dist/alletra-onboard-win64.zip
+            Provisioning_Automation/alletra_onboard/dist/alletra-onboard-win64.zip.sha256
+            Provisioning_Automation/alletra_onboard/dist/alletra-onboard-offline-win64.zip
+            Provisioning_Automation/alletra_onboard/dist/alletra-onboard-offline-win64.zip.sha256
+
+      - name: Publish to the tag's GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $assets = @(
+            'dist\alletra-onboard-win64.zip', 'dist\alletra-onboard-win64.zip.sha256',
+            'dist\alletra-onboard-offline-win64.zip', 'dist\alletra-onboard-offline-win64.zip.sha256'
+          )
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber
+          } else {
+            gh release create $tag @assets --title "Alletra Onboard $tag" --generate-notes
+          }
