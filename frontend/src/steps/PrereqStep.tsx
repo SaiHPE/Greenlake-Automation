@@ -107,8 +107,8 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
       <Section title="5 · Fill the Initialisation sheet">
         <Text size="small">
           On the next step, download the <b>Initialisation_sheet.xlsx</b>, fill every required field
-          (API credentials, serial, subscription key, network, DSCC details, admin credential), and
-          upload it. One workbook = one array.
+          (API credentials, serial, subscription key, network, DSCC details), and upload it. One
+          workbook = one array.
         </Text>
       </Section>
 
