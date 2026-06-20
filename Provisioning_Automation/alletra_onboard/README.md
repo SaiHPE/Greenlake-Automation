@@ -124,12 +124,12 @@ builds both on a Windows runner):
 
 Extract the zip and **double-click `AlletraOnboard.exe`** (inside the `AlletraOnboard\` folder).
 It serves the web app at `http://127.0.0.1:8765` and opens the browser. Run it **as Administrator**
-for the clock-sync; the Discovery Tool is bundled (SHA256-verified). **Prerequisite: the Microsoft
-Visual C++ Redistributable (x64)** must be installed — Chromium won't start without it (a
-"side-by-side configuration is incorrect" error). Most Windows boxes already have it; otherwise
-install [`vc_redist.x64.exe`](https://aka.ms/vs/17/release/vc_redist.x64.exe). On first launch
-Windows SmartScreen may warn (the build is unsigned) — click **More info → Run anyway**. Build
-locally with `scripts\build_exe.ps1` (slim) or `scripts\build_exe.ps1 -Chromium` (offline).
+for the clock-sync; the Discovery Tool is bundled (SHA256-verified). The **MSVC runtime that
+Chromium needs is bundled** (shipped next to `chrome.exe`), so no separate install is required —
+on an unusually stripped/corrupted Windows you may still need
+[`vc_redist.x64.exe`](https://aka.ms/vs/17/release/vc_redist.x64.exe). On first launch Windows
+SmartScreen may warn (the build is unsigned) — click **More info → Run anyway**. Build locally with
+`scripts\build_exe.ps1` (slim) or `scripts\build_exe.ps1 -Chromium` (offline).
 
 ### Releasing (automated)
 

@@ -17,34 +17,57 @@ import sys
 from pathlib import Path
 
 
+def _place_vcredist(executable: str | None) -> None:
+    """Copy the bundled MSVC runtime DLLs next to chrome.exe so Chromium runs even on a box without
+    the VC++ Redistributable installed. No-op when not frozen, or already present."""
+    if not (getattr(sys, "frozen", False) and executable):
+        return
+    source = os.path.join(sys._MEIPASS, "vcredist")  # type: ignore[attr-defined]
+    if not os.path.isdir(source):
+        return
+    import shutil
+
+    target_dir = os.path.dirname(executable)  # ...\chrome-win64
+    for dll in os.listdir(source):
+        target = os.path.join(target_dir, dll)
+        if not os.path.exists(target):
+            try:
+                shutil.copy2(os.path.join(source, dll), target)
+            except OSError:
+                pass
+
+
 def ensure_chromium() -> None:
-    """Make sure a Chromium is available. No-op for the bundled build or once downloaded."""
+    """Make sure Chromium is available + has its MSVC runtime. Downloads on first run (slim build)."""
     from playwright.sync_api import sync_playwright
 
-    try:
-        with sync_playwright() as pw:
-            executable = pw.chromium.executable_path
-        if executable and os.path.exists(executable):
-            return  # bundled, or already downloaded to the user cache
-    except Exception:  # noqa: BLE001 - fall through and try to install
-        pass
+    def _executable() -> str | None:
+        try:
+            with sync_playwright() as pw:
+                return pw.chromium.executable_path
+        except Exception:  # noqa: BLE001
+            return None
 
-    print("First run: downloading the Chromium browser (~150 MB, one time)…", flush=True)
-    try:
-        import subprocess
+    executable = _executable()
+    if not (executable and os.path.exists(executable)):
+        print("First run: downloading the Chromium browser (~150 MB, one time)…", flush=True)
+        try:
+            import subprocess
 
-        from playwright._impl._driver import compute_driver_executable, get_driver_env
+            from playwright._impl._driver import compute_driver_executable, get_driver_env
 
-        node, cli = compute_driver_executable()
-        subprocess.run([node, cli, "install", "chromium"], env=get_driver_env(), check=True)
-        print("Browser ready.", flush=True)
-    except Exception as exc:  # noqa: BLE001
-        print(
-            f"Could not download Chromium automatically ({exc}).\n"
-            "If this site blocks the Playwright browser CDN, use the offline build "
-            "(alletra-onboard-offline-win64.zip), which ships Chromium inside.",
-            flush=True,
-        )
+            node, cli = compute_driver_executable()
+            subprocess.run([node, cli, "install", "chromium"], env=get_driver_env(), check=True)
+            print("Browser ready.", flush=True)
+            executable = _executable()
+        except Exception as exc:  # noqa: BLE001
+            print(
+                f"Could not download Chromium automatically ({exc}).\n"
+                "If this site blocks the Playwright browser CDN, use the offline build "
+                "(alletra-onboard-offline-win64.zip), which ships Chromium inside.",
+                flush=True,
+            )
+    _place_vcredist(executable)
 
 
 def selftest() -> int:
