@@ -31,6 +31,12 @@ async def test_non_link_local_url_is_terminal():
     assert result == BrowserResultStatus.FAILED_TERMINAL
 
 
+async def test_placeholder_url_is_terminal():
+    # 169.254.0.0 is the work item's placeholder (no per-boot URL set) — never a real host.
+    result = await CloudinitWizardAdapter(headless=True).run(_item("https://169.254.0.0/cloudinit"), run_id="r1")
+    assert result == BrowserResultStatus.FAILED_TERMINAL
+
+
 def test_locators_cover_every_wizard_field():
     for key in (
         "get_started", "eula_accept_input", "next", "mgmt_ip", "netmask", "gateway",
