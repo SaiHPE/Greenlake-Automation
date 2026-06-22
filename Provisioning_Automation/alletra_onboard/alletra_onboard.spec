@@ -23,6 +23,7 @@ for _dll in _VC_DLLS:
         datas.append((_src, "vcredist"))
 
 hiddenimports = collect_submodules("uvicorn") + collect_submodules("alletra_onboard")
+hiddenimports += collect_submodules("paramiko")  # SSH client for post-init verification
 hiddenimports += ["anyio", "httptools", "websockets", "watchfiles", "h11"]
 
 a = Analysis(

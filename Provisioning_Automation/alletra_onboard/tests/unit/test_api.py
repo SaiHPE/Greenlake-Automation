@@ -7,7 +7,12 @@ from alletra_onboard.application.event_bus import InMemoryEventBus
 from alletra_onboard.application.intake import csv_template
 from alletra_onboard.application.onboarding_service import OnboardingService
 from alletra_onboard.config import Settings
-from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig
+from alletra_onboard.domain.models import (
+    ArrayWorkItem,
+    DsccSetupConfig,
+    NetworkConfig,
+    VerificationReport,
+)
 
 
 def _client(tmp_path) -> TestClient:
@@ -73,6 +78,27 @@ def test_mark_complete(tmp_path):
     run_id = client.post("/runs", json={"work_item": _work_item_payload()}).json()["run"]["run_id"]
     done = client.post(f"/runs/{run_id}/complete")
     assert done.json()["run"]["status"] == "succeeded"
+
+
+def test_verify_endpoint_accepts_credentials_and_validates(tmp_path):
+    # Inject a stub verify_fn so the endpoint never attempts a real SSH connection.
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(
+        Settings(), store, InMemoryEventBus(),
+        verify_fn=lambda item, username, password: VerificationReport(reachable=True),
+    )
+    client = TestClient(create_app(service))
+    run_id = client.post("/runs", json={"work_item": _work_item_payload()}).json()["run"]["run_id"]
+    client.post(f"/runs/{run_id}/complete")
+
+    ok = client.post(f"/runs/{run_id}/verify", json={"username": "3paradm", "password": "pw"})
+    assert ok.status_code == 200
+
+    # the password is required — a read-only check still has to authenticate
+    assert client.post(f"/runs/{run_id}/verify", json={"username": "3paradm"}).status_code == 422
+    # unknown run -> 404
+    assert client.post("/runs/nope/verify", json={"username": "u", "password": "p"}).status_code == 404
 
 
 def test_template_and_parse_round_trip(tmp_path):

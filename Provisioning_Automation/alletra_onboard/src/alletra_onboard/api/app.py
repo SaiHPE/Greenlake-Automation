@@ -43,6 +43,7 @@ from alletra_onboard.api.schemas import (
     DsccStepRequest,
     InitSheetUploadRequest,
     InitSheetUploadResponse,
+    VerifyStepRequest,
     EventListResponse,
     HealthResponse,
     PreflightRequest,
@@ -232,6 +233,15 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     @app.post("/runs/{run_id}/dscc", response_model=RunResponse)
     async def run_dscc(run_id: str, request: DsccStepRequest) -> RunResponse:
         return _start_step(run_id, lambda: service.start_dscc(run_id, cdp_url=request.cdp_url))
+
+    @app.post("/runs/{run_id}/verify", response_model=RunResponse)
+    async def run_verify(run_id: str, request: VerifyStepRequest) -> RunResponse:
+        # Post-init read-only SSH verification of the array config. Password is used for the SSH
+        # session only — never stored. Never changes the run's COMPLETE/SUCCEEDED status.
+        return _start_step(
+            run_id,
+            lambda: service.start_verify(run_id, username=request.username, password=request.password),
+        )
 
     @app.post("/runs/{run_id}/complete", response_model=RunResponse)
     async def complete_run(run_id: str) -> RunResponse:
