@@ -80,6 +80,11 @@ class DsccStepRequest(BaseModel):
     )
 
 
+class VerifyStepRequest(BaseModel):
+    username: str = Field(description="Array admin username (the DSCC System Credential, e.g. 3paradm).")
+    password: str = Field(description="Array admin password — used for the SSH session only, never stored.")
+
+
 # ------------------------------------------------------------------ browser
 
 class BrowserLaunchRequest(BaseModel):

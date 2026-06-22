@@ -12,8 +12,11 @@ from alletra_onboard.domain.models import (
     ArrayWorkItem,
     BrowserResultStatus,
     DsccSetupConfig,
+    FieldCheck,
+    FieldCheckStatus,
     NetworkConfig,
     RunStatus,
+    VerificationReport,
     WorkflowPhase,
 )
 
@@ -179,6 +182,64 @@ async def test_dscc_attach_failure_is_retryable(tmp_path):
     service.start_dscc(run.run_id, cdp_url="http://localhost:9222")
     await service.wait(run.run_id)
     assert service.get_run(run.run_id).status == RunStatus.RETRYABLE_FAILURE
+
+
+async def _complete(service, run_id):
+    """Drive a run to COMPLETE the way DSCC does, so verification runs on a finished run."""
+    service.mark_complete(run_id)
+
+
+async def test_verify_success_emits_report_without_changing_run_status(tmp_path):
+    report = VerificationReport(
+        reachable=True,
+        checks=[
+            FieldCheck(
+                field="Gateway", expected="10.0.0.1", actual="10.0.0.1",
+                status=FieldCheckStatus.PASS, critical=True,
+            )
+        ],
+    )
+    service = _service(tmp_path, verify_fn=lambda item, username, password: report)
+    run = service.create_run(_item())
+    await _complete(service, run.run_id)
+
+    service.start_verify(run.run_id, username="3paradm", password="pw")
+    await service.wait(run.run_id)
+
+    updated = service.get_run(run.run_id)
+    assert updated.status == RunStatus.SUCCEEDED  # verification never changes the run outcome
+    assert updated.current_phase == WorkflowPhase.COMPLETE
+    done = [e for e in service.list_events(run.run_id) if e.event_type == "verify.completed"]
+    assert done and done[-1].data["report"]["checks"][0]["field"] == "Gateway"
+
+
+async def test_verify_unreachable_emits_failure_but_keeps_run_succeeded(tmp_path):
+    report = VerificationReport(reachable=False, error="Could not reach the array")
+    service = _service(tmp_path, verify_fn=lambda item, username, password: report)
+    run = service.create_run(_item())
+    await _complete(service, run.run_id)
+
+    service.start_verify(run.run_id, username="u", password="p")
+    await service.wait(run.run_id)
+
+    assert service.get_run(run.run_id).status == RunStatus.SUCCEEDED
+    assert any(e.event_type == "verify.failed" for e in service.list_events(run.run_id))
+
+
+async def test_verify_exception_never_unsucceeds_the_run(tmp_path):
+    def boom(item, username, password):
+        raise RuntimeError("ssh library blew up")
+
+    service = _service(tmp_path, verify_fn=boom)
+    run = service.create_run(_item())
+    await _complete(service, run.run_id)
+
+    service.start_verify(run.run_id, username="u", password="p")
+    await service.wait(run.run_id)
+
+    updated = service.get_run(run.run_id)
+    assert updated.status == RunStatus.SUCCEEDED  # the guard must not mark a finished run retryable
+    assert any(e.event_type == "verify.failed" for e in service.list_events(run.run_id))
 
 
 async def test_concurrent_step_rejected(tmp_path):
