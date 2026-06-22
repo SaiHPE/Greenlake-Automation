@@ -30,6 +30,7 @@ from alletra_onboard.application.provisioning import (
     WARNING,
     build_provisioning_service,
 )
+from alletra_onboard.application.verification import verify
 from alletra_onboard.config import Settings, load_settings
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
@@ -78,6 +79,7 @@ class OnboardingService:
         provision_factory: Callable = _default_provision_factory,
         cloudinit_factory: Callable = _default_cloudinit_factory,
         dscc_factory: Callable = _default_dscc_factory,
+        verify_fn: Callable = verify,
     ) -> None:
         self.settings = settings
         self.store = store
@@ -85,6 +87,7 @@ class OnboardingService:
         self._provision_factory = provision_factory
         self._cloudinit_factory = cloudinit_factory
         self._dscc_factory = dscc_factory
+        self._verify_fn = verify_fn
         self._tasks: dict[str, asyncio.Task] = {}
 
     def _current_settings(self) -> Settings:
@@ -309,6 +312,38 @@ class OnboardingService:
                 "Set Up System wizard (Welcome), then retry",
             )
 
+    # ------------------------------------------------------------------ post-init verification
+
+    def start_verify(self, run_id: str, *, username: str, password: str) -> RunRecord:
+        run, item = self.get_run(run_id), self.get_work_item(run_id)
+        self._spawn(run_id, self._run_verify(run, item, username, password))
+        return run
+
+    async def _run_verify(self, run: RunRecord, item: ArrayWorkItem, username: str, password: str) -> None:
+        # The run is already COMPLETE; verification is a read-only confidence check and must NEVER
+        # change the run status — a failure here can't un-succeed the onboarding.
+        self._emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, "step.started", "Verifying the array configuration over SSH…")
+        try:
+            report = await asyncio.to_thread(self._verify_fn, item, username, password)
+        except Exception as exc:  # noqa: BLE001 - never propagate (the guard would mark the run failed)
+            self._emit(
+                run.run_id,
+                WorkflowPhase.CONFIG_VERIFY,
+                "verify.failed",
+                f"Verification error: {type(exc).__name__}: {str(exc)[:200]}",
+            )
+            return
+        if not report.reachable:
+            self._emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, "verify.failed", report.error or "Could not reach the array over SSH.")
+            return
+        self._emit(
+            run.run_id,
+            WorkflowPhase.CONFIG_VERIFY,
+            "verify.completed",
+            f"Verified the array — {report.passed} OK, {report.mismatches} mismatch(es).",
+            data={"report": report.model_dump(mode="json")},
+        )
+
     # ------------------------------------------------------------------ internals
 
     def _spawn(self, run_id: str, coro) -> None:
@@ -340,7 +375,9 @@ class OnboardingService:
         run.updated_at = datetime.now(UTC)
         self.store.upsert_run(run)
 
-    def _emit(self, run_id: str, phase: WorkflowPhase, event_type: str, message: str) -> None:
-        event = RunEvent(run_id=run_id, phase=phase, event_type=event_type, message=message)
+    def _emit(
+        self, run_id: str, phase: WorkflowPhase, event_type: str, message: str, data: dict | None = None
+    ) -> None:
+        event = RunEvent(run_id=run_id, phase=phase, event_type=event_type, message=message, data=data or {})
         self.store.append_event(event)
         self.events.publish_sync(event)

@@ -10,6 +10,7 @@ import { DsccStep } from './steps/DsccStep';
 import { GreenLakeStep } from './steps/GreenLakeStep';
 import { InitSheetStep } from './steps/InitSheetStep';
 import { PrereqStep } from './steps/PrereqStep';
+import { VerifyStep } from './steps/VerifyStep';
 
 const STEPS = [
   { title: 'Prerequisites', subtitle: 'what to do first' },
@@ -17,12 +18,16 @@ const STEPS = [
   { title: 'GreenLake registration', subtitle: 'register · assign · subscribe' },
   { title: 'Cloud Connectivity', subtitle: 'on-array wizard' },
   { title: 'DSCC Setup', subtitle: 'Set Up System wizard' },
+  { title: 'Verify configuration', subtitle: 'SSH read-only check' },
   { title: 'Finish', subtitle: 'summary' },
 ];
+const LAST_STEP = STEPS.length - 1;
 
 const RUN_ID_KEY = 'alletra.runId';
 
-// Which step a persisted run resumes to, from its phase.
+// Which step a persisted run resumes to, from its phase. The run goes COMPLETE after DSCC and
+// stays there (the optional SSH verification never changes its status), so COMPLETE lands on the
+// Verify step — the operator can run the check or click straight through to the summary.
 function stepForPhase(phase: string): number {
   if (phase === 'CLOUDINIT_CONNECT') return 3;
   if (phase === 'DSCC_SETUP_SYSTEM') return 4;
@@ -33,7 +38,7 @@ function stepForPhase(phase: string): number {
 export default function App() {
   const storedRunId = localStorage.getItem(RUN_ID_KEY);
   const [step, setStep] = useState(storedRunId ? 2 : 0);
-  const [maxStep, setMaxStep] = useState(storedRunId ? 5 : 0);
+  const [maxStep, setMaxStep] = useState(storedRunId ? LAST_STEP : 0);
   const [form, setForm] = useState<WorkItemForm>(EMPTY_FORM);
   const [runId, setRunId] = useState<string | null>(storedRunId);
   const { run, events } = useRunEvents(runId);
@@ -59,7 +64,7 @@ export default function App() {
         // Only adjust from the initial restore step (2). If getRun was slow and the operator
         // already navigated, respect their choice instead of yanking them back.
         setStep((current) => (current === 2 ? resumeAt : current));
-        setMaxStep(5); // the run exists — let every step be navigable
+        setMaxStep(LAST_STEP); // the run exists — let every step be navigable
       })
       .catch(() => {
         localStorage.removeItem(RUN_ID_KEY);
@@ -97,7 +102,7 @@ export default function App() {
         <Box gap="xsmall">
           {STEPS.map((item, index) => {
             const isCurrent = index === step;
-            const isDone = index < step || (index === 5 && run?.status === 'succeeded');
+            const isDone = index < step || (index === LAST_STEP && run?.status === 'succeeded');
             const reachable = index <= maxStep;
             return (
               <Box
@@ -165,7 +170,8 @@ export default function App() {
           {step === 4 && runId && (
             <DsccStep runId={runId} run={run} events={events} dsccRegion={form.dscc_region_code} onDone={() => advance(5)} />
           )}
-          {step === 5 && <DoneStep run={run} events={events} onRestart={restart} />}
+          {step === 5 && runId && <VerifyStep runId={runId} run={run} events={events} onDone={() => advance(6)} />}
+          {step === 6 && <DoneStep run={run} events={events} onRestart={restart} />}
           {step >= 2 && !runId && (
             <Text color="text-weak">Create a run on the Array details step first.</Text>
           )}

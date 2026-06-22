@@ -20,6 +20,7 @@ class WorkflowPhase(StrEnum):
     CLOUDINIT_CONNECT = "CLOUDINIT_CONNECT"
     DSCC_SETUP_SYSTEM = "DSCC_SETUP_SYSTEM"
     STORAGE_FLEET_VERIFY = "STORAGE_FLEET_VERIFY"
+    CONFIG_VERIFY = "CONFIG_VERIFY"
     COMPLETE = "COMPLETE"
 
 
@@ -159,3 +160,36 @@ class PreflightReport(BaseModel):
     @property
     def passed(self) -> bool:
         return self.overall_status in {CheckStatus.PASS, CheckStatus.WARN}
+
+
+class FieldCheckStatus(StrEnum):
+    PASS = "pass"
+    MISMATCH = "mismatch"
+    NOT_READABLE = "not_readable"  # the array didn't expose this value (or the parser missed it)
+
+
+class FieldCheck(BaseModel):
+    """One configured value compared against what the array actually reports."""
+
+    field: str
+    expected: str
+    actual: str | None = None
+    status: FieldCheckStatus
+    critical: bool = False  # network + system name — a mismatch here is prominent
+
+
+class VerificationReport(BaseModel):
+    """Result of the post-init SSH verification (see docs/adr/0001)."""
+
+    reachable: bool  # could we SSH in + run the show commands at all?
+    error: str | None = None
+    checks: list[FieldCheck] = Field(default_factory=list)
+    raw: dict[str, str] = Field(default_factory=dict)  # raw show* output, for operator review/calibration
+
+    @property
+    def passed(self) -> int:
+        return sum(1 for c in self.checks if c.status == FieldCheckStatus.PASS)
+
+    @property
+    def mismatches(self) -> int:
+        return sum(1 for c in self.checks if c.status == FieldCheckStatus.MISMATCH)
