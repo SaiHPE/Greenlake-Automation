@@ -18,6 +18,21 @@ export interface RunEvent {
   event_type: string;
   message: string;
   created_at: string;
+  data?: Record<string, any>;
+}
+
+export interface FieldCheck {
+  field: string;
+  expected: string;
+  actual: string | null;
+  status: 'pass' | 'mismatch' | 'not_readable';
+  critical: boolean;
+}
+export interface VerificationReport {
+  reachable: boolean;
+  error: string | null;
+  checks: FieldCheck[];
+  raw: Record<string, string>;
 }
 
 export interface CheckReport {
@@ -76,6 +91,9 @@ export const startCloudinit = (runId: string, cloudinitUrl: string, autoSubmit =
   });
 export const startDscc = (runId: string, cdpUrl: string) =>
   request<{ run: RunRecord }>('POST', `/runs/${runId}/dscc`, { cdp_url: cdpUrl });
+// Post-init SSH verification — password is used for the SSH session only, never stored.
+export const startVerify = (runId: string, username: string, password: string) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/verify`, { username, password });
 export const markComplete = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/complete`);
 
 export const launchBrowser = (url?: string) =>
