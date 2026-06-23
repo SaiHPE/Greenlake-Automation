@@ -1,7 +1,8 @@
 """Post-init SSH verification: the parser/compare logic and the read-only command guard.
 
-No real SSH — a fake client returns canned ``show*`` output. The parser formats here are
-representative; they get calibrated against the first live array (see docs/adr/0001).
+No real SSH — a fake client returns canned ``show*`` output. The canned output mirrors the real
+formats from a live HPE Alletra Storage MP B10000 (OS 10.5.51), so these double as a regression
+against that array (see docs/adr/0001).
 """
 
 import pytest
@@ -22,8 +23,8 @@ def _item(**net_over):
         "mgmt_ipv4": "10.64.154.225",
         "mask": "255.255.248.0",
         "gateway": "10.64.159.254",
-        "dns": ["10.203.96.10"],
-        "ntp": "10.203.96.20",
+        "dns": ["10.203.96.10", "10.203.96.9"],
+        "ntp": "NTP1.bgl1.globl.tslabs.hpecorp.net",
         "timezone": "Asia/Kolkata",
     }
     net.update(net_over)
@@ -35,26 +36,43 @@ def _item(**net_over):
         dscc_region_code="jp1",
         cloudinit_url="https://169.254.1.1/cloudinit",
         network=NetworkConfig(**net),
-        dscc_setup=DsccSetupConfig(system_name="array01", country="India"),
+        dscc_setup=DsccSetupConfig(
+            system_name="MPB10K-E24U21-LZ", country="India", contact_email="g-sai-roopesh@hpe.com"
+        ),
     )
 
 
 def _outputs(*, gateway="10.64.159.254"):
+    # Real command output formats from the live B10000.
     return {
         "showsys -d": (
-            "System Name : array01\n"
-            "Serial Number : SGHD45FF0Y\n"
-            "System Model : HPE Alletra MP B10000\n"
-            "Location : India\n"
+            "------------------------General------------------------\n"
+            "System Name                  :         MPB10K-E24U21-LZ\n"
+            "System Model                 :   HPE Alletra Storage MP\n"
+            "Serial Number                :               SGHD45FF0Y\n"
+            "Product Number               :                   S0B84A\n"
+            "System ID                    :                  0x2F629\n"
+            "--------System Descriptors--------\n"
+            "Location    :\n"
+            "Owner       :\n"
+            "Contact     : Sai Roopesh, 8217270831, g-sai-roopesh@hpe.com\n"
+            "Comment     :\n"
         ),
         "shownet": (
-            "IP Address : 10.64.154.225\n"
-            "Netmask : 255.255.248.0\n"
-            f"Gateway : {gateway}\n"
+            "IP Address    Netmask/PrefixLen Nodes Active Speed Duplex AutoNeg Status Mode\n"
+            "10.64.154.225     255.255.248.0    01      0  1000 Full   Yes     Active Static\n"
+            "\n"
+            f"Default IPv4 route :                                      {gateway}\n"
+            "Default IPv6 route :                                               None\n"
+            "NTP server         :                 NTP1.bgl1.globl.tslabs.hpecorp.net\n"
+            "DNS server         :                           10.203.96.10 10.203.96.9\n"
+            "Proxy server       :   http://Proxy.bgl1.global.tslabs.hpecorp.net:8080\n"
         ),
-        "showdns": "DNS Server : 10.203.96.10\n",
-        "showntp": "NTP Server : 10.203.96.20\n",
-        "showdate": "Timezone : Asia/Kolkata\nDate : 2026-06-21 10:30:00 IST\n",
+        "showdate": (
+            "Node Date\n"
+            "0    2026-06-22 16:28:55 IST (Asia/Kolkata)\n"
+            "1    2026-06-22 16:28:55 IST (Asia/Kolkata)\n"
+        ),
     }
 
 
@@ -100,6 +118,19 @@ def test_all_values_match_reports_all_pass():
     assert client.closed  # the SSH session is always closed
 
 
+def test_netmask_gateway_dns_ntp_timezone_parse_from_real_formats():
+    # The fields that were "not readable" before calibration: netmask (table row), gateway
+    # ("Default IPv4 route"), NTP/DNS (inside shownet), timezone (parenthesised in showdate).
+    fields = _by_field(verify(_item(), "3paradm", "pw", client_factory=_factory(_FakeClient(_outputs()))))
+    assert fields["Netmask"].actual == "255.255.248.0"
+    assert fields["Gateway"].actual == "10.64.159.254"
+    assert fields["NTP server"].actual == "NTP1.bgl1.globl.tslabs.hpecorp.net"
+    assert fields["Timezone"].actual == "Asia/Kolkata"
+    # DNS reads ONLY the "DNS server" line — not every IPv4 in shownet (no mgmt-IP/gateway pollution).
+    assert fields["DNS servers"].actual == "10.203.96.10, 10.203.96.9"
+    assert fields["Support contact"].status == FieldCheckStatus.PASS
+
+
 def test_wrong_gateway_is_a_critical_mismatch():
     client = _FakeClient(_outputs(gateway="10.0.0.1"))
     report = verify(_item(), "3paradm", "pw", client_factory=_factory(client))
@@ -116,7 +147,7 @@ def test_failed_command_makes_its_fields_not_readable():
     fields = _by_field(report)
     assert fields["Management IP"].status == FieldCheckStatus.NOT_READABLE
     assert fields["Gateway"].status == FieldCheckStatus.NOT_READABLE
-    assert fields["System name"].status == FieldCheckStatus.PASS  # other commands still parsed
+    assert fields["System name"].status == FieldCheckStatus.PASS  # showsys -d still parsed
 
 
 def test_unreachable_array_returns_not_reachable():
@@ -129,7 +160,7 @@ def test_unreachable_array_returns_not_reachable():
 
 def test_raw_outputs_are_returned_for_operator_review():
     report = verify(_item(), "3paradm", "pw", client_factory=_factory(_FakeClient(_outputs())))
-    assert "array01" in report.raw["showsys -d"]
+    assert "MPB10K-E24U21-LZ" in report.raw["showsys -d"]
 
 
 # ---------------------------------------------------------------- read-only guard
@@ -155,18 +186,28 @@ class _FakeSSH:
         pass
 
 
-def test_cli_client_refuses_non_show_commands():
+def test_cli_client_refuses_non_show_and_metacharacters():
     client = ArrayCliClient(host="h", username="u", password="p")
     client._client = _FakeSSH()
-    for danger in ("removevv badvv", "shutdownsys", "createvv x", "showsys; rm -rf /"):
+    danger = (
+        "removevv badvv",
+        "shutdownsys",
+        "createvv x",
+        "showsys -d; rm -rf /",  # metacharacter: command chaining
+        "showsys && reboot",
+        "shownet | sh",
+        "showsys `reboot`",
+    )
+    for command in danger:
         with pytest.raises(ArrayCliError):
-            client.run(danger)
+            client.run(command)
     assert client._client.commands == []  # nothing dangerous ever reached the transport
 
 
-def test_cli_client_allows_show_commands():
+def test_cli_client_allows_show_commands_with_args():
     client = ArrayCliClient(host="h", username="u", password="p")
     fake = _FakeSSH()
     client._client = fake
     assert client.run("showsys -d") == "ok\n"
-    assert fake.commands == ["showsys -d"]
+    assert client.run("showportdev ns 0:3:1") == "ok\n"
+    assert fake.commands == ["showsys -d", "showportdev ns 0:3:1"]

@@ -2,9 +2,15 @@
 
 After the operator confirms the array is initialized, the tool verifies the **on-array config**
 against the Initialisation-sheet values by logging into the array directly over **SSH** (port 22,
-the array admin account) and parsing the read-only `show*` commands (`showsys`, `shownet`,
-`showdns`, `showntp`, `showdate`). It never writes — it's a confidence check, not a gate, and a
-config mismatch never fails the onboarding.
+the array admin account) and parsing the read-only `show*` commands. It never writes — it's a
+confidence check, not a gate, and a config mismatch never fails the onboarding.
+
+Calibrated against a live B10000 (OS 10.5.51), the verified config comes from three commands:
+`showsys -d` (name / serial / product number / contact), `shownet` (mgmt IP + netmask, gateway as
+`Default IPv4 route`, plus the `NTP server` and `DNS server` lines), and `showdate` (timezone).
+Two calibration findings: `showdns` / `showntp` do not exist on this platform (DNS/NTP are read from
+`shownet`), and the DSCC "System country" is **not** stored on the array (`Location` is empty) — it's
+a cloud-side attribute, so it isn't verified here.
 
 ## Considered options
 
