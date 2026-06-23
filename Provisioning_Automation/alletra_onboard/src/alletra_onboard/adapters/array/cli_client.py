@@ -12,8 +12,18 @@ try:
 except ImportError:  # pragma: no cover - bundled in the .exe; optional for non-SSH runs
     paramiko = None
 
-# The ONLY commands this client may ever run. Anything else is refused.
-ALLOWED_COMMANDS = ("showsys", "shownet", "showdns", "showntp", "showdate")
+# The ONLY commands this client may ever run. All read-only `show*` — anything else is refused.
+ALLOWED_COMMANDS = (
+    # post-init config verification
+    "showsys", "shownet", "showdate", "showversion",
+    # provisioning / SAN-discovery preflight (read-only — see the WSAPI provisioning plan)
+    "showwsapi", "showcpg", "showspace", "showvv", "showvlun",
+    "showhost", "showport", "showportdev", "showrcopy", "showtarget",
+)
+# Shell metacharacters that could chain or redirect a second command — never present in a legit
+# show* invocation, so we reject the whole command if any appear (defence in depth on top of the
+# base-command allowlist).
+_FORBIDDEN_CHARS = set(";|&`$><\n\r")
 
 
 class ArrayCliError(Exception):
@@ -60,7 +70,10 @@ class ArrayCliClient:
     def run(self, command: str) -> str:
         if self._client is None:
             raise ArrayCliError("not connected")
-        base = command.split()[0] if command.split() else ""
+        if any(ch in command for ch in _FORBIDDEN_CHARS):
+            raise ArrayCliError("refused: command contains a forbidden shell metacharacter")
+        parts = command.split()
+        base = parts[0] if parts else ""
         if base not in ALLOWED_COMMANDS:
             raise ArrayCliError(f"refused: '{base}' is not a read-only show command")
         try:
