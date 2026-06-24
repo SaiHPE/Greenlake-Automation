@@ -1,7 +1,57 @@
-import { Anchor, Box, Button, Notification, Text } from 'grommet';
+import { Anchor, Box, Button, Notification, Table, TableBody, TableCell, TableHeader, TableRow, Text } from 'grommet';
 import { ReactNode } from 'react';
 import { ClockSync } from '../ClockSync';
 import { Instructions, Section } from '../components';
+
+// HPE's required firewall rules for the storage SAN (all TCP 443). <instance> is the DSCC region
+// (jp1 for Japan; also uk1, eu1, uae1, us1). Source: HPE Alletra MP B10000 preinstallation guide.
+const FIREWALL_RULES: [string, string, string][] = [
+  ['console.greenlake.hpe.com', 'User', 'HPE GreenLake'],
+  ['console-<instance>.data.cloud.hpe.com', 'User', 'DSCC instance'],
+  ['<instance>.data.cloud.hpe.com', 'User / API', 'DSCC (user + API)'],
+  ['device.cloud.hpe.com', 'Storage system', 'Hardware device activation'],
+  ['tunnel-<instance>.data.cloud.hpe.com', 'Storage system, Data Orchestrator', 'DSCC tunnel'],
+  ['cosm-*.s3.*.amazonaws.com', 'PSG', 'AWS S3 buckets'],
+  ['h30689.www3.hpe.com', 'Storage system', 'Software updates & patches'],
+  ['midway.ext.hpe.com', 'User / API', 'Device activation, RDA, InfoSight'],
+];
+
+function FirewallTable() {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          {['Endpoint (FQDN)', 'Initiator', 'Purpose'].map((h) => (
+            <TableCell key={h} scope="col" border="bottom">
+              <Text size="xsmall" weight="bold">
+                {h}
+              </Text>
+            </TableCell>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {FIREWALL_RULES.map(([fqdn, initiator, purpose]) => (
+          <TableRow key={fqdn}>
+            <TableCell>
+              <Text size="xsmall">{fqdn}</Text>
+            </TableCell>
+            <TableCell>
+              <Text size="xsmall" color="text-weak">
+                {initiator}
+              </Text>
+            </TableCell>
+            <TableCell>
+              <Text size="xsmall" color="text-weak">
+                {purpose}
+              </Text>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
 
 function Video({ src }: { src: string }) {
   return (
@@ -81,11 +131,20 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
         <Text size="xsmall" color="text-weak">The clip stops before the Client ID / secret are shown.</Text>
       </Section>
 
-      <Section title="3 · Network & time prerequisites">
+      <Section title="3 · Network, firewall & time">
+        <Text size="small">
+          Allow the firewall/proxy to reach these HPE endpoints — all <b>TCP 443</b>. <i>&lt;instance&gt;</i> is
+          your DSCC region: <b>jp1</b> (Japan), or uk1, eu1, uae1, us1.
+        </Text>
+        <FirewallTable />
         <Instructions
           items={[
-            <>Allow the firewall/proxy to reach: <b>console.greenlake.hpe.com</b>, <b>device.cloud.hpe.com</b>, <b>console-&lt;region&gt;.data.cloud.hpe.com</b>, <b>tunnel-&lt;region&gt;.data.cloud.hpe.com</b> (all TCP 443).</>,
-            <>DNS on the array must resolve global names (e.g. <b>device.cloud.hpe.com</b>).</>,
+            <>Local array discovery (HPE Discovery app) uses <b>mDNS on UDP 5353</b>.</>,
+            <>The array's DNS must resolve these global names (e.g. <b>device.cloud.hpe.com</b>).</>,
+            <>
+              Reserved for array operations — <b>do not assign these</b>: 16.1.8.11/27/43/59 and
+              16.1.9.11/27/43/59 (the CDM link-local range).
+            </>,
             <><b>System time must be within 2 minutes</b> of correct, or the array can't connect to DSCC. Use NTP, or the <b>Sync system clock</b> control below.</>,
           ]}
         />
@@ -93,21 +152,45 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
 
       <ClockSync title="System clock (must be within 2 minutes of correct)" />
 
-      <Section title="4 · Physical install & this jump box">
+      <Section title="4 · Management-network cabling (each controller → management switch)">
+        <Notification
+          status="warning"
+          title="The array must be on the management network before onboarding"
+          message="The Cloud Connectivity Wizard and DSCC reach the array over its management network. HPE shares one management IP across the controllers and fails over to a standby link, so EVERY controller must be cabled for redundancy. Connect all three port types below to the management switch."
+        />
+        <Instructions
+          items={[
+            <>
+              <b>Admin port</b> — on <b>each controller</b>, run a CAT-5e / Cat 6 Ethernet cable from the Admin
+              port to the <b>management LAN switch</b>. The controllers share one admin IP and only one link is
+              active at a time (it fails over to the surviving link), so cable <b>all</b> controllers.
+            </>,
+            <>
+              <b>iLO port</b> — on <b>each controller</b>, connect the iLO (out-of-band management) port to the{' '}
+              <b>same management network</b>.
+            </>,
+            <>
+              <b>CDM ports</b> — connect each controller chassis&apos;s <b>CDM Ethernet port</b> (using the supplied
+              OCuLink-to-Ethernet dongle), plus at least one drive-chassis CDM per rack, to the <b>same network</b>{' '}
+              as the management ports. CDMs auto-configure <b>link-local</b> addresses and need <b>no external IP</b>.
+            </>,
+          ]}
+        />
+        <Text size="xsmall" color="text-weak">
+          Source: HPE&apos;s{' '}
+          <Anchor
+            href="https://infosight.hpe.com/welcomecenter/getting-started/checklist?connectopt=HPE%20Cloud%20Connectivity%20Wizard%2FDiscovery%20Tool&greenlakeplatform=HPE%20GreenLake%20Cloud%20Platform&model=B10140&opt=factory&product=alletraB10k"
+            target="_blank"
+            label="onboarding checklist"
+          />{' '}
+          and the <i>Installing and configuring factory-integrated system</i> guide (sd00002405).
+        </Text>
+      </Section>
+
+      <Section title="5 · This jump box">
         <Instructions
           items={[
             <>The array is racked, cabled, and <b>powered on</b>.</>,
-            <>
-              On <b>each node</b>, the <b>CDM</b>, <b>iLO</b>, and <b>admin</b> ports are connected to the{' '}
-              <b>management switch</b> — this puts the array on the management network so the Cloud Connectivity
-              Wizard and DSCC can reach it. See HPE&apos;s{' '}
-              <Anchor
-                href="https://infosight.hpe.com/welcomecenter/getting-started/checklist?connectopt=HPE%20Cloud%20Connectivity%20Wizard%2FDiscovery%20Tool&greenlakeplatform=HPE%20GreenLake%20Cloud%20Platform&model=B10140&opt=factory&product=alletraB10k"
-                target="_blank"
-                label="onboarding checklist"
-              />
-              .
-            </>,
             <>This jump box is on the <b>same subnet</b> as the array (so it can reach the link-local <b>169.254.x</b> Cloud Connectivity URL).</>,
             <>Run this app <b>as Administrator</b> (so the clock-sync can set the system time).</>,
             <>Browser runtime: the packaged <b>.exe ships the VC++ runtime</b> Chromium needs; for a source/pip install, ensure the <b>Microsoft Visual C++ Redistributable (x64)</b> is installed.</>,
@@ -115,7 +198,7 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
         />
       </Section>
 
-      <Section title="5 · Fill the Initialisation sheet">
+      <Section title="6 · Fill the Initialisation sheet">
         <Text size="small">
           On the next step, download the <b>Initialisation_sheet.xlsx</b>, fill every required field
           (API credentials, serial, subscription key, network, DSCC details), and upload it. One
