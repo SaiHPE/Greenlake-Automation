@@ -96,7 +96,18 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
       <Section title="4 · Physical install & this jump box">
         <Instructions
           items={[
-            <>The array is racked, cabled, <b>powered on</b>, and its admin ports are on the management network.</>,
+            <>The array is racked, cabled, and <b>powered on</b>.</>,
+            <>
+              On <b>each node</b>, the <b>CDM</b>, <b>iLO</b>, and <b>admin</b> ports are connected to the{' '}
+              <b>management switch</b> — this puts the array on the management network so the Cloud Connectivity
+              Wizard and DSCC can reach it. See HPE&apos;s{' '}
+              <Anchor
+                href="https://infosight.hpe.com/welcomecenter/getting-started/checklist?connectopt=HPE%20Cloud%20Connectivity%20Wizard%2FDiscovery%20Tool&greenlakeplatform=HPE%20GreenLake%20Cloud%20Platform&model=B10140&opt=factory&product=alletraB10k"
+                target="_blank"
+                label="onboarding checklist"
+              />
+              .
+            </>,
             <>This jump box is on the <b>same subnet</b> as the array (so it can reach the link-local <b>169.254.x</b> Cloud Connectivity URL).</>,
             <>Run this app <b>as Administrator</b> (so the clock-sync can set the system time).</>,
             <>Browser runtime: the packaged <b>.exe ships the VC++ runtime</b> Chromium needs; for a source/pip install, ensure the <b>Microsoft Visual C++ Redistributable (x64)</b> is installed.</>,
