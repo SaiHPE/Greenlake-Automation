@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "alletra-onboard"
-version = "0.2.4"
+version = "0.2.5"
 description = "Local operator automation for HPE Alletra MP B10000 GreenLake and DSCC onboarding."
 readme = "README.md"
 requires-python = ">=3.12"
