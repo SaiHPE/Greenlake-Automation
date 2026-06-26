@@ -25,6 +25,16 @@ _Avoid_: secret, DSCC credential
 
 ## Language — storage provisioning (planned)
 
+**Provisioning intent**:
+What the customer *wants done*, supplied in the Initialisation sheet: reach (IPs + credentials) plus
+what to create (volume names/sizes, which hosts or cluster, replication target, protocol). The sheet
+carries only this — never environment facts.
+
+**Discovered fact**:
+Anything about the environment the automation *reads at run time* instead of asking for — array
+target-port WWPNs, CPGs, existing hosts/volumes/VLUNs, host HBA WWPNs, available personas, the
+`naa`↔VV mapping. Never placed in the sheet or hardcoded. See ADR 0002.
+
 **CPG (Common Provisioning Group)**:
 A provisioning *policy* (drive type + RAID layout) that volumes draw capacity from. It is not
 capacity itself, and it must already exist before a volume can be created.
