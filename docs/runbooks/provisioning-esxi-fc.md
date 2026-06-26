@@ -213,3 +213,37 @@ to production storage, so the provisioning module must:
 - Host/cluster: host names + WWPNs (from Phase 1) + cluster (host-set) name.
 - Volumes: names, size, count, provisioning (`reduce` vs `tpvv`), CPG (`SSD_r6`), optional VV-set name.
 - Export: per-host LUNs vs set-to-set with `auto` LUN.
+
+---
+
+## Calibration notes from the live lab (2026-06-25)
+
+Captured with `scripts/discovery/discover_array.py` (SSH) + `discover_esxi_ssh.py` (esxcli). The LZ
+array is **fully provisioned**, which makes it the calibration target for the discovery/verify
+parsers — and a real test of the idempotent design.
+
+**Live inventory (steady state):**
+- 3 ESXi hosts in host set **`CRVLZ_Hostset`**, persona **VMware (11)**. U26 = Emulex SN1700E
+  (`lpfc`), U27 = QLogic SN1700Q (`qlnativefc`); ESXi **8.0 U3** (build 25205845). FC only.
+- 4 tpvv volumes in CPG `SSD_r6`: `CRV_LZ_Infra`/`Prod1`/`Test` (10 TiB) + `CRV_LZ_ESXi_Backup`
+  (1 TiB), exported to the host set as **LUNs 1–4** over FC target ports `0:3:1/2` + `1:3:1/2`
+  (state `ready`; `showportdev ns` confirms each host WWPN per port — zoning verified array-side).
+- Replication group **`LZ_RcopyGroup1`** → target **`MPB10K-D24U21-VZ`**, mode **Periodic**, role
+  Primary, currently **Stopped** with the RC links **Down** / target `failed`. The `rcpy.*` entries
+  in `showvv` are RC internal snapshots.
+
+**Parser facts (use these when building discovery/verify):**
+- **`naa` ↔ VV is deterministic:** `naa.60002ac0` `00000000` `000000<VVid>` `<systemID>` — last 8
+  hex = array system id (`0002f629` here), the byte before = the VV id. So an ESXi disk maps to its
+  array volume with no guessing (e.g. `…000000030002f629` = vv 3 = `CRV_LZ_Infra`).
+- **Normalize WWPNs before matching:** ESXi reports colon-separated lowercase
+  (`10:00:5c:ed:…`); the array (`showhost`, `showportdev`) is colon-less uppercase (`10005CED…`).
+- **`vmhba0` and `vmhba64` are the same physical port** (Second-Level-LUN-ID alias, same WWPN) —
+  dedupe by WWPN.
+- **Multipath needs no action:** every `3PARdata`/`VV` device is `VMW_SATP_ALUA` + `VMW_PSP_RR`
+  (round-robin) by default on ESXi 8.0 U3 — confirming "7.0U3+ default" above; no custom SATP rule.
+- **`esxcli` sizes are in MB.**
+
+**Idempotency check (validated by the lab):** because hosts/volumes/VLUNs already exist here,
+re-running `createhost`/`createvv`/`createvlun` must detect `EXISTENT_HOST` / `EXISTENT_VV` /
+`EXISTENT_VLUN` and report a warning — never fail or duplicate.
