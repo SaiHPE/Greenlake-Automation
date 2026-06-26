@@ -130,3 +130,30 @@ class PreflightRequest(BaseModel):
 
 class PreflightResponse(BaseModel):
     report: PreflightReport
+
+
+# ------------------------------------------------------------------ prerequisites
+
+class FirewallRule(BaseModel):
+    fqdn: str
+    port: str
+    initiator: str
+    purpose: str
+
+
+class FirewallRulesResponse(BaseModel):
+    region: str
+    rules: list[FirewallRule]
+
+
+class ConnectivityResultItem(BaseModel):
+    host: str
+    port: int
+    reachable: bool
+    detail: str
+
+
+class ConnectivityResponse(BaseModel):
+    region: str
+    results: list[ConnectivityResultItem]
+    all_reachable: bool
