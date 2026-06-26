@@ -1,27 +1,23 @@
-import { Anchor, Box, Button, Notification, Table, TableBody, TableCell, TableHeader, TableRow, Text } from 'grommet';
-import { ReactNode } from 'react';
+import { Anchor, Box, Button, Notification, Spinner, Table, TableBody, TableCell, TableHeader, TableRow, Text } from 'grommet';
+import { StatusCritical, StatusGood } from 'grommet-icons';
+import { ReactNode, useEffect, useState } from 'react';
+import { API, ConnectivityResult, FirewallRule, checkConnectivity, firewallTxtUrl, getFirewall } from '../api';
 import { ClockSync } from '../ClockSync';
 import { Instructions, Section } from '../components';
 
-// HPE's required firewall rules for the storage SAN (all TCP 443). <instance> is the DSCC region
-// (jp1 for Japan; also uk1, eu1, uae1, us1). Source: HPE Alletra MP B10000 preinstallation guide.
-const FIREWALL_RULES: [string, string, string][] = [
-  ['console.greenlake.hpe.com', 'User', 'HPE GreenLake'],
-  ['console-<instance>.data.cloud.hpe.com', 'User', 'DSCC instance'],
-  ['<instance>.data.cloud.hpe.com', 'User / API', 'DSCC (user + API)'],
-  ['device.cloud.hpe.com', 'Storage system', 'Hardware device activation'],
-  ['tunnel-<instance>.data.cloud.hpe.com', 'Storage system, Data Orchestrator', 'DSCC tunnel'],
-  ['cosm-*.s3.*.amazonaws.com', 'PSG', 'AWS S3 buckets'],
-  ['h30689.www3.hpe.com', 'Storage system', 'Software updates & patches'],
-  ['midway.ext.hpe.com', 'User / API', 'Device activation, RDA, InfoSight'],
-];
-
-function FirewallTable() {
+function FirewallTable({ rules }: { rules: FirewallRule[] }) {
+  if (!rules.length) {
+    return (
+      <Text size="small" color="text-weak">
+        Loading firewall endpoints…
+      </Text>
+    );
+  }
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          {['Endpoint (FQDN)', 'Initiator', 'Purpose'].map((h) => (
+          {['Endpoint (FQDN)', 'Port', 'Initiator', 'Purpose'].map((h) => (
             <TableCell key={h} scope="col" border="bottom">
               <Text size="xsmall" weight="bold">
                 {h}
@@ -31,19 +27,24 @@ function FirewallTable() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {FIREWALL_RULES.map(([fqdn, initiator, purpose]) => (
-          <TableRow key={fqdn}>
+        {rules.map((r) => (
+          <TableRow key={r.fqdn}>
             <TableCell>
-              <Text size="xsmall">{fqdn}</Text>
+              <Text size="xsmall">{r.fqdn}</Text>
             </TableCell>
             <TableCell>
               <Text size="xsmall" color="text-weak">
-                {initiator}
+                {r.port}
               </Text>
             </TableCell>
             <TableCell>
               <Text size="xsmall" color="text-weak">
-                {purpose}
+                {r.initiator}
+              </Text>
+            </TableCell>
+            <TableCell>
+              <Text size="xsmall" color="text-weak">
+                {r.purpose}
               </Text>
             </TableCell>
           </TableRow>
@@ -75,6 +76,32 @@ function StepClip({ title, steps, src }: { title: string; steps: ReactNode[]; sr
 // What the HPE engineer must do BEFORE running the automation — the manual steps from HPE's
 // official onboarding checklist that this tool does not (and should not) perform.
 export function PrereqStep({ onDone }: { onDone: () => void }) {
+  const [rules, setRules] = useState<FirewallRule[]>([]);
+  const [conn, setConn] = useState<ConnectivityResult[] | null>(null);
+  const [allReachable, setAllReachable] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getFirewall()
+      .then((r) => setRules(r.rules))
+      .catch(() => undefined);
+  }, []);
+
+  const runConnectivity = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await checkConnectivity();
+      setConn(r.results);
+      setAllReachable(r.all_reachable);
+    } catch (exc: any) {
+      setError(String(exc.message ?? exc));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Box gap="medium">
       <Notification
@@ -125,7 +152,7 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
             <>In GreenLake, go to <b>Manage Workspace → API</b> and click <b>Create personal API client</b>.</>,
             <>Give it a name and select the <b>HPE GreenLake Cloud Platform</b> service, then click <b>Create</b>.</>,
             <>Copy the <b>Client ID</b>, <b>Client Secret</b>, and the per-workspace <b>token URL</b> (…/authorization/v2/oauth2/&lt;tenant&gt;/token) — you only see the secret once.</>,
-            <>Put those three into the <b>Initialisation sheet</b> (next step) — that's how this tool authenticates to GreenLake.</>,
+            <>Put those three into the <b>Initialisation sheet</b> (section 6 below) — that's how this tool authenticates to GreenLake.</>,
           ]}
         />
         <Text size="xsmall" color="text-weak">The clip stops before the Client ID / secret are shown.</Text>
@@ -133,10 +160,47 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
 
       <Section title="3 · Network, firewall & time">
         <Text size="small">
-          Allow the firewall/proxy to reach these HPE endpoints — all <b>TCP 443</b>. <i>&lt;instance&gt;</i> is
-          your DSCC region: <b>jp1</b> (Japan), or uk1, eu1, uae1, us1.
+          The customer's network team must allow these HPE endpoints — all <b>TCP 443</b> outbound.
+          <i> &lt;instance&gt;</i> is your DSCC region: <b>jp1</b> (Japan), or uk1, eu1, uae1, us1. Download the list to
+          forward to them, then use <b>Test connectivity</b> once they confirm the ports are open.
         </Text>
-        <FirewallTable />
+        <Box direction="row" gap="medium" align="center" wrap>
+          <Anchor href={firewallTxtUrl()} download="alletra-firewall-requirements.txt" label="Download firewall list (.txt)" />
+          <Button
+            label={busy ? 'Testing…' : 'Test connectivity (TCP 443)'}
+            disabled={busy}
+            onClick={runConnectivity}
+          />
+          {busy && <Spinner />}
+        </Box>
+        <FirewallTable rules={rules} />
+        {error && <Notification status="critical" title="Connectivity test failed" message={error} onClose={() => setError(null)} />}
+        {conn && (
+          <Box gap="xsmall" pad={{ top: 'xsmall' }} flex={false}>
+            <Notification
+              status={allReachable ? 'normal' : 'warning'}
+              title={allReachable ? 'All tested endpoints are reachable on TCP 443' : 'Some endpoints are not reachable'}
+              message={
+                allReachable
+                  ? 'The jump box can reach the HPE endpoints directly.'
+                  : 'Ask the network team to open the blocked destinations below (outbound TCP 443). A proxy-only path will also show as blocked here.'
+              }
+            />
+            {conn.map((c) => (
+              <Box key={c.host} direction="row" gap="small" align="center">
+                {c.reachable ? (
+                  <StatusGood color="status-ok" size="small" />
+                ) : (
+                  <StatusCritical color="status-critical" size="small" />
+                )}
+                <Text size="xsmall">{c.host}</Text>
+                <Text size="xsmall" color="text-weak">
+                  — {c.detail}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        )}
         <Instructions
           items={[
             <>Local array discovery (HPE Discovery app) uses <b>mDNS on UDP 5353</b>.</>,
@@ -198,12 +262,19 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
         />
       </Section>
 
-      <Section title="6 · Fill the Initialisation sheet">
+      <Section title="6 · Get the Initialisation sheet">
         <Text size="small">
-          On the next step, download the <b>Initialisation_sheet.xlsx</b>, fill every required field
-          (API credentials, serial, subscription key, network, DSCC details), and upload it. One
-          workbook = one array.
+          Download the workbook now, fill every required field (API credentials, serial, subscription key,
+          network, DSCC details), and upload it on the next step. One workbook = one array. The workbook
+          includes a <b>Prerequisites</b> tab with this firewall list and the cabling checklist.
         </Text>
+        <Box direction="row" gap="small">
+          <Anchor
+            href={`${API}/init-sheet/template`}
+            download="Initialisation_sheet.xlsx"
+            label="Download Initialisation_sheet.xlsx"
+          />
+        </Box>
       </Section>
 
       <Button primary label="I've completed these → Initialisation sheet" onClick={onDone} alignSelf="start" />

@@ -80,6 +80,49 @@ def test_mark_complete(tmp_path):
     assert done.json()["run"]["status"] == "succeeded"
 
 
+def test_prereq_firewall_and_connectivity(tmp_path, monkeypatch):
+    client = _client(tmp_path)
+
+    fw = client.get("/prereqs/firewall?region=jp1")
+    assert fw.status_code == 200
+    rules = fw.json()["rules"]
+    fqdns = [r["fqdn"] for r in rules]
+    assert "console.greenlake.hpe.com" in fqdns
+    assert "jp1.data.cloud.hpe.com" in fqdns  # <instance> substituted for the region
+    assert all(r["port"] == "TCP 443" for r in rules)
+
+    txt = client.get("/prereqs/firewall.txt?region=jp1")
+    assert txt.status_code == 200
+    assert "attachment" in txt.headers["content-disposition"]
+    assert "console.greenlake.hpe.com" in txt.text
+
+    # Connectivity does real network I/O — stub it so the test stays hermetic.
+    from alletra_onboard.application import prereqs
+
+    async def fake_check(region="jp1", timeout=5.0):
+        return [
+            prereqs.ConnectivityResult("console.greenlake.hpe.com", 443, True, "reachable"),
+            prereqs.ConnectivityResult("device.cloud.hpe.com", 443, False, "blocked (ConnectionRefusedError)"),
+        ]
+
+    monkeypatch.setattr(prereqs, "check_connectivity", fake_check)
+    conn = client.get("/prereqs/connectivity?region=jp1").json()
+    assert conn["all_reachable"] is False
+    assert {c["host"] for c in conn["results"]} == {"console.greenlake.hpe.com", "device.cloud.hpe.com"}
+
+
+def test_init_sheet_template_has_prerequisites_tab(tmp_path):
+    import io
+
+    from openpyxl import load_workbook
+
+    resp = _client(tmp_path).get("/init-sheet/template")
+    assert resp.status_code == 200
+    wb = load_workbook(io.BytesIO(resp.content))
+    assert wb.sheetnames[0] == "Initialisation"  # the fillable tab stays first (the parser reads it)
+    assert "Prerequisites" in wb.sheetnames
+
+
 def test_verify_endpoint_accepts_credentials_and_validates(tmp_path):
     # Inject a stub verify_fn so the endpoint never attempts a real SSH connection.
     store = SqliteRunStore(tmp_path / "state.db")

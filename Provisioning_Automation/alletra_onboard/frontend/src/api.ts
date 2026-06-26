@@ -62,6 +62,31 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (await response.json()) as T;
 }
 
+// ------------------------------------------------------------------ prerequisites
+export interface FirewallRule {
+  fqdn: string;
+  port: string;
+  initiator: string;
+  purpose: string;
+}
+export const getFirewall = (region = 'jp1') =>
+  request<{ region: string; rules: FirewallRule[] }>('GET', `/prereqs/firewall?region=${region}`);
+// The downloadable .txt the customer forwards to their network team.
+export const firewallTxtUrl = (region = 'jp1') => `${API}/prereqs/firewall.txt?region=${region}`;
+
+export interface ConnectivityResult {
+  host: string;
+  port: number;
+  reachable: boolean;
+  detail: string;
+}
+// Direct TCP-443 reachability from the jump box to the key HPE endpoints (are the firewall ports open?).
+export const checkConnectivity = (region = 'jp1') =>
+  request<{ region: string; results: ConnectivityResult[]; all_reachable: boolean }>(
+    'GET',
+    `/prereqs/connectivity?region=${region}`,
+  );
+
 export const getConfig = () => request<{ configured: boolean; values: Record<string, string> }>('GET', '/config');
 export const saveConfig = (values: Record<string, string | null>) =>
   request<{ configured: boolean; values: Record<string, string> }>('POST', '/config', values);
