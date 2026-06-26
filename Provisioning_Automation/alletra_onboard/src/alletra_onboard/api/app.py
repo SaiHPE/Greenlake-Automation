@@ -38,9 +38,13 @@ from alletra_onboard.api.schemas import (
     CloudinitStepRequest,
     ConfigStatusResponse,
     ConfigureRequest,
+    ConnectivityResponse,
+    ConnectivityResultItem,
     CreateRunRequest,
     DiscoveryToolResponse,
     DsccStepRequest,
+    FirewallRule,
+    FirewallRulesResponse,
     InitSheetUploadRequest,
     InitSheetUploadResponse,
     VerifyStepRequest,
@@ -63,6 +67,7 @@ from alletra_onboard.application.onboarding_service import (
     RunBusyError,
     RunNotFoundError,
 )
+from alletra_onboard.application import prereqs
 from alletra_onboard.application.preflight_service import PreflightService
 from alletra_onboard.config import load_settings
 
@@ -125,6 +130,36 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def config_check() -> CheckResponse:
         # Re-load settings so credentials saved a moment ago are picked up.
         return CheckResponse(report=await greenlake_check(load_settings()))
+
+    # ------------------------------------------------------------------ prerequisites
+
+    @app.get("/prereqs/firewall", response_model=FirewallRulesResponse)
+    async def prereq_firewall(region: str = "jp1") -> FirewallRulesResponse:
+        rules = [
+            FirewallRule(fqdn=fqdn, port=port, initiator=initiator, purpose=purpose)
+            for fqdn, port, initiator, purpose in prereqs.rules_for(region)
+        ]
+        return FirewallRulesResponse(region=region, rules=rules)
+
+    @app.get("/prereqs/firewall.txt", response_class=PlainTextResponse)
+    async def prereq_firewall_txt(region: str = "jp1") -> PlainTextResponse:
+        return PlainTextResponse(
+            prereqs.firewall_text(region),
+            media_type="text/plain",
+            headers={"Content-Disposition": 'attachment; filename="alletra-firewall-requirements.txt"'},
+        )
+
+    @app.get("/prereqs/connectivity", response_model=ConnectivityResponse)
+    async def prereq_connectivity(region: str = "jp1") -> ConnectivityResponse:
+        # Direct TCP-443 reachability from this jump box to the key HPE endpoints (are the ports open?).
+        results = await prereqs.check_connectivity(region)
+        items = [
+            ConnectivityResultItem(host=r.host, port=r.port, reachable=r.reachable, detail=r.detail)
+            for r in results
+        ]
+        return ConnectivityResponse(
+            region=region, results=items, all_reachable=all(i.reachable for i in items)
+        )
 
     # ------------------------------------------------------------------ work items
 

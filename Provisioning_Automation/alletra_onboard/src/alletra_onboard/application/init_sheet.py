@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
+from alletra_onboard.application import prereqs
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig
 
 SHEET_NAME = "Initialisation"
@@ -115,9 +116,68 @@ def build_template_bytes() -> bytes:
         row[1].alignment = Alignment(wrap_text=False)
     ws.freeze_panes = "A2"
 
+    _add_prereq_sheet(wb)
+
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
+
+
+def _add_prereq_sheet(wb: Workbook) -> None:
+    """A reference 'Prerequisites' tab: firewall rules to open + a short readiness checklist.
+
+    The parser ignores this tab (it only reads the 'Initialisation' sheet), so it is documentation
+    only. The firewall list is the same single source used by the app and the downloadable .txt.
+    """
+    ws = wb.create_sheet("Prerequisites")
+    header_fill = PatternFill("solid", fgColor=_HPE_GREEN)
+
+    def band(text: str) -> None:
+        ws.append([text, None, None])
+        for col in (1, 2, 3):
+            cell = ws.cell(row=ws.max_row, column=col)
+            cell.fill = header_fill
+            cell.font = Font(bold=True, color="FFFFFF")
+
+    def note(text: str) -> None:
+        ws.append([text, None, None])
+        ws.cell(row=ws.max_row, column=1).font = Font(italic=True, color="808080")
+
+    ws.append(["Prerequisites — complete before onboarding"])
+    ws.cell(row=1, column=1).font = Font(bold=True, size=13)
+
+    band("Firewall — open these OUTBOUND rules (send to your network team)")
+    ws.append(["Destination (FQDN)", "Port", "Purpose"])
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True)
+    for fqdn, port, _initiator, purpose in prereqs.rules_for("<instance>"):
+        ws.append([fqdn, port, purpose])
+    note("<instance> = your DSCC region (e.g. jp1).  Also required: mDNS UDP 5353 for local discovery.")
+    note("Reserved — do NOT assign these: " + ", ".join(prereqs.RESERVED_IPS) + " (CDM link-local).")
+
+    band("Management-network cabling (each controller → management switch)")
+    for item in (
+        "Admin port — each controller → management LAN switch (cable ALL controllers; the shared IP fails over).",
+        "iLO port — each controller → the same management network (out-of-band management).",
+        "CDM Ethernet port — each controller chassis (OCuLink-to-Ethernet dongle) + at least one drive chassis per rack.",
+    ):
+        ws.append([item, None, None])
+
+    band("Account, network & time")
+    for item in (
+        "HPE GreenLake account + workspace; Data Services deployed; Administrator role assigned.",
+        "Personal API client created (Client ID / Secret / token URL) — enter these on the Initialisation tab.",
+        "Array DNS resolves the global names above; system time within 2 minutes of correct.",
+        "Onboarding jump box on the same subnet as the array (for the 169.254.x Cloud Connectivity URL).",
+    ):
+        ws.append([item, None, None])
+
+    band("Reference")
+    ws.append(["HPE Alletra Storage MP B10000 — Network requirement details (Planning / install guide, sd00002405)."])
+
+    ws.column_dimensions["A"].width = 64
+    ws.column_dimensions["B"].width = 12
+    ws.column_dimensions["C"].width = 44
 
 
 def parse_workbook_bytes(data: bytes) -> ParsedInitSheet:
