@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only discovery of an HPE Alletra MP B10000 over SSH -> array-config.txt.
+r"""Read-only discovery of an HPE Alletra MP B10000 over SSH -> array-config.txt.
 
 Runs ONLY ``show*`` commands; it never changes the array. Credentials are NOT stored in this file:
 pass the host on the command line and the password via the ALLETRA_PASSWORD env var or the prompt.
