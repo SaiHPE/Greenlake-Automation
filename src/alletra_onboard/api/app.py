@@ -87,7 +87,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         service = OnboardingService(settings, store, InMemoryEventBus())
     env_path = Path(".env")
 
-    app = FastAPI(title="Alletra Onboard", version="0.2.0")
+    app = FastAPI(title="Alletra Onboard", version="0.3.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # vite dev server
