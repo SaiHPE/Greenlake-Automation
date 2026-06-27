@@ -47,6 +47,9 @@ packages = ["src/alletra_onboard"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+filterwarnings = [
+  "ignore:.*Eventlet is deprecated.*",  # transitive via python-3parclient's ssh module; dormant for us
+]
 
 [tool.ruff]
 line-length = 100
