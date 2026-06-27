@@ -31,6 +31,40 @@ VV set ─┘                         └─ host set
 
 ---
 
+## Prerequisites the tool verifies (design-locked in the provisioning grill)
+
+The customer / SAN team provides these; the tool's preflight **verifies** them and refuses to proceed
+if a hard one is missing. It never creates zones or alters the fabric. All reach info comes from the
+Initialisation sheet — intent + reach only (ADR 0002).
+
+**Reach (from the sheet):**
+- Array mgmt IP + admin credential — SSH (22) and WSAPI (443, proxy-bypassed for the internal IP).
+- vCenter IP + credential — the primary host-discovery path.
+
+**Array readiness (transport = WSAPI primary, SSH fallback — ADR 0003):**
+- WSAPI enabled **and ready**: `GET /system` returns 200. On 503/timeout, fall back to SSH for
+  reads/report and **stop before any write** ("WSAPI not ready — check `checkhealth`, then retry").
+- Array health surfaced via `checkhealth`; critical findings and `showwsapi -d` *System Resource
+  Usage* **> 90** are **warned** (operator decides) — they don't silently block.
+- A **CPG** exists with free capacity (discovered).
+- FC **target ports** in `target` mode and `ready` (discovered).
+
+**SAN zoning — HARD prerequisite, customer-owned; the tool VERIFIES but never creates:**
+- The host HBA ports must be zoned to the array target ports on the FC switch (SAN team's job).
+- Discovery confirms with `showportdev ns <n:s:p>` that **each host's WWPNs are visible on the array's
+  target ports**, and counts the paths. If a host's WWPNs aren't visible → **stop**: "zoning isn't
+  done — have the SAN team zone host X to the array, then retry." The tool has no switch access.
+- This verifies *live* connectivity (zoned **and** host online **and** HBA link up) — exactly the
+  usable-path condition. A host with only one visible path is flagged (no redundancy).
+
+**Host side (ESXi for v1; Windows / Linux deferred):**
+- ESXi hosts reachable via **vCenter** (primary) or **ESXi SSH** (fallback — *enabling SSH on each
+  ESXi host is a stated prerequisite*).
+- FC HBAs installed + linked (discovered); persona = **VMware** (confirm via `showhost -listpersona`).
+
+**Inputs (sheet — intent + reach):** array + vCenter creds/IPs; target hosts / cluster; volume spec
+(names / sizes / count); CPG (or auto-pick); protocol (FC).
+
 ## Phase 0 — Read-only preflight (safe to run any time)
 
 All `show*`; already in the SSH client allowlist. Run before any write.
