@@ -42,6 +42,7 @@ from alletra_onboard.domain.models import (
     WorkflowPhase,
 )
 from alletra_onboard.domain.ports import RunStore
+from alletra_onboard.domain.storage import ProvisioningIntent
 from alletra_onboard.domain.workflow import initial_phase, next_enabled_phase
 
 
@@ -119,6 +120,7 @@ class OnboardingService:
         *,
         mode: RunMode = RunMode.FULL_ONBOARDING,
         selected_steps: list[str] | None = None,
+        provisioning_intent: ProvisioningIntent | None = None,
     ) -> RunRecord:
         selected = list(selected_steps or [])
         run = RunRecord(
@@ -130,6 +132,8 @@ class OnboardingService:
         )
         self.store.upsert_run(run)
         self.store.save_work_item(run.run_id, item)
+        if provisioning_intent is not None:
+            self.store.save_provisioning_intent(run.run_id, provisioning_intent)
         self._emit(
             run.run_id,
             run.current_phase,
@@ -137,6 +141,12 @@ class OnboardingService:
             f"Run created for {item.serial_number} ({mode.value})",
         )
         return run
+
+    def get_provisioning_intent(self, run_id: str) -> ProvisioningIntent:
+        intent = self.store.get_provisioning_intent(run_id)
+        if intent is None:
+            raise RunNotFoundError(run_id)
+        return intent
 
     def get_run(self, run_id: str) -> RunRecord:
         run = self.store.get_run(run_id)
