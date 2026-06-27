@@ -15,6 +15,7 @@ from alletra_onboard.domain.models import (
     FieldCheck,
     FieldCheckStatus,
     NetworkConfig,
+    RunMode,
     RunStatus,
     VerificationReport,
     WorkflowPhase,
@@ -83,6 +84,27 @@ async def test_create_run_persists_work_item_and_event(tmp_path):
     assert run.status == RunStatus.READY
     assert service.get_work_item(run.run_id).serial_number == "SGHD45FF0Y"
     assert [e.event_type for e in service.list_events(run.run_id)] == ["run.created"]
+
+
+async def test_create_run_records_mode_and_initial_phase(tmp_path):
+    service = _service(tmp_path)
+    run = service.create_run(_item(), mode=RunMode.PROVISION_ONLY)
+    assert run.mode == RunMode.PROVISION_ONLY
+    assert run.current_phase == WorkflowPhase.STORAGE_DISCOVER  # first enabled provision step
+
+    verify_run = service.create_run(_item(), mode=RunMode.VERIFY_ONLY)
+    assert verify_run.current_phase == WorkflowPhase.CONFIG_VERIFY
+
+
+async def test_provision_advance_is_selection_aware(tmp_path):
+    # A custom run that drops cloudinit: GreenLake should advance straight to DSCC.
+    result = ProvisionResult(serial="SGHD45FF0Y", succeeded=True)
+    result.phases.append(PhaseOutcome(WorkflowPhase.GL_REGISTER_DEVICE, DONE, "registered"))
+    service = _service(tmp_path, provision_factory=_provision_factory(result))
+    run = service.create_run(_item(), mode=RunMode.CUSTOM, selected_steps=["greenlake", "dscc"])
+    service.start_provision(run.run_id)
+    await service.wait(run.run_id)
+    assert service.get_run(run.run_id).current_phase == WorkflowPhase.DSCC_SETUP_SYSTEM
 
 
 async def test_provision_success_advances_to_cloudinit(tmp_path):

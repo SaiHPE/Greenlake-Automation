@@ -220,6 +220,60 @@ def test_init_sheet_template_and_upload(tmp_path, monkeypatch):
     assert bad.status_code == 422
 
 
+def _fill_template(template_bytes: bytes, values: dict[str, str]) -> str:
+    """Fill the Value column of the Initialisation tab for the given keys -> base64 xlsx."""
+    import base64
+    import io
+
+    from openpyxl import load_workbook
+
+    from alletra_onboard.application.init_sheet import SECTIONS
+
+    label_to_key = {label: key for _, fields in SECTIONS for key, label, _, _ in fields}
+    wb = load_workbook(io.BytesIO(template_bytes))
+    for row in wb.active.iter_rows(min_row=2):
+        if row[0].value is None:
+            continue
+        key = label_to_key.get(str(row[0].value).strip().removesuffix("*").strip())
+        if key in values:
+            row[1].value = values[key]
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return base64.b64encode(buffer.getvalue()).decode()
+
+
+def test_verify_only_upload_lands_on_verify_without_greenlake_creds(tmp_path, monkeypatch):
+    # Decoupling: a sparse sheet (serial + array IP only) + mode=VERIFY_ONLY creates a run that
+    # resumes on the verify step and does NOT write GreenLake creds to .env.
+    from alletra_onboard.application.configuring import read_env
+
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    template = client.get("/init-sheet/template").content
+    b64 = _fill_template(template, {"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.154.225"})
+
+    resp = client.post("/init-sheet/upload", json={"content_b64": b64, "mode": "VERIFY_ONLY"})
+    assert resp.status_code == 200, resp.text
+    run = resp.json()["run"]
+    assert run["mode"] == "VERIFY_ONLY"
+    assert run["current_phase"] == "CONFIG_VERIFY"  # resumes straight to the SSH check
+
+    # no GreenLake creds in the sheet -> nothing written to .env
+    env_path = tmp_path / ".env"
+    assert not env_path.exists() or "GL_CLIENT_ID" not in read_env(env_path)
+
+
+def test_full_mode_upload_still_requires_every_field(tmp_path, monkeypatch):
+    # Default/full mode keeps the strict validation: a sparse sheet is a clean 422.
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    template = client.get("/init-sheet/template").content
+    b64 = _fill_template(template, {"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.154.225"})
+    resp = client.post("/init-sheet/upload", json={"content_b64": b64, "mode": "FULL_ONBOARDING"})
+    assert resp.status_code == 422
+    assert "API Client" in resp.text  # missing GreenLake creds reported
+
+
 def test_config_roundtrip_masks_secret(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
     client = _client(tmp_path)
