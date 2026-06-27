@@ -73,6 +73,26 @@ def _outputs(*, gateway="10.64.159.254"):
             "0    2026-06-22 16:28:55 IST (Asia/Kolkata)\n"
             "1    2026-06-22 16:28:55 IST (Asia/Kolkata)\n"
         ),
+        "checkhealth -svc -detail": (
+            "Checking alert\n"
+            "Checking cage\n"
+            "Checking ilo\n"
+            "Checking rc\n"
+            "\n"
+            "Component ----------------Summary Description---------------- Qty\n"
+            "Alert     New alerts                                            6\n"
+            "Cage      Cages in failed or degraded state                     1\n"
+            "CDM       CDM is not connected to network switch                1\n"
+            "iLO       iLO detected a problem with BIOS or Hardware health   2\n"
+            "RC        Links which are down                                  4\n"
+            "Security  System with remote root access enabled               1\n"
+            "-----------------------------------------------------------------\n"
+            "       6 total                                                15\n"
+            "\n"
+            "Component --Identifier-- ---Detailed Description--- Resolution\n"
+            "Alert     hw_cage:1       Cage cage1 over temperature           Manual\n"
+            "Security  SSH             Remote root access is enabled         Manual\n"
+        ),
     }
 
 
@@ -161,6 +181,26 @@ def test_unreachable_array_returns_not_reachable():
 def test_raw_outputs_are_returned_for_operator_review():
     report = verify(_item(), "3paradm", "pw", client_factory=_factory(_FakeClient(_outputs())))
     assert "MPB10K-E24U21-LZ" in report.raw["showsys -d"]
+
+
+def test_checkhealth_summary_parsed_into_issues():
+    report = verify(_item(), "3paradm", "pw", client_factory=_factory(_FakeClient(_outputs())))
+    by_component = {i.component: i for i in report.health_issues}
+    assert len(report.health_issues) == 6  # the 6 summary rows (not the detail rows)
+    assert report.health_total == 15  # 6+1+1+2+4+1
+    assert by_component["RC"].summary == "Links which are down"
+    assert by_component["RC"].qty == 4
+    assert by_component["Security"].qty == 1
+    # the detail rows (ending 'Manual') must NOT be parsed as summary issues
+    assert all(i.qty > 0 for i in report.health_issues)
+
+
+def test_no_checkhealth_output_means_no_health_issues():
+    outputs = _outputs()
+    outputs["checkhealth -svc -detail"] = ""  # e.g. a healthy array / command unavailable
+    report = verify(_item(), "3paradm", "pw", client_factory=_factory(_FakeClient(outputs)))
+    assert report.health_issues == []
+    assert report.health_total == 0
 
 
 # ---------------------------------------------------------------- read-only guard

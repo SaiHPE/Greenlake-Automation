@@ -53,8 +53,8 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
     <Box gap="medium">
       <Notification
         status="normal"
-        title="Optional: verify the array configuration"
-        message={`Array ${run?.serial_number ?? ''} is initialised. This logs into it over SSH (read-only) with the admin credentials and checks that the live settings match what you onboarded. It changes nothing and is safe to skip.`}
+        title="Optional: verify the array configuration & health"
+        message={`Array ${run?.serial_number ?? ''} is initialised. This logs into it over SSH (read-only) with the admin credentials, checks that the live settings match what you onboarded, and runs the array health check (checkhealth) + inventory. It changes nothing and is safe to skip.`}
       />
 
       <Section title="1 · Array admin credentials">
@@ -73,7 +73,7 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
         <Box direction="row" gap="small" align="center">
           <Button
             primary
-            label={running ? 'Checking…' : 'Verify configuration'}
+            label={running ? 'Checking…' : 'Verify config & health'}
             disabled={running || !username.trim() || !password}
             onClick={runVerify}
           />
@@ -107,9 +107,11 @@ function ReportView({ report }: { report: VerificationReport }) {
   const unreadable = report.checks.filter((c) => c.status === 'not_readable').length;
   const pass = report.checks.filter((c) => c.status === 'pass').length;
   const criticalMismatch = report.checks.some((c) => c.status === 'mismatch' && c.critical);
+  const healthTotal = report.health_issues.reduce((sum, i) => sum + i.qty, 0);
 
   return (
     <Section title="Verification report">
+      <Text size="small" weight="bold">Configuration</Text>
       <Notification
         status={mismatch ? (criticalMismatch ? 'critical' : 'warning') : 'normal'}
         title={mismatch ? `${mismatch} setting(s) do not match what you onboarded` : 'All readable settings match what you onboarded'}
@@ -149,6 +151,43 @@ function ReportView({ report }: { report: VerificationReport }) {
         “Not readable” means the array didn’t expose that value in its CLI output (or the parser missed it) — check it
         by hand if it matters. Raw command output is recorded in the run timeline data.
       </Text>
+
+      <Box gap="small" pad={{ top: 'small' }} flex={false}>
+        <Text size="small" weight="bold">Array health (checkhealth)</Text>
+        <Notification
+          status={report.health_issues.length ? 'warning' : 'normal'}
+          title={
+            report.health_issues.length
+              ? `${healthTotal} health issue(s) across ${report.health_issues.length} component(s)`
+              : 'No health issues reported'
+          }
+          message={
+            report.health_issues.length
+              ? 'The array reports the components below — each needs manual attention (e.g. replication links, iLO, cage, security).'
+              : 'checkhealth -svc -detail returned no problem components.'
+          }
+        />
+        {report.health_issues.length > 0 && (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableCell scope="col" border="bottom"><Text size="small" weight="bold">Component</Text></TableCell>
+                <TableCell scope="col" border="bottom"><Text size="small" weight="bold">Issue</Text></TableCell>
+                <TableCell scope="col" border="bottom"><Text size="small" weight="bold">Count</Text></TableCell>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {report.health_issues.map((h, idx) => (
+                <TableRow key={`${h.component}-${idx}`}>
+                  <TableCell><Text size="small">{h.component}</Text></TableCell>
+                  <TableCell><Text size="small">{h.summary}</Text></TableCell>
+                  <TableCell><Text size="small">{h.qty}</Text></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Box>
     </Section>
   );
 }

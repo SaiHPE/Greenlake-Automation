@@ -178,12 +178,21 @@ class FieldCheck(BaseModel):
     critical: bool = False  # network + system name — a mismatch here is prominent
 
 
+class HealthIssue(BaseModel):
+    """One row from `checkhealth -svc -detail` — a component the array reports a problem on."""
+
+    component: str  # e.g. Alert, Cage, CDM, iLO, RC, Security
+    summary: str    # the Summary Description text
+    qty: int        # how many of this issue
+
+
 class VerificationReport(BaseModel):
-    """Result of the post-init SSH verification (see docs/adr/0001)."""
+    """Result of the post-init SSH verification (see docs/adr/0001) — config + array health."""
 
     reachable: bool  # could we SSH in + run the show commands at all?
     error: str | None = None
     checks: list[FieldCheck] = Field(default_factory=list)
+    health_issues: list[HealthIssue] = Field(default_factory=list)  # from checkhealth -svc -detail
     raw: dict[str, str] = Field(default_factory=dict)  # raw show* output, for operator review/calibration
 
     @property
@@ -193,3 +202,7 @@ class VerificationReport(BaseModel):
     @property
     def mismatches(self) -> int:
         return sum(1 for c in self.checks if c.status == FieldCheckStatus.MISMATCH)
+
+    @property
+    def health_total(self) -> int:
+        return sum(i.qty for i in self.health_issues)

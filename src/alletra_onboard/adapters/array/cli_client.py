@@ -12,10 +12,13 @@ try:
 except ImportError:  # pragma: no cover - bundled in the .exe; optional for non-SSH runs
     paramiko = None
 
-# The ONLY commands this client may ever run. All read-only `show*` — anything else is refused.
+# The ONLY commands this client may ever run. All read-only inspection commands — anything else is
+# refused. `checkhealth` only inspects + reports (it never changes the array).
 ALLOWED_COMMANDS = (
     # post-init config verification
     "showsys", "shownet", "showdate", "showversion",
+    # array health + inventory verification
+    "checkhealth", "showinventory", "showpd",
     # provisioning / SAN-discovery preflight (read-only — see the WSAPI provisioning plan)
     "showwsapi", "showcpg", "showspace", "showvv", "showvlun",
     "showhost", "showport", "showportdev", "showrcopy", "showtarget",
@@ -31,12 +34,16 @@ class ArrayCliError(Exception):
 
 
 class ArrayCliClient:
-    def __init__(self, host: str, username: str, password: str, port: int = 22, timeout: float = 15.0) -> None:
+    def __init__(
+        self, host: str, username: str, password: str, port: int = 22,
+        timeout: float = 15.0, exec_timeout: float = 120.0,
+    ) -> None:
         self.host = host
         self.username = username
         self.password = password
         self.port = port
-        self.timeout = timeout
+        self.timeout = timeout            # connect timeout
+        self.exec_timeout = exec_timeout  # per-command cap (checkhealth can take ~30s)
         self._client = None
 
     def connect(self) -> None:
@@ -77,7 +84,7 @@ class ArrayCliClient:
         if base not in ALLOWED_COMMANDS:
             raise ArrayCliError(f"refused: '{base}' is not a read-only show command")
         try:
-            _stdin, stdout, stderr = self._client.exec_command(command, timeout=self.timeout)
+            _stdin, stdout, stderr = self._client.exec_command(command, timeout=self.exec_timeout)
             out = stdout.read().decode("utf-8", "replace")
             err = stderr.read().decode("utf-8", "replace")
         except Exception as exc:  # noqa: BLE001
