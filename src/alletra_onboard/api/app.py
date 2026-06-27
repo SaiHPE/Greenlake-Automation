@@ -223,7 +223,10 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                 },
             )
         run = service.create_run(
-            parsed.work_item, mode=request.mode, selected_steps=request.selected_steps
+            parsed.work_item,
+            mode=request.mode,
+            selected_steps=request.selected_steps,
+            provisioning_intent=parsed.provisioning_intent,
         )
         data = parsed.work_item.model_dump(mode="json")
         data["subscription_key"] = parsed.work_item.subscription_key.get_secret_value()

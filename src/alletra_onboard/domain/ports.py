@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from alletra_onboard.domain.models import ArrayWorkItem, BrowserResultStatus, RunEvent, RunRecord
+from alletra_onboard.domain.storage import ProvisioningIntent
 
 
 class EventSink(Protocol):
@@ -18,6 +19,8 @@ class RunStore(Protocol):
     def list_events(self, run_id: str) -> list[RunEvent]: ...
     def save_work_item(self, run_id: str, item: ArrayWorkItem) -> None: ...
     def get_work_item(self, run_id: str) -> ArrayWorkItem | None: ...
+    def save_provisioning_intent(self, run_id: str, intent: ProvisioningIntent) -> None: ...
+    def get_provisioning_intent(self, run_id: str) -> ProvisioningIntent | None: ...
 
 
 class CloudinitWizard(Protocol):

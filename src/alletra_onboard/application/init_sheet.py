@@ -19,6 +19,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 from alletra_onboard.application import prereqs
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, RunMode
+from alletra_onboard.domain.storage import EndpointCreds, ProvisioningIntent, VolumeSpec
 from alletra_onboard.domain.workflow import enabled_steps
 
 SHEET_NAME = "Initialisation"
@@ -91,12 +92,51 @@ _STEP_REQUIRES: dict[str, tuple[str, ...]] = {
         "contact_company", "contact_phone", "contact_email",
         "dscc_system_name", "dscc_country", "secret_name", "secret_username",
     ),
-    # Provisioning + verify only need to reach the array; their own intent lives on other inputs.
-    "discover": ("mgmt_ipv4",),
-    "zoning": ("mgmt_ipv4",),
-    "provision": ("mgmt_ipv4",),
+    # Provisioning steps validate against the separate 'Provisioning' tab (parsed below), so they
+    # add no Initialisation-tab requirements beyond the always-required serial. Verify reuses the
+    # onboarded network values, so it needs the array IP from the Initialisation tab.
+    "discover": (),
+    "zoning": (),
+    "provision": (),
     "verify": ("mgmt_ipv4",),
 }
+
+# The 'Provisioning' tab (Phase 2) — a second fillable tab, parsed only when a provisioning step is
+# selected. It carries the device targets (with passwords — customer-supplied) + the volume request.
+PROVISIONING_SHEET_NAME = "Provisioning"
+PROVISIONING_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
+    ("Targets — array", [
+        ("prov_array_host", "Array management IP", True, "the B10000 mgmt IP (WSAPI + SSH)"),
+        ("prov_array_user", "Array admin username", True, "e.g. 3paradm"),
+        ("prov_array_password", "Array admin password", True, "used for WSAPI + SSH this run"),
+    ]),
+    ("Targets — vCenter", [
+        ("prov_vcenter_host", "vCenter host or IP", True, "for read-only ESXi HBA discovery"),
+        ("prov_vcenter_user", "vCenter username", True, "e.g. administrator@vsphere.local"),
+        ("prov_vcenter_password", "vCenter password", True, ""),
+    ]),
+    ("Targets — SAN switches (dual fabric)", [
+        ("prov_sw1_host", "Switch 1 — odd / F1 — IP", True, "odd array ports zone here"),
+        ("prov_sw1_user", "Switch 1 username", True, "e.g. admin"),
+        ("prov_sw1_password", "Switch 1 password", True, ""),
+        ("prov_sw2_host", "Switch 2 — even / F2 — IP", True, "even array ports zone here"),
+        ("prov_sw2_user", "Switch 2 username", True, "e.g. admin"),
+        ("prov_sw2_password", "Switch 2 password", True, ""),
+    ]),
+    ("Storage to create", [
+        ("prov_host_set", "Host set / cluster name", True, "the ESXi cluster's host set on the array"),
+        ("prov_cpg", "CPG", False, "default SSD_r6"),
+        ("prov_type", "Provisioning type", False, "tpvv (thin) or reduce (dedup+compress); default tpvv"),
+        ("prov_vol_prefix", "Volume name prefix", True, "e.g. CRV_LZ_Prod (names become <prefix>01, 02…)"),
+        ("prov_vol_size_gib", "Volume size (GiB)", True, "per volume"),
+        ("prov_vol_count", "Volume count", False, "default 1"),
+        ("prov_vvset", "Volume set name", False, "optional — group the volumes into a VV set"),
+    ]),
+]
+
+_PROV_LABEL_TO_KEY = {label: key for _, fields in PROVISIONING_SECTIONS for key, label, _, _ in fields}
+_PROV_KEY_TO_LABEL = {key: label for _, fields in PROVISIONING_SECTIONS for key, label, _, _ in fields}
+_PROV_REQUIRED = [key for _, fields in PROVISIONING_SECTIONS for key, _, required, _ in fields if required]
 
 
 def required_keys_for(mode: RunMode, selected_steps: list[str] | None = None) -> set[str]:
@@ -113,45 +153,62 @@ class ParsedInitSheet:
     gl_client_id: str
     gl_client_secret: str
     gl_token_url: str
+    provisioning_intent: ProvisioningIntent | None = None  # set when a provisioning step is selected
+
+
+def _provisioning_selected(mode: RunMode, selected_steps: list[str] | None) -> bool:
+    return any(step.kind == "provision" for step in enabled_steps(mode, selected_steps))
 
 
 def _normalize_label(text: str) -> str:
     return text.strip().removesuffix("*").strip()
 
 
-def build_template_bytes() -> bytes:
-    """A blank Initialisation_sheet.xlsx: Field | Value | Notes, grouped by section."""
-    wb = Workbook()
-    ws = wb.active
-    ws.title = SHEET_NAME
+def _write_fillable_tab(ws, sections: list[tuple[str, list[tuple[str, str, bool, str]]]]) -> None:
+    """Write a Field | Value | Notes tab grouped by section header (the operator fills Value)."""
     ws.append(["Field", "Value", "Notes / example"])
     for cell in ws[1]:
         cell.font = Font(bold=True)
 
     header_fill = PatternFill("solid", fgColor=_HPE_GREEN)
-    for section, fields in SECTIONS:
+    for section, fields in sections:
         row = ws.max_row + 1
         for col in (1, 2, 3):
             cell = ws.cell(row=row, column=col, value=section if col == 1 else None)
             cell.fill = header_fill
             cell.font = Font(bold=True, color="FFFFFF")
-        for key, label, required, note in fields:
+        for _key, label, required, note in fields:
             display = f"{label} *" if required else label
             ws.append([display, "", note])
             ws.cell(row=ws.max_row, column=3).font = Font(italic=True, color="808080")
 
-    ws.column_dimensions["A"].width = 36
+    ws.column_dimensions["A"].width = 38
     ws.column_dimensions["B"].width = 42
     ws.column_dimensions["C"].width = 64
     for row in ws.iter_rows():
         row[1].alignment = Alignment(wrap_text=False)
     ws.freeze_panes = "A2"
 
+
+def build_template_bytes() -> bytes:
+    """A blank Initialisation_sheet.xlsx: Initialisation + Provisioning (fillable) + Prerequisites."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = SHEET_NAME
+    _write_fillable_tab(ws, SECTIONS)
+
+    _add_provisioning_sheet(wb)
     _add_prereq_sheet(wb)
 
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()
+
+
+def _add_provisioning_sheet(wb: Workbook) -> None:
+    """The fillable 'Provisioning' tab — parsed only when a provisioning step is selected."""
+    ws = wb.create_sheet(PROVISIONING_SHEET_NAME)
+    _write_fillable_tab(ws, PROVISIONING_SECTIONS)
 
 
 def _add_prereq_sheet(wb: Workbook) -> None:
@@ -225,17 +282,60 @@ def parse_workbook_bytes(
     workbook = load_workbook(io.BytesIO(data), data_only=True)
     sheet = workbook[SHEET_NAME] if SHEET_NAME in workbook.sheetnames else workbook.active
 
+    values = _read_tab(sheet, _LABEL_TO_KEY)
+    parsed = _build(values, required_keys_for(mode, selected_steps))
+
+    if _provisioning_selected(mode, selected_steps):
+        parsed.provisioning_intent = _parse_provisioning_tab(workbook)
+    return parsed
+
+
+def _read_tab(sheet, label_to_key: dict[str, str]) -> dict[str, str]:
+    """Collect Field->Value pairs from a fillable tab, matching labels to stable keys."""
     values: dict[str, str] = {}
     for row in sheet.iter_rows(min_row=1, max_col=2, values_only=True):
         label = row[0]
         value = row[1] if len(row) > 1 else None
         if label is None or value is None:
             continue
-        key = _LABEL_TO_KEY.get(_normalize_label(str(label)))
+        key = label_to_key.get(_normalize_label(str(label)))
         text = str(value).strip()
         if key and text:
             values[key] = text
-    return _build(values, required_keys_for(mode, selected_steps))
+    return values
+
+
+def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
+    """Read the 'Provisioning' tab into a ProvisioningIntent (passwords included — customer-supplied)."""
+    if PROVISIONING_SHEET_NAME not in workbook.sheetnames:
+        raise ValueError(
+            f"The '{PROVISIONING_SHEET_NAME}' tab is required for provisioning but was not found in the workbook."
+        )
+    values = _read_tab(workbook[PROVISIONING_SHEET_NAME], _PROV_LABEL_TO_KEY)
+    missing = [_PROV_KEY_TO_LABEL[key] for key in _PROV_REQUIRED if not values.get(key)]
+    if missing:
+        raise ValueError("Provisioning tab — missing required fields: " + ", ".join(sorted(missing)))
+
+    ptype = (values.get("prov_type") or "tpvv").strip().lower()
+    if ptype not in ("tpvv", "reduce"):
+        raise ValueError("Provisioning type must be 'tpvv' or 'reduce'.")
+    try:
+        size_gib = int(float(values["prov_vol_size_gib"]))
+        count = int(float(values.get("prov_vol_count") or "1"))
+    except ValueError as exc:
+        raise ValueError("Volume size (GiB) and count must be numbers.") from exc
+
+    return ProvisioningIntent(
+        host_set_name=values["prov_host_set"],
+        array=EndpointCreds(host=values["prov_array_host"], username=values["prov_array_user"], password=values["prov_array_password"]),
+        vcenter=EndpointCreds(host=values["prov_vcenter_host"], username=values["prov_vcenter_user"], password=values["prov_vcenter_password"]),
+        switch_f1=EndpointCreds(host=values["prov_sw1_host"], username=values["prov_sw1_user"], password=values["prov_sw1_password"]),
+        switch_f2=EndpointCreds(host=values["prov_sw2_host"], username=values["prov_sw2_user"], password=values["prov_sw2_password"]),
+        cpg=values.get("prov_cpg") or "SSD_r6",
+        provisioning_type=ptype,  # type: ignore[arg-type]
+        volume=VolumeSpec(name_prefix=values["prov_vol_prefix"], size_gib=size_gib, count=count),
+        vvset_name=values.get("prov_vvset") or None,
+    )
 
 
 def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
