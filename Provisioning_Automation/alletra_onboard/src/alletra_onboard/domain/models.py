@@ -20,8 +20,27 @@ class WorkflowPhase(StrEnum):
     CLOUDINIT_CONNECT = "CLOUDINIT_CONNECT"
     DSCC_SETUP_SYSTEM = "DSCC_SETUP_SYSTEM"
     STORAGE_FLEET_VERIFY = "STORAGE_FLEET_VERIFY"
+    # Storage provisioning (Phase 2) — driven over WSAPI, see docs/adr/0002-0004 + the runbook.
+    STORAGE_DISCOVER = "STORAGE_DISCOVER"
+    STORAGE_ZONING = "STORAGE_ZONING"
+    STORAGE_PROVISION = "STORAGE_PROVISION"
     CONFIG_VERIFY = "CONFIG_VERIFY"
     COMPLETE = "COMPLETE"
+
+
+class RunMode(StrEnum):
+    """Which slice of the onboarding the operator chose to run (decoupling — see docs/adr/0005).
+
+    The mode picks the set of steps the wizard renders + the service advances through, so an
+    operator can verify or provision an already-initialised array without re-running init.
+    CUSTOM means "use the explicit selected_steps list" rather than a preset.
+    """
+
+    FULL_ONBOARDING = "FULL_ONBOARDING"  # GreenLake -> Cloud Connectivity -> DSCC -> Verify
+    PROVISION_ONLY = "PROVISION_ONLY"    # Discovery -> Zoning -> Provision -> Verify
+    BOTH = "BOTH"                        # full onboarding, then provisioning
+    VERIFY_ONLY = "VERIFY_ONLY"          # just the read-only SSH config/health check
+    CUSTOM = "CUSTOM"                    # exactly the steps in selected_steps
 
 
 class RunStatus(StrEnum):
@@ -131,6 +150,10 @@ class RunRecord(BaseModel):
     serial_number: str
     status: RunStatus = RunStatus.NOT_STARTED
     current_phase: WorkflowPhase = WorkflowPhase.NOT_STARTED
+    # Decoupling (docs/adr/0005): the operator-selected slice. Defaults preserve the historical
+    # full-onboarding behaviour for runs created before modes existed (old DB rows deserialize here).
+    mode: RunMode = RunMode.FULL_ONBOARDING
+    selected_steps: list[str] = Field(default_factory=list)  # step keys; empty = derive from mode
     resources: ExternalResources = Field(default_factory=ExternalResources)
     warnings: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

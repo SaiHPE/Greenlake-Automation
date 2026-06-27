@@ -207,20 +207,24 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=422, detail="Upload was not valid base64") from exc
         try:
-            parsed = parse_workbook_bytes(raw)
+            parsed = parse_workbook_bytes(raw, mode=request.mode, selected_steps=request.selected_steps)
         except Exception as exc:  # noqa: BLE001 - bad xlsx / missing fields -> a clear 422
             raise HTTPException(status_code=422, detail=f"Initialisation sheet did not parse: {exc}") from exc
 
         # Workspace API credentials from the sheet land in the gitignored .env (no manual typing).
-        update_gl_credentials(
-            env_path,
-            {
-                "GL_CLIENT_ID": parsed.gl_client_id,
-                "GL_CLIENT_SECRET": parsed.gl_client_secret,
-                "GL_TOKEN_URL": parsed.gl_token_url,
-            },
+        # Only when present — a provision-only / verify-only sheet won't carry GreenLake creds.
+        if parsed.gl_client_id and parsed.gl_client_secret:
+            update_gl_credentials(
+                env_path,
+                {
+                    "GL_CLIENT_ID": parsed.gl_client_id,
+                    "GL_CLIENT_SECRET": parsed.gl_client_secret,
+                    "GL_TOKEN_URL": parsed.gl_token_url,
+                },
+            )
+        run = service.create_run(
+            parsed.work_item, mode=request.mode, selected_steps=request.selected_steps
         )
-        run = service.create_run(parsed.work_item)
         data = parsed.work_item.model_dump(mode="json")
         data["subscription_key"] = parsed.work_item.subscription_key.get_secret_value()
         data["dscc_setup"].pop("password", None)  # never echo the admin password to the UI
@@ -230,7 +234,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.post("/runs", response_model=RunResponse)
     async def create_run(request: CreateRunRequest) -> RunResponse:
-        return RunResponse(run=service.create_run(request.work_item))
+        return RunResponse(
+            run=service.create_run(
+                request.work_item, mode=request.mode, selected_steps=request.selected_steps
+            )
+        )
 
     @app.get("/runs", response_model=RunListResponse)
     async def list_runs() -> RunListResponse:
