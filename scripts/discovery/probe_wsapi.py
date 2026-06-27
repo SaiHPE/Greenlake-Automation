@@ -6,8 +6,10 @@ one session). Standard library only - no extra deps, so it runs in any python.
 
     python probe_wsapi.py 10.64.154.225 [--user 3paradm] [--port 443]
 
-Password via the ALLETRA_PASSWORD env var or the prompt. The WSAPI cert is self-signed, so TLS
-verification is disabled (mgmt network only).
+The array is on the internal management network, so the request is made DIRECTLY (any HTTP(S)_PROXY
+env var is bypassed - routing the array's 443 through a corporate proxy is what causes a TLS
+"handshake timed out"). The WSAPI cert is self-signed, so TLS verification is disabled.
+Password via the ALLETRA_PASSWORD env var or the prompt.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import argparse
 import getpass
 import json
 import os
+import socket
 import ssl
 import sys
 import urllib.error
@@ -37,7 +40,17 @@ GETS = [
 ]
 
 
-def call(method: str, url: str, *, key: str | None = None, body: dict | None = None, ctx) -> tuple[int, bytes]:
+def make_opener(ctx: ssl.SSLContext) -> urllib.request.OpenerDirector:
+    # ProxyHandler({}) disables every proxy: the array must be reached directly (an HTTP(S)_PROXY
+    # env var would otherwise tunnel the request through the corporate proxy, which can't route to
+    # the internal mgmt IP -> the TLS handshake times out).
+    return urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        urllib.request.HTTPSHandler(context=ctx),
+    )
+
+
+def call(opener, method: str, url: str, *, key: str | None = None, body: dict | None = None) -> tuple[int, bytes]:
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Accept", "application/json")
@@ -46,7 +59,7 @@ def call(method: str, url: str, *, key: str | None = None, body: dict | None = N
     if key:
         req.add_header("X-HP3PAR-WSAPI-SessionKey", key)
     try:
-        with urllib.request.urlopen(req, context=ctx, timeout=20) as resp:
+        with opener.open(req, timeout=20) as resp:
             return resp.status, resp.read()
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read()
@@ -60,24 +73,34 @@ def main() -> int:
     ap.add_argument("--user", default="3paradm")
     ap.add_argument("--port", default="443")
     args = ap.parse_args()
-    password = os.environ.get("ALLETRA_PASSWORD") or getpass.getpass(f"Password for {args.user}@{args.host}: ")
 
+    # 1) Direct TCP reachability (no proxy) - distinguishes "port blocked" from "proxy mis-route".
+    try:
+        with socket.create_connection((args.host, int(args.port)), timeout=8):
+            print(f"TCP {args.host}:{args.port} reachable (direct).")
+    except Exception as exc:  # noqa: BLE001
+        print(f"TCP {args.host}:{args.port} NOT reachable directly: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print("SSH (22) works but 443 doesn't -> the firewall is blocking WSAPI's port (SSH-only path).", file=sys.stderr)
+        return 2
+
+    password = os.environ.get("ALLETRA_PASSWORD") or getpass.getpass(f"Password for {args.user}@{args.host}: ")
     base = f"https://{args.host}:{args.port}/api/v1"
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
+    opener = make_opener(ctx)
 
-    status, raw = call("POST", base + "/credentials", body={"user": args.user, "password": password}, ctx=ctx)
+    status, raw = call(opener, "POST", base + "/credentials", body={"user": args.user, "password": password})
     if status not in (200, 201) or b"key" not in raw:
-        print(f"AUTH FAILED  status={status}  {raw[:200]!r}", file=sys.stderr)
-        print("Is WSAPI enabled (showwsapi) and reachable on this port?", file=sys.stderr)
+        print(f"\nAUTH FAILED  status={status}  {raw[:200]!r}", file=sys.stderr)
+        print("Is WSAPI enabled (showwsapi) and are the credentials correct?", file=sys.stderr)
         return 1
     key = json.loads(raw)["key"]
     print(f"WSAPI {base}  -  auth OK\n")
     print(f"{'collection':<20}{'status':<8}count / notes")
     print("-" * 60)
     for ep in GETS:
-        st, body = call("GET", f"{base}/{ep}", key=key, ctx=ctx)
+        st, body = call(opener, "GET", f"{base}/{ep}", key=key)
         note = ""
         try:
             j = json.loads(body)
@@ -89,9 +112,9 @@ def main() -> int:
                 note = "keys=" + ",".join(list(j)[:6])
         except Exception:  # noqa: BLE001
             note = body[:60].decode("utf-8", "replace")
-        flag = "" if st == 200 else "   <-- not available via WSAPI" if st in (404, 501) else ""
+        flag = "   <-- not available via WSAPI" if st in (404, 501) else ""
         print(f"{ep:<20}{st:<8}{note}{flag}")
-    call("DELETE", f"{base}/credentials/{key}", key=key, ctx=ctx)
+    call(opener, "DELETE", f"{base}/credentials/{key}", key=key)
     print("\nsession closed. (Note: the fabric nameserver / zoning view - `showportdev ns` - has no")
     print("WSAPI collection, so zoning *verification* stays on SSH regardless of the above.)")
     return 0
