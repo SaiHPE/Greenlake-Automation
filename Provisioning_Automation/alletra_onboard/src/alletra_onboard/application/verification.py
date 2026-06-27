@@ -28,6 +28,7 @@ from alletra_onboard.domain.models import (
     ArrayWorkItem,
     FieldCheck,
     FieldCheckStatus,
+    HealthIssue,
     VerificationReport,
 )
 
@@ -35,8 +36,11 @@ _IPV4 = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
 # shownet's data row: the only line that starts with two IPv4s (mgmt IP then netmask).
 _IPV4_ROW = re.compile(r"^\s*(\d{1,3}(?:\.\d{1,3}){3})\s+(\d{1,3}(?:\.\d{1,3}){3})\b")
 _PARENS = re.compile(r"\(([^)]+)\)")
-# Read-only commands, in order. Everything we verify is read from these three.
-_COMMANDS = ("showsys -d", "shownet", "showdate")
+# Read-only commands, in order: config verification (parsed into field checks) + array health /
+# inventory (checkhealth is parsed into issues; the rest are captured raw for operator review).
+_CONFIG_COMMANDS = ("showsys -d", "shownet", "showdate")
+_HEALTH_COMMANDS = ("checkhealth -svc -detail", "showversion", "showsys", "showcpg", "showpd", "showinventory")
+_COMMANDS = _CONFIG_COMMANDS + _HEALTH_COMMANDS
 
 
 def _kv(text: str) -> dict[str, str]:
@@ -133,6 +137,31 @@ def _build_checks(item: ArrayWorkItem, outputs: dict[str, str]) -> list[FieldChe
     return checks
 
 
+def _health_issues(checkhealth: str) -> list[HealthIssue]:
+    """Parse the SUMMARY table of `checkhealth -svc -detail` into per-component issue rows.
+
+    The table sits between the 'Component ... Summary Description ... Qty' header and the dashed
+    separator. Each data row is '<Component> <free-text summary...> <Qty>': the first token is the
+    component, the trailing token is the integer count, the middle is the description. An array with
+    no issues yields an empty list. (The verbose detail stays in the raw output for the operator.)
+    """
+    issues: list[HealthIssue] = []
+    in_summary = False
+    for line in checkhealth.splitlines():
+        if "Summary Description" in line:
+            in_summary = True
+            continue
+        if not in_summary:
+            continue
+        stripped = line.strip()
+        if stripped and set(stripped) <= {"-"}:  # dashed separator ends the summary table
+            break
+        tokens = line.split()
+        if len(tokens) >= 3 and tokens[0].isalpha() and tokens[0] != "Checking" and tokens[-1].isdigit():
+            issues.append(HealthIssue(component=tokens[0], summary=" ".join(tokens[1:-1]), qty=int(tokens[-1])))
+    return issues
+
+
 def verify(
     item: ArrayWorkItem,
     username: str,
@@ -157,4 +186,9 @@ def verify(
     finally:
         client.close()
 
-    return VerificationReport(reachable=True, checks=_build_checks(item, outputs), raw=outputs)
+    return VerificationReport(
+        reachable=True,
+        checks=_build_checks(item, outputs),
+        health_issues=_health_issues(outputs.get("checkhealth -svc -detail", "")),
+        raw=outputs,
+    )

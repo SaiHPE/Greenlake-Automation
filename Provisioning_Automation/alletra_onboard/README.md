@@ -8,7 +8,7 @@ It runs as a local web app (`onboard ui`, or the packaged `.exe`) that drives th
 | **A** | GreenLake REST | register device → assign to Data Services → add/apply subscription → verify | headless HTTP (anywhere with internet) |
 | **B** | Cloud Connectivity Wizard ("cloudinit") | fill the on-array wizard, stop at Review for the operator to Submit | Playwright, **launches** its own browser at the array's `169.254.x` URL |
 | **C** | DSCC "Set Up System" wizard | fill Welcome→Network→Time→Attributes→System, stop at the credential | Playwright, **attaches** to a logged-in Chrome (DSCC SSO) |
-| **D** | Post-init verification *(optional)* | SSH into the initialised array, read the running config via `show*`, report per-field whether it matches what was onboarded | **read-only** SSH (paramiko); never writes |
+| **D** | Post-init verification *(optional)* | SSH into the initialised array: per-field config check vs. what was onboarded, **plus** the `checkhealth` issue summary + inventory | **read-only** SSH (paramiko); never writes |
 
 The web app is a guided 7-step flow (Configure → Array details → GreenLake → Cloud
 Connectivity → DSCC → Verify → Finish) built with **React + the HPE Design System**
@@ -220,13 +220,14 @@ old UI. (To confirm you're on the new build: step 4 shows an **Open Discovery To
    - In the browser: under **System Credentials** add the array admin secret, **Continue**, review,
      **Submit**.
    - Back in the app, click **mark complete**.
-6. **Verify configuration** *(optional, read-only)* — enter the array admin **username/password**
-   (the DSCC System Credential, e.g. `3paradm`) and click **Verify configuration**. The app SSHes
-   into the now-initialised array, runs the `show*` commands, and reports per-field whether the live
-   settings (system name, mgmt IP/netmask/gateway, DNS, NTP, timezone, …) match what you onboarded.
-   It writes nothing and is safe to skip; the password is used only for that SSH session and is never
-   stored. *(The `show*` output parsers are calibrated against the first live array — see
-   `docs/adr/0001`.)*
+6. **Verify config & health** *(optional, read-only)* — enter the array admin **username/password**
+   (the DSCC System Credential, e.g. `3paradm`) and click **Verify config & health**. The app SSHes
+   into the now-initialised array and reports two things: (a) **configuration** — per-field whether the
+   live settings (system name, mgmt IP/netmask/gateway, DNS, NTP, timezone, …) match what you onboarded;
+   and (b) **array health** — the `checkhealth -svc -detail` issue summary (cage/iLO/CDM/RC/security…)
+   plus inventory/capacity (`showinventory`, `showcpg`, `showpd`). It writes nothing and is safe to
+   skip; the password is used only for that SSH session and is never stored. *(The output parsers are
+   calibrated against the live array — see `docs/adr/0001`.)*
 7. **Finish** — summary of the run.
 
 > Two reminders: run the app **as Administrator** (for the clock-sync button), and **hard-refresh**
