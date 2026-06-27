@@ -30,7 +30,11 @@ from alletra_onboard.application.provisioning import (
     WARNING,
     build_provisioning_service,
 )
+from alletra_onboard.application.storage import discovery as storage_discovery
+from alletra_onboard.application.storage import storage_provision
+from alletra_onboard.application.storage import zoning as storage_zoning
 from alletra_onboard.application.verification import verify
+from alletra_onboard.domain.storage import DiscoveryReport, ProvisioningPlan, ZoningReport
 from alletra_onboard.config import Settings, load_settings
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
@@ -62,6 +66,10 @@ class RunNotFoundError(LookupError):
 
 class RunBusyError(RuntimeError):
     """A background step is already executing for this run."""
+
+
+class StepPreconditionError(RuntimeError):
+    """A step was requested before its prerequisite ran (e.g. zoning/provision before discovery)."""
 
 
 def _default_provision_factory(settings: Settings, progress: Callable) -> Any:
@@ -102,6 +110,11 @@ class OnboardingService:
         self._dscc_factory = dscc_factory
         self._verify_fn = verify_fn
         self._tasks: dict[str, asyncio.Task] = {}
+        # Transient provisioning artifacts, keyed by run_id. They are also emitted in event data
+        # (so the UI has them); kept in memory so the apply steps act on exactly what was previewed.
+        self._discovery: dict[str, DiscoveryReport] = {}
+        self._zoning: dict[str, ZoningReport] = {}
+        self._plan: dict[str, ProvisioningPlan] = {}
 
     def _current_settings(self) -> Settings:
         # Re-read settings (incl. .env) at each step so GreenLake credentials entered in the
@@ -382,6 +395,122 @@ class OnboardingService:
             f"{report.health_total} health issue(s).",
             data={"report": report.model_dump(mode="json")},
         )
+
+    # ------------------------------------------------------------------ storage provisioning (Phase 2)
+
+    def start_discover(self, run_id: str) -> RunRecord:
+        run = self.get_run(run_id)
+        intent = self.get_provisioning_intent(run_id)
+        self._spawn(run_id, self._run_discover(run, intent))
+        return run
+
+    async def _run_discover(self, run: RunRecord, intent) -> None:
+        self._set(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_DISCOVER)
+        self._emit(run.run_id, WorkflowPhase.STORAGE_DISCOVER, "step.started", "Discovering array ports, ESXi HBAs and fabric logins…")
+        report = await asyncio.to_thread(storage_discovery.discover, intent)
+        self._discovery[run.run_id] = report
+        self._set(run, RunStatus.READY, WorkflowPhase.STORAGE_DISCOVER)
+        self._emit(
+            run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.completed",
+            f"Discovery complete — {len(report.array_ports)} array port(s), {len(report.host_hbas)} host HBA(s)"
+            + (f"; {len(report.notes)} note(s)" if report.notes else ""),
+            data={"report": report.model_dump(mode="json")},
+        )
+
+    def start_zoning_preview(self, run_id: str) -> RunRecord:
+        run = self.get_run(run_id)
+        intent = self.get_provisioning_intent(run_id)
+        discovery = self._require_discovery(run_id)
+        self._spawn(run_id, self._run_zoning_preview(run, intent, discovery))
+        return run
+
+    async def _run_zoning_preview(self, run: RunRecord, intent, discovery) -> None:
+        self._set(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
+        self._emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "step.started", "Verifying SAN zoning on both fabrics…")
+        report = await asyncio.to_thread(storage_zoning.build_report, intent, discovery)
+        self._zoning[run.run_id] = report
+        self._set(run, RunStatus.READY if report.proper else RunStatus.WAITING_FOR_OPERATOR, WorkflowPhase.STORAGE_ZONING)
+        missing = sum(1 for z in report.expected if not z.present)
+        self._emit(
+            run.run_id, WorkflowPhase.STORAGE_ZONING,
+            "zoning.proper" if report.proper else "zoning.previewed",
+            "Zoning is correct on both fabrics." if report.proper
+            else f"Zoning needs {missing} zone(s) added — review the remediation, then confirm to apply.",
+            data={"report": report.model_dump(mode="json")},
+        )
+
+    def start_zoning_apply(self, run_id: str) -> RunRecord:
+        run = self.get_run(run_id)
+        intent = self.get_provisioning_intent(run_id)
+        report = self._zoning.get(run_id)
+        if report is None or not report.remediations:
+            raise StepPreconditionError("no zoning remediation to apply — run the zoning preview first")
+        self._spawn(run_id, self._run_zoning_apply(run, intent, report))
+        return run
+
+    async def _run_zoning_apply(self, run: RunRecord, intent, report: ZoningReport) -> None:
+        self._set(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
+        total = sum(len(r.commands) for r in report.remediations)
+        self._emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.apply.started", f"Applying {total} zoning command(s) (additive, cfgenable)…")
+        results = await asyncio.to_thread(storage_zoning.apply_remediation, intent, report.remediations)
+        # Re-verify so the operator sees the post-apply truth.
+        fresh = await asyncio.to_thread(storage_zoning.build_report, intent, self._discovery.get(run.run_id))
+        self._zoning[run.run_id] = fresh
+        self._set(run, RunStatus.READY, WorkflowPhase.STORAGE_ZONING)
+        self._emit(
+            run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.applied",
+            f"Applied zoning — re-verified {'OK' if fresh.proper else 'with remaining gaps'}.",
+            data={"results": [{"command": c, "output": o} for c, o in results], "report": fresh.model_dump(mode="json")},
+        )
+
+    def start_storage_preview(self, run_id: str) -> RunRecord:
+        run = self.get_run(run_id)
+        intent = self.get_provisioning_intent(run_id)
+        discovery = self._require_discovery(run_id)
+        self._spawn(run_id, self._run_storage_preview(run, intent, discovery))
+        return run
+
+    async def _run_storage_preview(self, run: RunRecord, intent, discovery) -> None:
+        self._set(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
+        self._emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "step.started", "Building the provisioning plan…")
+        plan = await asyncio.to_thread(storage_provision.build_plan, intent, discovery)
+        self._plan[run.run_id] = plan
+        status = RunStatus.RETRYABLE_FAILURE if plan.error else RunStatus.WAITING_FOR_OPERATOR
+        self._set(run, status, WorkflowPhase.STORAGE_PROVISION)
+        self._emit(
+            run.run_id, WorkflowPhase.STORAGE_PROVISION,
+            "storage.preview.failed" if plan.error else "storage.previewed",
+            plan.error or f"Plan ready — {len(plan.actions)} action(s). Review, then confirm to create.",
+            data={"plan": plan.model_dump(mode="json")},
+        )
+
+    def start_storage_apply(self, run_id: str) -> RunRecord:
+        run = self.get_run(run_id)
+        intent = self.get_provisioning_intent(run_id)
+        discovery = self._require_discovery(run_id)
+        if self._plan.get(run_id) is None:
+            raise StepPreconditionError("no provisioning plan to apply — run the provisioning preview first")
+        self._spawn(run_id, self._run_storage_apply(run, intent, discovery))
+        return run
+
+    async def _run_storage_apply(self, run: RunRecord, intent, discovery) -> None:
+        self._set(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
+        self._emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.apply.started", "Creating host, volumes and exports…")
+        result = await asyncio.to_thread(storage_provision.apply_plan, intent, discovery)
+        created = sum(1 for o in result.outcomes if o.status == "created")
+        self._set(run, RunStatus.RETRYABLE_FAILURE if result.error else RunStatus.READY, WorkflowPhase.STORAGE_PROVISION)
+        self._emit(
+            run.run_id, WorkflowPhase.STORAGE_PROVISION,
+            "storage.apply.failed" if result.error else "storage.applied",
+            result.error or f"Provisioning complete — {created} created, {len(result.outcomes) - created} already existed.",
+            data={"result": result.model_dump(mode="json")},
+        )
+
+    def _require_discovery(self, run_id: str) -> DiscoveryReport:
+        report = self._discovery.get(run_id)
+        if report is None:
+            raise StepPreconditionError("run discovery first — it provides the ports/HBAs zoning and provisioning need")
+        return report
 
     # ------------------------------------------------------------------ internals
 
