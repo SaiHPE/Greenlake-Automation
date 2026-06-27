@@ -23,12 +23,37 @@ The array's local superuser account (username + password, e.g. `3paradm`) used t
 array directly. The same account the operator registers as the DSCC System Credential.
 _Avoid_: secret, DSCC credential
 
-## Language — storage provisioning (planned)
+## Language — modes (decoupling)
+
+**Mode**:
+The operator-selected *slice* of the onboarding, chosen at the start: Full onboarding / Provision only
+/ Both / Verify only / Custom. It determines which steps the wizard renders and the run executes — so
+verification or provisioning can target an already-initialised array without re-running init. See ADR 0005.
+_Avoid_: profile, workflow (a mode picks steps; it isn't itself a sequence)
+
+**Step**:
+One operator-facing unit of work (GreenLake registration, Cloud Connectivity, DSCC, Discovery, SAN
+Zoning, Provision storage, Verify). Each has a stable key and a *kind* — `init`, `provision`, or
+`verify`. A mode selects a set of steps; the step registry (`domain/workflow.py`) is their single
+source of truth for identity and order.
+
+## Language — storage provisioning
 
 **Provisioning intent**:
-What the customer *wants done*, supplied in the Initialisation sheet: reach (IPs + credentials) plus
-what to create (volume names/sizes, which hosts or cluster, replication target, protocol). The sheet
-carries only this — never environment facts.
+What the customer *wants done*, supplied on the **Provisioning tab** of the workbook: reach (array /
+vCenter / both switch IPs + credentials, passwords included) plus what to create (host-set name, volume
+name-prefix/size/count, CPG, thin-vs-reduce, optional VV-set). It carries only this — never environment facts.
+
+**Discovery report**:
+The run-time read an environment a provisioning run produces — array target ports + WWPNs, ESXi host
+HBA WWPNs + OS (via vCenter), and the fabric nameserver view — with WWPNs normalised for matching. A
+bundle of Discovered facts; the input to zoning and provisioning.
+
+**Zoning report / remediation**:
+The comparison of the *expected* odd/even zone set (computed from discovered array ports + host WWPNs)
+against each fabric's *actual* active zoning. The *remediation* is the exact additive command sequence
+(`alicreate` → `zonecreate` → `cfgadd` → `cfgenable`, never `cfgsave`-alone) to create the missing
+zones — shown for explicit confirmation before any switch write. See ADR 0004.
 
 **Discovered fact**:
 Anything about the environment the automation *reads at run time* instead of asking for — array
