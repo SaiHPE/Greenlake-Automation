@@ -135,6 +135,46 @@ export const startVerify = (runId: string, username: string, password: string) =
   request<{ run: RunRecord }>('POST', `/runs/${runId}/verify`, { username, password });
 export const markComplete = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/complete`);
 
+// ------------------------------------------------------------------ storage provisioning (Phase 2)
+export interface ArrayPort {
+  node: number; slot: number; card_port: number;
+  wwpn: string; link_state: string; fabric: 'odd' | 'even';
+}
+export interface HostHba {
+  host_name: string; wwpn: string; model: string | null; os: string | null;
+  fabric: 'odd' | 'even' | null;
+}
+export interface DiscoveryReport {
+  array_ports: ArrayPort[];
+  host_hbas: HostHba[];
+  nameserver: { fabric: string; switch_host: string; wwpn: string; is_array_port: boolean }[];
+  notes: string[];
+  error: string | null;
+}
+export interface ExpectedZone {
+  fabric: 'odd' | 'even'; switch_host: string; name: string;
+  host_wwpn: string; array_wwpn: string; present: boolean;
+}
+export interface ZoneRemediation {
+  fabric: 'odd' | 'even'; switch_host: string; cfg_name: string; commands: string[];
+}
+export interface ZoningReport {
+  expected: ExpectedZone[]; remediations: ZoneRemediation[];
+  proper: boolean; notes: string[]; error: string | null;
+}
+export interface PlannedAction {
+  kind: string; name: string; description: string; exists: boolean; detail: Record<string, any>;
+}
+export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; error: string | null; }
+export interface ActionOutcome { kind: string; name: string; status: 'created' | 'exists' | 'failed'; detail: string; }
+export interface ProvisioningResult { outcomes: ActionOutcome[]; error: string | null; }
+
+export const startDiscover = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/discover`);
+export const zoningPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/preview`);
+export const zoningApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/apply`);
+export const storagePreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/preview`);
+export const storageApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/apply`);
+
 export const launchBrowser = (url?: string) =>
   request<{ cdp_url: string; profile_dir: string; executable: string }>('POST', '/browser/launch', { port: 9222, url });
 
