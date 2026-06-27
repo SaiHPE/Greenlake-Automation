@@ -264,6 +264,74 @@ async def test_verify_exception_never_unsucceeds_the_run(tmp_path):
     assert any(e.event_type == "verify.failed" for e in service.list_events(run.run_id))
 
 
+def _prov_intent():
+    from alletra_onboard.domain.storage import EndpointCreds, ProvisioningIntent, VolumeSpec
+
+    def creds(host):
+        return EndpointCreds(host=host, username="u", password=SecretStr("p"))
+
+    return ProvisioningIntent(
+        host_set_name="HS", array=creds("a"), vcenter=creds("vc"),
+        switch_f1=creds("sw1"), switch_f2=creds("sw2"),
+        volume=VolumeSpec(name_prefix="V", size_gib=10, count=1),
+    )
+
+
+async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
+    from alletra_onboard.application.storage import discovery as sd
+    from alletra_onboard.application.storage import storage_provision as sp
+    from alletra_onboard.application.storage import zoning as sz
+    from alletra_onboard.domain.storage import (
+        ActionOutcome, DiscoveryReport, ExpectedZone, PlannedAction,
+        ProvisioningPlan, ProvisioningResult, ZoneRemediation, ZoningReport,
+    )
+
+    monkeypatch.setattr(sd, "discover", lambda intent: DiscoveryReport(notes=[]))
+    zoning_report = ZoningReport(
+        expected=[ExpectedZone(fabric="odd", switch_host="sw1", name="z", host_wwpn="A", array_wwpn="B")],
+        remediations=[ZoneRemediation(fabric="odd", switch_host="sw1", cfg_name="CFG", commands=['cfgenable "CFG"'])],
+        proper=False,
+    )
+    monkeypatch.setattr(sz, "build_report", lambda intent, discovery: zoning_report)
+    monkeypatch.setattr(sz, "apply_remediation", lambda intent, rem: [('cfgenable "CFG"', "ok")])
+    monkeypatch.setattr(sp, "build_plan", lambda intent, discovery: ProvisioningPlan(actions=[PlannedAction(kind="host", name="esx1", description="d")]))
+    monkeypatch.setattr(sp, "apply_plan", lambda intent, discovery: ProvisioningResult(outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]))
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+
+    service.start_discover(run.run_id)
+    await service.wait(run.run_id)
+    assert any(e.event_type == "discover.completed" for e in service.list_events(run.run_id))
+
+    service.start_zoning_preview(run.run_id)
+    await service.wait(run.run_id)
+    assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR  # remediation needs confirm
+    assert any(e.event_type == "zoning.previewed" for e in service.list_events(run.run_id))
+
+    service.start_zoning_apply(run.run_id)
+    await service.wait(run.run_id)
+    assert any(e.event_type == "zoning.applied" for e in service.list_events(run.run_id))
+
+    service.start_storage_preview(run.run_id)
+    await service.wait(run.run_id)
+    assert any(e.event_type == "storage.previewed" for e in service.list_events(run.run_id))
+
+    service.start_storage_apply(run.run_id)
+    await service.wait(run.run_id)
+    applied = [e for e in service.list_events(run.run_id) if e.event_type == "storage.applied"]
+    assert applied and applied[-1].data["result"]["outcomes"][0]["status"] == "created"
+
+
+async def test_zoning_before_discovery_is_a_precondition_error(tmp_path):
+    from alletra_onboard.application.onboarding_service import StepPreconditionError
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    with pytest.raises(StepPreconditionError):
+        service.start_zoning_preview(run.run_id)
+
+
 async def test_concurrent_step_rejected(tmp_path):
     release = asyncio.Event()
 

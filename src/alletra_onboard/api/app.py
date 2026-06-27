@@ -66,6 +66,7 @@ from alletra_onboard.application.onboarding_service import (
     OnboardingService,
     RunBusyError,
     RunNotFoundError,
+    StepPreconditionError,
 )
 from alletra_onboard.application import prereqs
 from alletra_onboard.application.preflight_service import PreflightService
@@ -262,6 +263,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             return RunResponse(run=start())
         except RunBusyError as exc:
             raise HTTPException(status_code=409, detail="a step is already running for this run") from exc
+        except StepPreconditionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except RunNotFoundError as exc:
+            # e.g. a provisioning step on a run that has no provisioning intent
+            raise HTTPException(status_code=404, detail=str(exc) or "not found") from exc
 
     @app.post("/runs/{run_id}/provision", response_model=RunResponse)
     async def run_provision(run_id: str, request: ProvisionStepRequest) -> RunResponse:
@@ -293,6 +299,30 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def complete_run(run_id: str) -> RunResponse:
         _get_run_or_404(run_id)
         return RunResponse(run=service.mark_complete(run_id))
+
+    # ------------------------------------------------------------------ storage provisioning (Phase 2)
+
+    @app.post("/runs/{run_id}/discover", response_model=RunResponse)
+    async def run_discover(run_id: str) -> RunResponse:
+        return _start_step(run_id, lambda: service.start_discover(run_id))
+
+    @app.post("/runs/{run_id}/zoning/preview", response_model=RunResponse)
+    async def run_zoning_preview(run_id: str) -> RunResponse:
+        return _start_step(run_id, lambda: service.start_zoning_preview(run_id))
+
+    @app.post("/runs/{run_id}/zoning/apply", response_model=RunResponse)
+    async def run_zoning_apply(run_id: str) -> RunResponse:
+        # Writes additive zones to the production fabric — the UI must preview + confirm first.
+        return _start_step(run_id, lambda: service.start_zoning_apply(run_id))
+
+    @app.post("/runs/{run_id}/storage/preview", response_model=RunResponse)
+    async def run_storage_preview(run_id: str) -> RunResponse:
+        return _start_step(run_id, lambda: service.start_storage_preview(run_id))
+
+    @app.post("/runs/{run_id}/storage/apply", response_model=RunResponse)
+    async def run_storage_apply(run_id: str) -> RunResponse:
+        # Creates host/volumes/exports on the array — the UI must preview + confirm first.
+        return _start_step(run_id, lambda: service.start_storage_apply(run_id))
 
     # ------------------------------------------------------------------ events
 
