@@ -6,7 +6,9 @@ export interface RunRecord {
   run_id: string;
   serial_number: string;
   status: string; // ready | running | waiting_for_operator | retryable_failure | ...
-  current_phase: string; // PREFLIGHT | GL_* | CLOUDINIT_CONNECT | DSCC_SETUP_SYSTEM | COMPLETE
+  current_phase: string; // PREFLIGHT | GL_* | CLOUDINIT_CONNECT | DSCC_SETUP_SYSTEM | STORAGE_* | COMPLETE
+  mode: string; // FULL_ONBOARDING | PROVISION_ONLY | BOTH | VERIFY_ONLY | CUSTOM
+  selected_steps: string[];
   warnings: string[];
   updated_at: string;
 }
@@ -99,7 +101,8 @@ export const saveConfig = (values: Record<string, string | null>) =>
 export const checkConfig = () => request<{ report: CheckReport }>('POST', '/config/check');
 
 export const parseCsv = (csvText: string) => request<{ work_items: any[] }>('POST', '/work-items/parse', { csv_text: csvText });
-export const createRun = (workItem: any) => request<{ run: RunRecord }>('POST', '/runs', { work_item: workItem });
+export const createRun = (workItem: any, mode = 'FULL_ONBOARDING', selectedSteps: string[] = []) =>
+  request<{ run: RunRecord }>('POST', '/runs', { work_item: workItem, mode, selected_steps: selectedSteps });
 
 export interface InitSheetUploadResult {
   run: RunRecord;
@@ -108,8 +111,13 @@ export interface InitSheetUploadResult {
 }
 // Upload the filled Initialisation_sheet.xlsx (base64). The server parses it, writes the GreenLake
 // API creds to .env, and creates the run — so the secret never round-trips through the browser.
-export const uploadInitSheet = (contentB64: string) =>
-  request<InitSheetUploadResult>('POST', '/init-sheet/upload', { content_b64: contentB64 });
+// `mode`/`selectedSteps` scope which sheet fields are required and which steps the run will render.
+export const uploadInitSheet = (contentB64: string, mode = 'FULL_ONBOARDING', selectedSteps: string[] = []) =>
+  request<InitSheetUploadResult>('POST', '/init-sheet/upload', {
+    content_b64: contentB64,
+    mode,
+    selected_steps: selectedSteps,
+  });
 export const getRun = (runId: string) => request<{ run: RunRecord; work_item: any }>('GET', `/runs/${runId}`);
 export const getEvents = (runId: string) => request<{ events: RunEvent[] }>('GET', `/runs/${runId}/events`);
 

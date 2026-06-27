@@ -18,7 +18,8 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from alletra_onboard.application import prereqs
-from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig
+from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, RunMode
+from alletra_onboard.domain.workflow import enabled_steps
 
 SHEET_NAME = "Initialisation"
 # The link-local cloudinit URL changes every boot, so it is NOT in the sheet — the operator pastes
@@ -72,8 +73,38 @@ SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
 ]
 
 _LABEL_TO_KEY = {label: key for _, fields in SECTIONS for key, label, _, _ in fields}
-_REQUIRED = [key for _, fields in SECTIONS for key, _, required, _ in fields if required]
 _KEY_TO_LABEL = {key: label for _, fields in SECTIONS for key, label, _, _ in fields}
+
+# Decoupling: which sheet fields each step actually needs. A run's mode -> enabled steps -> the
+# union of these is what we validate, so a verify-only / provision-only sheet isn't forced to carry
+# GreenLake creds or DSCC contact details. serial_number is always required (it names the run).
+_ALWAYS_REQUIRED: tuple[str, ...] = ("serial_number",)
+_STEP_REQUIRES: dict[str, tuple[str, ...]] = {
+    "greenlake": (
+        "gl_client_id", "gl_client_secret", "gl_token_url",
+        "part_number", "subscription_key", "service_catalog_region_id",
+    ),
+    "cloudinit": ("mgmt_ipv4", "mask", "gateway", "dns1", "ntp", "timezone"),
+    "dscc": (
+        "dscc_region_code",
+        "contact_first_name", "contact_last_name", "contact_language",
+        "contact_company", "contact_phone", "contact_email",
+        "dscc_system_name", "dscc_country", "secret_name", "secret_username",
+    ),
+    # Provisioning + verify only need to reach the array; their own intent lives on other inputs.
+    "discover": ("mgmt_ipv4",),
+    "zoning": ("mgmt_ipv4",),
+    "provision": ("mgmt_ipv4",),
+    "verify": ("mgmt_ipv4",),
+}
+
+
+def required_keys_for(mode: RunMode, selected_steps: list[str] | None = None) -> set[str]:
+    """The sheet field keys a run of this mode must have filled."""
+    keys = set(_ALWAYS_REQUIRED)
+    for step in enabled_steps(mode, selected_steps):
+        keys.update(_STEP_REQUIRES.get(step.key, ()))
+    return keys
 
 
 @dataclass
@@ -180,8 +211,17 @@ def _add_prereq_sheet(wb: Workbook) -> None:
     ws.column_dimensions["C"].width = 44
 
 
-def parse_workbook_bytes(data: bytes) -> ParsedInitSheet:
-    """Read a filled Initialisation_sheet.xlsx back into (GreenLake creds, ArrayWorkItem)."""
+def parse_workbook_bytes(
+    data: bytes,
+    *,
+    mode: RunMode = RunMode.FULL_ONBOARDING,
+    selected_steps: list[str] | None = None,
+) -> ParsedInitSheet:
+    """Read a filled Initialisation_sheet.xlsx back into (GreenLake creds, ArrayWorkItem).
+
+    Validation is scoped to the run `mode`: only the fields the selected steps need are required
+    (default FULL_ONBOARDING keeps every field required, as before).
+    """
     workbook = load_workbook(io.BytesIO(data), data_only=True)
     sheet = workbook[SHEET_NAME] if SHEET_NAME in workbook.sheetnames else workbook.active
 
@@ -195,28 +235,33 @@ def parse_workbook_bytes(data: bytes) -> ParsedInitSheet:
         text = str(value).strip()
         if key and text:
             values[key] = text
-    return _build(values)
+    return _build(values, required_keys_for(mode, selected_steps))
 
 
-def _build(values: dict[str, str]) -> ParsedInitSheet:
-    missing = [_KEY_TO_LABEL[key] for key in _REQUIRED if not values.get(key)]
+def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
+    missing = [_KEY_TO_LABEL[key] for key in required if not values.get(key)]
     if missing:
-        raise ValueError("Missing required fields: " + ", ".join(missing))
+        raise ValueError("Missing required fields: " + ", ".join(sorted(missing)))
+
+    # Fields not required by this mode but still mandatory on the models get harmless placeholders
+    # (they are never used by the steps that didn't ask for them).
+    def get(key: str, default: str = "") -> str:
+        return values.get(key) or default
 
     dns = [values[key] for key in ("dns1", "dns2", "dns3") if values.get(key)]
     network = NetworkConfig(
-        mgmt_ipv4=values["mgmt_ipv4"],
-        mask=values["mask"],
-        gateway=values["gateway"],
+        mgmt_ipv4=get("mgmt_ipv4"),
+        mask=get("mask"),
+        gateway=get("gateway"),
         dns=dns,
-        ntp=values["ntp"],
-        timezone=values["timezone"],
+        ntp=get("ntp"),
+        timezone=get("timezone"),
         proxy_host=values.get("proxy_host") or None,
         proxy_port=int(float(values["proxy_port"])) if values.get("proxy_port") else None,
     )
     dscc_setup = DsccSetupConfig(
-        system_name=values["dscc_system_name"],
-        country=values["dscc_country"],
+        system_name=get("dscc_system_name", get("serial_number", "array")),
+        country=get("dscc_country", "—"),
         credential_name=values.get("secret_name") or "b10000-admin",
         username=values.get("secret_username") or "3paradm",
         password=values.get("secret_password") or None,
@@ -228,18 +273,18 @@ def _build(values: dict[str, str]) -> ParsedInitSheet:
         contact_email=values.get("contact_email"),
     )
     work_item = ArrayWorkItem(
-        serial_number=values["serial_number"],
-        part_number=values["part_number"],
-        subscription_key=values["subscription_key"],
-        service_catalog_region_id=values["service_catalog_region_id"],
-        dscc_region_code=values["dscc_region_code"],
+        serial_number=values["serial_number"],  # always required
+        part_number=get("part_number", "—"),
+        subscription_key=get("subscription_key", "—"),
+        service_catalog_region_id=get("service_catalog_region_id", "—"),
+        dscc_region_code=get("dscc_region_code", "—"),
         cloudinit_url=values.get("cloudinit_url") or DEFAULT_CLOUDINIT_URL,
         network=network,
         dscc_setup=dscc_setup,
     )
     return ParsedInitSheet(
         work_item=work_item,
-        gl_client_id=values["gl_client_id"],
-        gl_client_secret=values["gl_client_secret"],
-        gl_token_url=values["gl_token_url"],
+        gl_client_id=get("gl_client_id"),
+        gl_client_secret=get("gl_client_secret"),
+        gl_token_url=get("gl_token_url"),
     )

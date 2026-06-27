@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from alletra_onboard.application.health import GreenLakeCheckReport
-from alletra_onboard.domain.models import ArrayWorkItem, PreflightReport, RunEvent, RunRecord
+from alletra_onboard.domain.models import ArrayWorkItem, PreflightReport, RunEvent, RunMode, RunRecord
 
 
 class HealthResponse(BaseModel):
@@ -33,6 +33,8 @@ class CheckResponse(BaseModel):
 
 class CreateRunRequest(BaseModel):
     work_item: ArrayWorkItem
+    mode: RunMode = RunMode.FULL_ONBOARDING
+    selected_steps: list[str] = Field(default_factory=list)
 
 
 class RunResponse(BaseModel):
@@ -112,6 +114,14 @@ class DiscoveryToolResponse(BaseModel):
 
 class InitSheetUploadRequest(BaseModel):
     content_b64: str = Field(description="Base64-encoded Initialisation_sheet.xlsx contents.")
+    mode: RunMode = Field(
+        default=RunMode.FULL_ONBOARDING,
+        description="Operator-selected slice (decoupling). Scopes which sheet fields are required.",
+    )
+    selected_steps: list[str] = Field(
+        default_factory=list,
+        description="Explicit step keys when mode is CUSTOM (else derived from the mode).",
+    )
 
 
 class InitSheetUploadResponse(BaseModel):

@@ -36,11 +36,23 @@ from alletra_onboard.domain.models import (
     ArrayWorkItem,
     BrowserResultStatus,
     RunEvent,
+    RunMode,
     RunRecord,
     RunStatus,
     WorkflowPhase,
 )
 from alletra_onboard.domain.ports import RunStore
+from alletra_onboard.domain.workflow import initial_phase, next_enabled_phase
+
+
+def _next_hint(phase: WorkflowPhase) -> str:
+    """A human hint for what comes after an init step, given the selection-aware next phase."""
+    return {
+        WorkflowPhase.CLOUDINIT_CONNECT: "next: Cloud Connectivity Wizard",
+        WorkflowPhase.DSCC_SETUP_SYSTEM: "next: DSCC Setup",
+        WorkflowPhase.STORAGE_DISCOVER: "next: storage discovery",
+        WorkflowPhase.COMPLETE: "no further onboarding steps selected",
+    }.get(phase, f"next: {phase.value}")
 
 
 class RunNotFoundError(LookupError):
@@ -101,15 +113,29 @@ class OnboardingService:
 
     # ------------------------------------------------------------------ run lifecycle
 
-    def create_run(self, item: ArrayWorkItem) -> RunRecord:
+    def create_run(
+        self,
+        item: ArrayWorkItem,
+        *,
+        mode: RunMode = RunMode.FULL_ONBOARDING,
+        selected_steps: list[str] | None = None,
+    ) -> RunRecord:
+        selected = list(selected_steps or [])
         run = RunRecord(
             serial_number=item.serial_number,
             status=RunStatus.READY,
-            current_phase=WorkflowPhase.PREFLIGHT,
+            current_phase=initial_phase(mode, selected),  # land on the first enabled step
+            mode=mode,
+            selected_steps=selected,
         )
         self.store.upsert_run(run)
         self.store.save_work_item(run.run_id, item)
-        self._emit(run.run_id, WorkflowPhase.PREFLIGHT, "run.created", f"Run created for {item.serial_number}")
+        self._emit(
+            run.run_id,
+            run.current_phase,
+            "run.created",
+            f"Run created for {item.serial_number} ({mode.value})",
+        )
         return run
 
     def get_run(self, run_id: str) -> RunRecord:
@@ -178,12 +204,13 @@ class OnboardingService:
             self._set(run, RunStatus.READY, WorkflowPhase.PREFLIGHT)
             self._emit(run.run_id, WorkflowPhase.PREFLIGHT, "step.completed", f"{label} completed — no writes made")
         else:
-            self._set(run, RunStatus.READY, WorkflowPhase.CLOUDINIT_CONNECT)
+            after = next_enabled_phase(run.mode, run.selected_steps, "greenlake")
+            self._set(run, RunStatus.READY, after)
             self._emit(
                 run.run_id,
                 WorkflowPhase.GL_VERIFY_DEVICE,
                 "step.completed",
-                f"{label} completed — next: Cloud Connectivity Wizard",
+                f"{label} completed — {_next_hint(after)}",
             )
 
     # ------------------------------------------------------------------ step B: cloudinit
@@ -243,8 +270,9 @@ class OnboardingService:
         result = await adapter.run(item, run_id=run.run_id, auto_submit=auto_submit)
 
         if result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE):
-            self._set(run, RunStatus.READY, WorkflowPhase.DSCC_SETUP_SYSTEM)
-            self._emit(run.run_id, WorkflowPhase.CLOUDINIT_CONNECT, "step.completed", "Array connected — next: DSCC Setup")
+            after = next_enabled_phase(run.mode, run.selected_steps, "cloudinit")
+            self._set(run, RunStatus.READY, after)
+            self._emit(run.run_id, WorkflowPhase.CLOUDINIT_CONNECT, "step.completed", f"Array connected — {_next_hint(after)}")
         elif result == BrowserResultStatus.WAITING_FOR_OPERATOR and review_ready:
             self._set(run, RunStatus.WAITING_FOR_OPERATOR)
             self._emit(
