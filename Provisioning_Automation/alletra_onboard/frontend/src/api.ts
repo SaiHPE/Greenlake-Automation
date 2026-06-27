@@ -28,10 +28,16 @@ export interface FieldCheck {
   status: 'pass' | 'mismatch' | 'not_readable';
   critical: boolean;
 }
+export interface HealthIssue {
+  component: string;
+  summary: string;
+  qty: number;
+}
 export interface VerificationReport {
   reachable: boolean;
   error: string | null;
   checks: FieldCheck[];
+  health_issues: HealthIssue[];
   raw: Record<string, string>;
 }
 

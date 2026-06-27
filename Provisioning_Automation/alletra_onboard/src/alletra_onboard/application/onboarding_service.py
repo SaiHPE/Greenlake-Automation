@@ -340,7 +340,8 @@ class OnboardingService:
             run.run_id,
             WorkflowPhase.CONFIG_VERIFY,
             "verify.completed",
-            f"Verified the array — {report.passed} OK, {report.mismatches} mismatch(es).",
+            f"Verified the array — {report.passed} OK, {report.mismatches} mismatch(es), "
+            f"{report.health_total} health issue(s).",
             data={"report": report.model_dump(mode="json")},
         )
 

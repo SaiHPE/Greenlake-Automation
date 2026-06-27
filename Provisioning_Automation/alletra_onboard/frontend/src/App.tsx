@@ -18,7 +18,7 @@ const STEPS = [
   { title: 'GreenLake registration', subtitle: 'register · assign · subscribe' },
   { title: 'Cloud Connectivity', subtitle: 'on-array wizard' },
   { title: 'DSCC Setup', subtitle: 'Set Up System wizard' },
-  { title: 'Verify configuration', subtitle: 'SSH read-only check' },
+  { title: 'Verify config & health', subtitle: 'SSH read-only check' },
   { title: 'Finish', subtitle: 'summary' },
 ];
 const LAST_STEP = STEPS.length - 1;
