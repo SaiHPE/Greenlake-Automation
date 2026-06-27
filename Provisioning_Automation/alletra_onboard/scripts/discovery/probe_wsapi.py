@@ -21,6 +21,7 @@ import os
 import socket
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -50,7 +51,7 @@ def make_opener(ctx: ssl.SSLContext) -> urllib.request.OpenerDirector:
     )
 
 
-def call(opener, method: str, url: str, *, key: str | None = None, body: dict | None = None) -> tuple[int, bytes]:
+def call(opener, method: str, url: str, *, key=None, body=None, timeout: float = 30.0) -> tuple[int, bytes]:
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Accept", "application/json")
@@ -59,7 +60,7 @@ def call(opener, method: str, url: str, *, key: str | None = None, body: dict | 
     if key:
         req.add_header("X-HP3PAR-WSAPI-SessionKey", key)
     try:
-        with opener.open(req, timeout=20) as resp:
+        with opener.open(req, timeout=timeout) as resp:
             return resp.status, resp.read()
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read()
@@ -72,6 +73,8 @@ def main() -> int:
     ap.add_argument("host", help="array management IP, e.g. 10.64.154.225")
     ap.add_argument("--user", default="3paradm")
     ap.add_argument("--port", default="443")
+    ap.add_argument("--timeout", type=float, default=45.0, help="per-request read timeout (s)")
+    ap.add_argument("--retries", type=int, default=3, help="auth attempts (WSAPI may be initialising)")
     args = ap.parse_args()
 
     # 1) Direct TCP reachability (no proxy) - distinguishes "port blocked" from "proxy mis-route".
@@ -90,17 +93,28 @@ def main() -> int:
     ctx.verify_mode = ssl.CERT_NONE
     opener = make_opener(ctx)
 
-    status, raw = call(opener, "POST", base + "/credentials", body={"user": args.user, "password": password})
+    status, raw = 0, b""
+    for attempt in range(1, args.retries + 1):
+        status, raw = call(opener, "POST", base + "/credentials",
+                           body={"user": args.user, "password": password}, timeout=args.timeout)
+        if status in (200, 201) and b"key" in raw:
+            break
+        print(f"  auth attempt {attempt}/{args.retries}: status={status} "
+              f"{raw[:140].decode('utf-8', 'replace')}", file=sys.stderr)
+        if attempt < args.retries:
+            time.sleep(20)
     if status not in (200, 201) or b"key" not in raw:
         print(f"\nAUTH FAILED  status={status}  {raw[:200]!r}", file=sys.stderr)
-        print("Is WSAPI enabled (showwsapi) and are the credentials correct?", file=sys.stderr)
+        print("WSAPI is reachable (TCP/TLS OK) but not SERVING — a 503 'services not ready' or a hang.", file=sys.stderr)
+        print("That's an ARRAY-side state, not the probe: check `checkhealth -svc -detail` (critical", file=sys.stderr)
+        print("over-temp / degraded cage?) and `showwsapi -d` (System Resource Usage). Reads work over SSH.", file=sys.stderr)
         return 1
     key = json.loads(raw)["key"]
     print(f"WSAPI {base}  -  auth OK\n")
     print(f"{'collection':<20}{'status':<8}count / notes")
     print("-" * 60)
     for ep in GETS:
-        st, body = call(opener, "GET", f"{base}/{ep}", key=key)
+        st, body = call(opener, "GET", f"{base}/{ep}", key=key, timeout=args.timeout)
         note = ""
         try:
             j = json.loads(body)
@@ -114,7 +128,7 @@ def main() -> int:
             note = body[:60].decode("utf-8", "replace")
         flag = "   <-- not available via WSAPI" if st in (404, 501) else ""
         print(f"{ep:<20}{st:<8}{note}{flag}")
-    call(opener, "DELETE", f"{base}/credentials/{key}", key=key)
+    call(opener, "DELETE", f"{base}/credentials/{key}", key=key, timeout=args.timeout)
     print("\nsession closed. (Note: the fabric nameserver / zoning view - `showportdev ns` - has no")
     print("WSAPI collection, so zoning *verification* stays on SSH regardless of the above.)")
     return 0
