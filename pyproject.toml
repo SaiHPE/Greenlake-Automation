@@ -21,6 +21,13 @@ dependencies = [
   "playwright>=1.45.0",
   "openpyxl>=3.1.0",
   "paramiko>=3.4.0",
+  # Storage provisioning (Phase 2). 4.2.14 is the floor for the Alletra MP B10000: earlier
+  # releases POST to /credentials instead of /api/v1/credentials and fail to authenticate
+  # (verified by deep research, Launchpad bug #2128677).
+  "python-3parclient>=4.2.14",
+  "pyvmomi>=8.0.0",  # read-only ESXi HBA/WWPN discovery via vCenter
+  "requests>=2.31.0",  # python-3parclient's HTTP transport for WSAPI
+  "eventlet>=0.33.0",  # imported (not declared) by python-3parclient's ssh module; dormant for us
 ]
 
 [project.optional-dependencies]

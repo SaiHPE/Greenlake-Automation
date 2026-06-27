@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunRecord
+from alletra_onboard.domain.storage import ProvisioningIntent
 
 
 class SqliteRunStore:
@@ -43,6 +44,14 @@ class SqliteRunStore:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS work_items (
+                    run_id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS provisioning_intents (
                     run_id TEXT PRIMARY KEY,
                     payload TEXT NOT NULL
                 )
@@ -125,6 +134,25 @@ class SqliteRunStore:
             return None
         return ArrayWorkItem.model_validate(json.loads(row[0]))
 
+    def save_provisioning_intent(self, run_id: str, intent: ProvisioningIntent) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO provisioning_intents (run_id, payload) VALUES (?, ?)
+                ON CONFLICT(run_id) DO UPDATE SET payload = excluded.payload
+                """,
+                (run_id, _provisioning_intent_json(intent)),
+            )
+
+    def get_provisioning_intent(self, run_id: str) -> ProvisioningIntent | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM provisioning_intents WHERE run_id = ?", (run_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return ProvisioningIntent.model_validate(json.loads(row[0]))
+
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.database_path, timeout=5)
 
@@ -136,4 +164,13 @@ def _work_item_json(item: ArrayWorkItem) -> str:
     data["subscription_key"] = item.subscription_key.get_secret_value()
     if item.dscc_setup.password is not None:
         data["dscc_setup"]["password"] = item.dscc_setup.password.get_secret_value()
+    return json.dumps(data)
+
+
+def _provisioning_intent_json(intent: ProvisioningIntent) -> str:
+    """Serialize a provisioning intent PRESERVING the device passwords (same masking caveat as the
+    work item — the customer-supplied creds must round-trip for the WSAPI/SSH/vCenter clients)."""
+    data = intent.model_dump(mode="json")
+    for endpoint in ("array", "vcenter", "switch_f1", "switch_f2"):
+        data[endpoint]["password"] = getattr(intent, endpoint).password.get_secret_value()
     return json.dumps(data)
