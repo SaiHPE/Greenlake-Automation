@@ -242,7 +242,8 @@ Everything in the tool today is read-only / operator-gated. This runbook is the 
 to production storage, so the provisioning module must:
 - **Preflight** with Phase 0 (`show*`) and refuse to write if the substrate isn't ready.
 - **Dry-run → preview → confirm** before issuing any create (show exactly what will be created).
-- Be **idempotent**: treat `EXISTENT_HOST` / `EXISTENT_VV` / `EXISTENT_VLUN` as warnings.
+- Be **idempotent**: treat `EXISTENT_HOST` / `EXISTENT_SV` / `EXISTENT_VLUN` as warnings (note: the
+  volume-exists reason is **`EXISTENT_SV`** "Volume Exists already", *not* `EXISTENT_VV` — verified).
 - **Never** issue `removevlun` / `removevv` from the tool — teardown stays manual (see the ESXi guide
   "Removing volumes": detach on ESXi first, then `removevlun`, then `removevv`, then rescan).
 
@@ -284,5 +285,53 @@ parsers — and a real test of the idempotent design.
 - **`esxcli` sizes are in MB.**
 
 **Idempotency check (validated by the lab):** because hosts/volumes/VLUNs already exist here,
-re-running `createhost`/`createvv`/`createvlun` must detect `EXISTENT_HOST` / `EXISTENT_VV` /
+re-running `createhost`/`createvv`/`createvlun` must detect `EXISTENT_HOST` / `EXISTENT_SV` /
 `EXISTENT_VLUN` and report a warning — never fail or duplicate.
+
+---
+
+## Verified build facts (deep research, 2026-06-26 — cited, adversarially checked)
+
+A 106-agent research pass verified the core write path against HPE / Brocade / VMware primary sources
+(24 of 25 claims confirmed by 3-vote adversarial check). The confirmations, the **corrections** to our
+assumptions, and what stayed unverified:
+
+**SDK / WSAPI transport**
+- Use **`python-3parclient >= 4.2.14`** (NOT 4.2.0) — earlier versions POST to `/credentials` instead
+  of `/api/v1/credentials` and **fail to authenticate to the B10000** (Launchpad bug #2128677). The SDK
+  officially supports Alletra MP firmware **10.4.0+** (our 10.5.51 is covered). Confirms `/api/v1` on
+  443 is correct; `/api/v3` on 8080 is a *newer additional* endpoint, not an older 3PAR one.
+- Call all create methods with **keyword arguments** — the SDK master has drifted (`createHost` gained
+  an `nqn` param before `optional`); positional calls will break on upgrade.
+
+**Host (Phase 2)** — `createHost(name, FCWwns=[...], optional={'persona': 11, 'descriptors': {...}})`:
+**one** host definition carrying **all** of a host's FC WWNs (VMware **Persona 11 / ALUA**), then export
+VLUNs to that single definition for multipath/failover. Idempotency: **`EXISTENT_HOST`** (do
+`findHost(wwn=...)` first); **`EXISTENT_PATH`** if a WWN already belongs to another host.
+[sd00002428 GUID-D93E3A75]
+
+**Volume (Phase 3)** — `createVolume(name, cpgName, sizeMiB, optional={'tpvv': True})`. **Correction:**
+the already-exists reason is **`EXISTENT_SV`** ("Volume Exists already"), *not* `EXISTENT_VV`. Data
+reduction = inline dedup (per-CPG, 16 KiB pages) + compression (per-VV, Zstandard). [sd00003946]
+
+**ESXi (Phase 5)** — ALUA (optimized = owning node); policy **`VMW_SATP_ALUA` + `VMW_PSP_RR` (iops=1)**,
+matched by vendor `3PARdata` / model `VV`. On **ESXi 7.0U3+ (so our 8.0U3) the built-in default rule is
+sufficient — do NOT add a custom SATP rule** (it's a tuning option only). Rescan registers new VLUNs
+before the VMFS datastore. [sd00002428 GUID-43B8814C; VMware KB 2069356]
+
+**Brocade zoning (Phase 4) — SAFETY-CRITICAL** — edit **additively** (`cfgadd "cfg","member;…"`), then
+**`cfgEnable`** to ACTIVATE (cfgEnable activates *and* persists to all switches). **`cfgSave` ALONE only
+commits the *Defined* config — it does NOT activate, and explicitly leaves the *Effective* and *Defined*
+configs inconsistent** (divergent zoning on a fabric merge / HA failover). So the auto-zone sequence is
+`alicreate → zonecreate → cfgadd → cfgEnable` — never `cfgSave`-alone as the "apply" step.
+[Broadcom FOS Admin Guide; FOS `cfgSave` reference] → folded into ADR 0004.
+
+**Not independently verified by the research (treat as open; we hold lab data for most):**
+- Discovery shapes (`GET /ports`, `showport`, WWPN `node:slot:port` encoding, host↔array WWPN
+  normalization) — *we have these from our live probes (VZ WSAPI `ports[0]` JSON + the `…0002F629`
+  encoding) and the calibration notes above.*
+- Brocade read-only inspection (`cfgshow`/`zoneshow`/`alishow`/`nsshow`) + naming + odd/even mapping —
+  *we have the `cfgshow` format + naming from Panduranga's PuTTY capture (ADR 0004, san-zoning memory).*
+- VLUN template types + auto/explicit LUN + the `EXISTENT_VLUN` reason — *CLI ref + SDK, not 3-voted.*
+- WSAPI readiness (`503 code 68`) detection — *empirical only (ADR 0003 readiness gate).*
+- Snapshot / Remote Copy / DR — entirely unverified; defer to `sd00002425/26` when we build those phases.
