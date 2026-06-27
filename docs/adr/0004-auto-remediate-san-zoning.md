@@ -4,7 +4,15 @@ For FC provisioning, SAN zoning is the prerequisite that lets a host actually *s
 only verifying it, the tool takes it end-to-end: it **discovers** the current zoning across **both
 Brocade fabrics** (odd / F1 and even / F2), **reports** the current status and the remediations needed
 by the cabling best practice, and — on **explicit operator confirmation** — **creates the missing
-zones itself** (`alicreate` → `zonecreate` → `cfgadd` → `cfgenable` → `cfgsave`). It then re-verifies.
+zones itself** (`alicreate` → `zonecreate` → `cfgadd` → `cfgenable`). It then re-verifies.
+
+> **Activation discipline (verified by deep research, 2026-06-26).** The apply step is **`cfgenable`**,
+> not `cfgsave`. `cfgenable` activates the change on the running fabric *and* persists it to nonvolatile
+> memory on all switches. **`cfgsave` alone only commits the *Defined* config — it does NOT activate,
+> and explicitly leaves the *Effective* and *Defined* configurations inconsistent**, which can produce
+> divergent zoning on a zone merge or HA failover. So the tool must drive `cfgadd → cfgenable` and must
+> never use `cfgsave`-alone as the "apply" step. [Broadcom FOS Administration Guide; FOS `cfgSave` cmd
+> reference — 3-vote confirmed.]
 
 **Best-practice rule (fixed, not customer-specified):** *odd port → odd switch, even port → even
 switch.* Array ports with `P` (the port in `N:S:P`) = 1,3 belong on Switch 1 / F1; `P` = 2,4 on
@@ -24,8 +32,8 @@ The fabric is **shared production** — the live `cfgshow` showed *hundreds* of 
 - **Additive-only.** The tool reads the active config first, computes **only the delta** for the target
   hosts, and `cfgadd`s its zones. It **never** creates/replaces a config or removes an existing zone.
 - **Preview + confirm, always.** It shows the exact per-switch commands it will run; the operator
-  confirms; only then does it execute and `cfgsave`. No silent writes — this is the highest-risk write
-  in the tool.
+  confirms; only then does it execute and `cfgenable` (the activation step — see the activation
+  discipline note above). No silent writes — this is the highest-risk write in the tool.
 - **Re-verify after.** Confirm via `cfgshow` (the zone is in the active config) **and** the array's
   `showportdev ns` (the host's WWPNs now log in on the target ports).
 
