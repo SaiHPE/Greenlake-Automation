@@ -33,7 +33,14 @@ mandatory, not optional.
 
 ## Consequences
 
-- Adds **`python-3parclient`** (wraps WSAPI auth/sessions/version quirks) as the write-path client.
+- Adds **`python-3parclient >= 4.2.14`** (wraps WSAPI auth/sessions/version quirks) as the write-path
+  client. **The `>= 4.2.14` floor is mandatory for the Alletra MP** (verified 2026-06-26): earlier
+  releases POST to `/credentials` instead of `/api/v1/credentials` and fail to authenticate to the
+  B10000 (Launchpad bug #2128677). The SDK officially supports firmware 10.4.0+ (our 10.5.51 is in).
+  Call create methods with **keyword args** — the SDK signature has drifted (`createHost` gained `nqn`).
+- Idempotency reasons the write path must catch as warnings: **`EXISTENT_HOST`** (host), **`EXISTENT_SV`**
+  ("Volume Exists already" — *not* `EXISTENT_VV`), **`EXISTENT_VLUN`** (export), **`EXISTENT_PATH`** (a
+  WWN already belongs to another host). Use `findHost(wwn=...)` for lookup-before-create.
 - A **readiness preflight** wraps the client; the existing **health check (`checkhealth`)** becomes a
   natural pre-provisioning gate — a degraded array is surfaced before any write is attempted.
 - **SSH is not removed**: zoning verification (`showportdev ns`), config/health verification, and
