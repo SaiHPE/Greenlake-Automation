@@ -8,6 +8,7 @@ from alletra_onboard.application.init_sheet import (
     build_template_bytes,
     parse_workbook_bytes,
 )
+from alletra_onboard.domain.models import RunMode
 
 
 def _fill(values: dict[str, str]) -> bytes:
@@ -92,3 +93,24 @@ def test_missing_required_field_is_reported():
         parse_workbook_bytes(_fill(incomplete))
     assert "API Client Secret" in str(exc.value)
     assert "IP address" in str(exc.value)
+
+
+def test_verify_only_sheet_needs_just_serial_and_ip():
+    # A sparse sheet (no GreenLake creds, no DSCC contact) parses fine for a verify-only run.
+    sparse = {"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.154.225"}
+    parsed = parse_workbook_bytes(_fill(sparse), mode=RunMode.VERIFY_ONLY)
+    assert parsed.work_item.serial_number == "SGHD45FF0Y"
+    assert parsed.work_item.network.mgmt_ipv4 == "10.64.154.225"
+    assert parsed.gl_client_id == ""  # not required, not present
+
+
+def test_verify_only_still_requires_the_array_ip():
+    with pytest.raises(ValueError) as exc:
+        parse_workbook_bytes(_fill({"serial_number": "SGHD45FF0Y"}), mode=RunMode.VERIFY_ONLY)
+    assert "IP address" in str(exc.value)
+
+
+def test_provision_only_does_not_require_greenlake_creds():
+    sparse = {"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.122.140"}
+    parsed = parse_workbook_bytes(_fill(sparse), mode=RunMode.PROVISION_ONLY)
+    assert parsed.work_item.network.mgmt_ipv4 == "10.64.122.140"
