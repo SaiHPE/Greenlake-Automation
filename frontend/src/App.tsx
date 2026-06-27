@@ -6,14 +6,16 @@ import { actionKeysFor, ACTION_CATALOG, ActionKey, phaseToActionKey, RunMode } f
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
 import { CloudinitStep } from './steps/CloudinitStep';
+import { DiscoveryStep } from './steps/DiscoveryStep';
 import { DoneStep } from './steps/DoneStep';
 import { DsccStep } from './steps/DsccStep';
 import { GreenLakeStep } from './steps/GreenLakeStep';
 import { InitSheetStep } from './steps/InitSheetStep';
 import { ModeStep } from './steps/ModeStep';
 import { PrereqStep } from './steps/PrereqStep';
-import { ProvisionPlaceholderStep } from './steps/ProvisionPlaceholderStep';
+import { ProvisionStep } from './steps/ProvisionStep';
 import { VerifyStep } from './steps/VerifyStep';
+import { ZoningStep } from './steps/ZoningStep';
 
 interface StepDef {
   key: string;
@@ -39,7 +41,6 @@ function buildSteps(mode: RunMode, custom: ActionKey[]): StepDef[] {
   return [MODE_STEP, PREREQ_STEP, SHEET_STEP, ...actions, DONE_STEP];
 }
 
-const PROVISION_KEYS = new Set<string>(['discover', 'zoning', 'provision']);
 const ACTION_KEY_SET = new Set<string>(ACTION_CATALOG.map((a) => a.key));
 
 export default function App() {
@@ -211,8 +212,14 @@ export default function App() {
           {current.key === 'dscc' && runId && (
             <DsccStep runId={runId} run={run} events={events} dsccRegion={form.dscc_region_code} onDone={next} />
           )}
-          {PROVISION_KEYS.has(current.key) && runId && (
-            <ProvisionPlaceholderStep title={current.title} onDone={next} />
+          {current.key === 'discover' && runId && (
+            <DiscoveryStep runId={runId} run={run} events={events} onDone={next} />
+          )}
+          {current.key === 'zoning' && runId && (
+            <ZoningStep runId={runId} run={run} events={events} onDone={next} />
+          )}
+          {current.key === 'provision' && runId && (
+            <ProvisionStep runId={runId} run={run} events={events} onDone={next} />
           )}
           {current.key === 'verify' && runId && (
             <VerifyStep runId={runId} run={run} events={events} onDone={next} />
