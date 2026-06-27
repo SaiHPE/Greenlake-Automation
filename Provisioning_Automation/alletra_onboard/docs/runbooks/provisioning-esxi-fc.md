@@ -49,13 +49,18 @@ Initialisation sheet — intent + reach only (ADR 0002).
 - A **CPG** exists with free capacity (discovered).
 - FC **target ports** in `target` mode and `ready` (discovered).
 
-**SAN zoning — HARD prerequisite, customer-owned; the tool VERIFIES but never creates:**
-- The host HBA ports must be zoned to the array target ports on the FC switch (SAN team's job).
-- Discovery confirms with `showportdev ns <n:s:p>` that **each host's WWPNs are visible on the array's
-  target ports**, and counts the paths. If a host's WWPNs aren't visible → **stop**: "zoning isn't
-  done — have the SAN team zone host X to the array, then retry." The tool has no switch access.
-- This verifies *live* connectivity (zoned **and** host online **and** HBA link up) — exactly the
-  usable-path condition. A host with only one visible path is flagged (no redundancy).
+**SAN zoning — the tool discovers, reports, and (on confirm) remediates — ADR 0004:**
+- *Physical cabling* (host HBA → switch, array port → switch) is the **customer prerequisite** — the
+  tool can't cable; it only zones ports that are cabled and logged into the fabric.
+- The tool reads **both Brocade fabrics** (Switch 1 / odd / F1, Switch 2 / even / F2 — IPs+creds from
+  the sheet), and **reports** the current zoning vs the best practice (*odd port → odd switch, even →
+  even*). On **operator confirmation** it **creates the missing zones** — additive-only:
+  `alicreate` → `zonecreate` → `cfgadd` → `cfgenable` → `cfgsave`; it never removes or replaces an
+  existing zone/config (the active config is shared production).
+- It **re-verifies** with `cfgshow` (zone present) **and** the array `showportdev ns` (the host's WWPNs
+  now log in on the target ports). A host with only one visible path is flagged (no redundancy).
+- The customer supplies the **HBA** in the sheet, not the ports; the tool discovers the array ports
+  (`showport`) and host WWPNs (vCenter) and computes the expected odd/even zoning itself.
 
 **Host side (ESXi for v1; Windows / Linux deferred):**
 - ESXi hosts reachable via **vCenter** (primary) or **ESXi SSH** (fallback — *enabling SSH on each
