@@ -128,6 +128,20 @@ def main() -> int:
             note = body[:60].decode("utf-8", "replace")
         flag = "   <-- not available via WSAPI" if st in (404, 501) else ""
         print(f"{ep:<20}{st:<8}{note}{flag}")
+    # Sample objects: print the first member of the key collections so we can see the exact WSAPI
+    # field shapes (names/types) for building the create + parse logic. Read-only.
+    print("\n--- sample objects (first member of each, truncated) ---")
+    for ep in ("cpgs", "hosts", "volumes", "vluns", "ports", "remotecopygroups"):
+        st, body = call(opener, "GET", f"{base}/{ep}", key=key, timeout=args.timeout)
+        try:
+            members = json.loads(body).get("members", [])
+        except Exception:  # noqa: BLE001
+            members = []
+        if members:
+            print(f"\n== {ep}[0] ==\n{json.dumps(members[0], indent=2)[:1400]}")
+        else:
+            print(f"\n== {ep}: (no members / not available, status {st}) ==")
+
     call(opener, "DELETE", f"{base}/credentials/{key}", key=key, timeout=args.timeout)
     print("\nsession closed. (Note: the fabric nameserver / zoning view - `showportdev ns` - has no")
     print("WSAPI collection, so zoning *verification* stays on SSH regardless of the above.)")
