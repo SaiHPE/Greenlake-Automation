@@ -33,6 +33,37 @@ def find_browser() -> str | None:
     return shutil.which("chrome") or shutil.which("msedge") or shutil.which("chromium")
 
 
+def channel_for_executable(exe: str | None) -> str | None:
+    """Map a browser exe path to the Playwright launch *channel* ('chrome' / 'msedge'), or None
+    (use Playwright's own bundled Chromium) when it's neither a branded Chrome nor Edge. Pure."""
+    if not exe:
+        return None
+    name = os.path.basename(exe).lower()
+    if "msedge" in name or "edge" in name:
+        return "msedge"
+    if "chrome" in name:
+        return "chrome"
+    return None
+
+
+def preferred_channel() -> str | None:
+    """The Playwright launch channel to drive an ALREADY-INSTALLED browser, so the tool needs no
+    bundled/downloaded Chromium: 'chrome' or 'msedge' when one is found (Chrome preferred, Edge
+    fallback), else None to fall back to Playwright's bundled Chromium.
+
+    ``ALLETRA_BROWSER_CHANNEL`` overrides the auto-detection: 'chrome'/'msedge' force that channel;
+    'chromium' forces the bundled build (None); anything else / unset = auto-detect. This is what
+    lets the slim build run on a locked-down box that can't reach the Playwright browser CDN —
+    almost every Windows host already has Edge (and often Chrome).
+    """
+    override = (os.environ.get("ALLETRA_BROWSER_CHANNEL") or "").strip().lower()
+    if override in ("chrome", "msedge"):
+        return override
+    if override == "chromium":
+        return None
+    return channel_for_executable(find_browser())
+
+
 def default_profile_dir() -> str:
     base = os.environ.get("TEMP") or os.environ.get("TMPDIR") or "."
     return str(Path(base) / "alletra-cdp")
