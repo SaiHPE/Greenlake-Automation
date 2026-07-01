@@ -20,7 +20,7 @@ from __future__ import annotations
 import re
 from typing import Callable
 
-from alletra_onboard.application.storage.clients import make_array_cli, make_brocade
+from alletra_onboard.application.storage.clients import make_brocade
 from alletra_onboard.domain.storage import (
     DiscoveryReport,
     ExpectedZone,
@@ -33,42 +33,6 @@ from alletra_onboard.domain.storage import (
 )
 
 _WWPN_RE = re.compile(r"^(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}$")
-_HEX16 = re.compile(r"\b[0-9A-Fa-f]{16}\b")  # bare 16-hex WWPN (array showport / showportdev ns form)
-
-
-def array_target_ports(showport: str) -> list[tuple[str, Fabric, str]]:
-    """FC target ports that are READY -> [(n:s:p, fabric, array_port_wwpn)]. Skips iSCSI + loss_sync.
-
-    showport columns: N:S:P  Mode  State  Node_WWN  Port_WWN  Type  Protocol  Label
-    """
-    out: list[tuple[str, Fabric, str]] = []
-    for line in (showport or "").splitlines():
-        p = line.split()
-        if len(p) >= 7 and ":" in p[0] and p[1] == "target" and p[2] == "ready" and "FC" in p:
-            fabric: Fabric = "odd" if int(p[0].split(":")[2]) % 2 == 1 else "even"
-            out.append((p[0], fabric, normalize_wwpn(p[4])))
-    return out
-
-
-def parse_ns(block: str) -> list[tuple[str, str]]:
-    """Parse `showportdev ns` -> [(host_name, host_port_wwpn)], excluding the array's own self-row.
-
-    Rows start with the PtId (0x…); the three 16-hex tokens are Node_WWN, Port_WWN, vp_WWN. We take
-    Port_WWN (the initiator) and skip the array's self-listing (Node 2FF7… or Port == vp_WWN).
-    """
-    out: list[tuple[str, str]] = []
-    for line in (block or "").splitlines():
-        if not line.strip().startswith("0x"):
-            continue
-        hexes = [normalize_wwpn(h) for h in _HEX16.findall(line)]
-        if len(hexes) < 2:
-            continue
-        node, port = hexes[0], hexes[1]
-        vp = hexes[2] if len(hexes) >= 3 else ""
-        if node.startswith("2FF7") or port == vp:
-            continue
-        out.append((line.split()[-1], port))
-    return out
 
 
 def _is_wwpn(token: str) -> bool:
@@ -152,36 +116,26 @@ def parse_active_zones(cfgshow: str) -> tuple[dict[str, set[str]], str | None]:
     return resolved, (effective_cfg or defined_cfg)
 
 
-def build_report(
-    intent: ProvisioningIntent,
-    discovery: DiscoveryReport,
-    *,
-    array_cli_factory: Callable = make_array_cli,
-) -> ZoningReport:
-    """Verify dual-fabric zoning FROM THE ARRAY (read-only) and reconcile against the expected hosts."""
+def build_report(intent: ProvisioningIntent, discovery: DiscoveryReport) -> ZoningReport:
+    """Verify dual-fabric zoning by COMPUTING over the DiscoveryReport (which already read the array's
+    showportdev ns) and reconciling against the expected hosts. No array or switch read here."""
     report = ZoningReport()
-    ns_by_port: dict[str, dict[str, str]] = {}     # n:s:p -> {host_wwpn: host_name}
-    ports: list[tuple[str, Fabric, str]] = []
-    try:
-        with array_cli_factory(intent.array) as cli:
-            ports = array_target_ports(cli.run("showport"))
-            for nsp, _fabric, _arr in ports:
-                ns_by_port[nsp] = {wwpn: name for (name, wwpn) in parse_ns(cli.run(f"showportdev ns {nsp}"))}
-    except Exception as exc:  # noqa: BLE001
-        report.error = f"Could not read the array over SSH for zoning ({intent.array.host}): {exc}"
-        return report
-    if not ports:
-        report.notes.append("No ready FC target ports found on the array (showport) — nothing to verify.")
+    if not discovery.array_ports:
+        report.notes.append(
+            "No array FC target ports in the discovery — run Discovery first (and check it reached the array)."
+        )
         return report
 
+    # The array's per-port nameserver (from discovery) is the effective zoning, by fabric.
     union: dict[Fabric, set[str]] = {"odd": set(), "even": set()}
-    arr_by_fabric: dict[Fabric, list[str]] = {"odd": [], "even": []}
     name_by_wwpn: dict[str, str] = {}
-    for nsp, fabric, arr in ports:
-        arr_by_fabric[fabric].append(arr)
-        for wwpn, name in ns_by_port[nsp].items():
-            union[fabric].add(wwpn)
-            name_by_wwpn[wwpn] = name
+    for entry in discovery.nameserver:
+        union[entry.fabric].add(entry.host_wwpn)
+        if entry.host_name:
+            name_by_wwpn[entry.host_wwpn] = entry.host_name
+    arr_by_fabric: dict[Fabric, list[str]] = {"odd": [], "even": []}
+    for port in discovery.array_ports:
+        arr_by_fabric[port.fabric].append(port.wwpn)
 
     # Expected hosts: prefer the vCenter discovery list; otherwise verify whoever the array reports.
     host_wwpns: dict[str, set[str]] = {}
