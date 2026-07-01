@@ -115,10 +115,12 @@ cd alletra-onboard; .\start.ps1
 **4. Packaged `.exe` (customers — no Python, no git, no Node).** Two self-contained Windows builds
 are attached to a **tagged** GitHub Release (push a `vX.Y.Z` tag → `.github/workflows/exe.yml`
 builds both on a Windows runner):
-- **`alletra-onboard-win64.zip`** (~60 MB) — the **slim** build; downloads Chromium (~150 MB) on
-  first launch through the proxy. Use this by default.
-- **`alletra-onboard-offline-win64.zip`** (~210 MB) — **bundles Chromium**; use it where the proxy
-  blocks Playwright's browser CDN.
+- **`alletra-onboard-win64.zip`** (~60 MB) — the **slim** build. It **drives an already-installed
+  Chrome/Edge** (which almost every Windows box has) — no download. Only if *no* branded browser is
+  present does it download Chromium (~150 MB) on first launch. Use this by default. (Force a choice
+  with `ALLETRA_BROWSER_CHANNEL=chrome|msedge|chromium`.)
+- **`alletra-onboard-offline-win64.zip`** (~210 MB) — **bundles Chromium**; use it on a locked-down
+  box with **no** Chrome/Edge installed *and* no route to Playwright's browser CDN.
 
 Extract the zip and **double-click `AlletraOnboard.exe`** (inside the `AlletraOnboard\` folder).
 It serves the web app at `http://127.0.0.1:8765` and opens the browser. Run it **as Administrator**
