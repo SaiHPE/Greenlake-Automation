@@ -1,4 +1,5 @@
-import { Box, Button, CheckBox, Text } from 'grommet';
+import { Box, Button, CheckBox, Notification, Text } from 'grommet';
+import { useState } from 'react';
 import { Section } from '../components';
 import { ACTION_CATALOG, ActionKey, MODE_PRESETS, RunMode } from '../modes';
 
@@ -7,13 +8,27 @@ interface Props {
   custom: ActionKey[];
   setMode: (mode: RunMode) => void;
   setCustom: (keys: ActionKey[]) => void;
-  onDone: () => void;
-  locked?: boolean; // once a run exists the mode is fixed (it shaped the run + the sheet validation)
+  onConfirm: () => Promise<void>; // mints the run from the uploaded sheet + this mode, then advances
+  locked?: boolean; // once a run exists the mode is fixed (it shaped the run)
 }
 
-export function ModeStep({ mode, custom, setMode, setCustom, onDone, locked }: Props) {
+export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked }: Props) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const toggle = (key: ActionKey, checked: boolean) =>
     setCustom(checked ? [...custom, key] : custom.filter((k) => k !== key));
+
+  const confirm = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm();
+    } catch (exc: any) {
+      setError(String(exc.message ?? exc));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <Box gap="medium">
@@ -84,12 +99,16 @@ export function ModeStep({ mode, custom, setMode, setCustom, onDone, locked }: P
         </Text>
       )}
 
+      {error && (
+        <Notification status="critical" title="Could not create the run" message={error} onClose={() => setError(null)} />
+      )}
+
       <Button
         primary
         alignSelf="start"
-        label="Continue → Prerequisites"
-        disabled={mode === 'CUSTOM' && custom.length === 0}
-        onClick={onDone}
+        label={busy ? 'Creating run…' : locked ? 'Continue →' : 'Create run & continue →'}
+        disabled={busy || (mode === 'CUSTOM' && custom.length === 0)}
+        onClick={confirm}
       />
     </Box>
   );

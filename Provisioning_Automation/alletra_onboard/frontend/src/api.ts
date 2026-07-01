@@ -105,19 +105,20 @@ export const createRun = (workItem: any, mode = 'FULL_ONBOARDING', selectedSteps
   request<{ run: RunRecord }>('POST', '/runs', { work_item: workItem, mode, selected_steps: selectedSteps });
 
 export interface InitSheetUploadResult {
-  run: RunRecord;
-  work_item: any; // parsed values for review (admin password never included)
+  token: string; // single-use hold for the parsed sheet; the run is minted from it + the chosen mode
+  work_item: any; // parsed values for review (admin/device passwords never included)
   credentials_saved: boolean;
 }
-// Upload the filled Initialisation_sheet.xlsx (base64). The server parses it, writes the GreenLake
-// API creds to .env, and creates the run — so the secret never round-trips through the browser.
-// `mode`/`selectedSteps` scope which sheet fields are required and which steps the run will render.
-export const uploadInitSheet = (contentB64: string, mode = 'FULL_ONBOARDING', selectedSteps: string[] = []) =>
-  request<InitSheetUploadResult>('POST', '/init-sheet/upload', {
-    content_b64: contentB64,
-    mode,
-    selected_steps: selectedSteps,
-  });
+// Upload the filled Initialisation_sheet.xlsx (base64). The server validates it is COMPLETE, writes
+// the GreenLake API creds to .env, and HOLDS the parsed sheet server-side — returning a token. No run
+// yet: the run is created later from this token + the chosen mode (createRunFromSheet), so device
+// passwords never round-trip through the browser. See ADR 0005 (revision).
+export const uploadInitSheet = (contentB64: string) =>
+  request<InitSheetUploadResult>('POST', '/init-sheet/upload', { content_b64: contentB64 });
+
+// Mint the run from a held sheet once the operator picks a mode.
+export const createRunFromSheet = (token: string, mode = 'FULL_ONBOARDING', selectedSteps: string[] = []) =>
+  request<{ run: RunRecord }>('POST', '/runs/from-sheet', { token, mode, selected_steps: selectedSteps });
 export const getRun = (runId: string) => request<{ run: RunRecord; work_item: any }>('GET', `/runs/${runId}`);
 export const getEvents = (runId: string) => request<{ events: RunEvent[] }>('GET', `/runs/${runId}/events`);
 

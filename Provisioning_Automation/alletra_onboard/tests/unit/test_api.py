@@ -163,14 +163,72 @@ def test_template_and_parse_round_trip(tmp_path):
     assert bad.status_code == 422
 
 
-def test_init_sheet_template_and_upload(tmp_path, monkeypatch):
+# A COMPLETE sheet: every main-tab required field + the Provisioning tab (ADR 0005 revision — the
+# sheet is filled in full BEFORE a mode is chosen, and the upload validates the whole superset).
+_COMPLETE_MAIN = {
+    "gl_client_id": "client-123", "gl_client_secret": "secret-xyz",
+    "gl_token_url": "https://global.api.greenlake.hpe.com/authorization/v2/oauth2/t/token",
+    "serial_number": "SGHD45FF0Y", "part_number": "S0B84A", "subscription_key": "YHHDKEY123",
+    "service_catalog_region_id": "ap-northeast", "dscc_region_code": "jp1",
+    "mgmt_ipv4": "10.64.154.225", "mask": "255.255.248.0", "gateway": "10.64.159.254",
+    "dns1": "10.203.96.10", "ntp": "ntp1.example.net", "timezone": "Asia/Kolkata",
+    "contact_first_name": "Jane", "contact_last_name": "Doe", "contact_language": "English",
+    "contact_company": "HPE", "contact_phone": "8000000000", "contact_email": "jane@example.com",
+    "dscc_system_name": "MPB10K-TEST", "dscc_country": "India",
+    "secret_name": "b10000-admin", "secret_username": "3paradm",
+}
+_COMPLETE_PROV = {
+    "prov_array_host": "10.64.154.225", "prov_array_user": "3paradm", "prov_array_password": "arraypw",
+    "prov_vcenter_host": "vc.example.com", "prov_vcenter_user": "administrator@vsphere.local",
+    "prov_vcenter_password": "vcpw",
+    "prov_host_set": "CRVLZ_Hostset", "prov_vol_prefix": "CRV_Prod", "prov_vol_size_gib": "1024",
+}
+
+
+def _fill_template(template_bytes: bytes, values: dict[str, str], prov: dict[str, str] | None = None) -> str:
+    """Fill the Value column of the Initialisation tab (and optionally the Provisioning tab) -> base64 xlsx."""
     import base64
     import io
 
     from openpyxl import load_workbook
 
+    from alletra_onboard.application.init_sheet import (
+        PROVISIONING_SECTIONS,
+        PROVISIONING_SHEET_NAME,
+        SECTIONS,
+    )
+
+    def fill(ws, sections, data):
+        label_to_key = {label: key for _, fields in sections for key, label, _, _ in fields}
+        for row in ws.iter_rows(min_row=2):
+            if row[0].value is None:
+                continue
+            key = label_to_key.get(str(row[0].value).strip().removesuffix("*").strip())
+            if key in data:
+                row[1].value = data[key]
+
+    wb = load_workbook(io.BytesIO(template_bytes))
+    fill(wb.active, SECTIONS, values)
+    if prov is not None and PROVISIONING_SHEET_NAME in wb.sheetnames:
+        fill(wb[PROVISIONING_SHEET_NAME], PROVISIONING_SECTIONS, prov)
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return base64.b64encode(buffer.getvalue()).decode()
+
+
+def _upload_complete(client) -> str:
+    """Upload a complete sheet and return the hold token."""
+    template = client.get("/init-sheet/template").content
+    b64 = _fill_template(template, _COMPLETE_MAIN, _COMPLETE_PROV)
+    resp = client.post("/init-sheet/upload", json={"content_b64": b64})
+    assert resp.status_code == 200, resp.text
+    return resp.json()["token"]
+
+
+def test_init_sheet_upload_holds_complete_sheet_and_saves_creds(tmp_path, monkeypatch):
+    import base64
+
     from alletra_onboard.application.configuring import read_env
-    from alletra_onboard.application.init_sheet import SECTIONS
 
     monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
     client = _client(tmp_path)
@@ -179,35 +237,14 @@ def test_init_sheet_template_and_upload(tmp_path, monkeypatch):
     assert template.status_code == 200
     assert "spreadsheetml" in template.headers["content-type"]
 
-    values = {
-        "gl_client_id": "client-123", "gl_client_secret": "secret-xyz",
-        "gl_token_url": "https://global.api.greenlake.hpe.com/authorization/v2/oauth2/t/token",
-        "serial_number": "SGHD45FF0Y", "part_number": "S0B84A", "subscription_key": "YHHDKEY123",
-        "service_catalog_region_id": "ap-northeast", "dscc_region_code": "jp1",
-        "mgmt_ipv4": "10.64.154.225", "mask": "255.255.248.0", "gateway": "10.64.159.254",
-        "dns1": "10.203.96.10", "ntp": "ntp1.example.net", "timezone": "Asia/Kolkata",
-        "contact_first_name": "Jane", "contact_last_name": "Doe", "contact_language": "English",
-        "contact_company": "HPE", "contact_phone": "8000000000", "contact_email": "jane@example.com",
-        "dscc_system_name": "MPB10K-TEST", "dscc_country": "India",
-        "secret_name": "b10000-admin", "secret_username": "3paradm",
-    }
-    label_to_key = {label: key for _, fields in SECTIONS for key, label, _, _ in fields}
-    wb = load_workbook(io.BytesIO(template.content))
-    for row in wb.active.iter_rows(min_row=2):
-        if row[0].value is None:
-            continue
-        key = label_to_key.get(str(row[0].value).strip().removesuffix("*").strip())
-        if key in values:
-            row[1].value = values[key]
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    b64 = base64.b64encode(buffer.getvalue()).decode()
-
+    b64 = _fill_template(template.content, _COMPLETE_MAIN, _COMPLETE_PROV)
     resp = client.post("/init-sheet/upload", json={"content_b64": b64})
-    assert resp.status_code == 200
+    assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["run"]["serial_number"] == "SGHD45FF0Y"
+    # A complete sheet is HELD (token), not turned into a run yet — the mode step mints the run.
+    assert body["token"] and "run" not in body
     assert body["credentials_saved"] is True
+    assert body["work_item"]["serial_number"] == "SGHD45FF0Y"
     # the admin password is not in the sheet at all, and is never echoed to the UI
     assert "password" not in body["work_item"]["dscc_setup"]
     # GreenLake credentials from the sheet were written to .env
@@ -220,58 +257,40 @@ def test_init_sheet_template_and_upload(tmp_path, monkeypatch):
     assert bad.status_code == 422
 
 
-def _fill_template(template_bytes: bytes, values: dict[str, str]) -> str:
-    """Fill the Value column of the Initialisation tab for the given keys -> base64 xlsx."""
-    import base64
-    import io
-
-    from openpyxl import load_workbook
-
-    from alletra_onboard.application.init_sheet import SECTIONS
-
-    label_to_key = {label: key for _, fields in SECTIONS for key, label, _, _ in fields}
-    wb = load_workbook(io.BytesIO(template_bytes))
-    for row in wb.active.iter_rows(min_row=2):
-        if row[0].value is None:
-            continue
-        key = label_to_key.get(str(row[0].value).strip().removesuffix("*").strip())
-        if key in values:
-            row[1].value = values[key]
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    return base64.b64encode(buffer.getvalue()).decode()
-
-
-def test_verify_only_upload_lands_on_verify_without_greenlake_creds(tmp_path, monkeypatch):
-    # Decoupling: a sparse sheet (serial + array IP only) + mode=VERIFY_ONLY creates a run that
-    # resumes on the verify step and does NOT write GreenLake creds to .env.
-    from alletra_onboard.application.configuring import read_env
-
+def test_incomplete_sheet_is_rejected_regardless_of_mode(tmp_path, monkeypatch):
+    # The sheet must be COMPLETE at upload (no mode is chosen yet) — a sparse sheet is a clean 422.
     monkeypatch.chdir(tmp_path)
     client = _client(tmp_path)
     template = client.get("/init-sheet/template").content
     b64 = _fill_template(template, {"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.154.225"})
+    resp = client.post("/init-sheet/upload", json={"content_b64": b64})
+    assert resp.status_code == 422
+    assert "API Client" in resp.text  # missing GreenLake creds reported
 
-    resp = client.post("/init-sheet/upload", json={"content_b64": b64, "mode": "VERIFY_ONLY"})
+
+def test_run_from_sheet_creates_run_with_chosen_mode(tmp_path, monkeypatch):
+    # The mode is chosen AFTER the sheet: /runs/from-sheet mints the run from the held sheet + mode.
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    token = _upload_complete(client)
+
+    resp = client.post("/runs/from-sheet", json={"token": token, "mode": "VERIFY_ONLY"})
     assert resp.status_code == 200, resp.text
     run = resp.json()["run"]
     assert run["mode"] == "VERIFY_ONLY"
     assert run["current_phase"] == "CONFIG_VERIFY"  # resumes straight to the SSH check
+    assert run["serial_number"] == "SGHD45FF0Y"
 
-    # no GreenLake creds in the sheet -> nothing written to .env
-    env_path = tmp_path / ".env"
-    assert not env_path.exists() or "GL_CLIENT_ID" not in read_env(env_path)
+    # the hold is single-use — a second attempt with the same token is a clean 410
+    again = client.post("/runs/from-sheet", json={"token": token, "mode": "BOTH"})
+    assert again.status_code == 410
 
 
-def test_full_mode_upload_still_requires_every_field(tmp_path, monkeypatch):
-    # Default/full mode keeps the strict validation: a sparse sheet is a clean 422.
+def test_run_from_sheet_unknown_token_is_410(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = _client(tmp_path)
-    template = client.get("/init-sheet/template").content
-    b64 = _fill_template(template, {"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.154.225"})
-    resp = client.post("/init-sheet/upload", json={"content_b64": b64, "mode": "FULL_ONBOARDING"})
-    assert resp.status_code == 422
-    assert "API Client" in resp.text  # missing GreenLake creds reported
+    resp = client.post("/runs/from-sheet", json={"token": "does-not-exist", "mode": "FULL_ONBOARDING"})
+    assert resp.status_code == 410
 
 
 def test_config_roundtrip_masks_secret(tmp_path, monkeypatch):

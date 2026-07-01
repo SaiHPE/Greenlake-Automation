@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunRecord
@@ -54,6 +55,18 @@ class SqliteRunStore:
                 CREATE TABLE IF NOT EXISTS provisioning_intents (
                     run_id TEXT PRIMARY KEY,
                     payload TEXT NOT NULL
+                )
+                """
+            )
+            # A complete sheet uploaded but not yet turned into a run (the operator hasn't picked a
+            # mode). Held server-side so device passwords never round-trip to the browser; popped when
+            # the mode is chosen. Durable so an upload survives a browser refresh / server restart.
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pending_sheets (
+                    token TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL
                 )
                 """
             )
@@ -152,6 +165,46 @@ class SqliteRunStore:
         if row is None:
             return None
         return ProvisioningIntent.model_validate(json.loads(row[0]))
+
+    def save_pending_sheet(
+        self, token: str, item: ArrayWorkItem, intent: ProvisioningIntent | None
+    ) -> None:
+        """Hold a parsed-but-not-yet-run sheet under an opaque token (secrets preserved, same as the
+        work-item / intent serializers). The row lives in the gitignored state DB only."""
+        payload = json.dumps(
+            {
+                "work_item": json.loads(_work_item_json(item)),
+                "provisioning_intent": json.loads(_provisioning_intent_json(intent)) if intent else None,
+            }
+        )
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO pending_sheets (token, payload, created_at) VALUES (?, ?, ?)
+                ON CONFLICT(token) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at
+                """,
+                (token, payload, datetime.now(timezone.utc).isoformat()),
+            )
+
+    def pop_pending_sheet(
+        self, token: str
+    ) -> tuple[ArrayWorkItem, ProvisioningIntent | None] | None:
+        """Fetch AND delete a pending sheet (single-use — one upload mints one run)."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM pending_sheets WHERE token = ?", (token,)
+            ).fetchone()
+            if row is None:
+                return None
+            connection.execute("DELETE FROM pending_sheets WHERE token = ?", (token,))
+        data = json.loads(row[0])
+        item = ArrayWorkItem.model_validate(data["work_item"])
+        intent = (
+            ProvisioningIntent.model_validate(data["provisioning_intent"])
+            if data.get("provisioning_intent")
+            else None
+        )
+        return item, intent
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.database_path, timeout=5)
