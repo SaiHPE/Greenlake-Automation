@@ -20,6 +20,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from alletra_onboard.adapters.browser.debug_browser import preferred_channel
 from alletra_onboard.adapters.browser.locators import CLOUDINIT, CLOUDINIT_TEXT
 from alletra_onboard.domain.models import ArrayWorkItem, BrowserResultStatus, NetworkConfig
 
@@ -73,8 +74,11 @@ class CloudinitWizardAdapter:
                 if attached:
                     browser = await pw.chromium.connect_over_cdp(self.cdp_url)
                 else:
+                    # Drive the already-installed Chrome/Edge (channel) when present, so no
+                    # bundled/downloaded Chromium is needed; None -> Playwright's own Chromium.
                     browser = await pw.chromium.launch(
                         headless=self.headless,
+                        channel=preferred_channel(),
                         args=[] if self.headless else ["--start-maximized"],
                     )
             except Exception:  # noqa: BLE001 - no browser (chromium missing, or CDP unreachable).

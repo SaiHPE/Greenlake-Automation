@@ -4,10 +4,14 @@ PyInstaller needs a real script (not the ``onboard`` console-script). This mirro
 it starts uvicorn in-process and opens the browser. When frozen it runs from the .exe's own folder
 so local state (.env, state DB, artifacts) lives next to the executable.
 
-Two build flavours share this script (see alletra_onboard.spec):
-  * bundled   — Chromium is shipped inside the .exe; the runtime hook points Playwright at it.
-  * slim      — no Chromium; ``ensure_chromium()`` downloads it on first run via the bundled
-                Node driver (the same proxy the tool already uses for GreenLake/DSCC).
+Browser strategy (the wizards + selftest): prefer an already-installed Chrome/Edge via Playwright's
+``channel`` (no download), and only fall back to a bundled/downloaded Chromium when no branded
+browser is present. Two build flavours share this script (see alletra_onboard.spec):
+  * bundled — Chromium is shipped inside the .exe; the runtime hook points Playwright at it (used
+              when no Chrome/Edge is installed).
+  * slim    — no Chromium; if a Chrome/Edge is installed it is driven directly, else
+              ``ensure_chromium()`` downloads Chromium on first run via the bundled Node driver
+              (needs the Playwright CDN — a locked-down box should use the offline build).
 """
 
 from __future__ import annotations
@@ -38,7 +42,17 @@ def _place_vcredist(executable: str | None) -> None:
 
 
 def ensure_chromium() -> None:
-    """Make sure Chromium is available + has its MSVC runtime. Downloads on first run (slim build)."""
+    """Make sure a browser is available for the wizards + selftest.
+
+    Prefer an already-installed Chrome/Edge (channel mode) — nothing to download or place. Only a
+    slim build on a box with NO branded browser falls through to downloading Playwright's Chromium
+    (which needs the CDN); a locked-down box should use the offline build instead.
+    """
+    from alletra_onboard.adapters.browser.debug_browser import preferred_channel
+
+    if preferred_channel():
+        return  # an installed Chrome/Edge will be driven directly
+
     from playwright.sync_api import sync_playwright
 
     def _executable() -> str | None:
@@ -80,10 +94,13 @@ def selftest() -> int:
     from playwright.async_api import async_playwright
 
     async def go() -> str:
+        from alletra_onboard.adapters.browser.debug_browser import preferred_channel
+
         async with async_playwright() as pw:
-            # channel="chromium" uses the FULL Chromium binary (what production launches headed),
-            # in new-headless mode so the selftest needs no desktop and no headless-shell.
-            browser = await pw.chromium.launch(headless=True, channel="chromium")
+            # Drive the installed Chrome/Edge if present (what production now prefers); otherwise
+            # channel="chromium" uses the FULL bundled Chromium. Headless new-mode either way, so
+            # the selftest needs no desktop and no headless-shell.
+            browser = await pw.chromium.launch(headless=True, channel=preferred_channel() or "chromium")
             try:
                 page = await browser.new_page()
                 await page.goto("about:blank")
