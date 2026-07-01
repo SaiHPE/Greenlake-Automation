@@ -8,7 +8,6 @@ interface Props {
   run: RunRecord | null;
   events: RunEvent[];
   onDone: () => void;
-  writesEnabled: boolean; // false = the apply (array-write) action is frozen pending live testing
 }
 
 function latest<T>(events: RunEvent[], type: string, key: string): T | null {
@@ -16,7 +15,7 @@ function latest<T>(events: RunEvent[], type: string, key: string): T | null {
   return (event?.data?.[key] as T) ?? null;
 }
 
-export function ProvisionStep({ runId, run, events, onDone, writesEnabled }: Props) {
+export function ProvisionStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const running = run?.status === 'running';
@@ -72,22 +71,12 @@ export function ProvisionStep({ runId, run, events, onDone, writesEnabled }: Pro
             </TableBody>
           </Table>
           {plan.notes.map((n, i) => <Text key={i} size="small" color="status-warning">• {n}</Text>)}
-          {writesEnabled ? (
-            <>
-              <CheckBox
-                label="I reviewed this plan and authorise creating these objects on the array."
-                checked={confirmed}
-                onChange={(e) => setConfirmed(e.target.checked)}
-              />
-              <Button label={running ? 'Creating…' : 'Apply — create on array'} primary disabled={!confirmed || running} onClick={call(() => storageApply(runId))} alignSelf="start" />
-            </>
-          ) : (
-            <Notification
-              status="warning"
-              title="Apply is frozen — preview only"
-              message="Creating host/volumes/exports on the array is disabled pending live-hardware testing. The plan above is what would be created. Enable writes once validated."
-            />
-          )}
+          <CheckBox
+            label="I reviewed this plan and authorise creating these objects on the array."
+            checked={confirmed}
+            onChange={(e) => setConfirmed(e.target.checked)}
+          />
+          <Button label={running ? 'Creating…' : 'Apply — create on array'} primary disabled={!confirmed || running} onClick={call(() => storageApply(runId))} alignSelf="start" />
         </Section>
       )}
 

@@ -7,15 +7,16 @@
 > hosts** (from vCenter discovery), and flags any expected host seen on neither fabric as
 > **unverified** ("not zoned OR offline" — the array can't distinguish the two). The Brocade switch
 > is **not** a prerequisite for verification; its IPs/creds are needed **only** to *create* missing
-> zones (remediation). Remediation writes are additionally **frozen** behind
-> `provisioning_writes_enabled` until validated against live hardware. The switch-side `cfgshow`
-> parser is retained for an optional config-hygiene audit. The rest of this ADR (the odd/even rule,
-> additive-only, `cfgenable`-not-`cfgsave`, preview+confirm) stands unchanged for the remediation path.
+> zones (remediation), which is gated behind preview + explicit operator confirmation (the global
+> write-freeze was removed once verification was validated against live hardware — preview+confirm is
+> the gate). The switch-side `cfgshow` parser is retained for an optional config-hygiene audit. The
+> rest of this ADR (the odd/even rule, additive-only, `cfgenable`-not-`cfgsave`, preview+confirm)
+> stands unchanged for the remediation path.
 
 For FC provisioning, SAN zoning is the prerequisite that lets a host actually *see* a LUN. The tool
 **verifies** the current zoning (array-side, read-only — see the revision above), **reports** the
 status and the remediations needed by the cabling best practice, and — on **explicit operator
-confirmation**, and only once writes are unfrozen — **creates the missing zones itself**
+confirmation** — **creates the missing zones itself**
 (`alicreate` → `zonecreate` → `cfgadd` → `cfgenable`) on the switch. It then re-verifies.
 
 > **Activation discipline (verified by deep research, 2026-06-26).** The apply step is **`cfgenable`**,
