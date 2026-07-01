@@ -67,6 +67,7 @@ from alletra_onboard.application.onboarding_service import (
     RunBusyError,
     RunNotFoundError,
     StepPreconditionError,
+    WritesFrozenError,
 )
 from alletra_onboard.application import prereqs
 from alletra_onboard.application.preflight_service import PreflightService
@@ -265,6 +266,8 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="a step is already running for this run") from exc
         except StepPreconditionError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except WritesFrozenError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         except RunNotFoundError as exc:
             # e.g. a provisioning step on a run that has no provisioning intent
             raise HTTPException(status_code=404, detail=str(exc) or "not found") from exc
@@ -323,6 +326,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def run_storage_apply(run_id: str) -> RunResponse:
         # Creates host/volumes/exports on the array — the UI must preview + confirm first.
         return _start_step(run_id, lambda: service.start_storage_apply(run_id))
+
+    @app.get("/provisioning/capabilities")
+    async def provisioning_capabilities() -> dict:
+        # The UI freezes the apply (write) actions when this is false — see config.provisioning_writes_enabled.
+        return {"writes_enabled": load_settings().provisioning_writes_enabled}
 
     # ------------------------------------------------------------------ events
 
