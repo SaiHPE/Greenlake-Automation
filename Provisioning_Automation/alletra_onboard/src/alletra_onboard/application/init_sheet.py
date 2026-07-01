@@ -147,6 +147,14 @@ def required_keys_for(mode: RunMode, selected_steps: list[str] | None = None) ->
     return keys
 
 
+def all_required_keys() -> set[str]:
+    """Every main-tab field a COMPLETE sheet must have — the union across all steps, mode-independent.
+    RunMode.BOTH enables the whole step registry, so its required set is the full superset. The upload
+    validates against this (see ADR 0005 revision): the sheet is filled once, in full, BEFORE a mode
+    is chosen, so an incomplete sheet is rejected regardless of the intent picked later."""
+    return required_keys_for(RunMode.BOTH)
+
+
 @dataclass
 class ParsedInitSheet:
     work_item: ArrayWorkItem
@@ -273,19 +281,22 @@ def parse_workbook_bytes(
     *,
     mode: RunMode = RunMode.FULL_ONBOARDING,
     selected_steps: list[str] | None = None,
+    complete: bool = False,
 ) -> ParsedInitSheet:
     """Read a filled Initialisation_sheet.xlsx back into (GreenLake creds, ArrayWorkItem).
 
-    Validation is scoped to the run `mode`: only the fields the selected steps need are required
-    (default FULL_ONBOARDING keeps every field required, as before).
+    ``complete=True`` (the upload path, ADR 0005 revision) validates the FULL superset and always
+    parses the Provisioning tab — the sheet is filled once, in full, before a mode is chosen. Passing
+    a ``mode`` instead scopes validation to that mode's fields (used where a mode is already known).
     """
     workbook = load_workbook(io.BytesIO(data), data_only=True)
     sheet = workbook[SHEET_NAME] if SHEET_NAME in workbook.sheetnames else workbook.active
 
     values = _read_tab(sheet, _LABEL_TO_KEY)
-    parsed = _build(values, required_keys_for(mode, selected_steps))
+    required = all_required_keys() if complete else required_keys_for(mode, selected_steps)
+    parsed = _build(values, required)
 
-    if _provisioning_selected(mode, selected_steps):
+    if complete or _provisioning_selected(mode, selected_steps):
         parsed.provisioning_intent = _parse_provisioning_tab(workbook)
     return parsed
 

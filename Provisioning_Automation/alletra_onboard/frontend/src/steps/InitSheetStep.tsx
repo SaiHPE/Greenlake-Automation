@@ -2,14 +2,11 @@ import { Anchor, Box, Button, FileInput, Notification, Spinner, Text } from 'gro
 import { useState } from 'react';
 import { API, CheckReport, checkConfig, InitSheetUploadResult, uploadInitSheet } from '../api';
 import { Instructions, Section } from '../components';
-import { actionKeysFor, ActionKey, RunMode } from '../modes';
 import { fromParsedWorkItem, WorkItemForm } from '../workItem';
 
 interface Props {
   setForm: (form: WorkItemForm) => void;
-  onRunCreated: (runId: string) => void;
-  mode: RunMode;
-  selectedSteps: ActionKey[];
+  onUploaded: (token: string) => void;
 }
 
 async function fileToBase64(file: File): Promise<string> {
@@ -19,7 +16,7 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
-export function InitSheetStep({ setForm, onRunCreated, mode, selectedSteps }: Props) {
+export function InitSheetStep({ setForm, onUploaded }: Props) {
   const [result, setResult] = useState<InitSheetUploadResult | null>(null);
   const [report, setReport] = useState<CheckReport | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -30,7 +27,7 @@ export function InitSheetStep({ setForm, onRunCreated, mode, selectedSteps }: Pr
     setError(null);
     setReport(null);
     try {
-      const res = await uploadInitSheet(await fileToBase64(file), mode, selectedSteps);
+      const res = await uploadInitSheet(await fileToBase64(file));
       setResult(res);
       setForm(fromParsedWorkItem(res.work_item));
     } catch (exc: any) {
@@ -53,7 +50,6 @@ export function InitSheetStep({ setForm, onRunCreated, mode, selectedSteps }: Pr
   };
 
   const item = result?.work_item;
-  const wantsGreenlake = actionKeysFor(mode, selectedSteps).includes('greenlake');
 
   return (
     <Box gap="medium">
@@ -103,10 +99,8 @@ export function InitSheetStep({ setForm, onRunCreated, mode, selectedSteps }: Pr
             <Text size="small"><b>DSCC system:</b> {item.dscc_setup?.system_name} ({item.dscc_setup?.country}) &nbsp; <b>Admin:</b> {item.dscc_setup?.username}</Text>
           </Box>
           <Box direction="row" gap="small" align="center">
-            <Button primary label="Continue →" onClick={() => onRunCreated(result!.run.run_id)} />
-            {wantsGreenlake && (
-              <Button label={busy === 'check' ? 'Testing…' : 'Test GreenLake connection'} disabled={busy !== null} onClick={test} />
-            )}
+            <Button primary label="Continue → Choose mode" onClick={() => onUploaded(result!.token)} />
+            <Button label={busy === 'check' ? 'Testing…' : 'Test GreenLake connection'} disabled={busy !== null} onClick={test} />
             {busy === 'check' && <Spinner />}
           </Box>
           {report && (

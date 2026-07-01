@@ -54,6 +54,7 @@ from alletra_onboard.api.schemas import (
     PreflightResponse,
     ProvisionStepRequest,
     RunDetailResponse,
+    RunFromSheetRequest,
     RunListResponse,
     RunResponse,
 )
@@ -64,6 +65,7 @@ from alletra_onboard.application.init_sheet import build_template_bytes, parse_w
 from alletra_onboard.application.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.onboarding_service import (
     OnboardingService,
+    PendingSheetNotFoundError,
     RunBusyError,
     RunNotFoundError,
     StepPreconditionError,
@@ -87,7 +89,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         service = OnboardingService(settings, store, InMemoryEventBus())
     env_path = Path(".env")
 
-    app = FastAPI(title="Alletra Onboard", version="0.4.1")
+    app = FastAPI(title="Alletra Onboard", version="0.5.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # vite dev server
@@ -203,18 +205,21 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.post("/init-sheet/upload", response_model=InitSheetUploadResponse)
     async def init_sheet_upload(request: InitSheetUploadRequest) -> InitSheetUploadResponse:
+        # The sheet is COMPLETE intake, uploaded before a mode is chosen (ADR 0005 revision): validate
+        # the full superset, save GreenLake creds, and HOLD the parsed sheet server-side. No run yet —
+        # picking a mode (POST /runs/from-sheet) mints it. Device passwords never leave the server.
         try:
             raw = base64.b64decode(request.content_b64, validate=True)
         except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=422, detail="Upload was not valid base64") from exc
         try:
-            parsed = parse_workbook_bytes(raw, mode=request.mode, selected_steps=request.selected_steps)
+            parsed = parse_workbook_bytes(raw, complete=True)
         except Exception as exc:  # noqa: BLE001 - bad xlsx / missing fields -> a clear 422
             raise HTTPException(status_code=422, detail=f"Initialisation sheet did not parse: {exc}") from exc
 
         # Workspace API credentials from the sheet land in the gitignored .env (no manual typing).
-        # Only when present — a provision-only / verify-only sheet won't carry GreenLake creds.
-        if parsed.gl_client_id and parsed.gl_client_secret:
+        credentials_saved = bool(parsed.gl_client_id and parsed.gl_client_secret)
+        if credentials_saved:
             update_gl_credentials(
                 env_path,
                 {
@@ -223,16 +228,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                     "GL_TOKEN_URL": parsed.gl_token_url,
                 },
             )
-        run = service.create_run(
-            parsed.work_item,
-            mode=request.mode,
-            selected_steps=request.selected_steps,
-            provisioning_intent=parsed.provisioning_intent,
-        )
+        token = service.stash_pending_sheet(parsed.work_item, parsed.provisioning_intent)
         data = parsed.work_item.model_dump(mode="json")
         data["subscription_key"] = parsed.work_item.subscription_key.get_secret_value()
         data["dscc_setup"].pop("password", None)  # never echo the admin password to the UI
-        return InitSheetUploadResponse(run=run, work_item=data)
+        return InitSheetUploadResponse(token=token, work_item=data, credentials_saved=credentials_saved)
 
     # ------------------------------------------------------------------ runs + steps
 
@@ -243,6 +243,20 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                 request.work_item, mode=request.mode, selected_steps=request.selected_steps
             )
         )
+
+    @app.post("/runs/from-sheet", response_model=RunResponse)
+    async def create_run_from_sheet(request: RunFromSheetRequest) -> RunResponse:
+        # The operator picked a mode for a previously-uploaded complete sheet -> mint the run now.
+        try:
+            run = service.create_run_from_pending(
+                request.token, mode=request.mode, selected_steps=request.selected_steps
+            )
+        except PendingSheetNotFoundError as exc:
+            raise HTTPException(
+                status_code=410,
+                detail="This uploaded sheet is no longer held — re-upload the Initialisation sheet.",
+            ) from exc
+        return RunResponse(run=run)
 
     @app.get("/runs", response_model=RunListResponse)
     async def list_runs() -> RunListResponse:
