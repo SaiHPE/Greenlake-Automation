@@ -147,7 +147,7 @@ export interface HostHba {
 export interface DiscoveryReport {
   array_ports: ArrayPort[];
   host_hbas: HostHba[];
-  nameserver: { fabric: string; switch_host: string; wwpn: string; is_array_port: boolean }[];
+  nameserver: { fabric: string; array_port: string; array_wwpn: string; host_wwpn: string; host_name: string }[];
   notes: string[];
   error: string | null;
 }
@@ -171,10 +171,6 @@ export interface PlannedAction {
 export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; error: string | null; }
 export interface ActionOutcome { kind: string; name: string; status: 'created' | 'exists' | 'failed'; detail: string; }
 export interface ProvisioningResult { outcomes: ActionOutcome[]; error: string | null; }
-
-// Whether provisioning WRITE actions are enabled (false = frozen pending live-hardware testing).
-export const getProvisioningCapabilities = () =>
-  request<{ writes_enabled: boolean }>('GET', '/provisioning/capabilities');
 
 export const startDiscover = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/discover`);
 export const zoningPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/preview`);

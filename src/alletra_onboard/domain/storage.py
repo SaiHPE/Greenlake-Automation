@@ -93,12 +93,14 @@ class HostHba(BaseModel):
 
 
 class NameserverEntry(BaseModel):
-    """Who is logged into the fabric, from `nsshow` / array `showportdev ns` — the live truth."""
+    """One host login the ARRAY sees on a target port (from `showportdev ns`) — the live, zoning-
+    filtered truth. The array names the host, so this carries the host WWPN + name per array port."""
 
     fabric: Fabric
-    switch_host: str
-    wwpn: str               # normalized — a logged-in initiator/target WWPN
-    is_array_port: bool = False
+    array_port: str         # n:s:p of the array target port
+    array_wwpn: str         # that port's WWPN (normalized)
+    host_wwpn: str          # the initiator WWPN zoned + logged in to that port (normalized)
+    host_name: str = ""     # the host name the array reports (from the ns SNN)
 
 
 class DiscoveryReport(BaseModel):
