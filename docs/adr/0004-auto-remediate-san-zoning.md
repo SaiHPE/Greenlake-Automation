@@ -1,10 +1,22 @@
 # The tool auto-remediates SAN zoning: discover → report → confirm → create (additive-only)
 
-For FC provisioning, SAN zoning is the prerequisite that lets a host actually *see* a LUN. Rather than
-only verifying it, the tool takes it end-to-end: it **discovers** the current zoning across **both
-Brocade fabrics** (odd / F1 and even / F2), **reports** the current status and the remediations needed
-by the cabling best practice, and — on **explicit operator confirmation** — **creates the missing
-zones itself** (`alicreate` → `zonecreate` → `cfgadd` → `cfgenable`). It then re-verifies.
+> **Revision (2026-06-30, validated against the live LZ array): VERIFICATION IS ARRAY-SIDE — no
+> switch login.** The fabric name server is zoning-filtered, so each array FC target port's
+> `showportdev ns` *is* its effective zoning, and the array names each host. So the tool verifies
+> zoning **read-only from the array** (`showport` + `showportdev ns`), cross-references the **expected
+> hosts** (from vCenter discovery), and flags any expected host seen on neither fabric as
+> **unverified** ("not zoned OR offline" — the array can't distinguish the two). The Brocade switch
+> is **not** a prerequisite for verification; its IPs/creds are needed **only** to *create* missing
+> zones (remediation). Remediation writes are additionally **frozen** behind
+> `provisioning_writes_enabled` until validated against live hardware. The switch-side `cfgshow`
+> parser is retained for an optional config-hygiene audit. The rest of this ADR (the odd/even rule,
+> additive-only, `cfgenable`-not-`cfgsave`, preview+confirm) stands unchanged for the remediation path.
+
+For FC provisioning, SAN zoning is the prerequisite that lets a host actually *see* a LUN. The tool
+**verifies** the current zoning (array-side, read-only — see the revision above), **reports** the
+status and the remediations needed by the cabling best practice, and — on **explicit operator
+confirmation**, and only once writes are unfrozen — **creates the missing zones itself**
+(`alicreate` → `zonecreate` → `cfgadd` → `cfgenable`) on the switch. It then re-verifies.
 
 > **Activation discipline (verified by deep research, 2026-06-26).** The apply step is **`cfgenable`**,
 > not `cfgsave`. `cfgenable` activates the change on the running fabric *and* persists it to nonvolatile
