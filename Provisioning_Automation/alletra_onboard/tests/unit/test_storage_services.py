@@ -97,6 +97,22 @@ class FakeBrocade:
         return [(c, "operation succeeded") for c in commands]
 
 
+class FakeArrayCli:
+    """Stand-in for ArrayCliClient — returns canned showport / showportdev ns text per command."""
+
+    def __init__(self, blocks: dict):
+        self.blocks = blocks
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def run(self, cmd: str) -> str:
+        return self.blocks.get(cmd, "")
+
+
 class FakeVCenter:
     def __init__(self, hbas):
         self._hbas = hbas
@@ -202,32 +218,81 @@ def _discovered():
     )
 
 
-def test_zoning_report_marks_present_and_missing_and_remediates_with_cfgenable():
-    report = zoning.build_report(
-        _intent(),
-        _discovered(),
-        brocade_factory=lambda c: FakeBrocade("", CFGSHOW_ODD if "odd" in c.host else CFGSHOW_EVEN),
-    )
-    # odd fabric: HOST_A x {ARR_O1, ARR_O2}; the ARR_O1 pairing is present, ARR_O2 is missing.
-    present = {(z.array_wwpn, z.present) for z in report.expected if z.fabric == "odd"}
-    assert (normalize_wwpn(ARR_O1), True) in present
-    assert (normalize_wwpn(ARR_O2), False) in present
+# ---- array-side zoning verify (showportdev ns), with expected-host reconciliation ----
+# WWPNs: esx1 fully zoned (A odd, B even); esx2 odd-only (C odd, D never seen); esx3 not seen at all.
+_A, _B = "10000000000000A1", "10000000000000B1"
+_C, _D = "10000000000000C1", "10000000000000D1"
+_E, _F = "10000000000000E1", "10000000000000E2"
+
+_SHOWPORT_A = """N:S:P   Mode     State --Node_WWN/IP--- -Port_WWN/HW_Addr-    Type Protocol Label
+0:3:1 target     ready 2FF70002AC02F629   20310002AC02F629    host       FC     -
+0:3:2 target     ready 2FF70002AC02F629   20320002AC02F629    host       FC     -
+1:3:1 target     ready 2FF70002AC02F629   21310002AC02F629    host       FC     -
+1:3:2 target     ready 2FF70002AC02F629   21320002AC02F629    host       FC     -
+0:4:1 target   offline          0.0.0.0       40A6B7E032E0    free    iSCSI     -"""
+
+
+def _ns(arr_wwpn: str, hosts: list[tuple[str, str]]) -> str:
+    rows = ["    PtId LpID Hadr Node_WWN Port_WWN ftrs svpm bbct flen vp_WWN SNN Name",
+            f"0x330200 0x00 0x00 2FF70002AC02F629 {arr_wwpn} 0x8800 0x0012 n/a 0x0800 {arr_wwpn} HPE Alletra port"]
+    for name, port in hosts:
+        rows.append(f"0x331000 0x08 0x00 2000{port[4:]} {port} 0x0000 0x0000 0x0000 0x0000 {arr_wwpn} Emulex {name}")
+    return "\n".join(rows)
+
+
+def _array_blocks() -> dict[str, str]:
+    return {
+        "showport": _SHOWPORT_A,
+        "showportdev ns 0:3:1": _ns("20310002AC02F629", [("esx1", _A), ("esx2", _C)]),
+        "showportdev ns 1:3:1": _ns("21310002AC02F629", [("esx1", _A), ("esx2", _C)]),
+        "showportdev ns 0:3:2": _ns("20320002AC02F629", [("esx1", _B)]),
+        "showportdev ns 1:3:2": _ns("21320002AC02F629", [("esx1", _B)]),
+    }
+
+
+def _expected_discovery():
+    return disc.DiscoveryReport(host_hbas=[
+        HostHba(host_name="esx1", wwpn=_A), HostHba(host_name="esx1", wwpn=_B),
+        HostHba(host_name="esx2", wwpn=_C), HostHba(host_name="esx2", wwpn=_D),
+        HostHba(host_name="esx3", wwpn=_E), HostHba(host_name="esx3", wwpn=_F),
+    ])
+
+
+def test_array_side_zoning_verify_and_reconciliation():
+    blocks = _array_blocks()
+    report = zoning.build_report(_intent(), _expected_discovery(), array_cli_factory=lambda c: FakeArrayCli(blocks))
+    assert report.source == "array" and report.error is None
+
+    status = {(z.name, z.present) for z in report.expected}
+    assert ("esx1_odd", True) in status and ("esx1_even", True) in status     # fully zoned
+    assert ("esx2_odd", True) in status and ("esx2_even", False) in status    # odd-only -> gap
+    # esx3 is on neither fabric -> unverified (not zoned OR offline), not a silent pass
+    assert report.unverified_hosts == ["esx3"]
+    assert any("esx3" in n and "EITHER fabric" in n for n in report.notes)
     assert report.proper is False
 
-    odd_rem = [r for r in report.remediations if r.fabric == "odd"][0]
-    assert odd_rem.cfg_name == "PROD_F1"
-    # additive + activated with cfgenable, never cfgsave-alone
-    assert any(c.startswith("zonecreate ") for c in odd_rem.commands)
-    assert odd_rem.commands[-1] == 'cfgenable "PROD_F1"'
-    assert not any("cfgsave" in c for c in odd_rem.commands)
+    # best-effort remediation for esx2's missing even-fabric WWPN (D), additive + cfgenable
+    even = [r for r in report.remediations if r.fabric == "even"]
+    assert even and any("zonecreate" in c for c in even[0].commands)
+    assert even[0].commands[-1].startswith("cfgenable")
+    assert not any("cfgsave" in c for r in report.remediations for c in r.commands)
+
+
+def test_array_side_zoning_all_present_is_proper():
+    # esx1 only, fully zoned on both fabrics -> proper, no unverified.
+    report = zoning.build_report(
+        _intent(),
+        disc.DiscoveryReport(host_hbas=[HostHba(host_name="esx1", wwpn=_A), HostHba(host_name="esx1", wwpn=_B)]),
+        array_cli_factory=lambda c: FakeArrayCli(_array_blocks()),
+    )
+    assert report.proper is True and not report.unverified_hosts
 
 
 def test_apply_remediation_runs_commands_on_each_switch():
-    report = zoning.build_report(
-        _intent(),
-        _discovered(),
-        brocade_factory=lambda c: FakeBrocade("", CFGSHOW_ODD if "odd" in c.host else CFGSHOW_EVEN),
-    )
+    from alletra_onboard.domain.storage import ZoneRemediation
+
+    rem = [ZoneRemediation(fabric="odd", switch_host="sw-odd", cfg_name="PROD_F1",
+                           commands=['zonecreate "z","aa;bb"', 'cfgadd "PROD_F1","z"', 'cfgenable "PROD_F1"'])]
     seen: dict[str, FakeBrocade] = {}
 
     def factory(creds):
@@ -235,7 +300,7 @@ def test_apply_remediation_runs_commands_on_each_switch():
         seen[creds.host] = fake
         return fake
 
-    zoning.apply_remediation(_intent(), report.remediations, brocade_factory=factory)
+    zoning.apply_remediation(_intent(), rem, brocade_factory=factory)
     assert any(cmd.startswith("cfgenable") for cmd in seen["sw-odd"].applied)
 
 

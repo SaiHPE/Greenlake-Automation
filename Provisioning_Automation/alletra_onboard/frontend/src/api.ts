@@ -160,7 +160,10 @@ export interface ZoneRemediation {
 }
 export interface ZoningReport {
   expected: ExpectedZone[]; remediations: ZoneRemediation[];
-  proper: boolean; notes: string[]; error: string | null;
+  proper: boolean;
+  unverified_hosts: string[]; // expected hosts seen on neither fabric — not zoned OR offline
+  source: string;             // 'array' — verified from showportdev ns, no switch
+  notes: string[]; error: string | null;
 }
 export interface PlannedAction {
   kind: string; name: string; description: string; exists: boolean; detail: Record<string, any>;

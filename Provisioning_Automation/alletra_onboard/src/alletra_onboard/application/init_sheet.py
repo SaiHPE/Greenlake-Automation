@@ -115,13 +115,13 @@ PROVISIONING_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
         ("prov_vcenter_user", "vCenter username", True, "e.g. administrator@vsphere.local"),
         ("prov_vcenter_password", "vCenter password", True, ""),
     ]),
-    ("Targets — SAN switches (dual fabric)", [
-        ("prov_sw1_host", "Switch 1 — odd / F1 — IP", True, "odd array ports zone here"),
-        ("prov_sw1_user", "Switch 1 username", True, "e.g. admin"),
-        ("prov_sw1_password", "Switch 1 password", True, ""),
-        ("prov_sw2_host", "Switch 2 — even / F2 — IP", True, "even array ports zone here"),
-        ("prov_sw2_user", "Switch 2 username", True, "e.g. admin"),
-        ("prov_sw2_password", "Switch 2 password", True, ""),
+    ("Targets — SAN switches (dual fabric) — OPTIONAL, only for zoning remediation", [
+        ("prov_sw1_host", "Switch 1 — odd / F1 — IP", False, "only needed to CREATE zones; verify is array-side"),
+        ("prov_sw1_user", "Switch 1 username", False, "e.g. admin"),
+        ("prov_sw1_password", "Switch 1 password", False, ""),
+        ("prov_sw2_host", "Switch 2 — even / F2 — IP", False, "only needed to CREATE zones; verify is array-side"),
+        ("prov_sw2_user", "Switch 2 username", False, "e.g. admin"),
+        ("prov_sw2_password", "Switch 2 password", False, ""),
     ]),
     ("Storage to create", [
         ("prov_host_set", "Host set / cluster name", True, "the ESXi cluster's host set on the array"),
@@ -329,8 +329,9 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
         host_set_name=values["prov_host_set"],
         array=EndpointCreds(host=values["prov_array_host"], username=values["prov_array_user"], password=values["prov_array_password"]),
         vcenter=EndpointCreds(host=values["prov_vcenter_host"], username=values["prov_vcenter_user"], password=values["prov_vcenter_password"]),
-        switch_f1=EndpointCreds(host=values["prov_sw1_host"], username=values["prov_sw1_user"], password=values["prov_sw1_password"]),
-        switch_f2=EndpointCreds(host=values["prov_sw2_host"], username=values["prov_sw2_user"], password=values["prov_sw2_password"]),
+        # Switches are OPTIONAL (verify is array-side; switches only needed to CREATE zones) -> default blank.
+        switch_f1=EndpointCreds(host=values.get("prov_sw1_host", ""), username=values.get("prov_sw1_user", ""), password=values.get("prov_sw1_password", "")),
+        switch_f2=EndpointCreds(host=values.get("prov_sw2_host", ""), username=values.get("prov_sw2_user", ""), password=values.get("prov_sw2_password", "")),
         cpg=values.get("prov_cpg") or "SSD_r6",
         provisioning_type=ptype,  # type: ignore[arg-type]
         volume=VolumeSpec(name_prefix=values["prov_vol_prefix"], size_gib=size_gib, count=count),

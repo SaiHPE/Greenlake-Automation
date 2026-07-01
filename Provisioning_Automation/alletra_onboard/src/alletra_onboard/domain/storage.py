@@ -132,7 +132,12 @@ class ZoneRemediation(BaseModel):
 class ZoningReport(BaseModel):
     expected: list[ExpectedZone] = Field(default_factory=list)
     remediations: list[ZoneRemediation] = Field(default_factory=list)
-    proper: bool = False     # every expected zone already present
+    proper: bool = False     # every expected host zoned on both fabrics, none unverified
+    # Expected hosts the array could NOT confirm on EITHER fabric — could be "not zoned" OR the host
+    # is simply offline/not logged in (the array can't tell the two apart). Surfaced, never silently
+    # passed; confirm the host is up, or cross-check the switch/ESXi.
+    unverified_hosts: list[str] = Field(default_factory=list)
+    source: str = "array"    # 'array' (showportdev ns) — verification needs no switch
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
 
