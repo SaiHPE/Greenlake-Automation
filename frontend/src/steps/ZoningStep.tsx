@@ -25,6 +25,14 @@ export function ZoningStep({ runId, run, events, onDone, writesEnabled }: Props)
   const report = latestReport(events);
   const missing = report ? report.expected.filter((z) => !z.present) : [];
 
+  // Roll the per-(host,fabric) rows up to one line per host: odd ✓/✗, even ✓/✗.
+  const byHost: Record<string, { odd: boolean; even: boolean }> = {};
+  report?.expected.forEach((z) => {
+    const host = z.name.replace(/_(odd|even)$/, '');
+    byHost[host] = byHost[host] || { odd: false, even: false };
+    byHost[host][z.fabric] = z.present;
+  });
+
   const call = (fn: () => Promise<unknown>) => async () => {
     setError(null);
     try {
@@ -38,9 +46,9 @@ export function ZoningStep({ runId, run, events, onDone, writesEnabled }: Props)
     <Box gap="medium">
       <Section title="Verify SAN zoning (both fabrics)">
         <Text size="small" color="text-weak">
-          Checks the odd/even best practice: each host HBA WWPN zoned to the array ports on the same
-          fabric. If zones are missing, the exact additive commands are shown for your confirmation
-          before anything is written to the switches.
+          Read-only, <b>from the array</b> (no switch login): the fabric name server is zoning-filtered,
+          so what each array FC port can see is its effective zoning. Each host should be zoned on
+          BOTH fabrics (odd/F1 and even/F2).
         </Text>
         <Box direction="row" gap="small" align="center">
           <Button primary label={running ? 'Working…' : report ? 'Re-verify' : 'Verify zoning'} disabled={running} onClick={call(() => zoningPreview(runId))} />
@@ -50,7 +58,31 @@ export function ZoningStep({ runId, run, events, onDone, writesEnabled }: Props)
       </Section>
 
       {report?.proper && (
-        <Notification status="normal" title="Zoning is correct on both fabrics" />
+        <Notification status="normal" title="Zoning is correct on both fabrics — verified from the array, no switch" />
+      )}
+
+      {report && Object.keys(byHost).length > 0 && (
+        <Section title="Per-host zoning (from showportdev ns)">
+          {Object.entries(byHost).map(([host, f]) => (
+            <Text key={host} size="small" color={f.odd && f.even ? undefined : 'status-warning'}>
+              <b>{host}</b> — odd/F1: {f.odd ? 'zoned' : 'MISSING'} · even/F2: {f.even ? 'zoned' : 'MISSING'}
+            </Text>
+          ))}
+        </Section>
+      )}
+
+      {report && report.unverified_hosts.length > 0 && (
+        <Notification
+          status="warning"
+          title={`Could not confirm ${report.unverified_hosts.length} host(s) — not zoned OR offline`}
+          message={`The array sees no login for: ${report.unverified_hosts.join(', ')}. The array can't tell "no zone" from "host powered off" — confirm the host is up; if it is, it's a real zoning gap.`}
+        />
+      )}
+
+      {report && report.notes.length > 0 && (
+        <Section title="Notes">
+          {report.notes.map((n, i) => <Text key={i} size="small" color="text-weak">• {n}</Text>)}
+        </Section>
       )}
 
       {report && !report.proper && missing.length > 0 && (
