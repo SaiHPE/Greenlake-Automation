@@ -1,13 +1,11 @@
-"""Discovery: read the real environment a provisioning run will act on.
+"""Discovery: read the real environment a provisioning run will act on — array-side, read-only.
 
-Combines three read-only sources into one DiscoveryReport:
-- the **array** (WSAPI): FC target ports + WWPNs + state, fabric by card-port parity;
-- **vCenter** (pyVmomi): each ESXi host's FC HBA WWPNs + OS;
-- **both SAN switches** (Brocade nsshow): who is logged into each fabric — the live truth that tells
-  us which fabric each host HBA WWPN actually sits on (odd vs even).
+ONE array SSH session gathers the FC target ports (`showport`) and, per port, who is zoned + logged
+in (`showportdev ns`) — the array names each host. vCenter supplies each ESXi host's HBA WWPNs + OS.
+Each host HBA is then assigned to the fabric it logs into ON THE ARRAY (no switch needed). Zoning
+verification computes over this DiscoveryReport — it does not read the array (or the switch) again.
 
-Any one source failing is captured as a note, not a hard error — a partial report still helps the
-operator (e.g. discover the array + hosts even if a switch is unreachable).
+Any one source failing is captured as a note, not a hard error.
 """
 
 from __future__ import annotations
@@ -15,8 +13,9 @@ from __future__ import annotations
 import re
 from typing import Callable
 
-from alletra_onboard.application.storage.clients import make_brocade, make_vcenter, make_wsapi
+from alletra_onboard.application.storage.clients import make_array_cli, make_vcenter
 from alletra_onboard.domain.storage import (
+    ArrayPort,
     DiscoveryReport,
     Fabric,
     NameserverEntry,
@@ -24,62 +23,83 @@ from alletra_onboard.domain.storage import (
     normalize_wwpn,
 )
 
-_WWPN_RE = re.compile(r"\b(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}\b")
+_HEX16 = re.compile(r"\b[0-9A-Fa-f]{16}\b")  # bare 16-hex WWPN (array showport / showportdev ns form)
 
 
-def parse_nameserver_wwpns(text: str) -> set[str]:
-    """Every WWPN-shaped token in nsshow output, normalized (colon-hex -> canonical)."""
-    return {normalize_wwpn(m.group(0)) for m in _WWPN_RE.finditer(text or "")}
+def array_target_ports(showport: str) -> list[tuple[str, Fabric, str]]:
+    """FC target ports that are READY -> [(n:s:p, fabric, array_port_wwpn)]. Skips iSCSI + loss_sync.
+
+    showport columns: N:S:P  Mode  State  Node_WWN  Port_WWN  Type  Protocol  Label
+    """
+    out: list[tuple[str, Fabric, str]] = []
+    for line in (showport or "").splitlines():
+        p = line.split()
+        if len(p) >= 7 and ":" in p[0] and p[1] == "target" and p[2] == "ready" and "FC" in p:
+            fabric: Fabric = "odd" if int(p[0].split(":")[2]) % 2 == 1 else "even"
+            out.append((p[0], fabric, normalize_wwpn(p[4])))
+    return out
+
+
+def parse_ns(block: str) -> list[tuple[str, str]]:
+    """Parse `showportdev ns` -> [(host_name, host_port_wwpn)], excluding the array's own self-row.
+
+    Rows start with the PtId (0x…); the three 16-hex tokens are Node_WWN, Port_WWN, vp_WWN. We take
+    Port_WWN (the initiator) and skip the array's self-listing (Node 2FF7… or Port == vp_WWN).
+    """
+    out: list[tuple[str, str]] = []
+    for line in (block or "").splitlines():
+        if not line.strip().startswith("0x"):
+            continue
+        hexes = [normalize_wwpn(h) for h in _HEX16.findall(line)]
+        if len(hexes) < 2:
+            continue
+        node, port = hexes[0], hexes[1]
+        vp = hexes[2] if len(hexes) >= 3 else ""
+        if node.startswith("2FF7") or port == vp:
+            continue
+        out.append((line.split()[-1], port))
+    return out
 
 
 def discover(
     intent: ProvisioningIntent,
     *,
-    wsapi_factory: Callable = make_wsapi,
+    array_cli_factory: Callable = make_array_cli,
     vcenter_factory: Callable = make_vcenter,
-    brocade_factory: Callable = make_brocade,
 ) -> DiscoveryReport:
     report = DiscoveryReport()
+    union: dict[Fabric, set[str]] = {"odd": set(), "even": set()}
 
+    # 1) Array (one SSH session): FC target ports + per-port nameserver (who's zoned + logged in).
     try:
-        with wsapi_factory(intent.array) as array:
-            report.array_ports = array.array_fc_ports()
+        with array_cli_factory(intent.array) as cli:
+            for nsp, fabric, arr_wwpn in array_target_ports(cli.run("showport")):
+                node, slot, card_port = (int(x) for x in nsp.split(":"))
+                report.array_ports.append(
+                    ArrayPort(node=node, slot=slot, card_port=card_port, wwpn=arr_wwpn, link_state="ready", fabric=fabric)
+                )
+                for host_name, host_wwpn in parse_ns(cli.run(f"showportdev ns {nsp}")):
+                    report.nameserver.append(
+                        NameserverEntry(fabric=fabric, array_port=nsp, array_wwpn=arr_wwpn, host_wwpn=host_wwpn, host_name=host_name)
+                    )
+                    union[fabric].add(host_wwpn)
     except Exception as exc:  # noqa: BLE001
-        report.notes.append(f"Array WSAPI discovery failed: {exc}")
+        report.notes.append(f"Array discovery (SSH) failed: {exc}")
 
+    # 2) vCenter: each ESXi host's FC HBA WWPNs + OS.
     try:
         with vcenter_factory(intent.vcenter) as vcenter:
             report.host_hbas = vcenter.host_fc_hbas()
     except Exception as exc:  # noqa: BLE001
         report.notes.append(f"vCenter discovery failed: {exc}")
 
-    array_wwpns = {p.wwpn for p in report.array_ports}
-    ns_by_fabric: dict[Fabric, set[str]] = {"odd": set(), "even": set()}
-    for fabric, creds in (("odd", intent.switch_f1), ("even", intent.switch_f2)):
-        try:
-            with brocade_factory(creds) as switch:
-                wwpns = parse_nameserver_wwpns(switch.nsshow())
-        except Exception as exc:  # noqa: BLE001
-            report.notes.append(f"{fabric} switch ({creds.host}) nsshow failed: {exc}")
-            continue
-        ns_by_fabric[fabric] = wwpns
-        for wwpn in sorted(wwpns):
-            report.nameserver.append(
-                NameserverEntry(
-                    fabric=fabric, switch_host=creds.host, wwpn=wwpn,
-                    is_array_port=wwpn in array_wwpns,
-                )
-            )
-
-    # Assign each host HBA to the fabric whose nameserver it logs into (the physical-cabling truth).
+    # 3) Assign each host HBA to the fabric it logs into ON THE ARRAY (no switch).
     for hba in report.host_hbas:
-        if hba.wwpn in ns_by_fabric["odd"]:
-            hba.fabric = "odd"
-        elif hba.wwpn in ns_by_fabric["even"]:
-            hba.fabric = "even"
-        else:
+        wwpn = normalize_wwpn(hba.wwpn)
+        hba.fabric = "odd" if wwpn in union["odd"] else "even" if wwpn in union["even"] else None
+        if hba.fabric is None:
             report.notes.append(
-                f"Host {hba.host_name} HBA {hba.wwpn} is not logged into either fabric — "
-                "check cabling/zoning for that port."
+                f"Host {hba.host_name} HBA {hba.wwpn} is not zoned/logged in on either fabric — "
+                "check cabling/zoning, or that the host is powered on."
             )
     return report

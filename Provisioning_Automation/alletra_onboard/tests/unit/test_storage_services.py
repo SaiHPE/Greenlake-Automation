@@ -12,6 +12,7 @@ from alletra_onboard.domain.storage import (
     ArrayPort,
     EndpointCreds,
     HostHba,
+    NameserverEntry,
     ProvisioningIntent,
     VolumeSpec,
     normalize_wwpn,
@@ -187,38 +188,7 @@ def test_parse_active_zones_resolves_aliases_and_effective():
     assert zones["Z1"] == {normalize_wwpn(HOST_A), normalize_wwpn(ARR_O1)}
 
 
-# ------------------------------------------------------------------ discovery
-
-def test_discovery_assigns_host_fabric_from_nameserver():
-    ns_odd = "\n".join([f"PortName: {w}" for w in (HOST_A, ARR_O1, ARR_O2)])
-    ns_even = "\n".join([f"PortName: {w}" for w in (HOST_B, ARR_E1, ARR_E2)])
-    hbas = [HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A)), HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_B))]
-
-    report = disc.discover(
-        _intent(),
-        wsapi_factory=lambda c: FakeWsapi(ports=_ports()),
-        vcenter_factory=lambda c: FakeVCenter(hbas),
-        brocade_factory=lambda c: FakeBrocade(ns_odd if "odd" in c.host else ns_even, ""),
-    )
-    by_wwpn = {h.wwpn: h.fabric for h in report.host_hbas}
-    assert by_wwpn[normalize_wwpn(HOST_A)] == "odd"
-    assert by_wwpn[normalize_wwpn(HOST_B)] == "even"
-    assert not report.notes  # all three sources succeeded
-
-
-# ------------------------------------------------------------------ zoning report + remediation
-
-def _discovered():
-    return disc.DiscoveryReport(
-        array_ports=_ports(),
-        host_hbas=[
-            HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A), fabric="odd"),
-            HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_B), fabric="even"),
-        ],
-    )
-
-
-# ---- array-side zoning verify (showportdev ns), with expected-host reconciliation ----
+# ------------------------------------------------------------------ discovery (array-side)
 # WWPNs: esx1 fully zoned (A odd, B even); esx2 odd-only (C odd, D never seen); esx3 not seen at all.
 _A, _B = "10000000000000A1", "10000000000000B1"
 _C, _D = "10000000000000C1", "10000000000000D1"
@@ -233,6 +203,7 @@ _SHOWPORT_A = """N:S:P   Mode     State --Node_WWN/IP--- -Port_WWN/HW_Addr-    T
 
 
 def _ns(arr_wwpn: str, hosts: list[tuple[str, str]]) -> str:
+    """Render a showportdev ns block: a self-row (skipped) + one row per (host_name, port_wwpn)."""
     rows = ["    PtId LpID Hadr Node_WWN Port_WWN ftrs svpm bbct flen vp_WWN SNN Name",
             f"0x330200 0x00 0x00 2FF70002AC02F629 {arr_wwpn} 0x8800 0x0012 n/a 0x0800 {arr_wwpn} HPE Alletra port"]
     for name, port in hosts:
@@ -240,27 +211,68 @@ def _ns(arr_wwpn: str, hosts: list[tuple[str, str]]) -> str:
     return "\n".join(rows)
 
 
-def _array_blocks() -> dict[str, str]:
-    return {
-        "showport": _SHOWPORT_A,
-        "showportdev ns 0:3:1": _ns("20310002AC02F629", [("esx1", _A), ("esx2", _C)]),
-        "showportdev ns 1:3:1": _ns("21310002AC02F629", [("esx1", _A), ("esx2", _C)]),
-        "showportdev ns 0:3:2": _ns("20320002AC02F629", [("esx1", _B)]),
-        "showportdev ns 1:3:2": _ns("21320002AC02F629", [("esx1", _B)]),
-    }
+_ARRAY_BLOCKS = {
+    "showport": _SHOWPORT_A,
+    "showportdev ns 0:3:1": _ns("20310002AC02F629", [("esx1", _A), ("esx2", _C)]),
+    "showportdev ns 1:3:1": _ns("21310002AC02F629", [("esx1", _A), ("esx2", _C)]),
+    "showportdev ns 0:3:2": _ns("20320002AC02F629", [("esx1", _B)]),
+    "showportdev ns 1:3:2": _ns("21320002AC02F629", [("esx1", _B)]),
+}
 
 
-def _expected_discovery():
-    return disc.DiscoveryReport(host_hbas=[
-        HostHba(host_name="esx1", wwpn=_A), HostHba(host_name="esx1", wwpn=_B),
-        HostHba(host_name="esx2", wwpn=_C), HostHba(host_name="esx2", wwpn=_D),
-        HostHba(host_name="esx3", wwpn=_E), HostHba(host_name="esx3", wwpn=_F),
-    ])
+def test_discovery_reads_array_and_assigns_fabric_no_switch():
+    # esx1's two HBAs (A, B) come from vCenter; the array's showportdev ns puts A on odd, B on even.
+    hbas = [HostHba(host_name="esx1", wwpn=_A), HostHba(host_name="esx1", wwpn=_B)]
+    report = disc.discover(
+        _intent(),
+        array_cli_factory=lambda c: FakeArrayCli(_ARRAY_BLOCKS),
+        vcenter_factory=lambda c: FakeVCenter(hbas),
+    )
+    assert len(report.array_ports) == 4                       # 4 ready FC target ports; iSCSI skipped
+    by_wwpn = {h.wwpn: h.fabric for h in report.host_hbas}
+    assert by_wwpn[_A] == "odd" and by_wwpn[_B] == "even"     # fabric assigned from the ARRAY ns
+    assert any(e.host_name == "esx1" and e.fabric == "odd" and e.array_port == "0:3:1"
+               for e in report.nameserver)
+    assert not report.notes  # both sources succeeded, every HBA placed on a fabric
+
+
+# ------------------------------------------------------------------ zoning report + remediation
+
+def _discovered():
+    return disc.DiscoveryReport(
+        array_ports=_ports(),
+        host_hbas=[
+            HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A), fabric="odd"),
+            HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_B), fabric="even"),
+        ],
+    )
+
+
+def _disc_for_zoning(hbas: list[HostHba]) -> "disc.DiscoveryReport":
+    """A DiscoveryReport shaped like the array-side discover() output: 4 target ports + the per-port
+    ns logins. esx1 is logged in on both fabrics (A odd, B even); esx2 only on odd (C)."""
+    ports = [
+        ArrayPort(node=0, slot=3, card_port=1, wwpn="20310002AC02F629", link_state="ready", fabric="odd"),
+        ArrayPort(node=1, slot=3, card_port=1, wwpn="21310002AC02F629", link_state="ready", fabric="odd"),
+        ArrayPort(node=0, slot=3, card_port=2, wwpn="20320002AC02F629", link_state="ready", fabric="even"),
+        ArrayPort(node=1, slot=3, card_port=2, wwpn="21320002AC02F629", link_state="ready", fabric="even"),
+    ]
+    ns = []
+    for nsp, arr in (("0:3:1", "20310002AC02F629"), ("1:3:1", "21310002AC02F629")):
+        ns.append(NameserverEntry(fabric="odd", array_port=nsp, array_wwpn=arr, host_wwpn=_A, host_name="esx1"))
+        ns.append(NameserverEntry(fabric="odd", array_port=nsp, array_wwpn=arr, host_wwpn=_C, host_name="esx2"))
+    for nsp, arr in (("0:3:2", "20320002AC02F629"), ("1:3:2", "21320002AC02F629")):
+        ns.append(NameserverEntry(fabric="even", array_port=nsp, array_wwpn=arr, host_wwpn=_B, host_name="esx1"))
+    return disc.DiscoveryReport(array_ports=ports, nameserver=ns, host_hbas=hbas)
 
 
 def test_array_side_zoning_verify_and_reconciliation():
-    blocks = _array_blocks()
-    report = zoning.build_report(_intent(), _expected_discovery(), array_cli_factory=lambda c: FakeArrayCli(blocks))
+    hbas = [
+        HostHba(host_name="esx1", wwpn=_A), HostHba(host_name="esx1", wwpn=_B),
+        HostHba(host_name="esx2", wwpn=_C), HostHba(host_name="esx2", wwpn=_D),
+        HostHba(host_name="esx3", wwpn=_E), HostHba(host_name="esx3", wwpn=_F),
+    ]
+    report = zoning.build_report(_intent(), _disc_for_zoning(hbas))
     assert report.source == "array" and report.error is None
 
     status = {(z.name, z.present) for z in report.expected}
@@ -282,8 +294,7 @@ def test_array_side_zoning_all_present_is_proper():
     # esx1 only, fully zoned on both fabrics -> proper, no unverified.
     report = zoning.build_report(
         _intent(),
-        disc.DiscoveryReport(host_hbas=[HostHba(host_name="esx1", wwpn=_A), HostHba(host_name="esx1", wwpn=_B)]),
-        array_cli_factory=lambda c: FakeArrayCli(_array_blocks()),
+        _disc_for_zoning([HostHba(host_name="esx1", wwpn=_A), HostHba(host_name="esx1", wwpn=_B)]),
     )
     assert report.proper is True and not report.unverified_hosts
 
