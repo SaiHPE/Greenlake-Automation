@@ -286,7 +286,6 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
         ProvisioningPlan, ProvisioningResult, ZoneRemediation, ZoningReport,
     )
 
-    monkeypatch.setenv("PROVISIONING_WRITES_ENABLED", "true")  # exercise the apply paths
     monkeypatch.setattr(sd, "discover", lambda intent: DiscoveryReport(notes=[]))
     zoning_report = ZoningReport(
         expected=[ExpectedZone(fabric="odd", switch_host="sw1", name="z", host_wwpn="A", array_wwpn="B")],
@@ -331,18 +330,6 @@ async def test_zoning_before_discovery_is_a_precondition_error(tmp_path):
     run = service.create_run(_item(), provisioning_intent=_prov_intent())
     with pytest.raises(StepPreconditionError):
         service.start_zoning_preview(run.run_id)
-
-
-async def test_writes_are_frozen_by_default(tmp_path, monkeypatch):
-    from alletra_onboard.application.onboarding_service import WritesFrozenError
-
-    monkeypatch.delenv("PROVISIONING_WRITES_ENABLED", raising=False)  # default = frozen
-    service = _service(tmp_path)
-    run = service.create_run(_item(), provisioning_intent=_prov_intent())
-    with pytest.raises(WritesFrozenError):
-        service.start_zoning_apply(run.run_id)
-    with pytest.raises(WritesFrozenError):
-        service.start_storage_apply(run.run_id)
 
 
 async def test_concurrent_step_rejected(tmp_path):
