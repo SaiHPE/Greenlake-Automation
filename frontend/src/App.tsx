@@ -1,7 +1,7 @@
 import { Box, Heading, Text } from 'grommet';
 import { Checkmark } from 'grommet-icons';
 import { useEffect, useRef, useState } from 'react';
-import { getRun } from './api';
+import { getProvisioningCapabilities, getRun } from './api';
 import { actionKeysFor, ACTION_CATALOG, ActionKey, phaseToActionKey, RunMode } from './modes';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
@@ -51,7 +51,15 @@ export default function App() {
   const [maxStep, setMaxStep] = useState(0);
   const [form, setForm] = useState<WorkItemForm>(EMPTY_FORM);
   const [runId, setRunId] = useState<string | null>(storedRunId);
+  const [writesEnabled, setWritesEnabled] = useState(false); // frozen until the backend says otherwise
   const { run, events } = useRunEvents(runId);
+
+  // Are provisioning write actions enabled, or frozen pending live-hardware testing?
+  useEffect(() => {
+    getProvisioningCapabilities()
+      .then((c) => setWritesEnabled(c.writes_enabled))
+      .catch(() => setWritesEnabled(false));
+  }, []);
 
   const steps = buildSteps(mode, customSteps);
   const lastStep = steps.length - 1;
@@ -216,10 +224,10 @@ export default function App() {
             <DiscoveryStep runId={runId} run={run} events={events} onDone={next} />
           )}
           {current.key === 'zoning' && runId && (
-            <ZoningStep runId={runId} run={run} events={events} onDone={next} />
+            <ZoningStep runId={runId} run={run} events={events} onDone={next} writesEnabled={writesEnabled} />
           )}
           {current.key === 'provision' && runId && (
-            <ProvisionStep runId={runId} run={run} events={events} onDone={next} />
+            <ProvisionStep runId={runId} run={run} events={events} onDone={next} writesEnabled={writesEnabled} />
           )}
           {current.key === 'verify' && runId && (
             <VerifyStep runId={runId} run={run} events={events} onDone={next} />

@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     # HTTPS_PROXY set but reaches DSCC directly.
     browser_proxy: str | None = None
     browser_proxy_bypass: str = "localhost;127.0.0.1;169.254.*"
+    # SAFETY FREEZE: provisioning WRITE actions (SAN zoning apply, host/volume/VLUN create) are
+    # disabled until they've been validated against live hardware. Read-only discovery, zoning
+    # verification, and the previews always work. Flip to true (env PROVISIONING_WRITES_ENABLED=true,
+    # or set it in .env) only once the write paths are tested + signed off.
+    provisioning_writes_enabled: bool = False
 
 
 def load_settings() -> Settings:
