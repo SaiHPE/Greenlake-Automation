@@ -274,6 +274,19 @@ def test_full_mode_upload_still_requires_every_field(tmp_path, monkeypatch):
     assert "API Client" in resp.text  # missing GreenLake creds reported
 
 
+def test_provisioning_writes_frozen_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("PROVISIONING_WRITES_ENABLED", raising=False)
+    client = _client(tmp_path)
+    caps = client.get("/provisioning/capabilities").json()
+    assert caps["writes_enabled"] is False
+
+    run_id = client.post("/runs", json={"work_item": _work_item_payload()}).json()["run"]["run_id"]
+    # apply (a write) is refused with 403 before it even looks for a plan/intent
+    resp = client.post(f"/runs/{run_id}/storage/apply")
+    assert resp.status_code == 403
+    assert "frozen" in resp.text.lower()
+
+
 def test_config_roundtrip_masks_secret(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
     client = _client(tmp_path)

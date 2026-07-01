@@ -72,6 +72,10 @@ class StepPreconditionError(RuntimeError):
     """A step was requested before its prerequisite ran (e.g. zoning/provision before discovery)."""
 
 
+class WritesFrozenError(RuntimeError):
+    """A provisioning WRITE was requested while writes are frozen (pending live-hardware testing)."""
+
+
 def _default_provision_factory(settings: Settings, progress: Callable) -> Any:
     return build_provisioning_service(settings, progress=progress)
 
@@ -440,6 +444,7 @@ class OnboardingService:
         )
 
     def start_zoning_apply(self, run_id: str) -> RunRecord:
+        self._require_writes_enabled()
         run = self.get_run(run_id)
         intent = self.get_provisioning_intent(run_id)
         report = self._zoning.get(run_id)
@@ -485,6 +490,7 @@ class OnboardingService:
         )
 
     def start_storage_apply(self, run_id: str) -> RunRecord:
+        self._require_writes_enabled()
         run = self.get_run(run_id)
         intent = self.get_provisioning_intent(run_id)
         discovery = self._require_discovery(run_id)
@@ -511,6 +517,14 @@ class OnboardingService:
         if report is None:
             raise StepPreconditionError("run discovery first — it provides the ports/HBAs zoning and provisioning need")
         return report
+
+    def _require_writes_enabled(self) -> None:
+        if not self._current_settings().provisioning_writes_enabled:
+            raise WritesFrozenError(
+                "Provisioning writes are frozen pending live-hardware testing. Discovery, zoning "
+                "verification, and the previews are available; the apply actions are disabled until "
+                "they're validated and PROVISIONING_WRITES_ENABLED is set."
+            )
 
     # ------------------------------------------------------------------ internals
 

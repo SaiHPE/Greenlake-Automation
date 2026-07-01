@@ -8,6 +8,7 @@ interface Props {
   run: RunRecord | null;
   events: RunEvent[];
   onDone: () => void;
+  writesEnabled: boolean; // false = the apply (switch-write) action is frozen pending live testing
 }
 
 function latestReport(events: RunEvent[]): ZoningReport | null {
@@ -17,7 +18,7 @@ function latestReport(events: RunEvent[]): ZoningReport | null {
   return (event?.data?.report as ZoningReport) ?? null;
 }
 
-export function ZoningStep({ runId, run, events, onDone }: Props) {
+export function ZoningStep({ runId, run, events, onDone, writesEnabled }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const running = run?.status === 'running';
@@ -68,19 +69,29 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
               </Box>
             </Box>
           ))}
-          <CheckBox
-            label="I reviewed these commands and authorise writing them to the production switches."
-            checked={confirmed}
-            onChange={(e) => setConfirmed(e.target.checked)}
-          />
-          <Button
-            label={running ? 'Applying…' : 'Apply remediation to switches'}
-            color="status-critical"
-            primary
-            disabled={!confirmed || running}
-            onClick={call(() => zoningApply(runId))}
-            alignSelf="start"
-          />
+          {writesEnabled ? (
+            <>
+              <CheckBox
+                label="I reviewed these commands and authorise writing them to the production switches."
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+              />
+              <Button
+                label={running ? 'Applying…' : 'Apply remediation to switches'}
+                color="status-critical"
+                primary
+                disabled={!confirmed || running}
+                onClick={call(() => zoningApply(runId))}
+                alignSelf="start"
+              />
+            </>
+          ) : (
+            <Notification
+              status="warning"
+              title="Apply is frozen — preview only"
+              message="Writing zones to the switches is disabled pending live-hardware testing. The commands above are a preview of what would be applied. Hand them to the SAN team, or enable writes once validated."
+            />
+          )}
         </Section>
       )}
 

@@ -169,6 +169,10 @@ export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; e
 export interface ActionOutcome { kind: string; name: string; status: 'created' | 'exists' | 'failed'; detail: string; }
 export interface ProvisioningResult { outcomes: ActionOutcome[]; error: string | null; }
 
+// Whether provisioning WRITE actions are enabled (false = frozen pending live-hardware testing).
+export const getProvisioningCapabilities = () =>
+  request<{ writes_enabled: boolean }>('GET', '/provisioning/capabilities');
+
 export const startDiscover = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/discover`);
 export const zoningPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/preview`);
 export const zoningApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/apply`);
