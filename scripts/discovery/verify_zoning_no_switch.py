@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
-r"""Switch-free FC zoning verification — prove you can confirm dual-fabric zoning WITHOUT the switch.
+r"""Switch-free FC zoning verification for an HPE Alletra MP B10000 — array-side, READ-ONLY.
 
-It logs into the ARRAY and the ESXi HOSTS only (never the Brocade switch) and answers, per host:
-is each HBA zoned to the array on the correct fabric (odd HBA -> odd array ports, even -> even)?
+Proves dual-fabric zoning is correct using ONLY the array (no Brocade switch, no ESXi needed).
+The fabric name server is zoning-filtered, so what each array FC target port can SEE *is* its
+effective zoning — and the array even prints the host name on each entry:
 
-How it knows, with zero switch access:
-  * Array, per FC target port:  showportdev ns <n:s:p>  -> host WWPNs ZONED to that port + logged in
-    (the fabric name server is zoning-filtered, so this IS the effective zoning for that port).
-    Port parity gives the fabric: odd cardPort -> odd switch / F1, even -> even / F2.
-  * ESXi, per host:  esxcli storage san fc list (HBA WWPNs) + esxcli storage core path list
-    (which array target WWPNs the host actually reaches) -> an independent end-to-end confirmation.
+    showport                      -> the FC target ports that are 'ready' (skip iSCSI / loss_sync)
+    showportdev ns <n:s:p>        -> the host WWPNs ZONED to that port + logged in (with host name)
 
-If every host has an HBA zoned on BOTH fabrics, zoning is correct — confirmed from two sides, no
-switch. A switch login would only be needed to CREATE a missing zone (remediation). 100% READ-ONLY:
-the only commands issued are showport / showportdev / showhost on the array and `esxcli ... list` on
-ESXi. Credentials are never stored — env vars or prompt.
+Odd card-port (…:1, …:3) => odd switch / F1 ;  even (…:2, …:4) => even switch / F2. A host is
+correctly zoned when it appears on BOTH fabrics. Calibrated to real B10000 output:
+`showportdev ns` rows are  PtId LpID Hadr  Node_WWN  Port_WWN  ...  vp_WWN  SNN  Name  — we take the
+Port_WWN (the initiator) and skip the array's own self-row (Node 2FF7… / Port == vp_WWN).
+
+Optional cross-checks (off by default): --esxi <ips> adds the host view (esxcli), and --with-fabric
+adds `showportdev fcfabric` (the WHOLE-SAN dump — large). Strictly read-only; creds via env/prompt.
 
     python verify_zoning_no_switch.py [--array 10.64.154.225] [--array-user 3paradm]
-                                      [--esxi 10.64.159.14,10.64.159.63,10.64.159.64] [--esxi-user root]
-                                      [--out zoning-no-switch.txt]
+                                      [--esxi 10.64.159.14,10.64.159.63,10.64.159.64] [--with-fabric]
 
 On a fresh box:  python -m pip install paramiko   then run the line above.
-Passwords:  set ALLETRA_PASSWORD / ESXI_PASSWORD, or just type them at the prompt.
+Password: set ALLETRA_PASSWORD, or type it at the prompt.
 """
 
 from __future__ import annotations
@@ -39,16 +38,12 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("paramiko is required:  python -m pip install paramiko")
 
-_NSP = re.compile(r"\b(\d+):(\d+):(\d+)\b")
-_WWPN = re.compile(r"\b(?:[0-9a-fA-F]{2}[:\-]?){7}[0-9a-fA-F]{2}\b")
+_HEX16 = re.compile(r"\b[0-9A-Fa-f]{16}\b")          # bare 16-hex WWPN (array showport / ns form)
+_WWPN_COLON = re.compile(r"\b(?:[0-9A-Fa-f]{2}:){7}[0-9A-Fa-f]{2}\b")  # ESXi colon form
 
 
 def norm(w: str) -> str:
     return "".join(c for c in w if c in "0123456789abcdefABCDEF").upper()
-
-
-def wwpns(text: str) -> set[str]:
-    return {norm(m.group(0)) for m in _WWPN.finditer(text or "") if len(norm(m.group(0))) == 16}
 
 
 def tcp_ok(host: str, port: int = 22, timeout: float = 5.0) -> bool:
@@ -73,118 +68,125 @@ def run(client, cmd: str) -> str:
     return o if o.strip() else (f"[stderr] {e}" if e else "")
 
 
-def target_ports(showport: str) -> list[str]:
-    ports, seen = [], set()
+def target_ports(showport: str) -> list[tuple[str, str, str]]:
+    """FC target ports that are READY -> [(n:s:p, fabric, array_port_wwpn)]. Skips iSCSI + loss_sync."""
+    res = []
     for line in showport.splitlines():
-        if "target" in line.lower():
-            m = _NSP.search(line)
-            if m and m.group(0) not in seen:
-                seen.add(m.group(0))
-                ports.append(m.group(0))
-    return ports
+        p = line.split()
+        # columns: N:S:P  Mode  State  Node_WWN  Port_WWN  Type  Protocol  Label
+        if len(p) >= 7 and ":" in p[0] and p[1] == "target" and p[2] == "ready" and "FC" in p:
+            card_port = int(p[0].split(":")[2])
+            fabric = "odd" if card_port % 2 == 1 else "even"
+            res.append((p[0], fabric, norm(p[4])))
+    return res
+
+
+def parse_ns(block: str) -> list[tuple[str, str]]:
+    """Parse `showportdev ns` -> [(host_name, host_port_wwpn)], excluding the array's own self-row."""
+    out = []
+    for line in block.splitlines():
+        if not line.strip().startswith("0x"):     # data rows start with the PtId 0x......
+            continue
+        hexes = _HEX16.findall(line)
+        if len(hexes) < 2:
+            continue
+        node, port = norm(hexes[0]), norm(hexes[1])
+        vp = norm(hexes[2]) if len(hexes) >= 3 else ""
+        if node.startswith("2FF7") or port == vp:   # the array listing its own target port — skip
+            continue
+        name = line.split()[-1]
+        out.append((name, port))
+    return out
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Switch-free FC zoning verification (array + ESXi only).")
+    ap = argparse.ArgumentParser(description="Switch-free, array-side FC zoning verification (read-only).")
     ap.add_argument("--array", default="10.64.154.225")
     ap.add_argument("--array-user", default="3paradm")
-    ap.add_argument("--esxi", default="10.64.159.14,10.64.159.63,10.64.159.64")
+    ap.add_argument("--ports", default="", help="override FC target ports, e.g. 0:3:1,0:3:2,1:3:1,1:3:2")
+    ap.add_argument("--esxi", default="", help="optional comma list of ESXi IPs for an independent cross-check")
     ap.add_argument("--esxi-user", default="root")
-    ap.add_argument("--ports", default="", help="override array target ports, e.g. 0:3:1,0:3:2,1:3:1,1:3:2")
+    ap.add_argument("--with-fabric", action="store_true", help="also dump showportdev fcfabric (whole SAN — large)")
     ap.add_argument("--out", default="zoning-no-switch.txt")
     args = ap.parse_args()
-    esxi_hosts = [h.strip() for h in args.esxi.split(",") if h.strip()]
+
+    if not tcp_ok(args.array):
+        print(f"Array {args.array} not reachable on 22 — check the IP / subnet.")
+        return 2
+    array_pw = os.environ.get("ALLETRA_PASSWORD") or getpass.getpass(f"Password for {args.array_user}@{args.array}: ")
 
     out = [f"# Switch-free zoning verification  {datetime.datetime.now():%Y-%m-%d %H:%M:%S}",
-           "# READ-ONLY: array showport/showportdev/showhost + ESXi 'esxcli ... list'. No switch login.\n"]
-    print("Reachability (TCP 22):")
-    for h in [args.array, *esxi_hosts]:
-        ok = tcp_ok(h)
-        print(f"  {h:<16} {'OK' if ok else 'UNREACHABLE'}")
-        out.append(f"# reach {h}: {'OK' if ok else 'UNREACHABLE'}")
-    if not tcp_ok(args.array):
-        print(f"\nArray {args.array} not reachable on 22 — try the other mgmt subnet or check the IP.")
-        return 2
-
-    array_pw = os.environ.get("ALLETRA_PASSWORD") or getpass.getpass(f"\nPassword for {args.array_user}@{args.array}: ")
-    esxi_pw = os.environ.get("ESXI_PASSWORD") or getpass.getpass(f"Password for {args.esxi_user}@ESXi: ")
-
-    # ---- Array side: per-port zoned WWPNs (the effective zoning), grouped by fabric ----
+           "# READ-ONLY: array showport + showportdev ns. No switch login.\n"]
     arr = connect(args.array, args.array_user, array_pw)
     showport = run(arr, "showport")
-    out += ["\n===== showport =====", showport]
-    out += ["\n===== showhost -d (WWPN -> host name) =====", run(arr, "showhost -d")]
-    ports = [p.strip() for p in args.ports.split(",") if p.strip()] or target_ports(showport)
+    out += ["===== showport =====", showport]
 
-    odd_zoned: set[str] = set()
-    even_zoned: set[str] = set()
-    for nsp in ports:
-        parity = int(nsp.split(":")[2]) % 2
-        ns_raw = run(arr, f"showportdev ns {nsp}")
-        fab_raw = run(arr, f"showportdev fcfabric {nsp}")
-        zoned = wwpns(ns_raw)
-        (odd_zoned if parity == 1 else even_zoned).update(zoned)
-        out += [f"\n===== showportdev ns {nsp}  [{'odd/F1' if parity else 'even/F2'}]  (zoned+logged-in) =====",
-                ns_raw or "(empty)",
-                f"\n===== showportdev fcfabric {nsp}  (all fabric, ignores zoning) =====", fab_raw or "(empty)"]
+    ports = target_ports(showport)
+    if args.ports:
+        want = {x.strip() for x in args.ports.split(",") if x.strip()}
+        ports = [(n, f, w) for (n, f, w) in ports if n in want]
+
+    # name -> {"odd": set(wwpn), "even": set(wwpn)}
+    per_host: dict[str, dict[str, set[str]]] = {}
+    array_ports_by_fabric: dict[str, list[str]] = {"odd": [], "even": []}
+    for nsp, fabric, arr_wwpn in ports:
+        array_ports_by_fabric[fabric].append(f"{nsp} ({arr_wwpn})")
+        block = run(arr, f"showportdev ns {nsp}")
+        out += [f"\n===== showportdev ns {nsp}  [{fabric}/F{'1' if fabric == 'odd' else '2'}] =====", block]
+        for name, wwpn in parse_ns(block):
+            per_host.setdefault(name, {"odd": set(), "even": set()})[fabric].add(wwpn)
+        if args.with_fabric:
+            out += [f"\n===== showportdev fcfabric {nsp} (whole SAN) =====", run(arr, f"showportdev fcfabric {nsp}")]
     arr.close()
 
-    # ---- ESXi side: HBA WWPNs + array targets seen (independent confirmation) ----
-    esxi_hbas: dict[str, set[str]] = {}
+    # Optional independent ESXi cross-check (never gates the verdict).
     esxi_targets: dict[str, set[str]] = {}
-    for h in esxi_hosts:
+    for h in [x.strip() for x in args.esxi.split(",") if x.strip()]:
         if not tcp_ok(h):
-            out.append(f"\n[!] ESXi {h} unreachable on 22 (SSH disabled?) — skipped")
+            out.append(f"\n[!] ESXi {h} unreachable on 22 — skipped")
             continue
+        pw = os.environ.get("ESXI_PASSWORD") or getpass.getpass(f"Password for {args.esxi_user}@{h}: ")
         try:
-            c = connect(h, args.esxi_user, esxi_pw)
-            fc = run(c, "esxcli storage san fc list")
+            c = connect(h, args.esxi_user, pw)
             paths = run(c, "esxcli storage core path list")
             c.close()
         except Exception as exc:  # noqa: BLE001
-            out.append(f"\n[!] ESXi {h}: {type(exc).__name__}: {str(exc)[:120]}")
+            out.append(f"\n[!] ESXi {h}: {type(exc).__name__}: {str(exc)[:100]} (SSH on? password?)")
             continue
-        hbas = {norm(m.group(0)) for line in fc.splitlines() if "port name" in line.lower() for m in _WWPN.finditer(line)}
-        targets = set()
+        tgt = set()
         for line in paths.splitlines():
             if "target identifier" in line.lower():
-                found = [norm(m.group(0)) for m in _WWPN.finditer(line)]
-                if found:
-                    targets.add(found[-1])
-        esxi_hbas[h], esxi_targets[h] = hbas, targets
-        out += [f"\n===== {h} : esxcli storage san fc list =====", fc,
-                f"\n===== {h} : esxcli storage core path list =====", paths]
+                m = _WWPN_COLON.findall(line)
+                if m:
+                    tgt.add(norm(m[-1]))
+        esxi_targets[h] = tgt
 
-    # ---- Verdict ----
-    verdict = ["\n==================  VERDICT (no switch was used)  =================="]
-    verdict.append(f"Array odd/F1 zoned WWPNs: {len(odd_zoned)}   even/F2 zoned WWPNs: {len(even_zoned)}")
-    overall_ok = bool(esxi_hbas)
-    for h in esxi_hosts:
-        if h not in esxi_hbas:
-            continue
-        hbas = esxi_hbas[h]
-        on_odd = sorted(hbas & odd_zoned)
-        on_even = sorted(hbas & even_zoned)
-        unzoned = sorted(hbas - odd_zoned - even_zoned)
-        ok = bool(on_odd) and bool(on_even)
-        overall_ok = overall_ok and ok
-        verdict.append(f"\n{h}  ->  {'PASS (zoned on both fabrics)' if ok else 'GAP'}")
-        verdict.append(f"    HBAs zoned on odd/F1:  {on_odd or 'NONE'}")
-        verdict.append(f"    HBAs zoned on even/F2: {on_even or 'NONE'}")
-        if unzoned:
-            verdict.append(f"    HBAs NOT zoned to the array anywhere: {unzoned}  <-- switch zone needed")
-        verdict.append(f"    array target WWPNs this host sees (esxcli): {len(esxi_targets.get(h, set()))}")
-
-    verdict.append(
-        f"\nCONCLUSION: zoning verification {'CONFIRMED' if esxi_hbas else 'INCONCLUSIVE'} from the array + "
-        f"ESXi alone — the switch was never contacted. Overall zoning: "
-        f"{'CORRECT on both fabrics' if overall_ok else 'has gaps (switch needed only to CREATE the missing zones)'}."
+    # ---- Verdict (from the array alone) ----
+    v = ["\n==================  VERDICT — from the array alone, no switch  =================="]
+    v.append(f"Array FC target ports (ready):  odd/F1 = {array_ports_by_fabric['odd']}   even/F2 = {array_ports_by_fabric['even']}")
+    v.append(f"Hosts seen zoned to the array:  {len(per_host)}")
+    all_ok = bool(per_host)
+    for name in sorted(per_host):
+        f = per_host[name]
+        ok = bool(f["odd"]) and bool(f["even"])
+        all_ok = all_ok and ok
+        v.append(f"\n  {name}   ->   {'PASS (zoned on BOTH fabrics)' if ok else 'GAP'}")
+        v.append(f"      odd/F1  : {sorted(f['odd'])  or 'NONE  <-- missing odd-fabric zone'}")
+        v.append(f"      even/F2 : {sorted(f['even']) or 'NONE  <-- missing even-fabric zone'}")
+    if esxi_targets:
+        v.append("\n  ESXi cross-check (array target WWPNs each host can reach):")
+        for h, t in esxi_targets.items():
+            v.append(f"      {h}: {len(t)} target(s)")
+    v.append(
+        f"\nCONCLUSION: {'all ' + str(len(per_host)) + ' host(s) zoned on BOTH fabrics — ZONING CORRECT' if all_ok and per_host else 'zoning has GAPS'} "
+        "— verified from the array alone; the switch was never contacted."
+        + ("" if all_ok and per_host else "  (Switch login is needed only to CREATE the missing zones.)")
     )
 
-    report = "\n".join(out + verdict) + "\n"
+    report = "\n".join(out + v) + "\n"
     with open(args.out, "w", encoding="utf-8") as fh:
         fh.write(report)
-    print("\n".join(verdict))
+    print("\n".join(v))
     print(f"\nFull raw output saved -> {args.out}")
     return 0
 
