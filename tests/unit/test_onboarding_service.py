@@ -277,6 +277,28 @@ def _prov_intent():
     )
 
 
+async def test_pending_sheet_stash_mints_run_and_preserves_intent(tmp_path):
+    # ADR 0005 revision: the sheet is held server-side (with device passwords) until a mode is
+    # chosen; create_run_from_pending then mints the run and preserves the provisioning intent.
+    from alletra_onboard.application.onboarding_service import PendingSheetNotFoundError
+
+    service = _service(tmp_path)
+    intent = _prov_intent()
+    token = service.stash_pending_sheet(_item(), intent)
+
+    run = service.create_run_from_pending(token, mode=RunMode.BOTH)
+    assert run.mode == RunMode.BOTH
+    assert run.current_phase == WorkflowPhase.PREFLIGHT  # BOTH starts at GreenLake/preflight
+    # the intent (with passwords) round-tripped through the durable stash into the run
+    restored = service.get_provisioning_intent(run.run_id)
+    assert restored.array.host == "a"
+    assert restored.array.password.get_secret_value() == "p"
+
+    # single-use: the hold is consumed, so a second mint fails cleanly
+    with pytest.raises(PendingSheetNotFoundError):
+        service.create_run_from_pending(token, mode=RunMode.BOTH)
+
+
 async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
     from alletra_onboard.application.storage import discovery as sd
     from alletra_onboard.application.storage import storage_provision as sp

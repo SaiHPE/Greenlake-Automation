@@ -1,7 +1,7 @@
 import { Box, Heading, Text } from 'grommet';
 import { Checkmark } from 'grommet-icons';
 import { useEffect, useRef, useState } from 'react';
-import { getRun } from './api';
+import { createRunFromSheet, getRun } from './api';
 import { actionKeysFor, ACTION_CATALOG, ActionKey, phaseToActionKey, RunMode } from './modes';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
@@ -30,7 +30,9 @@ const SHEET_STEP: StepDef = { key: 'sheet', title: 'Initialisation sheet', subti
 const DONE_STEP: StepDef = { key: 'done', title: 'Finish', subtitle: 'summary' };
 const RUN_ID_KEY = 'alletra.runId';
 
-// The wizard steps for a mode: scaffolding + the mode's action steps (in catalog order) + Finish.
+// The wizard steps: the sheet is COMPLETE intake and comes BEFORE the mode (ADR 0005 revision), so
+// the order is Prereq -> Sheet -> Mode -> the mode's action steps -> Finish. Still 3 scaffolding
+// steps before the actions, so the resume math (3 + indexInActions) is unchanged.
 function buildSteps(mode: RunMode, custom: ActionKey[]): StepDef[] {
   const keys = actionKeysFor(mode, custom);
   const actions = ACTION_CATALOG.filter((a) => keys.includes(a.key)).map((a) => ({
@@ -38,7 +40,7 @@ function buildSteps(mode: RunMode, custom: ActionKey[]): StepDef[] {
     title: a.title,
     subtitle: a.subtitle,
   }));
-  return [MODE_STEP, PREREQ_STEP, SHEET_STEP, ...actions, DONE_STEP];
+  return [PREREQ_STEP, SHEET_STEP, MODE_STEP, ...actions, DONE_STEP];
 }
 
 const ACTION_KEY_SET = new Set<string>(ACTION_CATALOG.map((a) => a.key));
@@ -51,6 +53,10 @@ export default function App() {
   const [maxStep, setMaxStep] = useState(0);
   const [form, setForm] = useState<WorkItemForm>(EMPTY_FORM);
   const [runId, setRunId] = useState<string | null>(storedRunId);
+  // The held-sheet token from the upload step; the Mode step mints the run from it. In-memory only —
+  // a browser refresh before choosing a mode means re-uploading the sheet (cheap; the run isn't lost
+  // because it doesn't exist yet).
+  const [sheetToken, setSheetToken] = useState<string | null>(null);
   const { run, events } = useRunEvents(runId);
 
   const steps = buildSteps(mode, customSteps);
@@ -102,11 +108,26 @@ export default function App() {
 
   const restart = () => {
     setRunId(null);
+    setSheetToken(null);
     setForm(EMPTY_FORM);
     setCustomSteps([]);
     setMode('FULL_ONBOARDING');
     setStep(0);
     setMaxStep(0);
+  };
+
+  // Picking a mode is what MINTS the run (from the held sheet). If a run already exists (the operator
+  // navigated back to this step), just move on — the mode is locked.
+  const confirmMode = async () => {
+    if (runId) {
+      next();
+      return;
+    }
+    if (!sheetToken) throw new Error('Upload the Initialisation sheet first.');
+    const { run: created } = await createRunFromSheet(sheetToken, mode, customSteps);
+    setSheetToken(null);
+    setRunId(created.run_id);
+    next();
   };
 
   const needsRun = ACTION_KEY_SET.has(current.key) && !runId;
@@ -187,18 +208,16 @@ export default function App() {
               custom={customSteps}
               setMode={setMode}
               setCustom={setCustomSteps}
-              onDone={next}
+              onConfirm={confirmMode}
               locked={!!runId}
             />
           )}
           {current.key === 'prereq' && <PrereqStep onDone={next} />}
           {current.key === 'sheet' && (
             <InitSheetStep
-              mode={mode}
-              selectedSteps={customSteps}
               setForm={setForm}
-              onRunCreated={(id) => {
-                setRunId(id);
+              onUploaded={(token) => {
+                setSheetToken(token);
                 next();
               }}
             />
@@ -225,7 +244,7 @@ export default function App() {
             <VerifyStep runId={runId} run={run} events={events} onDone={next} />
           )}
           {current.key === 'done' && <DoneStep run={run} events={events} onRestart={restart} />}
-          {needsRun && <Text color="text-weak">Create a run on the Initialisation sheet step first.</Text>}
+          {needsRun && <Text color="text-weak">Choose a mode first — that creates the run.</Text>}
         </Box>
       </Box>
     </Box>

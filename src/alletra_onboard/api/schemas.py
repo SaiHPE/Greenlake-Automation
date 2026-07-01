@@ -113,22 +113,26 @@ class DiscoveryToolResponse(BaseModel):
 # ------------------------------------------------------------------ initialisation sheet
 
 class InitSheetUploadRequest(BaseModel):
+    # The sheet is COMPLETE intake, uploaded BEFORE a mode is chosen (ADR 0005 revision), so no
+    # mode/steps here — the upload validates the full superset and holds the sheet server-side.
     content_b64: str = Field(description="Base64-encoded Initialisation_sheet.xlsx contents.")
-    mode: RunMode = Field(
-        default=RunMode.FULL_ONBOARDING,
-        description="Operator-selected slice (decoupling). Scopes which sheet fields are required.",
-    )
+
+
+class InitSheetUploadResponse(BaseModel):
+    # A single-use token for the held sheet; the run is minted later from this token + the chosen mode.
+    token: str
+    # The parsed work item for review (subscription_key shown; admin password / device passwords never echoed).
+    work_item: dict
+    credentials_saved: bool = True
+
+
+class RunFromSheetRequest(BaseModel):
+    token: str = Field(description="The token returned by /init-sheet/upload for the held sheet.")
+    mode: RunMode = Field(default=RunMode.FULL_ONBOARDING, description="The operator-selected slice.")
     selected_steps: list[str] = Field(
         default_factory=list,
         description="Explicit step keys when mode is CUSTOM (else derived from the mode).",
     )
-
-
-class InitSheetUploadResponse(BaseModel):
-    run: RunRecord
-    # The parsed work item for review (subscription_key shown; admin password never echoed).
-    work_item: dict
-    credentials_saved: bool = True
 
 
 # ------------------------------------------------------------------ preflight (existing)
