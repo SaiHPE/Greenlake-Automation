@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from typing import Any, Callable
+from uuid import uuid4
 
 from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAdapter
 from alletra_onboard.adapters.browser.dscc_setup import DsccSetupAdapter
@@ -70,6 +71,11 @@ class RunBusyError(RuntimeError):
 
 class StepPreconditionError(RuntimeError):
     """A step was requested before its prerequisite ran (e.g. zoning/provision before discovery)."""
+
+
+class PendingSheetNotFoundError(LookupError):
+    """A complete sheet was uploaded but its server-side hold is gone (already turned into a run, or
+    the state DB was reset) — the operator should re-upload the Initialisation sheet."""
 
 
 def _default_provision_factory(settings: Settings, progress: Callable) -> Any:
@@ -154,6 +160,36 @@ class OnboardingService:
             f"Run created for {item.serial_number} ({mode.value})",
         )
         return run
+
+    def stash_pending_sheet(
+        self, work_item: ArrayWorkItem, provisioning_intent: ProvisioningIntent | None
+    ) -> str:
+        """Hold a parsed COMPLETE sheet server-side and return a single-use token. The run is minted
+        later, when the operator picks a mode (ADR 0005 revision) — device passwords never round-trip
+        to the browser."""
+        token = uuid4().hex
+        self.store.save_pending_sheet(token, work_item, provisioning_intent)
+        return token
+
+    def create_run_from_pending(
+        self,
+        token: str,
+        *,
+        mode: RunMode = RunMode.FULL_ONBOARDING,
+        selected_steps: list[str] | None = None,
+    ) -> RunRecord:
+        """Mint the run for a previously-uploaded complete sheet, now that the operator has chosen a
+        mode. Consumes the pending-sheet hold (single use)."""
+        popped = self.store.pop_pending_sheet(token)
+        if popped is None:
+            raise PendingSheetNotFoundError(token)
+        work_item, provisioning_intent = popped
+        return self.create_run(
+            work_item,
+            mode=mode,
+            selected_steps=selected_steps,
+            provisioning_intent=provisioning_intent,
+        )
 
     def get_provisioning_intent(self, run_id: str) -> ProvisioningIntent:
         intent = self.store.get_provisioning_intent(run_id)

@@ -37,6 +37,13 @@ Zoning, Provision storage, Verify). Each has a stable key and a *kind* — `init
 `verify`. A mode selects a set of steps; the step registry (`domain/workflow.py`) is their single
 source of truth for identity and order.
 
+**Initialisation sheet**:
+The single workbook a customer fills for one array — filled *completely* (onboarding + provisioning
+fields, all tabs), then reused across every Mode. The Mode chooses which parts of the sheet are
+acted on; it never changes which sheet is used. One workbook = one array; the same complete sheet
+drives full onboarding, provision-only, verify-only, or all at once.
+_Avoid_: per-mode sheet (there is only one), profile
+
 ## Language — storage provisioning
 
 **Provisioning intent**:

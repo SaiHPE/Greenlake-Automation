@@ -1,9 +1,21 @@
 # Onboarding is decoupled into operator-selected modes
 
-The operator picks a **mode** at the start of a run — *Full onboarding*, *Provision storage only*,
-*Both*, *Verify only*, or *Custom* — and the wizard renders (and the service advances through) only
-the steps that mode needs. The same workbook is reused; what changes is which steps run and which
-sheet fields are required.
+> **Revision (2026-07-01): the sheet is COMPLETE INTAKE and now PRECEDES the mode.** The wizard
+> order is **Prerequisites → Initialisation sheet → Mode → the mode's steps**. The customer fills
+> **one complete workbook** (all onboarding + provisioning fields); the operator uploads it, and
+> only then picks a mode. Consequences: (1) **sheet validation is mode-independent** — the upload
+> requires the *complete* superset (`all_required_keys()` = every step's required fields), so an
+> incomplete sheet is rejected regardless of intent; (2) **the run is minted at the Mode step**, not
+> at sheet-upload — the upload parses + saves GreenLake creds + holds the parsed sheet server-side
+> under a token (device passwords never round-trip to the browser), and choosing a mode creates the
+> run from that held sheet. The rest of this ADR (the step registry, `RunMode`, mode-derived step
+> list, permissive backend, secrets-in-sheet rule) stands. This reverses only the "mode first"
+> ordering below.
+
+The operator picks a **mode** — *Full onboarding*, *Provision storage only*, *Both*, *Verify only*,
+or *Custom* — and the wizard renders (and the service advances through) only the steps that mode
+needs. The same workbook is reused; what changes is which steps run. (Ordering: per the revision
+above, the mode is chosen *after* the complete sheet is uploaded, and it is what creates the run.)
 
 **Why.** The original flow forced a single linear path (Prerequisites → Init sheet → GreenLake →
 Cloud Connectivity → DSCC → Verify). To verify or (now) provision an **already-initialised** array,
@@ -18,9 +30,10 @@ just to reach the step they cared about. That blocks the real test/operate loop.
   JSON payload; pre-mode rows deserialize as `FULL_ONBOARDING`).
 - `enabled_steps(mode, selected)` derives the step list; `initial_phase` lands a new run on its first
   enabled step; `next_enabled_phase` makes the A→B→C auto-advance skip deselected init steps.
-- **Conditional sheet validation** (`required_keys_for`): only the fields the selected steps need are
-  required. A verify-only / provision-only sheet needs serial + array IP, not GreenLake creds or DSCC
-  contact details.
+- **Sheet validation** (`required_keys_for` / `all_required_keys`): `required_keys_for(mode)` still
+  derives a mode's required fields, but per the 2026-07-01 revision the *upload* validates the
+  **complete** superset (`all_required_keys()`) since the sheet is filled once, in full, before the
+  mode is known. (Originally the upload validated only the selected mode's subset.)
 - The frontend mirrors this: a `ModeStep` chooser, then a **mode-derived step list** (replacing the
   old static `STEPS` + `maxStep` watermark); resume maps the persisted phase to a step within that list.
 
