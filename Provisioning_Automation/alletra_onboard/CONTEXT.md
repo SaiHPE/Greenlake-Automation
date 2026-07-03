@@ -109,3 +109,29 @@ write order. Failover/failback (disaster recovery) act on the group.
 **Device naa**:
 The host-side identifier for a SAN disk. For this array family it deterministically encodes the
 array system id and the VV id, so a host device maps back to its array volume.
+
+## Language — platform control plane
+
+**DSCC (Data Services Cloud Console)** — also **Data Ops Manager (DOM)**:
+HPE's GreenLake *cloud* control plane: one public REST API that manages *many* arrays (provision,
+replicate, snapshot, telemetry) from the cloud. Distinct from a single array's on-box WSAPI. See
+ADR 0006.
+_Avoid_: "the cloud" (name the plane); treating DSCC and WSAPI as interchangeable.
+
+**Control plane**:
+The surface a management operation is issued *through*. Three exist and each capability is *routed*
+to one: the **cloud** plane (DSCC, multi-array), the **direct** plane (a single array's WSAPI/SSH),
+and the **switch** (FC zoning). See ADR 0006.
+_Avoid_: conflating the control plane with the array itself (the data plane).
+
+**Protection policy**:
+A **DSCC**-managed rule set that applies **snapshots** and/or **replication** (Remote Copy) to
+volumes or volume-sets on a schedule, with retention — the cloud-native way to express snapshot + DR
+*intent*. The direct-array equivalent is `createsv` / `createsched`.
+_Avoid_: "backup".
+
+**View** *(file — provisional)*:
+On the file side, an exported access path to a file system (an SMB/NFS export with an attached
+policy) — the file analogue of a block **Export (VLUN)**. Provisional: the file control plane is not
+yet researched; refine after the file research pass.
+_Avoid_: assuming it equals "share" (a view may front one or more shares/exports — confirm in file research).
