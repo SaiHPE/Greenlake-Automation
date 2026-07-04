@@ -1,6 +1,6 @@
-import { Box, Button, CheckBox, Notification, Spinner, Text } from 'grommet';
+import { Box, Button, Notification, Spinner, Text } from 'grommet';
 import { useState } from 'react';
-import { RunEvent, RunRecord, zoningApply, zoningPreview, ZoningReport } from '../api';
+import { RunEvent, RunRecord, zoningPreview, ZoningReport } from '../api';
 import { EventLog, Section } from '../components';
 
 interface Props {
@@ -19,7 +19,6 @@ function latestReport(events: RunEvent[]): ZoningReport | null {
 
 export function ZoningStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
   const running = run?.status === 'running';
   const report = latestReport(events);
   const missing = report ? report.expected.filter((z) => !z.present) : [];
@@ -85,10 +84,11 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
       )}
 
       {report && !report.proper && missing.length > 0 && (
-        <Section title={`Remediation needed — ${missing.length} zone(s) missing`}>
+        <Section title={`Zoning plan — ${missing.length} zone(s) to add`}>
           <Text size="small">
-            The tool will <b>additively</b> create these zones and activate with <b>cfgenable</b>
-            {' '}(never cfgsave-alone). Existing zones on the production fabric are untouched.
+            The tool does <b>not</b> write to the switch. Hand these <b>additive</b> commands to the SAN
+            team to run on each fabric — they activate with <b>cfgenable</b> (never cfgsave-alone) and
+            leave existing zones untouched — then click <b>Re-verify</b> above.
           </Text>
           {report.remediations.map((rem) => (
             <Box key={rem.switch_host} gap="xsmall" pad={{ vertical: 'small' }}>
@@ -100,19 +100,6 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
               </Box>
             </Box>
           ))}
-          <CheckBox
-            label="I reviewed these commands and authorise writing them to the production switches."
-            checked={confirmed}
-            onChange={(e) => setConfirmed(e.target.checked)}
-          />
-          <Button
-            label={running ? 'Applying…' : 'Apply remediation to switches'}
-            color="status-critical"
-            primary
-            disabled={!confirmed || running}
-            onClick={call(() => zoningApply(runId))}
-            alignSelf="start"
-          />
         </Section>
       )}
 

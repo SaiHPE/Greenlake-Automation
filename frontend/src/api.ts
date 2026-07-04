@@ -204,7 +204,6 @@ export interface ProvisioningResult { outcomes: ActionOutcome[]; error: string |
 
 export const startDiscover = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/discover`);
 export const zoningPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/preview`);
-export const zoningApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/apply`);
 export const storagePreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/preview`);
 export const storageApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/apply`);
 
