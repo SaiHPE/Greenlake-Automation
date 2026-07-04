@@ -159,8 +159,9 @@ class WsapiClient:
 
     # ------------------------------------------------------------------ writes (idempotent)
 
-    def ensure_host(self, name: str, fc_wwns: list[str]) -> str:
-        """Create ONE host carrying all FC WWNs (persona 11). Returns 'created' or 'exists'.
+    def ensure_host(self, name: str, fc_wwns: list[str], persona: int = VMWARE_PERSONA) -> str:
+        """Create ONE host carrying all FC WWNs at the given persona (default VMware/11). Returns
+        'created' or 'exists'. An existing host is never modified — its persona is left as-is.
 
         Raises WsapiError if any WWN already belongs to a *different* host (EXISTENT_PATH) — that is a
         real conflict the operator must resolve, not something to silently adopt.
@@ -176,7 +177,7 @@ class WsapiClient:
                 "Resolve this on the array before provisioning."
             )
         try:
-            self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": VMWARE_PERSONA})
+            self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": persona})
             return "created"
         except Exception as exc:  # noqa: BLE001
             if self._is_conflict(exc):

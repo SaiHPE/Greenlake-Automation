@@ -22,6 +22,8 @@ from alletra_onboard.domain.storage import (
     ProvisioningIntent,
     ProvisioningPlan,
     ProvisioningResult,
+    PERSONA_NAMES,
+    persona_for_os,
 )
 
 _GIB_TO_MIB = 1024
@@ -35,6 +37,14 @@ def _hosts_by_name(discovery: DiscoveryReport) -> "OrderedDict[str, list[str]]":
         if hba.wwpn not in wwns:
             wwns.append(hba.wwpn)
     return grouped
+
+
+def _persona_by_host(discovery: DiscoveryReport) -> dict[str, int]:
+    """The array host persona for each discovered host, derived from its OS (default VMware)."""
+    personas: dict[str, int] = {}
+    for hba in discovery.host_hbas:
+        personas.setdefault(hba.host_name, persona_for_os(hba.os))
+    return personas
 
 
 def build_plan(
@@ -60,12 +70,14 @@ def build_plan(
         plan.error = f"Could not read the array over WSAPI: {exc}"
         return plan
 
+    personas = _persona_by_host(discovery)
     for host_name, wwns in hosts.items():
+        persona = personas.get(host_name, 11)
         plan.actions.append(PlannedAction(
             kind="host", name=host_name,
-            description=f"Host {host_name} — {len(wwns)} FC WWN(s), persona 11 (VMware/ALUA)",
+            description=f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona} ({PERSONA_NAMES.get(persona, '?')})",
             exists=host_name in existing_hosts,
-            detail={"wwns": wwns},
+            detail={"wwns": wwns, "persona": persona},
         ))
     plan.actions.append(PlannedAction(
         kind="hostset", name=intent.host_set_name,
@@ -114,10 +126,11 @@ def apply_plan(
     host_set_ref = f"set:{intent.host_set_name}"  # VLUN export target for the whole cluster
     vol_names = intent.volume.names()
     size_mib = intent.volume.size_gib * _GIB_TO_MIB
+    personas = _persona_by_host(discovery)
     try:
         with wsapi_factory(intent.array) as array:
             for host_name, wwns in hosts.items():
-                status = array.ensure_host(host_name, wwns)
+                status = array.ensure_host(host_name, wwns, persona=personas.get(host_name, 11))
                 result.outcomes.append(ActionOutcome(kind="host", name=host_name, status=status))
 
             status = array.ensure_host_set(intent.host_set_name, list(hosts))

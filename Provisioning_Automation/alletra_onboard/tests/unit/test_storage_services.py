@@ -159,8 +159,8 @@ class FakeWsapi:
     def volume_set_names(self):
         return list(self.vsets)
 
-    def ensure_host(self, name, wwns):
-        self.calls.append(("host", name, tuple(wwns)))
+    def ensure_host(self, name, wwns, persona=11):
+        self.calls.append(("host", name, tuple(wwns), persona))
         return "exists" if name in self.hosts else "created"
 
     def ensure_host_set(self, name, members):
@@ -354,3 +354,23 @@ def test_apply_plan_is_idempotent_and_exports_to_host_set():
     # volumes are exported to the host SET (set:<name>), not per-host
     assert ("vlun", "CRV_Prod01", "set:CRVLZ_Hostset") in fake.calls
     assert result.error is None
+
+
+def test_persona_derived_from_host_os():
+    from alletra_onboard.domain.storage import persona_for_os
+
+    assert persona_for_os("VMware ESXi 8.0.3") == 11
+    assert persona_for_os("Microsoft Windows Server 2019") == 15
+    assert persona_for_os("Red Hat Enterprise Linux 9") == 2
+    assert persona_for_os(None) == 11  # default VMware — discovery is ESXi-only today
+
+
+def test_apply_plan_sets_persona_per_host_os():
+    d = disc.DiscoveryReport(host_hbas=[
+        HostHba(host_name="esx1", wwpn=_A, os="VMware ESXi 8.0.3"),
+        HostHba(host_name="winbox", wwpn=_B, os="Microsoft Windows Server 2022"),
+    ])
+    fake = FakeWsapi()
+    prov.apply_plan(_intent(), d, wsapi_factory=lambda c: fake)
+    personas = {c[1]: c[3] for c in fake.calls if c[0] == "host"}  # ("host", name, wwns, persona)
+    assert personas == {"esx1": 11, "winbox": 15}  # persona per host, not a hardcoded 11
