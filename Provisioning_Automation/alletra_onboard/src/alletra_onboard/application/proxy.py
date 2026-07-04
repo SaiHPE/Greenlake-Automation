@@ -70,12 +70,18 @@ def is_bypassed(host: str | None, bypass: list[str]) -> bool:
 if _IS_WINDOWS:
     from ctypes import wintypes
 
+    # The WinHTTP out-strings below are GlobalAlloc'd by WinHTTP and we must GlobalFree them. They are
+    # declared as raw c_void_p (NOT LPWSTR) on purpose: ctypes auto-converts an LPWSTR field to a
+    # Python str on access, which LOSES the original pointer — then freeing the auto-converted str's
+    # address (ctypes.cast on a str returns a pointer INTO the Python object) corrupts the process heap
+    # (STATUS_HEAP_CORRUPTION, 0xC0000374). Keeping the raw pointer lets us read it with wstring_at and
+    # GlobalFree the exact address WinHTTP gave us. See docs/adr/0008.
     class _IE_PROXY_CONFIG(ctypes.Structure):
         _fields_ = [
             ("fAutoDetect", wintypes.BOOL),
-            ("lpszAutoConfigUrl", wintypes.LPWSTR),
-            ("lpszProxy", wintypes.LPWSTR),
-            ("lpszProxyBypass", wintypes.LPWSTR),
+            ("lpszAutoConfigUrl", ctypes.c_void_p),
+            ("lpszProxy", ctypes.c_void_p),
+            ("lpszProxyBypass", ctypes.c_void_p),
         ]
 
     class _AUTOPROXY_OPTIONS(ctypes.Structure):
@@ -91,8 +97,8 @@ if _IS_WINDOWS:
     class _PROXY_INFO(ctypes.Structure):
         _fields_ = [
             ("dwAccessType", wintypes.DWORD),
-            ("lpszProxy", wintypes.LPWSTR),
-            ("lpszProxyBypass", wintypes.LPWSTR),
+            ("lpszProxy", ctypes.c_void_p),        # WinHTTP GlobalAlloc'd — raw ptr, see note above
+            ("lpszProxyBypass", ctypes.c_void_p),
         ]
 
     _AUTO_DETECT = 0x00000001
@@ -113,6 +119,11 @@ if _IS_WINDOWS:
         wh.WinHttpCloseHandle.restype = wintypes.BOOL
         return wh
 
+    def _wstr(ptr) -> str | None:
+        """Copy a wide string from a raw pointer (int address or None) to a Python str, WITHOUT taking
+        ownership of the pointer (so the caller can still GlobalFree the original)."""
+        return ctypes.wstring_at(ptr) if ptr else None
+
     def _win_system_proxy(url: str) -> str | None:
         """Per-URL system proxy via WinHTTP: WinINET static, else PAC/WPAD — as the browser resolves it."""
         try:
@@ -125,9 +136,9 @@ if _IS_WINDOWS:
         pac_url: str | None = None
         try:
             if wh.WinHttpGetIEProxyConfigForCurrentUser(ctypes.byref(cfg)):
-                static = _first_proxy(cfg.lpszProxy)
+                static = _first_proxy(_wstr(cfg.lpszProxy))
                 auto_detect = bool(cfg.fAutoDetect)
-                pac_url = cfg.lpszAutoConfigUrl or None
+                pac_url = _wstr(cfg.lpszAutoConfigUrl)
         except Exception:  # noqa: BLE001
             pass
         finally:
@@ -157,18 +168,22 @@ if _IS_WINDOWS:
             if not ok:
                 return None
             try:
-                return _first_proxy(info.lpszProxy)
+                return _first_proxy(_wstr(info.lpszProxy))
             finally:
                 _global_free(info.lpszProxy, info.lpszProxyBypass)
         finally:
             wh.WinHttpCloseHandle(session)
 
     def _global_free(*ptrs) -> None:
+        """GlobalFree each raw WinHTTP pointer (a c_void_p field reads back as an int address, or None).
+        NEVER pass a Python str here — freeing a str's address corrupts the heap (see the struct note)."""
         k32 = ctypes.WinDLL("kernel32")
+        k32.GlobalFree.argtypes = [ctypes.c_void_p]
+        k32.GlobalFree.restype = ctypes.c_void_p
         for value in ptrs:
             if value:
                 try:
-                    k32.GlobalFree(ctypes.cast(value, ctypes.c_void_p))
+                    k32.GlobalFree(value)  # value is the real WinHTTP address (int), not a Python object
                 except Exception:  # noqa: BLE001
                     pass
 

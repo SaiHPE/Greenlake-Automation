@@ -69,3 +69,16 @@ Kerberos/NTLM (what the browser does transparently) is a **later enhancement**, 
 - The connectivity pre-check finally reflects reality (tests the path the tool will actually use).
 - Related hardcoded-assumption audit items (region default, fabric-by-parity, VMware persona, bypass
   scope) are tracked separately — this ADR fixes the proxy one.
+
+### Pitfall found in the field (fixed v0.9.1)
+
+The WinHTTP proxy structs (`WINHTTP_CURRENT_USER_IE_PROXY_CONFIG`, `WINHTTP_PROXY_INFO`) return
+strings that WinHTTP allocates and the caller must `GlobalFree`. Declaring those fields as `LPWSTR`
+made ctypes **auto-convert them to a Python `str` on access**, losing the original pointer — and
+`ctypes.cast(<that str>, c_void_p)` returns a pointer *into the Python object*, so `GlobalFree` then
+corrupted the process heap (**STATUS_HEAP_CORRUPTION / 0xC0000374**). It only manifested on a machine
+that actually **had a system proxy** (so the out-strings were non-null), which is why every unit test
+and CI selftest passed while the packaged app hard-crashed at launch on the proxied customer box (the
+serve path runs `apply_proxy_env()` before uvicorn prints — hence a black console, then the crash).
+Rule: **WinHTTP out-strings are held as raw `c_void_p`**, read with `wstring_at`, and `GlobalFree`'d
+by their real address — never as `LPWSTR`. Guarded by a struct-field regression test.
