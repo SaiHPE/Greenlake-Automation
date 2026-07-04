@@ -195,6 +195,18 @@ export interface ZoningReport {
   source: string;             // 'array' — verified from showportdev ns, no switch
   notes: string[]; error: string | null;
 }
+// The read-only assisted zoning plan (ADR 0004): per-fabric SIST pairs + aliases the operator names.
+export interface AliasedWwpn {
+  wwpn: string; display: string; role: 'host' | 'array'; fabric: string; nsp: string;
+  host_name: string; existing_aliases: string[]; suggested_alias: string;
+}
+export interface FabricZonePlan {
+  fabric: string; switch_host: string; active_cfg: string;
+  hosts: AliasedWwpn[]; array_ports: AliasedWwpn[]; pairs: [string, string][];
+}
+export interface ZoningPlan {
+  fabrics: FabricZonePlan[]; offline_hosts: string[]; notes: string[]; error: string | null;
+}
 export interface PlannedAction {
   kind: string; name: string; description: string; exists: boolean; detail: Record<string, any>;
 }
@@ -204,6 +216,7 @@ export interface ProvisioningResult { outcomes: ActionOutcome[]; error: string |
 
 export const startDiscover = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/discover`);
 export const zoningPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/preview`);
+export const zoningPlan = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/plan`);
 export const storagePreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/preview`);
 export const storageApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/apply`);
 

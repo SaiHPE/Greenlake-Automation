@@ -34,6 +34,7 @@ from alletra_onboard.application.provisioning import (
 from alletra_onboard.application.storage import discovery as storage_discovery
 from alletra_onboard.application.storage import storage_provision
 from alletra_onboard.application.storage import zoning as storage_zoning
+from alletra_onboard.application.storage import zoning_plan as storage_zoning_plan
 from alletra_onboard.application.verification import verify
 from alletra_onboard.domain.storage import DiscoveryReport, ProvisioningPlan, ZoningReport
 from alletra_onboard.config import Settings, load_settings
@@ -483,6 +484,28 @@ class OnboardingService:
             else f"Zoning needs {missing} zone(s) — the plan lists the exact commands for the SAN team to "
             "apply on the switch (the tool makes no switch writes); re-verify after they are applied.",
             data={"report": report.model_dump(mode="json")},
+        )
+
+    def start_zoning_plan(self, run_id: str) -> RunRecord:
+        run = self.get_run(run_id)
+        intent = self.get_provisioning_intent(run_id)
+        discovery = self._require_discovery(run_id)
+        self._spawn(run_id, self._run_zoning_plan(run, intent, discovery))
+        return run
+
+    async def _run_zoning_plan(self, run: RunRecord, intent, discovery) -> None:
+        self._set(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
+        self._emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "step.started",
+                   "Reading both fabric switches (read-only) to build the zoning plan…")
+        plan = await asyncio.to_thread(storage_zoning_plan.build_zoning_plan, intent, discovery)
+        pairs = sum(len(f.pairs) for f in plan.fabrics)
+        self._set(run, RunStatus.READY, WorkflowPhase.STORAGE_ZONING)
+        self._emit(
+            run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.plan",
+            f"Zoning plan: {pairs} single-initiator-single-target zone(s) across the fabrics"
+            + (f"; {len(plan.offline_hosts)} host WWPN(s) offline (cable + power)" if plan.offline_hosts else "")
+            + (f"; {len(plan.notes)} note(s)" if plan.notes else ""),
+            data={"plan": plan.model_dump(mode="json")},
         )
 
     def start_storage_preview(self, run_id: str) -> RunRecord:
