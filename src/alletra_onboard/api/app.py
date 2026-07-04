@@ -62,6 +62,7 @@ from alletra_onboard.application.configuring import masked_gl_credentials, updat
 from alletra_onboard.application.event_bus import InMemoryEventBus
 from alletra_onboard.application.health import greenlake_check
 from alletra_onboard.application.init_sheet import build_template_bytes, parse_workbook_bytes
+from alletra_onboard.domain.models import RunMode
 from alletra_onboard.application.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.onboarding_service import (
     OnboardingService,
@@ -89,7 +90,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         service = OnboardingService(settings, store, InMemoryEventBus())
     env_path = Path(".env")
 
-    app = FastAPI(title="Alletra Onboard", version="0.5.0")
+    app = FastAPI(title="Alletra Onboard", version="0.6.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # vite dev server
@@ -108,6 +109,13 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         return HealthResponse()
+
+    @app.get("/app/profile")
+    async def app_profile() -> dict:
+        # The UI reads this to brand itself + restrict the mode chooser: "full" shows all modes;
+        # "init-only" (the Alletra MP Initialization accelerator) shows Initialization only.
+        settings = load_settings()
+        return {"profile": settings.alletra_profile, "init_only": settings.init_only, "title": settings.app_title}
 
     @app.get("/config", response_model=ConfigStatusResponse)
     async def get_config() -> ConfigStatusResponse:
@@ -197,8 +205,9 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.get("/init-sheet/template")
     async def init_sheet_template() -> Response:
+        # The Initialization accelerator ships an onboarding-only sheet (no Provisioning tab).
         return Response(
-            content=build_template_bytes(),
+            content=build_template_bytes(init_only=load_settings().init_only),
             media_type=XLSX_MEDIA,
             headers={"Content-Disposition": 'attachment; filename="Initialisation_sheet.xlsx"'},
         )
@@ -208,12 +217,16 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # The sheet is COMPLETE intake, uploaded before a mode is chosen (ADR 0005 revision): validate
         # the full superset, save GreenLake creds, and HOLD the parsed sheet server-side. No run yet —
         # picking a mode (POST /runs/from-sheet) mints it. Device passwords never leave the server.
+        # The init-only accelerator validates ONBOARDING fields only (no Provisioning tab).
         try:
             raw = base64.b64decode(request.content_b64, validate=True)
         except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=422, detail="Upload was not valid base64") from exc
         try:
-            parsed = parse_workbook_bytes(raw, complete=True)
+            if load_settings().init_only:
+                parsed = parse_workbook_bytes(raw, mode=RunMode.FULL_ONBOARDING)
+            else:
+                parsed = parse_workbook_bytes(raw, complete=True)
         except Exception as exc:  # noqa: BLE001 - bad xlsx / missing fields -> a clear 422
             raise HTTPException(status_code=422, detail=f"Initialisation sheet did not parse: {exc}") from exc
 
