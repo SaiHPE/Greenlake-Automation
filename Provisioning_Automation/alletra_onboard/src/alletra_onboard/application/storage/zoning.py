@@ -18,9 +18,7 @@ generating remediation, but the verify path no longer requires the switch.
 from __future__ import annotations
 
 import re
-from typing import Callable
 
-from alletra_onboard.application.storage.clients import make_brocade
 from alletra_onboard.domain.storage import (
     DiscoveryReport,
     ExpectedZone,
@@ -223,21 +221,3 @@ def _remediations(
         cmds = cmds + [f'cfgadd "<active_cfg>","{names}"', 'cfgenable "<active_cfg>"']
         remediations.append(ZoneRemediation(fabric=fabric, switch_host=switch_by_fabric[fabric], cfg_name="<active_cfg>", commands=cmds))
     return remediations
-
-
-def apply_remediation(
-    intent: ProvisioningIntent,
-    remediations: list[ZoneRemediation],
-    *,
-    brocade_factory: Callable = make_brocade,
-) -> list[tuple[str, str]]:
-    """Execute the (already operator-confirmed) additive commands on each fabric. Returns (cmd, output)."""
-    creds_by_host = {intent.switch_f1.host: intent.switch_f1, intent.switch_f2.host: intent.switch_f2}
-    results: list[tuple[str, str]] = []
-    for remediation in remediations:
-        creds = creds_by_host.get(remediation.switch_host)
-        if creds is None:
-            raise ValueError(f"No credentials for switch {remediation.switch_host}")
-        with brocade_factory(creds) as switch:
-            results.extend(switch.apply(remediation.commands))
-    return results

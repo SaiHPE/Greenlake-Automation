@@ -315,7 +315,6 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
         proper=False,
     )
     monkeypatch.setattr(sz, "build_report", lambda intent, discovery: zoning_report)
-    monkeypatch.setattr(sz, "apply_remediation", lambda intent, rem: [('cfgenable "CFG"', "ok")])
     monkeypatch.setattr(sp, "build_plan", lambda intent, discovery: ProvisioningPlan(actions=[PlannedAction(kind="host", name="esx1", description="d")]))
     monkeypatch.setattr(sp, "apply_plan", lambda intent, discovery: ProvisioningResult(outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]))
 
@@ -330,10 +329,6 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
     await service.wait(run.run_id)
     assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR  # remediation needs confirm
     assert any(e.event_type == "zoning.previewed" for e in service.list_events(run.run_id))
-
-    service.start_zoning_apply(run.run_id)
-    await service.wait(run.run_id)
-    assert any(e.event_type == "zoning.applied" for e in service.list_events(run.run_id))
 
     service.start_storage_preview(run.run_id)
     await service.wait(run.run_id)
