@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import os
 import sys
 from pathlib import Path
 
@@ -53,15 +54,22 @@ from alletra_onboard.api.schemas import (
     PreflightRequest,
     PreflightResponse,
     ProvisionStepRequest,
+    ProxySaveRequest,
+    ProxyStatusResponse,
     RunDetailResponse,
     RunFromSheetRequest,
     RunListResponse,
     RunResponse,
 )
-from alletra_onboard.application.configuring import masked_gl_credentials, update_gl_credentials
+from alletra_onboard.application.configuring import (
+    masked_gl_credentials,
+    set_env_values,
+    update_gl_credentials,
+)
 from alletra_onboard.application.event_bus import InMemoryEventBus
 from alletra_onboard.application.health import greenlake_check
 from alletra_onboard.application.init_sheet import build_template_bytes, parse_workbook_bytes
+from alletra_onboard.application.proxy import ProxyResolver, apply_proxy_env, detect_system_proxy
 from alletra_onboard.domain.models import RunMode
 from alletra_onboard.application.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.onboarding_service import (
@@ -84,13 +92,16 @@ class CsvParseRequest(BaseModel):
 
 def create_app(service: OnboardingService | None = None) -> FastAPI:
     settings = load_settings()
+    # Publish the effective proxy (manual override, else the auto-detected system proxy) to the process
+    # env so httpx (GreenLake/clock) and the launched browser go through it — like the browser. ADR 0008.
+    apply_proxy_env(settings.alletra_proxy)
     if service is None:
         store = SqliteRunStore(settings.state_database_path)
         store.initialize()
         service = OnboardingService(settings, store, InMemoryEventBus())
     env_path = Path(".env")
 
-    app = FastAPI(title="Alletra Onboard", version="0.7.0")
+    app = FastAPI(title="Alletra Onboard", version="0.8.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # vite dev server
@@ -162,15 +173,37 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.get("/prereqs/connectivity", response_model=ConnectivityResponse)
     async def prereq_connectivity(region: str = "jp1") -> ConnectivityResponse:
-        # Direct TCP-443 reachability from this jump box to the key HPE endpoints (are the ports open?).
-        results = await prereqs.check_connectivity(region)
+        # Reachability to the HPE endpoints via the SAME path the tool uses: through the effective
+        # proxy (auto-detected system proxy or the manual override) if any, else direct.
+        manual = load_settings().alletra_proxy
+        results = await prereqs.check_connectivity(region, manual_proxy=manual)
         items = [
-            ConnectivityResultItem(host=r.host, port=r.port, reachable=r.reachable, detail=r.detail)
+            ConnectivityResultItem(host=r.host, port=r.port, reachable=r.reachable, detail=r.detail, via=r.via)
             for r in results
         ]
+        effective = ProxyResolver(manual).for_url("https://common.cloud.hpe.com")
         return ConnectivityResponse(
-            region=region, results=items, all_reachable=all(i.reachable for i in items)
+            region=region, results=items, all_reachable=all(i.reachable for i in items), proxy=effective
         )
+
+    @app.get("/prereqs/proxy", response_model=ProxyStatusResponse)
+    async def prereq_proxy_status() -> ProxyStatusResponse:
+        manual = load_settings().alletra_proxy or None
+        detected = detect_system_proxy("https://common.cloud.hpe.com")
+        effective = ProxyResolver(manual).for_url("https://common.cloud.hpe.com")
+        source = "manual" if manual else ("system" if detected else "direct")
+        return ProxyStatusResponse(detected=detected, manual=manual, effective=effective, source=source)
+
+    @app.post("/prereqs/proxy", response_model=ProxyStatusResponse)
+    async def prereq_proxy_save(request: ProxySaveRequest) -> ProxyStatusResponse:
+        # os.environ is the source of truth for the running process (pydantic reads it); .env persists
+        # a set across restarts. Then re-publish the effective proxy for httpx + browser.
+        value = (request.proxy or "").strip()
+        os.environ["ALLETRA_PROXY"] = value
+        if value:
+            set_env_values(env_path, {"ALLETRA_PROXY": value})
+        apply_proxy_env(value or None)
+        return await prereq_proxy_status()
 
     # ------------------------------------------------------------------ work items
 

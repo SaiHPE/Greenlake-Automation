@@ -99,7 +99,7 @@ def test_prereq_firewall_and_connectivity(tmp_path, monkeypatch):
     # Connectivity does real network I/O — stub it so the test stays hermetic.
     from alletra_onboard.application import prereqs
 
-    async def fake_check(region="jp1", timeout=5.0):
+    async def fake_check(region="jp1", timeout=5.0, manual_proxy=None):
         return [
             prereqs.ConnectivityResult("console.greenlake.hpe.com", 443, True, "reachable"),
             prereqs.ConnectivityResult("device.cloud.hpe.com", 443, False, "blocked (ConnectionRefusedError)"),
@@ -291,6 +291,26 @@ def test_run_from_sheet_unknown_token_is_410(tmp_path, monkeypatch):
     client = _client(tmp_path)
     resp = client.post("/runs/from-sheet", json={"token": "does-not-exist", "mode": "FULL_ONBOARDING"})
     assert resp.status_code == 410
+
+
+def test_proxy_status_and_manual_override(tmp_path, monkeypatch):
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    for v in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        monkeypatch.delenv(v, raising=False)
+    try:
+        client = _client(tmp_path)
+        saved = client.post("/prereqs/proxy", json={"proxy": "myproxy:3128"}).json()
+        assert saved["manual"] == "myproxy:3128"
+        assert saved["effective"] == "http://myproxy:3128" and saved["source"] == "manual"
+        got = client.get("/prereqs/proxy").json()
+        assert got["source"] == "manual" and got["effective"] == "http://myproxy:3128"
+        cleared = client.post("/prereqs/proxy", json={"proxy": ""}).json()
+        assert not cleared["manual"]  # override removed -> falls back to auto-detect
+    finally:
+        for v in ("ALLETRA_PROXY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy"):
+            os.environ.pop(v, None)
 
 
 def test_app_profile_defaults_to_full(tmp_path, monkeypatch):
