@@ -443,7 +443,16 @@ class OnboardingService:
     async def _run_discover(self, run: RunRecord, intent) -> None:
         self._set(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_DISCOVER)
         self._emit(run.run_id, WorkflowPhase.STORAGE_DISCOVER, "step.started", "Discovering array ports, ESXi HBAs and fabric logins…")
-        report = await asyncio.to_thread(storage_discovery.discover, intent)
+        loop = asyncio.get_running_loop()
+
+        def progress(message: str) -> None:
+            # discover() runs in a worker thread; the SSE fan-out uses asyncio.Queues (not thread-safe),
+            # so marshal each progress event back onto the event loop.
+            loop.call_soon_threadsafe(
+                self._emit, run.run_id, WorkflowPhase.STORAGE_DISCOVER, "phase.progress", message
+            )
+
+        report = await asyncio.to_thread(storage_discovery.discover, intent, progress=progress)
         self._discovery[run.run_id] = report
         self._set(run, RunStatus.READY, WorkflowPhase.STORAGE_DISCOVER)
         self._emit(

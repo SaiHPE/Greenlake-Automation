@@ -308,7 +308,7 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
         ProvisioningPlan, ProvisioningResult, ZoneRemediation, ZoningReport,
     )
 
-    monkeypatch.setattr(sd, "discover", lambda intent: DiscoveryReport(notes=[]))
+    monkeypatch.setattr(sd, "discover", lambda intent, progress=None: DiscoveryReport(notes=[]))
     zoning_report = ZoningReport(
         expected=[ExpectedZone(fabric="odd", switch_host="sw1", name="z", host_wwpn="A", array_wwpn="B")],
         remediations=[ZoneRemediation(fabric="odd", switch_host="sw1", cfg_name="CFG", commands=['cfgenable "CFG"'])],
