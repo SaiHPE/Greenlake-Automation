@@ -84,11 +84,11 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
   const [proxy, setProxyState] = useState<ProxyStatus | null>(null);
   const [proxyInput, setProxyInput] = useState('');
   const [savingProxy, setSavingProxy] = useState(false);
+  // DSCC region (the <instance> in <instance>.data.cloud.hpe.com). Editable — HPE keeps adding
+  // regions, so this is a suggestion list, not a closed set (confirmed: us1/eu1/jp1/uk1).
+  const [region, setRegion] = useState('jp1');
 
   useEffect(() => {
-    getFirewall()
-      .then((r) => setRules(r.rules))
-      .catch(() => undefined);
     getProxyStatus()
       .then((p) => {
         setProxyState(p);
@@ -96,6 +96,12 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    getFirewall(region)
+      .then((r) => setRules(r.rules))
+      .catch(() => undefined);
+  }, [region]);
 
   const applyProxy = async (value: string | null) => {
     setSavingProxy(true);
@@ -116,7 +122,7 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await checkConnectivity();
+      const r = await checkConnectivity(region);
       setConn(r.results);
       setAllReachable(r.all_reachable);
     } catch (exc: any) {
@@ -185,11 +191,22 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
       <Section title="3 · Network, firewall & time">
         <Text size="small">
           The customer's network team must allow these HPE endpoints — all <b>TCP 443</b> outbound.
-          <i> &lt;instance&gt;</i> is your DSCC region: <b>jp1</b> (Japan), or uk1, eu1, uae1, us1. Download the list to
-          forward to them, then use <b>Test connectivity</b> once they confirm the ports are open.
+          <i> &lt;instance&gt;</i> is your DSCC region — pick or type it below (e.g. <b>us1</b>, <b>eu1</b>,
+          <b>jp1</b>, <b>uk1</b>, or any other HPE region). Download the list to forward to them, then use
+          <b> Test connectivity</b> once they confirm the ports are open.
         </Text>
         <Box direction="row" gap="medium" align="center" wrap>
-          <Anchor href={firewallTxtUrl()} download="alletra-firewall-requirements.txt" label="Download firewall list (.txt)" />
+          <Box width="xsmall">
+            <TextInput
+              size="small"
+              value={region}
+              suggestions={['us1', 'eu1', 'jp1', 'uk1']}
+              onChange={(e) => setRegion(e.target.value.trim())}
+              onSelect={(e) => setRegion(String(e.suggestion))}
+              aria-label="DSCC region"
+            />
+          </Box>
+          <Anchor href={firewallTxtUrl(region)} download="alletra-firewall-requirements.txt" label="Download firewall list (.txt)" />
           <Button
             label={busy ? 'Testing…' : 'Test connectivity (TCP 443)'}
             disabled={busy}

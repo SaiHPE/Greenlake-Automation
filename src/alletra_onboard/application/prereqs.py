@@ -3,8 +3,10 @@ live reachability check the operator can run from the jump box.
 
 Single source of truth for the firewall list — the UI table, the downloadable ``.txt`` (which the
 customer forwards to their network team), and the Initialisation-sheet "Prerequisites" tab all read
-from here. ``<instance>`` is substituted with the DSCC region (jp1 for Japan; also uk1, eu1, uae1,
-us1). Sourced from HPE's "Network requirement details for HPE Alletra Storage MP B10000".
+from here. ``<instance>`` is substituted with the DSCC region — confirmed codes are us1 (America),
+eu1 (Europe), jp1 (Japan), uk1 (UK); HPE keeps adding regions, so any code the operator supplies is
+accepted (never a closed list). Sources: HPE DSCC Security Guide (a00113337) + the "Network
+requirement details for HPE Alletra Storage MP B10000".
 """
 
 from __future__ import annotations
