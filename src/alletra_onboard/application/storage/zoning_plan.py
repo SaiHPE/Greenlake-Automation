@@ -89,31 +89,31 @@ def parse_active_cfg(cfgshow: str) -> str:
     return ""
 
 
-def _suggest_alias(existing: list[str], role: str, nsp: str, host_name: str) -> str:
-    """Pre-fill: the existing alias that matches the naming convention (so we reuse the RIGHT one, not a
-    stale duplicate); else the first existing alias; else "" (the operator types it)."""
+def _suggest_alias(existing: list[str], role: str, nsp: str, alias_freq: dict[str, int]) -> str:
+    """Pre-fill: prefer an alias UNIQUELY bound to this WWPN — the real per-device name. A *shared* alias
+    (bound to many WWPNs on a busy fabric, e.g. `winhost_fc_port_2`, `sy480g108wlrb_0012`) is junk and
+    must NOT be suggested: if two hosts share one, their single-init-single-target zone names collide.
+    Among the unique candidates, prefer the convention match (the array port's n:s:p code). Else "" so
+    the operator types it."""
+    if not existing:
+        return ""
+    pool = [alias for alias in existing if alias_freq.get(alias, 1) <= 1] or existing
     if role == "array" and nsp:
         parts = nsp.split(":")
         code = "N{}S{}P{}".format(*parts) if len(parts) == 3 else ""   # 0:3:1 -> N0S3P1
         digits = "".join(parts)                                        # 031
-        for alias in existing:
-            low = alias.lower()
-            if (code and code.lower() in low) or (digits and digits in alias):
+        for alias in pool:
+            if (code and code.lower() in alias.lower()) or (digits and digits in alias):
                 return alias
-    if role == "host" and host_name:
-        token = re.split(r"[^0-9A-Za-z]+", host_name)[0].lower()
-        for alias in existing:
-            if token and token in alias.lower():
-                return alias
-    return existing[0] if existing else ""
+    return pool[0]
 
 
 def _aliased(wwpn: str, role: str, fabric: str, aliases: dict[str, list[str]],
-             *, nsp: str = "", host_name: str = "") -> AliasedWwpn:
+             alias_freq: dict[str, int], *, nsp: str = "", host_name: str = "") -> AliasedWwpn:
     existing = aliases.get(wwpn, [])
     return AliasedWwpn(
         wwpn=wwpn, display=wwpn_colons(wwpn), role=role, fabric=fabric, nsp=nsp, host_name=host_name,
-        existing_aliases=existing, suggested_alias=_suggest_alias(existing, role, nsp, host_name),
+        existing_aliases=existing, suggested_alias=_suggest_alias(existing, role, nsp, alias_freq),
     )
 
 
@@ -148,6 +148,12 @@ def build_zoning_plan(
             active_cfg[label] = ""
             plan.notes.append(f"Could not read the {label} switch {creds.host}: {exc}")
 
+    # How many distinct WWPNs each alias is bound to — a shared alias is junk (never suggested).
+    alias_freq: dict[str, int] = defaultdict(int)
+    for names in aliases.values():
+        for alias in set(names):
+            alias_freq[alias] += 1
+
     def fabric_of(wwpn: str) -> str:
         return next((label for label in ("F1", "F2") if wwpn in ns.get(label, {})), "")
 
@@ -162,11 +168,11 @@ def build_zoning_plan(
     # 4) Per fabric: the host + array WWPNs present, and every SIST pair (each host port x each array port).
     for label in ("F1", "F2"):
         hosts = [
-            _aliased(wwpn, "host", label, aliases, host_name=host_by_wwpn[wwpn])
+            _aliased(wwpn, "host", label, aliases, alias_freq, host_name=host_by_wwpn[wwpn])
             for wwpn in host_by_wwpn if fabric_of(wwpn) == label
         ]
         ports = [
-            _aliased(p.wwpn, "array", label, aliases, nsp=p.label)
+            _aliased(p.wwpn, "array", label, aliases, alias_freq, nsp=p.label)
             for p in array_ports if fabric_of(p.wwpn) == label
         ]
         pairs = [(host.wwpn, port.wwpn) for host in hosts for port in ports]
@@ -208,6 +214,8 @@ def render_commands(plan: ZoningPlan, aliases: dict[str, str]) -> dict[str, list
             if not host_alias or not array_alias:
                 continue
             zone = f"{host_alias}_{array_alias}"
+            if zone in zone_names:            # dedupe: colliding aliases must not double a zone
+                continue
             zone_names.append(zone)
             cmds.append(f'zonecreate "{zone}","{host_alias};{array_alias}"')
 
