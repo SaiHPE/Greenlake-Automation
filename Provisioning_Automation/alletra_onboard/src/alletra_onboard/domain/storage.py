@@ -31,6 +31,24 @@ def wwpn_colons(normalized: str) -> str:
     return ":".join(n[i : i + 2] for i in range(0, len(n), 2))
 
 
+# 3PAR / Primera / Alletra MP host persona IDs (see `showhost -listpersona`). We only CREATE hosts we
+# discover, and discovery is vCenter/ESXi today, so VMware(11) is the default — but the persona is
+# DERIVED from the host OS so a Windows/Linux host gets the right one instead of a hardcoded 11.
+PERSONA_NAMES: dict[int, str] = {1: "Generic", 2: "Generic-ALUA", 11: "VMware", 15: "WindowsServer"}
+
+
+def persona_for_os(os: str | None) -> int:
+    """Map a host OS string (e.g. from vCenter) to its array host persona id. Defaults to VMware."""
+    s = (os or "").lower()
+    if "vmware" in s or "esxi" in s:
+        return 11  # VMware
+    if "windows" in s:
+        return 15  # WindowsServer
+    if any(k in s for k in ("linux", "rhel", "red hat", "ubuntu", "suse", "centos", "oracle", "debian")):
+        return 2   # Generic-ALUA
+    return 11      # default: the tool discovers ESXi hosts today
+
+
 # ------------------------------------------------------------------ provisioning intent (the sheet)
 
 class EndpointCreds(BaseModel):
