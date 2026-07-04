@@ -148,16 +148,23 @@ export const markComplete = (runId: string) => request<{ run: RunRecord }>('POST
 // ------------------------------------------------------------------ storage provisioning (Phase 2)
 export interface ArrayPort {
   node: number; slot: number; card_port: number;
-  wwpn: string; link_state: string; fabric: 'odd' | 'even';
+  protocol: 'fc' | 'iscsi';
+  wwpn: string; address: string; link_state: string;
+  fabric: 'odd' | 'even' | null;
 }
 export interface HostHba {
   host_name: string; wwpn: string; model: string | null; os: string | null;
   fabric: 'odd' | 'even' | null;
 }
+// From `showhost -d` — the array's curated host view: each FC WWPN -> the n:s:p ports it's logged
+// into (empty = configured but not logged in / not zoned).
+export interface ArrayHost {
+  name: string; persona: string; wwpns: Record<string, string[]>;
+}
 export interface DiscoveryReport {
   array_ports: ArrayPort[];
   host_hbas: HostHba[];
-  nameserver: { fabric: string; array_port: string; array_wwpn: string; host_wwpn: string; host_name: string }[];
+  array_hosts: ArrayHost[];
   notes: string[];
   error: string | null;
 }

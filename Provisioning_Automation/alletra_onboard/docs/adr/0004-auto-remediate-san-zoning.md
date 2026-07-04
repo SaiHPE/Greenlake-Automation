@@ -1,5 +1,13 @@
 # The tool auto-remediates SAN zoning: discover → report → confirm → create (additive-only)
 
+> **Revision (2026-07-03): verification reads `showhost -d`, not `showportdev ns`.** The raw fabric
+> name server (`showportdev ns`) also lists the array's own peer ports and *other* storage arrays, so
+> inferring "hosts" from it can mistake a storage port for an ESXi host (and it line-wraps). The array's
+> curated host view — **`showhost -d`** (Id · Name · Persona · WWN · Port · IP) — lists only real hosts
+> and the array ports each WWPN is logged into, so it can't confuse storage for a host. Discovery now
+> reads `showport` + `showport -iscsi` (all FC + iSCSI ports, any state) + `showhost -d`; zoning verify
+> computes over that. Calibrated against a live Primera A630 (OS 4.5.24). Everything below stands.
+
 > **Revision (2026-06-30, validated against the live LZ array): VERIFICATION IS ARRAY-SIDE — no
 > switch login.** The fabric name server is zoning-filtered, so each array FC target port's
 > `showportdev ns` *is* its effective zoning, and the array names each host. So the tool verifies
