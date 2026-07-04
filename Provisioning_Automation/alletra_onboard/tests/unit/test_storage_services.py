@@ -313,20 +313,16 @@ def test_array_side_zoning_all_present_is_proper():
     assert report.proper is True and not report.unverified_hosts
 
 
-def test_apply_remediation_runs_commands_on_each_switch():
-    from alletra_onboard.domain.storage import ZoneRemediation
+def test_brocade_client_is_read_only_no_write_path():
+    # ADR 0004 (revised): the tool NEVER writes to the switch — it produces a read-only zoning plan.
+    # Guard that no write allowlist / apply path / write command can creep back in.
+    from alletra_onboard.adapters.fabric import brocade_client as bc
 
-    rem = [ZoneRemediation(fabric="odd", switch_host="sw-odd", cfg_name="PROD_F1",
-                           commands=['zonecreate "z","aa;bb"', 'cfgadd "PROD_F1","z"', 'cfgenable "PROD_F1"'])]
-    seen: dict[str, FakeBrocade] = {}
-
-    def factory(creds):
-        fake = FakeBrocade("", "")
-        seen[creds.host] = fake
-        return fake
-
-    zoning.apply_remediation(_intent(), rem, brocade_factory=factory)
-    assert any(cmd.startswith("cfgenable") for cmd in seen["sw-odd"].applied)
+    assert not hasattr(bc, "ALLOWED_WRITE")
+    assert not hasattr(bc.BrocadeClient, "apply")
+    assert not hasattr(zoning, "apply_remediation")
+    for write_cmd in ("alicreate", "aliadd", "zonecreate", "zoneadd", "cfgadd", "cfgenable", "cfgsave", "zonedelete"):
+        assert write_cmd not in bc.ALLOWED_READ
 
 
 # ------------------------------------------------------------------ provisioning plan + apply

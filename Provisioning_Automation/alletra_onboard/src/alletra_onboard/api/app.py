@@ -370,11 +370,6 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def run_zoning_preview(run_id: str) -> RunResponse:
         return _start_step(run_id, lambda: service.start_zoning_preview(run_id))
 
-    @app.post("/runs/{run_id}/zoning/apply", response_model=RunResponse)
-    async def run_zoning_apply(run_id: str) -> RunResponse:
-        # Writes additive zones to the production fabric — the UI must preview + confirm first.
-        return _start_step(run_id, lambda: service.start_zoning_apply(run_id))
-
     @app.post("/runs/{run_id}/storage/preview", response_model=RunResponse)
     async def run_storage_preview(run_id: str) -> RunResponse:
         return _start_step(run_id, lambda: service.start_storage_preview(run_id))

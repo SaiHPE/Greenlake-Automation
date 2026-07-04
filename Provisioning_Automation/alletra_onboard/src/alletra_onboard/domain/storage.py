@@ -172,6 +172,44 @@ class ZoningReport(BaseModel):
     error: str | None = None
 
 
+# ------------------------------------------------------------------ zoning plan (assisted builder)
+
+class AliasedWwpn(BaseModel):
+    """One WWPN in the zoning plan — a host HBA port or an array target port — with the alias(es) the
+    switch already has for it (there can be several on a shared fabric) and a suggested alias to
+    pre-fill (the convention-matching existing one, else empty for the operator to type). See ADR 0004."""
+
+    wwpn: str                                   # normalized (16 hex)
+    display: str                                # colon-lowercase (Brocade form)
+    role: Literal["host", "array"]
+    fabric: str = ""                            # "F1" | "F2" | "" (offline / on neither fabric)
+    nsp: str = ""                               # array target port n:s:p ("" for a host)
+    host_name: str = ""                         # owning host ("" for an array port)
+    existing_aliases: list[str] = Field(default_factory=list)  # every alias the switch has for this WWPN
+    suggested_alias: str = ""                   # pre-fill: the convention match, else ""
+
+
+class FabricZonePlan(BaseModel):
+    """The plan for one fabric: the host + array WWPNs present on it, and the SIST pairs to zone."""
+
+    fabric: str                                 # "F1" | "F2"
+    switch_host: str
+    active_cfg: str = ""                        # e.g. F1_CFG (from cfgshow Effective)
+    hosts: list[AliasedWwpn] = Field(default_factory=list)        # host HBA ports on this fabric
+    array_ports: list[AliasedWwpn] = Field(default_factory=list)  # array target ports online on this fabric
+    pairs: list[tuple[str, str]] = Field(default_factory=list)    # (host_wwpn, array_wwpn) single-init-single-target
+
+
+class ZoningPlan(BaseModel):
+    """The read-only assisted zoning plan (ADR 0004): per-fabric host↔array SIST pairs + aliases, for
+    the operator to name and the SAN team to apply. The tool never writes to the switch."""
+
+    fabrics: list[FabricZonePlan] = Field(default_factory=list)
+    offline_hosts: list[str] = Field(default_factory=list)  # host "name (wwpn)" on no fabric -> cable+power
+    notes: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
 # ------------------------------------------------------------------ provisioning plan + result
 
 ActionKind = Literal["host", "hostset", "volume", "vvset", "vlun"]

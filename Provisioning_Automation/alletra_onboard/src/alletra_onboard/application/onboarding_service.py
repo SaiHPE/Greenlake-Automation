@@ -480,32 +480,9 @@ class OnboardingService:
             run.run_id, WorkflowPhase.STORAGE_ZONING,
             "zoning.proper" if report.proper else "zoning.previewed",
             "Zoning is correct on both fabrics." if report.proper
-            else f"Zoning needs {missing} zone(s) added — review the remediation, then confirm to apply.",
+            else f"Zoning needs {missing} zone(s) — the plan lists the exact commands for the SAN team to "
+            "apply on the switch (the tool makes no switch writes); re-verify after they are applied.",
             data={"report": report.model_dump(mode="json")},
-        )
-
-    def start_zoning_apply(self, run_id: str) -> RunRecord:
-        run = self.get_run(run_id)
-        intent = self.get_provisioning_intent(run_id)
-        report = self._zoning.get(run_id)
-        if report is None or not report.remediations:
-            raise StepPreconditionError("no zoning remediation to apply — run the zoning preview first")
-        self._spawn(run_id, self._run_zoning_apply(run, intent, report))
-        return run
-
-    async def _run_zoning_apply(self, run: RunRecord, intent, report: ZoningReport) -> None:
-        self._set(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
-        total = sum(len(r.commands) for r in report.remediations)
-        self._emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.apply.started", f"Applying {total} zoning command(s) (additive, cfgenable)…")
-        results = await asyncio.to_thread(storage_zoning.apply_remediation, intent, report.remediations)
-        # Re-verify so the operator sees the post-apply truth.
-        fresh = await asyncio.to_thread(storage_zoning.build_report, intent, self._discovery.get(run.run_id))
-        self._zoning[run.run_id] = fresh
-        self._set(run, RunStatus.READY, WorkflowPhase.STORAGE_ZONING)
-        self._emit(
-            run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.applied",
-            f"Applied zoning — re-verified {'OK' if fresh.proper else 'with remaining gaps'}.",
-            data={"results": [{"command": c, "output": o} for c, o in results], "report": fresh.model_dump(mode="json")},
         )
 
     def start_storage_preview(self, run_id: str) -> RunRecord:
