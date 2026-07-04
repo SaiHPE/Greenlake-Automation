@@ -97,7 +97,11 @@ class ArrayPort(BaseModel):
     wwpn: str = ""          # normalized FC port WWPN ("" for iSCSI)
     address: str = ""       # iSCSI target IP ("" for FC)
     link_state: str         # ready | offline | loss_sync | ...
-    fabric: Fabric | None = None  # FC only, by port parity (card_port odd -> odd, even -> even)
+    # FC only. Derived from the switch this port attaches to (showportdev fcfabric) when it is
+    # 'ready' and resolvable; otherwise falls back to card-port parity (odd card_port -> odd fabric,
+    # even -> even). See docs/adr/0009.
+    fabric: Fabric | None = None
+    fabric_switch: str = ""  # the switch/fabric-entry name from showportdev fcfabric ("" if unknown)
 
     @property
     def label(self) -> str:
