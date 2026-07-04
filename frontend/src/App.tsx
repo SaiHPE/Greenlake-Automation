@@ -1,7 +1,7 @@
 import { Box, Heading, Text } from 'grommet';
 import { Checkmark } from 'grommet-icons';
 import { useEffect, useRef, useState } from 'react';
-import { createRunFromSheet, getRun } from './api';
+import { createRunFromSheet, getAppProfile, getRun } from './api';
 import { actionKeysFor, ACTION_CATALOG, ActionKey, phaseToActionKey, RunMode } from './modes';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
@@ -57,6 +57,9 @@ export default function App() {
   // a browser refresh before choosing a mode means re-uploading the sheet (cheap; the run isn't lost
   // because it doesn't exist yet).
   const [sheetToken, setSheetToken] = useState<string | null>(null);
+  // Build profile: the init-only accelerator brands itself + shows only the Initialization mode.
+  const [initOnly, setInitOnly] = useState(false);
+  const [appTitle, setAppTitle] = useState('Alletra MP B10000 Onboarding');
   const { run, events } = useRunEvents(runId);
 
   const steps = buildSteps(mode, customSteps);
@@ -68,6 +71,17 @@ export default function App() {
     if (runId) localStorage.setItem(RUN_ID_KEY, runId);
     else localStorage.removeItem(RUN_ID_KEY);
   }, [runId]);
+
+  // Build profile: brand the app and (init-only accelerator) lock the mode to Initialization.
+  useEffect(() => {
+    getAppProfile()
+      .then((p) => {
+        setInitOnly(p.init_only);
+        setAppTitle(p.title);
+        if (p.init_only) setMode('FULL_ONBOARDING');
+      })
+      .catch(() => {});
+  }, []);
 
   // On first load, if a run was persisted, restore its mode + work-item form and jump to the right
   // step. If it no longer exists in the backend, drop it.
@@ -141,7 +155,7 @@ export default function App() {
             <Text weight="bold">HPE GreenLake</Text>
           </Box>
           <Heading level={4} margin="none">
-            Alletra MP B10000 Onboarding
+            {appTitle}
           </Heading>
           <Text size="small" color="text-weak">
             {run ? `${run.serial_number} · ${run.status.replaceAll('_', ' ')}` : 'No active run'}
@@ -210,6 +224,7 @@ export default function App() {
               setCustom={setCustomSteps}
               onConfirm={confirmMode}
               locked={!!runId}
+              initOnly={initOnly}
             />
           )}
           {current.key === 'prereq' && <PrereqStep onDone={next} />}

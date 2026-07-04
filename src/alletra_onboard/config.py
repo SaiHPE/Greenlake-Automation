@@ -11,6 +11,10 @@ class Settings(BaseSettings):
 
     api_host: str = "127.0.0.1"
     api_port: int = 8765
+    # Build profile. "full" = the whole platform (onboard + provision). "init-only" = the "Alletra MP
+    # Initialization" accelerator: onboarding only, an init-only sheet (no Provisioning tab), and the
+    # mode chooser restricted to Initialization. The init accelerator build bakes ALLETRA_PROFILE.
+    alletra_profile: str = "full"
     gl_client_id: str | None = None
     gl_client_secret: str | None = None
     gl_member_workspace_id: str | None = None
@@ -25,6 +29,15 @@ class Settings(BaseSettings):
     # HTTPS_PROXY set but reaches DSCC directly.
     browser_proxy: str | None = None
     browser_proxy_bypass: str = "localhost;127.0.0.1;169.254.*"
+
+    @property
+    def init_only(self) -> bool:
+        """True when this build is the Initialization-only accelerator."""
+        return self.alletra_profile.strip().lower().replace("_", "-") == "init-only"
+
+    @property
+    def app_title(self) -> str:
+        return "Alletra MP Initialization" if self.init_only else "Alletra MP B10000 Onboarding"
 
 
 def load_settings() -> Settings:

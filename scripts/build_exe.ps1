@@ -10,8 +10,10 @@
 
 .PARAMETER SkipInstall  Skip pip/playwright install (deps already present, e.g. in CI).
 .PARAMETER Chromium     Bundle Chromium (the offline build).
+.PARAMETER Profile      'full' (default) or 'init-only' — the "Alletra MP Initialization" accelerator
+                        (onboarding only, init-only sheet). Baked into the exe; renames the zip.
 #>
-param([switch]$SkipInstall, [switch]$Chromium)
+param([switch]$SkipInstall, [switch]$Chromium, [ValidateSet('full', 'init-only')][string]$Profile = 'full')
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
 
@@ -33,12 +35,16 @@ if (-not $SkipInstall) {
   & $py -m playwright install chromium
 }
 
+# Bake the profile into the exe (alletra_onboard.spec reads ALLETRA_BUILD_PROFILE).
+$env:ALLETRA_BUILD_PROFILE = $Profile
+$stem = if ($Profile -eq 'init-only') { 'alletra-mp-initialization' } else { 'alletra-onboard' }
+
 if ($Chromium) {
   $env:ALLETRA_BUNDLE_CHROMIUM = '1'
-  $zip = 'dist\alletra-onboard-offline-win64.zip'
+  $zip = "dist\$stem-offline-win64.zip"
 } else {
   Remove-Item Env:\ALLETRA_BUNDLE_CHROMIUM -ErrorAction SilentlyContinue
-  $zip = 'dist\alletra-onboard-win64.zip'
+  $zip = "dist\$stem-win64.zip"
 }
 
 Remove-Item -Recurse -Force build, 'dist\AlletraOnboard' -ErrorAction SilentlyContinue

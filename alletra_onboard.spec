@@ -3,6 +3,7 @@
 # Set ALLETRA_BUNDLE_CHROMIUM=1 to also bundle Chromium (offline build); unset for the slim build
 # that downloads Chromium on first run. Prereq for the offline build: `playwright install chromium`.
 import os
+import tempfile
 
 from PyInstaller.building.datastruct import Tree
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
@@ -10,6 +11,15 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 bundle_chromium = os.environ.get("ALLETRA_BUNDLE_CHROMIUM") == "1"
 
 datas = collect_data_files("playwright")  # the Playwright Node driver + package data (both builds)
+
+# Bake the app profile ("full" or "init-only") into the bundle. app_main._apply_build_profile reads
+# build_profile.txt at startup and exports ALLETRA_PROFILE, so the Initialization accelerator build
+# (ALLETRA_BUILD_PROFILE=init-only) restricts itself. Default "full" leaves the app unchanged.
+_profile_dir = tempfile.mkdtemp()
+_profile_file = os.path.join(_profile_dir, "build_profile.txt")
+with open(_profile_file, "w", encoding="utf-8") as _pf:
+    _pf.write(os.environ.get("ALLETRA_BUILD_PROFILE", "full").strip())
+datas.append((_profile_file, "."))
 
 # Chromium needs the MSVC runtime (vcruntime140*/msvcp140). Ship those DLLs app-local so the .exe
 # runs on a box without the VC++ Redistributable installed. Bundled under vcredist/ for the slim
