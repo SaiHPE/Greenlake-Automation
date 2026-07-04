@@ -135,7 +135,11 @@ An existing alias is shown and **reused**, never re-created.
 
 **Zoning is single-initiator-single-target** — one host HBA port ↔ one array port per zone. Each host
 HBA port on fabric F is zoned to every array target port online on F (odd HBA → F1 / odd array ports;
-even HBA → F2 / even array ports; across both nodes for redundancy).
+even HBA → F2 / even array ports; across both nodes for redundancy). **Remote-Copy-FC and Peer ports
+are excluded** — identified by the `showport` **Label** (`RCFC` / `Peer`), *not* the alias name (which
+is inconsistently applied on a shared fabric). RCFC ports are Initiator-mode array↔array replication
+ports, not host targets, and HPE/3PAR guidance excludes them from host zoning (they get their own
+RCFC↔RCFC zones). [3parug: "Correct practice for zoning Host ports and RCFC ports"; RCFC requirements.]
 
 **Generated command sequence (read-only preview, per fabric), assembled from the operator-edited
 aliases + the discovered pairing:**
