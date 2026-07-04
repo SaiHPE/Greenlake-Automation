@@ -110,7 +110,7 @@ class FakeArrayCli:
     def __exit__(self, *a):
         return False
 
-    def run(self, cmd: str) -> str:
+    def run(self, cmd: str, timeout: float | None = None) -> str:
         return self.blocks.get(cmd, "")
 
 
@@ -469,3 +469,18 @@ def test_switch_for_wwpn_finds_the_f_port_switch():
     text = _fcfabric("20330002AC025515", "SWX_F2")
     assert disc.switch_for_wwpn(text, "20:33:00:02:ac:02:55:15") == "SWX_F2"   # colon form normalizes
     assert disc.switch_for_wwpn(text, "DEADBEEFDEADBEEF") is None
+
+
+def test_discovery_emits_progress_for_each_substep():
+    """Discovery reports progress so a long run (per-port fabric probe + vCenter) doesn't look hung."""
+    msgs: list[str] = []
+    disc.discover(
+        _intent(),
+        array_cli_factory=lambda c: FakeArrayCli(_ARRAY_BLOCKS),
+        vcenter_factory=lambda c: FakeVCenter([HostHba(host_name="esx1", wwpn=_A)]),
+        progress=msgs.append,
+    )
+    joined = " ".join(msgs).lower()
+    assert "ssh" in joined and "port" in joined and "vcenter" in joined     # each phase announced
+    # per-port fabric probe is the slow part -> it must report which port it is on (e.g. "0:3:3 (1/4)")
+    assert any("resolving" in m.lower() and "0:3:3" in m for m in msgs)

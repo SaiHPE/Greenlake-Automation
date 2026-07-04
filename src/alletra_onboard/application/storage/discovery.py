@@ -192,19 +192,27 @@ def resolve_port_fabrics(fc_ports: list[ArrayPort], switch_by_label: dict[str, s
     return notes
 
 
-def _refine_fabrics_from_switches(cli, array_ports: list[ArrayPort]) -> list[str]:
+# `showportdev fcfabric` dumps the whole fabric mesh; on a large shared fabric each probe can be slow.
+# It is best-effort (parity is the fallback), so cap each probe well under the CLI's default so one
+# slow/hung port can't stall discovery for minutes.
+_FCFABRIC_TIMEOUT = 30.0
+
+
+def _refine_fabrics_from_switches(cli, array_ports: list[ArrayPort], *, progress=None) -> list[str]:
     """Run `showportdev fcfabric` on each READY FC port to learn the switch it attaches to, then
     resolve fabrics (switch-derived, parity fallback). Best-effort: a failed/empty per-port lookup
     just leaves that port on its parity fabric. Only 'ready' ports are probed — a down/loss_sync port
-    isn't attached to a fabric, so probing it would only waste an SSH round-trip."""
+    isn't attached to a fabric, so probing it would only waste an SSH round-trip. `progress(msg)` (if
+    given) is called before each probe so the operator sees which port is being resolved."""
     fc_ports = [p for p in array_ports if p.protocol == "fc"]
+    ready = [p for p in fc_ports if p.link_state == "ready" and p.wwpn]
     switch_by_label: dict[str, str] = {}
-    for port in fc_ports:
-        if port.link_state != "ready" or not port.wwpn:
-            continue
+    for i, port in enumerate(ready, 1):
+        if progress:
+            progress(f"Resolving the fabric switch for port {port.label} ({i}/{len(ready)})…")
         try:
-            text = cli.run(f"showportdev fcfabric {port.label}")
-        except Exception:  # noqa: BLE001 - one flaky lookup must not sink discovery
+            text = cli.run(f"showportdev fcfabric {port.label}", timeout=_FCFABRIC_TIMEOUT)
+        except Exception:  # noqa: BLE001 - one flaky/slow lookup must not sink discovery
             continue
         sw = switch_for_wwpn(text, port.wwpn)
         if sw:
@@ -217,28 +225,48 @@ def discover(
     *,
     array_cli_factory: Callable = make_array_cli,
     vcenter_factory: Callable = make_vcenter,
+    progress: Callable[[str], None] | None = None,
 ) -> DiscoveryReport:
+    """Read the environment (array-side + vCenter), read-only. `progress(msg)`, if given, is called at
+    each sub-step so a long run (the per-port fabric probe + vCenter connect can each take a while)
+    shows live activity instead of looking hung."""
     report = DiscoveryReport()
+
+    def _p(message: str) -> None:
+        if progress:
+            try:
+                progress(message)
+            except Exception:  # noqa: BLE001 - progress reporting must never break discovery
+                pass
 
     # 1) Array (one SSH session): all FC + iSCSI target ports + the curated host view, then refine each
     #    FC port's fabric from the switch it attaches to (showportdev fcfabric; parity is the fallback).
     try:
+        _p("Connecting to the array over SSH…")
         with array_cli_factory(intent.array) as cli:
+            _p("Reading FC + iSCSI target ports (showport)…")
             iscsi_ips = parse_iscsi_ips(cli.run("showport -iscsi"))
             report.array_ports = parse_ports(cli.run("showport"), iscsi_ips)
+            _p("Reading the array's host view (showhost)…")
             report.array_hosts = parse_showhost(cli.run("showhost -d"))
-            report.notes.extend(_refine_fabrics_from_switches(cli, report.array_ports))
+            fc = sum(1 for p in report.array_ports if p.protocol == "fc")
+            isc = sum(1 for p in report.array_ports if p.protocol == "iscsi")
+            _p(f"Array: {fc} FC + {isc} iSCSI target port(s), {len(report.array_hosts)} host(s). Resolving fabrics…")
+            report.notes.extend(_refine_fabrics_from_switches(cli, report.array_ports, progress=_p))
     except Exception as exc:  # noqa: BLE001
         report.notes.append(f"Array discovery (SSH) failed: {exc}")
 
     # 2) vCenter: each ESXi host's FC HBA WWPNs + OS.
     try:
+        _p(f"Connecting to vCenter {intent.vcenter.host} (read-only)…")
         with vcenter_factory(intent.vcenter) as vcenter:
             report.host_hbas = vcenter.host_fc_hbas()
+        _p(f"vCenter: {len(report.host_hbas)} ESXi host HBA(s).")
     except Exception as exc:  # noqa: BLE001
         report.notes.append(f"vCenter discovery failed: {exc}")
 
     # 3) Assign each vCenter HBA to the fabric its WWPN logs into ON THE ARRAY (from showhost).
+    _p("Matching host HBAs to the array fabrics…")
     wwpn_fabric = fabric_by_wwpn(report.array_hosts, report.array_ports)
     for hba in report.host_hbas:
         fabrics = wwpn_fabric.get(normalize_wwpn(hba.wwpn))
