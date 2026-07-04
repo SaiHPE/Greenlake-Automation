@@ -140,3 +140,36 @@ def test_offline_host_is_flagged_never_guessed():
     )
     assert any("ghost" in entry for entry in plan.offline_hosts)
     assert all(not f.pairs for f in plan.fabrics)                  # nothing zoned for an offline host
+
+
+def test_suggested_alias_prefers_unique_over_shared_junk():
+    # SHARED_JUNK is bound to BOTH the host and the array port (freq >= 2) -> junk. A shared alias must
+    # never be suggested (that's what made 3 hosts collide on one alias live); the unique one wins.
+    alis = (
+        f" alias:\tSHARED_JUNK\n\t\t{_HOST_A}\n"
+        f" alias:\tSHARED_JUNK\n\t\t{_ARR_031}\n"
+        f" alias:\tCRVProd_hostA_P1\n\t\t{_HOST_A}\n"
+    )
+
+    def factory(creds):
+        return FakeBrocade(_F1_NS, alis, _F1_CFG) if creds.host == "sw-f1" else FakeBrocade(_F2_NS, "", _F2_CFG)
+
+    plan = zp.build_zoning_plan(_intent(), _discovery(), brocade_factory=factory)
+    f1 = next(f for f in plan.fabrics if f.fabric == "F1")
+    host = next(h for h in f1.hosts if h.wwpn == "10000000000000AA")
+    assert host.suggested_alias == "CRVProd_hostA_P1"   # unique, not the shared SHARED_JUNK
+
+
+def test_render_commands_dedupes_colliding_zones():
+    # If two hosts end up with the same alias, their SIST zone names collide -> emit each zone ONCE.
+    from alletra_onboard.domain.storage import AliasedWwpn, FabricZonePlan, ZoningPlan
+
+    h1 = AliasedWwpn(wwpn="AA", display="aa", role="host", fabric="F1", suggested_alias="H")
+    h2 = AliasedWwpn(wwpn="BB", display="bb", role="host", fabric="F1", suggested_alias="H")  # same alias
+    arr = AliasedWwpn(wwpn="CC", display="cc", role="array", fabric="F1", nsp="0:3:1", suggested_alias="A")
+    plan = ZoningPlan(fabrics=[FabricZonePlan(
+        fabric="F1", switch_host="s", active_cfg="F1_CFG",
+        hosts=[h1, h2], array_ports=[arr], pairs=[("AA", "CC"), ("BB", "CC")],
+    )])
+    zones = [c for c in zp.render_commands(plan, {})["F1"] if c.startswith("zonecreate")]
+    assert len(zones) == 1   # both pairs collide on zone "H_A" -> deduped
