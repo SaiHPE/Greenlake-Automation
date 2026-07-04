@@ -370,6 +370,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def run_zoning_preview(run_id: str) -> RunResponse:
         return _start_step(run_id, lambda: service.start_zoning_preview(run_id))
 
+    @app.post("/runs/{run_id}/zoning/plan", response_model=RunResponse)
+    async def run_zoning_plan(run_id: str) -> RunResponse:
+        # Read-only: reads both fabric switches to build the zoning plan; makes NO switch writes.
+        return _start_step(run_id, lambda: service.start_zoning_plan(run_id))
+
     @app.post("/runs/{run_id}/storage/preview", response_model=RunResponse)
     async def run_storage_preview(run_id: str) -> RunResponse:
         return _start_step(run_id, lambda: service.start_storage_preview(run_id))
