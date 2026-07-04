@@ -25,6 +25,7 @@ function renderCommands(fab: FabricZonePlan, aliases: Record<string, string>): s
     const aa = aliasFor(arr);
     if (!ha || !aa) return;
     const zone = `${ha}_${aa}`;
+    if (zones.includes(zone)) return; // dedupe: colliding aliases must not double a zone
     zones.push(zone);
     cmds.push(`zonecreate "${zone}","${ha};${aa}"`);
   });
