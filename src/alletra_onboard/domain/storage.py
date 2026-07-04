@@ -102,6 +102,7 @@ class ArrayPort(BaseModel):
     # even -> even). See docs/adr/0009.
     fabric: Fabric | None = None
     fabric_switch: str = ""  # the switch/fabric-entry name from showportdev fcfabric ("" if unknown)
+    usage: str = ""          # showport Label token: "RCFC"/"Peer" = replication/peer port, NOT a host target
 
     @property
     def label(self) -> str:

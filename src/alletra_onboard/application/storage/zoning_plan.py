@@ -162,8 +162,23 @@ def build_zoning_plan(
     for hba in discovery.host_hbas:
         host_by_wwpn.setdefault(normalize_wwpn(hba.wwpn), hba.host_name)
 
-    # 3) Array FC target ports (discovery); only the ones online appear in a fabric NS.
-    array_ports = [p for p in discovery.array_ports if p.protocol == "fc" and p.wwpn]
+    # 3) Array FC target ports (discovery), EXCLUDING Remote-Copy-FC and Peer ports (showport Label
+    #    "RCFC" / "Peer") — those are replication/peer ports, not host targets. HPE/3PAR guidance:
+    #    RCFC ports are excluded from host zoning (they get their own RCFC<->RCFC zones). Only the
+    #    ports online in a fabric NS end up placed.
+    def _is_host_target(p) -> bool:
+        u = p.usage.upper()
+        return p.protocol == "fc" and bool(p.wwpn) and u != "RCFC" and not u.startswith("PEER")
+
+    array_ports = [p for p in discovery.array_ports if _is_host_target(p)]
+    excluded = [
+        f"{p.label} ({p.usage})" for p in discovery.array_ports
+        if p.protocol == "fc" and p.wwpn and not _is_host_target(p)
+    ]
+    if excluded:
+        plan.notes.append(
+            "Excluded from host zoning (replication/peer ports, not host targets): " + ", ".join(excluded)
+        )
 
     # 4) Per fabric: the host + array WWPNs present, and every SIST pair (each host port x each array port).
     for label in ("F1", "F2"):
