@@ -74,7 +74,7 @@ class ArrayCliClient:
             ) from exc
         self._client = client
 
-    def run(self, command: str) -> str:
+    def run(self, command: str, timeout: float | None = None) -> str:
         if self._client is None:
             raise ArrayCliError("not connected")
         if any(ch in command for ch in _FORBIDDEN_CHARS):
@@ -84,7 +84,7 @@ class ArrayCliClient:
         if base not in ALLOWED_COMMANDS:
             raise ArrayCliError(f"refused: '{base}' is not a read-only show command")
         try:
-            _stdin, stdout, stderr = self._client.exec_command(command, timeout=self.exec_timeout)
+            _stdin, stdout, stderr = self._client.exec_command(command, timeout=timeout or self.exec_timeout)
             out = stdout.read().decode("utf-8", "replace")
             err = stderr.read().decode("utf-8", "replace")
         except Exception as exc:  # noqa: BLE001
