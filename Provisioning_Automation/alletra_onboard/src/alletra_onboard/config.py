@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # HTTPS_PROXY set but reaches DSCC directly.
     browser_proxy: str | None = None
     browser_proxy_bypass: str = "localhost;127.0.0.1;169.254.*"
+    # Manual proxy override (env ALLETRA_PROXY / .env). Blank -> the tool auto-detects the system
+    # proxy (WinINET static + PAC/WPAD), like the browser. host:port or user:pass@host:port. ADR 0008.
+    alletra_proxy: str | None = None
 
     @property
     def init_only(self) -> bool:

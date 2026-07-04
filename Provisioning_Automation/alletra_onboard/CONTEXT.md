@@ -147,3 +147,20 @@ On the file side, an exported access path to a file system (an SMB/NFS export wi
 policy) — the file analogue of a block **Export (VLUN)**. Provisional: the file control plane is not
 yet researched; refine after the file research pass.
 _Avoid_: assuming it equals "share" (a view may front one or more shares/exports — confirm in file research).
+
+## Language — proxy / connectivity
+
+**System proxy**:
+The proxy the OS (and browser) uses, resolved *per destination URL* from WinINET static settings +
+PAC/WPAD auto-config. The tool **auto-detects** this — it never hardcodes a proxy — so it works in any
+environment. See ADR 0008.
+
+**Effective proxy**:
+The proxy the tool actually uses for a given outbound call: the **manual override** if the operator set
+one, else the auto-detected **system proxy**, else none (direct). Produced by the `ProxyResolver`.
+_Avoid_: "the proxy" (be specific — override vs system vs none).
+
+**Proxy bypass** (NO_PROXY):
+The hosts/subnets reached **directly**, never through the proxy — `localhost`, the cloudinit link-local
+`169.254.*`, and the **on-prem device IPs from the run** (array / vCenter / switches). Derived from the
+sheet, not hardcoded. See ADR 0008.

@@ -1,7 +1,7 @@
-import { Anchor, Box, Button, Notification, Spinner, Table, TableBody, TableCell, TableHeader, TableRow, Text } from 'grommet';
+import { Anchor, Box, Button, Notification, Spinner, Table, TableBody, TableCell, TableHeader, TableRow, Text, TextInput } from 'grommet';
 import { StatusCritical, StatusGood } from 'grommet-icons';
 import { ReactNode, useEffect, useState } from 'react';
-import { API, ConnectivityResult, FirewallRule, checkConnectivity, firewallTxtUrl, getFirewall } from '../api';
+import { API, ConnectivityResult, FirewallRule, ProxyStatus, checkConnectivity, firewallTxtUrl, getFirewall, getProxyStatus, saveProxy } from '../api';
 import { ClockSync } from '../ClockSync';
 import { Instructions, Section } from '../components';
 
@@ -81,12 +81,36 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
   const [allReachable, setAllReachable] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [proxy, setProxyState] = useState<ProxyStatus | null>(null);
+  const [proxyInput, setProxyInput] = useState('');
+  const [savingProxy, setSavingProxy] = useState(false);
 
   useEffect(() => {
     getFirewall()
       .then((r) => setRules(r.rules))
       .catch(() => undefined);
+    getProxyStatus()
+      .then((p) => {
+        setProxyState(p);
+        setProxyInput(p.manual ?? '');
+      })
+      .catch(() => undefined);
   }, []);
+
+  const applyProxy = async (value: string | null) => {
+    setSavingProxy(true);
+    setError(null);
+    try {
+      const p = await saveProxy(value);
+      setProxyState(p);
+      setProxyInput(p.manual ?? '');
+      await runConnectivity(); // re-test through the new effective proxy
+    } catch (exc: any) {
+      setError(String(exc.message ?? exc));
+    } finally {
+      setSavingProxy(false);
+    }
+  };
 
   const runConnectivity = async () => {
     setBusy(true);
@@ -174,6 +198,35 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
           {busy && <Spinner />}
         </Box>
         <FirewallTable rules={rules} />
+
+        <Box border={{ color: 'border' }} round="xsmall" pad="small" gap="xsmall" flex={false}>
+          <Text size="small" weight="bold">Proxy</Text>
+          <Text size="xsmall" color="text-weak">
+            The tool auto-detects your system proxy (the same one the browser uses) and sends its
+            traffic through it. Override it here only if auto-detect is wrong or absent.
+          </Text>
+          {proxy && (
+            <Text size="xsmall">
+              {proxy.source === 'manual' && <>Using <b>manual proxy</b>: {proxy.effective}</>}
+              {proxy.source === 'system' && <>Using <b>auto-detected system proxy</b>: {proxy.detected}</>}
+              {proxy.source === 'direct' && <>No proxy detected — connecting <b>directly</b>.</>}
+            </Text>
+          )}
+          <Box direction="row" gap="small" align="center" wrap>
+            <Box width="small">
+              <TextInput
+                size="small"
+                placeholder="host:port (manual override)"
+                value={proxyInput}
+                onChange={(e) => setProxyInput(e.target.value)}
+              />
+            </Box>
+            <Button size="small" label={savingProxy ? 'Saving…' : 'Save & re-test'} disabled={savingProxy} onClick={() => applyProxy(proxyInput.trim() || null)} />
+            {proxy?.manual && <Button size="small" label="Clear (auto-detect)" disabled={savingProxy} onClick={() => applyProxy(null)} />}
+            {savingProxy && <Spinner />}
+          </Box>
+        </Box>
+
         {error && <Notification status="critical" title="Connectivity test failed" message={error} onClose={() => setError(null)} />}
         {conn && (
           <Box gap="xsmall" pad={{ top: 'xsmall' }} flex={false}>
@@ -182,8 +235,8 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
               title={allReachable ? 'All tested endpoints are reachable on TCP 443' : 'Some endpoints are not reachable'}
               message={
                 allReachable
-                  ? 'The jump box can reach the HPE endpoints directly.'
-                  : 'Ask the network team to open the blocked destinations below (outbound TCP 443). A proxy-only path will also show as blocked here.'
+                  ? `The tool can reach the HPE endpoints${proxy?.effective ? ' through the proxy' : ' directly'}.`
+                  : 'Ask the network team to open the blocked destinations below (outbound TCP 443), or set the correct proxy above.'
               }
             />
             {conn.map((c) => (
@@ -195,7 +248,7 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
                 )}
                 <Text size="xsmall">{c.host}</Text>
                 <Text size="xsmall" color="text-weak">
-                  — {c.detail}
+                  — {c.detail}{c.via ? ` (via ${c.via})` : ''}
                 </Text>
               </Box>
             ))}
