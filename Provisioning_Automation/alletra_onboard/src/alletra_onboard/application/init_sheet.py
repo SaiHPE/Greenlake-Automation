@@ -198,14 +198,17 @@ def _write_fillable_tab(ws, sections: list[tuple[str, list[tuple[str, str, bool,
     ws.freeze_panes = "A2"
 
 
-def build_template_bytes() -> bytes:
-    """A blank Initialisation_sheet.xlsx: Initialisation + Provisioning (fillable) + Prerequisites."""
+def build_template_bytes(*, init_only: bool = False) -> bytes:
+    """A blank Initialisation_sheet.xlsx: Initialisation (fillable) + Prerequisites, plus the
+    Provisioning tab unless ``init_only`` (the Initialization accelerator ships an onboarding-only
+    sheet — no array/vCenter/switch credentials)."""
     wb = Workbook()
     ws = wb.active
     ws.title = SHEET_NAME
     _write_fillable_tab(ws, SECTIONS)
 
-    _add_provisioning_sheet(wb)
+    if not init_only:
+        _add_provisioning_sheet(wb)
     _add_prereq_sheet(wb)
 
     buffer = io.BytesIO()

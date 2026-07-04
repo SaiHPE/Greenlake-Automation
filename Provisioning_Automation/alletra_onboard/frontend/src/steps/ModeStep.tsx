@@ -10,13 +10,23 @@ interface Props {
   setCustom: (keys: ActionKey[]) => void;
   onConfirm: () => Promise<void>; // mints the run from the uploaded sheet + this mode, then advances
   locked?: boolean; // once a run exists the mode is fixed (it shaped the run)
+  initOnly?: boolean; // the Initialization accelerator: only the Initialization mode is offered
 }
 
-export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked }: Props) {
+export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, initOnly }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toggle = (key: ActionKey, checked: boolean) =>
     setCustom(checked ? [...custom, key] : custom.filter((k) => k !== key));
+
+  // The init-only accelerator offers just Initialization (Full onboarding), relabelled.
+  const presets = initOnly ? MODE_PRESETS.filter((p) => p.mode === 'FULL_ONBOARDING') : MODE_PRESETS;
+  const labelFor = (p: (typeof MODE_PRESETS)[number]) =>
+    initOnly && p.mode === 'FULL_ONBOARDING' ? 'Initialization' : p.label;
+  const blurbFor = (p: (typeof MODE_PRESETS)[number]) =>
+    initOnly && p.mode === 'FULL_ONBOARDING'
+      ? 'Register in GreenLake, run the Cloud Connectivity wizard, complete DSCC Set Up, then verify.'
+      : p.blurb;
 
   const confirm = async () => {
     setBusy(true);
@@ -32,13 +42,14 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked }
 
   return (
     <Box gap="medium">
-      <Section title="What do you want to run?">
+      <Section title={initOnly ? 'Initialization' : 'What do you want to run?'}>
         <Text size="small" color="text-weak">
-          Pick a mode. The wizard then shows only the steps that mode needs — so you can verify or
-          provision an already-initialised array without re-running initialisation.
+          {initOnly
+            ? 'This accelerator runs array initialization only: GreenLake registration, Cloud Connectivity, and DSCC Set Up, then a read-only verify.'
+            : 'Pick a mode. The wizard then shows only the steps that mode needs — so you can verify or provision an already-initialised array without re-running initialisation.'}
         </Text>
         <Box gap="small" pad={{ top: 'small' }}>
-          {MODE_PRESETS.map((preset) => {
+          {presets.map((preset) => {
             const selected = mode === preset.mode;
             return (
               <Box
@@ -65,9 +76,9 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked }
                   {selected && <Box width="9px" height="9px" round="full" background="brand" />}
                 </Box>
                 <Box>
-                  <Text weight={selected ? 'bold' : undefined}>{preset.label}</Text>
+                  <Text weight={selected ? 'bold' : undefined}>{labelFor(preset)}</Text>
                   <Text size="small" color="text-weak">
-                    {preset.blurb}
+                    {blurbFor(preset)}
                   </Text>
                 </Box>
               </Box>
