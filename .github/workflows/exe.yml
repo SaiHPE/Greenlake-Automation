@@ -44,6 +44,9 @@ jobs:
           dist\AlletraOnboard\AlletraOnboard.exe selftest
           if ($LASTEXITCODE -ne 0) { throw "slim selftest failed" }
 
+      - name: Serve smoke-test slim (boot the web app with a proxy set, expect 200)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke_serve.ps1
+
       - name: Build offline (Chromium bundled)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -SkipInstall -Chromium
 
@@ -52,6 +55,9 @@ jobs:
           dist\AlletraOnboard\AlletraOnboard.exe selftest
           if ($LASTEXITCODE -ne 0) { throw "offline selftest failed" }
 
+      - name: Serve smoke-test offline (boot the web app with a proxy set, expect 200)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke_serve.ps1
+
       - name: Build init-only accelerator (Alletra MP Initialization, slim)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -SkipInstall -Profile init-only
 
@@ -59,6 +65,9 @@ jobs:
         run: |
           dist\AlletraOnboard\AlletraOnboard.exe selftest
           if ($LASTEXITCODE -ne 0) { throw "init-only selftest failed" }
+
+      - name: Serve smoke-test init-only (boot the web app with a proxy set, expect 200)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke_serve.ps1
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
