@@ -132,8 +132,25 @@ def _force_utf8() -> None:
             pass
 
 
+def _apply_build_profile() -> None:
+    """The Initialization-accelerator build bundles ``build_profile.txt`` (see alletra_onboard.spec);
+    read it and export ALLETRA_PROFILE before any settings load, so the app restricts itself. No-op
+    when not frozen or the marker is absent (the default 'full' build)."""
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        marker = Path(sys._MEIPASS) / "build_profile.txt"  # type: ignore[attr-defined]
+        if marker.is_file():
+            value = marker.read_text(encoding="utf-8").strip()
+            if value:
+                os.environ.setdefault("ALLETRA_PROFILE", value)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main() -> None:
     _force_utf8()
+    _apply_build_profile()  # before any alletra_onboard import that loads settings
     if "selftest" in sys.argv[1:]:
         sys.exit(selftest())
 
@@ -149,7 +166,7 @@ def main() -> None:
 
     settings = load_settings()
     address = f"http://{settings.api_host}:{settings.api_port}"
-    print(f"Alletra Onboard — serving the web app at {address}")
+    print(f"{settings.app_title} — serving the web app at {address}")
     print("Leave this window open. Close it (or press Ctrl+C) to stop.")
 
     import threading

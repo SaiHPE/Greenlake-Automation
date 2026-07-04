@@ -293,6 +293,38 @@ def test_run_from_sheet_unknown_token_is_410(tmp_path, monkeypatch):
     assert resp.status_code == 410
 
 
+def test_app_profile_defaults_to_full(tmp_path, monkeypatch):
+    monkeypatch.delenv("ALLETRA_PROFILE", raising=False)
+    prof = _client(tmp_path).get("/app/profile").json()
+    assert prof["profile"] == "full" and prof["init_only"] is False and "Onboarding" in prof["title"]
+
+
+def test_init_only_profile_template_has_no_provisioning_and_uploads(tmp_path, monkeypatch):
+    import io
+
+    from openpyxl import load_workbook
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ALLETRA_PROFILE", "init-only")
+    client = _client(tmp_path)
+
+    prof = client.get("/app/profile").json()
+    assert prof["init_only"] is True and prof["title"] == "Alletra MP Initialization"
+
+    # the init-only template ships an onboarding-only sheet — no Provisioning tab
+    tpl = client.get("/init-sheet/template").content
+    wb = load_workbook(io.BytesIO(tpl))
+    assert "Initialisation" in wb.sheetnames and "Provisioning" not in wb.sheetnames
+
+    # an onboarding-only sheet (no Provisioning creds) uploads fine under the init-only profile
+    resp = client.post("/init-sheet/upload", json={"content_b64": _fill_template(tpl, _COMPLETE_MAIN)})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["token"]
+    # and it mints an onboarding run
+    run = client.post("/runs/from-sheet", json={"token": resp.json()["token"], "mode": "FULL_ONBOARDING"}).json()["run"]
+    assert run["mode"] == "FULL_ONBOARDING"
+
+
 def test_config_roundtrip_masks_secret(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
     client = _client(tmp_path)

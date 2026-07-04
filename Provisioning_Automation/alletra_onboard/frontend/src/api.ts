@@ -95,6 +95,15 @@ export const checkConnectivity = (region = 'jp1') =>
     `/prereqs/connectivity?region=${region}`,
   );
 
+// Build profile — the UI brands itself + restricts the mode chooser from this. 'full' = the whole
+// platform; init_only = the "Alletra MP Initialization" accelerator (Initialization only).
+export interface AppProfile {
+  profile: string;
+  init_only: boolean;
+  title: string;
+}
+export const getAppProfile = () => request<AppProfile>('GET', '/app/profile');
+
 export const getConfig = () => request<{ configured: boolean; values: Record<string, string> }>('GET', '/config');
 export const saveConfig = (values: Record<string, string | null>) =>
   request<{ configured: boolean; values: Record<string, string> }>('POST', '/config', values);
