@@ -12,6 +12,7 @@ Any one source failing is captured as a note, not a hard error.
 
 from __future__ import annotations
 
+import re
 from collections import OrderedDict
 from typing import Callable
 
@@ -24,6 +25,8 @@ from alletra_onboard.domain.storage import (
     ProvisioningIntent,
     normalize_wwpn,
 )
+
+_LOGICAL_NAME_RE = re.compile(r"^\s*Logical Name:\s*(\S+)", re.IGNORECASE)
 
 
 def parse_iscsi_ips(showport_iscsi: str) -> dict[str, str]:
@@ -104,6 +107,111 @@ def fabric_by_wwpn(array_hosts: list[ArrayHost], array_ports: list[ArrayPort]) -
     return out
 
 
+def switch_for_wwpn(fcfabric: str, wwpn: str) -> str | None:
+    """From `showportdev fcfabric <n:s:p>`, the switch this array port attaches to: the switch whose
+    F-Port has the port's own WWPN as its attached N-Port. Returns the switch Logical Name, or None."""
+    want = normalize_wwpn(wwpn)
+    current: str | None = None
+    for line in (fcfabric or "").splitlines():
+        m = _LOGICAL_NAME_RE.match(line)
+        if m:
+            current = m.group(1)
+            continue
+        if "F-Port" in line and want and want in normalize_wwpn(line):
+            return current
+    return None
+
+
+def resolve_port_fabrics(fc_ports: list[ArrayPort], switch_by_label: dict[str, str]) -> list[str]:
+    """Assign each FC port's fabric, preferring the SWITCH it attaches to (from showportdev fcfabric)
+    over card-port parity. Mutates `fabric` + `fabric_switch`; returns explanatory notes.
+
+    Design (see docs/adr/0009): parity is a reliable default on standard dual-fabric cabling, but it is
+    only a heuristic — the physical truth is which switch a port lands on. So:
+      * exactly two attach-switches -> those ARE the two fabrics; map each to a slot (odd/even),
+        preferring the slot its ports' parity already implies, and OVERRIDE parity where they differ
+        (a note flags the non-standard cabling — the real bug parity can't see);
+      * anything else (0/1/>2 switches, or ports down like a loss_sync array) -> fall back to parity,
+        which is exactly what we did before this refinement. Never silently mislead: fallbacks/overrides
+        are noted.
+    """
+    notes: list[str] = []
+    for port in fc_ports:
+        sw = switch_by_label.get(port.label)
+        if sw:
+            port.fabric_switch = sw
+
+    def parity(port: ArrayPort) -> Fabric:
+        return "odd" if port.card_port % 2 == 1 else "even"
+
+    switches = sorted({sw for sw in switch_by_label.values() if sw})
+
+    if len(switches) != 2:
+        for port in fc_ports:
+            port.fabric = parity(port)
+        if len(switches) > 2:
+            notes.append(
+                f"Array FC ports resolved to {len(switches)} fabric switches ({', '.join(switches)}); "
+                "used card-port parity for fabric (could not map them to exactly two fabrics)."
+            )
+        elif len(switches) == 1:
+            on_sw = [p for p in fc_ports if switch_by_label.get(p.label) == switches[0]]
+            if any(p.card_port % 2 for p in on_sw) and any(not p.card_port % 2 for p in on_sw):
+                notes.append(
+                    f"All resolved array FC ports attach to a single fabric ({switches[0]}) — the SAN "
+                    "may be single-fabric; the dual-fabric (odd/even) zoning check assumes two fabrics."
+                )
+        return notes
+
+    # Exactly two fabrics. Map each switch to a slot, preferring the parity its own ports imply.
+    majority: dict[str, Fabric] = {}
+    for sw in switches:
+        on_sw = [p for p in fc_ports if switch_by_label.get(p.label) == sw]
+        odd = sum(1 for p in on_sw if p.card_port % 2)
+        majority[sw] = "odd" if odd * 2 >= len(on_sw) else "even"
+    if len(set(majority.values())) == 2:
+        label_of = majority
+    else:  # both switches sit at the same port-parity -> parity can't name them; use a stable order
+        label_of = {switches[0]: "odd", switches[1]: "even"}
+        notes.append(
+            f"Both array fabrics attach at the same card-port parity; labelled by switch: "
+            f"{switches[0]}=odd, {switches[1]}=even."
+        )
+    for port in fc_ports:
+        sw = switch_by_label.get(port.label)
+        if sw in label_of:
+            resolved = label_of[sw]
+            if resolved != parity(port):
+                notes.append(
+                    f"Port {port.label} attaches to switch {sw} ({resolved} fabric) but its card-port "
+                    f"parity is {parity(port)} — using the switch (non-standard cabling)."
+                )
+            port.fabric = resolved
+        else:
+            port.fabric = parity(port)  # not attached (e.g. loss_sync) -> parity fallback
+    return notes
+
+
+def _refine_fabrics_from_switches(cli, array_ports: list[ArrayPort]) -> list[str]:
+    """Run `showportdev fcfabric` on each READY FC port to learn the switch it attaches to, then
+    resolve fabrics (switch-derived, parity fallback). Best-effort: a failed/empty per-port lookup
+    just leaves that port on its parity fabric. Only 'ready' ports are probed — a down/loss_sync port
+    isn't attached to a fabric, so probing it would only waste an SSH round-trip."""
+    fc_ports = [p for p in array_ports if p.protocol == "fc"]
+    switch_by_label: dict[str, str] = {}
+    for port in fc_ports:
+        if port.link_state != "ready" or not port.wwpn:
+            continue
+        try:
+            text = cli.run(f"showportdev fcfabric {port.label}")
+        except Exception:  # noqa: BLE001 - one flaky lookup must not sink discovery
+            continue
+        sw = switch_for_wwpn(text, port.wwpn)
+        if sw:
+            switch_by_label[port.label] = sw
+    return resolve_port_fabrics(fc_ports, switch_by_label)
+
+
 def discover(
     intent: ProvisioningIntent,
     *,
@@ -112,12 +220,14 @@ def discover(
 ) -> DiscoveryReport:
     report = DiscoveryReport()
 
-    # 1) Array (one SSH session): all FC + iSCSI target ports + the curated host view.
+    # 1) Array (one SSH session): all FC + iSCSI target ports + the curated host view, then refine each
+    #    FC port's fabric from the switch it attaches to (showportdev fcfabric; parity is the fallback).
     try:
         with array_cli_factory(intent.array) as cli:
             iscsi_ips = parse_iscsi_ips(cli.run("showport -iscsi"))
             report.array_ports = parse_ports(cli.run("showport"), iscsi_ips)
             report.array_hosts = parse_showhost(cli.run("showhost -d"))
+            report.notes.extend(_refine_fabrics_from_switches(cli, report.array_ports))
     except Exception as exc:  # noqa: BLE001
         report.notes.append(f"Array discovery (SSH) failed: {exc}")
 
