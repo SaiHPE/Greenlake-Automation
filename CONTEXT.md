@@ -29,7 +29,19 @@ _Avoid_: secret, DSCC credential
 The operator-selected *slice* of the onboarding, chosen at the start: Full onboarding / Provision only
 / Both / Verify only / Custom. It determines which steps the wizard renders and the run executes — so
 verification or provisioning can target an already-initialised array without re-running init. See ADR 0005.
-_Avoid_: profile, workflow (a mode picks steps; it isn't itself a sequence)
+_Avoid_: profile (that is the **build profile** — a different thing), workflow (a mode picks steps; it isn't itself a sequence)
+
+**Build profile**:
+A *compile-time* selector — `ALLETRA_PROFILE` = `full` (default) | `init-only` — baked into a release to
+choose which slice of the one codebase that artifact exposes: the whole platform, or the **Initialization
+accelerator**. It fixes the sheet, the mode chooser, and the title before the app even runs. Distinct
+from a **Mode** (a *runtime* operator choice within a build). See ADR 0007.
+_Avoid_: mode (a build profile is chosen at build time, not by the operator)
+
+**Initialization accelerator** ("Alletra MP Initialization"):
+The `init-only` **build profile** released as a separate, restricted app for field engineers — onboarding
+only (GreenLake → Cloud Connectivity → DSCC → verify), an onboarding-only sheet (no Provisioning tab), and
+the mode chooser locked to Initialization. Same codebase as the full app. See ADR 0007.
 
 **Step**:
 One operator-facing unit of work (GreenLake registration, Cloud Connectivity, DSCC, Discovery, SAN
