@@ -19,6 +19,12 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
   const toggle = (key: ActionKey, checked: boolean) =>
     setCustom(checked ? [...custom, key] : custom.filter((k) => k !== key));
 
+  // SAN Zoning and Provision storage both COMPUTE over the Discovery results, so a custom run that
+  // includes either without Discovery dead-ends (the step can't run, and Restart is only on Finish).
+  // Require Discovery before the run is minted.
+  const missingDiscovery =
+    !locked && mode === 'CUSTOM' && (custom.includes('zoning') || custom.includes('provision')) && !custom.includes('discover');
+
   // The init-only accelerator offers just Initialization (Full onboarding), relabelled.
   const presets = initOnly ? MODE_PRESETS.filter((p) => p.mode === 'FULL_ONBOARDING') : MODE_PRESETS;
   const labelFor = (p: (typeof MODE_PRESETS)[number]) =>
@@ -105,9 +111,17 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
 
       {locked && (
         <Text size="small" color="text-weak">
-          A run already exists for this session — the mode is locked. Use “Restart” on the Finish step
-          to start a new run with a different mode.
+          A run already exists for this session — the mode is locked. Use “Start over” (bottom of the
+          left sidebar) to begin a new run with a different mode.
         </Text>
+      )}
+
+      {missingDiscovery && (
+        <Notification
+          status="warning"
+          title="Add Discovery"
+          message="SAN Zoning and Provision storage both work from the Discovery results — include “Discovery” in your selection."
+        />
       )}
 
       {error && (
@@ -118,7 +132,7 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
         primary
         alignSelf="start"
         label={busy ? 'Creating run…' : locked ? 'Continue →' : 'Create run & continue →'}
-        disabled={busy || (mode === 'CUSTOM' && custom.length === 0)}
+        disabled={busy || (mode === 'CUSTOM' && custom.length === 0) || missingDiscovery}
         onClick={confirm}
       />
     </Box>

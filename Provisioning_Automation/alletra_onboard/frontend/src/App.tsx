@@ -1,4 +1,4 @@
-import { Box, Heading, Text } from 'grommet';
+import { Box, Button, Heading, Text } from 'grommet';
 import { Checkmark } from 'grommet-icons';
 import { useEffect, useRef, useState } from 'react';
 import { createRunFromSheet, getAppProfile, getRun } from './api';
@@ -203,6 +203,18 @@ export default function App() {
           })}
         </Box>
         <Box flex />
+        {runId && (
+          <Button
+            label="Start over"
+            size="small"
+            alignSelf="start"
+            onClick={() => {
+              // Reachable from ANY step — the wizard otherwise only offers restart on Finish, which
+              // traps a run whose mode can't complete (e.g. zoning with no discovery).
+              if (window.confirm('Start over? This discards the current run and returns to the first step.')) restart();
+            }}
+          />
+        )}
         <Text size="xsmall" color="text-weak">
           Provisioning automation · localhost only
         </Text>
