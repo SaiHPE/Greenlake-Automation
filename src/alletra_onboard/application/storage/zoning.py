@@ -117,34 +117,44 @@ def parse_active_zones(cfgshow: str) -> tuple[dict[str, set[str]], str | None]:
 
 
 def build_report(intent: ProvisioningIntent, discovery: DiscoveryReport) -> ZoningReport:
-    """Verify dual-fabric zoning by COMPUTING over the DiscoveryReport (which already read the array's
-    showportdev ns) and reconciling against the expected hosts. No array or switch read here."""
+    """Verify dual-fabric zoning by COMPUTING over the DiscoveryReport and reconciling against the
+    expected hosts. The array-side source is `showhost -d` (discovery.array_hosts) — the array's
+    curated host view, so a storage/peer-array port can never be mistaken for a host. No array or
+    switch read here."""
     report = ZoningReport()
-    if not discovery.array_ports:
+    fc_ports = [p for p in discovery.array_ports if p.protocol == "fc" and p.fabric]
+    if not fc_ports:
         report.notes.append(
             "No array FC target ports in the discovery — run Discovery first (and check it reached the array)."
         )
         return report
 
-    # The array's per-port nameserver (from discovery) is the effective zoning, by fabric.
+    # Which host WWPNs the ARRAY sees LOGGED IN, by fabric — from showhost (real hosts only).
+    port_fabric: dict[str, Fabric] = {p.label: p.fabric for p in fc_ports if p.fabric}
     union: dict[Fabric, set[str]] = {"odd": set(), "even": set()}
     name_by_wwpn: dict[str, str] = {}
-    for entry in discovery.nameserver:
-        union[entry.fabric].add(entry.host_wwpn)
-        if entry.host_name:
-            name_by_wwpn[entry.host_wwpn] = entry.host_name
+    for host in discovery.array_hosts:
+        for wwpn, ports in host.wwpns.items():
+            for nsp in ports:
+                fabric = port_fabric.get(nsp)
+                if fabric:
+                    union[fabric].add(wwpn)
+                    name_by_wwpn[wwpn] = host.name
     arr_by_fabric: dict[Fabric, list[str]] = {"odd": [], "even": []}
-    for port in discovery.array_ports:
+    for port in fc_ports:
         arr_by_fabric[port.fabric].append(port.wwpn)
 
-    # Expected hosts: prefer the vCenter discovery list; otherwise verify whoever the array reports.
+    # Expected hosts: prefer the vCenter discovery list; otherwise verify the hosts the array reports
+    # as actually LOGGED IN (not its whole configured roster).
     host_wwpns: dict[str, set[str]] = {}
     for hba in discovery.host_hbas:
         host_wwpns.setdefault(hba.host_name, set()).add(normalize_wwpn(hba.wwpn))
     if not host_wwpns:
-        for wwpn, name in name_by_wwpn.items():
-            host_wwpns.setdefault(name, set()).add(wwpn)
-        report.notes.append("No vCenter host list — verifying the hosts the array reports as zoned.")
+        for host in discovery.array_hosts:
+            logged_in = {w for w, ports in host.wwpns.items() if any(port_fabric.get(nsp) for nsp in ports)}
+            if logged_in:
+                host_wwpns.setdefault(host.name, set()).update(logged_in)
+        report.notes.append("No vCenter host list — verifying the hosts the array reports as logged in (showhost).")
 
     switch_by_fabric = {"odd": intent.switch_f1.host, "even": intent.switch_f2.host}
     array_ports_str = {f: ", ".join(sorted(set(arr_by_fabric[f]))) or "(none)" for f in ("odd", "even")}
