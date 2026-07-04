@@ -21,6 +21,11 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   const report = latestReport(events);
   const fcPorts = (report?.array_ports ?? []).filter((p) => p.protocol === 'fc');
   const iscsiPorts = (report?.array_ports ?? []).filter((p) => p.protocol === 'iscsi');
+  // The most recent discovery progress line — shown live next to the spinner so a long run (the
+  // per-port fabric probe + vCenter connect) is visibly working, not hung.
+  const progressMsg = [...events]
+    .reverse()
+    .find((e) => e.phase === 'STORAGE_DISCOVER' && (e.event_type === 'phase.progress' || e.event_type === 'step.started'))?.message;
 
   const run_ = async () => {
     setError(null);
@@ -39,9 +44,12 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
           (<b>showhost</b>), and each ESXi host&apos;s FC HBA WWPNs + OS (vCenter). Each HBA is matched to
           the fabric it logs into on the array. Read-only — nothing is changed.
         </Text>
-        <Box direction="row" gap="small" align="center">
-          <Button primary label={running ? 'Discovering…' : report ? 'Re-run discovery' : 'Run discovery'} disabled={running} onClick={run_} />
-          {running && <Spinner />}
+        <Box gap="xsmall">
+          <Box direction="row" gap="small" align="center">
+            <Button primary label={running ? 'Discovering…' : report ? 'Re-run discovery' : 'Run discovery'} disabled={running} onClick={run_} />
+            {running && <Spinner />}
+          </Box>
+          {running && progressMsg && <Text size="small" color="text-weak">{progressMsg}</Text>}
         </Box>
         {error && <Notification status="critical" title="Discovery failed to start" message={error} onClose={() => setError(null)} />}
       </Section>
