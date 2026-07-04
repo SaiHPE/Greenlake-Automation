@@ -173,3 +173,22 @@ def test_render_commands_dedupes_colliding_zones():
     )])
     zones = [c for c in zp.render_commands(plan, {})["F1"] if c.startswith("zonecreate")]
     assert len(zones) == 1   # both pairs collide on zone "H_A" -> deduped
+
+
+def test_rcfc_and_peer_ports_excluded_from_host_zoning():
+    # RCFC (Remote-Copy-FC) + Peer ports are NOT host targets (HPE/3PAR) — exclude them, note it.
+    rcfc = "20:34:00:02:ac:02:f6:29"   # 0:3:4, showport Label "RCFC"
+    ns_f1 = _F1_NS + f"\n N    010400;   3;{rcfc};2f:f7:00:02:ac:02:f6:29; 0x0\n    Device type: Physical Target\n"
+
+    def factory(creds):
+        return FakeBrocade(ns_f1, _F1_ALIS, _F1_CFG) if creds.host == "sw-f1" else FakeBrocade(_F2_NS, _F2_ALIS, _F2_CFG)
+
+    disc = _discovery()
+    disc.array_ports.append(
+        ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC02F629", link_state="ready", usage="RCFC")
+    )
+    plan = zp.build_zoning_plan(_intent(), disc, brocade_factory=factory)
+    placed = [a.wwpn for f in plan.fabrics for a in f.array_ports]
+    assert "20340002AC02F629" not in placed        # the RCFC port is excluded even though it's online
+    assert "20310002AC02F629" in placed            # the real host target port is kept
+    assert any("RCFC" in note for note in plan.notes)
