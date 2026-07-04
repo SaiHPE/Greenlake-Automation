@@ -165,9 +165,22 @@ class ConnectivityResultItem(BaseModel):
     port: int
     reachable: bool
     detail: str
+    via: str = ""  # the proxy the test tunnelled through ("" = tested directly)
 
 
 class ConnectivityResponse(BaseModel):
     region: str
     results: list[ConnectivityResultItem]
     all_reachable: bool
+    proxy: str | None = None  # the effective proxy these were tested through (None = direct)
+
+
+class ProxyStatusResponse(BaseModel):
+    detected: str | None = None   # the auto-detected system proxy (WinINET/PAC), if any
+    manual: str | None = None     # the operator's manual override, if set
+    effective: str | None = None  # what the tool will actually use (manual > detected > direct)
+    source: str = "direct"        # "manual" | "system" | "direct"
+
+
+class ProxySaveRequest(BaseModel):
+    proxy: str | None = None      # manual override host:port (or user:pass@host:port); null/"" clears it

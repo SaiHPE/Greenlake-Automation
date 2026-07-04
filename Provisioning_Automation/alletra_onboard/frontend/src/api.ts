@@ -87,13 +87,25 @@ export interface ConnectivityResult {
   port: number;
   reachable: boolean;
   detail: string;
+  via: string; // the proxy the test tunnelled through ('' = direct)
 }
-// Direct TCP-443 reachability from the jump box to the key HPE endpoints (are the firewall ports open?).
+// Reachability to the key HPE endpoints via the SAME path the tool uses (through the effective proxy
+// if there is one, else direct) — so a proxy-only network no longer shows everything as blocked.
 export const checkConnectivity = (region = 'jp1') =>
-  request<{ region: string; results: ConnectivityResult[]; all_reachable: boolean }>(
+  request<{ region: string; results: ConnectivityResult[]; all_reachable: boolean; proxy: string | null }>(
     'GET',
     `/prereqs/connectivity?region=${region}`,
   );
+
+// Proxy: the tool auto-detects the system proxy (like the browser); a manual override can be saved.
+export interface ProxyStatus {
+  detected: string | null;
+  manual: string | null;
+  effective: string | null;
+  source: 'manual' | 'system' | 'direct' | string;
+}
+export const getProxyStatus = () => request<ProxyStatus>('GET', '/prereqs/proxy');
+export const saveProxy = (proxy: string | null) => request<ProxyStatus>('POST', '/prereqs/proxy', { proxy });
 
 // Build profile — the UI brands itself + restricts the mode chooser from this. 'full' = the whole
 // platform; init_only = the "Alletra MP Initialization" accelerator (Initialization only).

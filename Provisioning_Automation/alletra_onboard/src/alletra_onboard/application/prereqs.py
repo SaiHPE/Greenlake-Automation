@@ -12,6 +12,9 @@ from __future__ import annotations
 import asyncio
 import socket
 from dataclasses import dataclass
+from urllib.parse import urlparse
+
+from alletra_onboard.application.proxy import ProxyResolver
 
 # (fqdn, port, initiator, purpose). All outbound TCP 443.
 FIREWALL_RULES: list[tuple[str, str, str, str]] = [
@@ -89,6 +92,7 @@ class ConnectivityResult:
     port: int
     reachable: bool
     detail: str
+    via: str = ""  # the proxy used ("" = tested directly)
 
 
 async def _check_one(host: str, port: int, timeout: float) -> ConnectivityResult:
@@ -109,8 +113,40 @@ async def _check_one(host: str, port: int, timeout: float) -> ConnectivityResult
         return ConnectivityResult(host, port, False, f"blocked ({type(exc).__name__})")
 
 
-async def check_connectivity(region: str = "jp1", timeout: float = 5.0) -> list[ConnectivityResult]:
-    """Direct TCP-443 reachability from this jump box to the key HPE endpoints (firewall open?)."""
+async def _check_via_proxy(host: str, port: int, proxy_url: str, timeout: float) -> ConnectivityResult:
+    """Reachability THROUGH the proxy — an HTTP CONNECT tunnel, exactly how the tool's traffic goes."""
+    parsed = urlparse(proxy_url)
+    phost, pport = parsed.hostname or "", parsed.port or 8080
+    try:
+        reader, writer = await asyncio.wait_for(asyncio.open_connection(phost, pport), timeout=timeout)
+    except Exception:  # noqa: BLE001
+        return ConnectivityResult(host, port, False, f"proxy {phost}:{pport} not reachable", via=proxy_url)
+    try:
+        writer.write(f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n".encode())
+        await writer.drain()
+        line = (await asyncio.wait_for(reader.readline(), timeout=timeout)).decode("latin1", "replace").strip()
+        if "407" in line:
+            return ConnectivityResult(host, port, False, "proxy requires authentication (407)", via=proxy_url)
+        ok = " 200 " in f" {line} " or "200 connection" in line.lower()
+        return ConnectivityResult(host, port, ok, "reachable via proxy" if ok else f"proxy said: {line}", via=proxy_url)
+    except Exception as exc:  # noqa: BLE001
+        return ConnectivityResult(host, port, False, f"proxy error ({type(exc).__name__})", via=proxy_url)
+    finally:
+        writer.close()
+
+
+async def check_connectivity(
+    region: str = "jp1", timeout: float = 6.0, manual_proxy: str | None = None
+) -> list[ConnectivityResult]:
+    """Reachability to the key HPE endpoints, using the SAME path the tool will use: through the
+    effective proxy (auto-detected system proxy, or the manual override) if there is one, else direct.
+    So a proxy-only network no longer shows everything as blocked."""
     region = (region or "jp1").strip() or "jp1"
     hosts = [h.replace("<instance>", region) for h in _TEST_HOSTS]
-    return list(await asyncio.gather(*[_check_one(h, 443, timeout) for h in hosts]))
+    resolver = ProxyResolver(manual_proxy)
+
+    async def _check(host: str) -> ConnectivityResult:
+        proxy = resolver.for_url(f"https://{host}")
+        return await (_check_via_proxy(host, 443, proxy, timeout) if proxy else _check_one(host, 443, timeout))
+
+    return list(await asyncio.gather(*[_check(h) for h in hosts]))
