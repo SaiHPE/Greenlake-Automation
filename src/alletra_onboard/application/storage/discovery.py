@@ -62,6 +62,7 @@ def parse_ports(showport: str, iscsi_ips: dict[str, str]) -> list[ArrayPort]:
             out.append(ArrayPort(
                 node=node, slot=slot, card_port=card_port, protocol="fc",
                 wwpn=normalize_wwpn(p[4]), link_state=p[2], fabric=fabric,
+                usage=p[7] if len(p) > 7 else "",   # Label token: "RCFC"/"Peer" -> not a host target port
             ))
         else:
             out.append(ArrayPort(
