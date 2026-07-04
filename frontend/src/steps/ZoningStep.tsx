@@ -1,7 +1,8 @@
 import { Box, Button, Notification, Spinner, Text } from 'grommet';
 import { useState } from 'react';
-import { RunEvent, RunRecord, zoningPreview, ZoningReport } from '../api';
+import { RunEvent, RunRecord, zoningPlan, zoningPreview, ZoningPlan, ZoningReport } from '../api';
 import { EventLog, Section } from '../components';
+import { ZoningPlanView } from './ZoningPlanView';
 
 interface Props {
   runId: string;
@@ -17,11 +18,16 @@ function latestReport(events: RunEvent[]): ZoningReport | null {
   return (event?.data?.report as ZoningReport) ?? null;
 }
 
+function latestPlan(events: RunEvent[]): ZoningPlan | null {
+  const event = [...events].reverse().find((e) => e.event_type === 'zoning.plan');
+  return (event?.data?.plan as ZoningPlan) ?? null;
+}
+
 export function ZoningStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const running = run?.status === 'running';
   const report = latestReport(events);
-  const missing = report ? report.expected.filter((z) => !z.present) : [];
+  const plan = latestPlan(events);
 
   // Roll the per-(host,fabric) rows up to one line per host: odd ✓/✗, even ✓/✗.
   const byHost: Record<string, { odd: boolean; even: boolean }> = {};
@@ -83,25 +89,23 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
         </Section>
       )}
 
-      {report && !report.proper && missing.length > 0 && (
-        <Section title={`Zoning plan — ${missing.length} zone(s) to add`}>
-          <Text size="small">
-            The tool does <b>not</b> write to the switch. Hand these <b>additive</b> commands to the SAN
-            team to run on each fabric — they activate with <b>cfgenable</b> (never cfgsave-alone) and
-            leave existing zones untouched — then click <b>Re-verify</b> above.
-          </Text>
-          {report.remediations.map((rem) => (
-            <Box key={rem.switch_host} gap="xsmall" pad={{ vertical: 'small' }}>
-              <Text size="small" weight="bold">{rem.fabric} fabric — {rem.switch_host} (cfg {rem.cfg_name})</Text>
-              <Box background="background-contrast" round="xsmall" pad="small">
-                {rem.commands.map((c, i) => (
-                  <Text key={i} size="small" style={{ fontFamily: 'monospace' }}>{c}</Text>
-                ))}
-              </Box>
-            </Box>
-          ))}
-        </Section>
-      )}
+      <Section title="Build the zoning plan (reads both switches, read-only)">
+        <Text size="small" color="text-weak">
+          Reads BOTH fabric switches read-only to map each host WWPN to its fabric and pull existing
+          aliases, then builds the single-initiator-single-target plan. You name the aliases; the tool
+          generates the exact <b>alicreate / zonecreate / cfgadd / cfgenable</b> commands for the SAN
+          team to run. The tool makes <b>no switch writes</b>.
+        </Text>
+        <Button
+          primary
+          alignSelf="start"
+          label={running ? 'Reading switches…' : plan ? 'Rebuild plan' : 'Build zoning plan'}
+          disabled={running}
+          onClick={call(() => zoningPlan(runId))}
+        />
+      </Section>
+
+      {plan && <ZoningPlanView plan={plan} />}
 
       {report && (
         <Button label="Continue →" primary={report.proper} onClick={onDone} alignSelf="start" />
