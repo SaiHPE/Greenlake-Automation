@@ -9,10 +9,10 @@ from alletra_onboard.application.storage import discovery as disc
 from alletra_onboard.application.storage import storage_provision as prov
 from alletra_onboard.application.storage import zoning
 from alletra_onboard.domain.storage import (
+    ArrayHost,
     ArrayPort,
     EndpointCreds,
     HostHba,
-    NameserverEntry,
     ProvisioningIntent,
     VolumeSpec,
     normalize_wwpn,
@@ -188,52 +188,68 @@ def test_parse_active_zones_resolves_aliases_and_effective():
     assert zones["Z1"] == {normalize_wwpn(HOST_A), normalize_wwpn(ARR_O1)}
 
 
-# ------------------------------------------------------------------ discovery (array-side)
-# WWPNs: esx1 fully zoned (A odd, B even); esx2 odd-only (C odd, D never seen); esx3 not seen at all.
+# ------------- discovery (array-side, real HPE Primera A630 / Alletra MP command formats) -------------
+# esx1 fully zoned (A odd, B even); esx2 odd-only (C odd, D never seen); esx3 not seen at all.
 _A, _B = "10000000000000A1", "10000000000000B1"
 _C, _D = "10000000000000C1", "10000000000000D1"
 _E, _F = "10000000000000E1", "10000000000000E2"
 
-_SHOWPORT_A = """N:S:P   Mode     State --Node_WWN/IP--- -Port_WWN/HW_Addr-    Type Protocol Label
-0:3:1 target     ready 2FF70002AC02F629   20310002AC02F629    host       FC     -
-0:3:2 target     ready 2FF70002AC02F629   20320002AC02F629    host       FC     -
-1:3:1 target     ready 2FF70002AC02F629   21310002AC02F629    host       FC     -
-1:3:2 target     ready 2FF70002AC02F629   21320002AC02F629    host       FC     -
-0:4:1 target   offline          0.0.0.0       40A6B7E032E0    free    iSCSI     -"""
+# Real `showport`: FC host ports 0:3:3/0:3:4 + node-1 pair, iSCSI 0:4:x, and a SAS disk port (skipped).
+_SHOWPORT = """N:S:P      Mode     State --Node_WWN/IP--- -Port_WWN/HW_Addr- Type Protocol       Label Partner FailoverState
+0:0:1 initiator     ready 50002ACFF7025515   50002AC001025515 disk      SAS        DP-1       -             -
+0:3:3    target     ready 2FF70002AC025515   20330002AC025515 host       FC           -   1:3:3          none
+0:3:4    target     ready 2FF70002AC025515   20340002AC025515 host       FC        RCFC   1:3:4          none
+1:3:3    target     ready 2FF70002AC025515   21330002AC025515 host       FC           -   0:3:3          none
+1:3:4    target     ready 2FF70002AC025515   21340002AC025515 host       FC        RCFC   0:3:4          none
+0:4:1    target     ready                -       B47AF1090E36 free    iSCSI           -       -             -
+0:4:2    target   offline                -       B47AF1090E37 free    iSCSI           -       -             -"""
+
+_SHOWPORT_ISCSI = """N:S:P State   IPAddr        Netmask/PrefixLen Gateway       TPGT  MTU   Rate iSNS_Addr iSNS_Port STGT VLAN
+0:4:1 ready   10.55.234.221 255.255.248.0     10.55.239.254   41 1500 10Gbps 0.0.0.0        3205   41 Y
+0:4:2 offline 0.0.0.0       0.0.0.0           0.0.0.0         42  n/a    n/a 0.0.0.0        3205   42 Y"""
 
 
-def _ns(arr_wwpn: str, hosts: list[tuple[str, str]]) -> str:
-    """Render a showportdev ns block: a self-row (skipped) + one row per (host_name, port_wwpn)."""
-    rows = ["    PtId LpID Hadr Node_WWN Port_WWN ftrs svpm bbct flen vp_WWN SNN Name",
-            f"0x330200 0x00 0x00 2FF70002AC02F629 {arr_wwpn} 0x8800 0x0012 n/a 0x0800 {arr_wwpn} HPE Alletra port"]
-    for name, port in hosts:
-        rows.append(f"0x331000 0x08 0x00 2000{port[4:]} {port} 0x0000 0x0000 0x0000 0x0000 {arr_wwpn} Emulex {name}")
-    return "\n".join(rows)
+def _showhost_d(rows: list[tuple[str, str, str, str]]) -> str:
+    """Render `showhost -d`: one line per (name, persona, wwn, port). Real 6-column layout."""
+    out = ["Id Name Persona ------------WWN/iSCSI_Name/NQN------------ Port IP_addr"]
+    for i, (name, persona, wwn, port) in enumerate(rows, 1):
+        out.append(f"{i} {name} {persona} {wwn} {port} n/a")
+    return "\n".join(out)
 
 
 _ARRAY_BLOCKS = {
-    "showport": _SHOWPORT_A,
-    "showportdev ns 0:3:1": _ns("20310002AC02F629", [("esx1", _A), ("esx2", _C)]),
-    "showportdev ns 1:3:1": _ns("21310002AC02F629", [("esx1", _A), ("esx2", _C)]),
-    "showportdev ns 0:3:2": _ns("20320002AC02F629", [("esx1", _B)]),
-    "showportdev ns 1:3:2": _ns("21320002AC02F629", [("esx1", _B)]),
+    "showport": _SHOWPORT,
+    "showport -iscsi": _SHOWPORT_ISCSI,
+    # esx1: A logged in on 0:3:3 (odd), B on 0:3:4 (even). A Windows host with an unconnected WWN too.
+    "showhost -d": _showhost_d([
+        ("esx1", "VMware", _A, "0:3:3"),
+        ("esx1", "VMware", _B, "0:3:4"),
+        ("winbox", "WindowsServer", "50060B0000C2EE28", "---"),
+    ]),
 }
 
 
-def test_discovery_reads_array_and_assigns_fabric_no_switch():
-    # esx1's two HBAs (A, B) come from vCenter; the array's showportdev ns puts A on odd, B on even.
+def test_discovery_reads_all_ports_and_hosts_from_showhost():
     hbas = [HostHba(host_name="esx1", wwpn=_A), HostHba(host_name="esx1", wwpn=_B)]
     report = disc.discover(
         _intent(),
         array_cli_factory=lambda c: FakeArrayCli(_ARRAY_BLOCKS),
         vcenter_factory=lambda c: FakeVCenter(hbas),
     )
-    assert len(report.array_ports) == 4                       # 4 ready FC target ports; iSCSI skipped
+    fc = [p for p in report.array_ports if p.protocol == "fc"]
+    iscsi = [p for p in report.array_ports if p.protocol == "iscsi"]
+    assert len(fc) == 4 and len(iscsi) == 2          # SAS/disk excluded; iSCSI kept incl. the offline one
+    assert {p.link_state for p in iscsi} == {"ready", "offline"}
+    assert next(p for p in iscsi if p.link_state == "ready").address == "10.55.234.221"
+    # showhost -d -> curated hosts, each WWPN mapped to the array ports it's logged into
+    esx1 = next(h for h in report.array_hosts if h.name == "esx1")
+    assert esx1.persona == "VMware" and esx1.wwpns[_A] == ["0:3:3"] and esx1.wwpns[_B] == ["0:3:4"]
+    winbox = next(h for h in report.array_hosts if h.name == "winbox")
+    assert winbox.wwpns["50060B0000C2EE28"] == []    # configured but not logged in (no n:s:p)
+    # vCenter HBAs assigned to the fabric they log into ON THE ARRAY (via showhost, not the switch)
     by_wwpn = {h.wwpn: h.fabric for h in report.host_hbas}
-    assert by_wwpn[_A] == "odd" and by_wwpn[_B] == "even"     # fabric assigned from the ARRAY ns
-    assert any(e.host_name == "esx1" and e.fabric == "odd" and e.array_port == "0:3:1"
-               for e in report.nameserver)
-    assert not report.notes  # both sources succeeded, every HBA placed on a fabric
+    assert by_wwpn[_A] == "odd" and by_wwpn[_B] == "even"
+    assert not report.notes
 
 
 # ------------------------------------------------------------------ zoning report + remediation
@@ -249,21 +265,19 @@ def _discovered():
 
 
 def _disc_for_zoning(hbas: list[HostHba]) -> "disc.DiscoveryReport":
-    """A DiscoveryReport shaped like the array-side discover() output: 4 target ports + the per-port
-    ns logins. esx1 is logged in on both fabrics (A odd, B even); esx2 only on odd (C)."""
+    """A DiscoveryReport shaped like the array-side discover() output: FC ports + showhost logins.
+    esx1 is logged in on both fabrics (A on 0:3:3=odd, B on 0:3:4=even); esx2 only on odd (C)."""
     ports = [
-        ArrayPort(node=0, slot=3, card_port=1, wwpn="20310002AC02F629", link_state="ready", fabric="odd"),
-        ArrayPort(node=1, slot=3, card_port=1, wwpn="21310002AC02F629", link_state="ready", fabric="odd"),
-        ArrayPort(node=0, slot=3, card_port=2, wwpn="20320002AC02F629", link_state="ready", fabric="even"),
-        ArrayPort(node=1, slot=3, card_port=2, wwpn="21320002AC02F629", link_state="ready", fabric="even"),
+        ArrayPort(node=0, slot=3, card_port=3, protocol="fc", wwpn="20330002AC025515", link_state="ready", fabric="odd"),
+        ArrayPort(node=1, slot=3, card_port=3, protocol="fc", wwpn="21330002AC025515", link_state="ready", fabric="odd"),
+        ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC025515", link_state="ready", fabric="even"),
+        ArrayPort(node=1, slot=3, card_port=4, protocol="fc", wwpn="21340002AC025515", link_state="ready", fabric="even"),
     ]
-    ns = []
-    for nsp, arr in (("0:3:1", "20310002AC02F629"), ("1:3:1", "21310002AC02F629")):
-        ns.append(NameserverEntry(fabric="odd", array_port=nsp, array_wwpn=arr, host_wwpn=_A, host_name="esx1"))
-        ns.append(NameserverEntry(fabric="odd", array_port=nsp, array_wwpn=arr, host_wwpn=_C, host_name="esx2"))
-    for nsp, arr in (("0:3:2", "20320002AC02F629"), ("1:3:2", "21320002AC02F629")):
-        ns.append(NameserverEntry(fabric="even", array_port=nsp, array_wwpn=arr, host_wwpn=_B, host_name="esx1"))
-    return disc.DiscoveryReport(array_ports=ports, nameserver=ns, host_hbas=hbas)
+    array_hosts = [
+        ArrayHost(name="esx1", persona="VMware", wwpns={_A: ["0:3:3", "1:3:3"], _B: ["0:3:4"]}),  # both fabrics
+        ArrayHost(name="esx2", persona="VMware", wwpns={_C: ["0:3:3"]}),                            # odd only
+    ]
+    return disc.DiscoveryReport(array_ports=ports, array_hosts=array_hosts, host_hbas=hbas)
 
 
 def test_array_side_zoning_verify_and_reconciliation():
