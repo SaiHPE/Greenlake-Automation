@@ -60,3 +60,60 @@ def test_apply_proxy_env_publishes_manual_and_bypass(monkeypatch):
     assert proxy == "http://mp:3128"
     assert os.environ["HTTPS_PROXY"] == "http://mp:3128"
     assert "10.65.234.220" in os.environ["NO_PROXY"] and "169.254.*" in os.environ["NO_PROXY"]
+
+
+# --------------- regression: v0.9.0 heap-corruption crash on a box WITH a system proxy ---------------
+
+def test_winhttp_out_strings_are_raw_pointers_not_lpwstr():
+    """The WinHTTP out-string struct fields MUST be raw ``c_void_p``, never ``LPWSTR``.
+
+    As ``LPWSTR`` they auto-convert to a Python ``str`` on access, so the real GlobalAlloc'd pointer is
+    lost; ``GlobalFree`` then runs on a pointer INTO a Python object and corrupts the process heap
+    (STATUS_HEAP_CORRUPTION / 0xC0000374). This only triggers on a machine that actually HAS a system
+    proxy (so the strings are non-null) — which is why every unit + CI selftest passed while the
+    packaged app crashed at launch on the proxied customer box. Deterministic guard against a revert.
+    """
+    import ctypes
+
+    from alletra_onboard.application import proxy
+
+    if not proxy._IS_WINDOWS:  # the structs only exist on the packaged Windows target
+        return
+    ie = dict(proxy._IE_PROXY_CONFIG._fields_)
+    pi = dict(proxy._PROXY_INFO._fields_)
+    for field in ("lpszAutoConfigUrl", "lpszProxy", "lpszProxyBypass"):
+        assert ie[field] is ctypes.c_void_p, f"_IE_PROXY_CONFIG.{field} must be c_void_p (raw pointer)"
+    for field in ("lpszProxy", "lpszProxyBypass"):
+        assert pi[field] is ctypes.c_void_p, f"_PROXY_INFO.{field} must be c_void_p (raw pointer)"
+
+
+def test_win_system_proxy_reads_then_frees_a_real_pointer(monkeypatch):
+    """End-to-end: read the WinHTTP string via a raw pointer and GlobalFree that exact pointer — with a
+    genuine GlobalAlloc'd wide string, so a regression to the bad free would corrupt the heap here."""
+    import ctypes
+
+    from alletra_onboard.application import proxy
+
+    if not proxy._IS_WINDOWS:
+        return
+    k32 = ctypes.WinDLL("kernel32")
+    k32.GlobalAlloc.restype = ctypes.c_void_p
+    k32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+
+    def galloc_wstr(s: str) -> int:
+        raw = ctypes.create_unicode_buffer(s)
+        ptr = k32.GlobalAlloc(0x0040, ctypes.sizeof(raw))  # GPTR = fixed + zero-init
+        ctypes.memmove(ptr, raw, ctypes.sizeof(raw))
+        return ptr
+
+    class FakeWH:
+        def WinHttpGetIEProxyConfigForCurrentUser(self, ref):
+            cfg = ctypes.cast(ref, ctypes.POINTER(proxy._IE_PROXY_CONFIG)).contents
+            cfg.fAutoDetect = False
+            cfg.lpszAutoConfigUrl = None
+            cfg.lpszProxy = galloc_wstr("1.2.3.4:8080")
+            cfg.lpszProxyBypass = None
+            return 1
+
+    monkeypatch.setattr(proxy, "_winhttp", lambda: FakeWH())
+    assert proxy._win_system_proxy("https://common.cloud.hpe.com") == "http://1.2.3.4:8080"
