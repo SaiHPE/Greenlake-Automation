@@ -374,3 +374,98 @@ def test_apply_plan_sets_persona_per_host_os():
     prov.apply_plan(_intent(), d, wsapi_factory=lambda c: fake)
     personas = {c[1]: c[3] for c in fake.calls if c[0] == "host"}  # ("host", name, wwns, persona)
     assert personas == {"esx1": 11, "winbox": 15}  # persona per host, not a hardcoded 11
+
+
+# ---------------- fabric resolution (#3: fabric from showportdev fcfabric, parity fallback) ----------------
+_SW_F2 = "SW6600_Q5U38_F2"   # the switch the odd-parity host ports (…:3) attach to (real calibration)
+_SW_F1 = "SW6600_Q5U39_F1"   # the switch the even-parity host ports (…:4) attach to
+
+
+def _fc4() -> list[ArrayPort]:
+    """The four FC host ports (nodes 0/1 x ports :3/:4), fabric pre-set by parity as parse_ports leaves them."""
+    return [
+        ArrayPort(node=0, slot=3, card_port=3, protocol="fc", wwpn="20330002AC025515", link_state="ready", fabric="odd"),
+        ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC025515", link_state="ready", fabric="even"),
+        ArrayPort(node=1, slot=3, card_port=3, protocol="fc", wwpn="21330002AC025515", link_state="ready", fabric="odd"),
+        ArrayPort(node=1, slot=3, card_port=4, protocol="fc", wwpn="21340002AC025515", link_state="ready", fabric="even"),
+    ]
+
+
+def test_resolve_fabrics_switch_agreeing_with_parity_is_silent():
+    # The real Primera calibration: :3 ports -> F2 switch, :4 ports -> F1 switch. Same GROUPING as parity.
+    ports = _fc4()
+    sw = {"0:3:3": _SW_F2, "1:3:3": _SW_F2, "0:3:4": _SW_F1, "1:3:4": _SW_F1}
+    notes = disc.resolve_port_fabrics(ports, sw)
+    assert {p.label: p.fabric for p in ports} == {"0:3:3": "odd", "1:3:3": "odd", "0:3:4": "even", "1:3:4": "even"}
+    assert next(p for p in ports if p.label == "0:3:3").fabric_switch == _SW_F2
+    assert notes == []          # switch agrees with parity -> identical result, nothing to report
+
+
+def test_resolve_fabrics_overrides_parity_on_nonstandard_cabling():
+    # 1:3:4 (even card-port) is miscabled onto the F2 switch, where the odd ports live -> parity is wrong.
+    ports = _fc4()
+    sw = {"0:3:3": _SW_F2, "1:3:3": _SW_F2, "0:3:4": _SW_F1, "1:3:4": _SW_F2}
+    notes = disc.resolve_port_fabrics(ports, sw)
+    assert next(p for p in ports if p.label == "1:3:4").fabric == "odd"   # follows the switch, not parity
+    assert any("1:3:4" in n and "non-standard" in n for n in notes)
+
+
+def test_resolve_fabrics_falls_back_to_parity_without_switch_data():
+    # e.g. every host port is loss_sync (the 225 today) -> no fcfabric data -> parity, no noise.
+    ports = _fc4()
+    notes = disc.resolve_port_fabrics(ports, {})
+    assert {p.label: p.fabric for p in ports} == {"0:3:3": "odd", "1:3:3": "odd", "0:3:4": "even", "1:3:4": "even"}
+    assert all(p.fabric_switch == "" for p in ports)
+    assert notes == []
+
+
+def test_resolve_fabrics_more_than_two_switches_uses_parity_with_note():
+    ports = _fc4()
+    sw = {"0:3:3": "SWA", "1:3:3": "SWB", "0:3:4": "SWC", "1:3:4": "SWC"}
+    notes = disc.resolve_port_fabrics(ports, sw)
+    assert next(p for p in ports if p.label == "0:3:3").fabric == "odd"   # parity fallback
+    assert any("3 fabric switches" in n for n in notes)
+
+
+def test_resolve_fabrics_two_switches_same_parity_labels_by_switch():
+    # Both attach-switches sit at odd card-port parity -> parity can't name them; stable-order labelling.
+    ports = [
+        ArrayPort(node=0, slot=3, card_port=1, protocol="fc", wwpn="20310002AC025515", link_state="ready", fabric="odd"),
+        ArrayPort(node=1, slot=3, card_port=3, protocol="fc", wwpn="21330002AC025515", link_state="ready", fabric="odd"),
+    ]
+    notes = disc.resolve_port_fabrics(ports, {"0:3:1": "SWB", "1:3:3": "SWA"})
+    assert {p.fabric for p in ports} == {"odd", "even"}                   # split into two distinct slots
+    assert any("same card-port parity" in n for n in notes)
+
+
+def _fcfabric(port_wwpn: str, switch_name: str) -> str:
+    """Minimal `showportdev fcfabric` text: the port's WWPN sits as the attached N-Port on switch_name."""
+    return (
+        "Fabric information\n"
+        f"  Logical Name: {switch_name}\n"
+        f"    13 2000000000000001 F-Port Online unknown {port_wwpn} N-Port\n"
+    )
+
+
+def test_discovery_refines_fabric_from_switch():
+    blocks = dict(_ARRAY_BLOCKS)
+    blocks["showportdev fcfabric 0:3:3"] = _fcfabric("20330002AC025515", "SWX_F2")
+    blocks["showportdev fcfabric 1:3:3"] = _fcfabric("21330002AC025515", "SWX_F2")
+    blocks["showportdev fcfabric 0:3:4"] = _fcfabric("20340002AC025515", "SWY_F1")
+    blocks["showportdev fcfabric 1:3:4"] = _fcfabric("21340002AC025515", "SWY_F1")
+    hbas = [HostHba(host_name="esx1", wwpn=_A), HostHba(host_name="esx1", wwpn=_B)]
+    report = disc.discover(
+        _intent(),
+        array_cli_factory=lambda c: FakeArrayCli(blocks),
+        vcenter_factory=lambda c: FakeVCenter(hbas),
+    )
+    fc = {p.label: p for p in report.array_ports if p.protocol == "fc"}
+    assert fc["0:3:3"].fabric_switch == "SWX_F2" and fc["0:3:3"].fabric == "odd"
+    assert fc["0:3:4"].fabric_switch == "SWY_F1" and fc["0:3:4"].fabric == "even"
+    assert not report.notes        # switch agrees with parity -> silent
+
+
+def test_switch_for_wwpn_finds_the_f_port_switch():
+    text = _fcfabric("20330002AC025515", "SWX_F2")
+    assert disc.switch_for_wwpn(text, "20:33:00:02:ac:02:55:15") == "SWX_F2"   # colon form normalizes
+    assert disc.switch_for_wwpn(text, "DEADBEEFDEADBEEF") is None

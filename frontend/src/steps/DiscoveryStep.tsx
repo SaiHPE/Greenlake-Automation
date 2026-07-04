@@ -63,7 +63,10 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
                   <TableRow key={`${p.node}:${p.slot}:${p.card_port}`}>
                     <TableCell><Text size="small">{p.node}:{p.slot}:{p.card_port}</Text></TableCell>
                     <TableCell><Text size="small">{p.wwpn}</Text></TableCell>
-                    <TableCell><Text size="small">{p.fabric ?? '—'}</Text></TableCell>
+                    <TableCell>
+                      <Text size="small">{p.fabric ?? '—'}</Text>
+                      {p.fabric_switch && <Text size="xsmall" color="text-weak"> ({p.fabric_switch})</Text>}
+                    </TableCell>
                     <TableCell><Text size="small" color={p.link_state === 'ready' ? 'status-ok' : 'status-warning'}>{p.link_state}</Text></TableCell>
                   </TableRow>
                 ))}
