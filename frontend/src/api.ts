@@ -163,6 +163,7 @@ export interface ArrayPort {
   protocol: 'fc' | 'iscsi';
   wwpn: string; address: string; link_state: string;
   fabric: 'odd' | 'even' | null;
+  fabric_switch: string; // switch the port attaches to (showportdev fcfabric); '' if by parity
 }
 export interface HostHba {
   host_name: string; wwpn: string; model: string | null; os: string | null;
