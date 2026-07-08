@@ -68,15 +68,22 @@ The run-time read an environment a provisioning run produces — array target po
 HBA WWPNs + OS (via vCenter), and the fabric nameserver view — with WWPNs normalised for matching. A
 bundle of Discovered facts; the input to zoning and provisioning.
 
-**Zoning report / zoning plan**:
-The comparison of the *expected* zone set — host HBA WWPNs from **vCenter** (the authoritative,
-complete host list) paired with the array target-port WWPNs per fabric — against what is *actually*
-zoned (the array's logged-in view, `showhost`) and, for an unzoned-but-online host WWPN, which fabric
-it sits on (the switch name server, `nsshow`/`nscamshow`). The *zoning plan* is the resulting
-**read-only**, per-fabric host-WWPN ↔ array-port-WWPN mapping with the correct aliases and the exact
-`alicreate` → `zonecreate` → `cfgadd` → `cfgenable` command sequence — presented for the **SAN team to
-apply by hand**. **The tool never writes to the switch.** See ADR 0004.
-_Avoid_: "remediation" (the tool no longer creates zones — it produces a plan the SAN team applies).
+**Fabric (odd / even)**:
+Which of the two SAN switches a port is cabled to. The operator DECLARES it in the sheet —
+`switch_f1` = the **odd / F1** switch, `switch_f2` = the **even / F2** switch — and the tool assigns
+every port (host + storage) to the fabric of whichever declared switch's name server sees it.
+Port-number parity (odd `P`=1/3, even `P`=2/4) is only a **cross-check**; a mismatch is flagged. Works
+only when the two switches are *separate* fabrics — a meshed lab collapses the split. See ADR 0004.
+_Avoid_: treating fabric as a property of the port number alone (the switch cabling is the truth).
+
+**Zoning plan** (current map + builder):
+Two things: (1) the **current-connection map** — per host WWPN, the storage port WWPN(s) + `n:s:p` it
+is actually logged into (`showhost` + `showport`), host WWPN ↔ storage WWPN, both sides; and (2) the
+**operator-selected builder** — per host WWPN a parity-filtered dropdown of same-fabric storage ports
+the operator *selects*, which the tool turns into the **read-only** `alicreate` → `zonecreate` →
+`cfgadd` → `cfgenable` preview for the **SAN team to apply by hand**. **The tool never writes to the
+switch.** See ADR 0004.
+_Avoid_: "remediation" (the tool produces a plan; it does not create zones), "auto-pair" (the operator selects).
 
 **Discovered fact**:
 Anything about the environment the automation *reads at run time* instead of asking for — array
