@@ -1,5 +1,38 @@
 # The tool verifies SAN zoning and produces a read-only zoning PLAN — it never writes to the switch
 
+> **DESIGN REFINED (2026-07-04, from the SAN-team call with Panduranga). BUILD DEFERRED until a clean
+> test fabric exists.** The v0.10.x plan *auto-paired* each host WWPN with every same-fabric array
+> target port. That doesn't survive the field — fabric assignment must be **switch-based and
+> operator-selected**, not auto. The model:
+>
+> - **Fabric = which switch a port is cabled to.** The operator DECLARES the two fabrics in the sheet:
+>   `switch_f1` = the **odd / F1** switch, `switch_f2` = the **even / F2** switch. The tool reads each
+>   switch's name server and assigns every port (host + storage) to the fabric of whichever declared
+>   switch sees it. **Port-number parity** (odd `P` = 1/3 → odd, even `P` = 2/4 → even) is a
+>   **cross-check**, not the source of truth; if the switch a port sits on disagrees with its parity
+>   (miscabling), the tool **flags it** — it never silently guesses.
+> - **Requires a REAL dual fabric.** This works only when `switch_f1` / `switch_f2` are **separate
+>   fabrics**. In the lab they are one big **meshed** fabric (many switches E-port-linked, "no odd/even
+>   policy"), so both declared switches see *everything* (fabric-wide `nscamshow`) and the split
+>   collapses — exactly the "resolved to 5 switches, could not map to two fabrics" the tool reported.
+>   In that case the tool must **say so**, not emit garbage. A customer site — and Panduranga's incoming
+>   **isolated 2-switch + 1-array + 1-host** test bed — has a clean dual fabric where the split is
+>   unambiguous.
+> - **Two-part UI.** (1) A read-only **current-connection map** — per host WWPN, the storage port
+>   WWPN(s) + `n:s:p` it is actually logged into (from `showhost` + `showport`): host WWPN ↔ storage
+>   WWPN, *both sides*, "exactly what is connected to what"; an already-zoned host shows fully wired.
+>   (2) An **operator-selected zoning builder** — per host WWPN a **dropdown of storage ports filtered
+>   to the same fabric/parity** (a host HBA on the odd switch ⇒ only odd storage ports offered), each
+>   option showing `n:s:p`, WWPN, and **label / existing use**; the operator **selects** the targets and
+>   the tool emits the `alicreate / zonecreate / cfgadd / cfgenable` preview. NOT auto-all-ports. Ports
+>   already zoned are pre-selected / greyed (show the delta).
+> - **The RCFC hard-exclusion (v0.10.1) is DROPPED.** Keying on the `showport` Label "RCFC" wrongly
+>   removed *host-serving* ports — the array's `showhost` showed hosts logged in on `0:3:4` / `1:3:4`;
+>   those are **Target-mode host ports**, not the **Initiator-mode** RCFC ports the HPE guidance means.
+>   With operator selection the human just doesn't pick replication ports, so the tool **shows** each
+>   port's label/use and lets the operator decide instead of guessing.
+> - Still **no switch writes** (read-only preview only). **Build this AFTER the clean lab lands.**
+
 > **DECISION REVISED (2026-07-03): NO SWITCH WRITES — verify + read-only zoning PLAN.** This ADR
 > originally had the tool CREATE the missing zones on operator confirmation
 > (`alicreate → zonecreate → cfgadd → cfgenable`). That is **superseded**: the tool now **verifies**
@@ -110,6 +143,10 @@ The fabric is **shared production** — the live `cfgshow` showed *hundreds* of 
   path with strong guardrails. This is the riskiest module — it warrants the most testing.
 
 ## The zoning plan — method (the SAN team's house standard, 2026-07-03)
+
+> Superseded in part by the **2026-07-04 refinement** at the top: fabric is **switch-declared** (not
+> parity-derived), storage ports are **operator-selected** from a parity-filtered dropdown (not
+> auto-all), and RCFC is **not** hard-excluded. The command format, aliases, and SIST rule below still hold.
 
 The read-only plan follows the SAN team's own method (field transcript + zoning worksheet from
 Panduranga). The tool is an **assisted command builder**, not an auto-generator: it discovers
