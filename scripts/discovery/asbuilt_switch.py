@@ -39,6 +39,12 @@ WWPNS = OUT / "array_wwpns.txt"
 # effective zoning cfg name in its header). nsshow = LOCAL nameserver only (bounded); we deliberately
 # do NOT run nscamshow/cfgshow (fabric-wide, hundreds of zones on a shared prod fabric).
 COMMANDS = ["switchshow", "fabricshow", "ipaddrshow", "chassisshow", "switchname", "version", "nsshow"]
+# Structural read-only guard: the ONLY switch commands this probe may ever issue. Anything that could
+# change zoning/config (cfgenable, zonecreate, alicreate, cfgsave, portcfg*, ...) is not here and is
+# refused below — the switch is never written, per the standing rule.
+_READONLY_SWITCH = {"switchshow", "fabricshow", "ipaddrshow", "chassisshow", "switchname", "version",
+                    "nsshow", "nscamshow", "nsallshow", "cfgshow", "zoneshow", "alishow",
+                    "portshow", "islshow", "trunkshow", "fabricshow"}
 
 
 def _norm(s: str) -> str:
@@ -80,6 +86,9 @@ def main():
             continue
         switchshow = ""
         for cmd in COMMANDS:
+            if cmd.split()[0] not in _READONLY_SWITCH:  # structural read-only guard
+                lines.append(f"\n[REFUSED — not a read-only switch command: {cmd}]")
+                continue
             lines.append(f"\n===== [{name}] $ {cmd} =====")
             try:
                 _i, o, e = c.exec_command(cmd, timeout=60)

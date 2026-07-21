@@ -72,6 +72,10 @@ def main():
         if cmd.startswith("#"):
             lines.append("\n" + cmd)
             continue
+        base = cmd.split()[0]
+        if not (base.startswith("show") or base == "checkhealth"):  # structural read-only guard
+            lines.append(f"\n[REFUSED — not a read-only command: {cmd}]")
+            continue
         lines.append(f"\n===== $ {cmd} =====")
         try:
             _i, o, e = c.exec_command(cmd, timeout=120)
