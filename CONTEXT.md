@@ -68,6 +68,15 @@ The run-time read an environment a provisioning run produces — array target po
 HBA WWPNs + OS (via vCenter), and the fabric nameserver view — with WWPNs normalised for matching. A
 bundle of Discovered facts; the input to zoning and provisioning.
 
+**Ideal subset**:
+The clean subset we curate *out of the messy lab* to work with — the hosts that are powered on and
+correctly zoned to the array (logged in on the expected fabric(s)), pruned of the noise (offline /
+unzoned / half-zoned hosts, storage & peer ports). Not new hardware — a curated *view* of the messy
+lab. Discovery classifies every host's HBAs by fabric + login state; the operator selects the good
+ones (the dropdown builder). Serves as the tier-2 green validation set for provisioning now, and the
+known-good reference / seed for the (deferred, not abandoned) zoning automation.
+_Avoid_: treating it as a separate "ideal lab" (it's a subset of the messy one).
+
 **Fabric (odd / even)**:
 Which of the two SAN switches a port is cabled to. The operator DECLARES it in the sheet —
 `switch_f1` = the **odd / F1** switch, `switch_f2` = the **even / F2** switch — and the tool assigns
@@ -119,7 +128,15 @@ The host-type profile the array applies for SCSI/ALUA behaviour (e.g. the VMware
 
 **Zoning**:
 Switch-level pairing of a host WWPN and an array target-port WWPN so the two can communicate.
-Created on the SAN switch; *verifiable* from the array's fabric nameserver.
+Created on the SAN switch; *verifiable* from the array's fabric nameserver. Provisioning *consumes*
+zoning (reads which host WWPN is logged into which array port); it does not *produce* it.
+
+**Path verification**:
+After the array-side export, reading the array back (`showvlun` + `showhost`) to confirm the exported
+LUN is reachable over the host's actually-logged-in WWPNs, per fabric — e.g. "host X: 2/2 HBAs logged
+in, LUN live on both fabrics" vs "0 paths — not zoned". Read-only; it *consumes* zoning, never creates
+it, and it stops at the array (the ESXi-side datastore is a separate, out-of-scope step).
+_Avoid_: conflating with **Post-init verification** (that checks onboarding config, not the data path).
 
 **ALUA path state (AO / ANO)**:
 Active-Optimized vs Active-Non-Optimized — whether a path leads to the controller node that owns
