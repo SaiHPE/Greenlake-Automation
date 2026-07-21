@@ -26,6 +26,10 @@ CTX.verify_mode = ssl.CERT_NONE          # self-signed array cert
 
 
 def call(method, path, headers=None, body=None):
+    # Structural read-only guard: only GET, plus the single login handshake (POST /credentials, which
+    # just mints a self-expiring session token — not a config write). Any other verb is refused.
+    if not (method == "GET" or (method == "POST" and path == "/credentials")):
+        raise RuntimeError(f"REFUSED — not a read-only WSAPI call: {method} {path}")
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(BASE + path, data=data, method=method)
     req.add_header("Content-Type", "application/json")
