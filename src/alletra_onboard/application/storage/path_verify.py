@@ -18,9 +18,12 @@ from __future__ import annotations
 
 import re
 
+from alletra_onboard.application.storage.clients import make_array_cli
 from alletra_onboard.domain.storage import (
+    DiscoveryReport,
     HostPathStatus,
     PathVerification,
+    ProvisioningIntent,
     VolumePath,
     normalize_wwpn,
 )
@@ -108,3 +111,22 @@ def verify_paths(
             live_volumes=live_vols, dead_volumes=dead_vols, detail=detail,
         ))
     return report
+
+
+def verify_provisioned_paths(
+    intent: ProvisioningIntent,
+    discovery: DiscoveryReport,
+    *,
+    array_cli_factory=make_array_cli,
+) -> PathVerification:
+    """Flow hook: read `showvlun -a` from the array (read-only SSH) and verify the exported LUNs are
+    actually LIVE to the provisioned hosts. Target hosts = the discovered host-set members (the vCenter
+    host list, else the array's own `showhost` hosts); target volumes = the intent's volumes. This is the
+    tier-2 step called after `apply_plan` — read-only, and it reports rather than gating."""
+    try:
+        with array_cli_factory(intent.array) as cli:
+            text = cli.run("showvlun -a")
+    except Exception as exc:  # noqa: BLE001
+        return PathVerification(error=f"Could not read 'showvlun -a' over SSH: {exc}")
+    hosts = {h.host_name for h in discovery.host_hbas} or {ah.name for ah in discovery.array_hosts}
+    return verify_paths(hosts, set(intent.volume.names()), parse_showvlun_active(text))
