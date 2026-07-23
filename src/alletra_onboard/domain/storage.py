@@ -31,22 +31,25 @@ def wwpn_colons(normalized: str) -> str:
     return ":".join(n[i : i + 2] for i in range(0, len(n), 2))
 
 
-# 3PAR / Primera / Alletra MP host persona IDs (see `showhost -listpersona`). We only CREATE hosts we
-# discover, and discovery is vCenter/ESXi today, so VMware(11) is the default — but the persona is
-# DERIVED from the host OS so a Windows/Linux host gets the right one instead of a hardcoded 11.
-PERSONA_NAMES: dict[int, str] = {1: "Generic", 2: "Generic-ALUA", 11: "VMware", 15: "WindowsServer"}
+# Host persona is DERIVED from the discovered host OS (discovery is vCenter/ESXi today → VMware default).
+# We return the persona NAME here and let the WSAPI adapter map it to the array's persona id, because the
+# two numbering schemes differ and it is a trap: the CLI `showhost -listpersona` calls VMware "11", but
+# the WSAPI enum that `createHost` needs calls VMware 8 (verified against the hpe3parclient constants AND
+# a live Alletra MP whose VMware ESXi hosts reported WSAPI persona 8). Passing the CLI number to createHost
+# would create ESXi hosts with the *Windows* persona. Resolving by name keeps the two from ever mixing.
+PersonaName = Literal["VMware", "WindowsServer", "Generic-ALUA"]
 
 
-def persona_for_os(os: str | None) -> int:
-    """Map a host OS string (e.g. from vCenter) to its array host persona id. Defaults to VMware."""
+def persona_for_os(os: str | None) -> PersonaName:
+    """Map a host OS string (e.g. from vCenter) to its host persona NAME. Defaults to VMware."""
     s = (os or "").lower()
     if "vmware" in s or "esxi" in s:
-        return 11  # VMware
+        return "VMware"
     if "windows" in s:
-        return 15  # WindowsServer
+        return "WindowsServer"
     if any(k in s for k in ("linux", "rhel", "red hat", "ubuntu", "suse", "centos", "oracle", "debian")):
-        return 2   # Generic-ALUA
-    return 11      # default: the tool discovers ESXi hosts today
+        return "Generic-ALUA"
+    return "VMware"  # default: the tool discovers ESXi hosts today
 
 
 # ------------------------------------------------------------------ provisioning intent (the sheet)
