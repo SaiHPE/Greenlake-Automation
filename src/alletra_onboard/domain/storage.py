@@ -243,3 +243,38 @@ class ActionOutcome(BaseModel):
 class ProvisioningResult(BaseModel):
     outcomes: list[ActionOutcome] = Field(default_factory=list)
     error: str | None = None
+
+
+# ------------------------------------------------------------------ tier-2 path verification (ADR 0010)
+
+PathVerdict = Literal["live", "partial", "no_path"]
+
+
+class VolumePath(BaseModel):
+    """One ACTIVE VLUN path from `showvlun -a`: a volume live to a host over one HBA WWPN + array port."""
+
+    lun: int
+    volume: str
+    host: str
+    host_wwpn: str          # normalized
+    port: str               # array port n:s:p
+    status: str             # active | nonopt (ALUA active-optimized / non-optimized) | ...
+
+
+class HostPathStatus(BaseModel):
+    """Per host: does the exported LUN actually reach it, and over how many fabrics? Read-only, never
+    a gate — a `no_path` host is fine (the export exists and activates once the host is on + zoned)."""
+
+    host: str
+    verdict: PathVerdict
+    hbas_with_paths: int                                   # distinct host WWPNs carrying a live path
+    fabrics: list[str] = Field(default_factory=list)       # fabrics (odd/even) with live paths
+    live_volumes: list[str] = Field(default_factory=list)  # target volumes with >=1 active path here
+    dead_volumes: list[str] = Field(default_factory=list)  # target volumes exported but with NO path
+    detail: str = ""
+
+
+class PathVerification(BaseModel):
+    hosts: list[HostPathStatus] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    error: str | None = None
