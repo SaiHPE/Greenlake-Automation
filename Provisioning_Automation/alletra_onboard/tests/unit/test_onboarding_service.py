@@ -265,15 +265,15 @@ async def test_verify_exception_never_unsucceeds_the_run(tmp_path):
 
 
 def _prov_intent():
-    from alletra_onboard.domain.storage import EndpointCreds, ProvisioningIntent, VolumeSpec
+    from alletra_onboard.domain.storage import EndpointCreds, ProvisioningIntent
 
     def creds(host):
         return EndpointCreds(host=host, username="u", password=SecretStr("p"))
 
-    return ProvisioningIntent(
+    return ProvisioningIntent.from_simple(
         host_set_name="HS", array=creds("a"), vcenter=creds("vc"),
         switch_f1=creds("sw1"), switch_f2=creds("sw2"),
-        volume=VolumeSpec(name_prefix="V", size_gib=10, count=1),
+        name_prefix="V", size_gib=10, count=1,
     )
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from alletra_onboard.application.storage import zoning_plan as zp
 from alletra_onboard.domain.storage import (
-    ArrayPort, DiscoveryReport, EndpointCreds, HostHba, ProvisioningIntent, VolumeSpec,
+    ArrayPort, DiscoveryReport, EndpointCreds, HostHba, ProvisioningIntent,
 )
 
 _ARR_031 = "20:31:00:02:ac:02:f6:29"
@@ -70,10 +70,10 @@ def _creds(host):
 
 
 def _intent():
-    return ProvisioningIntent(
+    return ProvisioningIntent.from_simple(
         host_set_name="hs", array=_creds("array"), vcenter=_creds("vc"),
         switch_f1=_creds("sw-f1"), switch_f2=_creds("sw-f2"),
-        volume=VolumeSpec(name_prefix="v", size_gib=1),
+        name_prefix="v", size_gib=1,
     )
 
 
