@@ -129,4 +129,4 @@ def verify_provisioned_paths(
     except Exception as exc:  # noqa: BLE001
         return PathVerification(error=f"Could not read 'showvlun -a' over SSH: {exc}")
     hosts = {h.host_name for h in discovery.host_hbas} or {ah.name for ah in discovery.array_hosts}
-    return verify_paths(hosts, set(intent.volume.names()), parse_showvlun_active(text))
+    return verify_paths(hosts, {v.name for v in intent.volumes}, parse_showvlun_active(text))

@@ -62,32 +62,71 @@ class EndpointCreds(BaseModel):
     password: SecretStr
 
 
-class VolumeSpec(BaseModel):
-    """A compact volume request: <name_prefix>NN for count volumes of size_gib each."""
+class VolumeRequest(BaseModel):
+    """One volume to create — its OWN name, size, provisioning type, CPG, and optional VV-set membership.
+    Heterogeneous by design: a run creates a LIST of these, not N identical copies (ADR 0010)."""
 
-    name_prefix: str
+    name: str
     size_gib: int
-    count: int = 1
+    provisioning_type: ProvisioningType = "tpvv"
+    cpg: str = "SSD_r6"
+    vvset: str | None = None       # optional VV-set to add this volume to
 
-    def names(self) -> list[str]:
-        if self.count <= 1:
-            return [self.name_prefix]
-        width = max(2, len(str(self.count)))
-        return [f"{self.name_prefix}{i:0{width}d}" for i in range(1, self.count + 1)]
+    @property
+    def size_mib(self) -> int:
+        return self.size_gib * 1024
+
+
+class HostSetRequest(BaseModel):
+    """A host set to create + its SELECTED members (host names). Empty members => all discovered hosts
+    (the cluster). A run may create one or more host sets (ADR 0010)."""
+
+    name: str
+    members: list[str] = Field(default_factory=list)
 
 
 class ProvisioningIntent(BaseModel):
-    """What the operator supplies on the Provisioning tab to drive a provisioning run."""
+    """What drives a provisioning run: reach (creds) + a plural/heterogeneous set of objects to create —
+    many volumes (each with its own attributes) and one or more host sets with selected members. See ADR 0010."""
 
-    host_set_name: str
     array: EndpointCreds          # mgmt IP + admin (e.g. 3paradm) + password
     vcenter: EndpointCreds        # vCenter for read-only ESXi HBA discovery
     switch_f1: EndpointCreds      # odd fabric (F1)
     switch_f2: EndpointCreds      # even fabric (F2)
-    cpg: str = "SSD_r6"
-    provisioning_type: ProvisioningType = "tpvv"
-    volume: VolumeSpec
-    vvset_name: str | None = None
+    volumes: list[VolumeRequest] = Field(default_factory=list)
+    host_sets: list[HostSetRequest] = Field(default_factory=list)
+
+    @classmethod
+    def from_simple(
+        cls,
+        *,
+        array: EndpointCreds,
+        vcenter: EndpointCreds,
+        switch_f1: EndpointCreds,
+        switch_f2: EndpointCreds,
+        host_set_name: str,
+        name_prefix: str,
+        size_gib: int,
+        count: int = 1,
+        provisioning_type: ProvisioningType = "tpvv",
+        cpg: str = "SSD_r6",
+        vvset: str | None = None,
+    ) -> "ProvisioningIntent":
+        """Bulk shortcut: expand <prefix>NN + count into N identical volumes in one all-members host set —
+        the current flat-sheet case. The row-table sheet (Stage 2) will build the plural form directly."""
+        if count <= 1:
+            names = [name_prefix]
+        else:
+            width = max(2, len(str(count)))
+            names = [f"{name_prefix}{i:0{width}d}" for i in range(1, count + 1)]
+        return cls(
+            array=array, vcenter=vcenter, switch_f1=switch_f1, switch_f2=switch_f2,
+            volumes=[
+                VolumeRequest(name=n, size_gib=size_gib, provisioning_type=provisioning_type, cpg=cpg, vvset=vvset)
+                for n in names
+            ],
+            host_sets=[HostSetRequest(name=host_set_name, members=[])],
+        )
 
 
 # ------------------------------------------------------------------ discovery
