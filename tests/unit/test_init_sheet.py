@@ -151,12 +151,12 @@ def test_provision_only_parses_the_provisioning_tab_not_greenlake():
     assert parsed.gl_client_id == ""  # GreenLake creds not required for provisioning
     intent = parsed.provisioning_intent
     assert intent is not None
-    assert intent.host_set_name == "CRVLZ_Hostset"
+    assert intent.host_sets[0].name == "CRVLZ_Hostset"
     assert intent.array.host == "10.64.122.140"
     assert intent.array.password.get_secret_value() == "pw"
     assert intent.switch_f1.host == "10.0.0.1" and intent.switch_f2.host == "10.0.0.2"
-    assert intent.volume.names() == ["CRV_LZ_Prod01", "CRV_LZ_Prod02", "CRV_LZ_Prod03"]
-    assert intent.provisioning_type == "tpvv" and intent.cpg == "SSD_r6"
+    assert [v.name for v in intent.volumes] == ["CRV_LZ_Prod01", "CRV_LZ_Prod02", "CRV_LZ_Prod03"]
+    assert intent.volumes[0].provisioning_type == "tpvv" and intent.volumes[0].cpg == "SSD_r6"
 
 
 def test_provision_only_reports_missing_provisioning_fields():
