@@ -19,7 +19,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 from alletra_onboard.application import prereqs
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, RunMode
-from alletra_onboard.domain.storage import EndpointCreds, ProvisioningIntent, VolumeSpec
+from alletra_onboard.domain.storage import EndpointCreds, ProvisioningIntent
 from alletra_onboard.domain.workflow import enabled_steps
 
 SHEET_NAME = "Initialisation"
@@ -339,7 +339,9 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
     except ValueError as exc:
         raise ValueError("Volume size (GiB) and count must be numbers.") from exc
 
-    return ProvisioningIntent(
+    # The flat Provisioning tab is the "simple" case (N identical volumes, one all-members host set); the
+    # row-table sheet (ADR 0010 Stage 2) will build the plural/heterogeneous form directly.
+    return ProvisioningIntent.from_simple(
         host_set_name=values["prov_host_set"],
         array=EndpointCreds(host=values["prov_array_host"], username=values["prov_array_user"], password=values["prov_array_password"]),
         vcenter=EndpointCreds(host=values["prov_vcenter_host"], username=values["prov_vcenter_user"], password=values["prov_vcenter_password"]),
@@ -348,8 +350,10 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
         switch_f2=EndpointCreds(host=values.get("prov_sw2_host", ""), username=values.get("prov_sw2_user", ""), password=values.get("prov_sw2_password", "")),
         cpg=values.get("prov_cpg") or "SSD_r6",
         provisioning_type=ptype,  # type: ignore[arg-type]
-        volume=VolumeSpec(name_prefix=values["prov_vol_prefix"], size_gib=size_gib, count=count),
-        vvset_name=values.get("prov_vvset") or None,
+        name_prefix=values["prov_vol_prefix"],
+        size_gib=size_gib,
+        count=count,
+        vvset=values.get("prov_vvset") or None,
     )
 
 

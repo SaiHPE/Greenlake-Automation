@@ -25,9 +25,6 @@ from alletra_onboard.domain.storage import (
     persona_for_os,
 )
 
-_GIB_TO_MIB = 1024
-
-
 def _hosts_by_name(discovery: DiscoveryReport) -> "OrderedDict[str, list[str]]":
     """Group discovered HBA WWPNs by ESXi host name, de-duplicated, preserving order."""
     grouped: OrderedDict[str, list[str]] = OrderedDict()
@@ -44,6 +41,20 @@ def _persona_by_host(discovery: DiscoveryReport) -> dict[str, str]:
     for hba in discovery.host_hbas:
         personas.setdefault(hba.host_name, persona_for_os(hba.os))
     return personas
+
+
+def _members_for(host_set, all_hosts: "OrderedDict[str, list[str]]") -> list[str]:
+    """A host set's members: the operator's selection, or ALL discovered hosts when none is given."""
+    return list(host_set.members) if host_set.members else list(all_hosts)
+
+
+def _vvsets(intent: ProvisioningIntent) -> "OrderedDict[str, list[str]]":
+    """Group volume names by the VV-set each volume asked to join (order preserved)."""
+    sets: OrderedDict[str, list[str]] = OrderedDict()
+    for v in intent.volumes:
+        if v.vvset:
+            sets.setdefault(v.vvset, []).append(v.name)
+    return sets
 
 
 def build_plan(
@@ -63,11 +74,14 @@ def build_plan(
             existing_host_sets = set(array.host_set_names())
             existing_volumes = set(array.volume_names())
             existing_vsets = set(array.volume_set_names())
-            if intent.cpg not in set(array.cpg_names()):
-                plan.notes.append(f"CPG '{intent.cpg}' was not found on the array — volume creation will fail.")
+            cpgs = set(array.cpg_names())
     except Exception as exc:  # noqa: BLE001
         plan.error = f"Could not read the array over WSAPI: {exc}"
         return plan
+
+    for cpg in sorted({v.cpg for v in intent.volumes}):
+        if cpg not in cpgs:
+            plan.notes.append(f"CPG '{cpg}' was not found on the array — volume creation will fail for it.")
 
     personas = _persona_by_host(discovery)
     for host_name, wwns in hosts.items():
@@ -78,35 +92,41 @@ def build_plan(
             exists=host_name in existing_hosts,
             detail={"wwns": wwns, "persona": persona},
         ))
-    plan.actions.append(PlannedAction(
-        kind="hostset", name=intent.host_set_name,
-        description=f"Host set {intent.host_set_name} — {len(hosts)} host(s)",
-        exists=intent.host_set_name in existing_host_sets,
-        detail={"members": list(hosts)},
-    ))
 
-    vol_names = intent.volume.names()
-    size_mib = intent.volume.size_gib * _GIB_TO_MIB
-    for name in vol_names:
+    for hs in intent.host_sets:
+        members = _members_for(hs, hosts)
         plan.actions.append(PlannedAction(
-            kind="volume", name=name,
-            description=f"Volume {name} — {intent.volume.size_gib} GiB, {intent.provisioning_type}, CPG {intent.cpg}",
-            exists=name in existing_volumes,
-            detail={"size_mib": size_mib, "cpg": intent.cpg, "type": intent.provisioning_type},
+            kind="hostset", name=hs.name,
+            description=f"Host set {hs.name} — {len(members)} host(s)",
+            exists=hs.name in existing_host_sets,
+            detail={"members": members},
         ))
-    if intent.vvset_name:
+
+    for v in intent.volumes:
         plan.actions.append(PlannedAction(
-            kind="vvset", name=intent.vvset_name,
-            description=f"Volume set {intent.vvset_name} — {len(vol_names)} volume(s)",
-            exists=intent.vvset_name in existing_vsets,
-            detail={"members": vol_names},
+            kind="volume", name=v.name,
+            description=f"Volume {v.name} — {v.size_gib} GiB, {v.provisioning_type}, CPG {v.cpg}",
+            exists=v.name in existing_volumes,
+            detail={"size_mib": v.size_mib, "cpg": v.cpg, "type": v.provisioning_type, "vvset": v.vvset},
         ))
-    for name in vol_names:
+
+    for vvset, vols in _vvsets(intent).items():
         plan.actions.append(PlannedAction(
-            kind="vlun", name=name,
-            description=f"Export {name} → host set {intent.host_set_name} (auto LUN)",
-            detail={"host_set": intent.host_set_name},
+            kind="vvset", name=vvset,
+            description=f"Volume set {vvset} — {len(vols)} volume(s)",
+            exists=vvset in existing_vsets,
+            detail={"members": vols},
         ))
+
+    # Presentation (Stage 1 default): each volume -> each host set at an auto LUN. The operator-composed
+    # source x target x LUN dropdown builder is ADR 0010 Stage 2.
+    for hs in intent.host_sets:
+        for v in intent.volumes:
+            plan.actions.append(PlannedAction(
+                kind="vlun", name=v.name,
+                description=f"Export {v.name} → host set {hs.name} (auto LUN)",
+                detail={"host_set": hs.name},
+            ))
     return plan
 
 
@@ -122,9 +142,6 @@ def apply_plan(
         result.error = "No ESXi host HBAs discovered — refusing to provision with no hosts."
         return result
 
-    host_set_ref = f"set:{intent.host_set_name}"  # VLUN export target for the whole cluster
-    vol_names = intent.volume.names()
-    size_mib = intent.volume.size_gib * _GIB_TO_MIB
     personas = _persona_by_host(discovery)
     try:
         with wsapi_factory(intent.array) as array:
@@ -132,20 +149,22 @@ def apply_plan(
                 status = array.ensure_host(host_name, wwns, persona=personas.get(host_name, "VMware"))
                 result.outcomes.append(ActionOutcome(kind="host", name=host_name, status=status))
 
-            status = array.ensure_host_set(intent.host_set_name, list(hosts))
-            result.outcomes.append(ActionOutcome(kind="hostset", name=intent.host_set_name, status=status))
+            for hs in intent.host_sets:
+                status = array.ensure_host_set(hs.name, _members_for(hs, hosts))
+                result.outcomes.append(ActionOutcome(kind="hostset", name=hs.name, status=status))
 
-            for name in vol_names:
-                status = array.ensure_volume(name, intent.cpg, size_mib, intent.provisioning_type)
-                result.outcomes.append(ActionOutcome(kind="volume", name=name, status=status))
+            for v in intent.volumes:
+                status = array.ensure_volume(v.name, v.cpg, v.size_mib, v.provisioning_type)
+                result.outcomes.append(ActionOutcome(kind="volume", name=v.name, status=status))
 
-            if intent.vvset_name:
-                status = array.ensure_volume_set(intent.vvset_name, vol_names)
-                result.outcomes.append(ActionOutcome(kind="vvset", name=intent.vvset_name, status=status))
+            for vvset, vols in _vvsets(intent).items():
+                status = array.ensure_volume_set(vvset, vols)
+                result.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
 
-            for name in vol_names:
-                status = array.ensure_vlun(name, host_set_ref)
-                result.outcomes.append(ActionOutcome(kind="vlun", name=name, status=status))
+            for hs in intent.host_sets:
+                for v in intent.volumes:
+                    status = array.ensure_vlun(v.name, f"set:{hs.name}")
+                    result.outcomes.append(ActionOutcome(kind="vlun", name=v.name, status=status))
     except Exception as exc:  # noqa: BLE001 - record what we got, surface the failure
         result.error = str(exc)
     return result

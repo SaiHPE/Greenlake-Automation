@@ -14,7 +14,6 @@ from alletra_onboard.domain.storage import (
     EndpointCreds,
     HostHba,
     ProvisioningIntent,
-    VolumeSpec,
     normalize_wwpn,
 )
 
@@ -38,10 +37,10 @@ def _intent(**over) -> ProvisioningIntent:
         vcenter=_creds("vc"),
         switch_f1=_creds("sw-odd"),
         switch_f2=_creds("sw-even"),
-        volume=VolumeSpec(name_prefix="CRV_Prod", size_gib=1024, count=2),
+        name_prefix="CRV_Prod", size_gib=1024, count=2,
     )
     data.update(over)
-    return ProvisioningIntent(**data)
+    return ProvisioningIntent.from_simple(**data)
 
 
 def _ports() -> list[ArrayPort]:
@@ -572,7 +571,7 @@ def test_verify_provisioned_paths_reads_showvlun_and_reports():
             return _VZ_SHOWVLUN_A
 
     fake = _FakeCli()
-    intent = _intent(volume=VolumeSpec(name_prefix="VZ_ESXi_Profile_bk", size_gib=10, count=1))
+    intent = _intent(name_prefix="VZ_ESXi_Profile_bk", size_gib=10, count=1)
     d = disc.DiscoveryReport(host_hbas=[HostHba(host_name="CRV_VZ_DL360G11D24U25", wwpn=_A)])
     rep = verify_provisioned_paths(intent, d, array_cli_factory=lambda creds: fake)
 
