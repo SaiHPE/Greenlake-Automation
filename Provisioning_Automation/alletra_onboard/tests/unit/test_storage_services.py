@@ -159,7 +159,7 @@ class FakeWsapi:
     def volume_set_names(self):
         return list(self.vsets)
 
-    def ensure_host(self, name, wwns, persona=11):
+    def ensure_host(self, name, wwns, persona="VMware"):
         self.calls.append(("host", name, tuple(wwns), persona))
         return "exists" if name in self.hosts else "created"
 
@@ -355,10 +355,21 @@ def test_apply_plan_is_idempotent_and_exports_to_host_set():
 def test_persona_derived_from_host_os():
     from alletra_onboard.domain.storage import persona_for_os
 
-    assert persona_for_os("VMware ESXi 8.0.3") == 11
-    assert persona_for_os("Microsoft Windows Server 2019") == 15
-    assert persona_for_os("Red Hat Enterprise Linux 9") == 2
-    assert persona_for_os(None) == 11  # default VMware — discovery is ESXi-only today
+    assert persona_for_os("VMware ESXi 8.0.3") == "VMware"
+    assert persona_for_os("Microsoft Windows Server 2019") == "WindowsServer"
+    assert persona_for_os("Red Hat Enterprise Linux 9") == "Generic-ALUA"
+    assert persona_for_os(None) == "VMware"  # default — discovery is ESXi-only today
+
+
+def test_wsapi_persona_ids_match_the_array_enum():
+    # Regression guard for the CLI-vs-WSAPI persona trap. createHost needs the WSAPI enum
+    # (VMware=8, WindowsServer=11, Generic-ALUA=2), NOT the CLI `showhost -listpersona` numbers
+    # (where VMware=11). Verified against hpe3parclient's HOST_PERSONA_* constants + a live array.
+    from alletra_onboard.adapters.array.wsapi_client import _WSAPI_PERSONA
+
+    assert _WSAPI_PERSONA["VMware"] == 8
+    assert _WSAPI_PERSONA["WindowsServer"] == 11
+    assert _WSAPI_PERSONA["Generic-ALUA"] == 2
 
 
 def test_apply_plan_sets_persona_per_host_os():
@@ -369,7 +380,7 @@ def test_apply_plan_sets_persona_per_host_os():
     fake = FakeWsapi()
     prov.apply_plan(_intent(), d, wsapi_factory=lambda c: fake)
     personas = {c[1]: c[3] for c in fake.calls if c[0] == "host"}  # ("host", name, wwns, persona)
-    assert personas == {"esx1": 11, "winbox": 15}  # persona per host, not a hardcoded 11
+    assert personas == {"esx1": "VMware", "winbox": "WindowsServer"}  # name per host, not hardcoded
 
 
 # ---------------- fabric resolution (#3: fabric from showportdev fcfabric, parity fallback) ----------------

@@ -34,8 +34,21 @@ except Exception:  # noqa: BLE001 - import may pull eventlet; keep import errors
 
 from alletra_onboard.domain.storage import ArrayPort, normalize_wwpn
 
-# VMware host persona (ALUA) on the B10000 — confirmed by the implementation guide + research.
-VMWARE_PERSONA = 11
+# WSAPI host-persona ids, resolved by NAME. The values are hpe3parclient's HOST_PERSONA_* constants —
+# the array's WSAPI persona enum: VMware=8, WindowsServer=11, Generic-ALUA=2. Verified 2026-07-22 against
+# the SDK constants AND a live Alletra MP (GET /hosts reported persona 8 for its VMware ESXi hosts). This
+# is the WSAPI enum, NOT the CLI `showhost -listpersona` numbering where VMware=11 — passing the CLI number
+# to createHost would create ESXi hosts with the *Windows* persona (11 == WindowsServer here). Resolving by
+# name means the two numberings can never be confused again.
+_WSAPI_PERSONA: dict[str, int] = (
+    {
+        "VMware": HPE3ParClient.HOST_PERSONA_VMWARE,
+        "WindowsServer": HPE3ParClient.HOST_PERSONA_WINDOWS_SERVER,
+        "Generic-ALUA": HPE3ParClient.HOST_PERSONA_GENERIC_ALUA,
+    }
+    if HPE3ParClient is not None
+    else {"VMware": 8, "WindowsServer": 11, "Generic-ALUA": 2}  # SDK absent in this build: verified values
+)
 
 
 class WsapiError(Exception):
@@ -159,13 +172,17 @@ class WsapiClient:
 
     # ------------------------------------------------------------------ writes (idempotent)
 
-    def ensure_host(self, name: str, fc_wwns: list[str], persona: int = VMWARE_PERSONA) -> str:
-        """Create ONE host carrying all FC WWNs at the given persona (default VMware/11). Returns
-        'created' or 'exists'. An existing host is never modified — its persona is left as-is.
+    def ensure_host(self, name: str, fc_wwns: list[str], persona: str = "VMware") -> str:
+        """Create ONE host carrying all FC WWNs at the given persona NAME (default 'VMware'), resolved to
+        the WSAPI persona id via `_WSAPI_PERSONA`. Returns 'created' or 'exists'. An existing host is never
+        modified — its persona is left as-is.
 
         Raises WsapiError if any WWN already belongs to a *different* host (EXISTENT_PATH) — that is a
         real conflict the operator must resolve, not something to silently adopt.
         """
+        persona_id = _WSAPI_PERSONA.get(persona)
+        if persona_id is None:
+            raise WsapiError(f"unknown host persona '{persona}' (expected one of {sorted(_WSAPI_PERSONA)})")
         owners = {self.find_host_by_wwn(w) for w in fc_wwns}
         owners.discard(None)
         if owners == {name}:
@@ -177,7 +194,7 @@ class WsapiClient:
                 "Resolve this on the array before provisioning."
             )
         try:
-            self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": persona})
+            self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": persona_id})
             return "created"
         except Exception as exc:  # noqa: BLE001
             if self._is_conflict(exc):
