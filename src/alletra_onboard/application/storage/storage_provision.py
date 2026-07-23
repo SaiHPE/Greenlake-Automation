@@ -5,7 +5,7 @@ the operator to confirm. apply_plan() executes it idempotently — each create r
 never failing on a re-run (EXISTENT_HOST / EXISTENT_SV / EXISTENT_VLUN).
 
 Modelled on the verified design: ONE host definition per ESXi server carrying ALL its FC WWNs at
-VMware persona 11, grouped in the cluster host set, with volumes exported to the host SET so every
+the VMware persona, grouped in the cluster host set, with volumes exported to the host SET so every
 host in the cluster sees them down multiple paths (ALUA).
 """
 
@@ -22,7 +22,6 @@ from alletra_onboard.domain.storage import (
     ProvisioningIntent,
     ProvisioningPlan,
     ProvisioningResult,
-    PERSONA_NAMES,
     persona_for_os,
 )
 
@@ -39,9 +38,9 @@ def _hosts_by_name(discovery: DiscoveryReport) -> "OrderedDict[str, list[str]]":
     return grouped
 
 
-def _persona_by_host(discovery: DiscoveryReport) -> dict[str, int]:
-    """The array host persona for each discovered host, derived from its OS (default VMware)."""
-    personas: dict[str, int] = {}
+def _persona_by_host(discovery: DiscoveryReport) -> dict[str, str]:
+    """The host persona NAME for each discovered host, derived from its OS (default VMware)."""
+    personas: dict[str, str] = {}
     for hba in discovery.host_hbas:
         personas.setdefault(hba.host_name, persona_for_os(hba.os))
     return personas
@@ -72,10 +71,10 @@ def build_plan(
 
     personas = _persona_by_host(discovery)
     for host_name, wwns in hosts.items():
-        persona = personas.get(host_name, 11)
+        persona = personas.get(host_name, "VMware")
         plan.actions.append(PlannedAction(
             kind="host", name=host_name,
-            description=f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona} ({PERSONA_NAMES.get(persona, '?')})",
+            description=f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona}",
             exists=host_name in existing_hosts,
             detail={"wwns": wwns, "persona": persona},
         ))
@@ -130,7 +129,7 @@ def apply_plan(
     try:
         with wsapi_factory(intent.array) as array:
             for host_name, wwns in hosts.items():
-                status = array.ensure_host(host_name, wwns, persona=personas.get(host_name, 11))
+                status = array.ensure_host(host_name, wwns, persona=personas.get(host_name, "VMware"))
                 result.outcomes.append(ActionOutcome(kind="host", name=host_name, status=status))
 
             status = array.ensure_host_set(intent.host_set_name, list(hosts))
