@@ -491,3 +491,64 @@ def test_discovery_emits_progress_for_each_substep():
     assert "ssh" in joined and "port" in joined and "vcenter" in joined     # each phase announced
     # per-port fabric probe is the slow part -> it must report which port it is on (e.g. "0:3:3 (1/4)")
     assert any("resolving" in m.lower() and "0:3:3" in m for m in msgs)
+
+
+# ---------------------------------------------------------------- tier-2 path verification (ADR 0010)
+
+# Real `showvlun -a` rows from a live Alletra MP (VZ, OS 10.5.51). Type is two words ("host set"), the
+# volume name is long — the parser must anchor on the n:s:p port token, not fixed offsets.
+_VZ_SHOWVLUN_A = """\
+Lun VVName                               HostName              -Host_WWN/iSCSI_Name/Host_NQN-  Port     Type Status ID
+  1 VZ_ESXi_Profile_bk                   CRV_VZ_DL360G11D24U25 10009440C9D01212               0:3:1 host set nonopt 10
+  4 2nd_Attempt_sv_CRV_LZ_Infra_RW       CRV_VZ_DL360G11D24U25 10009440C9D01212               0:3:1 host set active 10
+  1 VZ_ESXi_Profile_bk                   CRV_VZ_DL360G11D24U25 10009440C9D01213               0:3:2 host set nonopt 10
+  1 VZ_ESXi_Profile_bk                   CRV_VZ_DL360G11D24U25 10009440C9D01212               1:3:1 host set active 11
+  1 VZ_ESXi_Profile_bk                   CRV_VZ_DL360G11D24U25 10009440C9D01213               1:3:2 host set active 11
+"""
+
+
+def test_parse_showvlun_active_real_sample():
+    from alletra_onboard.application.storage.path_verify import parse_showvlun_active
+
+    paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
+    assert len(paths) == 5                                   # header skipped, 5 data rows
+    p = paths[1]                                             # the 'active' Infra path on 0:3:1
+    assert p.lun == 4 and p.volume == "2nd_Attempt_sv_CRV_LZ_Infra_RW"
+    assert p.host == "CRV_VZ_DL360G11D24U25"
+    assert p.host_wwpn == "10009440C9D01212" and p.port == "0:3:1" and p.status == "active"
+
+
+def test_verify_paths_live_both_fabrics():
+    from alletra_onboard.application.storage.path_verify import parse_showvlun_active, verify_paths
+
+    paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
+    rep = verify_paths({"CRV_VZ_DL360G11D24U25"}, {"VZ_ESXi_Profile_bk"}, paths)
+    h = rep.hosts[0]
+    assert h.verdict == "live"
+    assert h.fabrics == ["even", "odd"]                     # 0:3:1/1:3:1 odd + 0:3:2/1:3:2 even
+    assert h.hbas_with_paths == 2                           # both HBAs carry a live path
+    assert h.dead_volumes == []
+
+
+def test_verify_paths_no_path_when_host_absent():
+    from alletra_onboard.application.storage.path_verify import parse_showvlun_active, verify_paths
+
+    paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
+    rep = verify_paths({"esx-offline"}, {"VZ_ESXi_Profile_bk"}, paths)
+    h = rep.hosts[0]
+    assert h.verdict == "no_path" and h.hbas_with_paths == 0
+    assert h.dead_volumes == ["VZ_ESXi_Profile_bk"]         # exported target with no live path
+    assert "not zoned" in h.detail.lower()
+
+
+def test_verify_paths_partial_single_fabric():
+    from alletra_onboard.application.storage.path_verify import parse_showvlun_active, verify_paths
+
+    text = (
+        "Lun VVName HostName -Host_WWN- Port Type Status ID\n"
+        "  1 Vol1 esx1 10000000AAAA0001 0:3:1 host set active 10\n"   # odd fabric only
+    )
+    rep = verify_paths({"esx1"}, {"Vol1"}, parse_showvlun_active(text))
+    h = rep.hosts[0]
+    assert h.verdict == "partial" and h.fabrics == ["odd"]
+    assert "missing the even fabric" in h.detail
