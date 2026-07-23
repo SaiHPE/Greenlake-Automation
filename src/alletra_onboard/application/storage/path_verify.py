@@ -1,0 +1,110 @@
+"""Tier-2 path verification (ADR 0010): after the array-side export, read `showvlun -a` back and
+report, per host, whether the exported LUN is actually LIVE — over how many HBAs and which fabrics —
+or "0 paths (host off / not zoned)". Strictly read-only; it *reports*, it never gates provisioning
+(a `no_path` host is fine — the VLUN exists and activates the moment the host is on + zoned).
+
+Calibrated against a live Alletra MP (OS 10.5.51) `showvlun -a`:
+
+    Lun VVName                HostName              -Host_WWN/iSCSI_Name/Host_NQN- Port  Type     Status ID
+      4 2nd_..._CRV_LZ_Infra  CRV_VZ_DL360G11D24U25 10009440C9D01212              0:3:1 host set active 10
+
+`showvlun -a` lists only ACTIVE VLUNs, so a row here == a live path. Status is the ALUA path state:
+`active` (active-optimized) and `nonopt` (active-non-optimized) both carry / can carry I/O — both count
+as a live path. `Type` is one or two words (`host` / `host set`), so we anchor parsing on the unambiguous
+`n:s:p` port token rather than fixed column offsets (tolerates a spaced volume name).
+"""
+
+from __future__ import annotations
+
+import re
+
+from alletra_onboard.domain.storage import (
+    HostPathStatus,
+    PathVerification,
+    VolumePath,
+    normalize_wwpn,
+)
+
+_NSP = re.compile(r"^\d+:\d+:\d+$")
+# ALUA states that mean the path carries (or can carry) I/O — i.e. a LIVE path.
+_LIVE_STATUS = {"active", "nonopt"}
+
+
+def _fabric(port: str) -> str:
+    """odd/even by array card-port parity (the ADR-0009 default: P=1,3 -> odd; P=2,4 -> even)."""
+    try:
+        return "odd" if int(port.split(":")[2]) % 2 == 1 else "even"
+    except (ValueError, IndexError):
+        return "?"
+
+
+def parse_showvlun_active(text: str) -> list[VolumePath]:
+    """`showvlun -a` -> [VolumePath] (one per active path). Columns:
+    Lun VVName HostName Host_WWN Port Type[ set] Status ID. Anchored on the n:s:p port token."""
+    out: list[VolumePath] = []
+    for line in (text or "").splitlines():
+        p = line.split()
+        if len(p) < 7 or not p[0].isdigit():
+            continue
+        port_idx = next((i for i, tok in enumerate(p) if _NSP.match(tok)), None)
+        if port_idx is None or port_idx < 3:
+            continue  # header / not a data row
+        host_wwn = normalize_wwpn(p[port_idx - 1])
+        if len(host_wwn) != 16:  # iSCSI IQN / NQN — not an FC path we verify here
+            continue
+        out.append(VolumePath(
+            lun=int(p[0]),
+            volume=" ".join(p[1 : port_idx - 2]),  # VVName may be multi-token; HostName is p[port_idx-2]
+            host=p[port_idx - 2],
+            host_wwpn=host_wwn,
+            port=p[port_idx],
+            status=p[-2].lower(),
+        ))
+    return out
+
+
+def verify_paths(
+    target_hosts: set[str],
+    target_volumes: set[str],
+    vlun_paths: list[VolumePath],
+) -> PathVerification:
+    """Per target host, classify the live paths to the target volumes (from `showvlun -a`).
+
+    verdict: `live` (paths on BOTH fabrics), `partial` (one fabric only), `no_path` (none — host off or
+    not zoned). `target_volumes` empty => consider every volume the host has an active path to.
+    """
+    report = PathVerification()
+    if not target_hosts:
+        report.notes.append("No target hosts to verify.")
+        return report
+
+    for host in sorted(target_hosts):
+        paths = [
+            vp for vp in vlun_paths
+            if vp.host == host
+            and vp.status in _LIVE_STATUS
+            and (not target_volumes or vp.volume in target_volumes)
+        ]
+        live_vols = sorted({vp.volume for vp in paths})
+        dead_vols = sorted(target_volumes - set(live_vols)) if target_volumes else []
+        fabrics = sorted({_fabric(vp.port) for vp in paths} - {"?"})
+        hbas = len({vp.host_wwpn for vp in paths})
+
+        if not paths:
+            verdict = "no_path"
+            detail = "0 live paths — host off OR not zoned (export exists; it activates once the host is on + zoned)"
+        elif len(fabrics) >= 2:
+            verdict = "live"
+            detail = f"{hbas} HBA(s) live on both fabrics ({', '.join(fabrics)})"
+        else:
+            verdict = "partial"
+            missing = "even" if fabrics == ["odd"] else "odd"
+            detail = f"{hbas} HBA(s) live on {fabrics[0]} fabric only — missing the {missing} fabric (single path)"
+
+        if dead_vols:
+            detail += f"; exported-but-no-path: {', '.join(dead_vols)}"
+        report.hosts.append(HostPathStatus(
+            host=host, verdict=verdict, hbas_with_paths=hbas, fabrics=fabrics,
+            live_volumes=live_vols, dead_volumes=dead_vols, detail=detail,
+        ))
+    return report
