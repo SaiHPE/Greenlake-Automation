@@ -552,3 +552,30 @@ def test_verify_paths_partial_single_fabric():
     h = rep.hosts[0]
     assert h.verdict == "partial" and h.fabrics == ["odd"]
     assert "missing the even fabric" in h.detail
+
+
+def test_verify_provisioned_paths_reads_showvlun_and_reports():
+    from alletra_onboard.application.storage.path_verify import verify_provisioned_paths
+
+    class _FakeCli:
+        def __init__(self):
+            self.cmds = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def run(self, cmd, **k):
+            self.cmds.append(cmd)
+            return _VZ_SHOWVLUN_A
+
+    fake = _FakeCli()
+    intent = _intent(volume=VolumeSpec(name_prefix="VZ_ESXi_Profile_bk", size_gib=10, count=1))
+    d = disc.DiscoveryReport(host_hbas=[HostHba(host_name="CRV_VZ_DL360G11D24U25", wwpn=_A)])
+    rep = verify_provisioned_paths(intent, d, array_cli_factory=lambda creds: fake)
+
+    assert "showvlun -a" in fake.cmds                        # it read the array, read-only
+    h = next(x for x in rep.hosts if x.host == "CRV_VZ_DL360G11D24U25")
+    assert h.verdict == "live" and "VZ_ESXi_Profile_bk" in h.live_volumes
