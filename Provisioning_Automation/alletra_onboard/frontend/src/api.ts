@@ -239,6 +239,17 @@ export const saveStorageBuilder = (runId: string, builder: ProvisioningBuilder) 
 export const storagePreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/preview`);
 export const storageApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/apply`);
 
+// Tier-2 path verification (ADR 0010): read `showvlun -a` back and report, per host, whether the
+// exported LUN is actually live and over how many fabrics. Read-only; report-only (never gates).
+export type PathVerdict = 'live' | 'partial' | 'no_path';
+export interface HostPathStatus {
+  host: string; verdict: PathVerdict;
+  hbas_with_paths: number; fabrics: string[];
+  live_volumes: string[]; dead_volumes: string[]; detail: string;
+}
+export interface PathVerification { hosts: HostPathStatus[]; notes: string[]; error: string | null; }
+export const verifyPaths = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/verify-paths`);
+
 export const launchBrowser = (url?: string) =>
   request<{ cdp_url: string; profile_dir: string; executable: string }>('POST', '/browser/launch', { port: 9222, url });
 

@@ -316,6 +316,24 @@ async def test_set_provisioning_builder_persists_membership_vvsets_and_exports(t
     assert saved.volumes[0].vvset == "myvvset"
 
 
+async def test_path_verify_emits_per_host_report(tmp_path, monkeypatch):
+    from alletra_onboard.application.storage import path_verify as pv
+    from alletra_onboard.domain.storage import DiscoveryReport, HostPathStatus, PathVerification
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()  # tier-2 needs discovery present
+    monkeypatch.setattr(pv, "verify_provisioned_paths", lambda intent, discovery: PathVerification(
+        hosts=[HostPathStatus(host="esx1", verdict="live", hbas_with_paths=2, fabrics=["odd", "even"], detail="ok")]))
+
+    service.start_path_verify(run.run_id)
+    await service.wait(run.run_id)
+    verified = next(e for e in service.list_events(run.run_id) if e.event_type == "storage.paths.verified")
+    assert verified.data["verification"]["hosts"][0]["verdict"] == "live"
+    # report-only: the run is not failed by a verdict
+    assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR
+
+
 async def test_pending_sheet_stash_mints_run_and_preserves_intent(tmp_path):
     # ADR 0005 revision: the sheet is held server-side (with device passwords) until a mode is
     # chosen; create_run_from_pending then mints the run and preserves the provisioning intent.
