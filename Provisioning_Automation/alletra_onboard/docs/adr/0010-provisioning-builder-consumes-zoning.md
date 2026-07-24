@@ -35,9 +35,13 @@ exported each volume to `set:<hostset>` at an auto LUN. Panduranga's direction i
 ## Design
 
 1. **Host WWPNs are discovered, not typed.** vCenter enumerates each ESXi host's FC HBA WWPNs + OS
-   (`adapters/vcenter/vcenter_client.py`); persona is derived from the OS (VMware 11 / WindowsServer 15 /
-   Generic-ALUA 2). The array side is OS-agnostic, so scoping discovery to ESXi+vCenter *now* does not
-   bake ESXi into tiers 1–2; other host OSes are a later discovery source.
+   (`adapters/vcenter/vcenter_client.py`); persona is derived from the OS and resolved **by name** at
+   create time to the array's **WSAPI persona enum** — **VMware 8 / WindowsServer 11 / Generic-ALUA 2**.
+   NOTE: this is the WSAPI enum, **not** the CLI `showhost -listpersona` numbers (where VMware = **11**);
+   the first cut hardcoded VMware → 11, which over WSAPI is *WindowsServer*, silently creating ESXi hosts
+   with the wrong persona. **Validated live on VZ (`10.64.122.140`) 2026-07-23: a host created with
+   persona 8 reads back as persona 8 (VMware).** The array side is OS-agnostic, so scoping discovery to
+   ESXi+vCenter *now* does not bake ESXi into tiers 1–2; other host OSes are a later discovery source.
 2. **Tier 2 = read-only path verification.** After apply, read `showvlun` + `showhost` and report per host
    "2/2 HBAs logged in — LUN live on both fabrics" or "0 paths — host off or not zoned (created; activates
    once zoned)". It **reports, never gates**: `createVLUN` succeeds regardless of login state and the
