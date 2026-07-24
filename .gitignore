@@ -1,5 +1,6 @@
-# Sensitive / lab-specific — never commit
+# Sensitive / lab-specific — never commit (incl. HPE templates + generated as-built docs)
 *.docx
+*.dotx
 docx_images/
 *.csv
 *.json
