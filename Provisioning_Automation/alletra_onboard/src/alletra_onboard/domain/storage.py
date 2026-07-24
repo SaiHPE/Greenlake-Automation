@@ -211,6 +211,55 @@ class DiscoveryReport(BaseModel):
     error: str | None = None
 
 
+# ------------------------------------------------------------------ provisioning builder (ADR 0010 Stage 2)
+
+class DiscoveredHostBrief(BaseModel):
+    """A discovered ESXi host offered in the host-set membership dropdown, with a short fabric-login
+    status so a half-zoned host isn't picked blind (ADR 0010)."""
+
+    name: str
+    status: str                                       # e.g. "2 HBAs - both fabrics" / "not logged in"
+    wwpns: list[str] = Field(default_factory=list)     # normalized
+
+
+class ProvisioningObjects(BaseModel):
+    """The dropdown 'palette': objects already on the array (read over WSAPI) + the ones this run will
+    create (from the sheet intent) + discovered hosts, plus the host sets / exports already composed so
+    the builder can resume. `array_error` is set (and the existing_* lists empty) if the array read
+    failed — the palette is still usable with the to-be-created + discovered objects."""
+
+    existing_cpgs: list[str] = Field(default_factory=list)
+    existing_hosts: list[str] = Field(default_factory=list)
+    existing_host_sets: list[str] = Field(default_factory=list)
+    existing_volumes: list[str] = Field(default_factory=list)
+    existing_volume_sets: list[str] = Field(default_factory=list)
+    array_error: str | None = None
+    new_volumes: list[str] = Field(default_factory=list)
+    new_host_sets: list[str] = Field(default_factory=list)
+    new_vvsets: list[str] = Field(default_factory=list)
+    discovered_hosts: list[DiscoveredHostBrief] = Field(default_factory=list)
+    host_sets: list[HostSetRequest] = Field(default_factory=list)   # currently composed
+    exports: list[ExportRequest] = Field(default_factory=list)      # currently composed
+
+
+class ProvisioningBuilder(BaseModel):
+    """What the operator composed in the dropdown builder — host-set membership, VV-set membership
+    (vvset name -> member volume names), and the exports. Saved onto the run's ProvisioningIntent.
+    When `vvsets` is non-empty it is authoritative (a volume not listed in any set is un-set)."""
+
+    host_sets: list[HostSetRequest] = Field(default_factory=list)
+    exports: list[ExportRequest] = Field(default_factory=list)
+    vvsets: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class ProvisioningComposition(BaseModel):
+    """Echo of the composed relationships after saving them onto the intent (for the UI to confirm)."""
+
+    host_sets: list[HostSetRequest] = Field(default_factory=list)
+    exports: list[ExportRequest] = Field(default_factory=list)
+    volumes: list[VolumeRequest] = Field(default_factory=list)
+
+
 # ------------------------------------------------------------------ zoning
 
 class ExpectedZone(BaseModel):
