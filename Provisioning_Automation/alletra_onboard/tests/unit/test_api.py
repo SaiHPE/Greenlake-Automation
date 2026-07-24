@@ -370,6 +370,29 @@ def test_init_only_profile_template_has_no_provisioning_and_uploads(tmp_path, mo
     assert run["mode"] == "FULL_ONBOARDING"
 
 
+def test_storage_builder_saves_composition_and_objects_needs_discovery(tmp_path):
+    client = _client(tmp_path)
+    token = _upload_complete(client)
+    run = client.post("/runs/from-sheet", json={"token": token, "mode": "BOTH"}).json()["run"]
+    rid = run["run_id"]
+
+    # the dropdown palette needs discovery first -> 409
+    assert client.get(f"/runs/{rid}/storage/objects").status_code == 409
+
+    # the builder saves the composed host-set membership + exports onto the intent (no discovery needed)
+    builder = {
+        "host_sets": [{"name": "CRVLZ_Hostset", "members": ["esx1", "esx2"]}],
+        "exports": [{"source_kind": "volume", "source_name": "CRV_Prod01",
+                     "target_kind": "hostset", "target_name": "CRVLZ_Hostset", "lun": 10}],
+        "vvsets": {},
+    }
+    resp = client.post(f"/runs/{rid}/storage/builder", json=builder)
+    assert resp.status_code == 200, resp.text
+    comp = resp.json()
+    assert comp["exports"][0]["lun"] == 10
+    assert comp["host_sets"][0]["members"] == ["esx1", "esx2"]
+
+
 def test_config_roundtrip_masks_secret(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
     client = _client(tmp_path)
