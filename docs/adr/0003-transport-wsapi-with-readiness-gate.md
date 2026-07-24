@@ -47,5 +47,8 @@ mandatory, not optional.
   all discovery stay on SSH; it is also the fallback to *read/report* when WSAPI is unavailable.
 - WSAPI object shapes are version-stable JSON, so the discovery/parse logic for the write path is
   not calibration-sensitive the way `show*` text is (see ADR 0002).
-- The healthy VZ array (`10.64.122.140`) is a clean WSAPI write-test target (no hosts/vluns, CPG
-  `SSD_r6`, ~29 TiB free) — coordinate writes with Panduranga and clean up after.
+- The VZ array (`10.64.122.140`) is the WSAPI write-test target. **No longer a clean slate** — as of
+  2026-07-21 it carries 3 real ESXi hosts + ~85 volumes (provisioned + zoned). The **tier-1 write path
+  was validated live on it 2026-07-23** using isolated throwaway `zz_test_*` objects (1 GiB thin in
+  `SSD_r6`, safe fake WWPN), torn down after and never touching the real hosts/volumes. Coordinate any
+  writes with Panduranga and clean up after.
