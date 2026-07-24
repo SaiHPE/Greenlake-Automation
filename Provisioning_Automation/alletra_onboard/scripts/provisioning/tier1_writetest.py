@@ -81,8 +81,6 @@ if st not in (200, 201) or not isinstance(bd, dict) or "key" not in bd:
 SESS = bd["key"]
 line(f"WSAPI READY on {ARRAY} (auth OK).")
 
-VLUN_KEY = ""   # canonical vlun id captured from the create Location header
-
 # --- pre-flight guards (re-verify live, never trust the recon) ---------
 def preflight():
     cpg = next((c for c in members("/cpgs") if c.get("name") == CPG), None)
@@ -118,18 +116,18 @@ def create(path, body, what):
         die(f"create {what} failed (status={s}): {b}")
 
 def do_create():
-    global VLUN_KEY
     line("\n=== CREATE (mirrors our wsapi_client plural path) ===")
     create("/hosts", {"name": H_HOST, "FCWWNs": [FAKE_WWPN], "persona": PERSONA_VMWARE}, "host (persona=8 VMware)")
     create("/hostsets", {"name": H_HSET, "setmembers": [H_HOST]}, "host-set + member")
     create("/volumes", {"name": V_VOL, "cpg": CPG, "sizeMiB": SIZE_MIB, "tpvv": True}, "volume (1GiB thin)")
     create("/volumesets", {"name": V_VVSET, "setmembers": [V_VOL]}, "volume-set + member")
-    # present the VOLUME to the HOST-SET -- the exact "set:" path apply_plan uses
-    s, b, hdr = call("POST", "/vluns", SESS, {"volumeName": V_VOL, "lun": LUN, "hostname": f"set:{H_HSET}"})
+    # present the VOLUME to the HOST-SET -- the exact "set:" path apply_plan uses.
+    # NB: for a host-set whose member isn't fabric-logged the array returns a
+    # warning in the Location header, so we do NOT parse the key from it --
+    # teardown reads the authoritative key back from GET /vluns instead.
+    s, b, _ = call("POST", "/vluns", SESS, {"volumeName": V_VOL, "lun": LUN, "hostname": f"set:{H_HSET}"})
     if s in (200, 201):
-        loc = hdr.get("Location", "")
-        VLUN_KEY = loc.split("/vluns/")[-1] if "/vluns/" in loc else ""
-        line(f"  created VLUN: {V_VOL} -> set:{H_HSET} lun {LUN}  (key={VLUN_KEY or loc or '?'})")
+        line(f"  created VLUN: {V_VOL} -> set:{H_HSET} lun {LUN}")
     elif _exists(s, b):
         line("  VLUN already exists (ok)")
     else:
@@ -160,26 +158,25 @@ def guard_del(name):
     if not str(name).startswith(PREFIX):
         die(f"refusing to DELETE non-throwaway object: {name}")
 
+def _vlun_key(x):
+    # build the authoritative delete key from the array's OWN reported fields
+    key = f'{x.get("volumeName")},{x.get("lun")},{x.get("hostname", "")}'
+    pp = x.get("portPos")
+    if pp:
+        key += f',{pp.get("node")}:{pp.get("slot")}:{pp.get("cardPort")}'
+    return key
+
 def do_teardown():
     line("\n=== TEARDOWN (reverse order; zz_test_* only) ===")
-    # 1) VLUN -- prefer the canonical key from create; else enumerate + try both host forms
-    if VLUN_KEY:
-        guard_del(VLUN_KEY.split(",")[0])
-        s, _, _ = call("DELETE", f"/vluns/{VLUN_KEY}", SESS)
-        line(f"  del VLUN {VLUN_KEY}: status={s}")
-    else:
-        for x in members("/vluns"):
-            vn = str(x.get("volumeName", ""))
-            if not vn.startswith(PREFIX):
-                continue
-            guard_del(vn)
-            hn = str(x.get("hostname", ""))
-            for cand in (hn, f"set:{hn}"):
-                key = f'{vn},{x.get("lun")},{cand}'
-                s, _, _ = call("DELETE", f"/vluns/{key}", SESS)
-                line(f"  try del VLUN {key}: status={s}")
-                if s in (200, 204):
-                    break
+    # 1) VLUN(s) -- read the real key back from the array (never from a header)
+    for x in members("/vluns"):
+        vn = str(x.get("volumeName", ""))
+        if not vn.startswith(PREFIX):
+            continue
+        guard_del(vn)
+        key = _vlun_key(x)
+        s, _, _ = call("DELETE", f"/vluns/{key}", SESS)
+        line(f"  del VLUN {key}: status={s}")
     # 2) volume-set  3) volume  4) host-set  5) host
     for path, nm, what in [(f"/volumesets/{V_VVSET}", V_VVSET, "volume-set"),
                            (f"/volumes/{V_VOL}", V_VOL, "volume"),
