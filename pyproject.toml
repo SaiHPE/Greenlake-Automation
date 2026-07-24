@@ -20,6 +20,7 @@ dependencies = [
   "structlog>=24.2.0",
   "playwright>=1.45.0",
   "openpyxl>=3.1.0",
+  "python-docx>=1.1.0",  # fills the as-built .docx template (Document step) preserving its boilerplate
   "paramiko>=3.4.0",
   # Storage provisioning (Phase 2). 4.2.14 is the floor for the Alletra MP B10000: earlier
   # releases POST to /credentials instead of /api/v1/credentials and fail to authenticate
