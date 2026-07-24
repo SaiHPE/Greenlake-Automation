@@ -12,6 +12,7 @@ from alletra_onboard.domain.storage import (
     ArrayHost,
     ArrayPort,
     EndpointCreds,
+    ExportRequest,
     HostHba,
     ProvisioningIntent,
     normalize_wwpn,
@@ -174,8 +175,8 @@ class FakeWsapi:
         self.calls.append(("vvset", name))
         return "created"
 
-    def ensure_vlun(self, vol, host):
-        self.calls.append(("vlun", vol, host))
+    def ensure_vlun(self, vol, host, lun=None):
+        self.calls.append(("vlun", vol, host) if lun is None else ("vlun", vol, host, lun))
         return "created"
 
 
@@ -346,9 +347,41 @@ def test_apply_plan_is_idempotent_and_exports_to_host_set():
     statuses = {(o.kind, o.name): o.status for o in result.outcomes}
     assert statuses[("host", "esx1")] == "exists"
     assert statuses[("volume", "CRV_Prod01")] == "created"
-    # volumes are exported to the host SET (set:<name>), not per-host
+    # with NO explicit exports, the default is every volume -> the host SET (set:<name>) at auto LUN
     assert ("vlun", "CRV_Prod01", "set:CRVLZ_Hostset") in fake.calls
     assert result.error is None
+
+
+def test_explicit_exports_override_the_default_and_carry_source_target_and_lun():
+    # Stage 2: the operator-composed exports drive presentation instead of the each-vol->each-hostset
+    # default — a VV-set to a host-set at an explicit LUN, and a single volume to a single host (auto).
+    intent = _intent().model_copy(update={"exports": [
+        ExportRequest(source_kind="vvset", source_name="CRV_VVSet", target_kind="hostset",
+                      target_name="CRVLZ_Hostset", lun=100),
+        ExportRequest(source_kind="volume", source_name="CRV_Prod01", target_kind="host",
+                      target_name="esx1"),
+    ]})
+    fake = FakeWsapi(hosts={"esx1"})
+    result = prov.apply_plan(intent, _discovered(), wsapi_factory=lambda c: fake)
+    # source/target refs get the WSAPI set: prefix; explicit LUN is recorded, auto LUN is not
+    assert ("vlun", "set:CRV_VVSet", "set:CRVLZ_Hostset", 100) in fake.calls
+    assert ("vlun", "CRV_Prod01", "esx1") in fake.calls
+    # the default (each volume -> set:CRVLZ_Hostset) must NOT fire when explicit exports are given
+    assert ("vlun", "CRV_Prod02", "set:CRVLZ_Hostset") not in fake.calls
+    assert result.error is None
+
+
+def test_build_plan_previews_explicit_exports_with_lun_text():
+    intent = _intent().model_copy(update={"exports": [
+        ExportRequest(source_kind="volume", source_name="CRV_Prod01", target_kind="hostset",
+                      target_name="CRVLZ_Hostset", lun=7),
+    ]})
+    fake = FakeWsapi(hosts={"esx1"})
+    plan = prov.build_plan(intent, _discovered(), wsapi_factory=lambda c: fake)
+    vluns = [a for a in plan.actions if a.kind == "vlun"]
+    assert len(vluns) == 1  # only the one composed export, not the each-vol default
+    assert "LUN 7" in vluns[0].description
+    assert vluns[0].detail == {"source": "CRV_Prod01", "target": "set:CRVLZ_Hostset", "lun": 7}
 
 
 def test_persona_derived_from_host_os():

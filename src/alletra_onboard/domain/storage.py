@@ -85,9 +85,37 @@ class HostSetRequest(BaseModel):
     members: list[str] = Field(default_factory=list)
 
 
+ExportSourceKind = Literal["volume", "vvset"]
+ExportTargetKind = Literal["host", "hostset"]
+
+
+class ExportRequest(BaseModel):
+    """One presentation (VLUN): a source (a volume or a VV-set) exported to a target (a host or a
+    host-set) at an explicit LUN, or auto-assigned. Composed by the operator's dropdown builder over
+    discovered + to-be-created objects (ADR 0010). When a run supplies NO exports, provisioning falls
+    back to the Stage-1 default (every volume -> every host set, auto LUN)."""
+
+    source_kind: ExportSourceKind
+    source_name: str
+    target_kind: ExportTargetKind
+    target_name: str
+    lun: int | None = None          # None = let the array auto-assign
+
+    @property
+    def source_ref(self) -> str:
+        """The WSAPI volumeName token: a bare volume name, or 'set:<vvset>' for a VV-set."""
+        return self.source_name if self.source_kind == "volume" else f"set:{self.source_name}"
+
+    @property
+    def target_ref(self) -> str:
+        """The WSAPI hostname token: a bare host name, or 'set:<hostset>' for a host-set."""
+        return self.target_name if self.target_kind == "host" else f"set:{self.target_name}"
+
+
 class ProvisioningIntent(BaseModel):
     """What drives a provisioning run: reach (creds) + a plural/heterogeneous set of objects to create —
-    many volumes (each with its own attributes) and one or more host sets with selected members. See ADR 0010."""
+    many volumes (each with its own attributes), one or more host sets with selected members, and the
+    presentations (exports) that wire them together. See ADR 0010."""
 
     array: EndpointCreds          # mgmt IP + admin (e.g. 3paradm) + password
     vcenter: EndpointCreds        # vCenter for read-only ESXi HBA discovery
@@ -95,6 +123,7 @@ class ProvisioningIntent(BaseModel):
     switch_f2: EndpointCreds      # even fabric (F2)
     volumes: list[VolumeRequest] = Field(default_factory=list)
     host_sets: list[HostSetRequest] = Field(default_factory=list)
+    exports: list[ExportRequest] = Field(default_factory=list)  # empty => default each-volume->each-host-set
 
     @classmethod
     def from_simple(
