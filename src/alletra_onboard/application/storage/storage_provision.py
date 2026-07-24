@@ -17,6 +17,7 @@ from typing import Callable
 from alletra_onboard.application.storage.clients import make_wsapi
 from alletra_onboard.domain.storage import (
     ActionOutcome,
+    DiscoveredHostBrief,
     DiscoveryReport,
     ExportRequest,
     PlannedAction,
@@ -56,6 +57,47 @@ def _vvsets(intent: ProvisioningIntent) -> "OrderedDict[str, list[str]]":
         if v.vvset:
             sets.setdefault(v.vvset, []).append(v.name)
     return sets
+
+
+def read_array_objects(intent: ProvisioningIntent, *, wsapi_factory: Callable = make_wsapi) -> dict:
+    """Read the objects that already exist on the array (for the builder's dropdowns). Degrades
+    gracefully: if the array can't be read, returns empty lists + an error string so the palette is
+    still usable from the to-be-created + discovered objects."""
+    try:
+        with wsapi_factory(intent.array) as array:
+            return {
+                "cpgs": sorted(array.cpg_names()),
+                "hosts": sorted(array.host_names()),
+                "host_sets": sorted(array.host_set_names()),
+                "volumes": sorted(array.volume_names()),
+                "volume_sets": sorted(array.volume_set_names()),
+                "error": None,
+            }
+    except Exception as exc:  # noqa: BLE001 - the palette still works without the existing objects
+        return {"cpgs": [], "hosts": [], "host_sets": [], "volumes": [], "volume_sets": [], "error": str(exc)}
+
+
+def host_briefs(discovery: DiscoveryReport) -> list[DiscoveredHostBrief]:
+    """Summarise each discovered ESXi host's fabric-login state for the membership dropdown — the
+    'status text so a half-zoned host isn't picked blind' of ADR 0010."""
+    per_host = _hosts_by_name(discovery)
+    fabrics_by_host: OrderedDict[str, set[str]] = OrderedDict()
+    for hba in discovery.host_hbas:
+        by = fabrics_by_host.setdefault(hba.host_name, set())
+        if hba.fabric:
+            by.add(hba.fabric)
+
+    briefs: list[DiscoveredHostBrief] = []
+    for name, wwns in per_host.items():
+        fabrics = fabrics_by_host.get(name, set())
+        if len(fabrics) >= 2:
+            status = f"{len(wwns)} HBAs - both fabrics"
+        elif len(fabrics) == 1:
+            status = f"{len(wwns)} HBAs - one fabric ({next(iter(fabrics))})"
+        else:
+            status = f"{len(wwns)} HBAs - not logged in (off or unzoned)"
+        briefs.append(DiscoveredHostBrief(name=name, status=status, wwpns=wwns))
+    return briefs
 
 
 def _resolve_exports(intent: ProvisioningIntent) -> list[ExportRequest]:
