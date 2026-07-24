@@ -59,9 +59,15 @@ _Avoid_: per-mode sheet (there is only one), profile
 ## Language — storage provisioning
 
 **Provisioning intent**:
-What the customer *wants done*, supplied on the **Provisioning tab** of the workbook: reach (array /
-vCenter / both switch IPs + credentials, passwords included) plus what to create (host-set name, volume
-name-prefix/size/count, CPG, thin-vs-reduce, optional VV-set). It carries only this — never environment facts.
+What the customer *wants done* on one array: the **reach** (array / vCenter / both switch IPs +
+credentials, passwords included) plus what to create — a **list of volumes**, each with its own name,
+size, provisioning type (thin/reduce), CPG, and optional VV-set membership, and **one or more host-sets**
+with their selected member hosts. **Heterogeneous**: the volumes need not share size, type, or CPG. It
+carries only this — never environment facts.
+_Note_: the Provisioning tab currently expresses only the simple case — one name-prefix/size/count → N
+identical volumes into one host-set, via a `from_simple` shortcut; Stage 2 redesigns the tab to express
+the full plural shape above.
+_Avoid_: the old flat "one host-set name + one volume prefix/size/count" model (that was `VolumeSpec`, now removed).
 
 **Discovery report**:
 The run-time read an environment a provisioning run produces — array target ports + WWPNs, ESXi host
