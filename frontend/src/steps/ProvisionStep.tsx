@@ -2,6 +2,7 @@ import { Box, Button, CheckBox, Notification, Spinner, Table, TableBody, TableCe
 import { useState } from 'react';
 import { ProvisioningPlan, ProvisioningResult, RunEvent, RunRecord, storageApply, storagePreview } from '../api';
 import { EventLog, Section } from '../components';
+import { ProvisioningBuilderView } from './ProvisioningBuilderView';
 
 interface Props {
   runId: string;
@@ -33,11 +34,13 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
 
   return (
     <Box gap="medium">
+      <ProvisioningBuilderView runId={runId} disabled={running} />
+
       <Section title="Provision storage (host · volumes · LUN export)">
         <Text size="small" color="text-weak">
-          Creates one host definition per ESXi server (all FC WWNs, persona 11), groups them in the
-          host set, creates the volumes in the CPG, and exports them to the host set. Idempotent — a
-          re-run reports what already exists.
+          Creates one host definition per ESXi server (all FC WWNs, at the discovered persona — VMware =
+          WSAPI 8), groups them in the host set, creates the volumes in the CPG, and exports them per the
+          composition above (or the default). Idempotent — a re-run reports what already exists.
         </Text>
         <Box direction="row" gap="small" align="center">
           <Button primary label={running ? 'Working…' : plan ? 'Rebuild plan' : 'Build plan'} disabled={running} onClick={call(() => storagePreview(runId))} />
