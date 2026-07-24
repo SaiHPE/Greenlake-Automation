@@ -18,6 +18,7 @@ from alletra_onboard.application.storage.clients import make_wsapi
 from alletra_onboard.domain.storage import (
     ActionOutcome,
     DiscoveryReport,
+    ExportRequest,
     PlannedAction,
     ProvisioningIntent,
     ProvisioningPlan,
@@ -55,6 +56,18 @@ def _vvsets(intent: ProvisioningIntent) -> "OrderedDict[str, list[str]]":
         if v.vvset:
             sets.setdefault(v.vvset, []).append(v.name)
     return sets
+
+
+def _resolve_exports(intent: ProvisioningIntent) -> list[ExportRequest]:
+    """The presentations (VLUNs) to create: the operator's explicit export list, or — when none was
+    composed — the Stage-1 default of every volume -> every host set at an auto LUN (ADR 0010)."""
+    if intent.exports:
+        return list(intent.exports)
+    return [
+        ExportRequest(source_kind="volume", source_name=v.name, target_kind="hostset", target_name=hs.name)
+        for hs in intent.host_sets
+        for v in intent.volumes
+    ]
 
 
 def build_plan(
@@ -118,15 +131,15 @@ def build_plan(
             detail={"members": vols},
         ))
 
-    # Presentation (Stage 1 default): each volume -> each host set at an auto LUN. The operator-composed
-    # source x target x LUN dropdown builder is ADR 0010 Stage 2.
-    for hs in intent.host_sets:
-        for v in intent.volumes:
-            plan.actions.append(PlannedAction(
-                kind="vlun", name=v.name,
-                description=f"Export {v.name} → host set {hs.name} (auto LUN)",
-                detail={"host_set": hs.name},
-            ))
+    # Presentation: the operator-composed exports (source volume|vvset x target host|hostset x LUN),
+    # or the Stage-1 default (each volume -> each host set, auto LUN) when none were composed (ADR 0010).
+    for ex in _resolve_exports(intent):
+        lun_txt = "auto LUN" if ex.lun is None else f"LUN {ex.lun}"
+        plan.actions.append(PlannedAction(
+            kind="vlun", name=ex.source_name,
+            description=f"Export {ex.source_kind} {ex.source_name} → {ex.target_kind} {ex.target_name} ({lun_txt})",
+            detail={"source": ex.source_ref, "target": ex.target_ref, "lun": ex.lun},
+        ))
     return plan
 
 
@@ -161,10 +174,9 @@ def apply_plan(
                 status = array.ensure_volume_set(vvset, vols)
                 result.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
 
-            for hs in intent.host_sets:
-                for v in intent.volumes:
-                    status = array.ensure_vlun(v.name, f"set:{hs.name}")
-                    result.outcomes.append(ActionOutcome(kind="vlun", name=v.name, status=status))
+            for ex in _resolve_exports(intent):
+                status = array.ensure_vlun(ex.source_ref, ex.target_ref, lun=ex.lun)
+                result.outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status=status))
     except Exception as exc:  # noqa: BLE001 - record what we got, surface the failure
         result.error = str(exc)
     return result

@@ -4,41 +4,72 @@ import pytest
 from openpyxl import load_workbook
 
 from alletra_onboard.application.init_sheet import (
+    HOSTSET_COLUMNS,
+    HOSTSETS_SHEET_NAME,
     PROVISIONING_SECTIONS,
     PROVISIONING_SHEET_NAME,
     SECTIONS,
+    VOLUME_COLUMNS,
+    VOLUMES_SHEET_NAME,
     build_template_bytes,
     parse_workbook_bytes,
 )
 from alletra_onboard.domain.models import RunMode
 
-_PROV_COMPLETE = {
+# The provisioning input now spans three tabs: Provisioning (targets + defaults, key-value), Volumes
+# (row-table), Host sets (row-table). Tests supply a dict {"targets", "volumes", "hostsets"}.
+_PROV_TARGETS = {
     "prov_array_host": "10.64.122.140", "prov_array_user": "3paradm", "prov_array_password": "pw",
     "prov_vcenter_host": "vc.example.net", "prov_vcenter_user": "administrator@vsphere.local", "prov_vcenter_password": "vpw",
     "prov_sw1_host": "10.0.0.1", "prov_sw1_user": "admin", "prov_sw1_password": "s1",
     "prov_sw2_host": "10.0.0.2", "prov_sw2_user": "admin", "prov_sw2_password": "s2",
-    "prov_host_set": "CRVLZ_Hostset", "prov_cpg": "SSD_r6", "prov_type": "tpvv",
-    "prov_vol_prefix": "CRV_LZ_Prod", "prov_vol_size_gib": "1024", "prov_vol_count": "3",
 }
+_PROV_VOLUMES = [
+    {"name": "CRV_LZ_Prod01", "size_gib": "1024"},
+    {"name": "CRV_LZ_Prod02", "size_gib": "1024"},
+    {"name": "CRV_LZ_Prod03", "size_gib": "1024"},
+]
+_PROV_HOSTSETS = [{"name": "CRVLZ_Hostset"}]
+_PROV_COMPLETE = {"targets": _PROV_TARGETS, "volumes": _PROV_VOLUMES, "hostsets": _PROV_HOSTSETS}
 
 
-def _fill_tabs(init_values: dict[str, str], prov_values: dict[str, str] | None = None) -> bytes:
-    """Fill the Initialisation tab and (optionally) the Provisioning tab of the template."""
+def _norm(s: object) -> str:
+    return str(s).strip().removesuffix("*").strip()
+
+
+def _fill_row_table(ws, columns, records: list[dict[str, str]]) -> None:
+    """Locate the header row (by matching column labels) and write each record into the rows beneath."""
+    header_to_key = {_norm(label): key for key, label, _ in columns}
+    header_row, col_of_key = None, {}
+    for r in ws.iter_rows():
+        found = {header_to_key[_norm(c.value)]: c.column for c in r if c.value is not None and _norm(c.value) in header_to_key}
+        if found:
+            header_row, col_of_key = r[0].row, found
+            break
+    for i, rec in enumerate(records):
+        for key, val in rec.items():
+            ws.cell(row=header_row + 1 + i, column=col_of_key[key], value=val)
+
+
+def _fill_tabs(init_values: dict[str, str], prov: dict | None = None) -> bytes:
+    """Fill the Initialisation tab and (optionally) the Provisioning + Volumes + Host sets tabs."""
     init_l2k = {label: key for _, fields in SECTIONS for key, label, _, _ in fields}
     prov_l2k = {label: key for _, fields in PROVISIONING_SECTIONS for key, label, _, _ in fields}
     wb = load_workbook(io.BytesIO(build_template_bytes()))
 
-    def fill(ws, label_to_key, vals):
+    def fill_kv(ws, label_to_key, vals):
         for row in ws.iter_rows(min_row=2):
             if row[0].value is None:
                 continue
-            key = label_to_key.get(str(row[0].value).strip().removesuffix("*").strip())
+            key = label_to_key.get(_norm(row[0].value))
             if key and key in vals:
                 row[1].value = vals[key]
 
-    fill(wb["Initialisation"], init_l2k, init_values)
-    if prov_values is not None:
-        fill(wb[PROVISIONING_SHEET_NAME], prov_l2k, prov_values)
+    fill_kv(wb["Initialisation"], init_l2k, init_values)
+    if prov is not None:
+        fill_kv(wb[PROVISIONING_SHEET_NAME], prov_l2k, prov.get("targets", {}))
+        _fill_row_table(wb[VOLUMES_SHEET_NAME], VOLUME_COLUMNS, prov.get("volumes", []))
+        _fill_row_table(wb[HOSTSETS_SHEET_NAME], HOSTSET_COLUMNS, prov.get("hostsets", []))
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
@@ -143,7 +174,7 @@ def test_verify_only_still_requires_the_array_ip():
     assert "IP address" in str(exc.value)
 
 
-def test_provision_only_parses_the_provisioning_tab_not_greenlake():
+def test_provision_only_parses_the_provisioning_tabs_not_greenlake():
     parsed = parse_workbook_bytes(
         _fill_tabs({"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.122.140"}, _PROV_COMPLETE),
         mode=RunMode.PROVISION_ONLY,
@@ -151,17 +182,45 @@ def test_provision_only_parses_the_provisioning_tab_not_greenlake():
     assert parsed.gl_client_id == ""  # GreenLake creds not required for provisioning
     intent = parsed.provisioning_intent
     assert intent is not None
-    assert intent.host_sets[0].name == "CRVLZ_Hostset"
+    assert [hs.name for hs in intent.host_sets] == ["CRVLZ_Hostset"]
+    assert intent.host_sets[0].members == []  # blank Members => all discovered hosts
     assert intent.array.host == "10.64.122.140"
     assert intent.array.password.get_secret_value() == "pw"
     assert intent.switch_f1.host == "10.0.0.1" and intent.switch_f2.host == "10.0.0.2"
     assert [v.name for v in intent.volumes] == ["CRV_LZ_Prod01", "CRV_LZ_Prod02", "CRV_LZ_Prod03"]
-    assert intent.volumes[0].provisioning_type == "tpvv" and intent.volumes[0].cpg == "SSD_r6"
+    assert intent.volumes[0].provisioning_type == "tpvv" and intent.volumes[0].cpg == "SSD_r6"  # defaults
+    assert intent.exports == []  # exports are composed later in the UI, never in the sheet
 
 
-def test_provision_only_reports_missing_provisioning_fields():
-    incomplete = dict(_PROV_COMPLETE)
-    del incomplete["prov_array_password"]
+def test_provisioning_row_tables_are_plural_and_heterogeneous():
+    prov = {
+        "targets": _PROV_TARGETS,
+        "volumes": [
+            {"name": "boot", "size_gib": "64", "provisioning_type": "tpvv", "cpg": "SSD_r6", "vvset": "cluster_vvset"},
+            {"name": "data", "size_gib": "4096", "provisioning_type": "reduce", "cpg": "NL_r6", "vvset": "cluster_vvset"},
+            {"name": "scratch", "size_gib": "512"},  # Type/CPG blank -> defaults
+        ],
+        "hostsets": [
+            {"name": "prod_cluster", "members": "esx1, esx2 , esx3"},
+            {"name": "dr_cluster"},  # blank members -> all discovered
+        ],
+    }
+    intent = parse_workbook_bytes(
+        _fill_tabs({"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.122.140"}, prov),
+        mode=RunMode.PROVISION_ONLY,
+    ).provisioning_intent
+    assert [(v.name, v.size_gib, v.provisioning_type, v.cpg, v.vvset) for v in intent.volumes] == [
+        ("boot", 64, "tpvv", "SSD_r6", "cluster_vvset"),
+        ("data", 4096, "reduce", "NL_r6", "cluster_vvset"),
+        ("scratch", 512, "tpvv", "SSD_r6", None),  # defaults applied
+    ]
+    assert intent.host_sets[0].members == ["esx1", "esx2", "esx3"]  # split + trimmed
+    assert intent.host_sets[1].members == []
+
+
+def test_provision_only_reports_missing_target_fields():
+    incomplete = {"targets": dict(_PROV_TARGETS), "volumes": _PROV_VOLUMES, "hostsets": _PROV_HOSTSETS}
+    del incomplete["targets"]["prov_array_password"]
     with pytest.raises(ValueError) as exc:
         parse_workbook_bytes(
             _fill_tabs({"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.122.140"}, incomplete),
@@ -171,7 +230,16 @@ def test_provision_only_reports_missing_provisioning_fields():
     assert "Array admin password" in str(exc.value)
 
 
-def test_full_mode_ignores_the_provisioning_tab():
-    # No provisioning step selected -> the Provisioning tab is not parsed at all.
+def test_provision_only_requires_at_least_one_volume():
+    no_vols = {"targets": _PROV_TARGETS, "volumes": [], "hostsets": _PROV_HOSTSETS}
+    with pytest.raises(ValueError, match="Volumes tab"):
+        parse_workbook_bytes(
+            _fill_tabs({"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.122.140"}, no_vols),
+            mode=RunMode.PROVISION_ONLY,
+        )
+
+
+def test_full_mode_ignores_the_provisioning_tabs():
+    # No provisioning step selected -> the Provisioning tabs are not parsed at all.
     parsed = parse_workbook_bytes(_fill_tabs(_COMPLETE))  # default FULL_ONBOARDING, no prov values
     assert parsed.provisioning_intent is None
