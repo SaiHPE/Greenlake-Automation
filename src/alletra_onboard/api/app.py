@@ -71,6 +71,11 @@ from alletra_onboard.application.health import greenlake_check
 from alletra_onboard.application.init_sheet import build_template_bytes, parse_workbook_bytes
 from alletra_onboard.application.proxy import ProxyResolver, apply_proxy_env, detect_system_proxy
 from alletra_onboard.domain.models import RunMode
+from alletra_onboard.domain.storage import (
+    ProvisioningBuilder,
+    ProvisioningComposition,
+    ProvisioningObjects,
+)
 from alletra_onboard.application.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.onboarding_service import (
     OnboardingService,
@@ -374,6 +379,25 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def run_zoning_plan(run_id: str) -> RunResponse:
         # Read-only: reads both fabric switches to build the zoning plan; makes NO switch writes.
         return _start_step(run_id, lambda: service.start_zoning_plan(run_id))
+
+    @app.get("/runs/{run_id}/storage/objects", response_model=ProvisioningObjects)
+    async def storage_objects(run_id: str) -> ProvisioningObjects:
+        # The dropdown palette (existing array objects + to-be-created + discovered hosts). Reads the
+        # array over WSAPI, so run it off the event loop.
+        _get_run_or_404(run_id)
+        try:
+            return await asyncio.to_thread(service.get_storage_objects, run_id)
+        except StepPreconditionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.post("/runs/{run_id}/storage/builder", response_model=ProvisioningComposition)
+    async def storage_builder(run_id: str, request: ProvisioningBuilder) -> ProvisioningComposition:
+        # Save the operator-composed host-set membership + VV-set membership + exports onto the intent.
+        _get_run_or_404(run_id)
+        try:
+            return service.set_provisioning_builder(run_id, request)
+        except StepPreconditionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.post("/runs/{run_id}/storage/preview", response_model=RunResponse)
     async def run_storage_preview(run_id: str) -> RunResponse:

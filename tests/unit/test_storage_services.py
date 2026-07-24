@@ -384,6 +384,31 @@ def test_build_plan_previews_explicit_exports_with_lun_text():
     assert vluns[0].detail == {"source": "CRV_Prod01", "target": "set:CRVLZ_Hostset", "lun": 7}
 
 
+def test_read_array_objects_returns_sorted_existing_and_degrades_on_error():
+    fake = FakeWsapi(hosts={"h1"}, host_sets={"hs1"}, volumes={"v2", "v1"}, vsets={"vs1"}, cpgs={"SSD_r6", "NL_r6"})
+    objs = prov.read_array_objects(_intent(), wsapi_factory=lambda c: fake)
+    assert objs["cpgs"] == ["NL_r6", "SSD_r6"]  # sorted
+    assert objs["volumes"] == ["v1", "v2"] and objs["hosts"] == ["h1"]
+    assert objs["error"] is None
+
+    def boom(_creds):
+        raise RuntimeError("array down")
+    degraded = prov.read_array_objects(_intent(), wsapi_factory=boom)
+    assert degraded["hosts"] == [] and degraded["volumes"] == []
+    assert "array down" in degraded["error"]
+
+
+def test_host_briefs_summarize_fabric_login_status():
+    briefs = prov.host_briefs(_discovered())  # esx1: HOST_A on odd + HOST_B on even
+    assert [b.name for b in briefs] == ["esx1"]
+    assert "both fabrics" in briefs[0].status
+    assert len(briefs[0].wwpns) == 2
+
+    # a host whose HBAs log into no fabric reads as not-logged-in (off / unzoned)
+    one = disc.DiscoveryReport(host_hbas=[HostHba(host_name="esx9", wwpn=normalize_wwpn(HOST_A), fabric=None)])
+    assert "not logged in" in prov.host_briefs(one)[0].status
+
+
 def test_persona_derived_from_host_os():
     from alletra_onboard.domain.storage import persona_for_os
 

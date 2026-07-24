@@ -277,6 +277,45 @@ def _prov_intent():
     )
 
 
+async def test_get_storage_objects_builds_the_dropdown_palette(tmp_path, monkeypatch):
+    from alletra_onboard.application.storage import storage_provision as sp
+    from alletra_onboard.domain.storage import DiscoveryReport, HostHba, normalize_wwpn
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    # discovery is required for the palette (it supplies the membership hosts)
+    service._discovery[run.run_id] = DiscoveryReport(host_hbas=[
+        HostHba(host_name="esx1", wwpn=normalize_wwpn("10:00:00:00:00:00:00:a1"), fabric="odd"),
+        HostHba(host_name="esx1", wwpn=normalize_wwpn("10:00:00:00:00:00:00:b1"), fabric="even"),
+    ])
+    monkeypatch.setattr(sp, "read_array_objects", lambda intent: {
+        "cpgs": ["SSD_r6"], "hosts": ["existing_host"], "host_sets": ["existing_hs"],
+        "volumes": ["existing_vol"], "volume_sets": [], "error": None,
+    })
+    objs = service.get_storage_objects(run.run_id)
+    assert objs.existing_hosts == ["existing_host"] and objs.existing_cpgs == ["SSD_r6"]
+    assert objs.new_volumes == ["V"] and objs.new_host_sets == ["HS"]  # from _prov_intent
+    assert objs.discovered_hosts[0].name == "esx1" and "both fabrics" in objs.discovered_hosts[0].status
+
+
+async def test_set_provisioning_builder_persists_membership_vvsets_and_exports(tmp_path):
+    from alletra_onboard.domain.storage import ExportRequest, HostSetRequest, ProvisioningBuilder
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    comp = service.set_provisioning_builder(run.run_id, ProvisioningBuilder(
+        host_sets=[HostSetRequest(name="HS", members=["esx1", "esx2"])],
+        exports=[ExportRequest(source_kind="volume", source_name="V", target_kind="hostset", target_name="HS", lun=5)],
+        vvsets={"myvvset": ["V"]},
+    ))
+    assert comp.host_sets[0].members == ["esx1", "esx2"] and comp.exports[0].lun == 5
+    # composed relationships are persisted onto the run's intent for preview/apply
+    saved = service.get_provisioning_intent(run.run_id)
+    assert saved.exports[0].source_name == "V"
+    assert saved.host_sets[0].members == ["esx1", "esx2"]
+    assert saved.volumes[0].vvset == "myvvset"
+
+
 async def test_pending_sheet_stash_mints_run_and_preserves_intent(tmp_path):
     # ADR 0005 revision: the sheet is held server-side (with device passwords) until a mode is
     # chosen; create_run_from_pending then mints the run and preserves the provisioning intent.

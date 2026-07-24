@@ -36,7 +36,14 @@ from alletra_onboard.application.storage import storage_provision
 from alletra_onboard.application.storage import zoning as storage_zoning
 from alletra_onboard.application.storage import zoning_plan as storage_zoning_plan
 from alletra_onboard.application.verification import verify
-from alletra_onboard.domain.storage import DiscoveryReport, ProvisioningPlan, ZoningReport
+from alletra_onboard.domain.storage import (
+    DiscoveryReport,
+    ProvisioningBuilder,
+    ProvisioningComposition,
+    ProvisioningObjects,
+    ProvisioningPlan,
+    ZoningReport,
+)
 from alletra_onboard.config import Settings, load_settings
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
@@ -556,6 +563,44 @@ class OnboardingService:
         if report is None:
             raise StepPreconditionError("run discovery first — it provides the ports/HBAs zoning and provisioning need")
         return report
+
+    # ------------------------------------------------------------------ provisioning builder (Stage 2)
+
+    def get_storage_objects(self, run_id: str) -> ProvisioningObjects:
+        """The dropdown 'palette': array objects (WSAPI read) + to-be-created (sheet intent) + discovered
+        hosts + the currently-composed host sets/exports. Synchronous — the caller runs it off-loop."""
+        intent = self.get_provisioning_intent(run_id)
+        discovery = self._require_discovery(run_id)
+        existing = storage_provision.read_array_objects(intent)
+        return ProvisioningObjects(
+            existing_cpgs=existing["cpgs"],
+            existing_hosts=existing["hosts"],
+            existing_host_sets=existing["host_sets"],
+            existing_volumes=existing["volumes"],
+            existing_volume_sets=existing["volume_sets"],
+            array_error=existing["error"],
+            new_volumes=[v.name for v in intent.volumes],
+            new_host_sets=[hs.name for hs in intent.host_sets],
+            new_vvsets=sorted({v.vvset for v in intent.volumes if v.vvset}),
+            discovered_hosts=storage_provision.host_briefs(discovery),
+            host_sets=list(intent.host_sets),
+            exports=list(intent.exports),
+        )
+
+    def set_provisioning_builder(self, run_id: str, builder: ProvisioningBuilder) -> ProvisioningComposition:
+        """Save the operator's composed host-set membership + VV-set membership + exports onto the run's
+        ProvisioningIntent, so the subsequent preview/apply act on them."""
+        intent = self.get_provisioning_intent(run_id)
+        updated = intent.model_copy(deep=True, update={
+            "host_sets": builder.host_sets if builder.host_sets else intent.host_sets,
+            "exports": builder.exports,
+        })
+        if builder.vvsets:  # authoritative when provided: a volume in no set is un-set
+            vol_to_vvset = {vol: name for name, vols in builder.vvsets.items() for vol in vols}
+            for v in updated.volumes:
+                v.vvset = vol_to_vvset.get(v.name)
+        self.store.save_provisioning_intent(run_id, updated)
+        return ProvisioningComposition(host_sets=updated.host_sets, exports=updated.exports, volumes=updated.volumes)
 
     # ------------------------------------------------------------------ internals
 
