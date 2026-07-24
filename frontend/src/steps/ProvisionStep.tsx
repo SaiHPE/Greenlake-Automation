@@ -1,8 +1,10 @@
 import { Box, Button, CheckBox, Notification, Spinner, Table, TableBody, TableCell, TableHeader, TableRow, Tag, Text } from 'grommet';
 import { useState } from 'react';
-import { ProvisioningPlan, ProvisioningResult, RunEvent, RunRecord, storageApply, storagePreview } from '../api';
+import { PathVerdict, PathVerification, ProvisioningPlan, ProvisioningResult, RunEvent, RunRecord, storageApply, storagePreview, verifyPaths } from '../api';
 import { EventLog, Section } from '../components';
 import { ProvisioningBuilderView } from './ProvisioningBuilderView';
+
+const VERDICT_COLOR: Record<PathVerdict, string> = { live: 'status-ok', partial: 'status-warning', no_path: 'status-unknown' };
 
 interface Props {
   runId: string;
@@ -22,6 +24,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
   const running = run?.status === 'running';
   const plan = latest<ProvisioningPlan>(events, 'storage.previewed', 'plan');
   const result = latest<ProvisioningResult>(events, 'storage.applied', 'result');
+  const paths = latest<PathVerification>(events, 'storage.paths.verified', 'verification');
 
   const call = (fn: () => Promise<unknown>) => async () => {
     setError(null);
@@ -94,6 +97,28 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
           <Button label="Continue →" primary onClick={onDone} alignSelf="start" />
         </Section>
       )}
+
+      <Section title="Path verification (tier-2) — is the exported LUN actually live?">
+        <Text size="small" color="text-weak">
+          Reads showvlun -a (read-only) and reports, per host, whether the LUN is live and over how many
+          fabrics. Report-only — a "no path" host is fine (the export activates once the host is on +
+          zoned); it never blocks provisioning.
+        </Text>
+        <Box direction="row" gap="small" align="center">
+          <Button label={running ? 'Working…' : 'Check paths'} disabled={running} onClick={call(() => verifyPaths(runId))} />
+          {running && <Spinner />}
+        </Box>
+        {paths?.error && <Notification status="critical" title="Path check failed" message={paths.error} />}
+        {paths && !paths.error && paths.hosts.map((h) => (
+          <Box key={h.host} direction="row" gap="small" align="center" pad={{ vertical: 'xxsmall' }}>
+            <Box width="240px" flex={false}><Text size="small">{h.host}</Text></Box>
+            <Box width="90px" flex={false}><Tag size="small" value={h.verdict} border={{ color: VERDICT_COLOR[h.verdict] }} /></Box>
+            <Text size="small" color="text-weak">{h.detail}</Text>
+          </Box>
+        ))}
+        {paths && !paths.error && paths.hosts.length === 0 && <Text size="small" color="text-weak">No target hosts to verify.</Text>}
+        {paths?.notes.map((n, i) => <Text key={i} size="small" color="text-weak">• {n}</Text>)}
+      </Section>
 
       <Section title="Activity"><EventLog events={events.filter((e) => e.phase === 'STORAGE_PROVISION')} /></Section>
     </Box>

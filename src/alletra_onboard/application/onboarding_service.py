@@ -32,6 +32,7 @@ from alletra_onboard.application.provisioning import (
     build_provisioning_service,
 )
 from alletra_onboard.application.storage import discovery as storage_discovery
+from alletra_onboard.application.storage import path_verify as storage_path_verify
 from alletra_onboard.application.storage import storage_provision
 from alletra_onboard.application.storage import zoning as storage_zoning
 from alletra_onboard.application.storage import zoning_plan as storage_zoning_plan
@@ -556,6 +557,30 @@ class OnboardingService:
             "storage.apply.failed" if result.error else "storage.applied",
             result.error or f"Provisioning complete — {created} created, {len(result.outcomes) - created} already existed.",
             data={"result": result.model_dump(mode="json")},
+        )
+
+    def start_path_verify(self, run_id: str) -> RunRecord:
+        run = self.get_run(run_id)
+        intent = self.get_provisioning_intent(run_id)
+        discovery = self._require_discovery(run_id)
+        self._spawn(run_id, self._run_path_verify(run, intent, discovery))
+        return run
+
+    async def _run_path_verify(self, run: RunRecord, intent, discovery) -> None:
+        # Tier-2: read `showvlun -a` (read-only SSH) and report per host whether the exported LUNs are
+        # actually live, over how many fabrics. Report-only — it never gates the run (ADR 0010).
+        self._set(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
+        self._emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.paths.checking",
+                   "Reading showvlun -a to verify the exported LUNs are live (read-only)…")
+        verification = await asyncio.to_thread(storage_path_verify.verify_provisioned_paths, intent, discovery)
+        live = sum(1 for h in verification.hosts if h.verdict == "live")
+        status = RunStatus.RETRYABLE_FAILURE if verification.error else RunStatus.WAITING_FOR_OPERATOR
+        self._set(run, status, WorkflowPhase.STORAGE_PROVISION)
+        self._emit(
+            run.run_id, WorkflowPhase.STORAGE_PROVISION,
+            "storage.paths.failed" if verification.error else "storage.paths.verified",
+            verification.error or f"Path check: {live}/{len(verification.hosts)} host(s) live on both fabrics (report-only).",
+            data={"verification": verification.model_dump(mode="json")},
         )
 
     def _require_discovery(self, run_id: str) -> DiscoveryReport:

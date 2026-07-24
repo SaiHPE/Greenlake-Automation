@@ -392,6 +392,9 @@ def test_storage_builder_saves_composition_and_objects_needs_discovery(tmp_path)
     assert comp["exports"][0]["lun"] == 10
     assert comp["host_sets"][0]["members"] == ["esx1", "esx2"]
 
+    # tier-2 path verify is registered and also needs discovery first -> 409
+    assert client.post(f"/runs/{rid}/storage/verify-paths").status_code == 409
+
 
 def test_config_roundtrip_masks_secret(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory

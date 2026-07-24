@@ -408,6 +408,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # Creates host/volumes/exports on the array — the UI must preview + confirm first.
         return _start_step(run_id, lambda: service.start_storage_apply(run_id))
 
+    @app.post("/runs/{run_id}/storage/verify-paths", response_model=RunResponse)
+    async def run_storage_verify_paths(run_id: str) -> RunResponse:
+        # Tier-2, read-only: reads showvlun -a and reports per-host path liveness. Never gates.
+        return _start_step(run_id, lambda: service.start_path_verify(run_id))
+
     # ------------------------------------------------------------------ events
 
     @app.get("/runs/{run_id}/events", response_model=EventListResponse)
