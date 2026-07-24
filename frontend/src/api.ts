@@ -214,9 +214,28 @@ export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; e
 export interface ActionOutcome { kind: string; name: string; status: 'created' | 'exists' | 'failed'; detail: string; }
 export interface ProvisioningResult { outcomes: ActionOutcome[]; error: string | null; }
 
+// The plural provisioning intent pieces + the operator dropdown-builder (ADR 0010 Stage 2).
+export interface VolumeRequest { name: string; size_gib: number; provisioning_type: 'tpvv' | 'reduce'; cpg: string; vvset: string | null; }
+export interface HostSetRequest { name: string; members: string[]; }
+export interface ExportRequest { source_kind: 'volume' | 'vvset'; source_name: string; target_kind: 'host' | 'hostset'; target_name: string; lun: number | null; }
+export interface DiscoveredHostBrief { name: string; status: string; wwpns: string[]; }
+// The dropdown "palette": existing array objects + to-be-created (from the sheet) + discovered hosts.
+export interface ProvisioningObjects {
+  existing_cpgs: string[]; existing_hosts: string[]; existing_host_sets: string[];
+  existing_volumes: string[]; existing_volume_sets: string[]; array_error: string | null;
+  new_volumes: string[]; new_host_sets: string[]; new_vvsets: string[];
+  discovered_hosts: DiscoveredHostBrief[];
+  host_sets: HostSetRequest[]; exports: ExportRequest[]; // currently composed (resume)
+}
+export interface ProvisioningBuilder { host_sets: HostSetRequest[]; exports: ExportRequest[]; vvsets: Record<string, string[]>; }
+export interface ProvisioningComposition { host_sets: HostSetRequest[]; exports: ExportRequest[]; volumes: VolumeRequest[]; }
+
 export const startDiscover = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/discover`);
 export const zoningPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/preview`);
 export const zoningPlan = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/plan`);
+export const getStorageObjects = (runId: string) => request<ProvisioningObjects>('GET', `/runs/${runId}/storage/objects`);
+export const saveStorageBuilder = (runId: string, builder: ProvisioningBuilder) =>
+  request<ProvisioningComposition>('POST', `/runs/${runId}/storage/builder`, builder);
 export const storagePreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/preview`);
 export const storageApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/apply`);
 
