@@ -232,10 +232,15 @@ class WsapiClient:
                 return "exists"
             raise self._translate(exc, where=f"createVolumeSet {name}") from exc
 
-    def ensure_vlun(self, volume_name: str, host_name: str) -> str:
-        """Export a volume to a host with an auto-assigned LUN. Returns 'created' or 'exists'."""
+    def ensure_vlun(self, volume_name: str, host_name: str, lun: int | None = None) -> str:
+        """Export a source to a target as a VLUN. ``volume_name`` is a bare volume or ``set:<vvset>``;
+        ``host_name`` is a bare host or ``set:<hostset>``. ``lun=None`` lets the array auto-assign;
+        an explicit ``lun`` presents at that number. Returns 'created' or 'exists' (idempotent)."""
         try:
-            self._require().createVLUN(volume_name, hostname=host_name, auto=True)
+            if lun is None:
+                self._require().createVLUN(volume_name, hostname=host_name, auto=True)
+            else:
+                self._require().createVLUN(volume_name, lun=lun, hostname=host_name, auto=False)
             return "created"
         except Exception as exc:  # noqa: BLE001 - EXISTENT_VLUN on a re-run
             if self._is_conflict(exc):

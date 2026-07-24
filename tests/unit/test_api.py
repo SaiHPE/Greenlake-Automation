@@ -178,39 +178,64 @@ _COMPLETE_MAIN = {
     "secret_name": "b10000-admin", "secret_username": "3paradm",
 }
 _COMPLETE_PROV = {
-    "prov_array_host": "10.64.154.225", "prov_array_user": "3paradm", "prov_array_password": "arraypw",
-    "prov_vcenter_host": "vc.example.com", "prov_vcenter_user": "administrator@vsphere.local",
-    "prov_vcenter_password": "vcpw",
-    "prov_host_set": "CRVLZ_Hostset", "prov_vol_prefix": "CRV_Prod", "prov_vol_size_gib": "1024",
+    "targets": {
+        "prov_array_host": "10.64.154.225", "prov_array_user": "3paradm", "prov_array_password": "arraypw",
+        "prov_vcenter_host": "vc.example.com", "prov_vcenter_user": "administrator@vsphere.local",
+        "prov_vcenter_password": "vcpw",
+    },
+    "volumes": [{"name": "CRV_Prod01", "size_gib": "1024"}],
+    "hostsets": [{"name": "CRVLZ_Hostset"}],
 }
 
 
-def _fill_template(template_bytes: bytes, values: dict[str, str], prov: dict[str, str] | None = None) -> str:
-    """Fill the Value column of the Initialisation tab (and optionally the Provisioning tab) -> base64 xlsx."""
+def _fill_template(template_bytes: bytes, values: dict[str, str], prov: dict | None = None) -> str:
+    """Fill the Value column of the Initialisation tab (and optionally the Provisioning + Volumes +
+    Host sets tabs) -> base64 xlsx."""
     import base64
     import io
 
     from openpyxl import load_workbook
 
     from alletra_onboard.application.init_sheet import (
+        HOSTSET_COLUMNS,
+        HOSTSETS_SHEET_NAME,
         PROVISIONING_SECTIONS,
         PROVISIONING_SHEET_NAME,
         SECTIONS,
+        VOLUME_COLUMNS,
+        VOLUMES_SHEET_NAME,
     )
 
-    def fill(ws, sections, data):
+    def _norm(s):
+        return str(s).strip().removesuffix("*").strip()
+
+    def fill_kv(ws, sections, data):
         label_to_key = {label: key for _, fields in sections for key, label, _, _ in fields}
         for row in ws.iter_rows(min_row=2):
             if row[0].value is None:
                 continue
-            key = label_to_key.get(str(row[0].value).strip().removesuffix("*").strip())
+            key = label_to_key.get(_norm(row[0].value))
             if key in data:
                 row[1].value = data[key]
 
+    def fill_table(ws, columns, records):
+        header_to_key = {_norm(label): key for key, label, _ in columns}
+        header_row, col_of = None, {}
+        for r in ws.iter_rows():
+            found = {header_to_key[_norm(c.value)]: c.column for c in r if c.value is not None and _norm(c.value) in header_to_key}
+            if found:
+                header_row, col_of = r[0].row, found
+                break
+        for i, rec in enumerate(records):
+            for key, val in rec.items():
+                ws.cell(row=header_row + 1 + i, column=col_of[key], value=val)
+
     wb = load_workbook(io.BytesIO(template_bytes))
-    fill(wb.active, SECTIONS, values)
+    fill_kv(wb.active, SECTIONS, values)
     if prov is not None and PROVISIONING_SHEET_NAME in wb.sheetnames:
-        fill(wb[PROVISIONING_SHEET_NAME], PROVISIONING_SECTIONS, prov)
+        fill_kv(wb[PROVISIONING_SHEET_NAME], PROVISIONING_SECTIONS, prov.get("targets", {}))
+        fill_table(wb[VOLUMES_SHEET_NAME], VOLUME_COLUMNS, prov.get("volumes", []))
+        fill_table(wb[HOSTSETS_SHEET_NAME], HOSTSET_COLUMNS, prov.get("hostsets", []))
     buffer = io.BytesIO()
     wb.save(buffer)
     return base64.b64encode(buffer.getvalue()).decode()

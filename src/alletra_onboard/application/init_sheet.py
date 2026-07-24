@@ -15,11 +15,16 @@ import io
 from dataclasses import dataclass
 
 from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from alletra_onboard.application import prereqs
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, RunMode
-from alletra_onboard.domain.storage import EndpointCreds, ProvisioningIntent
+from alletra_onboard.domain.storage import (
+    EndpointCreds,
+    HostSetRequest,
+    ProvisioningIntent,
+    VolumeRequest,
+)
 from alletra_onboard.domain.workflow import enabled_steps
 
 SHEET_NAME = "Initialisation"
@@ -101,9 +106,16 @@ _STEP_REQUIRES: dict[str, tuple[str, ...]] = {
     "verify": ("mgmt_ipv4",),
 }
 
-# The 'Provisioning' tab (Phase 2) — a second fillable tab, parsed only when a provisioning step is
-# selected. It carries the device targets (with passwords — customer-supplied) + the volume request.
+# The provisioning input (Phase 2 / ADR 0010 Stage 2) spans THREE fillable tabs, parsed only when a
+# provisioning step is selected: 'Provisioning' carries the device targets (with passwords —
+# customer-supplied) + defaults; 'Volumes' and 'Host sets' are ROW-TABLES (one object per row) so a
+# run can create a plural/heterogeneous set of volumes and one or more host sets. The exports
+# (which source is presented to which target, at which LUN) are composed later in the operator's
+# dropdown builder over discovered + to-be-created objects — they are not in the sheet.
 PROVISIONING_SHEET_NAME = "Provisioning"
+VOLUMES_SHEET_NAME = "Volumes"
+HOSTSETS_SHEET_NAME = "Host sets"
+
 PROVISIONING_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
     ("Targets — array", [
         ("prov_array_host", "Array management IP", True, "the B10000 mgmt IP (WSAPI + SSH)"),
@@ -123,15 +135,23 @@ PROVISIONING_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
         ("prov_sw2_user", "Switch 2 username", False, "e.g. admin"),
         ("prov_sw2_password", "Switch 2 password", False, ""),
     ]),
-    ("Storage to create", [
-        ("prov_host_set", "Host set / cluster name", True, "the ESXi cluster's host set on the array"),
-        ("prov_cpg", "CPG", False, "default SSD_r6"),
-        ("prov_type", "Provisioning type", False, "tpvv (thin) or reduce (dedup+compress); default tpvv"),
-        ("prov_vol_prefix", "Volume name prefix", True, "e.g. CRV_LZ_Prod (names become <prefix>01, 02…)"),
-        ("prov_vol_size_gib", "Volume size (GiB)", True, "per volume"),
-        ("prov_vol_count", "Volume count", False, "default 1"),
-        ("prov_vvset", "Volume set name", False, "optional — group the volumes into a VV set"),
+    ("Defaults — used when a Volumes row leaves CPG / Type blank (optional)", [
+        ("prov_default_cpg", "Default CPG", False, "default SSD_r6"),
+        ("prov_default_type", "Default provisioning type", False, "tpvv (thin) or reduce (dedup+compress); default tpvv"),
     ]),
+]
+
+# Row-table columns for the Volumes / Host sets tabs: (key, header, required).
+VOLUME_COLUMNS: list[tuple[str, str, bool]] = [
+    ("name", "Volume name", True),
+    ("size_gib", "Size (GiB)", True),
+    ("provisioning_type", "Type (tpvv / reduce)", False),
+    ("cpg", "CPG", False),
+    ("vvset", "VV-set (optional)", False),
+]
+HOSTSET_COLUMNS: list[tuple[str, str, bool]] = [
+    ("name", "Host set name", True),
+    ("members", "Members — comma-separated host names; blank = all discovered", False),
 ]
 
 _PROV_LABEL_TO_KEY = {label: key for _, fields in PROVISIONING_SECTIONS for key, label, _, _ in fields}
@@ -216,10 +236,45 @@ def build_template_bytes(*, init_only: bool = False) -> bytes:
     return buffer.getvalue()
 
 
+def _write_table_tab(ws, columns: list[tuple[str, str, bool]], *, blank_rows: int, intro: str) -> None:
+    """Write a ROW-TABLE tab: an intro line, a bold header row (one column per field), then blank rows
+    the operator fills — one object per row (ADR 0010 Stage 2)."""
+    ws.append([intro])
+    ws.cell(row=1, column=1).font = Font(italic=True, color="808080")
+
+    header_fill = PatternFill("solid", fgColor=_HPE_GREEN)
+    header = [f"{label} *" if required else label for _key, label, required in columns]
+    ws.append(header)
+    header_row = ws.max_row
+    for cell in ws[header_row]:
+        cell.fill = header_fill
+        cell.font = Font(bold=True, color="FFFFFF")
+
+    # Materialise blank rows as a bordered, fillable grid (append([None,...]) creates no cells, so the
+    # operator would otherwise see just a header with nowhere obvious to type).
+    thin = Side(style="thin", color="D0D0D0")
+    grid = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for r in range(header_row + 1, header_row + 1 + blank_rows):
+        for c in range(1, len(columns) + 1):
+            ws.cell(row=r, column=c).border = grid
+
+    for i, (_key, label, _required) in enumerate(columns, start=1):
+        ws.column_dimensions[ws.cell(row=header_row, column=i).column_letter].width = max(20, len(label) + 4)
+    ws.freeze_panes = ws.cell(row=header_row + 1, column=1).coordinate
+
+
 def _add_provisioning_sheet(wb: Workbook) -> None:
-    """The fillable 'Provisioning' tab — parsed only when a provisioning step is selected."""
-    ws = wb.create_sheet(PROVISIONING_SHEET_NAME)
-    _write_fillable_tab(ws, PROVISIONING_SECTIONS)
+    """The fillable provisioning input — parsed only when a provisioning step is selected: the
+    'Provisioning' tab (targets + defaults) plus the 'Volumes' and 'Host sets' row-tables."""
+    _write_fillable_tab(wb.create_sheet(PROVISIONING_SHEET_NAME), PROVISIONING_SECTIONS)
+    _write_table_tab(
+        wb.create_sheet(VOLUMES_SHEET_NAME), VOLUME_COLUMNS, blank_rows=15,
+        intro="Volumes to create — one per row. Type/CPG blank = the Provisioning-tab defaults.",
+    )
+    _write_table_tab(
+        wb.create_sheet(HOSTSETS_SHEET_NAME), HOSTSET_COLUMNS, blank_rows=8,
+        intro="Host sets to create — one per row. Leave Members blank to include all discovered hosts.",
+    )
 
 
 def _add_prereq_sheet(wb: Workbook) -> None:
@@ -319,41 +374,88 @@ def _read_tab(sheet, label_to_key: dict[str, str]) -> dict[str, str]:
     return values
 
 
+def _read_table(ws, columns: list[tuple[str, str, bool]]) -> list[dict[str, str]]:
+    """Read a row-table tab into a list of {key: value} dicts. Locates the header row by matching cells
+    to the known column headers (tolerant of the intro line and of the operator's column order), then
+    reads data rows to the end, skipping any row whose first (name) column is blank."""
+    header_to_key = {_normalize_label(label): key for key, label, _ in columns}
+    rows = list(ws.iter_rows(values_only=True))
+    header_idx: int | None = None
+    col_index: dict[int, str] = {}
+    for i, row in enumerate(rows):
+        mapping = {ci: header_to_key[_normalize_label(str(cell))]
+                   for ci, cell in enumerate(row)
+                   if cell is not None and _normalize_label(str(cell)) in header_to_key}
+        if mapping:
+            header_idx, col_index = i, mapping
+            break
+    if header_idx is None:
+        return []
+
+    name_key = columns[0][0]
+    records: list[dict[str, str]] = []
+    for row in rows[header_idx + 1:]:
+        record = {
+            key: str(row[ci]).strip()
+            for ci, key in col_index.items()
+            if ci < len(row) and row[ci] is not None and str(row[ci]).strip()
+        }
+        if record.get(name_key):
+            records.append(record)
+    return records
+
+
 def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
-    """Read the 'Provisioning' tab into a ProvisioningIntent (passwords included — customer-supplied)."""
-    if PROVISIONING_SHEET_NAME not in workbook.sheetnames:
-        raise ValueError(
-            f"The '{PROVISIONING_SHEET_NAME}' tab is required for provisioning but was not found in the workbook."
-        )
-    values = _read_tab(workbook[PROVISIONING_SHEET_NAME], _PROV_LABEL_TO_KEY)
-    missing = [_PROV_KEY_TO_LABEL[key] for key in _PROV_REQUIRED if not values.get(key)]
+    """Read the provisioning input (Provisioning targets + Volumes + Host sets row-tables) into a plural
+    ProvisioningIntent (passwords included — customer-supplied). Exports are composed later in the UI."""
+    for name in (PROVISIONING_SHEET_NAME, VOLUMES_SHEET_NAME, HOSTSETS_SHEET_NAME):
+        if name not in workbook.sheetnames:
+            raise ValueError(f"The '{name}' tab is required for provisioning but was not found in the workbook.")
+
+    targets = _read_tab(workbook[PROVISIONING_SHEET_NAME], _PROV_LABEL_TO_KEY)
+    missing = [_PROV_KEY_TO_LABEL[key] for key in _PROV_REQUIRED if not targets.get(key)]
     if missing:
         raise ValueError("Provisioning tab — missing required fields: " + ", ".join(sorted(missing)))
 
-    ptype = (values.get("prov_type") or "tpvv").strip().lower()
-    if ptype not in ("tpvv", "reduce"):
-        raise ValueError("Provisioning type must be 'tpvv' or 'reduce'.")
-    try:
-        size_gib = int(float(values["prov_vol_size_gib"]))
-        count = int(float(values.get("prov_vol_count") or "1"))
-    except ValueError as exc:
-        raise ValueError("Volume size (GiB) and count must be numbers.") from exc
+    default_cpg = targets.get("prov_default_cpg") or "SSD_r6"
+    default_type = (targets.get("prov_default_type") or "tpvv").strip().lower()
+    if default_type not in ("tpvv", "reduce"):
+        raise ValueError("Default provisioning type must be 'tpvv' or 'reduce'.")
 
-    # The flat Provisioning tab is the "simple" case (N identical volumes, one all-members host set); the
-    # row-table sheet (ADR 0010 Stage 2) will build the plural/heterogeneous form directly.
-    return ProvisioningIntent.from_simple(
-        host_set_name=values["prov_host_set"],
-        array=EndpointCreds(host=values["prov_array_host"], username=values["prov_array_user"], password=values["prov_array_password"]),
-        vcenter=EndpointCreds(host=values["prov_vcenter_host"], username=values["prov_vcenter_user"], password=values["prov_vcenter_password"]),
+    vol_rows = _read_table(workbook[VOLUMES_SHEET_NAME], VOLUME_COLUMNS)
+    if not vol_rows:
+        raise ValueError("Volumes tab — add at least one volume (a name and a size).")
+    volumes: list[VolumeRequest] = []
+    for r in vol_rows:
+        ptype = (r.get("provisioning_type") or default_type).strip().lower()
+        if ptype not in ("tpvv", "reduce"):
+            raise ValueError(f"Volume '{r['name']}' — Type must be 'tpvv' or 'reduce'.")
+        try:
+            size_gib = int(float(r["size_gib"]))
+        except (KeyError, ValueError) as exc:
+            raise ValueError(f"Volume '{r.get('name', '?')}' — Size (GiB) must be a number.") from exc
+        volumes.append(VolumeRequest(
+            name=r["name"], size_gib=size_gib,
+            provisioning_type=ptype,  # type: ignore[arg-type]
+            cpg=r.get("cpg") or default_cpg, vvset=r.get("vvset") or None,
+        ))
+
+    hs_rows = _read_table(workbook[HOSTSETS_SHEET_NAME], HOSTSET_COLUMNS)
+    if not hs_rows:
+        raise ValueError("Host sets tab — add at least one host set (a name).")
+    host_sets = [
+        HostSetRequest(name=r["name"], members=[m.strip() for m in (r.get("members") or "").split(",") if m.strip()])
+        for r in hs_rows
+    ]
+
+    return ProvisioningIntent(
+        array=EndpointCreds(host=targets["prov_array_host"], username=targets["prov_array_user"], password=targets["prov_array_password"]),
+        vcenter=EndpointCreds(host=targets["prov_vcenter_host"], username=targets["prov_vcenter_user"], password=targets["prov_vcenter_password"]),
         # Switches are OPTIONAL (verify is array-side; switches only needed to CREATE zones) -> default blank.
-        switch_f1=EndpointCreds(host=values.get("prov_sw1_host", ""), username=values.get("prov_sw1_user", ""), password=values.get("prov_sw1_password", "")),
-        switch_f2=EndpointCreds(host=values.get("prov_sw2_host", ""), username=values.get("prov_sw2_user", ""), password=values.get("prov_sw2_password", "")),
-        cpg=values.get("prov_cpg") or "SSD_r6",
-        provisioning_type=ptype,  # type: ignore[arg-type]
-        name_prefix=values["prov_vol_prefix"],
-        size_gib=size_gib,
-        count=count,
-        vvset=values.get("prov_vvset") or None,
+        switch_f1=EndpointCreds(host=targets.get("prov_sw1_host", ""), username=targets.get("prov_sw1_user", ""), password=targets.get("prov_sw1_password", "")),
+        switch_f2=EndpointCreds(host=targets.get("prov_sw2_host", ""), username=targets.get("prov_sw2_user", ""), password=targets.get("prov_sw2_password", "")),
+        volumes=volumes,
+        host_sets=host_sets,
     )
 
 
