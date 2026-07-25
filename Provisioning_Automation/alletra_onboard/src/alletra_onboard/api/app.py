@@ -74,7 +74,7 @@ from alletra_onboard.application.platform.proxy import ProxyResolver, apply_prox
 from alletra_onboard.domain.models import RunMode
 from alletra_onboard.domain.provisioning import ProvisioningBuilder, ProvisioningComposition, ProvisioningObjects
 from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
-from alletra_onboard.application.onboarding_service import (
+from alletra_onboard.application.service import (
     OnboardingService,
     PendingSheetNotFoundError,
     RunBusyError,

@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from pydantic import SecretStr
 
-from alletra_onboard.application.storage import discovery as disc
-from alletra_onboard.application.storage import storage_provision as prov
-from alletra_onboard.application.storage import zoning
+from alletra_onboard.application.provisioning import discovery as disc
+from alletra_onboard.application.provisioning import storage_provision as prov
+from alletra_onboard.application.provisioning import zoning
 from alletra_onboard.domain.shared import EndpointCreds, normalize_wwpn
 from alletra_onboard.domain.discovery import ArrayHost, ArrayPort, HostHba
 from alletra_onboard.domain.provisioning import ExportRequest, ProvisioningIntent
@@ -559,7 +559,7 @@ Lun VVName                               HostName              -Host_WWN/iSCSI_N
 
 
 def test_parse_showvlun_active_real_sample():
-    from alletra_onboard.application.storage.path_verify import parse_showvlun_active
+    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active
 
     paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
     assert len(paths) == 5                                   # header skipped, 5 data rows
@@ -570,7 +570,7 @@ def test_parse_showvlun_active_real_sample():
 
 
 def test_verify_paths_live_both_fabrics():
-    from alletra_onboard.application.storage.path_verify import parse_showvlun_active, verify_paths
+    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
 
     paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
     rep = verify_paths({"CRV_VZ_DL360G11D24U25"}, {"VZ_ESXi_Profile_bk"}, paths)
@@ -582,7 +582,7 @@ def test_verify_paths_live_both_fabrics():
 
 
 def test_verify_paths_no_path_when_host_absent():
-    from alletra_onboard.application.storage.path_verify import parse_showvlun_active, verify_paths
+    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
 
     paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
     rep = verify_paths({"esx-offline"}, {"VZ_ESXi_Profile_bk"}, paths)
@@ -593,7 +593,7 @@ def test_verify_paths_no_path_when_host_absent():
 
 
 def test_verify_paths_partial_single_fabric():
-    from alletra_onboard.application.storage.path_verify import parse_showvlun_active, verify_paths
+    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
 
     text = (
         "Lun VVName HostName -Host_WWN- Port Type Status ID\n"
@@ -606,7 +606,7 @@ def test_verify_paths_partial_single_fabric():
 
 
 def test_verify_provisioned_paths_reads_showvlun_and_reports():
-    from alletra_onboard.application.storage.path_verify import verify_provisioned_paths
+    from alletra_onboard.application.provisioning.path_verify import verify_provisioned_paths
 
     class _FakeCli:
         def __init__(self):

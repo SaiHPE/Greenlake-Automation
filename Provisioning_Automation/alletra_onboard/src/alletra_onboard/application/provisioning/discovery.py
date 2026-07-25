@@ -16,7 +16,7 @@ import re
 from collections import OrderedDict
 from typing import Callable
 
-from alletra_onboard.application.storage.clients import make_array_cli, make_vcenter
+from alletra_onboard.application.provisioning.clients import make_array_cli, make_vcenter
 from alletra_onboard.domain.shared import Fabric, normalize_wwpn
 from alletra_onboard.domain.discovery import ArrayHost, ArrayPort, DiscoveryReport
 from alletra_onboard.domain.provisioning import ProvisioningIntent
