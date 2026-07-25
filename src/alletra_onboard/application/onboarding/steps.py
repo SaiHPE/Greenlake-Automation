@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAdapter
 from alletra_onboard.adapters.browser.dscc_setup import DsccSetupAdapter
-from alletra_onboard.application.provisioning import (
+from alletra_onboard.application.onboarding.greenlake_provision import (
     FAILED,
     WARNING,
     build_provisioning_service,

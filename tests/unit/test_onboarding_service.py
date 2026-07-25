@@ -4,9 +4,9 @@ import pytest
 from pydantic import SecretStr
 
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
-from alletra_onboard.application.event_bus import InMemoryEventBus
+from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.onboarding_service import OnboardingService, RunBusyError
-from alletra_onboard.application.provisioning import DONE, FAILED, WARNING, PhaseOutcome, ProvisionResult
+from alletra_onboard.application.onboarding.greenlake_provision import DONE, FAILED, WARNING, PhaseOutcome, ProvisionResult
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import (
     ArrayWorkItem,

@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 import re
 
-from alletra_onboard.application.asbuilt import AsBuiltData
+from alletra_onboard.application.documents.asbuilt import AsBuiltData
 
 _NSP = re.compile(r"^\d+:\d+:\d+$")
 _IPV4 = re.compile(r"^\d+\.\d+\.\d+\.\d+$")

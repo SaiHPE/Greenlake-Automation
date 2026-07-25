@@ -11,7 +11,7 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from alletra_onboard.application.event_bus import InMemoryEventBus
+from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.config import Settings, load_settings
 from alletra_onboard.domain.models import (
     ArrayWorkItem,

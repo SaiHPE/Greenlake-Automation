@@ -16,7 +16,7 @@ import socket
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-from alletra_onboard.application.proxy import ProxyResolver
+from alletra_onboard.application.platform.proxy import ProxyResolver
 
 # (fqdn, port, initiator, purpose). All outbound TCP 443.
 FIREWALL_RULES: list[tuple[str, str, str, str]] = [

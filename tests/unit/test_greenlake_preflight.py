@@ -1,11 +1,11 @@
 from pydantic import SecretStr
 
 from alletra_onboard.adapters.greenlake.service_catalog import ServiceProvision
-from alletra_onboard.application.greenlake_preflight import (
+from alletra_onboard.application.onboarding.greenlake_preflight import (
     GreenLakeReadPreflightService,
     build_greenlake_read_preflight,
 )
-from alletra_onboard.application.preflight_service import PreflightService
+from alletra_onboard.application.onboarding.preflight_service import PreflightService
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import ArrayWorkItem, CheckStatus, DsccSetupConfig, NetworkConfig, PreflightCheck
 
