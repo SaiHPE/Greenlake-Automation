@@ -1,6 +1,8 @@
-# Sensitive / lab-specific — never commit (incl. HPE templates + generated as-built docs)
+# Sensitive / lab-specific — never commit (generated as-built docs, lab dumps)
 *.docx
 *.dotx
+# ...except the bundled HPE house-style as-built template (a shipped app resource)
+!Provisioning_Automation/alletra_onboard/src/alletra_onboard/resources/asbuilt_template.dotx
 docx_images/
 *.csv
 *.json
