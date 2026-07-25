@@ -109,10 +109,13 @@ export const saveProxy = (proxy: string | null) => request<ProxyStatus>('POST', 
 
 // Build profile — the UI brands itself + restricts the mode chooser from this. 'full' = the whole
 // platform; init_only = the "Alletra MP Initialization" accelerator (Initialization only).
+// It also carries the SERVED step registry + mode presets the wizard renders from (ADR 0011 Phase 2).
 export interface AppProfile {
   profile: string;
   init_only: boolean;
   title: string;
+  steps: import('./modes').ServedStep[];
+  modes: Record<string, import('./modes').ActionKey[]>;
 }
 export const getAppProfile = () => request<AppProfile>('GET', '/app/profile');
 

@@ -1,6 +1,7 @@
-// Decoupling (docs/adr/0005): the operator picks a MODE up front, and the wizard renders only the
-// steps that mode needs — so verification or provisioning can run against an already-initialised
-// array without walking the whole init chain. Mirrors the backend RunMode + step registry.
+// Decoupling (docs/adr/0005 + 0011): the operator picks a MODE up front, and the wizard renders only
+// the steps that mode needs. The step registry (keys, labels, kinds, phases) and the mode→steps map
+// are SERVED by the backend (GET /app/profile — single source of truth: domain/workflow.py). This
+// module keeps only presentation extras (subtitles, mode labels/blurbs) and helpers over served data.
 
 export type RunMode = 'FULL_ONBOARDING' | 'PROVISION_ONLY' | 'BOTH' | 'VERIFY_ONLY' | 'CUSTOM';
 
@@ -14,38 +15,39 @@ export type ActionKey =
   | 'verify'
   | 'asbuilt';
 
-export interface ActionDef {
+// One step as served by GET /app/profile.
+export interface ServedStep {
   key: ActionKey;
-  title: string;
-  subtitle: string;
+  label: string;
   kind: 'init' | 'provision' | 'verify';
+  phase: string;
 }
 
-// Ordered catalog of the pickable action steps (the scaffolding steps — mode/prereq/sheet/done —
-// are added by App). Order here is the order they appear in the wizard.
-export const ACTION_CATALOG: ActionDef[] = [
-  { key: 'greenlake', title: 'GreenLake registration', subtitle: 'register · assign · subscribe', kind: 'init' },
-  { key: 'cloudinit', title: 'Cloud Connectivity', subtitle: 'on-array wizard', kind: 'init' },
-  { key: 'dscc', title: 'DSCC Setup', subtitle: 'Set Up System wizard', kind: 'init' },
-  { key: 'discover', title: 'Discovery', subtitle: 'array ports · ESXi HBAs · zoning', kind: 'provision' },
-  { key: 'zoning', title: 'SAN Zoning', subtitle: 'verify · remediate (confirm)', kind: 'provision' },
-  { key: 'provision', title: 'Provision storage', subtitle: 'host · volumes · LUNs', kind: 'provision' },
-  { key: 'verify', title: 'Verify config & health', subtitle: 'SSH read-only check', kind: 'verify' },
-  { key: 'asbuilt', title: 'As-built document', subtitle: 'read-only → HPE .docx', kind: 'verify' },
-];
+export interface StepRegistry {
+  steps: ServedStep[];
+  modes: Record<string, ActionKey[]>;
+}
 
-// Preset modes -> their action keys (keep in lockstep with the backend _MODE_STEPS).
-const MODE_STEPS: Record<Exclude<RunMode, 'CUSTOM'>, ActionKey[]> = {
-  FULL_ONBOARDING: ['greenlake', 'cloudinit', 'dscc', 'verify', 'asbuilt'],
-  PROVISION_ONLY: ['discover', 'zoning', 'provision', 'verify', 'asbuilt'],
-  BOTH: ['greenlake', 'cloudinit', 'dscc', 'discover', 'zoning', 'provision', 'verify', 'asbuilt'],
-  VERIFY_ONLY: ['verify', 'asbuilt'],
+// Presentation only — the one per-step thing the backend doesn't own.
+const STEP_SUBTITLES: Record<ActionKey, string> = {
+  greenlake: 'register · assign · subscribe',
+  cloudinit: 'on-array wizard',
+  dscc: 'Set Up System wizard',
+  discover: 'array ports · ESXi HBAs · zoning',
+  zoning: 'verify · remediate (confirm)',
+  provision: 'host · volumes · LUNs',
+  verify: 'SSH read-only check',
+  asbuilt: 'read-only → HPE .docx',
 };
 
-// The action steps to render for a mode, always in catalog order. CUSTOM uses the explicit set.
-export function actionKeysFor(mode: RunMode, custom: ActionKey[]): ActionKey[] {
-  const chosen = mode === 'CUSTOM' ? new Set(custom) : new Set<ActionKey>(MODE_STEPS[mode]);
-  return ACTION_CATALOG.filter((a) => chosen.has(a.key)).map((a) => a.key);
+export function subtitleFor(key: string): string {
+  return STEP_SUBTITLES[key as ActionKey] ?? '';
+}
+
+// The action steps to render for a mode, always in registry order. CUSTOM uses the explicit set.
+export function actionKeysFor(registry: StepRegistry, mode: RunMode, custom: ActionKey[]): ActionKey[] {
+  const chosen = mode === 'CUSTOM' ? new Set(custom) : new Set(registry.modes[mode] ?? []);
+  return registry.steps.filter((s) => chosen.has(s.key)).map((s) => s.key);
 }
 
 export interface ModePreset {
@@ -63,13 +65,10 @@ export const MODE_PRESETS: ModePreset[] = [
 ];
 
 // Map a persisted run phase back to the action step key, so a refresh resumes on the right step.
-export function phaseToActionKey(phase: string): ActionKey {
-  if (phase === 'CLOUDINIT_CONNECT') return 'cloudinit';
-  if (phase === 'DSCC_SETUP_SYSTEM') return 'dscc';
-  if (phase === 'STORAGE_DISCOVER') return 'discover';
-  if (phase === 'STORAGE_ZONING') return 'zoning';
-  if (phase === 'STORAGE_PROVISION') return 'provision';
-  if (phase === 'CONFIG_VERIFY') return 'verify';
-  if (phase === 'ASBUILT_DOCUMENT' || phase === 'COMPLETE') return 'asbuilt';
-  return 'greenlake'; // PREFLIGHT / GL_*
+// A phase that matches no step (GL_* mid-phases) resumes on the first step; COMPLETE on the last.
+export function phaseToActionKey(registry: StepRegistry, phase: string): ActionKey {
+  const match = registry.steps.find((s) => s.phase === phase);
+  if (match) return match.key;
+  if (phase === 'COMPLETE' && registry.steps.length) return registry.steps[registry.steps.length - 1].key;
+  return registry.steps[0]?.key ?? 'greenlake';
 }
