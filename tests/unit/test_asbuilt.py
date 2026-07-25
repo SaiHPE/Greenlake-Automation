@@ -17,14 +17,14 @@ _CHECKHEALTH = (
     "       1 total                                      10\n"
 )
 
-_INVENTORY = (
-    "-----------------------Cage Inventory--------------------\n"
-    "Cage -Name- -Manufacturer- -Type-\n"
-    "   1 cage1  HPE            DCN7\n"
-    "\n"
-    "-----------------------Disk Inventory--------------------\n"
-    "Id CagePos State  --MFR--\n"
-    " 0 1:1     normal SAMSUNG\n"
+_INVENTORY = (  # showinventory -csvtable output
+    "-----------------------Cage Inventory--------------------,,,\n"
+    "Cage,-Name-,-Manufacturer-,-Type-\n"
+    "1,cage1,HPE,DCN7\n"
+    ",,,\n"
+    "-----------------------Disk Inventory--------------------,,,\n"
+    "Id,CagePos,State,--MFR--\n"
+    "0,1:1,normal,SAMSUNG\n"
 )
 
 _SAMPLE = AsBuiltData(

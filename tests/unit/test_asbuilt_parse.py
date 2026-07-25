@@ -136,33 +136,42 @@ Task      Task:7092        Failed Task                      Manual
 """
 
 
-_INVENTORY = """     ID ------Name------ --------Model--------- --Serial-- System_PN Nodes
-0x2F629 TEST-ARRAY-01    HPE Alletra Storage MP TESTSN0001 S0B84A        2
+# `showinventory -csvtable` output — deterministic CSV (quoted commas, values with spaces).
+_INVENTORY = """ID,------Name------,--------Model---------,--Serial--,System_PN,Nodes
+0x2F629,TEST-ARRAY-01,HPE Alletra Storage MP,TESTSN0001,S0B84A,2
 
-------------------------------Interface Card-------------------------------
-Cage -I/F_card- -Name- -Manufacturer- -Assem_Part- -Assem_Serial- -Firmware-
-   1          1 Node 0 HPE            R7D02-63003  EXTVUB912M200K 1005
-   1          2 Node 1 HPE            R7D02-63003  EXTVUB912M200L 1005
-
-----------------------------------Internal Drives----------------------------------- -(GB)-
-Cage IOM DrvID ---Manufacturer---- ----------Model---------- ---Serial--- -Firmware- -Size-
-   1   1     1 MicronTechnologyInc Micron_7450_MTFDKBA960TFR 254253CA0C80 E2MU113       960
+-------------------------------Interface Card-------------------------------,,,,,,
+Cage,-I/F_card-,-Name-,-Manufacturer-,-Assem_Part-,-Assem_Serial-,-Firmware-
+1,1,Node 0,HPE,R7D02-63003,EXTVUB912M200K,1005
+,,,,,,
+------------------------------Memory Devices-------------------------------,,,,,,,,(GiB/s),(GiB),------
+Cage,IOM,Mem,-------Name--------,Type,Manufacturer,--PartNumber---,-Serial-,Speed,Size,RCD
+1,1,1,Iom[1]PROC 1 DIMM 1,DDR4,Hynix,HMAG84EXNRA086N,3727967E,3200,32,0xb380
+,,,,,,,,,,
+---------------------------------------------CPU---------------------------------------------,,,,,,
+Cage,IOM,Slot,Cores,Threads,--------Manufacturer--------,---------------Model----------------
+1,1,1,16,32,"Advanced Micro Devices, Inc.",0 (AMD EPYC 7313P 16-Core Processor)
+------------------------------------
+2,total,,
 """
 
 
-def test_parse_inventory_splits_subsections_fixed_width():
+def test_parse_inventory_splits_csv_subsections():
     tables = parse_inventory(_INVENTORY)
     by_title = {title: (headers, rows) for title, headers, rows in tables}
-    # the array-id block (no title) is anchored at col 0 so the id isn't clipped
-    idblock = [(h, r) for t, h, r in tables if not t]
-    assert idblock and idblock[0][1][0][0] == "0x2F629"
+    assert set(by_title) == {"", "Interface Card", "Memory Devices", "CPU"}  # footer/blank rows dropped
 
-    ifh, ifr = by_title["Interface Card"]
-    assert ifh[:3] == ["Cage", "I/F_card", "Name"]
-    assert ifr[0][2] == "Node 0"      # a value WITH an internal space stays one cell
+    # the array-id block (no section title)
+    assert by_title[""][1][0][3] == "TESTSN0001"
 
-    dh, dr = by_title["Internal Drives"]     # title cleaned of trailing "-(GB)-"
-    assert dr[0][3] == "MicronTechnologyInc"
+    # a value with an internal space stays one cell
+    assert by_title["Interface Card"][1][0][2] == "Node 0"
+
+    # REGRESSION (was mis-split by fixed-width): Speed/Size/RCD land in the right columns
+    assert by_title["Memory Devices"][1][0][-3:] == ["3200", "32", "0xb380"]
+
+    # a quoted comma inside a value is one cell (csv, not naive split)
+    assert by_title["CPU"][1][0][5] == "Advanced Micro Devices, Inc."
 
 
 def test_parse_checkhealth_splits_summary_and_detail_tables():
