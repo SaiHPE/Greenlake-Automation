@@ -53,9 +53,11 @@ Four layers, dependencies point inward (`api → application → domain`; `adapt
   helpers), `discovery.py`, `zoning.py`, `provisioning.py` (intent/builder/plan/`PathVerification`);
   `workflow.py` (the **step registry** + mode→steps), `ports.py` (`RunStore` interface),
   `policies.py`, `errors.py`.
-- **`application/`** — services orchestrating domain + adapters. Split: onboarding/init + a `storage/`
-  subpackage (the provisioning bounded context) + as-built modules + cross-cutting (proxy, prereqs,
-  health, init_sheet).
+- **`application/`** — services orchestrating domain + adapters, organized as bounded-context packages
+  (ADR 0011): `runs/` (coordinator + event bus), `onboarding/` (A–C steps, GreenLake clients/preflight/
+  health), `provisioning/` (discovery/zoning/provision/path-verify + their step services), `documents/`
+  (verify + as-built), `platform/` (intake, init sheet, config, proxy, prereqs). `service.py` is the
+  composition-root façade the API constructs.
 - **`adapters/`** — one subpackage per external system, each built from `EndpointCreds`/config via
   factory functions (`storage/clients.py`, injectable so services unit-test with fakes).
 - **`api/`** — `app.py` (all routes as inline closures in `create_app(service)`), `schemas.py` (Pydantic
@@ -91,24 +93,27 @@ Replicate/DR ⚪ · Report ⚪ · **Document ✅(as-built, v0.12.0)**. File colu
 | `ports.py` | `RunStore` interface (persistence contract) |
 | `policies.py`, `errors.py` | Domain rules + typed errors |
 
-### 5.2 application/ (onboarding + cross-cutting)
+### 5.2 application/ (bounded-context packages, ADR 0011)
 | Module | Responsibility |
 |---|---|
-| **`onboarding_service.py`** | The **composition-root façade**: wires `runs/coordinator.py` (lifecycle, guarded spawn, set_state/emit) + the four step services (`onboarding/steps.py`, `storage/steps.py`, `documents/steps.py`) and delegates one-to-one; step logic lives in the services |
-| `init_sheet.py` | The workbook: `build_template_bytes` (Initialisation + Provisioning + Volumes + Host sets + Prerequisites tabs) and `parse_workbook_bytes` → `ParsedInitSheet` (work item, GL creds, `ProvisioningIntent`, customer/site) |
-| `provisioning.py` | Component A — GreenLake onboarding provisioning (register/assign/subscribe) orchestration |
-| `verification.py` | Post-init read-only config+health verify (`verify(item, user, pw)` → `VerificationReport`) |
-| `proxy.py` | `ProxyResolver` — effective proxy (manual > auto-detected system/PAC > direct), `apply_proxy_env` (ADR 0008) |
-| `prereqs.py`, `preflight_service.py`, `greenlake_preflight.py` | Firewall rules, connectivity pre-check, GreenLake readiness |
-| `health.py`, `configuring.py`, `intake.py` | GreenLake health check, config I/O, CSV intake |
-| `event_bus.py` | `InMemoryEventBus` — per-run pub/sub feeding SSE |
-| **`asbuilt.py`** | `AsBuiltData` + `generate_asbuilt` — fills the bundled HPE Block-Storage `.docx` (cover/customer, Table 01, inventory + checkhealth tables); `default_template()` resolution |
-| **`asbuilt_parse.py`** | `parse_asbuilt` (dump→`AsBuiltData`), `parse_inventory` (**CSV**, `showinventory -csvtable`), `parse_checkhealth` (Summary/Details) |
-| **`asbuilt_docx.py`** | `hpe_table` — HPE house-style Word tables (green header/zebra/borders), ported from the operator's `sapdoc.py` |
+| **`service.py`** | The **composition-root façade** (`OnboardingService`): wires the coordinator + four step services and delegates one-to-one; step logic lives in the services |
+| `runs/coordinator.py` | `RunCoordinator` — run lifecycle, pending-sheet stash, guarded background spawn, `set_state`/`emit` (store + SSE); owns the step exceptions |
+| `runs/event_bus.py` | `InMemoryEventBus` — per-run pub/sub feeding SSE |
+| `onboarding/steps.py` | `OnboardingSteps` — A GreenLake → B Cloud Connectivity → C DSCC (+ default adapter factories) |
+| `onboarding/greenlake_provision.py` | Component A — GreenLake registration orchestration (register/assign/subscribe) |
+| `onboarding/clients.py` | **`make_greenlake`** — the GreenLake client factory seam (the future ADR-0006 DSCC slot) |
+| `onboarding/greenlake_preflight.py`, `onboarding/preflight_service.py`, `onboarding/health.py` | GreenLake read preflight, local prereq checks, readiness check |
+| `documents/steps.py` | `DocumentSteps` — post-init verify + as-built (never touch run status) |
+| `documents/verification.py` | Read-only config+health verify (`verify(item, user, pw)` → `VerificationReport`) |
+| `documents/asbuilt.py`, `asbuilt_parse.py`, `asbuilt_docx.py` | As-built: fill the bundled HPE `.docx` / parse the CLI dump (CSV) / HPE house-style tables |
+| `platform/init_sheet.py` | The workbook: template build + `parse_workbook_bytes` → `ParsedInitSheet` |
+| `platform/intake.py`, `platform/configuring.py` | CSV intake, `.env` config I/O |
+| `platform/proxy.py`, `platform/prereqs.py` | `ProxyResolver` (ADR 0008), firewall rules + connectivity check |
 
-### 5.3 application/storage/ (provisioning bounded context)
+### 5.3 application/provisioning/ (storage-provisioning context)
 | Module | Responsibility |
 |---|---|
+| `steps.py` | `DiscoveryZoningSteps` (discover + zoning verify/plan; owns the durable discovery artifact behind `require_discovery`) and `ProvisioningSteps` (tier-1 preview/apply, Stage-2 builder, tier-2 path-verify) |
 | `clients.py` | Adapter **factories** (`make_wsapi`/`make_array_cli`/`make_vcenter`/`make_brocade`) — the injection seam for tests |
 | `discovery.py` | Read array ports + `showhost -d` + fabric resolution + vCenter HBAs → `DiscoveryReport` |
 | `zoning.py`, `zoning_plan.py` | Array-side zoning **verify** (report) + read-only zoning **plan** builder (ADR 0004) |
@@ -152,35 +157,40 @@ Replicate/DR ⚪ · Report ⚪ · **Document ✅(as-built, v0.12.0)**. File colu
    `POST /storage/builder`) → `preview` (`build_plan`) → confirm → `apply` (`apply_plan`, idempotent WSAPI
    writes) → `verify-paths` (tier-2, report-only).
 4. **As-built (last):** `POST /runs/{id}/asbuilt` → SSH read-only (`show*`/`checkhealth`/`showinventory
-   -csvtable`) → `parse_asbuilt` → `generate_asbuilt` → **.docx bytes in memory** → `GET /asbuilt/download`.
+   -csvtable`) → `parse_asbuilt` → `generate_asbuilt` → **.docx bytes (durable `run_artifacts`)** → `GET /asbuilt/download`.
 
 ## 7. State & persistence
 - **Durable (SQLite):** runs, work items, pending sheets (single-use token), provisioning intent.
-- **Transient (in-memory dicts on the service, lost on restart):** `_discovery`, `_zoning`, `_plan`,
-  **`_asbuilt`** (docx bytes), `_tasks` (running asyncio tasks). Also emitted in event data so the UI has them.
+- **Durable step artifacts (SQLite `run_artifacts`, ADR 0011 C7):** discovery report, provisioning-plan
+  gate, as-built docx — the store is the truth (restart-proof), the step services keep an in-memory parse
+  cache. Also emitted in event data so the UI has them. Only `_tasks` (running asyncio tasks) is
+  inherently transient.
 - **Secrets:** GreenLake creds + proxy in gitignored `.env`; device passwords supplied per-run or held in the
   pending-sheet/intent, never echoed to the browser.
 
 ## 8. Refactoring seams & known pain points (read this first)
 
-- **`onboarding_service.py` is a god-object.** It owns the event bus, the store, *all* per-run transient
-  state, and *every* step's `start_*`/`_run_*` (onboarding A–C, discovery, zoning, provisioning tiers,
-  verify, as-built). It is the prime decomposition target — e.g. split into per-bounded-context services
-  (onboarding / provisioning / verify / document) behind a thin run coordinator, and move transient state
-  into a store or the event log.
-- **The step registry is duplicated** across `domain/workflow.py` and `frontend/src/modes.ts`, kept "in
-  lockstep" by hand (a comment says so). A single source (generated or served) would remove a class of bugs.
-- **Transient per-run state is in-memory only** (`_discovery`/`_zoning`/`_plan`/`_asbuilt`) — a server
-  restart loses it and the step must re-run. Fine for a single-operator desktop app; a refactor toward
-  durability/multi-run would need to persist these.
-- **The hybrid control plane is half-built** (ADR 0006): everything is direct-WSAPI/SSH/browser; the DSCC
-  *cloud* client (the intended primary, multi-array plane) does not exist. A refactor that adds it should
-  introduce a control-plane-client abstraction with **capability routing** (cloud-preferred vs direct-only).
-- **Bounded contexts are already legible** and worth hardening: **provisioning** (`application/storage/*` +
-  `domain/storage.py`'s provisioning half), **as-built/document** (`asbuilt*.py` — cleanly self-contained,
-  parse→generate→docx), **onboarding** (A–D), **discovery/zoning** (shared foundation). `domain/storage.py`
-  is doing double duty (provisioning **and** discovery **and** zoning **and** as-built models) — a candidate
-  to split per context.
+Updated after the ADR-0011 Phase-1 refactor (2026-07-24). Of the five seams the original baseline
+named, three are RESOLVED; two remain, plus the standing invariants:
+
+- **RESOLVED — the god-object (C1):** the orchestrator is decomposed into `runs/coordinator.py` +
+  four per-context step services; `service.py` is a thin, permanent composition-root façade
+  (same public surface, pure delegation).
+- **RESOLVED — the domain grab-bag (C3) + flat application/ (C4):** models split into
+  `domain/{shared,discovery,zoning,provisioning}.py`; application modules live in context packages
+  (`runs/ onboarding/ provisioning/ documents/ platform/`); Component A renamed
+  `greenlake_provision` (the old `application/provisioning.py` name collided with the
+  storage-provisioning context).
+- **RESOLVED — in-memory-only step state (C7):** durable `run_artifacts` (discovery / plan gate /
+  as-built docx); store is the truth, the services keep a parse cache. Only `_tasks` is memory-only.
+- **REMAINING — the step registry is duplicated** across `domain/workflow.py` and
+  `frontend/src/modes.ts` (plus hand-mirrored types in `api.ts`, phase/status string literals across
+  the step components, and the `workItem.ts` shape mirror). ADR-0011 **Phase 2** serves the registry
+  via `GET /app/profile` and deletes the mirrors — the only planned API-contract change.
+- **REMAINING — the hybrid control plane is half-built** (ADR 0006): everything is
+  direct-WSAPI/SSH/browser; the DSCC *cloud* client does not exist. Its slot is now explicit:
+  `application/onboarding/clients.py` (`make_greenlake`) — add the DSCC client + capability routing
+  there when it is built. Deliberately NOT abstracted before then (ADR 0011).
 - **Async/sync boundary:** FastAPI async + `asyncio.to_thread` around blocking SDK clients; eventlet dormant.
   Keep the "no monkey-patch" invariant if touching the SDK import path (a past heap-corruption class of bug
   lived near packaging — see ADR 0008 pitfall).
@@ -191,7 +201,7 @@ Replicate/DR ⚪ · Report ⚪ · **Document ✅(as-built, v0.12.0)**. File colu
 - **Scope / north-star:** [SCOPE.md](SCOPE.md) — the 7-stage × block/file matrix.
 - **Glossary:** [CONTEXT.md](../CONTEXT.md) — canonical domain terms (incl. As-built, Provisioning intent,
   Path verification, Ideal subset, control plane).
-- **Decisions:** [docs/adr/0001–0010](adr/) — post-init verify (0001), discovery-driven (0002), WSAPI
+- **Decisions:** [docs/adr/0001–0011](adr/) — post-init verify (0001), discovery-driven (0002), WSAPI
   transport (0003), zoning verify+plan (0004), modes (0005), hybrid control plane (0006), init-only profile
   (0007), proxy auto-detect (0008), fabric-from-switch (0009), provisioning builder consumes zoning (0010).
 - **Runbook:** [docs/runbooks/provisioning-esxi-fc.md](runbooks/provisioning-esxi-fc.md).
