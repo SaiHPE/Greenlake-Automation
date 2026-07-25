@@ -49,6 +49,20 @@ def test_health(tmp_path):
     assert _client(tmp_path).get("/health").json() == {"status": "ok"}
 
 
+def test_app_profile_serves_the_step_registry(tmp_path):
+    # ADR 0011 Phase 2: the wizard renders from the SERVED registry — this payload IS the contract
+    # that replaced the hand-synced frontend mirror (modes.ts).
+    body = _client(tmp_path).get("/app/profile").json()
+    assert [s["key"] for s in body["steps"]] == [
+        "greenlake", "cloudinit", "dscc", "discover", "zoning", "provision", "verify", "asbuilt",
+    ]
+    assert all(s["label"] and s["kind"] in ("init", "provision", "verify") and s["phase"] for s in body["steps"])
+    assert body["modes"]["VERIFY_ONLY"] == ["verify", "asbuilt"]
+    assert body["modes"]["FULL_ONBOARDING"] == ["greenlake", "cloudinit", "dscc", "verify", "asbuilt"]
+    assert body["modes"]["PROVISION_ONLY"] == ["discover", "zoning", "provision", "verify", "asbuilt"]
+    assert body["modes"]["BOTH"] == [s["key"] for s in body["steps"]]
+
+
 def test_create_get_and_list_runs_masks_secret(tmp_path):
     client = _client(tmp_path)
     created = client.post("/runs", json={"work_item": _work_item_payload()})

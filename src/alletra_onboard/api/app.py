@@ -73,6 +73,7 @@ from alletra_onboard.application.platform.init_sheet import build_template_bytes
 from alletra_onboard.application.platform.proxy import ProxyResolver, apply_proxy_env, detect_system_proxy
 from alletra_onboard.domain.models import RunMode
 from alletra_onboard.domain.provisioning import ProvisioningBuilder, ProvisioningComposition, ProvisioningObjects
+from alletra_onboard.domain.workflow import STEP_REGISTRY, mode_steps
 from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.service import (
     OnboardingService,
@@ -127,8 +128,19 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def app_profile() -> dict:
         # The UI reads this to brand itself + restrict the mode chooser: "full" shows all modes;
         # "init-only" (the Alletra MP Initialization accelerator) shows Initialization only.
+        # It ALSO serves the step registry + mode presets — the single source of truth the wizard
+        # renders from (ADR 0011 Phase 2; kills the hand-synced frontend mirror).
         settings = load_settings()
-        return {"profile": settings.alletra_profile, "init_only": settings.init_only, "title": settings.app_title}
+        return {
+            "profile": settings.alletra_profile,
+            "init_only": settings.init_only,
+            "title": settings.app_title,
+            "steps": [
+                {"key": s.key, "label": s.label, "kind": s.kind, "phase": s.phase.value}
+                for s in STEP_REGISTRY
+            ],
+            "modes": {mode.value: list(keys) for mode, keys in mode_steps().items()},
+        }
 
     @app.get("/config", response_model=ConfigStatusResponse)
     async def get_config() -> ConfigStatusResponse:

@@ -2,7 +2,7 @@ import { Box, Button, Heading, Text } from 'grommet';
 import { Checkmark } from 'grommet-icons';
 import { useEffect, useRef, useState } from 'react';
 import { createRunFromSheet, getAppProfile, getRun } from './api';
-import { actionKeysFor, ACTION_CATALOG, ActionKey, phaseToActionKey, RunMode } from './modes';
+import { actionKeysFor, ActionKey, phaseToActionKey, RunMode, StepRegistry, subtitleFor } from './modes';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
 import { AsBuiltStep } from './steps/AsBuiltStep';
@@ -32,19 +32,15 @@ const DONE_STEP: StepDef = { key: 'done', title: 'Finish', subtitle: 'summary' }
 const RUN_ID_KEY = 'alletra.runId';
 
 // The wizard steps: the sheet is COMPLETE intake and comes BEFORE the mode (ADR 0005 revision), so
-// the order is Prereq -> Sheet -> Mode -> the mode's action steps -> Finish. Still 3 scaffolding
-// steps before the actions, so the resume math (3 + indexInActions) is unchanged.
-function buildSteps(mode: RunMode, custom: ActionKey[]): StepDef[] {
-  const keys = actionKeysFor(mode, custom);
-  const actions = ACTION_CATALOG.filter((a) => keys.includes(a.key)).map((a) => ({
-    key: a.key,
-    title: a.title,
-    subtitle: a.subtitle,
-  }));
+// the order is Prereq -> Sheet -> Mode -> the mode's action steps -> Finish. The action steps come
+// from the SERVED registry (GET /app/profile) — the UI keeps no copy of the step list (ADR 0011).
+function buildSteps(registry: StepRegistry | null, mode: RunMode, custom: ActionKey[]): StepDef[] {
+  const keys = registry ? new Set(actionKeysFor(registry, mode, custom)) : new Set<ActionKey>();
+  const actions = (registry?.steps ?? [])
+    .filter((s) => keys.has(s.key))
+    .map((s) => ({ key: s.key, title: s.label, subtitle: subtitleFor(s.key) }));
   return [PREREQ_STEP, SHEET_STEP, MODE_STEP, ...actions, DONE_STEP];
 }
-
-const ACTION_KEY_SET = new Set<string>(ACTION_CATALOG.map((a) => a.key));
 
 export default function App() {
   const storedRunId = localStorage.getItem(RUN_ID_KEY);
@@ -61,9 +57,11 @@ export default function App() {
   // Build profile: the init-only accelerator brands itself + shows only the Initialization mode.
   const [initOnly, setInitOnly] = useState(false);
   const [appTitle, setAppTitle] = useState('Alletra MP B10000 Onboarding');
+  // The served step registry (GET /app/profile) — the wizard renders from this, not a local copy.
+  const [registry, setRegistry] = useState<StepRegistry | null>(null);
   const { run, events } = useRunEvents(runId);
 
-  const steps = buildSteps(mode, customSteps);
+  const steps = buildSteps(registry, mode, customSteps);
   const lastStep = steps.length - 1;
   const current = steps[Math.min(step, lastStep)];
 
@@ -73,22 +71,25 @@ export default function App() {
     else localStorage.removeItem(RUN_ID_KEY);
   }, [runId]);
 
-  // Build profile: brand the app and (init-only accelerator) lock the mode to Initialization.
+  // Build profile: brand the app, take the served step registry, and (init-only accelerator) lock
+  // the mode to Initialization.
   useEffect(() => {
     getAppProfile()
       .then((p) => {
         setInitOnly(p.init_only);
         setAppTitle(p.title);
+        setRegistry({ steps: p.steps, modes: p.modes });
         if (p.init_only) setMode('FULL_ONBOARDING');
       })
       .catch(() => {});
   }, []);
 
-  // On first load, if a run was persisted, restore its mode + work-item form and jump to the right
-  // step. If it no longer exists in the backend, drop it.
+  // Once the registry has arrived: if a run was persisted, restore its mode + work-item form and
+  // jump to the right step (indexes come from the BUILT step list — no hard-coded offsets). If the
+  // run no longer exists in the backend, drop it.
   const restored = useRef(false);
   useEffect(() => {
-    if (restored.current) return;
+    if (!registry || restored.current) return;
     restored.current = true;
     const stored = localStorage.getItem(RUN_ID_KEY);
     if (!stored) return;
@@ -101,19 +102,20 @@ export default function App() {
         if (detail.work_item) setForm(fromParsedWorkItem(detail.work_item));
 
         // Resume on the action step matching the run's phase (within this mode's step list).
-        const keys = actionKeysFor(runMode, selected);
-        const actionKey = phaseToActionKey(detail.run.current_phase);
-        const indexInActions = keys.indexOf(actionKey);
-        const resumeAt = indexInActions >= 0 ? 3 + indexInActions : keys.length ? 3 : 2;
-        const total = 3 + keys.length + 1;
+        const restoredSteps = buildSteps(registry, runMode, selected);
+        const actionKey = phaseToActionKey(registry, detail.run.current_phase);
+        const idx = restoredSteps.findIndex((s) => s.key === actionKey);
+        const modeIdx = restoredSteps.findIndex((s) => s.key === 'mode');
+        const firstActionIdx = modeIdx + 1 < restoredSteps.length - 1 ? modeIdx + 1 : modeIdx;
+        const resumeAt = idx >= 0 ? idx : firstActionIdx;
         setStep((cur) => (cur === 0 ? resumeAt : cur));
-        setMaxStep(total - 1); // the run exists — let every step be navigable
+        setMaxStep(restoredSteps.length - 1); // the run exists — let every step be navigable
       })
       .catch(() => {
         localStorage.removeItem(RUN_ID_KEY);
         setRunId(null);
       });
-  }, []);
+  }, [registry]);
 
   const advance = (to: number) => {
     setStep(to);
@@ -145,7 +147,7 @@ export default function App() {
     next();
   };
 
-  const needsRun = ACTION_KEY_SET.has(current.key) && !runId;
+  const needsRun = (registry?.steps ?? []).some((s) => s.key === current.key) && !runId;
 
   return (
     <Box fill direction="row" background="background-back">
@@ -238,6 +240,7 @@ export default function App() {
               onConfirm={confirmMode}
               locked={!!runId}
               initOnly={initOnly}
+              catalog={registry?.steps ?? []}
             />
           )}
           {current.key === 'prereq' && <PrereqStep onDone={next} />}
