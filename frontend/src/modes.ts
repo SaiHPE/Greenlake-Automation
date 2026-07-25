@@ -30,14 +30,14 @@ export interface StepRegistry {
 
 // Presentation only — the one per-step thing the backend doesn't own.
 const STEP_SUBTITLES: Record<ActionKey, string> = {
-  greenlake: 'register · assign · subscribe',
-  cloudinit: 'on-array wizard',
+  greenlake: 'Register, assign and subscribe',
+  cloudinit: 'Connect the array to HPE GreenLake',
   dscc: 'Set Up System wizard',
-  discover: 'array ports · ESXi HBAs · zoning',
-  zoning: 'verify · remediate (confirm)',
-  provision: 'host · volumes · LUNs',
-  verify: 'SSH read-only check',
-  asbuilt: 'read-only → HPE .docx',
+  discover: 'Array ports, host adapters, fabric logins',
+  zoning: 'Verify and draft switch commands',
+  provision: 'Hosts, volumes and exports',
+  verify: 'Read-only configuration check',
+  asbuilt: 'Handover document',
 };
 
 export function subtitleFor(key: string): string {
@@ -60,7 +60,7 @@ export const MODE_PRESETS: ModePreset[] = [
   { mode: 'FULL_ONBOARDING', label: 'Full onboarding', blurb: 'GreenLake → Cloud Connectivity → DSCC, then verify. For a brand-new array.' },
   { mode: 'PROVISION_ONLY', label: 'Provision storage only', blurb: 'Discovery, zoning, and host + LUN provisioning on an already-initialised array.' },
   { mode: 'BOTH', label: 'Onboard, then provision', blurb: 'The full chain end to end: initialise the array, then provision storage.' },
-  { mode: 'VERIFY_ONLY', label: 'Verify only', blurb: 'Read-only SSH config + health check against an initialised array.' },
+  { mode: 'VERIFY_ONLY', label: 'Verify only', blurb: 'A read-only verification of the array configuration and status.' },
   { mode: 'CUSTOM', label: 'Custom…', blurb: 'Pick exactly the steps to run.' },
 ];
 
