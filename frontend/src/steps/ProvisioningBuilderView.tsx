@@ -7,7 +7,7 @@ import {
   ProvisioningObjects,
   saveStorageBuilder,
 } from '../api';
-import { Section } from '../components';
+import { Surface } from '../ui/primitives';
 
 // The operator dropdown-builder (ADR 0010 Stage 2): compose host-set membership + the exports
 // (source volume/VV-set → target host/host-set → LUN) over discovered + to-be-created objects, and
@@ -131,7 +131,7 @@ export function ProvisioningBuilderView({ runId, disabled = false }: { runId: st
 
   if (!objects) {
     return (
-      <Section title="Compose the provisioning (dropdowns)">
+      <Surface title="Compose the provisioning (dropdowns)">
         <Text size="small" color="text-weak">
           Pick host-set members and the exports (which volume / VV-set is presented to which host /
           host-set, at which LUN) from the discovered + to-be-created objects. Leave it untouched to use
@@ -142,7 +142,7 @@ export function ProvisioningBuilderView({ runId, disabled = false }: { runId: st
           {busy && <Spinner />}
         </Box>
         {error && <Notification status="critical" title="Could not load objects" message={error} onClose={() => setError(null)} />}
-      </Section>
+      </Surface>
     );
   }
 
@@ -152,7 +152,7 @@ export function ProvisioningBuilderView({ runId, disabled = false }: { runId: st
   const busyOrDisabled = disabled || busy;
 
   return (
-    <Section title="Compose the provisioning (dropdowns)">
+    <Surface title="Compose the provisioning (dropdowns)">
       {objects.array_error && (
         <Notification status="warning" title="Array objects unavailable"
           message={`Couldn't read existing objects from the array (${objects.array_error}). You can still compose over the to-be-created + discovered objects.`} />
@@ -192,6 +192,6 @@ export function ProvisioningBuilderView({ runId, disabled = false }: { runId: st
       </Box>
       {saved && <Notification status="normal" title="Composition saved" message={saved} onClose={() => setSaved(null)} />}
       {error && <Notification status="critical" title="Save failed" message={error} onClose={() => setError(null)} />}
-    </Section>
+    </Surface>
   );
 }
