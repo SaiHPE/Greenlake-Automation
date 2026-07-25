@@ -4,11 +4,11 @@ Generates the per-deployment as-built from **read-only** array facts (`show*` + 
 writes, no switch login), rendered into HPE's house-style Word template so the output carries the HPE
 logo / headers / footers / fonts.
 
-Design (so no proprietary HPE artifact lands in this public repo):
-  * The template is **not bundled here**. At runtime the generator loads HPE's house-style template
-    (`HPE_Graphik_A4.dotx`, or any .docx/.dotx) from a path resolved by ``default_template()`` — an
-    env var or a ``templates/`` folder the engineer populates once next to the app. If none is found,
-    it renders a plain (unbranded) document, so it always works.
+Design:
+  * HPE's house-style template (`HPE_Graphik_A4.dotx`) is **bundled** as
+    ``resources/asbuilt_template.dotx`` and used by default. Override with the env var
+    ``ALLETRA_ASBUILT_TEMPLATE`` or a ``templates/`` drop-in next to the app; ``template=None`` renders
+    a plain (unbranded) document, so it always works.
   * We keep the template's branding + styles + section (headers/footers), delete its instructional
     body ("delete all content and start typing", per the template itself), then add our content.
 
@@ -73,12 +73,22 @@ class AsBuiltData:
     checkhealth: str = ""   # checkhealth -svc -detail, verbatim
 
 
+def _resource_dir() -> Path:
+    """Where bundled resources live — under sys._MEIPASS in the frozen .exe, else the package dir."""
+    if getattr(sys, "frozen", False):
+        return Path(getattr(sys, "_MEIPASS", ".")) / "alletra_onboard" / "resources"
+    return Path(__file__).resolve().parent.parent / "resources"
+
+
 def default_template() -> Path | None:
-    """Resolve the house-style template WITHOUT bundling it in the repo: an explicit env var, else a
-    ``templates/asbuilt_template.(dotx|docx)`` next to the app / cwd. None => render unbranded."""
+    """The house-style template: an explicit env override, else the **bundled** HPE template, else a
+    ``templates/`` drop-in next to the app / cwd, else None (render unbranded)."""
     env = os.environ.get("ALLETRA_ASBUILT_TEMPLATE")
     if env and Path(env).is_file():
         return Path(env)
+    bundled = _resource_dir() / "asbuilt_template.dotx"
+    if bundled.is_file():
+        return bundled
     bases = [Path.cwd()]
     if getattr(sys, "argv", None) and sys.argv[0]:
         bases.append(Path(sys.argv[0]).resolve().parent)
