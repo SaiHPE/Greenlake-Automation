@@ -1,6 +1,6 @@
 from pydantic import SecretStr
 
-from alletra_onboard.application.preflight_service import PreflightService
+from alletra_onboard.application.onboarding.preflight_service import PreflightService
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import ArrayWorkItem, CheckStatus, DsccSetupConfig, NetworkConfig
 

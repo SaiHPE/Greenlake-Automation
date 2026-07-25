@@ -10,11 +10,11 @@ from __future__ import annotations
 import asyncio
 from typing import Callable
 
-from alletra_onboard.application.asbuilt import generate_asbuilt
-from alletra_onboard.application.asbuilt_parse import parse_asbuilt
+from alletra_onboard.application.documents.asbuilt import generate_asbuilt
+from alletra_onboard.application.documents.asbuilt_parse import parse_asbuilt
 from alletra_onboard.application.runs.coordinator import RunCoordinator
 from alletra_onboard.application.storage.clients import make_array_cli
-from alletra_onboard.application.verification import verify
+from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.domain.models import ArrayWorkItem, RunRecord, WorkflowPhase
 from alletra_onboard.domain.shared import EndpointCreds
 

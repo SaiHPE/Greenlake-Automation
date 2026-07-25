@@ -1,4 +1,4 @@
-from alletra_onboard.application.configuring import (
+from alletra_onboard.application.platform.configuring import (
     masked_gl_credentials,
     read_env,
     set_env_values,

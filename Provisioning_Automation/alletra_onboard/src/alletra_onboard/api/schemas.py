@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from alletra_onboard.application.health import GreenLakeCheckReport
+from alletra_onboard.application.onboarding.health import GreenLakeCheckReport
 from alletra_onboard.domain.models import ArrayWorkItem, PreflightReport, RunEvent, RunMode, RunRecord
 
 

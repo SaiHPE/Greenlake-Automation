@@ -1,7 +1,7 @@
 import docx
 from docx.oxml.ns import qn
 
-from alletra_onboard.application.asbuilt import AsBuiltData, default_template, generate_asbuilt
+from alletra_onboard.application.documents.asbuilt import AsBuiltData, default_template, generate_asbuilt
 
 _CHECKHEALTH = (
     "Checking alert\n"

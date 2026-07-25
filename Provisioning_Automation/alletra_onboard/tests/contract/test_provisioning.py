@@ -6,7 +6,7 @@ from alletra_onboard.adapters.greenlake.devices import DevicesClient
 from alletra_onboard.adapters.greenlake.http_client import GreenLakeHttpClient
 from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogClient
 from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
-from alletra_onboard.application.provisioning import (
+from alletra_onboard.application.onboarding.greenlake_provision import (
     DONE,
     FAILED,
     SKIPPED,
@@ -30,7 +30,7 @@ def _no_sleep(monkeypatch):
         return None
 
     monkeypatch.setattr("alletra_onboard.adapters.greenlake.http_client.asyncio.sleep", _sleep)
-    monkeypatch.setattr("alletra_onboard.application.provisioning.asyncio.sleep", _sleep)
+    monkeypatch.setattr("alletra_onboard.application.onboarding.greenlake_provision.asyncio.sleep", _sleep)
 
 
 def _item() -> ArrayWorkItem:

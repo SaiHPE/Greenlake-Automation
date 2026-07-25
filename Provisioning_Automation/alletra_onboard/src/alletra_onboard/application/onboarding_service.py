@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Callable
 
 from alletra_onboard.application.documents.steps import DocumentSteps
-from alletra_onboard.application.event_bus import InMemoryEventBus
+from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.onboarding.steps import (
     OnboardingSteps,
     default_cloudinit_factory,
@@ -32,7 +32,7 @@ from alletra_onboard.application.runs.coordinator import (
     StepPreconditionError,
 )
 from alletra_onboard.application.storage.steps import DiscoveryZoningSteps, ProvisioningSteps
-from alletra_onboard.application.verification import verify
+from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunMode, RunRecord
 from alletra_onboard.domain.ports import RunStore

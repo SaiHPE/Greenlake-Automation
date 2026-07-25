@@ -1,4 +1,4 @@
-from alletra_onboard.application.asbuilt_parse import (
+from alletra_onboard.application.documents.asbuilt_parse import (
     parse_asbuilt,
     parse_checkhealth,
     parse_inventory,

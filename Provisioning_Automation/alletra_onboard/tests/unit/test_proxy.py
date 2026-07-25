@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from alletra_onboard.application.proxy import (
+from alletra_onboard.application.platform.proxy import (
     ProxyResolver,
     _first_proxy,
     apply_proxy_env,
@@ -75,7 +75,7 @@ def test_winhttp_out_strings_are_raw_pointers_not_lpwstr():
     """
     import ctypes
 
-    from alletra_onboard.application import proxy
+    from alletra_onboard.application.platform import proxy
 
     if not proxy._IS_WINDOWS:  # the structs only exist on the packaged Windows target
         return
@@ -92,7 +92,7 @@ def test_win_system_proxy_reads_then_frees_a_real_pointer(monkeypatch):
     genuine GlobalAlloc'd wide string, so a regression to the bad free would corrupt the heap here."""
     import ctypes
 
-    from alletra_onboard.application import proxy
+    from alletra_onboard.application.platform import proxy
 
     if not proxy._IS_WINDOWS:
         return
