@@ -1,10 +1,29 @@
-import { Box, Button, CheckBox, Notification, Spinner, Table, TableBody, TableCell, TableHeader, TableRow, Tag, Text } from 'grommet';
+import { Box, Button, DataTable, Text } from 'grommet';
 import { useState } from 'react';
-import { PathVerdict, PathVerification, ProvisioningPlan, ProvisioningResult, RunEvent, RunRecord, storageApply, storagePreview, verifyPaths } from '../api';
-import { EventLog, Section } from '../components';
+import {
+  ActionOutcome,
+  HostPathStatus,
+  PathVerdict,
+  PathVerification,
+  PlannedAction,
+  ProvisioningPlan,
+  ProvisioningResult,
+  RunEvent,
+  RunRecord,
+  storageApply,
+  storagePreview,
+  verifyPaths,
+} from '../api';
+import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
+import { StatusIndicator, StepState } from '../ui/status';
+import { StepShell } from '../ui/StepShell';
 import { ProvisioningBuilderView } from './ProvisioningBuilderView';
 
-const VERDICT_COLOR: Record<PathVerdict, string> = { live: 'status-ok', partial: 'status-warning', no_path: 'status-unknown' };
+const VERDICT: Record<PathVerdict, { state: StepState; label: string }> = {
+  live: { state: 'complete', label: 'Live' },
+  partial: { state: 'action_required', label: 'Partial' },
+  no_path: { state: 'not_started', label: 'No path' },
+};
 
 interface Props {
   runId: string;
@@ -14,113 +33,190 @@ interface Props {
 }
 
 function latest<T>(events: RunEvent[], type: string, key: string): T | null {
-  const event = [...events].reverse().find((e) => e.event_type === type);
+  const event = [...events].reverse().find((item) => item.event_type === type);
   return (event?.data?.[key] as T) ?? null;
 }
 
 export function ProvisionStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
   const running = run?.status === 'running';
+
   const plan = latest<ProvisioningPlan>(events, 'storage.previewed', 'plan');
   const result = latest<ProvisioningResult>(events, 'storage.applied', 'result');
   const paths = latest<PathVerification>(events, 'storage.paths.verified', 'verification');
 
-  const call = (fn: () => Promise<unknown>) => async () => {
+  const toCreate = plan ? plan.actions.filter((action) => !action.exists).length : 0;
+  const existing = plan ? plan.actions.length - toCreate : 0;
+  const created = result ? result.outcomes.filter((outcome) => outcome.status === 'created').length : 0;
+
+  const call = (action: () => Promise<unknown>) => async () => {
     setError(null);
     try {
-      await fn();
+      await action();
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
     }
   };
 
   return (
-    <Box gap="medium">
+    <StepShell
+      title="Provision storage"
+      description="Creates the hosts, host sets, volumes and exports on the array. No writes occur until the plan is approved."
+      stateDetail={result ? 'objects created' : plan ? 'awaiting approval' : undefined}
+      error={error}
+      onDismissError={() => setError(null)}
+      activityEmpty="Compose the objects below, then build the plan."
+      footerNote="Re-running skips existing objects."
+      gate={
+        plan && !plan.error && !result
+          ? {
+              title: 'Review the plan, then approve creation',
+              message:
+                'No changes have been made to the array. Creation is idempotent — existing objects are skipped.',
+            }
+          : null
+      }
+      actions={
+        <>
+          <Button
+            busy={running}
+            label={plan ? 'Rebuild plan' : 'Build plan'}
+            onClick={call(() => storagePreview(runId))}
+          />
+          {plan && !plan.error && !result && (
+            <Button primary busy={running} label="Create storage objects" onClick={call(() => storageApply(runId))} />
+          )}
+          {result && <Button primary label="Continue" onClick={onDone} />}
+        </>
+      }
+    >
       <ProvisioningBuilderView runId={runId} disabled={running} />
 
-      <Section title="Provision storage (host · volumes · LUN export)">
-        <Text size="small" color="text-weak">
-          Creates one host definition per ESXi server (all FC WWNs, at the discovered persona — VMware =
-          WSAPI 8), groups them in the host set, creates the volumes in the CPG, and exports them per the
-          composition above (or the default). Idempotent — a re-run reports what already exists.
-        </Text>
-        <Box direction="row" gap="small" align="center">
-          <Button primary label={running ? 'Working…' : plan ? 'Rebuild plan' : 'Build plan'} disabled={running} onClick={call(() => storagePreview(runId))} />
-          {running && <Spinner />}
-        </Box>
-        {error && <Notification status="critical" title="Provisioning step failed" message={error} onClose={() => setError(null)} />}
-      </Section>
-
-      {plan?.error && <Notification status="critical" title="Plan could not be built" message={plan.error} />}
+      {plan?.error && <InlineNotification tone="critical" title="The plan could not be built" message={plan.error} />}
 
       {plan && !plan.error && (
-        <Section title={`Plan — ${plan.actions.length} action(s)`}>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableCell><Text size="small" weight="bold">Kind</Text></TableCell>
-                <TableCell><Text size="small" weight="bold">Name</Text></TableCell>
-                <TableCell><Text size="small" weight="bold">What</Text></TableCell>
-                <TableCell><Text size="small" weight="bold">State</Text></TableCell>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {plan.actions.map((a, i) => (
-                <TableRow key={i}>
-                  <TableCell><Text size="small">{a.kind}</Text></TableCell>
-                  <TableCell><Text size="small">{a.name}</Text></TableCell>
-                  <TableCell><Text size="small">{a.description}</Text></TableCell>
-                  <TableCell><Tag size="small" value={a.exists ? 'exists' : 'create'} border={{ color: a.exists ? 'border' : 'brand' }} /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {plan.notes.map((n, i) => <Text key={i} size="small" color="status-warning">• {n}</Text>)}
-          <CheckBox
-            label="I reviewed this plan and authorise creating these objects on the array."
-            checked={confirmed}
-            onChange={(e) => setConfirmed(e.target.checked)}
+        <Surface title="Plan" description="Objects to be created on the array when you approve.">
+          <DataTable
+            columns={[
+              { property: 'kind', header: 'Kind', render: (action: PlannedAction) => <Text size="small">{action.kind}</Text> },
+              { property: 'name', header: 'Name', render: (action: PlannedAction) => <Text size="small">{action.name}</Text> },
+              {
+                property: 'exists',
+                header: 'Action',
+                render: (action: PlannedAction) => (
+                  <StatusIndicator
+                    state={action.exists ? 'not_started' : 'complete'}
+                    label={action.exists ? 'Exists' : 'Create'}
+                  />
+                ),
+              },
+              {
+                property: 'description',
+                header: 'Detail',
+                render: (action: PlannedAction) => (
+                  <Text size="small" color="text-weak">
+                    {action.description}
+                  </Text>
+                ),
+              },
+            ]}
+            data={plan.actions}
+            primaryKey={false}
           />
-          <Button label={running ? 'Creating…' : 'Apply — create on array'} primary disabled={!confirmed || running} onClick={call(() => storageApply(runId))} alignSelf="start" />
-        </Section>
+          <TableSummary>
+            {toCreate} to create · {existing} already exist
+          </TableSummary>
+          {plan.notes.length > 0 && (
+            <InlineNotification tone="info" title="Plan notes" message={plan.notes.join(' · ')} />
+          )}
+        </Surface>
       )}
 
       {result && (
-        <Section title="Result">
-          {result.error && <Notification status="critical" title="Provisioning reported an error" message={result.error} />}
-          {result.outcomes.map((o, i) => (
-            <Text key={i} size="small">
-              <b>{o.kind}</b> {o.name} — {o.status}{o.detail ? ` (${o.detail})` : ''}
-            </Text>
-          ))}
-          <Button label="Continue →" primary onClick={onDone} alignSelf="start" />
-        </Section>
+        <Surface title="Result">
+          {result.error ? (
+            <InlineNotification tone="critical" title="Creation reported an error" message={result.error} />
+          ) : (
+            <InlineNotification
+              tone="ok"
+              title={`${created} object${created === 1 ? '' : 's'} created`}
+              message={`${result.outcomes.length - created} already existed and were left untouched.`}
+            />
+          )}
+          <DataTable
+            columns={[
+              { property: 'kind', header: 'Kind', render: (outcome: ActionOutcome) => <Text size="small">{outcome.kind}</Text> },
+              { property: 'name', header: 'Name', render: (outcome: ActionOutcome) => <Text size="small">{outcome.name}</Text> },
+              {
+                property: 'status',
+                header: 'Result',
+                render: (outcome: ActionOutcome) => (
+                  <StatusIndicator
+                    state={outcome.status === 'created' ? 'complete' : outcome.status === 'failed' ? 'failed' : 'not_started'}
+                    label={outcome.status === 'created' ? 'Created' : outcome.status === 'failed' ? 'Failed' : 'Existed'}
+                  />
+                ),
+              },
+              {
+                property: 'detail',
+                header: 'Detail',
+                render: (outcome: ActionOutcome) => (
+                  <Text size="small" color="text-weak">
+                    {outcome.detail || '—'}
+                  </Text>
+                ),
+              },
+            ]}
+            data={result.outcomes}
+            primaryKey={false}
+          />
+        </Surface>
       )}
 
-      <Section title="Path verification (tier-2) — is the exported LUN actually live?">
-        <Text size="small" color="text-weak">
-          Reads showvlun -a (read-only) and reports, per host, whether the LUN is live and over how many
-          fabrics. Report-only — a "no path" host is fine (the export activates once the host is on +
-          zoned); it never blocks provisioning.
-        </Text>
-        <Box direction="row" gap="small" align="center">
-          <Button label={running ? 'Working…' : 'Check paths'} disabled={running} onClick={call(() => verifyPaths(runId))} />
-          {running && <Spinner />}
-        </Box>
-        {paths?.error && <Notification status="critical" title="Path check failed" message={paths.error} />}
-        {paths && !paths.error && paths.hosts.map((h) => (
-          <Box key={h.host} direction="row" gap="small" align="center" pad={{ vertical: 'xxsmall' }}>
-            <Box width="240px" flex={false}><Text size="small">{h.host}</Text></Box>
-            <Box width="90px" flex={false}><Tag size="small" value={h.verdict} border={{ color: VERDICT_COLOR[h.verdict] }} /></Box>
-            <Text size="small" color="text-weak">{h.detail}</Text>
+      <Surface
+        title="Path verification"
+        description="Reads the array back and reports whether each exported LUN is live, and over how many fabrics. Report only — it never gates the run."
+        actions={<Button busy={running} label="Verify paths" onClick={call(() => verifyPaths(runId))} />}
+      >
+        {paths?.error && <InlineNotification tone="critical" title="Path verification failed" message={paths.error} />}
+        {paths && !paths.error && paths.hosts.length === 0 && (
+          <Text size="small" color="text-weak">
+            No target hosts to verify.
+          </Text>
+        )}
+        {paths && !paths.error && paths.hosts.length > 0 && (
+          <DataTable
+            columns={[
+              { property: 'host', header: 'Host', render: (host: HostPathStatus) => <Text size="small">{host.host}</Text> },
+              {
+                property: 'verdict',
+                header: 'Result',
+                render: (host: HostPathStatus) => (
+                  <StatusIndicator state={VERDICT[host.verdict].state} label={VERDICT[host.verdict].label} />
+                ),
+              },
+              {
+                property: 'detail',
+                header: 'Detail',
+                render: (host: HostPathStatus) => (
+                  <Text size="small" color="text-weak">
+                    {host.detail}
+                  </Text>
+                ),
+              },
+            ]}
+            data={paths.hosts}
+            primaryKey="host"
+          />
+        )}
+        {paths?.notes.length ? (
+          <Box flex={false}>
+            <Text size="xsmall" color="text-weak">
+              {paths.notes.join(' · ')}
+            </Text>
           </Box>
-        ))}
-        {paths && !paths.error && paths.hosts.length === 0 && <Text size="small" color="text-weak">No target hosts to verify.</Text>}
-        {paths?.notes.map((n, i) => <Text key={i} size="small" color="text-weak">• {n}</Text>)}
-      </Section>
-
-      <Section title="Activity"><EventLog events={events.filter((e) => e.phase === 'STORAGE_PROVISION')} /></Section>
-    </Box>
+        ) : null}
+      </Surface>
+    </StepShell>
   );
 }

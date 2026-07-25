@@ -1,7 +1,9 @@
-import { Box, Button, Notification, Spinner, Text, TextInput } from 'grommet';
+import { Box, Button, FormField, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
 import { useState } from 'react';
 import { launchDiscoveryTool, RunEvent, RunRecord, startCloudinit } from '../api';
-import { EventLog, Instructions, Section, StatusTag } from '../components';
+import { InlineNotification, Surface } from '../ui/primitives';
+import { StatusIndicator } from '../ui/status';
+import { StepShell } from '../ui/StepShell';
 import { WorkItemForm } from '../workItem';
 
 interface Props {
@@ -12,44 +14,29 @@ interface Props {
   onDone: () => void;
 }
 
-function ReviewRow({ label, value }: { label: string; value: string }) {
-  return (
-    <Box direction="row" gap="small">
-      <Box width="180px" flex={false}>
-        <Text size="small" color="text-weak">
-          {label}
-        </Text>
-      </Box>
-      <Text size="small" weight="bold">
-        {value || '—'}
-      </Text>
-    </Box>
-  );
-}
-
 export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
-  // 169.254.0.0 is the placeholder the work item carries when no per-boot URL was set — start
-  // with an empty box so the operator must paste the real one from the Discovery Tool.
+  // 169.254.0.0 is the placeholder the workbook carries when no per-boot address was recorded, so
+  // the field starts empty and the operator must paste the current one.
   const [url, setUrl] = useState(form.cloudinit_url.includes('169.254.0.0') ? '' : form.cloudinit_url);
   const [error, setError] = useState<string | null>(null);
   const [discoveryBusy, setDiscoveryBusy] = useState(false);
   const [discovery, setDiscovery] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const stepEvents = events.filter((e) => e.phase === 'CLOUDINIT_CONNECT');
+  const mine = events.filter((event) => event.phase === 'CLOUDINIT_CONNECT');
   const running = run?.status === 'running' && run?.current_phase === 'CLOUDINIT_CONNECT';
   const connected = run?.current_phase === 'DSCC_SETUP_SYSTEM' && run?.status === 'ready';
-  const failed =
+  const awaitingSubmit =
+    run?.status === 'waiting_for_operator' &&
     run?.current_phase === 'CLOUDINIT_CONNECT' &&
-    (run?.status === 'retryable_failure' || run?.status === 'terminal_failure');
-  // Must be a real link-local URL — reject the 169.254.0.0 placeholder (it's not a host).
-  const validUrl = url.trim().startsWith('https://169.254.') && !url.trim().includes('169.254.0.0');
+    mine.some((event) => event.event_type === 'operator.review_ready');
+  const valid = url.trim().startsWith('https://169.254.') && !url.trim().includes('169.254.0.0');
 
   const dns = form.dns
     .split(';')
     .map((value) => value.trim())
     .filter(Boolean)
     .join(', ');
-  const proxy = form.proxy_host ? `${form.proxy_host}:${form.proxy_port || '8080'}` : 'none';
+  const proxy = form.proxy_host ? `${form.proxy_host}:${form.proxy_port || '8080'}` : 'None';
 
   const start = async () => {
     setError(null);
@@ -65,11 +52,11 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
     setDiscovery(null);
     try {
       const result = await launchDiscoveryTool();
-      if (result.launched) {
-        setDiscovery({ ok: true, text: `Opened ${result.path?.split('\\').pop() ?? 'Discovery Tool'}` });
-      } else {
-        setDiscovery({ ok: false, text: result.error ?? 'Could not open the Discovery Tool' });
-      }
+      setDiscovery(
+        result.launched
+          ? { ok: true, text: `Opened ${result.path?.split('\\').pop() ?? 'the Discovery Tool'}` }
+          : { ok: false, text: result.error ?? 'The Discovery Tool could not be opened' },
+      );
     } catch (exc: any) {
       setDiscovery({ ok: false, text: String(exc.message ?? exc) });
     } finally {
@@ -78,97 +65,106 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
   };
 
   return (
-    <Box gap="medium">
-      <Section title="1 · Get the wizard URL from the Discovery Tool">
-        <Instructions
-          items={[
-            <>Click <b>Open Discovery Tool</b> below (it launches the app from this jump box&apos;s Desktop).</>,
-            <>Search for the array&apos;s serial number ({run?.serial_number ?? '…'}).</>,
-            <>Copy the wizard link — it looks like <b>https://169.254.x.x/cloudinit</b> (it changes every boot).</>,
-            <>Paste it into the box below.</>,
-          ]}
-        />
-        <Box direction="row" gap="small" align="center">
-          <Button
-            label={discoveryBusy ? 'Opening…' : 'Open Discovery Tool'}
-            disabled={discoveryBusy}
-            onClick={openDiscovery}
-          />
-          {discovery && (
-            <Text size="small" color={discovery.ok ? 'status-ok' : 'status-critical'}>
-              {discovery.text}
-            </Text>
-          )}
-        </Box>
-        <Box direction="row" gap="small" align="center" width="large">
-          <TextInput placeholder="https://169.254.x.x/cloudinit" value={url} onChange={(e) => setUrl(e.target.value)} />
-        </Box>
-        {url.trim() === '' ? (
-          <Text size="small" color="text-weak">
-            Paste the array&apos;s <b>https://169.254.x.x/cloudinit</b> URL from the Discovery Tool (it changes every boot).
-          </Text>
-        ) : !validUrl ? (
-          <Text size="small" color="status-critical">
-            That isn&apos;t a usable array URL — paste the link-local <b>https://169.254.x.x/cloudinit</b> from the Discovery Tool (not 169.254.0.0).
-          </Text>
-        ) : null}
-      </Section>
-
-      <Section title="2 · Review the values that will be applied">
-        <Text size="small">
-          The automation fills these and Submits in one motion — review them <b>here</b>, not in the
-          wizard. (The on-array wizard discards typed Network values if it sits idle on its Review
-          screen, so we don&apos;t pause there.)
-        </Text>
-        <Box gap="xsmall" pad={{ vertical: 'small' }}>
-          <ReviewRow label="Management IP" value={form.mgmt_ipv4} />
-          <ReviewRow label="Netmask" value={form.mask} />
-          <ReviewRow label="Gateway" value={form.gateway} />
-          <ReviewRow label="DNS" value={dns} />
-          <ReviewRow label="NTP" value={form.ntp} />
-          <ReviewRow label="Timezone" value={form.timezone} />
-          <ReviewRow label="Proxy" value={proxy} />
-        </Box>
-        <Notification
-          status="info"
-          message="A safety check re-reads the wizard's Review screen right before Submit and refuses to apply if the Network IP doesn't match these values — so a wrong (link-local) IP can never be applied. To change anything, go back to Array details."
-        />
-      </Section>
-
-      <Section title="3 · Fill & connect">
-        <Text size="small">
-          A browser opens at the URL above, fills the wizard, and connects the array. This page
-          updates live and continues automatically once the array reports connected.
-        </Text>
-        <Box direction="row" gap="small" align="center">
+    <StepShell
+      title="Cloud Connectivity"
+      description="Populates the array's on-box wizard with the network configuration from the workbook, then connects the array to HPE GreenLake."
+      error={error}
+      onDismissError={() => setError(null)}
+      activityEmpty="Paste the array wizard address and start the connection."
+      footerNote="Values are verified against the array's own review screen immediately before submission."
+      gate={
+        awaitingSubmit
+          ? {
+              title: 'Submit the wizard in the array console',
+              message:
+                'The values are populated and verified. Select Submit in the browser window that is open on the array wizard; this step continues as soon as the array reports connected.',
+            }
+          : null
+      }
+      actions={
+        connected ? (
+          <Button primary label="Continue" onClick={onDone} />
+        ) : (
           <Button
             primary
-            disabled={!validUrl || running || connected}
-            label={running ? 'Filling & connecting…' : 'Fill & connect'}
+            busy={running}
+            label={running ? 'Connecting' : 'Populate and connect'}
+            disabled={!valid}
             onClick={start}
           />
-          {running && <Spinner />}
-          <StatusTag status={run?.current_phase === 'CLOUDINIT_CONNECT' ? run?.status : undefined} />
+        )
+      }
+    >
+      <Surface
+        title="Array wizard address"
+        description="The link-local address changes on every boot; paste the current value."
+        actions={
+          <Button busy={discoveryBusy} label="Launch the HPE Discovery Tool" onClick={openDiscovery} />
+        }
+      >
+        <Box width="large" flex={false}>
+          <FormField
+            label="Cloud Connectivity URL"
+            htmlFor="cloudinit-url"
+            help={`Search the Discovery Tool for ${run?.serial_number ?? 'the serial number'} and copy the wizard link.`}
+            error={url.trim() && !valid ? 'Enter the link-local address, for example https://169.254.12.34/cloudinit' : undefined}
+          >
+            <TextInput
+              id="cloudinit-url"
+              placeholder="https://169.254.x.x/cloudinit"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+            />
+          </FormField>
         </Box>
-      </Section>
+        {discovery && (
+          <Box pad={{ top: 'xsmall' }} flex={false}>
+            <StatusIndicator state={discovery.ok ? 'complete' : 'failed'} label={discovery.text} />
+          </Box>
+        )}
+      </Surface>
 
-      {error && <Notification status="critical" title="Could not start" message={error} onClose={() => setError(null)} />}
-      {failed && (
-        <Notification
-          status="critical"
-          title="The wizard run did not complete"
-          message="Nothing was applied. Check the message in Progress (and the screenshot in .alletra_onboard/artifacts), then click Fill & connect again."
+      <Surface
+        title="Configuration to be applied"
+        description="Review these here. To change any value, return to the initialisation sheet."
+      >
+        <NameValueList pairProps={{ direction: 'column' }} valueProps={{ width: 'medium' }}>
+          <NameValuePair name="Management IP">
+            <Text>{form.mgmt_ipv4 || '—'}</Text>
+          </NameValuePair>
+          <NameValuePair name="Subnet mask">
+            <Text>{form.mask || '—'}</Text>
+          </NameValuePair>
+          <NameValuePair name="Gateway">
+            <Text>{form.gateway || '—'}</Text>
+          </NameValuePair>
+          <NameValuePair name="DNS">
+            <Text>{dns || '—'}</Text>
+          </NameValuePair>
+          <NameValuePair name="NTP">
+            <Text>{form.ntp || '—'}</Text>
+          </NameValuePair>
+          <NameValuePair name="Time zone">
+            <Text>{form.timezone || '—'}</Text>
+          </NameValuePair>
+          <NameValuePair name="Proxy">
+            <Text>{proxy}</Text>
+          </NameValuePair>
+        </NameValueList>
+        <InlineNotification
+          tone="info"
+          title="A wrong address cannot be applied"
+          message="The array wizard discards typed values if it is left idle, so the tool re-reads the review screen immediately before submitting and refuses to proceed if the management IP does not match the values above."
+        />
+      </Surface>
+
+      {connected && (
+        <InlineNotification
+          tone="ok"
+          title="The array is connected to HPE GreenLake"
+          message="Cloud connectivity is established. Continue to DSCC setup."
         />
       )}
-      {connected && (
-        <Notification status="normal" title="Array connected to HPE GreenLake" message="Cloud connectivity is done — continue to DSCC Setup." />
-      )}
-
-      <Section title="Progress">
-        <EventLog events={stepEvents} emptyText="Paste the URL and click Fill & connect to start." />
-      </Section>
-
-      <Button primary label="Continue → DSCC Setup" disabled={!connected} onClick={onDone} alignSelf="start" />
-    </Box>
+    </StepShell>
   );
 }

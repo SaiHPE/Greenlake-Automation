@@ -1,8 +1,10 @@
-import { Box, Button, Notification, Spinner, Text } from 'grommet';
+import { Box, Button, Text } from 'grommet';
 import { useState } from 'react';
 import { RunEvent, RunRecord, launchBrowser, markComplete, startDscc } from '../api';
 import { ClockSync } from '../ClockSync';
-import { EventLog, Instructions, Section, StatusTag } from '../components';
+import { InlineNotification, Surface } from '../ui/primitives';
+import { StatusIndicator } from '../ui/status';
+import { StepShell } from '../ui/StepShell';
 
 interface Props {
   runId: string;
@@ -18,44 +20,16 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
 
   const consoleUrl = `https://console-${dsccRegion || 'jp1'}.data.cloud.hpe.com`;
-
-  const stepEvents = events.filter((e) => e.phase === 'DSCC_SETUP_SYSTEM' || e.phase === 'COMPLETE');
+  const mine = events.filter((event) => event.phase === 'DSCC_SETUP_SYSTEM' || event.phase === 'COMPLETE');
   const running = run?.status === 'running' && run?.current_phase === 'DSCC_SETUP_SYSTEM';
-  const credentialsReady = stepEvents.some((e) => e.event_type === 'operator.credentials_ready');
-  const failed = run?.current_phase === 'DSCC_SETUP_SYSTEM' && run?.status === 'retryable_failure';
+  const credentialsReady = mine.some((event) => event.event_type === 'operator.credentials_ready');
   const completed = run?.status === 'succeeded';
 
-  const openBrowser = async () => {
-    setBusy('browser');
+  const call = async (key: string, action: () => Promise<unknown>) => {
+    setBusy(key);
     setError(null);
     try {
-      const info = await launchBrowser(consoleUrl);
-      setCdpUrl(info.cdp_url);
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const runAutomation = async () => {
-    setBusy('dscc');
-    setError(null);
-    try {
-      await startDscc(runId, cdpUrl ?? 'http://localhost:9222');
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const finish = async () => {
-    setBusy('complete');
-    setError(null);
-    try {
-      await markComplete(runId);
-      onDone();
+      await action();
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
     } finally {
@@ -64,79 +38,96 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
   };
 
   return (
-    <Box gap="medium">
-      {/* Re-check (and re-sync) the clock here too — DSCC sign-in fails on a skewed clock. */}
-      <ClockSync consoleUrl={consoleUrl} title="System clock (required for DSCC sign-in)" />
-
-      <Section title="1 · Open DSCC and start the Set Up System wizard">
-        <Instructions
-          items={[
-            <>Click <b>Open DSCC browser</b> — a Chrome window opens at {consoleUrl}.</>,
-            <>Sign in with your HPE GreenLake account (SSO). The automation never touches your login.</>,
-            <>Open the <b>Setup</b> service, find <b>{run?.serial_number ?? 'your array'}</b>, and click <b>Set Up System</b>.</>,
-            <>Stay on the wizard&apos;s <b>Welcome</b> screen, then come back here.</>,
-          ]}
-        />
-        <Box direction="row" gap="small" align="center">
-          <Button primary label={busy === 'browser' ? 'Launching…' : 'Open DSCC browser'} disabled={busy !== null} onClick={openBrowser} />
-          {cdpUrl && (
-            <Text size="small" color="status-ok">
-              Browser launched (attach: {cdpUrl})
-            </Text>
-          )}
-        </Box>
-      </Section>
-
-      <Section title="2 · Run the automation">
-        <Text size="small">
-          Fills Welcome → Network Domain → Time → Attributes (Proxy, Support Contact) → System name &amp; country,
-          then stops at <b>System Credentials</b> for you.
-        </Text>
-        <Box direction="row" gap="small" align="center">
+    <StepShell
+      title="DSCC setup"
+      description="Drives the Data Services Cloud Console Set Up System wizard as far as the credential step."
+      error={error}
+      onDismissError={() => setError(null)}
+      activityEmpty="Launch the browser and run the automation."
+      footerNote="Mark complete only after DSCC reports the system as added."
+      gate={
+        credentialsReady && !completed
+          ? {
+              title: 'Enter the array credential in the browser, then complete the wizard',
+              message:
+                'All fields through the Credentials step are populated. Select or create the system credential with the array admin account, continue through Review, submit, then mark this step complete.',
+            }
+          : null
+      }
+      actions={
+        <>
+          <Button
+            busy={busy === 'dscc' || running}
+            label={running ? 'Filling' : 'Run DSCC automation'}
+            disabled={!cdpUrl || completed}
+            onClick={() => call('dscc', () => startDscc(runId, cdpUrl ?? 'http://localhost:9222'))}
+          />
           <Button
             primary
-            label={running || busy === 'dscc' ? 'Filling…' : 'Run DSCC automation'}
-            disabled={busy !== null || running || !cdpUrl}
-            onClick={runAutomation}
+            busy={busy === 'complete'}
+            label={completed ? 'Continue' : 'Mark DSCC complete'}
+            disabled={!credentialsReady && !completed}
+            onClick={() => (completed ? onDone() : call('complete', () => markComplete(runId).then(onDone)))}
           />
-          {running && <Spinner />}
-          <StatusTag status={run?.current_phase === 'DSCC_SETUP_SYSTEM' ? run?.status : undefined} />
-        </Box>
-        {!cdpUrl && (
+        </>
+      }
+    >
+      {/* DSCC sign-in fails on a skewed workstation clock, so it is re-checked here. */}
+      <ClockSync consoleUrl={consoleUrl} title="Workstation clock" />
+
+      <Surface
+        title="Browser"
+        description="DSCC requires an authenticated session, so the tool attaches to a browser under your control."
+        actions={
+          <Button
+            busy={busy === 'browser'}
+            label="Launch the DSCC browser"
+            onClick={() =>
+              call('browser', async () => {
+                const info = await launchBrowser(consoleUrl);
+                setCdpUrl(info.cdp_url);
+              })
+            }
+          />
+        }
+      >
+        <Box gap="xsmall" flex={false}>
           <Text size="small" color="text-weak">
-            Open the DSCC browser first (step 1).
+            1. Sign in with your HPE GreenLake account. The automation never handles your sign-in.
           </Text>
-        )}
-      </Section>
+          <Text size="small" color="text-weak">
+            2. Open the Setup service, locate {run?.serial_number ?? 'the array'}, and select Set Up System.
+          </Text>
+          <Text size="small" color="text-weak">
+            3. Leave the wizard on its Welcome screen and return here.
+          </Text>
+          {cdpUrl && (
+            <Box pad={{ top: 'xsmall' }} flex={false}>
+              <StatusIndicator state="complete" label={`Attached · ${cdpUrl}`} />
+            </Box>
+          )}
+        </Box>
+      </Surface>
 
-      {error && <Notification status="critical" title="Request failed" message={error} onClose={() => setError(null)} />}
+      <Surface title="Populated fields" description="Everything the automation fills before it hands back to you.">
+        <Text size="small" color="text-weak">
+          Welcome, network domain, time, attributes (proxy and support contact), then the system name and country. It
+          stops at System Credentials.
+        </Text>
+        <InlineNotification
+          tone="info"
+          title="Credential handling"
+          message="The array password is entered by the operator only; this tool never submits credentials to a cloud console."
+        />
+      </Surface>
 
-      {credentialsReady && !completed && (
-        <Notification
-          status="warning"
-          title="Action needed: finish in the DSCC browser"
-          message="In the wizard: select or Create New under System Credentials (your array admin username/password), click Continue, review everything, and click Submit. Then mark the run complete below."
+      {completed && (
+        <InlineNotification
+          tone="ok"
+          title="DSCC setup is complete"
+          message="The array is registered with Data Services Cloud Console."
         />
       )}
-      {failed && (
-        <Notification
-          status="critical"
-          title="Could not drive the DSCC wizard"
-          message="Make sure the debug Chrome is open on the Set Up System wizard (Welcome screen), then run the automation again."
-        />
-      )}
-
-      <Section title="Progress">
-        <EventLog events={stepEvents} emptyText="Run the automation to see progress here." />
-      </Section>
-
-      <Button
-        primary
-        label={busy === 'complete' ? 'Saving…' : 'I submitted in DSCC — mark complete'}
-        disabled={!credentialsReady || completed || busy !== null}
-        onClick={finish}
-        alignSelf="start"
-      />
-    </Box>
+    </StepShell>
   );
 }
