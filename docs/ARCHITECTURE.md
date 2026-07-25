@@ -50,8 +50,8 @@ Four layers, dependencies point inward (`api → application → domain`; `adapt
 
 - **`domain/`** — pure models + contracts, no I/O. `models.py` (onboarding: `ArrayWorkItem`, `RunRecord`,
   `WorkflowPhase`, `RunMode`), `storage.py` (provisioning subdomain: `ProvisioningIntent`/`VolumeRequest`/
-  `HostSetRequest`/`ExportRequest`, discovery `DiscoveryReport`, zoning, `PathVerification`, as-built
-  `AsBuiltData`), `workflow.py` (the **step registry** + mode→steps), `ports.py` (`RunStore` interface),
+  `HostSetRequest`/`ExportRequest`, discovery `DiscoveryReport`, zoning, `PathVerification`),
+  `workflow.py` (the **step registry** + mode→steps), `ports.py` (`RunStore` interface),
   `policies.py`, `errors.py`.
 - **`application/`** — services orchestrating domain + adapters. Split: onboarding/init + a `storage/`
   subpackage (the provisioning bounded context) + as-built modules + cross-cutting (proxy, prereqs,
@@ -83,7 +83,7 @@ Replicate/DR ⚪ · Report ⚪ · **Document ✅(as-built, v0.12.0)**. File colu
 | Module | Responsibility |
 |---|---|
 | `models.py` | Onboarding models + enums: `ArrayWorkItem` (per-array intake, now incl. `customer_name`/`site`), `RunRecord`/`RunStatus`, `WorkflowPhase`, `RunMode`, `NetworkConfig`, `DsccSetupConfig`, `VerificationReport` |
-| `storage.py` | Provisioning subdomain: `EndpointCreds`; **plural intent** (`ProvisioningIntent` = `volumes[]`+`host_sets[]`+`exports[]`, `from_simple`); `persona_for_os`→name; discovery (`ArrayPort`/`HostHba`/`ArrayHost`/`DiscoveryReport`); zoning (`ZoningReport`/`ZoningPlan`); builder palette (`ProvisioningObjects`/`ProvisioningBuilder`); plan+result; tier-2 (`PathVerification`); **as-built (`AsBuiltData`)** |
+| `storage.py` | Provisioning subdomain: `EndpointCreds`; **plural intent** (`ProvisioningIntent` = `volumes[]`+`host_sets[]`+`exports[]`, `from_simple`); `persona_for_os`→name; discovery (`ArrayPort`/`HostHba`/`ArrayHost`/`DiscoveryReport`); zoning (`ZoningReport`/`ZoningPlan`); builder palette (`ProvisioningObjects`/`ProvisioningBuilder`); plan+result; tier-2 (`PathVerification`). (As-built's `AsBuiltData` is a dataclass in `application/asbuilt.py`, not here) |
 | `workflow.py` | **`STEP_REGISTRY`** (ordered `StepDef`s: greenlake, cloudinit, dscc, discover, zoning, provision, verify, **asbuilt**) + `_MODE_STEPS` (preset mode→steps) + `enabled_steps`/`initial_phase`/`next_enabled_phase` |
 | `ports.py` | `RunStore` interface (persistence contract) |
 | `policies.py`, `errors.py` | Domain rules + typed errors |
@@ -97,7 +97,7 @@ Replicate/DR ⚪ · Report ⚪ · **Document ✅(as-built, v0.12.0)**. File colu
 | `verification.py` | Post-init read-only config+health verify (`verify(item, user, pw)` → `VerificationReport`) |
 | `proxy.py` | `ProxyResolver` — effective proxy (manual > auto-detected system/PAC > direct), `apply_proxy_env` (ADR 0008) |
 | `prereqs.py`, `preflight_service.py`, `greenlake_preflight.py` | Firewall rules, connectivity pre-check, GreenLake readiness |
-| `health.py`, `configuring.py`, `intake.py`, `run_service.py`, `validation_service.py` | GreenLake health check, config I/O, CSV intake, run helpers, sheet validation |
+| `health.py`, `configuring.py`, `intake.py` | GreenLake health check, config I/O, CSV intake |
 | `event_bus.py` | `InMemoryEventBus` — per-run pub/sub feeding SSE |
 | **`asbuilt.py`** | `AsBuiltData` + `generate_asbuilt` — fills the bundled HPE Block-Storage `.docx` (cover/customer, Table 01, inventory + checkhealth tables); `default_template()` resolution |
 | **`asbuilt_parse.py`** | `parse_asbuilt` (dump→`AsBuiltData`), `parse_inventory` (**CSV**, `showinventory -csvtable`), `parse_checkhealth` (Summary/Details) |
@@ -119,10 +119,10 @@ Replicate/DR ⚪ · Report ⚪ · **Document ✅(as-built, v0.12.0)**. File colu
 | `array/cli_client.py` | Read-only SSH CLI, **command allowlist** (structurally read-only) — verify + as-built + discovery |
 | `vcenter/vcenter_client.py` | Read-only ESXi HBA/WWPN discovery (pyvmomi) |
 | `fabric/brocade_client.py` | Brocade FOS reads (nsshow/cfgshow/…); read-only (write path removed) |
-| `greenlake/*` | GreenLake global API: `auth`, `devices`, `subscriptions`, `service_catalog`, `storage_fleet`, `http_client` (Component A) |
-| `browser/*` | Playwright/CDP browser automation: `cloudinit_wizard` (B), `dscc_setup` (C), `debug_browser`, `locators`, `session` |
-| `persistence/sqlite.py`, `artifacts.py` | `SqliteRunStore` (implements `RunStore`), artifact storage |
-| `secrets/env_provider.py`, `system/clock.py`, `system/discovery_tool.py` | `.env` secrets, HTTPS-based clock sync (ADR 0008 note), bundled Discovery Tool launcher |
+| `greenlake/*` | GreenLake global API: `auth`, `devices`, `subscriptions`, `service_catalog`, `http_client` (Component A) |
+| `browser/*` | Playwright/CDP browser automation: `cloudinit_wizard` (B), `dscc_setup` (C), `debug_browser`, `locators` |
+| `persistence/sqlite.py` | `SqliteRunStore` (implements `RunStore`) |
+| `system/clock.py`, `system/discovery_tool.py` | HTTPS-based clock sync (ADR 0008 note), bundled Discovery Tool launcher |
 
 ### 5.5 api/ & frontend/
 - `api/app.py` — `create_app(service)` wires every route as an inline closure; helpers `_get_run_or_404`,
