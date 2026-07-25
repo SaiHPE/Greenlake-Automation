@@ -138,6 +138,35 @@ def _os_version(sec: dict[str, str]) -> str:
     return m.group(1) if m else ""
 
 
+def parse_checkhealth(text: str) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str, str]]]:
+    """Split `checkhealth -svc -detail` into two tables for the doc:
+    summary rows (Component, Description, Qty) and detail rows (Component, Identifier, Description,
+    Resolution). Anchored on the two header lines; the last token of a detail row is the Resolution,
+    the first two are Component + single-token Identifier."""
+    summary: list[tuple[str, str, str]] = []
+    detail: list[tuple[str, str, str, str]] = []
+    mode: str | None = None
+    for line in (text or "").splitlines():
+        if "Summary Description" in line and "Qty" in line:
+            mode = "sum"
+            continue
+        if "Identifier" in line and "Resolution" in line:
+            mode = "det"
+            continue
+        stripped = line.strip()
+        if not stripped or set(stripped) <= set("- "):  # blank / separator
+            continue
+        p = line.split()
+        if p[0].isdigit() and "total" in line:          # the "N total M" footer
+            mode = None
+            continue
+        if mode == "sum" and p[-1].isdigit() and not p[0].isdigit():
+            summary.append((p[0], " ".join(p[1:-1]), p[-1]))
+        elif mode == "det" and len(p) >= 4 and not p[0].isdigit():
+            detail.append((p[0], p[1], " ".join(p[2:-1]), p[-1]))
+    return summary, detail
+
+
 def parse_asbuilt(dump: str) -> AsBuiltData:
     """Parse a full ``asbuilt_array.py`` dump into ``AsBuiltData`` (inventory + checkhealth verbatim)."""
     sec = split_sections(dump)
