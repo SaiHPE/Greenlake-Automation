@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Alletra Onboard â€” full UX mockup set</title>
+<title>Alletra Onboard — full UX mockup set</title>
 <style>
-/* â•â•â•â•â•â•â•â•â•â• EXACT hpe-design-tokens (installed pkg) + design-system.hpe.design rules â•â•â•â•â•â•â•â•â•â• */
+/* ══════════ EXACT hpe-design-tokens (installed pkg) + design-system.hpe.design rules ══════════ */
 :root{
-  --brand:#01a982;                     /* decorative.brand â€” the Element only */
+  --brand:#01a982;                     /* decorative.brand — the Element only */
   --primary-strong:#008567; --primary-strong-hover:#006750;
   --text-primary:#006750; --focus:#004233;
   --bg-back:#f7f7f7; --bg-front:#fff; --bg-contrast:rgba(0,0,0,.04); --bg-hover:rgba(0,0,0,.04);
@@ -31,7 +31,7 @@ p,.t-s{font-size:1rem;line-height:1.25rem}                  /* text.small */
 .weak{color:var(--text-weak)} .strong{color:var(--text-strong)}
 .maxread{max-width:30em}                                     /* DS: text maxWidth 30em */
 
-/* â•â•â•â•â•â•â•â•â•â• review toolbar (not part of the product) â•â•â•â•â•â•â•â•â•â• */
+/* ══════════ review toolbar (not part of the product) ══════════ */
 .review{position:sticky;top:0;z-index:60;background:#2e2e2e;color:#fff;padding:var(--s-xxs) var(--s-m);
   display:flex;align-items:center;gap:var(--s-s);flex-wrap:wrap}
 .review b{font-size:1rem;letter-spacing:.02em}
@@ -40,7 +40,7 @@ p,.t-s{font-size:1rem;line-height:1.25rem}                  /* text.small */
 .review .pill.on{background:var(--brand);color:#08251c;font-weight:600}
 .review .hint{font-size:.8rem;opacity:.7;margin-left:auto}
 
-/* â•â•â•â•â•â•â•â•â•â• app chrome â•â•â•â•â•â•â•â•â•â• */
+/* ══════════ app chrome ══════════ */
 header.global{display:flex;align-items:center;justify-content:space-between;gap:var(--s-m);
   background:var(--bg-front);padding:var(--s-xxs) var(--s-m);position:sticky;top:38px;z-index:40}
 .brand{display:flex;align-items:center;gap:var(--s-xs)}
@@ -81,7 +81,7 @@ main{flex:1;min-width:0}
 .note p{margin-top:2px}
 .note .x{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-weak);font-size:1.1rem;line-height:1}
 
-/* layered surfaces â€” DS: separate with colour, avoid borders */
+/* layered surfaces — DS: separate with colour, avoid borders */
 .surface{background:var(--bg-front);border-radius:var(--r-m);padding:var(--s-s) var(--s-m) var(--s-m);margin-top:var(--s-m)}
 .surface h2{font-size:1.375rem;line-height:1.75rem;font-weight:500;color:var(--text-strong)}
 .surface .sub{font-size:1rem;color:var(--text-weak);margin-top:2px;max-width:30em}
@@ -166,7 +166,7 @@ table.dt{width:100%;border-collapse:collapse;font-size:1rem}
 </head>
 <body>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â• REVIEW TOOLBAR (not part of the product) â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ═══════════ REVIEW TOOLBAR (not part of the product) ═══════════ -->
 <div class="review">
   <b>Mockups</b>
   <button class="pill" data-go="prereq">1 Prerequisites</button>
@@ -184,18 +184,18 @@ table.dt{width:100%;border-collapse:collapse;font-size:1rem}
   <button class="pill" data-go="finish">12 Finish</button>
   <button class="pill" data-go="states">States</button>
   <button class="pill" data-go="spec">Spec</button>
-  <span class="hint">click a screen Â· every state is real markup, nothing is wired</span>
+  <span class="hint">select a screen · static mockups for design review</span>
 </div>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â• GLOBAL HEADER â€” HPE Element top-left (DS rule). No GreenLake badge (retired). â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ═══════════ GLOBAL HEADER — HPE Element top-left (DS rule). No GreenLake badge (retired). ═══════════ -->
 <header class="global">
   <div class="brand">
     <svg width="40" height="20" viewBox="0 0 48 24" role="img" aria-label="HPE"><path fill-rule="evenodd" clip-rule="evenodd" d="M2 6h44v12H2V6zm3 3h38v6H5V9z" fill="#01a982"/></svg>
     <span class="svc">Alletra MP B10000 Onboarding</span>
   </div>
   <div class="runmeta">
-    <span class="mono" id="hdr-serial">SGH123XYZ0</span><span class="dot">Â·</span>
-    <span class="strong">Onboard, then provision</span><span class="dot">Â·</span>
+    <span class="mono" id="hdr-serial">SGH123XYZ0</span><span class="dot">·</span>
+    <span class="strong">Onboard, then provision</span><span class="dot">·</span>
     <span class="status sm" id="hdr-status"></span>
   </div>
 </header>
@@ -209,73 +209,73 @@ table.dt{width:100%;border-collapse:collapse;font-size:1rem}
     </div>
     <div class="page" id="pages">
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 1 Â· PREREQUISITES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 1 · PREREQUISITES ══════════════════ -->
 <section class="screen" id="s-prereq">
   <div class="pagehead"><div class="of">Step 1 of 12</div><h1>Prerequisites</h1>
-    <div class="sub">Check the workstation can reach HPE GreenLake and the array before you start.</div>
-    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+    <div class="sub">Validate connectivity from this workstation to HPE GreenLake and the array before proceeding.</div>
+    <div class="st"><span class="status" data-st="needs">Action required</span></div></div>
 
   <section class="surface">
     <h2>Connectivity</h2>
-    <div class="sub">These endpoints must be reachable. Ask your network team to allow anything blocked.</div>
-    <div class="tbar"><span class="t-s weak">4 endpoints</span><button class="btn ghost sm">Test again</button></div>
+    <div class="sub">These endpoints must be reachable. Request firewall exceptions from your network team for any shown as blocked.</div>
+    <div class="tbar"><span class="t-s weak">4 endpoints</span><button class="btn ghost sm">Retest</button></div>
     <table class="dt">
       <thead><tr><th>Endpoint</th><th>Purpose</th><th>Result</th></tr></thead>
       <tbody>
-        <tr><td class="mono">sso.common.cloud.hpe.com</td><td>GreenLake sign-in</td><td><span class="status sm" data-st="done">Reachable</span></td></tr>
+        <tr><td class="mono">sso.common.cloud.hpe.com</td><td>GreenLake authentication</td><td><span class="status sm" data-st="done">Reachable</span></td></tr>
         <tr><td class="mono">global.api.greenlake.hpe.com</td><td>Device registration</td><td><span class="status sm" data-st="done">Reachable</span></td></tr>
         <tr><td class="mono">169.254.0.0/16</td><td>On-array Cloud Connectivity wizard</td><td><span class="status sm" data-st="done">Reachable</span></td></tr>
         <tr><td class="mono">192.0.2.40:443</td><td>Array WSAPI</td><td><span class="status sm" data-st="failed">Blocked</span></td></tr>
       </tbody>
-      <tfoot><tr><td colspan="3">3 reachable Â· 1 blocked</td></tr></tfoot>
+      <tfoot><tr><td colspan="3">3 reachable · 1 blocked</td></tr></tfoot>
     </table>
-    <div class="note crit"><span data-icon="crit"></span><div><b>The array is not reachable yet.</b>
-      <p>Provisioning steps need port 443 to <span class="mono">192.0.2.40</span>. Initialisation steps will still run.</p></div></div>
+    <div class="note crit"><span data-icon="crit"></span><div><b>The array management interface is not reachable.</b>
+      <p>Provisioning requires TCP 443 to <span class="mono">192.0.2.40</span>. Initialisation steps are unaffected.</p></div></div>
   </section>
 
   <section class="surface">
     <h2>Proxy</h2>
-    <div class="sub">Detected from the system, the same way your browser resolves it. Override only if this is wrong.</div>
+    <div class="sub">Detected from the operating system, as a browser would resolve it. Provide an override only if the detected value is incorrect.</div>
     <dl class="nvl" style="margin-top:var(--s-xs)">
       <dt>Detected</dt><dd class="mono">http://proxy.example.net:8080</dd>
       <dt>In use</dt><dd>Detected system proxy</dd>
-      <dt>Bypassed</dt><dd class="mono">localhost Â· 169.254.* Â· 192.0.2.40</dd>
+      <dt>Bypassed</dt><dd class="mono">localhost · 169.254.* · 192.0.2.40</dd>
     </dl>
-    <div class="field"><label for="px">Manual override</label><input id="px" placeholder="http://host:port â€” leave empty to use the detected proxy"></div>
+    <div class="field"><label for="px">Manual override</label><input id="px" placeholder="http://host:port — leave empty to use the detected proxy"></div>
   </section>
 
   <section class="surface">
     <h2>Workstation clock</h2>
-    <div class="sub">GreenLake rejects requests when the clock has drifted.</div>
+    <div class="sub">HPE GreenLake rejects authentication when the workstation clock has drifted.</div>
     <div style="display:flex;align-items:center;gap:var(--s-s);margin-top:var(--s-xs)">
-      <span class="status" data-st="done">Within 2 seconds of HPE time</span><button class="btn ghost sm">Sync now</button></div>
+      <span class="status" data-st="done">Within 2 seconds of HPE time</span><button class="btn ghost sm">Synchronise now</button></div>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">Nothing here changes the array.</span>
-    <div class="acts"><button class="btn secondary">Download the sheet</button><button class="btn primary">Continue</button></div></div>
+  <div class="wizfoot"><span class="t-s weak">This step makes no changes to the array.</span>
+    <div class="acts"><button class="btn secondary">Download the initialisation sheet</button><button class="btn primary">Continue</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 2 Â· INITIALISATION SHEET â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 2 · INITIALISATION SHEET ══════════════════ -->
 <section class="screen" id="s-sheet">
   <div class="pagehead"><div class="of">Step 2 of 12</div><h1>Initialisation sheet</h1>
-    <div class="sub">One workbook per array, filled completely. The mode you pick next decides which parts are used.</div>
+    <div class="sub">One workbook per array, completed in full. The selected mode determines which sections are applied.</div>
     <div class="st"><span class="status" data-st="done">Uploaded</span></div></div>
 
   <section class="surface">
-    <h2>Upload the filled workbook</h2>
+    <h2>Upload the completed workbook</h2>
     <div class="drop" style="margin-top:var(--s-xs)">
       <div class="strong">Initialisation_sheet_SGH123XYZ0.xlsx</div>
       <p class="weak" style="margin-top:var(--s-4xs)">Parsed 42 values across 5 tabs</p>
       <div style="margin-top:var(--s-s);display:flex;gap:var(--s-xs);justify-content:center">
         <button class="btn ghost sm">Replace file</button><button class="btn ghost sm">Download blank template</button></div>
     </div>
-    <div class="note ok"><span data-icon="ok"></span><div><b>Sheet accepted.</b>
-      <p>Device passwords stay on this machine â€” they are never sent to the browser.</p></div></div>
+    <div class="note ok"><span data-icon="ok"></span><div><b>Workbook validated.</b>
+      <p>Device credentials remain on this workstation and are never transmitted to the browser.</p></div></div>
   </section>
 
   <section class="surface">
-    <h2>Review what we read</h2>
-    <div class="sub">Check these against the sheet before creating the run.</div>
+    <h2>Review parsed values</h2>
+    <div class="sub">Verify these against the workbook before creating the run.</div>
     <div class="grid2" style="margin-top:var(--s-xs)">
       <dl class="nvl">
         <dt>Serial number</dt><dd class="mono">SGH123XYZ0</dd>
@@ -295,14 +295,14 @@ table.dt{width:100%;border-collapse:collapse;font-size:1rem}
   </section>
 
   <div class="wizfoot"><span class="t-s weak">The run is created on the next step.</span>
-    <div class="acts"><button class="btn secondary">Test GreenLake sign-in</button><button class="btn primary">Continue</button></div></div>
+    <div class="acts"><button class="btn secondary">Validate GreenLake credentials</button><button class="btn primary">Continue</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 3 Â· MODE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 3 · MODE ══════════════════ -->
 <section class="screen" id="s-mode">
-  <div class="pagehead"><div class="of">Step 3 of 12</div><h1>Choose what to run</h1>
-    <div class="sub">The wizard shows only the steps your choice needs, so you can provision or verify an array that is already initialised.</div>
-    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+  <div class="pagehead"><div class="of">Step 3 of 12</div><h1>Select mode</h1>
+    <div class="sub">The wizard presents only the steps the selected mode requires, enabling provisioning or verification of an array that is already initialised.</div>
+    <div class="st"><span class="status" data-st="needs">Action required</span></div></div>
 
   <section class="surface">
     <h2>Mode</h2>
@@ -314,19 +314,19 @@ table.dt{width:100%;border-collapse:collapse;font-size:1rem}
       <div class="selector on"><div class="ind"></div><div><div class="strong">Onboard, then provision</div>
         <p class="weak">The whole chain end to end: initialise the array, then provision storage.</p></div></div>
       <div class="selector"><div class="ind"></div><div><div class="strong">Verify only</div>
-        <p class="weak">A read-only check of the array configuration and status.</p></div></div>
+        <p class="weak">A read-only verification of the array configuration and status.</p></div></div>
       <div class="selector"><div class="ind"></div><div><div class="strong">Custom</div>
         <p class="weak">Pick exactly the steps to run.</p></div></div>
     </div>
-    <div class="note info"><span data-icon="info"></span><div><b>This run will have 9 steps.</b>
-      <p>The mode is fixed once the run is created. Use Cancel run to start again with a different one.</p></div></div>
+    <div class="note info"><span data-icon="info"></span><div><b>This mode comprises 9 steps.</b>
+      <p>The mode is fixed for the lifetime of the run. Cancel the run to select a different mode.</p></div></div>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">Creating the run stores the sheet against this array.</span>
+  <div class="wizfoot"><span class="t-s weak">Creating the run associates this workbook with the array.</span>
     <div class="acts"><button class="btn primary">Create run</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 4 Â· GREENLAKE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 4 · GREENLAKE ══════════════════ -->
 <section class="screen" id="s-greenlake">
   <div class="pagehead"><div class="of">Step 4 of 12</div><h1>GreenLake registration</h1>
     <div class="sub">Registers the array in HPE GreenLake, assigns it to Data Services and applies the subscription.</div>
@@ -335,42 +335,42 @@ table.dt{width:100%;border-collapse:collapse;font-size:1rem}
   <section class="surface">
     <h2>Progress</h2>
     <ul class="tl">
-      <li class="ok"><span class="t">09:14:02</span>Signed in to HPE GreenLake</li>
+      <li class="ok"><span class="t">09:14:02</span>Authenticated to HPE GreenLake</li>
       <li class="ok"><span class="t">09:14:05</span>Found Data Services in ap-northeast</li>
-      <li class="ok"><span class="t">09:14:11</span>Added the subscription key</li>
+      <li class="ok"><span class="t">09:14:11</span>Applied the subscription key</li>
       <li class="ok"><span class="t">09:14:19</span>Registered device SGH123XYZ0</li>
-      <li><span class="t">09:14:22</span>Assigning the device to Data Servicesâ€¦</li>
+      <li><span class="t">09:14:22</span>Assigning the device to Data Services…</li>
     </ul>
     <div style="margin-top:var(--s-s);display:flex;gap:var(--s-s);align-items:center">
       <div class="sk" style="width:60%"></div></div>
   </section>
 
   <section class="surface">
-    <h2>What this created</h2>
+    <h2>Created resources</h2>
     <dl class="nvl" style="margin-top:var(--s-xs)">
-      <dt>Device ID</dt><dd class="mono">d3f1a0c8-â€¦-9b21</dd>
+      <dt>Device ID</dt><dd class="mono">d3f1a0c8-…-9b21</dd>
       <dt>Subscription</dt><dd class="mono">SUB-4471902</dd>
       <dt>Region</dt><dd>ap-northeast (jp1)</dd>
     </dl>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">Every write is checked first, so re-running is safe.</span>
-    <div class="acts"><button class="btn secondary">Run without writing</button>
-      <button class="btn primary" disabled><span class="spin"></span>Registeringâ€¦</button></div></div>
+  <div class="wizfoot"><span class="t-s weak">Each write is idempotency-checked; re-running is safe.</span>
+    <div class="acts"><button class="btn secondary">Dry run (no writes)</button>
+      <button class="btn primary" disabled><span class="spin"></span>Registering…</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 5 Â· CLOUD CONNECTIVITY (operator gate) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 5 · CLOUD CONNECTIVITY (operator gate) ══════════════════ -->
 <section class="screen" id="s-cloudinit">
   <div class="pagehead"><div class="of">Step 5 of 12</div><h1>Cloud Connectivity</h1>
-    <div class="sub">Fills the array's on-box wizard with the network settings from your sheet, then connects it to GreenLake.</div>
-    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+    <div class="sub">Populates the array's Cloud Connectivity wizard with the network configuration from the workbook, then connects the array to HPE GreenLake.</div>
+    <div class="st"><span class="status" data-st="needs">Action required</span></div></div>
 
-  <div class="note warn"><span data-icon="warn"></span><div><b>Check the values in the browser, then press Submit there.</b>
-    <p>A browser window is open on the array's wizard with everything filled in. This tool waits for you â€” it will not submit for you.</p></div></div>
+  <div class="note warn"><span data-icon="warn"></span><div><b>Review the populated values in the array console, then select Submit there.</b>
+    <p>A browser session is open on the array wizard with all values populated. Submission is reserved for the operator — this tool never submits on your behalf.</p></div></div>
 
   <section class="surface">
-    <h2>What was filled in</h2>
-    <div class="sub">Compare this against the array's Review screen before you submit.</div>
+    <h2>Populated values</h2>
+    <div class="sub">Compare these against the array's Review screen before submitting.</div>
     <div class="grid2" style="margin-top:var(--s-xs)">
       <dl class="nvl"><dt>Management IP</dt><dd class="mono">192.0.2.40</dd>
         <dt>Subnet mask</dt><dd class="mono">255.255.248.0</dd><dt>Gateway</dt><dd class="mono">192.0.2.254</dd></dl>
@@ -380,63 +380,63 @@ table.dt{width:100%;border-collapse:collapse;font-size:1rem}
   </section>
 
   <section class="surface">
-    <h2>Array address</h2>
-    <div class="sub">The link-local address changes every time the array boots, so paste the current one.</div>
+    <h2>Array wizard address</h2>
+    <div class="sub">The link-local address changes on every boot; paste the current value.</div>
     <div class="field"><label for="ci">Cloud Connectivity URL</label>
       <input id="ci" class="mono" value="https://169.254.184.89/cloudinit">
-      <div class="help">Find it with the bundled HPE Discovery Tool, or on the array's front panel.</div></div>
-    <div style="margin-top:var(--s-xs)"><button class="btn ghost sm">Open the Discovery Tool</button></div>
+      <div class="help">Obtain it from the bundled HPE Discovery Tool or the array front panel.</div></div>
+    <div style="margin-top:var(--s-xs)"><button class="btn ghost sm">Launch the HPE Discovery Tool</button></div>
   </section>
 
   <section class="surface"><h2 style="font-size:1.125rem">Activity</h2>
     <ul class="tl">
-      <li class="ok"><span class="t">09:21:40</span>Opened the array wizard</li>
-      <li class="ok"><span class="t">09:21:58</span>Filled the network settings</li>
-      <li class="warn"><span class="t">09:22:03</span>Waiting for you to submit in the browser</li>
+      <li class="ok"><span class="t">09:21:40</span>Opened the array wizard session</li>
+      <li class="ok"><span class="t">09:21:58</span>Populated the network configuration</li>
+      <li class="warn"><span class="t">09:22:03</span>Awaiting operator submission in the browser</li>
     </ul></section>
 
-  <div class="wizfoot"><span class="t-s weak">Nothing is applied to the array until you submit.</span>
-    <div class="acts"><button class="btn secondary">Fill again</button><button class="btn primary">I have submitted it</button></div></div>
+  <div class="wizfoot"><span class="t-s weak">No configuration is applied until submission.</span>
+    <div class="acts"><button class="btn secondary">Repopulate</button><button class="btn primary">Confirm submission</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 6 Â· DSCC â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 6 · DSCC ══════════════════ -->
 <section class="screen" id="s-dscc">
   <div class="pagehead"><div class="of">Step 6 of 12</div><h1>DSCC setup</h1>
     <div class="sub">Drives the Data Services Cloud Console Set Up System wizard as far as the credential step.</div>
-    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+    <div class="st"><span class="status" data-st="needs">Action required</span></div></div>
 
-  <div class="note warn"><span data-icon="warn"></span><div><b>Add the array credential in the browser, then finish the wizard.</b>
-    <p>Everything up to the Credentials step is filled in. Add the secret yourself, continue through Review, submit, then mark this step done.</p></div></div>
+  <div class="note warn"><span data-icon="warn"></span><div><b>Enter the array credential in the browser, then complete the wizard.</b>
+    <p>All fields through the Credentials step are populated. Enter the secret, continue through Review, submit, then mark this step complete.</p></div></div>
 
   <section class="surface">
-    <h2>Filled in for you</h2>
+    <h2>Populated fields</h2>
     <dl class="nvl" style="margin-top:var(--s-xs)">
       <dt>System name</dt><dd>lab-b10000-01</dd>
       <dt>Country</dt><dd>India</dd>
       <dt>Credential name</dt><dd class="mono">b10000-admin</dd>
-      <dt>Support contact</dt><dd>A. Operator Â· ops@contoso.example</dd>
+      <dt>Support contact</dt><dd>A. Operator · ops@contoso.example</dd>
     </dl>
     <div class="note info" style="margin-top:var(--s-s)"><span data-icon="info"></span><div>
-      <b>Why you add the secret.</b><p>The array password is never typed by this tool into a cloud console.</p></div></div>
+      <b>Credential handling.</b><p>The array password is entered by the operator only; this tool never submits credentials to a cloud console.</p></div></div>
   </section>
 
   <section class="surface">
     <h2>Browser</h2>
-    <div class="sub">DSCC needs you signed in, so the tool attaches to a browser you control.</div>
+    <div class="sub">DSCC requires an authenticated session, so the tool attaches to a browser under your control.</div>
     <div style="display:flex;gap:var(--s-xs);margin-top:var(--s-xs);flex-wrap:wrap">
-      <button class="btn ghost sm">Open the DSCC browser</button><button class="btn ghost sm">Re-attach</button></div>
-    <div class="chips"><span class="chip">Attached Â· port 9222</span><span class="chip">Signed in as ops@contoso.example</span></div>
+      <button class="btn ghost sm">Launch the DSCC browser</button><button class="btn ghost sm">Re-attach</button></div>
+    <div class="chips"><span class="chip">Attached · port 9222</span><span class="chip">Authenticated as ops@contoso.example</span></div>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">Mark it done only after DSCC shows the system as added.</span>
-    <div class="acts"><button class="btn secondary">Run again</button><button class="btn primary">Mark DSCC complete</button></div></div>
+  <div class="wizfoot"><span class="t-s weak">Mark complete only after DSCC reports the system as added.</span>
+    <div class="acts"><button class="btn secondary">Re-run</button><button class="btn primary">Mark DSCC complete</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 7 Â· DISCOVERY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 7 · DISCOVERY ══════════════════ -->
 <section class="screen" id="s-discover">
   <div class="pagehead"><div class="of">Step 7 of 12</div><h1>Discovery</h1>
-    <div class="sub">Reads the array ports, the ESXi host adapters from vCenter, and which of them are logged in on each fabric. Read-only.</div>
-    <div class="st"><span class="status" data-st="done">Done</span></div></div>
+    <div class="sub">Reads the array target ports, the ESXi host adapters from vCenter, and their fabric logins. Read-only.</div>
+    <div class="st"><span class="status" data-st="done">Complete</span></div></div>
 
   <section class="surface">
     <h2>Array target ports</h2>
@@ -450,13 +450,13 @@ table.dt{width:100%;border-collapse:collapse;font-size:1rem}
         <tr><td class="mono">1:3:1</td><td class="mono">21310002AC000000</td><td>Odd (F1)</td><td><span class="status sm" data-st="done">Ready</span></td></tr>
         <tr><td class="mono">1:3:2</td><td class="mono">21320002AC000000</td><td>Even (F2)</td><td><span class="status sm" data-st="failed">Loss of sync</span></td></tr>
       </tbody>
-      <tfoot><tr><td colspan="4">3 ready Â· 1 needs a cable or switch port check</td></tr></tfoot>
+      <tfoot><tr><td colspan="4">3 ready · 1 requires a cable or switch-port check</td></tr></tfoot>
     </table>
   </section>
 
   <section class="surface">
-    <h2>Hosts from vCenter</h2>
-    <div class="sub">Which adapters are logged in tells you what is safe to provision to.</div>
+    <h2>ESXi hosts (vCenter)</h2>
+    <div class="sub">Fabric logins indicate which hosts can be provisioned safely.</div>
     <table class="dt" style="margin-top:var(--s-xs)">
       <thead><tr><th>Host</th><th>OS</th><th>Adapters</th><th>Fabric logins</th></tr></thead>
       <tbody>
@@ -464,25 +464,25 @@ table.dt{width:100%;border-collapse:collapse;font-size:1rem}
         <tr><td>esx2</td><td>VMware ESXi 8.0 U3</td><td>2</td><td><span class="status sm" data-st="needs">Odd fabric only</span></td></tr>
         <tr><td>esx3</td><td>VMware ESXi 8.0 U3</td><td>2</td><td><span class="status sm" data-st="notstarted">Not logged in</span></td></tr>
       </tbody>
-      <tfoot><tr><td colspan="4">3 hosts Â· 6 adapters Â· 1 host ready on both fabrics</td></tr></tfoot>
+      <tfoot><tr><td colspan="4">3 hosts · 6 adapters · 1 host ready on both fabrics</td></tr></tfoot>
     </table>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">Discovery is saved with the run, so a restart will not lose it.</span>
-    <div class="acts"><button class="btn secondary">Run discovery again</button><button class="btn primary">Continue</button></div></div>
+  <div class="wizfoot"><span class="t-s weak">Discovery results persist with the run and survive an application restart.</span>
+    <div class="acts"><button class="btn secondary">Re-run discovery</button><button class="btn primary">Continue</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 8 Â· ZONING â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 8 · ZONING ══════════════════ -->
 <section class="screen" id="s-zoning">
   <div class="pagehead"><div class="of">Step 8 of 12</div><h1>SAN zoning</h1>
-    <div class="sub">Checks the zoning the array can see and drafts the commands for your SAN team. This tool never writes to a switch.</div>
-    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+    <div class="sub">Verifies zoning as observed by the array and drafts switch commands for the SAN team. This tool never writes to a switch.</div>
+    <div class="st"><span class="status" data-st="needs">Action required</span></div></div>
 
   <div class="note warn"><span data-icon="warn"></span><div><b>Two hosts are missing zones on the even fabric.</b>
-    <p>Send the draft below to the SAN team. Re-check once they have applied it.</p></div></div>
+    <p>Provide the draft below to the SAN team and re-verify after it has been applied.</p></div></div>
 
   <section class="surface">
-    <h2>What the array can see</h2>
+    <h2>Zoning observed by the array</h2>
     <table class="dt" style="margin-top:var(--s-xs)">
       <thead><tr><th>Host</th><th>Odd fabric (F1)</th><th>Even fabric (F2)</th></tr></thead>
       <tbody>
@@ -494,43 +494,43 @@ table.dt{width:100%;border-collapse:collapse;font-size:1rem}
   </section>
 
   <section class="surface">
-    <h2>Draft for the SAN team</h2>
+    <h2>Proposed zoning commands</h2>
     <div class="sub">Single-initiator, single-target zones added to the active configuration on <span class="mono">192.0.2.52</span>.</div>
-    <div class="tbar"><span class="t-s weak">Even fabric (F2) Â· 4 commands</span>
+    <div class="tbar"><span class="t-s weak">Even fabric (F2) · 4 commands</span>
       <div style="display:flex;gap:var(--s-xxs)"><button class="btn ghost sm">Copy</button><button class="btn ghost sm">Download</button></div></div>
     <pre class="mono" style="background:var(--bg-contrast);padding:var(--s-s);border-radius:var(--r-s);overflow:auto;line-height:1.6">alicreate "BLR_esx2_HBA1", "10:00:00:00:c9:aa:bb:02"
 zonecreate "BLR_esx2_HBA1__b10000_1_3_2", "BLR_esx2_HBA1;b10000_1_3_2"
 cfgadd "F2_CFG", "BLR_esx2_HBA1__b10000_1_3_2"
 cfgenable "F2_CFG"</pre>
-    <div class="note info"><span data-icon="info"></span><div><b>Have them run these in a change window.</b>
+    <div class="note info"><span data-icon="info"></span><div><b>Apply during a maintenance window.</b>
       <p><span class="mono">cfgenable</span> reloads the active configuration on a shared fabric.</p></div></div>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">Provisioning can continue â€” exports go live when zoning lands.</span>
-    <div class="acts"><button class="btn secondary">Check again</button><button class="btn primary">Continue anyway</button></div></div>
+  <div class="wizfoot"><span class="t-s weak">Provisioning may proceed — exports become active once zoning is applied.</span>
+    <div class="acts"><button class="btn secondary">Re-verify</button><button class="btn primary">Proceed anyway</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 9a Â· BUILDER â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 9a · BUILDER ══════════════════ -->
 <section class="screen" id="s-builder">
   <div class="pagehead"><div class="of">Step 9 of 12</div><h1>Provision storage</h1>
-    <div class="sub">Compose what to create from the objects discovered on the array and the ones in your sheet.</div>
-    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+    <div class="sub">Compose the objects to create from those discovered on the array and those defined in the workbook.</div>
+    <div class="st"><span class="status" data-st="needs">Action required</span></div></div>
 
   <section class="surface">
     <h2>Host sets</h2>
-    <div class="sub">Group the hosts that should see the same volumes â€” usually one cluster.</div>
+    <div class="sub">Group hosts that share volume access — typically one cluster.</div>
     <table class="dt" style="margin-top:var(--s-xs)">
       <thead><tr><th style="width:34%">Host set</th><th>Members</th><th style="width:8%"></th></tr></thead>
       <tbody>
         <tr><td class="mono">HS_PROD</td>
-          <td><div class="chips" style="margin:0"><span class="chip">esx1 âœ•</span><span class="chip">esx2 âœ•</span>
+          <td><div class="chips" style="margin:0"><span class="chip">esx1 ✕</span><span class="chip">esx2 ✕</span>
             <button class="btn ghost sm">Add host</button></div></td>
           <td><button class="btn ghost sm">Remove</button></td></tr>
       </tbody>
     </table>
     <button class="btn ghost sm" style="margin-top:var(--s-xs)">Add host set</button>
     <div class="note warn"><span data-icon="warn"></span><div><b>esx3 is not logged in on either fabric.</b>
-      <p>You can still add it â€” the export goes live when the host is powered on and zoned.</p></div></div>
+      <p>It may still be added — the export becomes active once the host is online and zoned.</p></div></div>
   </section>
 
   <section class="surface">
@@ -540,15 +540,15 @@ cfgenable "F2_CFG"</pre>
       <tbody>
         <tr><td class="mono">VOL_SQL_01</td><td>500 GiB</td><td>Thin</td><td class="mono">SSD_r6</td><td class="mono">VVS_SQL</td></tr>
         <tr><td class="mono">VOL_SQL_02</td><td>500 GiB</td><td>Thin</td><td class="mono">SSD_r6</td><td class="mono">VVS_SQL</td></tr>
-        <tr><td class="mono">VOL_LOG_01</td><td>200 GiB</td><td>Thin, reduced</td><td class="mono">SSD_r6</td><td>â€”</td></tr>
+        <tr><td class="mono">VOL_LOG_01</td><td>200 GiB</td><td>Thin, reduced</td><td class="mono">SSD_r6</td><td>—</td></tr>
       </tbody>
-      <tfoot><tr><td colspan="5">3 volumes Â· 1.2 TiB from the sheet</td></tr></tfoot>
+      <tfoot><tr><td colspan="5">3 volumes · 1.2 TiB from the sheet</td></tr></tfoot>
     </table>
   </section>
 
   <section class="surface">
     <h2>Exports</h2>
-    <div class="sub">Which volumes each host set can see. Leave the LUN empty and the array assigns one.</div>
+    <div class="sub">Volume presentation to each host set. Leave the LUN blank for the array to assign one.</div>
     <table class="dt" style="margin-top:var(--s-xs)">
       <thead><tr><th>Source</th><th>Target</th><th style="width:15%">LUN</th><th style="width:8%"></th></tr></thead>
       <tbody>
@@ -563,65 +563,65 @@ cfgenable "F2_CFG"</pre>
     <button class="btn ghost sm" style="margin-top:var(--s-xs)">Add export</button>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">Nothing is created yet â€” the next screen shows exactly what will be.</span>
-    <div class="acts"><button class="btn secondary">Reset to sheet</button><button class="btn primary">Review the plan</button></div></div>
+  <div class="wizfoot"><span class="t-s weak">No objects are created at this stage — the next screen presents the exact plan.</span>
+    <div class="acts"><button class="btn secondary">Reset to workbook</button><button class="btn primary">Review plan</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 9b Â· PLAN & CREATE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 9b · PLAN & CREATE ══════════════════ -->
 <section class="screen" id="s-provision">
   <div class="pagehead"><div class="of">Step 9 of 12</div><h1>Provision storage</h1>
-    <div class="sub">Creates the hosts, host sets, volumes and exports on the array. Nothing is written until you confirm.</div>
-    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+    <div class="sub">Creates the hosts, host sets, volumes and exports on the array. No writes occur until the plan is approved.</div>
+    <div class="st"><span class="status" data-st="needs">Action required</span></div></div>
 
-  <div class="note warn"><span data-icon="warn"></span><div><b>Review the plan, then create.</b>
-    <p>Nothing has been written to the array yet. Creating is idempotent â€” anything that already exists is skipped.</p></div></div>
+  <div class="note warn"><span data-icon="warn"></span><div><b>Review the plan, then approve creation.</b>
+    <p>No changes have been made to the array. Creation is idempotent — existing objects are skipped.</p></div></div>
 
   <section class="surface">
     <h2>Plan</h2>
-    <div class="sub">What will be created on <span class="mono">192.0.2.40</span>.</div>
+    <div class="sub">Objects to be created on <span class="mono">192.0.2.40</span>.</div>
     <div class="tbar"><span class="t-s weak">8 actions</span><button class="btn ghost sm">Export plan</button></div>
     <table class="dt">
       <thead><tr><th>Kind</th><th>Name</th><th>Action</th><th>Detail</th></tr></thead>
       <tbody>
-        <tr><td><span class="meta">host</span></td><td class="mono">esx1</td><td><span class="status sm" data-st="create">Create</span></td><td>2 WWPNs Â· VMware persona</td></tr>
+        <tr><td><span class="meta">host</span></td><td class="mono">esx1</td><td><span class="status sm" data-st="create">Create</span></td><td>2 WWPNs · VMware persona</td></tr>
         <tr><td><span class="meta">host</span></td><td class="mono">esx2</td><td><span class="status sm" data-st="exists">Exists</span></td><td>left untouched</td></tr>
         <tr><td><span class="meta">host set</span></td><td class="mono">HS_PROD</td><td><span class="status sm" data-st="create">Create</span></td><td>esx1, esx2</td></tr>
-        <tr><td><span class="meta">volume</span></td><td class="mono">VOL_SQL_01</td><td><span class="status sm" data-st="create">Create</span></td><td>500 GiB Â· thin Â· SSD_r6</td></tr>
-        <tr><td><span class="meta">volume</span></td><td class="mono">VOL_SQL_02</td><td><span class="status sm" data-st="create">Create</span></td><td>500 GiB Â· thin Â· SSD_r6</td></tr>
-        <tr><td><span class="meta">volume</span></td><td class="mono">VOL_LOG_01</td><td><span class="status sm" data-st="create">Create</span></td><td>200 GiB Â· reduced Â· SSD_r6</td></tr>
+        <tr><td><span class="meta">volume</span></td><td class="mono">VOL_SQL_01</td><td><span class="status sm" data-st="create">Create</span></td><td>500 GiB · thin · SSD_r6</td></tr>
+        <tr><td><span class="meta">volume</span></td><td class="mono">VOL_SQL_02</td><td><span class="status sm" data-st="create">Create</span></td><td>500 GiB · thin · SSD_r6</td></tr>
+        <tr><td><span class="meta">volume</span></td><td class="mono">VOL_LOG_01</td><td><span class="status sm" data-st="create">Create</span></td><td>200 GiB · reduced · SSD_r6</td></tr>
         <tr><td><span class="meta">volume set</span></td><td class="mono">VVS_SQL</td><td><span class="status sm" data-st="create">Create</span></td><td>VOL_SQL_01, VOL_SQL_02</td></tr>
-        <tr><td><span class="meta">export</span></td><td class="mono">VVS_SQL â†’ HS_PROD</td><td><span class="status sm" data-st="create">Create</span></td><td>LUN assigned by the array</td></tr>
+        <tr><td><span class="meta">export</span></td><td class="mono">VVS_SQL → HS_PROD</td><td><span class="status sm" data-st="create">Create</span></td><td>LUN assigned by the array</td></tr>
       </tbody>
-      <tfoot><tr><td colspan="4">7 to create Â· 1 already exists</td></tr></tfoot>
+      <tfoot><tr><td colspan="4">7 to create · 1 already exists</td></tr></tfoot>
     </table>
   </section>
 
   <section class="surface">
-    <h2>Path check</h2>
-    <div class="sub">Run after creating. It reads the array back and reports only â€” it never blocks the run.</div>
+    <h2>Path verification</h2>
+    <div class="sub">Runs after creation; reads the array back and reports findings only — it never gates the run.</div>
     <div style="margin-top:var(--s-xs)">
-      <div class="vrow"><span class="h">esx1</span><span class="status sm" data-st="done">Live</span><span class="d">2 of 2 adapters Â· both fabrics</span></div>
-      <div class="vrow"><span class="h">esx2</span><span class="status sm" data-st="needs">Partial</span><span class="d">1 of 2 adapters Â· odd fabric only â€” the even-fabric zone is missing</span></div>
-      <div class="vrow"><span class="h">esx3</span><span class="status sm" data-st="failed">No path</span><span class="d">the export exists; it goes live when the host is on and zoned</span></div>
+      <div class="vrow"><span class="h">esx1</span><span class="status sm" data-st="done">Live</span><span class="d">2 of 2 adapters · both fabrics</span></div>
+      <div class="vrow"><span class="h">esx2</span><span class="status sm" data-st="needs">Partial</span><span class="d">1 of 2 adapters · odd fabric only — even-fabric zone not applied</span></div>
+      <div class="vrow"><span class="h">esx3</span><span class="status sm" data-st="failed">No path</span><span class="d">export present; becomes active once the host is online and zoned</span></div>
     </div>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">Re-running skips whatever already exists.</span>
+  <div class="wizfoot"><span class="t-s weak">Re-running skips existing objects.</span>
     <div class="acts"><button class="btn secondary">Edit composition</button><button class="btn primary">Create storage objects</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 10 Â· VERIFY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 10 · VERIFY ══════════════════ -->
 <section class="screen" id="s-verify">
   <div class="pagehead"><div class="of">Step 10 of 12</div><h1>Verify configuration</h1>
-    <div class="sub">Signs in to the array over SSH and compares what is running against your sheet. Read-only.</div>
-    <div class="st"><span class="status" data-st="done">Done Â· 1 difference</span></div></div>
+    <div class="sub">Authenticates to the array over SSH and compares the running configuration against the workbook. Read-only.</div>
+    <div class="st"><span class="status" data-st="done">Complete · 1 discrepancy</span></div></div>
 
   <section class="surface">
-    <h2>Array sign-in</h2>
+    <h2>Array credentials</h2>
     <div class="fgrid" style="margin-top:var(--s-xs)">
       <div class="field" style="margin-top:0"><label for="u">User name</label><input id="u" value="3paradm"></div>
-      <div class="field" style="margin-top:0"><label for="p">Password</label><input id="p" type="password" value="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢">
-        <div class="help">Used for this check only. It is never stored.</div></div>
+      <div class="field" style="margin-top:0"><label for="p">Password</label><input id="p" type="password" value="••••••••">
+        <div class="help">Used for this verification only; never stored.</div></div>
     </div>
   </section>
 
@@ -632,16 +632,16 @@ cfgenable "F2_CFG"</pre>
       <tbody>
         <tr><td>Management IP</td><td class="mono">192.0.2.40</td><td class="mono">192.0.2.40</td><td><span class="status sm" data-st="done">Match</span></td></tr>
         <tr><td>Gateway</td><td class="mono">192.0.2.254</td><td class="mono">192.0.2.254</td><td><span class="status sm" data-st="done">Match</span></td></tr>
-        <tr><td>NTP server</td><td class="mono">ntp.example.net</td><td class="mono">pool.ntp.org</td><td><span class="status sm" data-st="needs">Differs</span></td></tr>
+        <tr><td>NTP server</td><td class="mono">ntp.example.net</td><td class="mono">pool.ntp.org</td><td><span class="status sm" data-st="needs">Mismatch</span></td></tr>
         <tr><td>Time zone</td><td>Asia/Kolkata</td><td>Asia/Kolkata</td><td><span class="status sm" data-st="done">Match</span></td></tr>
       </tbody>
-      <tfoot><tr><td colspan="4">3 match Â· 1 differs</td></tr></tfoot>
+      <tfoot><tr><td colspan="4">3 match · 1 mismatch</td></tr></tfoot>
     </table>
   </section>
 
   <section class="surface">
     <h2>Array status</h2>
-    <div class="sub">Reported by the array's own status check.</div>
+    <div class="sub">As reported by the array's status check.</div>
     <table class="dt" style="margin-top:var(--s-xs)">
       <thead><tr><th>Component</th><th>Summary</th><th>Count</th></tr></thead>
       <tbody>
@@ -652,19 +652,19 @@ cfgenable "F2_CFG"</pre>
     </table>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">A difference here never fails the run â€” it is for you to judge.</span>
-    <div class="acts"><button class="btn secondary">Check again</button><button class="btn primary">Continue</button></div></div>
+  <div class="wizfoot"><span class="t-s weak">A discrepancy never fails the run — disposition remains with the operator.</span>
+    <div class="acts"><button class="btn secondary">Re-verify</button><button class="btn primary">Continue</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 11 Â· AS-BUILT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 11 · AS-BUILT ══════════════════ -->
 <section class="screen" id="s-asbuilt">
   <div class="pagehead"><div class="of">Step 11 of 12</div><h1>As-built document</h1>
-    <div class="sub">Reads the array's finished configuration and writes it into the HPE Word template as your handover document.</div>
-    <div class="st"><span class="status" data-st="done">Ready to download</span></div></div>
+    <div class="sub">Reads the array's final configuration and renders it into the HPE Word template as the handover deliverable.</div>
+    <div class="st"><span class="status" data-st="done">Document ready</span></div></div>
 
   <section class="surface">
     <h2>Cover details</h2>
-    <div class="sub">The only two things the array cannot tell us.</div>
+    <div class="sub">Operator-supplied fields; not stored on the array.</div>
     <div class="fgrid" style="margin-top:var(--s-xs)">
       <div class="field" style="margin-top:0"><label for="cn">Customer name</label><input id="cn" value="Contoso Manufacturing"></div>
       <div class="field" style="margin-top:0"><label for="si">Site</label><input id="si" value="Bengaluru DC-2"></div>
@@ -672,30 +672,30 @@ cfgenable "F2_CFG"</pre>
   </section>
 
   <section class="surface">
-    <h2>What went into the document</h2>
+    <h2>Document contents</h2>
     <div class="grid2" style="margin-top:var(--s-xs)">
       <dl class="nvl"><dt>System name</dt><dd>lab-b10000-01</dd><dt>Model</dt><dd>HPE Alletra Storage MP</dd>
         <dt>Serial number</dt><dd class="mono">SGH123XYZ0</dd><dt>Controllers</dt><dd>2</dd></dl>
       <dl class="nvl"><dt>Software</dt><dd>10.5.51</dd><dt>Raw capacity</dt><dd>36,608,000 MiB</dd>
-        <dt>Drives</dt><dd>24 Ã— 3.84 TB NVMe SSD</dd><dt>Host ports</dt><dd>4 Ã— 32 Gb FC</dd></dl>
+        <dt>Drives</dt><dd>24 × 3.84 TB NVMe SSD</dd><dt>Host ports</dt><dd>4 × 32 Gb FC</dd></dl>
     </div>
     <div class="note ok" style="margin-top:var(--s-s)"><span data-icon="ok"></span><div>
-      <b>as-built-SGH123XYZ0.docx is ready â€” 412 KB.</b>
+      <b>as-built-SGH123XYZ0.docx is ready — 412 KB.</b>
       <p>Inventory and status tables are included, formatted to the HPE template.</p></div></div>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">Read-only â€” generating this changes nothing on the array.</span>
-    <div class="acts"><button class="btn secondary">Generate again</button><button class="btn primary">Download document</button></div></div>
+  <div class="wizfoot"><span class="t-s weak">Read-only — generation makes no changes to the array.</span>
+    <div class="acts"><button class="btn secondary">Regenerate</button><button class="btn primary">Download document</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 12 Â· FINISH â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ 12 · FINISH ══════════════════ -->
 <section class="screen" id="s-finish">
   <div class="pagehead"><div class="of">Step 12 of 12</div><h1>Finish</h1>
-    <div class="sub">Everything this run did, and what is left for someone else to do.</div>
+    <div class="sub">A record of what this run performed and the items handed over to other teams.</div>
     <div class="st"><span class="status" data-st="done">Run complete</span></div></div>
 
   <div class="note ok"><span data-icon="ok"></span><div><b>SGH123XYZ0 is onboarded and provisioned.</b>
-    <p>It is registered in GreenLake, set up in DSCC, and serving 3 volumes to 2 hosts.</p></div></div>
+    <p>Registered in HPE GreenLake, configured in DSCC, and presenting 3 volumes to 2 hosts.</p></div></div>
 
   <section class="surface">
     <h2>Summary</h2>
@@ -703,59 +703,59 @@ cfgenable "F2_CFG"</pre>
       <dl class="nvl"><dt>Array</dt><dd class="mono">SGH123XYZ0</dd><dt>Customer</dt><dd>Contoso Manufacturing</dd>
         <dt>Site</dt><dd>Bengaluru DC-2</dd><dt>Started</dt><dd>25 Jul 2026, 09:12</dd></dl>
       <dl class="nvl"><dt>Finished</dt><dd>25 Jul 2026, 10:04</dd><dt>Steps run</dt><dd>9 of 9</dd>
-        <dt>Created</dt><dd>3 volumes Â· 1 host set Â· 2 exports</dd><dt>Document</dt><dd>as-built-SGH123XYZ0.docx</dd></dl>
+        <dt>Created</dt><dd>3 volumes · 1 host set · 2 exports</dd><dt>Document</dt><dd>as-built-SGH123XYZ0.docx</dd></dl>
     </div>
   </section>
 
   <section class="surface">
-    <h2>Still to do</h2>
-    <div class="sub">Handed to other teams â€” this tool does not do these.</div>
+    <h2>Outstanding items</h2>
+    <div class="sub">Owned by other teams — outside this tool's scope.</div>
     <div style="margin-top:var(--s-xs)">
-      <div class="vrow"><span class="status sm" data-st="needs">SAN team</span><span class="d">Apply the even-fabric zones for esx2 and esx3, then re-check paths.</span></div>
+      <div class="vrow"><span class="status sm" data-st="needs">SAN team</span><span class="d">Apply the even-fabric zones for esx2 and esx3, then re-run path verification.</span></div>
       <div class="vrow"><span class="status sm" data-st="needs">Virtualisation team</span><span class="d">Rescan the adapters in vCenter and create the datastores.</span></div>
-      <div class="vrow"><span class="status sm" data-st="notstarted">Optional</span><span class="d">Set the NTP server on the array to match the sheet.</span></div>
+      <div class="vrow"><span class="status sm" data-st="notstarted">Optional</span><span class="d">Set the array NTP server to match the workbook.</span></div>
     </div>
   </section>
 
-  <div class="wizfoot"><span class="t-s weak">The run stays on this machine until you start a new one.</span>
-    <div class="acts"><button class="btn secondary">Download document</button><button class="btn primary">Start another array</button></div></div>
+  <div class="wizfoot"><span class="t-s weak">The run record remains on this workstation until a new run is started.</span>
+    <div class="acts"><button class="btn secondary">Download document</button><button class="btn primary">Start a new deployment</button></div></div>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• STATES & PATTERNS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ STATES & PATTERNS ══════════════════ -->
 <section class="screen" id="s-states">
   <div class="pagehead"><h1>States and patterns</h1>
-    <div class="sub">Every state a step can be in, and the shared pieces each screen is built from.</div></div>
+    <div class="sub">The complete set of step states and the shared patterns each screen is composed from.</div></div>
 
   <section class="surface">
     <h2>Step status</h2>
-    <div class="sub">Colour, icon, shape and words â€” WCAG 2.1 needs at least three of the four, so status never depends on colour alone.</div>
+    <div class="sub">Colour, icon, shape and words — WCAG 2.1 needs at least three of the four, so status never depends on colour alone.</div>
     <div style="display:flex;gap:var(--s-m);flex-wrap:wrap;margin-top:var(--s-s)">
       <span class="status" data-st="notstarted">Not started</span>
       <span class="status" data-st="running">Running</span>
-      <span class="status" data-st="needs">Needs you</span>
-      <span class="status" data-st="done">Done</span>
+      <span class="status" data-st="needs">Action required</span>
+      <span class="status" data-st="done">Complete</span>
       <span class="status" data-st="failed">Failed</span>
     </div>
   </section>
 
   <section class="surface">
     <h2>Notifications</h2>
-    <div class="note ok"><span data-icon="ok"></span><div><b>Done.</b><p>Confirms something finished.</p></div>
-      <button class="x">âœ•</button></div>
-    <div class="note info"><span data-icon="info"></span><div><b>Context.</b><p>Explains why a step behaves as it does.</p></div>
-      <button class="x">âœ•</button></div>
-    <div class="note warn"><span data-icon="warn"></span><div><b>Needs you.</b><p>Says what to do and where.</p></div></div>
-    <div class="note crit"><span data-icon="crit"></span><div><b>Failed â€” and what to try.</b>
-      <p class="mono t-xs" style="margin-top:6px">WSAPI 503 Â· the array is still starting its services</p>
-      <p>Wait for the array to finish booting, then run the step again.</p></div></div>
+    <div class="note ok"><span data-icon="ok"></span><div><b>Complete.</b><p>Confirms an operation finished successfully.</p></div>
+      <button class="x">✕</button></div>
+    <div class="note info"><span data-icon="info"></span><div><b>Information.</b><p>Provides context for the step's behaviour.</p></div>
+      <button class="x">✕</button></div>
+    <div class="note warn"><span data-icon="warn"></span><div><b>Action required.</b><p>States the required action and where to perform it.</p></div></div>
+    <div class="note crit"><span data-icon="crit"></span><div><b>Failed — with remediation.</b>
+      <p class="mono t-xs" style="margin-top:6px">WSAPI 503 · the array is still starting its services</p>
+      <p>Wait for array services to finish starting, then re-run the step.</p></div></div>
   </section>
 
   <section class="surface">
     <h2>Failed step</h2>
-    <div class="sub">The message says what broke, in plain words, with the next move.</div>
+    <div class="sub">The message states the failure and the recommended next action.</div>
     <div class="wizfoot" style="border-top:none;padding-top:var(--s-xs)">
-      <span class="t-s weak">Nothing was written â€” safe to retry.</span>
-      <div class="acts"><button class="btn secondary">Show technical detail</button><button class="btn primary">Try again</button></div></div>
+      <span class="t-s weak">No changes were made — safe to retry.</span>
+      <div class="acts"><button class="btn secondary">View technical details</button><button class="btn primary">Retry</button></div></div>
   </section>
 
   <section class="surface">
@@ -763,7 +763,7 @@ cfgenable "F2_CFG"</pre>
     <div class="grid2" style="margin-top:var(--s-xs)">
       <div style="background:var(--bg-contrast);border-radius:var(--r-s);padding:var(--s-m);text-align:center">
         <div class="strong">No hosts discovered yet</div>
-        <p class="weak" style="margin-top:var(--s-4xs)">Run discovery and the hosts vCenter knows about will appear here.</p>
+        <p class="weak" style="margin-top:var(--s-4xs)">Run discovery and the hosts known to vCenter will appear here.</p>
         <button class="btn secondary sm" style="margin-top:var(--s-xs)">Run discovery</button></div>
       <div style="padding:var(--s-xs)">
         <div class="sk" style="width:45%"></div><div class="sk" style="width:80%;margin-top:10px"></div>
@@ -774,16 +774,16 @@ cfgenable "F2_CFG"</pre>
 
   <section class="surface">
     <h2>Cancel run</h2>
-    <div class="sub">A double confirmation, because the run cannot be brought back.</div>
+    <div class="sub">A double confirmation — discarding a run is irreversible.</div>
     <div class="scrim" style="margin-top:var(--s-xs)">
       <div class="modal"><h3>Discard this run?</h3>
-        <p style="margin-top:var(--s-3xs)">The array keeps everything already created. This clears the run from the tool so you can start a new one.</p>
+        <p style="margin-top:var(--s-3xs)">Objects already created on the array are retained. This removes the run from this tool only.</p>
         <div class="foot"><button class="btn secondary">Keep run</button><button class="btn primary">Discard run</button></div></div>
     </div>
   </section>
 </section>
 
-<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SPEC â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<!-- ══════════════════ SPEC ══════════════════ -->
 <section class="screen" id="s-spec">
   <div class="pagehead"><h1>Design spec</h1>
     <div class="sub">The rules these mockups follow, scraped from design-system.hpe.design and the installed hpe-design-tokens.</div></div>
@@ -791,16 +791,16 @@ cfgenable "F2_CFG"</pre>
   <section class="surface">
     <h2>Brand</h2>
     <div class="spec"><table>
-      <tr><td>HPE Element, top left</td><td>The DS says: â€œAlways use the HPE Element at the top-left of your service or product experience.â€ That is the green rectangle in our header.</td></tr>
-      <tr><td>HPE logo</td><td>The full wordmark, for brand-establishing or low-density layouts, top-left or bottom-left. Shown below â€” this is the file the design system itself serves.</td></tr>
-      <tr><td>GreenLake badge removed</td><td>Retired: â€œshould not be added to any new material.â€ Our old header used it.</td></tr>
+      <tr><td>HPE Element, top left</td><td>The DS says: “Always use the HPE Element at the top-left of your service or product experience.” That is the green rectangle in our header.</td></tr>
+      <tr><td>HPE logo</td><td>The full wordmark, for brand-establishing or low-density layouts, top-left or bottom-left. Shown below — this is the file the design system itself serves.</td></tr>
+      <tr><td>GreenLake badge removed</td><td>Retired: “should not be added to any new material.” Our old header used it.</td></tr>
     </table></div>
     <div style="margin-top:var(--s-s);background:var(--bg-contrast);border-radius:var(--r-s);padding:var(--s-s);display:flex;gap:var(--s-l);align-items:center;flex-wrap:wrap">
       <svg width="150" height="43" viewBox="0 0 504 144" role="img" aria-label="Hewlett Packard Enterprise">
         <path d="M391.2 81.27v35.46H504V144H362.4V54H504v27.27H391.2z" fill="#01a982"/>
         <path d="M276.673 0h-89.254v144h28.8v-36.607h60.008c37.914 0 59.692-21.59 59.692-53.395C335.918 21.985 314.14 0 276.673 0zm-1.881 79.793h-58.573V27.27h58.573c22.679 0 31.281 10.484 31.281 26.728 0 16.079-8.602 25.795-31.281 25.795zM391.2 40.63h-28.8V0H504v27.27H391.2v13.36zM151.2 0v144h-28.8V84.984H28.8V144H0V0h28.8v57.384h93.6V0h28.8z"/></svg>
       <svg width="80" height="40" viewBox="0 0 48 24" role="img" aria-label="HPE Element"><path fill-rule="evenodd" clip-rule="evenodd" d="M2 6h44v12H2V6zm3 3h38v6H5V9z" fill="#01a982"/></svg>
-      <div class="t-s weak">Full logo (HPE_logo_full-clr_pos_rgb.svg) Â· the Element</div>
+      <div class="t-s weak">Full logo (HPE_logo_full-clr_pos_rgb.svg) · the Element</div>
     </div>
   </section>
 
@@ -808,10 +808,10 @@ cfgenable "F2_CFG"</pre>
     <h2>Tokens in use</h2>
     <div class="spec"><table>
       <tr><td>Primary action</td><td><span class="mono">background.primary-strong #008567</span> with <span class="mono">text.onPrimaryStrong</span>. Brand green <span class="mono">#01a982</span> is the Element only.</td></tr>
-      <tr><td>Status icons</td><td><span class="mono">ok #009a71 Â· warning #d36d00 Â· critical #ec3331 Â· info #00567a Â· unknown #757575</span></td></tr>
-      <tr><td>Status surfaces</td><td><span class="mono">ok #e3fdf4 Â· warning #fff3dd Â· critical #ffecec Â· info #e0f8ff</span></td></tr>
-      <tr><td>Text</td><td><span class="mono">#555 default Â· #2e2e2e strong Â· #676767 weak</span>; body is text.medium 1.125rem/1.5rem; reading width capped at 30em</td></tr>
-      <tr><td>Spacing</td><td>4, 6, 8, 12, 16, 24, 32, 48, 64, 96 px â€” t-shirt tokens only, no ad-hoc pixels</td></tr>
+      <tr><td>Status icons</td><td><span class="mono">ok #009a71 · warning #d36d00 · critical #ec3331 · info #00567a · unknown #757575</span></td></tr>
+      <tr><td>Status surfaces</td><td><span class="mono">ok #e3fdf4 · warning #fff3dd · critical #ffecec · info #e0f8ff</span></td></tr>
+      <tr><td>Text</td><td><span class="mono">#555 default · #2e2e2e strong · #676767 weak</span>; body is text.medium 1.125rem/1.5rem; reading width capped at 30em</td></tr>
+      <tr><td>Spacing</td><td>4, 6, 8, 12, 16, 24, 32, 48, 64, 96 px — t-shirt tokens only, no ad-hoc pixels</td></tr>
       <tr><td>Buttons</td><td>pill <span class="mono">9999px</span>, weight 600, padding 5/18, min height 36px</td></tr>
       <tr><td>Focus</td><td><span class="mono">#004233</span>, 2px, 2px offset</td></tr>
     </table></div>
@@ -820,24 +820,24 @@ cfgenable "F2_CFG"</pre>
   <section class="surface">
     <h2>Rules these screens follow</h2>
     <div class="spec"><table>
-      <tr><td>Wizard anatomy</td><td>Sticky bar with Previous step and Cancel run; â€œStep X of Yâ€; the primary action sits far right in a footer that never moves.</td></tr>
-      <tr><td>Never say â€œhealthâ€</td><td>The DS forbids it in UI copy â€” always â€œstatusâ€. The old â€œVerify config &amp; healthâ€ step is now â€œVerify configurationâ€.</td></tr>
+      <tr><td>Wizard anatomy</td><td>Sticky bar with Previous step and Cancel run; “Step X of Y”; the primary action sits far right in a footer that never moves.</td></tr>
+      <tr><td>Never say “health”</td><td>The DS forbids it in UI copy — always “status”. The old “Verify config &amp; health” step is now “Verify configuration”.</td></tr>
       <tr><td>Status = 3 of 4 signals</td><td>Colour, icon, shape, words. Ours carry all four.</td></tr>
       <tr><td>Layered backgrounds</td><td>One approach app-wide; sections separated by surface colour and spacing, not borders.</td></tr>
-      <tr><td>Verb + noun buttons</td><td>â€œCreate storage objectsâ€, â€œRun discoveryâ€, â€œDownload documentâ€. Create means â€œsubmit input and make the objectâ€.</td></tr>
+      <tr><td>Verb + noun buttons</td><td>“Create storage objects”, “Run discovery”, “Download document”. Create means “submit input and make the object”.</td></tr>
       <tr><td>DataTable</td><td>Controls above the table, a summary count in the footer.</td></tr>
-      <tr><td>NameValueList</td><td>For metadata, sentence-case names â€” used for parsed sheet values and array facts.</td></tr>
+      <tr><td>NameValueList</td><td>For metadata, sentence-case names — used for parsed sheet values and array facts.</td></tr>
       <tr><td>One spinner</td><td>Never more than one on a screen; skeletons hold layout while data loads.</td></tr>
-      <tr><td>Voice</td><td>Plain English, active, short, roughly grade 7, sentence case, no â€œpleaseâ€.</td></tr>
+      <tr><td>Voice</td><td>Plain English, active, short, roughly grade 7, sentence case, no “please”.</td></tr>
     </table></div>
   </section>
 
   <section class="surface">
     <h2>Where we deliberately differ</h2>
     <div class="spec"><table>
-      <tr><td>Not a fullscreen modal</td><td>The DS wizard is a modal over a page. Ours is the whole application â€” there is no page behind it.</td></tr>
-      <tr><td>We keep a step rail</td><td>The DS wizard is linear and forward-only. Our steps are chosen by mode, gated by the operator and revisitable, so the rail is the only thing showing scope and position. We add â€œStep X of Yâ€ so the progress rule is still met.</td></tr>
-      <tr><td>Cancel means discard the run</td><td>There is nothing to return to, so Cancel run ends the run â€” and gets the DS double confirmation.</td></tr>
+      <tr><td>Not a fullscreen modal</td><td>The DS wizard is a modal over a page. Ours is the whole application — there is no page behind it.</td></tr>
+      <tr><td>We keep a step rail</td><td>The DS wizard is linear and forward-only. Our steps are chosen by mode, gated by the operator and revisitable, so the rail is the only thing showing scope and position. We add “Step X of Y” so the progress rule is still met.</td></tr>
+      <tr><td>Cancel means discard the run</td><td>There is nothing to return to, so Cancel run ends the run — and gets the DS double confirmation.</td></tr>
     </table></div>
   </section>
 </section>
@@ -847,7 +847,7 @@ cfgenable "F2_CFG"</pre>
 </div>
 
 <script>
-/* â•â•â• status indicator: icon + shape per status (never colour alone) â•â•â• */
+/* ═══ status indicator: icon + shape per status (never colour alone) ═══ */
 const ICONS = {
   done:  '<svg width="17" height="17" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#009a71"/><path d="M8 12.5l2.5 2.5L16 9.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   needs: '<svg width="17" height="17" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5H2.5z" fill="#d36d00"/><path d="M12 9.5v4.2" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1.15" fill="#fff"/></svg>',
@@ -864,7 +864,7 @@ const ICONS = {
 document.querySelectorAll('[data-st]').forEach(el=>{ el.insertAdjacentHTML('afterbegin', ICONS[el.dataset.st]||''); });
 document.querySelectorAll('[data-icon]').forEach(el=>{ el.outerHTML = ICONS[el.dataset.icon]||''; });
 
-/* â•â•â• steps + rail â•â•â• */
+/* ═══ steps + rail ═══ */
 const STEPS = [
   {k:'prereq',    g:'Prepare',    l:'Prerequisites',        st:'needs'},
   {k:'sheet',     g:'Prepare',    l:'Initialisation sheet', st:'done'},
@@ -872,12 +872,12 @@ const STEPS = [
   {k:'greenlake', g:'Initialize', l:'GreenLake registration', st:'running'},
   {k:'cloudinit', g:'Initialize', l:'Cloud Connectivity',   st:'needs'},
   {k:'dscc',      g:'Initialize', l:'DSCC setup',           st:'needs'},
-  {k:'discover',  g:'Provision',  l:'Discovery',            st:'done',  h:'4 ports Â· 6 adapters'},
-  {k:'zoning',    g:'Provision',  l:'SAN zoning',           st:'needs', h:'2 zones missing'},
-  {k:'builder',   g:'Provision',  l:'Provision storage',    st:'needs', h:'plan ready'},
-  {k:'provision', g:'Provision',  l:'Provision storage',    st:'needs', h:'plan ready', hide:true},
-  {k:'verify',    g:'Document',   l:'Verify configuration', st:'done',  h:'1 difference'},
-  {k:'asbuilt',   g:'Document',   l:'As-built document',    st:'done',  h:'ready'},
+  {k:'discover',  g:'Provision',  l:'Discovery',            st:'done',  h:'4 ports · 6 adapters'},
+  {k:'zoning',    g:'Provision',  l:'SAN zoning',           st:'needs', h:'2 zones outstanding'},
+  {k:'builder',   g:'Provision',  l:'Provision storage',    st:'needs', h:'awaiting approval'},
+  {k:'provision', g:'Provision',  l:'Provision storage',    st:'needs', h:'awaiting approval', hide:true},
+  {k:'verify',    g:'Document',   l:'Verify configuration', st:'done',  h:'1 discrepancy'},
+  {k:'asbuilt',   g:'Document',   l:'As-built document',    st:'done',  h:'document ready'},
   {k:'finish',    g:'Document',   l:'Finish',               st:'notstarted'}
 ];
 function renderRail(active){
@@ -906,4 +906,3 @@ go('prereq');
 </script>
 </body>
 </html>
-
