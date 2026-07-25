@@ -19,16 +19,10 @@ from __future__ import annotations
 
 import re
 
-from alletra_onboard.domain.storage import (
-    DiscoveryReport,
-    ExpectedZone,
-    Fabric,
-    ProvisioningIntent,
-    ZoneRemediation,
-    ZoningReport,
-    normalize_wwpn,
-    wwpn_colons,
-)
+from alletra_onboard.domain.shared import Fabric, normalize_wwpn, wwpn_colons
+from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.zoning import ExpectedZone, ZoneRemediation, ZoningReport
+from alletra_onboard.domain.provisioning import ProvisioningIntent
 
 _WWPN_RE = re.compile(r"^(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}$")
 

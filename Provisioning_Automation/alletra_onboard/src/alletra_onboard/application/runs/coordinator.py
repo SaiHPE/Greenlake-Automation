@@ -22,7 +22,7 @@ from alletra_onboard.domain.models import (
     WorkflowPhase,
 )
 from alletra_onboard.domain.ports import RunStore
-from alletra_onboard.domain.storage import ProvisioningIntent
+from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.workflow import initial_phase
 
 

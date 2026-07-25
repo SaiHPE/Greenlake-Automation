@@ -17,15 +17,10 @@ from collections import OrderedDict, defaultdict
 from typing import Callable
 
 from alletra_onboard.application.storage.clients import make_brocade
-from alletra_onboard.domain.storage import (
-    AliasedWwpn,
-    DiscoveryReport,
-    FabricZonePlan,
-    ProvisioningIntent,
-    ZoningPlan,
-    normalize_wwpn,
-    wwpn_colons,
-)
+from alletra_onboard.domain.shared import normalize_wwpn, wwpn_colons
+from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, ZoningPlan
+from alletra_onboard.domain.provisioning import ProvisioningIntent
 
 _WWPN_COLON = re.compile(r"(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}")
 

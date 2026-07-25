@@ -7,7 +7,7 @@ from alletra_onboard.adapters.array.cli_client import ArrayCliClient
 from alletra_onboard.adapters.array.wsapi_client import WsapiClient
 from alletra_onboard.adapters.fabric.brocade_client import BrocadeClient
 from alletra_onboard.adapters.vcenter.vcenter_client import VCenterClient
-from alletra_onboard.domain.storage import EndpointCreds
+from alletra_onboard.domain.shared import EndpointCreds
 
 
 def make_wsapi(creds: EndpointCreds) -> WsapiClient:
