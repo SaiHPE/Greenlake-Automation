@@ -335,7 +335,7 @@ async def test_path_verify_emits_per_host_report(tmp_path, monkeypatch):
 
 
 async def test_start_asbuilt_reads_array_and_produces_downloadable_docx(tmp_path, monkeypatch):
-    from alletra_onboard.application import onboarding_service as osvc
+    from alletra_onboard.application.documents import steps as doc_steps
 
     canned = {
         "showsys -d": ("System Name : TEST-01\nSystem Model : HPE Alletra Storage MP\n"
@@ -364,7 +364,7 @@ async def test_start_asbuilt_reads_array_and_produces_downloadable_docx(tmp_path
         def run(self, cmd, timeout=None):
             return canned.get(cmd, "")
 
-    monkeypatch.setattr(osvc, "make_array_cli", lambda creds: FakeCli())
+    monkeypatch.setattr(doc_steps, "make_array_cli", lambda creds: FakeCli())
 
     service = _service(tmp_path)
     run = service.create_run(_item())
