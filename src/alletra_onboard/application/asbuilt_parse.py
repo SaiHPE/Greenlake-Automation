@@ -7,6 +7,7 @@ relevant block. Extractors use ``str.split()`` (whitespace-agnostic) so they tol
 
 from __future__ import annotations
 
+import csv
 import re
 
 from alletra_onboard.application.asbuilt import AsBuiltData
@@ -167,52 +168,50 @@ def parse_checkhealth(text: str) -> tuple[list[tuple[str, str, str]], list[tuple
     return summary, detail
 
 
-def _columns(header: str, data_lines: list[str]) -> tuple[list[str], list[list[str]]]:
-    """Slice a fixed-width block by the header's column token positions. The first column is anchored
-    at index 0 (so a value left of its right-aligned header — e.g. the array-id row — isn't clipped)."""
-    tokens = [m.start() for m in re.finditer(r"\S+", header)]
-    if not tokens:
-        return [], []
-    starts = [0] + tokens[1:]
-    ends = tokens[1:] + [None]
-
-    def cut(line: str) -> list[str]:
-        return [(line[a:b] if b is not None else line[a:]).strip() for a, b in zip(starts, ends)]
-
-    headers = [h.strip("-").strip() for h in cut(header)]
-    rows = [cut(line) for line in data_lines]
-    return headers, [r for r in rows if any(c for c in r)]
+def _is_inv_footer(row: list[str]) -> bool:
+    """A `showinventory` footer row like ``2,total,,`` or ``20,,,,,`` — dropped from the table."""
+    cells = [c.strip() for c in row]
+    return (len(cells) >= 2 and cells[1] == "total") or bool(cells and cells[0].isdigit() and not any(cells[1:]))
 
 
 def parse_inventory(text: str) -> list[tuple[str, list[str], list[list[str]]]]:
-    """Split ``showinventory`` into its sub-sections -> [(title, headers, rows)]. A dash-wrapped line
-    ("----Midplane----") is a section title; the next block's first line is the column header, the rest
-    are data (footer "N total" rows dropped). Each block is sliced fixed-width via ``_columns``."""
+    """Split ``showinventory -csvtable`` output into [(title, headers, rows)] per sub-section.
+
+    Deterministic — each line is CSV (``csv.reader`` handles quoted commas and values with spaces, e.g.
+    ``"Advanced Micro Devices, Inc."`` or ``Iom[1]PROC 1 DIMM 1``). A line whose first field holds a run
+    of dashes is a section title/separator ("----Midplane----"); the next block's first row is the
+    header, the rest are data ("N total" footers dropped). Header names are stripped of their dashes.
+    """
     out: list[tuple[str, list[str], list[list[str]]]] = []
     title = ""
-    block: list[str] = []
+    block: list[list[str]] = []
 
     def flush() -> None:
         nonlocal block
-        data = [ln for ln in block[1:] if ln.strip() and not re.match(r"^\s*\d+\s+total", ln)]
-        if block and data:
-            headers, rows = _columns(block[0], data)
-            if headers and rows:
-                out.append((title, headers, rows))
+        if not block:
+            return
+        headers = [c.strip().strip("-").strip() for c in block[0]]
+        rows = [
+            [(r[i].strip() if i < len(r) else "") for i in range(len(headers))]
+            for r in block[1:]
+            if not _is_inv_footer(r) and any(c.strip() for c in r)
+        ]
+        if rows and any(h for h in headers):
+            out.append((title, headers, rows))
         block = []
 
     for line in (text or "").splitlines():
-        stripped = line.strip()
-        if not stripped:
+        row = next(csv.reader([line])) if line else [""]
+        if not any(c.strip() for c in row):  # blank line OR an all-empty CSV row (",,,,") -> separator
             flush()
             continue
-        if stripped.startswith("-"):          # a title ("----Midplane----") or a plain separator
-            label = re.split(r"-{2,}", stripped.strip("-"))[0].strip()  # drop trailing dash-runs/units
+        if "---" in (row[0] or ""):          # a section title ("----Midplane----") or a plain separator
+            label = re.split(r"-{2,}", row[0].strip("-"))[0].strip()
             if label:
                 title = label
             flush()
             continue
-        block.append(line)
+        block.append(row)
     flush()
     return out
 
@@ -239,6 +238,6 @@ def parse_asbuilt(dump: str) -> AsBuiltData:
         gateway=net["gateway"],
         ntp=net["ntp"],
         dns=net["dns"],
-        inventory=sec.get("showinventory", ""),
+        inventory=sec.get("showinventory -csvtable") or sec.get("showinventory", ""),
         checkhealth=sec.get("checkhealth -svc -detail", ""),
     )
