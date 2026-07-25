@@ -19,7 +19,6 @@ class WorkflowPhase(StrEnum):
     GL_VERIFY_DEVICE = "GL_VERIFY_DEVICE"
     CLOUDINIT_CONNECT = "CLOUDINIT_CONNECT"
     DSCC_SETUP_SYSTEM = "DSCC_SETUP_SYSTEM"
-    STORAGE_FLEET_VERIFY = "STORAGE_FLEET_VERIFY"
     # Storage provisioning (Phase 2) — driven over WSAPI, see docs/adr/0002-0004 + the runbook.
     STORAGE_DISCOVER = "STORAGE_DISCOVER"
     STORAGE_ZONING = "STORAGE_ZONING"
@@ -116,7 +115,6 @@ class ArrayWorkItem(BaseModel):
     dscc_setup: DsccSetupConfig
     tags: dict[str, str] = Field(default_factory=dict)
     support_contact: dict[str, Any] = Field(default_factory=dict)
-    storage_fleet_enabled: bool = False
     customer_name: str = ""   # for the as-built cover page (operator-supplied; not stored on the array)
     site: str = ""
 
@@ -135,7 +133,6 @@ class ExternalResources(BaseModel):
     service_manager_id: str | None = None
     service_catalog_region_id: str | None = None
     active_async_operation_id: str | None = None
-    storage_fleet_system_id: str | None = None
 
 
 class RunEvent(BaseModel):
