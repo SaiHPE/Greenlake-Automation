@@ -11,7 +11,8 @@ export type ActionKey =
   | 'discover'
   | 'zoning'
   | 'provision'
-  | 'verify';
+  | 'verify'
+  | 'asbuilt';
 
 export interface ActionDef {
   key: ActionKey;
@@ -30,14 +31,15 @@ export const ACTION_CATALOG: ActionDef[] = [
   { key: 'zoning', title: 'SAN Zoning', subtitle: 'verify · remediate (confirm)', kind: 'provision' },
   { key: 'provision', title: 'Provision storage', subtitle: 'host · volumes · LUNs', kind: 'provision' },
   { key: 'verify', title: 'Verify config & health', subtitle: 'SSH read-only check', kind: 'verify' },
+  { key: 'asbuilt', title: 'As-built document', subtitle: 'read-only → HPE .docx', kind: 'verify' },
 ];
 
 // Preset modes -> their action keys (keep in lockstep with the backend _MODE_STEPS).
 const MODE_STEPS: Record<Exclude<RunMode, 'CUSTOM'>, ActionKey[]> = {
-  FULL_ONBOARDING: ['greenlake', 'cloudinit', 'dscc', 'verify'],
-  PROVISION_ONLY: ['discover', 'zoning', 'provision', 'verify'],
-  BOTH: ['greenlake', 'cloudinit', 'dscc', 'discover', 'zoning', 'provision', 'verify'],
-  VERIFY_ONLY: ['verify'],
+  FULL_ONBOARDING: ['greenlake', 'cloudinit', 'dscc', 'verify', 'asbuilt'],
+  PROVISION_ONLY: ['discover', 'zoning', 'provision', 'verify', 'asbuilt'],
+  BOTH: ['greenlake', 'cloudinit', 'dscc', 'discover', 'zoning', 'provision', 'verify', 'asbuilt'],
+  VERIFY_ONLY: ['verify', 'asbuilt'],
 };
 
 // The action steps to render for a mode, always in catalog order. CUSTOM uses the explicit set.
@@ -67,6 +69,7 @@ export function phaseToActionKey(phase: string): ActionKey {
   if (phase === 'STORAGE_DISCOVER') return 'discover';
   if (phase === 'STORAGE_ZONING') return 'zoning';
   if (phase === 'STORAGE_PROVISION') return 'provision';
-  if (phase === 'CONFIG_VERIFY' || phase === 'COMPLETE') return 'verify';
+  if (phase === 'CONFIG_VERIFY') return 'verify';
+  if (phase === 'ASBUILT_DOCUMENT' || phase === 'COMPLETE') return 'asbuilt';
   return 'greenlake'; // PREFLIGHT / GL_*
 }

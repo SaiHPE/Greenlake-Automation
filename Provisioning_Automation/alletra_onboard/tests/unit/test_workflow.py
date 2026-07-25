@@ -22,15 +22,15 @@ def _keys(mode, selected=None):
 
 
 def test_full_onboarding_steps_in_registry_order():
-    assert _keys(RunMode.FULL_ONBOARDING) == ["greenlake", "cloudinit", "dscc", "verify"]
+    assert _keys(RunMode.FULL_ONBOARDING) == ["greenlake", "cloudinit", "dscc", "verify", "asbuilt"]
 
 
 def test_provision_only_excludes_init_steps():
-    assert _keys(RunMode.PROVISION_ONLY) == ["discover", "zoning", "provision", "verify"]
+    assert _keys(RunMode.PROVISION_ONLY) == ["discover", "zoning", "provision", "verify", "asbuilt"]
 
 
-def test_verify_only_is_just_verify():
-    assert _keys(RunMode.VERIFY_ONLY) == ["verify"]
+def test_verify_only_is_verify_then_asbuilt():
+    assert _keys(RunMode.VERIFY_ONLY) == ["verify", "asbuilt"]
 
 
 def test_custom_honours_explicit_selection_in_registry_order():

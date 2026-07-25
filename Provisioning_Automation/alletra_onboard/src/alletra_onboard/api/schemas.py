@@ -87,6 +87,13 @@ class VerifyStepRequest(BaseModel):
     password: str = Field(description="Array admin password — used for the SSH session only, never stored.")
 
 
+class AsBuiltStepRequest(BaseModel):
+    username: str = Field(description="Array admin username (e.g. 3paradm) — read-only SSH for the as-built.")
+    password: str = Field(description="Array admin password — used for the SSH session only, never stored.")
+    customer: str = Field(default="", description="Customer name for the as-built cover page (overrides the sheet value).")
+    site: str = Field(default="", description="Deployment site/location (optional; the array doesn't store it).")
+
+
 # ------------------------------------------------------------------ browser
 
 class BrowserLaunchRequest(BaseModel):
