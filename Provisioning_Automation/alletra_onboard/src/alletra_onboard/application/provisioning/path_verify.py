@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 
-from alletra_onboard.application.storage.clients import make_array_cli
+from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.domain.shared import normalize_wwpn
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (

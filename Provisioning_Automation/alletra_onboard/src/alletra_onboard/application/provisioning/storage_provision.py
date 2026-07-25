@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Callable
 
-from alletra_onboard.application.storage.clients import make_wsapi
+from alletra_onboard.application.provisioning.clients import make_wsapi
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
     ActionOutcome,

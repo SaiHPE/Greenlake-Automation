@@ -5,7 +5,7 @@ from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.api.app import create_app
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.platform.intake import csv_template
-from alletra_onboard.application.onboarding_service import OnboardingService
+from alletra_onboard.application.service import OnboardingService
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
