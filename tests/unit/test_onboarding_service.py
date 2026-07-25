@@ -5,7 +5,7 @@ from pydantic import SecretStr
 
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
-from alletra_onboard.application.onboarding_service import OnboardingService, RunBusyError
+from alletra_onboard.application.service import OnboardingService, RunBusyError
 from alletra_onboard.application.onboarding.greenlake_provision import DONE, FAILED, WARNING, PhaseOutcome, ProvisionResult
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import (
@@ -279,7 +279,7 @@ def _prov_intent():
 
 
 async def test_get_storage_objects_builds_the_dropdown_palette(tmp_path, monkeypatch):
-    from alletra_onboard.application.storage import storage_provision as sp
+    from alletra_onboard.application.provisioning import storage_provision as sp
     from alletra_onboard.domain.shared import normalize_wwpn
     from alletra_onboard.domain.discovery import DiscoveryReport, HostHba
 
@@ -319,7 +319,7 @@ async def test_set_provisioning_builder_persists_membership_vvsets_and_exports(t
 
 
 async def test_path_verify_emits_per_host_report(tmp_path, monkeypatch):
-    from alletra_onboard.application.storage import path_verify as pv
+    from alletra_onboard.application.provisioning import path_verify as pv
     from alletra_onboard.domain.discovery import DiscoveryReport
     from alletra_onboard.domain.provisioning import HostPathStatus, PathVerification
 
@@ -383,7 +383,7 @@ async def test_start_asbuilt_reads_array_and_produces_downloadable_docx(tmp_path
 async def test_pending_sheet_stash_mints_run_and_preserves_intent(tmp_path):
     # ADR 0005 revision: the sheet is held server-side (with device passwords) until a mode is
     # chosen; create_run_from_pending then mints the run and preserves the provisioning intent.
-    from alletra_onboard.application.onboarding_service import PendingSheetNotFoundError
+    from alletra_onboard.application.service import PendingSheetNotFoundError
 
     service = _service(tmp_path)
     intent = _prov_intent()
@@ -403,9 +403,9 @@ async def test_pending_sheet_stash_mints_run_and_preserves_intent(tmp_path):
 
 
 async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
-    from alletra_onboard.application.storage import discovery as sd
-    from alletra_onboard.application.storage import storage_provision as sp
-    from alletra_onboard.application.storage import zoning as sz
+    from alletra_onboard.application.provisioning import discovery as sd
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.application.provisioning import zoning as sz
     from alletra_onboard.domain.discovery import DiscoveryReport
     from alletra_onboard.domain.zoning import ExpectedZone, ZoneRemediation, ZoningReport
     from alletra_onboard.domain.provisioning import (
@@ -448,7 +448,7 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
 
 
 async def test_zoning_before_discovery_is_a_precondition_error(tmp_path):
-    from alletra_onboard.application.onboarding_service import StepPreconditionError
+    from alletra_onboard.application.service import StepPreconditionError
 
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())

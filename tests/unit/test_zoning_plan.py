@@ -3,7 +3,7 @@ build the per-fabric SIST plan from read-only switch data, keep every alias, ren
 
 from __future__ import annotations
 
-from alletra_onboard.application.storage import zoning_plan as zp
+from alletra_onboard.application.provisioning import zoning_plan as zp
 from alletra_onboard.domain.shared import EndpointCreds
 from alletra_onboard.domain.discovery import ArrayPort, DiscoveryReport, HostHba
 from alletra_onboard.domain.provisioning import ProvisioningIntent

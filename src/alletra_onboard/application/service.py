@@ -31,7 +31,7 @@ from alletra_onboard.application.runs.coordinator import (
     RunNotFoundError,
     StepPreconditionError,
 )
-from alletra_onboard.application.storage.steps import DiscoveryZoningSteps, ProvisioningSteps
+from alletra_onboard.application.provisioning.steps import DiscoveryZoningSteps, ProvisioningSteps
 from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunMode, RunRecord

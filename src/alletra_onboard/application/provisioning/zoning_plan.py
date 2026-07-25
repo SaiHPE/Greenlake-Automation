@@ -16,7 +16,7 @@ import re
 from collections import OrderedDict, defaultdict
 from typing import Callable
 
-from alletra_onboard.application.storage.clients import make_brocade
+from alletra_onboard.application.provisioning.clients import make_brocade
 from alletra_onboard.domain.shared import normalize_wwpn, wwpn_colons
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, ZoningPlan
