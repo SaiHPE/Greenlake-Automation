@@ -27,6 +27,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt
 
+from alletra_onboard.application.asbuilt_docx import hpe_table
+
 # Template Table-01 label (column 0, as it appears in the doc) -> AsBuiltData field. Match is
 # whitespace-normalised + case-insensitive (the template mixes "InServ"/"Inserv").
 _LABEL_TO_FIELD: dict[str, str] = {
@@ -160,14 +162,6 @@ def _insert_mono_after(heading, text: str):
     return new_p
 
 
-def _table_style(doc) -> str | None:
-    names = {s.name for s in doc.styles}
-    for candidate in ("Grid Table 4 Accent 1", "Grid Table 4", "Table Grid", "Light Grid Accent 1", "Light List Accent 1"):
-        if candidate in names:
-            return candidate
-    return None
-
-
 def _place_after(anchor, element):
     """Move a python-docx Paragraph/Table's XML to right after ``anchor`` (an lxml element)."""
     xml = element._p if hasattr(element, "_p") else element._tbl
@@ -175,55 +169,56 @@ def _place_after(anchor, element):
     return xml
 
 
-def _fill_row(table, values, *, bold: bool = False) -> None:
-    cells = table.add_row().cells
-    for i, value in enumerate(values):
-        if i < len(cells):
-            cell = cells[i]
-            cell.text = ""
-            run = cell.paragraphs[0].add_run(str(value))
-            run.bold = bold
-            run.font.size = Pt(8)
+def _content_widths(headers: list[str], rows) -> list[float]:
+    """Column-width fractions proportional to the widest cell in each column (min 4% each)."""
+    n = len(headers)
+    widest = [max([len(headers[i])] + [len(r[i]) for r in rows if i < len(r)]) for i in range(n)]
+    total = sum(widest) or n
+    return [max(0.04, w / total) for w in widest]
+
+
+def _bold_para_after(anchor, caption: str, doc):
+    para = doc.add_paragraph()
+    para.add_run(caption).bold = True
+    return _place_after(anchor, para)
+
+
+def _add_inventory_after(heading, text: str, doc) -> None:
+    """Render each ``showinventory`` sub-section as its own HPE-styled table under the heading; falls
+    back to a monospace dump if nothing parsed."""
+    from alletra_onboard.application.asbuilt_parse import parse_inventory  # local: avoid import cycle
+
+    sections = parse_inventory(text)
+    if not sections:
+        _insert_mono_after(heading, text)
+        return
+    anchor = heading._p
+    for title, headers, rows in sections:
+        if title:
+            anchor = _bold_para_after(anchor, title, doc)
+        tbl = hpe_table(doc, headers, rows, widths=_content_widths(headers, rows), font_size=7, header_size=7)
+        anchor = _place_after(anchor, tbl)
 
 
 def _add_checkhealth_after(heading, text: str, doc) -> None:
-    """Render checkhealth as two formatted Word tables (Summary + Details) after the heading; falls
-    back to a monospace dump if the output couldn't be parsed into rows."""
+    """Render checkhealth as two HPE-styled Word tables (Summary + Details); falls back to monospace."""
     from alletra_onboard.application.asbuilt_parse import parse_checkhealth  # local: avoid import cycle
 
     summary, detail = parse_checkhealth(text)
     if not summary and not detail:
         _insert_mono_after(heading, text)
         return
-    style = _table_style(doc)
     anchor = heading._p
-
-    def label(caption: str) -> None:
-        nonlocal anchor
-        para = doc.add_paragraph()
-        run = para.add_run(caption)
-        run.bold = True
-        anchor = _place_after(anchor, para)
-
-    def table(headers: list[str], rows) -> None:
-        nonlocal anchor
-        tbl = doc.add_table(rows=0, cols=len(headers))
-        if style:
-            try:
-                tbl.style = style
-            except Exception:  # noqa: BLE001 - fall back to the default table style
-                pass
-        _fill_row(tbl, headers, bold=True)
-        for row in rows:
-            _fill_row(tbl, row)
-        anchor = _place_after(anchor, tbl)
-
     if summary:
-        label("Summary")
-        table(["Component", "Summary Description", "Qty"], summary)
+        anchor = _bold_para_after(anchor, "Summary", doc)
+        tbl = hpe_table(doc, ["Component", "Summary Description", "Qty"], summary,
+                        widths=[0.20, 0.66, 0.14], font_size=8, header_size=8)
+        anchor = _place_after(anchor, tbl)
     if detail:
-        label("Details")
-        table(["Component", "Identifier", "Detailed Description", "Resolution"], detail)
+        anchor = _bold_para_after(anchor, "Details", doc)
+        tbl = hpe_table(doc, ["Component", "Identifier", "Detailed Description", "Resolution"], detail,
+                        widths=[0.12, 0.28, 0.48, 0.12], font_size=8, header_size=8)
+        anchor = _place_after(anchor, tbl)
 
 
 def generate_asbuilt(data: AsBuiltData, out_path: str | Path, *, template: str | Path | None = ...) -> Path:
@@ -252,7 +247,7 @@ def generate_asbuilt(data: AsBuiltData, out_path: str | Path, *, template: str |
         elif "checkhealth" in heading:
             ch_heading = para
     if inv_heading is not None:
-        _insert_mono_after(inv_heading, data.inventory)
+        _add_inventory_after(inv_heading, data.inventory, doc)
     if ch_heading is not None:
         _add_checkhealth_after(ch_heading, data.checkhealth, doc)
 
