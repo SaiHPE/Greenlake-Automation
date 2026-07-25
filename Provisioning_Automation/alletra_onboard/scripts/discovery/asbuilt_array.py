@@ -37,7 +37,7 @@ COMMANDS = [
     "showsys", "showsys -d", "shownet", "showdate",
     "showversion", "showversion -b", "showlicense",
     "showpd", "showspace", "showcpg", "showcpg -space",
-    "showport", "showport -par", "showinventory",
+    "showport", "showport -par", "showinventory -csvtable",  # -csvtable => deterministic CSV parse
     "# ---- AS-BUILT: health (Panduranga wants checkhealth output) ----",
     "checkhealth -svc -detail",
     "# ---- PROVISIONING readiness / objects (ADR 0010) ----",
