@@ -9,7 +9,7 @@ import pytest
 from pydantic import SecretStr
 
 from alletra_onboard.adapters.array.cli_client import ArrayCliClient, ArrayCliError
-from alletra_onboard.application.verification import verify
+from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
     DsccSetupConfig,

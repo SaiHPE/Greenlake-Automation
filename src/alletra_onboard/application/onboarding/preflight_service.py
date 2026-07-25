@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from alletra_onboard.application.greenlake_preflight import (
+from alletra_onboard.application.onboarding.greenlake_preflight import (
     GreenLakePreflightRunner,
     build_greenlake_read_preflight,
 )

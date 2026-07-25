@@ -14,7 +14,7 @@ import uvicorn
 from rich.console import Console
 from rich.table import Table
 
-from alletra_onboard.application.health import greenlake_check
+from alletra_onboard.application.onboarding.health import greenlake_check
 from alletra_onboard.config import load_settings
 
 app = typer.Typer(help="HPE Alletra MP B10000 onboarding — launches the operator web app.")

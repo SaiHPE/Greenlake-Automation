@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from alletra_onboard.application.provisioning import build_provisioning_service, missing_credentials
+from alletra_onboard.application.onboarding.greenlake_provision import build_provisioning_service, missing_credentials
 from alletra_onboard.config import Settings
 
 

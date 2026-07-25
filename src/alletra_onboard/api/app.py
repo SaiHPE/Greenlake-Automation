@@ -62,18 +62,18 @@ from alletra_onboard.api.schemas import (
     RunListResponse,
     RunResponse,
 )
-from alletra_onboard.application.configuring import (
+from alletra_onboard.application.platform.configuring import (
     masked_gl_credentials,
     set_env_values,
     update_gl_credentials,
 )
-from alletra_onboard.application.event_bus import InMemoryEventBus
-from alletra_onboard.application.health import greenlake_check
-from alletra_onboard.application.init_sheet import build_template_bytes, parse_workbook_bytes
-from alletra_onboard.application.proxy import ProxyResolver, apply_proxy_env, detect_system_proxy
+from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+from alletra_onboard.application.onboarding.health import greenlake_check
+from alletra_onboard.application.platform.init_sheet import build_template_bytes, parse_workbook_bytes
+from alletra_onboard.application.platform.proxy import ProxyResolver, apply_proxy_env, detect_system_proxy
 from alletra_onboard.domain.models import RunMode
 from alletra_onboard.domain.provisioning import ProvisioningBuilder, ProvisioningComposition, ProvisioningObjects
-from alletra_onboard.application.intake import csv_template, load_work_items_csv_text
+from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.onboarding_service import (
     OnboardingService,
     PendingSheetNotFoundError,
@@ -81,8 +81,8 @@ from alletra_onboard.application.onboarding_service import (
     RunNotFoundError,
     StepPreconditionError,
 )
-from alletra_onboard.application import prereqs
-from alletra_onboard.application.preflight_service import PreflightService
+from alletra_onboard.application.platform import prereqs
+from alletra_onboard.application.onboarding.preflight_service import PreflightService
 from alletra_onboard.config import load_settings
 
 SSE_HEARTBEAT_S = 15.0

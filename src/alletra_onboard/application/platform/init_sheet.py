@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
-from alletra_onboard.application import prereqs
+from alletra_onboard.application.platform import prereqs
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, RunMode
 from alletra_onboard.domain.shared import EndpointCreds
 from alletra_onboard.domain.provisioning import HostSetRequest, ProvisioningIntent, VolumeRequest

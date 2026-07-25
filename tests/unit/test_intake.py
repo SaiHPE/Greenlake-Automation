@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from alletra_onboard.application.intake import load_work_items_csv
+from alletra_onboard.application.platform.intake import load_work_items_csv
 
 
 def test_load_work_items_csv(tmp_path: Path):
