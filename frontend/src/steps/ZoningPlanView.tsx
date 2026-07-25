@@ -1,7 +1,7 @@
 import { Box, Text, TextInput } from 'grommet';
 import { useState } from 'react';
 import { AliasedWwpn, FabricZonePlan, ZoningPlan } from '../api';
-import { Section } from '../components';
+import { Surface } from '../ui/primitives';
 
 // Assemble the read-only command preview for one fabric from the plan + the operator's chosen aliases.
 // Mirrors zoning_plan.render_commands (ADR 0004); the tool never RUNS these.
@@ -71,7 +71,7 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
         const rows = [...fab.hosts, ...fab.array_ports];
         const cmds = renderCommands(fab, aliases);
         return (
-          <Section key={fab.fabric} title={`${fab.fabric} — ${fab.switch_host} (cfg ${fab.active_cfg || '—'})`}>
+          <Surface key={fab.fabric} title={`${fab.fabric} — ${fab.switch_host} (cfg ${fab.active_cfg || '—'})`}>
             {rows.length === 0
               ? <Text size="small" color="text-weak">No host or array ports online on this fabric.</Text>
               : rows.map((w) => <AliasRow key={w.wwpn} w={w} value={aliases[w.wwpn] ?? ''} onChange={(v) => set(w.wwpn, v)} />)}
@@ -80,13 +80,13 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
                 {cmds.map((c, i) => <Text key={i} size="small" style={{ fontFamily: 'monospace' }}>{c}</Text>)}
               </Box>
             )}
-          </Section>
+          </Surface>
         );
       })}
       {plan.offline_hosts.length > 0 && (
-        <Section title={`Offline — cable + power the host, then re-run (${plan.offline_hosts.length})`}>
+        <Surface title={`Offline — cable + power the host, then re-run (${plan.offline_hosts.length})`}>
           {plan.offline_hosts.map((h, i) => <Text key={i} size="small" color="status-warning">{h}</Text>)}
-        </Section>
+        </Surface>
       )}
       {plan.notes.map((n, i) => <Text key={i} size="small" color="text-weak">• {n}</Text>)}
     </Box>

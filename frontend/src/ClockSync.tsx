@@ -1,7 +1,7 @@
 import { Box, Button, Notification, Spinner, Text } from 'grommet';
 import { useEffect, useState } from 'react';
 import { ClockStatus, getClock, syncClock } from './api';
-import { Section } from './components';
+import { Surface } from './ui/primitives';
 
 interface Props {
   // When set, the skew is measured against this host's HTTPS Date header (the DSCC console);
@@ -45,7 +45,7 @@ export function ClockSync({ consoleUrl, title = 'System clock', note }: Props) {
   };
 
   return (
-    <Section title={title}>
+    <Surface title={title}>
       {clock === null ? (
         <Box direction="row" gap="small" align="center">
           <Spinner size="small" />
@@ -75,6 +75,6 @@ export function ClockSync({ consoleUrl, title = 'System clock', note }: Props) {
       )}
       {message && <Text size="small" color="status-ok">{message}</Text>}
       {error && <Notification status="critical" title="Sync failed" message={error} onClose={() => setError(null)} />}
-    </Section>
+    </Surface>
   );
 }
