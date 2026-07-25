@@ -4,11 +4,8 @@ from typing import Protocol
 
 import httpx
 
-from alletra_onboard.adapters.greenlake.auth import OAuthClientCredentials
-from alletra_onboard.adapters.greenlake.devices import DevicesClient
-from alletra_onboard.adapters.greenlake.http_client import GreenLakeHttpClient
-from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogClient, ServiceProvision
-from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
+from alletra_onboard.adapters.greenlake.service_catalog import ServiceProvision
+from alletra_onboard.application.onboarding.clients import make_greenlake
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import ArrayWorkItem, CheckStatus, PreflightCheck
 from alletra_onboard.domain.policies import redact
@@ -183,20 +180,17 @@ def build_greenlake_read_preflight(settings: Settings) -> GreenLakePreflightRunn
     if missing:
         return MissingGreenLakeReadPreflightService(missing)
 
-    token_provider = OAuthClientCredentials(
-        settings.gl_token_url,
-        settings.gl_client_id or "",
-        settings.gl_client_secret or "",
-    )
-    http = GreenLakeHttpClient(settings.gl_base_url, token_provider)
+    clients = make_greenlake(settings)
     return GreenLakeReadPreflightService(
-        token_provider,
-        DevicesClient(http),
-        SubscriptionsClient(http),
-        ServiceCatalogClient(http),
+        clients.token_provider,
+        clients.devices,
+        clients.subscriptions,
+        clients.service_catalog,
     )
 
 
+# NOTE: deliberately distinct from clients.missing_credentials — the READ preflight additionally
+# requires the member workspace id (its lookups are workspace-scoped), and TOKEN_URL has a default.
 def _missing_credentials(settings: Settings) -> list[str]:
     return [
         name

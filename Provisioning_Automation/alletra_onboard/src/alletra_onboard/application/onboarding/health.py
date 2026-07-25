@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from alletra_onboard.application.onboarding.greenlake_provision import build_provisioning_service, missing_credentials
+from alletra_onboard.application.onboarding.clients import make_greenlake, missing_credentials
 from alletra_onboard.config import Settings
 
 
@@ -32,16 +32,16 @@ async def greenlake_check(settings: Settings) -> GreenLakeCheckReport:
     if missing:
         return GreenLakeCheckReport(ok=False, missing_credentials=missing, error="credentials not configured")
 
-    service = build_provisioning_service(settings)
+    clients = make_greenlake(settings)
     try:
-        regions = await service.service_catalog.per_region_service_managers()
+        regions = await clients.service_catalog.per_region_service_managers()
         ds_ids = {
             sm.get("id")
             for region in regions
             for sm in region.get("serviceManagers", [])
             if "data service" in str(sm.get("name", "")).lower()
         }
-        response = await service.http.request(
+        response = await clients.http.request(
             "GET", "/service-catalog/v1/service-manager-provisions", bucket="service_catalog_read"
         )
         raw = response.json().get("items", [])
