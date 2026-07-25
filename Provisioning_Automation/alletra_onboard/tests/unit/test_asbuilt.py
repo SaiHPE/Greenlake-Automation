@@ -1,6 +1,8 @@
+import zipfile
+
 import docx
 
-from alletra_onboard.application.asbuilt import AsBuiltData, generate_asbuilt
+from alletra_onboard.application.asbuilt import AsBuiltData, default_template, generate_asbuilt
 
 _SAMPLE = AsBuiltData(
     name="MPB10K-E24U21-LZ", model="Alletra MP B10000", serial_no="SGHD45FF0Y",
@@ -48,6 +50,19 @@ def test_generate_asbuilt_uses_template_clears_its_body_keeps_branding(tmp_path)
     assert table["Serial No"] == "SGHD45FF0Y"           # our content rendered
     header = "\n".join(p.text for p in doc.sections[0].header.paragraphs)
     assert "HPE-BRAND-HEADER" in header                 # branding (header) preserved
+
+
+def test_default_template_resolves_bundled_and_generates_branded(tmp_path, monkeypatch):
+    monkeypatch.delenv("ALLETRA_ASBUILT_TEMPLATE", raising=False)
+    bundled = default_template()
+    assert bundled is not None and bundled.name == "asbuilt_template.dotx" and bundled.is_file()
+
+    # no explicit template -> uses the bundled HPE house-style template (branding assets present)
+    out = generate_asbuilt(_SAMPLE, tmp_path / "branded.docx")
+    media = [n for n in zipfile.ZipFile(str(out)).namelist() if n.startswith("word/media/")]
+    assert media, "expected HPE branding media from the bundled template"
+    _doc, table, _text = _read(out)
+    assert table["Serial No"] == "SGHD45FF0Y"
 
 
 def test_generate_asbuilt_missing_values_render_as_dash(tmp_path):

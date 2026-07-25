@@ -52,6 +52,8 @@ a = Analysis(
 # Always bundle the built React UI and the Discovery Tool.
 a.datas += Tree("frontend/dist", prefix="frontend/dist")
 a.datas += Tree("tools/discovery", prefix="tools/discovery")
+# Bundle package resources (the HPE house-style as-built template) so the frozen app can render branded docs.
+a.datas += Tree("src/alletra_onboard/resources", prefix="alletra_onboard/resources")
 
 # Offline build only: bundle Chromium, minus the headless-shell + ffmpeg we never use (we launch
 # the full headed browser). Saves ~270 MB vs. the whole ms-playwright cache.
