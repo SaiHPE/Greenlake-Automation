@@ -17,6 +17,16 @@ _CHECKHEALTH = (
     "       1 total                                      10\n"
 )
 
+_INVENTORY = (
+    "-----------------------Cage Inventory--------------------\n"
+    "Cage -Name- -Manufacturer- -Type-\n"
+    "   1 cage1  HPE            DCN7\n"
+    "\n"
+    "-----------------------Disk Inventory--------------------\n"
+    "Id CagePos State  --MFR--\n"
+    " 0 1:1     normal SAMSUNG\n"
+)
+
 _SAMPLE = AsBuiltData(
     customer="ACME Corp", name="MPB10K-E24U21-LZ", model="HPE Alletra Storage MP",
     serial_no="SGHD45FF0Y", controller_nodes="2", os_version="10.5.51", drive_cages="1 (cage1)",
@@ -24,7 +34,7 @@ _SAMPLE = AsBuiltData(
     raid="RAID 6 (SSD_r6)", host_ports="8 x 32Gbps FC target",
     mgmt_ip="10.64.154.225", netmask="255.255.248.0", gateway="10.64.159.254",
     ntp="ntp.example.net", dns="10.203.96.10, 10.203.96.9",
-    inventory="Node 0  Assembly OK\nNode 1  Assembly OK", checkhealth=_CHECKHEALTH,
+    inventory=_INVENTORY, checkhealth=_CHECKHEALTH,
 )
 
 
@@ -52,14 +62,14 @@ def test_generate_fills_cover_table01_and_renders_checkhealth_tables(tmp_path):
     assert t01["InServ IP Address"] == "10.64.154.225"
     assert t01["Cache(GB)"].startswith("503 GiB")
 
-    # checkhealth rendered as two extra formatted Word tables (Summary + Details)
-    assert len(doc.tables) >= 3
-    headers = [tuple(c.text.strip() for c in t.rows[0].cells) for t in doc.tables[1:3]]
-    assert ("Component", "Summary Description", "Qty") in headers
-    assert any(h[:2] == ("Component", "Identifier") for h in headers)
+    # checkhealth + inventory rendered as HPE Word tables (found by their headers, any order)
+    all_headers = [tuple(c.text.strip() for c in t.rows[0].cells) for t in doc.tables]
+    assert ("Component", "Summary Description", "Qty") in all_headers
+    assert any(h[:2] == ("Component", "Identifier") for h in all_headers)
+    assert any("Manufacturer" in h for h in all_headers)  # an inventory sub-table
 
-    # inventory present, and the template's boilerplate is preserved
-    assert "Node 0  Assembly OK" in text
+    # inventory values landed in a table, and the template's boilerplate is preserved
+    assert "cage1" in text and "SAMSUNG" in text
     assert "Proprietary Notice" in text
 
 

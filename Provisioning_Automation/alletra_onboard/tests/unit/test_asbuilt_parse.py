@@ -1,4 +1,9 @@
-from alletra_onboard.application.asbuilt_parse import parse_asbuilt, parse_checkhealth, split_sections
+from alletra_onboard.application.asbuilt_parse import (
+    parse_asbuilt,
+    parse_checkhealth,
+    parse_inventory,
+    split_sections,
+)
 
 # A genericized dump that mirrors the real `asbuilt_array.py` output format (no lab data).
 _DUMP = """# ASBUILT + PROVISIONING READ-ONLY ARRAY DUMP
@@ -129,6 +134,35 @@ Task      Task:7092        Failed Task                      Manual
 --------------------------------------------------------------------
        2 total                                                     2
 """
+
+
+_INVENTORY = """     ID ------Name------ --------Model--------- --Serial-- System_PN Nodes
+0x2F629 TEST-ARRAY-01    HPE Alletra Storage MP TESTSN0001 S0B84A        2
+
+------------------------------Interface Card-------------------------------
+Cage -I/F_card- -Name- -Manufacturer- -Assem_Part- -Assem_Serial- -Firmware-
+   1          1 Node 0 HPE            R7D02-63003  EXTVUB912M200K 1005
+   1          2 Node 1 HPE            R7D02-63003  EXTVUB912M200L 1005
+
+----------------------------------Internal Drives----------------------------------- -(GB)-
+Cage IOM DrvID ---Manufacturer---- ----------Model---------- ---Serial--- -Firmware- -Size-
+   1   1     1 MicronTechnologyInc Micron_7450_MTFDKBA960TFR 254253CA0C80 E2MU113       960
+"""
+
+
+def test_parse_inventory_splits_subsections_fixed_width():
+    tables = parse_inventory(_INVENTORY)
+    by_title = {title: (headers, rows) for title, headers, rows in tables}
+    # the array-id block (no title) is anchored at col 0 so the id isn't clipped
+    idblock = [(h, r) for t, h, r in tables if not t]
+    assert idblock and idblock[0][1][0][0] == "0x2F629"
+
+    ifh, ifr = by_title["Interface Card"]
+    assert ifh[:3] == ["Cage", "I/F_card", "Name"]
+    assert ifr[0][2] == "Node 0"      # a value WITH an internal space stays one cell
+
+    dh, dr = by_title["Internal Drives"]     # title cleaned of trailing "-(GB)-"
+    assert dr[0][3] == "MicronTechnologyInc"
 
 
 def test_parse_checkhealth_splits_summary_and_detail_tables():
