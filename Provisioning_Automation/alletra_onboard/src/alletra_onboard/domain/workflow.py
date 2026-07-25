@@ -29,14 +29,15 @@ STEP_REGISTRY: tuple[StepDef, ...] = (
     StepDef("zoning", "SAN Zoning", WorkflowPhase.STORAGE_ZONING, "provision"),
     StepDef("provision", "Provision storage", WorkflowPhase.STORAGE_PROVISION, "provision"),
     StepDef("verify", "Verify config & health", WorkflowPhase.CONFIG_VERIFY, "verify"),
+    StepDef("asbuilt", "As-built document", WorkflowPhase.ASBUILT_DOCUMENT, "verify"),
 )
 
 # Preset modes -> the step keys they include. CUSTOM uses the explicit selection instead.
 _MODE_STEPS: dict[RunMode, tuple[str, ...]] = {
-    RunMode.FULL_ONBOARDING: ("greenlake", "cloudinit", "dscc", "verify"),
-    RunMode.PROVISION_ONLY: ("discover", "zoning", "provision", "verify"),
-    RunMode.BOTH: ("greenlake", "cloudinit", "dscc", "discover", "zoning", "provision", "verify"),
-    RunMode.VERIFY_ONLY: ("verify",),
+    RunMode.FULL_ONBOARDING: ("greenlake", "cloudinit", "dscc", "verify", "asbuilt"),
+    RunMode.PROVISION_ONLY: ("discover", "zoning", "provision", "verify", "asbuilt"),
+    RunMode.BOTH: ("greenlake", "cloudinit", "dscc", "discover", "zoning", "provision", "verify", "asbuilt"),
+    RunMode.VERIFY_ONLY: ("verify", "asbuilt"),
 }
 
 

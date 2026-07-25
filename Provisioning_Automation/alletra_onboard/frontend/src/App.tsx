@@ -5,6 +5,7 @@ import { createRunFromSheet, getAppProfile, getRun } from './api';
 import { actionKeysFor, ACTION_CATALOG, ActionKey, phaseToActionKey, RunMode } from './modes';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
+import { AsBuiltStep } from './steps/AsBuiltStep';
 import { CloudinitStep } from './steps/CloudinitStep';
 import { DiscoveryStep } from './steps/DiscoveryStep';
 import { DoneStep } from './steps/DoneStep';
@@ -269,6 +270,9 @@ export default function App() {
           )}
           {current.key === 'verify' && runId && (
             <VerifyStep runId={runId} run={run} events={events} onDone={next} />
+          )}
+          {current.key === 'asbuilt' && runId && (
+            <AsBuiltStep runId={runId} run={run} events={events} onDone={next} />
           )}
           {current.key === 'done' && <DoneStep run={run} events={events} onRestart={restart} />}
           {needsRun && <Text color="text-weak">Choose a mode first — that creates the run.</Text>}
