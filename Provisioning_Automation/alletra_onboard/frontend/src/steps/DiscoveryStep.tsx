@@ -1,7 +1,9 @@
-import { Box, Button, Notification, Spinner, Table, TableBody, TableCell, TableHeader, TableRow, Text } from 'grommet';
+import { Box, Button, DataTable, Text } from 'grommet';
 import { useState } from 'react';
-import { DiscoveryReport, RunEvent, RunRecord, startDiscover } from '../api';
-import { EventLog, Section } from '../components';
+import { ArrayHost, ArrayPort, DiscoveryReport, HostHba, RunEvent, RunRecord, startDiscover } from '../api';
+import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
+import { StatusIndicator } from '../ui/status';
+import { StepShell } from '../ui/StepShell';
 
 interface Props {
   runId: string;
@@ -10,24 +12,21 @@ interface Props {
   onDone: () => void;
 }
 
-function latestReport(events: RunEvent[]): DiscoveryReport | null {
-  const event = [...events].reverse().find((e) => e.event_type === 'discover.completed');
-  return (event?.data?.report as DiscoveryReport) ?? null;
-}
+const mono = { fontFamily: 'ui-monospace, Consolas, monospace' };
 
 export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const running = run?.status === 'running';
-  const report = latestReport(events);
-  const fcPorts = (report?.array_ports ?? []).filter((p) => p.protocol === 'fc');
-  const iscsiPorts = (report?.array_ports ?? []).filter((p) => p.protocol === 'iscsi');
-  // The most recent discovery progress line — shown live next to the spinner so a long run (the
-  // per-port fabric probe + vCenter connect) is visibly working, not hung.
-  const progressMsg = [...events]
-    .reverse()
-    .find((e) => e.phase === 'STORAGE_DISCOVER' && (e.event_type === 'phase.progress' || e.event_type === 'step.started'))?.message;
 
-  const run_ = async () => {
+  const report =
+    ([...events].reverse().find((event) => event.event_type === 'discover.completed')?.data?.report as
+      | DiscoveryReport
+      | undefined) ?? null;
+  const fcPorts = (report?.array_ports ?? []).filter((port) => port.protocol === 'fc');
+  const iscsiPorts = (report?.array_ports ?? []).filter((port) => port.protocol === 'iscsi');
+  const readyPorts = fcPorts.filter((port) => port.link_state === 'ready').length;
+
+  const discover = async () => {
     setError(null);
     try {
       await startDiscover(runId);
@@ -37,141 +36,161 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   };
 
   return (
-    <Box gap="medium">
-      <Section title="Discover the environment (read-only)">
-        <Text size="small" color="text-weak">
-          Reads <b>all</b> of the array&apos;s FC and iSCSI target ports, the array&apos;s own host view
-          (<b>showhost</b>), and each ESXi host&apos;s FC HBA WWPNs + OS (vCenter). Each HBA is matched to
-          the fabric it logs into on the array. Read-only — nothing is changed.
-        </Text>
-        <Box gap="xsmall">
-          <Box direction="row" gap="small" align="center">
-            <Button primary label={running ? 'Discovering…' : report ? 'Re-run discovery' : 'Run discovery'} disabled={running} onClick={run_} />
-            {running && <Spinner />}
-          </Box>
-          {running && progressMsg && <Text size="small" color="text-weak">{progressMsg}</Text>}
-        </Box>
-        {error && <Notification status="critical" title="Discovery failed to start" message={error} onClose={() => setError(null)} />}
-      </Section>
-
-      {report && (
+    <StepShell
+      title="Discovery"
+      description="Reads the array target ports, the ESXi host adapters from vCenter, and their fabric logins. Read-only."
+      stateDetail={report ? `${fcPorts.length} ports · ${report.host_hbas.length} adapters` : undefined}
+      error={error}
+      onDismissError={() => setError(null)}
+      activityEmpty="Run discovery to read the environment."
+      footerNote="Discovery results persist with the run and survive an application restart."
+      actions={
         <>
-          <Section title={`Array FC ports (${fcPorts.length})`}>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableCell><Text size="small" weight="bold">Port (n:s:p)</Text></TableCell>
-                  <TableCell><Text size="small" weight="bold">WWPN</Text></TableCell>
-                  <TableCell><Text size="small" weight="bold">Fabric</Text></TableCell>
-                  <TableCell><Text size="small" weight="bold">State</Text></TableCell>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {fcPorts.map((p) => (
-                  <TableRow key={`${p.node}:${p.slot}:${p.card_port}`}>
-                    <TableCell><Text size="small">{p.node}:{p.slot}:{p.card_port}</Text></TableCell>
-                    <TableCell><Text size="small">{p.wwpn}</Text></TableCell>
-                    <TableCell>
-                      <Text size="small">{p.fabric ?? '—'}</Text>
-                      {p.fabric_switch && <Text size="xsmall" color="text-weak"> ({p.fabric_switch})</Text>}
-                    </TableCell>
-                    <TableCell><Text size="small" color={p.link_state === 'ready' ? 'status-ok' : 'status-warning'}>{p.link_state}</Text></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Section>
-
-          {iscsiPorts.length > 0 && (
-            <Section title={`Array iSCSI ports (${iscsiPorts.length})`}>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableCell><Text size="small" weight="bold">Port (n:s:p)</Text></TableCell>
-                    <TableCell><Text size="small" weight="bold">IP address</Text></TableCell>
-                    <TableCell><Text size="small" weight="bold">State</Text></TableCell>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {iscsiPorts.map((p) => (
-                    <TableRow key={`${p.node}:${p.slot}:${p.card_port}`}>
-                      <TableCell><Text size="small">{p.node}:{p.slot}:{p.card_port}</Text></TableCell>
-                      <TableCell><Text size="small">{p.address || '—'}</Text></TableCell>
-                      <TableCell><Text size="small" color={p.link_state === 'ready' ? 'status-ok' : 'status-warning'}>{p.link_state}</Text></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Section>
-          )}
-
-          {report.array_hosts.length > 0 && (
-            <Section title={`Array hosts — showhost (${report.array_hosts.length})`}>
-              <Text size="small" color="text-weak">
-                The array&apos;s own host view. A WWPN with array ports listed is <b>logged in (zoned)</b> there;
-                &ldquo;not logged in&rdquo; means configured but not connected.
-              </Text>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableCell><Text size="small" weight="bold">Host</Text></TableCell>
-                    <TableCell><Text size="small" weight="bold">Persona</Text></TableCell>
-                    <TableCell><Text size="small" weight="bold">WWPN</Text></TableCell>
-                    <TableCell><Text size="small" weight="bold">Logged-in ports</Text></TableCell>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {report.array_hosts.flatMap((h) =>
-                    Object.entries(h.wwpns).map(([wwpn, ports]) => (
-                      <TableRow key={h.name + wwpn}>
-                        <TableCell><Text size="small">{h.name}</Text></TableCell>
-                        <TableCell><Text size="small">{h.persona}</Text></TableCell>
-                        <TableCell><Text size="small">{wwpn}</Text></TableCell>
-                        <TableCell><Text size="small" color={ports.length ? 'status-ok' : 'status-warning'}>{ports.length ? ports.join(', ') : 'not logged in'}</Text></TableCell>
-                      </TableRow>
-                    )),
-                  )}
-                </TableBody>
-              </Table>
-            </Section>
-          )}
-
-          <Section title={`ESXi host HBAs (${report.host_hbas.length})`}>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableCell><Text size="small" weight="bold">Host</Text></TableCell>
-                  <TableCell><Text size="small" weight="bold">WWPN</Text></TableCell>
-                  <TableCell><Text size="small" weight="bold">Fabric</Text></TableCell>
-                  <TableCell><Text size="small" weight="bold">OS</Text></TableCell>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {report.host_hbas.map((h) => (
-                  <TableRow key={h.host_name + h.wwpn}>
-                    <TableCell><Text size="small">{h.host_name}</Text></TableCell>
-                    <TableCell><Text size="small">{h.wwpn}</Text></TableCell>
-                    <TableCell><Text size="small" color={h.fabric ? undefined : 'status-warning'}>{h.fabric ?? 'not logged in'}</Text></TableCell>
-                    <TableCell><Text size="small">{h.os ?? '—'}</Text></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Section>
-
-          {report.notes.length > 0 && (
-            <Section title="Notes">
-              {report.notes.map((n, i) => (
-                <Text key={i} size="small" color="status-warning">• {n}</Text>
-              ))}
-            </Section>
-          )}
-
-          <Button primary label="Continue →" onClick={onDone} alignSelf="start" />
+          <Button
+            busy={running}
+            label={report ? 'Re-run discovery' : running ? 'Discovering' : 'Run discovery'}
+            onClick={discover}
+          />
+          {report && <Button primary label="Continue" onClick={onDone} />}
         </>
+      }
+    >
+      {!report && !running && (
+        <Surface title="Nothing discovered yet">
+          <Text size="small" color="text-weak">
+            Discovery reads every array target port, the array's own host view, and each ESXi host's adapters from
+            vCenter, then matches each adapter to the fabric it logs into. Nothing is modified.
+          </Text>
+        </Surface>
       )}
 
-      <Section title="Activity"><EventLog events={events.filter((e) => e.phase === 'STORAGE_DISCOVER')} /></Section>
-    </Box>
+      {report?.error && <InlineNotification tone="critical" title="Discovery reported a problem" message={report.error} />}
+
+      {report && (
+        <Surface title="Array target ports" description="Fibre Channel ports the array presents to hosts.">
+          <DataTable
+            columns={[
+              { property: 'label', header: 'Port', render: (port: ArrayPort) => <Text size="small" style={mono}>{`${port.node}:${port.slot}:${port.card_port}`}</Text> },
+              { property: 'wwpn', header: 'WWPN', render: (port: ArrayPort) => <Text size="small" style={mono}>{port.wwpn}</Text> },
+              {
+                property: 'fabric',
+                header: 'Fabric',
+                render: (port: ArrayPort) => (
+                  <Text size="small">{port.fabric ? `${port.fabric}${port.fabric_switch ? ` (${port.fabric_switch})` : ''}` : '—'}</Text>
+                ),
+              },
+              {
+                property: 'link_state',
+                header: 'Link',
+                render: (port: ArrayPort) => (
+                  <StatusIndicator
+                    state={port.link_state === 'ready' ? 'complete' : 'action_required'}
+                    label={port.link_state === 'ready' ? 'Ready' : port.link_state.replaceAll('_', ' ')}
+                  />
+                ),
+              },
+            ]}
+            data={fcPorts}
+            primaryKey={false}
+          />
+          <TableSummary>
+            {readyPorts} ready · {fcPorts.length - readyPorts} require a cable or switch-port check
+          </TableSummary>
+        </Surface>
+      )}
+
+      {iscsiPorts.length > 0 && (
+        <Surface title="Array iSCSI ports">
+          <DataTable
+            columns={[
+              { property: 'label', header: 'Port', render: (port: ArrayPort) => <Text size="small" style={mono}>{`${port.node}:${port.slot}:${port.card_port}`}</Text> },
+              { property: 'address', header: 'IP address', render: (port: ArrayPort) => <Text size="small" style={mono}>{port.address || '—'}</Text> },
+              {
+                property: 'link_state',
+                header: 'Link',
+                render: (port: ArrayPort) => (
+                  <StatusIndicator state={port.link_state === 'ready' ? 'complete' : 'action_required'} label={port.link_state} />
+                ),
+              },
+            ]}
+            data={iscsiPorts}
+            primaryKey={false}
+          />
+        </Surface>
+      )}
+
+      {report && report.host_hbas.length > 0 && (
+        <Surface
+          title="ESXi hosts"
+          description="Fabric logins indicate which hosts can be provisioned safely."
+        >
+          <DataTable
+            columns={[
+              { property: 'host_name', header: 'Host', render: (hba: HostHba) => <Text size="small">{hba.host_name}</Text> },
+              { property: 'wwpn', header: 'Adapter WWPN', render: (hba: HostHba) => <Text size="small" style={mono}>{hba.wwpn}</Text> },
+              {
+                property: 'fabric',
+                header: 'Fabric login',
+                render: (hba: HostHba) =>
+                  hba.fabric ? (
+                    <StatusIndicator state="complete" label={`${hba.fabric} fabric`} />
+                  ) : (
+                    <StatusIndicator state="not_started" label="Not logged in" />
+                  ),
+              },
+              { property: 'os', header: 'Operating system', render: (hba: HostHba) => <Text size="small">{hba.os ?? '—'}</Text> },
+            ]}
+            data={report.host_hbas}
+            primaryKey={false}
+          />
+          <TableSummary>
+            {new Set(report.host_hbas.map((hba) => hba.host_name)).size} hosts · {report.host_hbas.length} adapters ·{' '}
+            {report.host_hbas.filter((hba) => hba.fabric).length} logged in
+          </TableSummary>
+        </Surface>
+      )}
+
+      {report && report.array_hosts.length > 0 && (
+        <Surface
+          title="Hosts known to the array"
+          description="An adapter with no ports listed is configured on the array but not logged in — it is not zoned, or the host is offline."
+        >
+          <DataTable
+            columns={[
+              { property: 'name', header: 'Host', render: (host: ArrayHost) => <Text size="small">{host.name}</Text> },
+              { property: 'persona', header: 'Persona', render: (host: ArrayHost) => <Text size="small">{host.persona || '—'}</Text> },
+              {
+                property: 'wwpns',
+                header: 'Logged-in ports',
+                render: (host: ArrayHost) => (
+                  <Box gap="xxsmall">
+                    {Object.entries(host.wwpns).map(([wwpn, ports]) => (
+                      <Box key={wwpn} direction="row" gap="small" align="center" wrap>
+                        <Text size="small" style={mono}>
+                          {wwpn}
+                        </Text>
+                        {ports.length ? (
+                          <Text size="small" color="text-weak" style={mono}>
+                            {ports.join(', ')}
+                          </Text>
+                        ) : (
+                          <StatusIndicator state="not_started" label="Not logged in" />
+                        )}
+                      </Box>
+                    ))}
+                  </Box>
+                ),
+              },
+            ]}
+            data={report.array_hosts}
+            primaryKey={false}
+          />
+        </Surface>
+      )}
+
+      {report && report.notes.length > 0 && (
+        <InlineNotification tone="info" title="Discovery notes" message={report.notes.join(' · ')} />
+      )}
+    </StepShell>
   );
 }
