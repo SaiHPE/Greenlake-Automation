@@ -447,6 +447,26 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
     assert applied and applied[-1].data["result"]["outcomes"][0]["status"] == "created"
 
 
+async def test_discovery_survives_a_service_restart(tmp_path, monkeypatch):
+    # C7 (ADR 0011): step artifacts are durable — a new service over the SAME store (= app restart
+    # mid-engagement) reads discovery back from run_artifacts instead of forcing a re-run.
+    from alletra_onboard.application.provisioning import discovery as sd
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    monkeypatch.setattr(sd, "discover", lambda intent, progress=None: DiscoveryReport(notes=["from-run-1"]))
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(Settings(), store, InMemoryEventBus())
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service.start_discover(run.run_id)
+    await service.wait(run.run_id)
+
+    restarted = OnboardingService(Settings(), store, InMemoryEventBus())
+    assert restarted.discovery_zoning._discovery.get(run.run_id) is None  # nothing in memory...
+    report = restarted.discovery_zoning.require_discovery(run.run_id)     # ...read through the store
+    assert report.notes == ["from-run-1"]
+
+
 async def test_zoning_before_discovery_is_a_precondition_error(tmp_path):
     from alletra_onboard.application.service import StepPreconditionError
 

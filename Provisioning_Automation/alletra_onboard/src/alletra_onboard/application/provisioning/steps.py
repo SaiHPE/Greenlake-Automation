@@ -34,13 +34,17 @@ class DiscoveryZoningSteps:
 
     def __init__(self, coord: RunCoordinator) -> None:
         self._coord = coord
-        # Transient per-run discovery, also emitted in event data (so the UI has it); kept in memory
-        # so downstream steps act on exactly what was discovered. require_discovery() is the accessor
-        # every consumer goes through (and the seam for a durable read-through later).
+        # Per-run discovery cache over the durable run_artifacts store (C7): the store is the truth
+        # (a server restart mid-engagement must not force re-discovery), the dict avoids re-parsing.
         self._discovery: dict[str, DiscoveryReport] = {}
 
     def require_discovery(self, run_id: str) -> DiscoveryReport:
         report = self._discovery.get(run_id)
+        if report is None:
+            raw = self._coord.store.load_artifact(run_id, "discovery")
+            if raw is not None:
+                report = DiscoveryReport.model_validate_json(raw)
+                self._discovery[run_id] = report
         if report is None:
             raise StepPreconditionError("run discovery first — it provides the ports/HBAs zoning and provisioning need")
         return report
@@ -67,6 +71,7 @@ class DiscoveryZoningSteps:
 
         report = await asyncio.to_thread(storage_discovery.discover, intent, progress=progress)
         self._discovery[run.run_id] = report
+        coord.store.save_artifact(run.run_id, "discovery", report.model_dump_json().encode("utf-8"))
         coord.set_state(run, RunStatus.READY, WorkflowPhase.STORAGE_DISCOVER)
         coord.emit(
             run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.completed",
@@ -130,8 +135,18 @@ class ProvisioningSteps:
     def __init__(self, coord: RunCoordinator, discovery_steps: DiscoveryZoningSteps) -> None:
         self._coord = coord
         self._discovery_steps = discovery_steps
-        # The previewed plan, per run — kept so apply acts on exactly what was previewed.
+        # The previewed plan, per run — the "was previewed" gate for apply. Durable (C7) so the gate
+        # survives a restart; cached to avoid re-parsing.
         self._plan: dict[str, ProvisioningPlan] = {}
+
+    def _previewed_plan(self, run_id: str) -> ProvisioningPlan | None:
+        plan = self._plan.get(run_id)
+        if plan is None:
+            raw = self._coord.store.load_artifact(run_id, "provisioning_plan")
+            if raw is not None:
+                plan = ProvisioningPlan.model_validate_json(raw)
+                self._plan[run_id] = plan
+        return plan
 
     def start_storage_preview(self, run_id: str) -> RunRecord:
         coord = self._coord
@@ -147,6 +162,7 @@ class ProvisioningSteps:
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "step.started", "Building the provisioning plan…")
         plan = await asyncio.to_thread(storage_provision.build_plan, intent, discovery)
         self._plan[run.run_id] = plan
+        coord.store.save_artifact(run.run_id, "provisioning_plan", plan.model_dump_json().encode("utf-8"))
         status = RunStatus.RETRYABLE_FAILURE if plan.error else RunStatus.WAITING_FOR_OPERATOR
         coord.set_state(run, status, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(
@@ -161,7 +177,7 @@ class ProvisioningSteps:
         run = coord.get_run(run_id)
         intent = coord.get_provisioning_intent(run_id)
         discovery = self._discovery_steps.require_discovery(run_id)
-        if self._plan.get(run_id) is None:
+        if self._previewed_plan(run_id) is None:
             raise StepPreconditionError("no provisioning plan to apply — run the provisioning preview first")
         coord.spawn(run_id, self._run_storage_apply(run, intent, discovery))
         return run
