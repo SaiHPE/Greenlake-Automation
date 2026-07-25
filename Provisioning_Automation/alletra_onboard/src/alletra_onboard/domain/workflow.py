@@ -41,6 +41,12 @@ _MODE_STEPS: dict[RunMode, tuple[str, ...]] = {
 }
 
 
+def mode_steps() -> dict[RunMode, tuple[str, ...]]:
+    """The preset mode → step-keys map, for serving to the frontend (ADR 0011 Phase 2 — the UI
+    renders the wizard from this instead of keeping a hand-synced mirror)."""
+    return dict(_MODE_STEPS)
+
+
 def enabled_steps(mode: RunMode, selected_steps: list[str] | None = None) -> list[StepDef]:
     """The steps to render/run for a mode, in registry order. CUSTOM honours selected_steps."""
     if mode == RunMode.CUSTOM:

@@ -1,7 +1,7 @@
 import { Box, Button, CheckBox, Notification, Text } from 'grommet';
 import { useState } from 'react';
 import { Section } from '../components';
-import { ACTION_CATALOG, ActionKey, MODE_PRESETS, RunMode } from '../modes';
+import { ActionKey, MODE_PRESETS, RunMode, ServedStep, subtitleFor } from '../modes';
 
 interface Props {
   mode: RunMode;
@@ -11,9 +11,10 @@ interface Props {
   onConfirm: () => Promise<void>; // mints the run from the uploaded sheet + this mode, then advances
   locked?: boolean; // once a run exists the mode is fixed (it shaped the run)
   initOnly?: boolean; // the Initialization accelerator: only the Initialization mode is offered
+  catalog: ServedStep[]; // the SERVED step registry (GET /app/profile) — drives the CUSTOM picker
 }
 
-export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, initOnly }: Props) {
+export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, initOnly, catalog }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toggle = (key: ActionKey, checked: boolean) =>
@@ -96,10 +97,10 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
       {mode === 'CUSTOM' && (
         <Section title="Pick the steps to run">
           <Box gap="xsmall">
-            {ACTION_CATALOG.map((action) => (
+            {catalog.map((action) => (
               <CheckBox
                 key={action.key}
-                label={`${action.title} — ${action.subtitle}`}
+                label={`${action.label} — ${subtitleFor(action.key)}`}
                 checked={custom.includes(action.key)}
                 disabled={locked}
                 onChange={(event) => toggle(action.key, event.target.checked)}
