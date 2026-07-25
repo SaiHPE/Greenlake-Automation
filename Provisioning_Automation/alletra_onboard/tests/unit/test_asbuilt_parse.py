@@ -1,4 +1,4 @@
-from alletra_onboard.application.asbuilt_parse import parse_asbuilt, split_sections
+from alletra_onboard.application.asbuilt_parse import parse_asbuilt, parse_checkhealth, split_sections
 
 # A genericized dump that mirrors the real `asbuilt_array.py` output format (no lab data).
 _DUMP = """# ASBUILT + PROVISIONING READ-ONLY ARRAY DUMP
@@ -113,3 +113,29 @@ def test_raw_capacity_takes_raw_not_usable_total():
 def test_host_ports_excludes_iscsi_and_peer_ports():
     d = parse_asbuilt(_DUMP)
     assert "0:4:1" not in d.host_ports and "0:5:1" not in d.host_ports
+
+
+_CHECKHEALTH = """Checking alert
+Checking cage
+Component ----------------Summary Description---------------- Qty
+Alert     New alerts                                            9
+vlun      Hosts not connected to a port                         1
+-----------------------------------------------------------------
+       2 total                                                 10
+
+Component ---Identifier--- ------Detailed Description------ Resolution
+Alert     hw_cage:1        Cage cage1 over temperature      Manual
+Task      Task:7092        Failed Task                      Manual
+--------------------------------------------------------------------
+       2 total                                                     2
+"""
+
+
+def test_parse_checkhealth_splits_summary_and_detail_tables():
+    summary, detail = parse_checkhealth(_CHECKHEALTH)
+    assert ("Alert", "New alerts", "9") in summary
+    assert ("vlun", "Hosts not connected to a port", "1") in summary
+    assert ("Alert", "hw_cage:1", "Cage cage1 over temperature", "Manual") in detail
+    assert ("Task", "Task:7092", "Failed Task", "Manual") in detail
+    # the "N total M" footers must not leak into the rows
+    assert all(not r[0].isdigit() for r in summary + [(d[0],) for d in detail])
