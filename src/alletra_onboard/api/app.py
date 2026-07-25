@@ -33,6 +33,7 @@ from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.adapters.system.clock import ClockStatus, ClockSyncResult, clock_status, sync_clock
 from alletra_onboard.adapters.system.discovery_tool import launch_discovery_tool
 from alletra_onboard.api.schemas import (
+    AsBuiltStepRequest,
     BrowserLaunchRequest,
     BrowserLaunchResponse,
     CheckResponse,
@@ -358,6 +359,31 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         return _start_step(
             run_id,
             lambda: service.start_verify(run_id, username=request.username, password=request.password),
+        )
+
+    @app.post("/runs/{run_id}/asbuilt", response_model=RunResponse)
+    async def run_asbuilt(run_id: str, request: AsBuiltStepRequest) -> RunResponse:
+        # Read-only: SSH the array (show*/checkhealth/showinventory -csvtable) and build the as-built
+        # .docx. Password is used for the SSH session only. Download it from /asbuilt/download.
+        return _start_step(
+            run_id,
+            lambda: service.start_asbuilt(
+                run_id, username=request.username, password=request.password,
+                customer=request.customer, site=request.site,
+            ),
+        )
+
+    @app.get("/runs/{run_id}/asbuilt/download")
+    async def download_asbuilt(run_id: str) -> Response:
+        _get_run_or_404(run_id)
+        data = service.get_asbuilt(run_id)
+        if data is None:
+            raise HTTPException(status_code=404, detail="No as-built generated yet — run the as-built step first.")
+        serial = service.get_work_item(run_id).serial_number
+        return Response(
+            content=data,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="as-built-{serial}.docx"'},
         )
 
     @app.post("/runs/{run_id}/complete", response_model=RunResponse)

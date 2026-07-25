@@ -334,6 +334,49 @@ async def test_path_verify_emits_per_host_report(tmp_path, monkeypatch):
     assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR
 
 
+async def test_start_asbuilt_reads_array_and_produces_downloadable_docx(tmp_path, monkeypatch):
+    from alletra_onboard.application import onboarding_service as osvc
+
+    canned = {
+        "showsys -d": ("System Name : TEST-01\nSystem Model : HPE Alletra Storage MP\n"
+                       "Serial Number : SGH1\nNumber of Nodes : 2\n"
+                       "---Raw System Capacity (MiB)---\nTotal Capacity : 36608000\n"),
+        "shownet": ("IP Address Netmask\n10.0.0.10 255.255.255.0\n\n"
+                    "Default IPv4 route : 10.0.0.1\nNTP server : ntp.x\nDNS server : 10.1.1.1\n"),
+        "showversion": "Release version 10.5.51\n",
+        "shownode": "Node Name Encl Master InCluster Mem(MiB) Up\n0 SN-0 1:1 Yes Yes 257498 x\n",
+        "showcage": "Id Name Drives\n1 cage1 10\n",
+        "showpd": "Id CagePos Type RPM State Total Free Cap\n0 1:1 SSD N/A normal 1 1 3840\n",
+        "showcpg": "Id Name Warn VVs\n0 SSD_r6 - 8\n",
+        "showport": "N:S:P Mode State Node Port Type Protocol Label\n0:3:1 target ready X 2031 host FC -\n",
+        "showport -par": "N:S:P Connmode ConnType CfgRate MaxRate\n0:3:1 host point auto 32Gbps\n",
+        "showinventory -csvtable": "ID,Name\nx,TEST-01\n",
+        "checkhealth -svc -detail": "Checking alert\nComponent Summary Description Qty\nAlert New 1\n---\n1 total 1\n",
+    }
+
+    class FakeCli:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def run(self, cmd, timeout=None):
+            return canned.get(cmd, "")
+
+    monkeypatch.setattr(osvc, "make_array_cli", lambda creds: FakeCli())
+
+    service = _service(tmp_path)
+    run = service.create_run(_item())
+    service.start_asbuilt(run.run_id, username="3paradm", password="pw", customer="ACME Corp")
+    await service.wait(run.run_id)
+
+    ev = next(e for e in service.list_events(run.run_id) if e.event_type == "asbuilt.generated")
+    assert ev.data["customer"] == "ACME Corp" and ev.data["serial"] == "SGH1"
+    docx_bytes = service.get_asbuilt(run.run_id)
+    assert docx_bytes and docx_bytes[:2] == b"PK"  # a .docx is a zip
+
+
 async def test_pending_sheet_stash_mints_run_and_preserves_intent(tmp_path):
     # ADR 0005 revision: the sheet is held server-side (with device passwords) until a mode is
     # chosen; create_run_from_pending then mints the run and preserves the provisioning intent.

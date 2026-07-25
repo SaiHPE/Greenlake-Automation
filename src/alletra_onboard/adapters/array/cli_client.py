@@ -17,8 +17,8 @@ except ImportError:  # pragma: no cover - bundled in the .exe; optional for non-
 ALLOWED_COMMANDS = (
     # post-init config verification
     "showsys", "shownet", "showdate", "showversion",
-    # array health + inventory verification
-    "checkhealth", "showinventory", "showpd",
+    # array health + inventory verification / as-built (node memory + drive cages)
+    "checkhealth", "showinventory", "showpd", "shownode", "showcage",
     # provisioning / SAN-discovery preflight (read-only — see the WSAPI provisioning plan)
     "showwsapi", "showcpg", "showspace", "showvv", "showvlun",
     "showhost", "showport", "showportdev", "showrcopy", "showtarget",

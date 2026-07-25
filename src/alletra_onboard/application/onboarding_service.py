@@ -36,6 +36,9 @@ from alletra_onboard.application.storage import path_verify as storage_path_veri
 from alletra_onboard.application.storage import storage_provision
 from alletra_onboard.application.storage import zoning as storage_zoning
 from alletra_onboard.application.storage import zoning_plan as storage_zoning_plan
+from alletra_onboard.application.asbuilt import generate_asbuilt
+from alletra_onboard.application.asbuilt_parse import parse_asbuilt
+from alletra_onboard.application.storage.clients import make_array_cli
 from alletra_onboard.application.verification import verify
 from alletra_onboard.domain.storage import (
     DiscoveryReport,
@@ -56,7 +59,7 @@ from alletra_onboard.domain.models import (
     WorkflowPhase,
 )
 from alletra_onboard.domain.ports import RunStore
-from alletra_onboard.domain.storage import ProvisioningIntent
+from alletra_onboard.domain.storage import EndpointCreds, ProvisioningIntent
 from alletra_onboard.domain.workflow import initial_phase, next_enabled_phase
 
 
@@ -130,6 +133,7 @@ class OnboardingService:
         self._discovery: dict[str, DiscoveryReport] = {}
         self._zoning: dict[str, ZoningReport] = {}
         self._plan: dict[str, ProvisioningPlan] = {}
+        self._asbuilt: dict[str, bytes] = {}  # generated as-built .docx bytes, per run
 
     def _current_settings(self) -> Settings:
         # Re-read settings (incl. .env) at each step so GreenLake credentials entered in the
@@ -440,6 +444,69 @@ class OnboardingService:
             f"{report.health_total} health issue(s).",
             data={"report": report.model_dump(mode="json")},
         )
+
+    # ------------------------------------------------------------------ as-built document (last step)
+
+    # Read-only reads whose section markers `parse_asbuilt` expects (order is not significant).
+    _ASBUILT_COMMANDS: tuple[str, ...] = (
+        "shownode", "showcage", "showsys -d", "shownet", "showversion",
+        "showpd", "showcpg", "showport", "showport -par",
+        "showinventory -csvtable", "checkhealth -svc -detail",
+    )
+
+    def start_asbuilt(self, run_id: str, *, username: str, password: str, customer: str = "", site: str = "") -> RunRecord:
+        run, item = self.get_run(run_id), self.get_work_item(run_id)
+        intent = self.store.get_provisioning_intent(run_id)
+        host = intent.array.host if intent else item.network.mgmt_ipv4
+        self._spawn(run_id, self._run_asbuilt(run, item, host, username, password, customer, site))
+        return run
+
+    async def _run_asbuilt(self, run: RunRecord, item: ArrayWorkItem, host: str, username: str,
+                           password: str, customer: str, site: str) -> None:
+        # Read-only (SSH show*/checkhealth/showinventory -csvtable) -> the as-built .docx. Post-onboarding
+        # and read-only, so like verify it NEVER changes the run status; the UI reacts to the events.
+        self._emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.started",
+                   f"Reading {host} (read-only) and building the as-built document…")
+        try:
+            data = await asyncio.to_thread(self._collect_asbuilt, host, username, password)
+            data.customer = customer or item.customer_name or ""
+            data.site = site or item.site or ""
+            docx_bytes = await asyncio.to_thread(self._render_asbuilt, data)
+        except Exception as exc:  # noqa: BLE001 - report, never propagate (would mark the run failed)
+            self._emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.failed",
+                       f"As-built generation failed: {type(exc).__name__}: {str(exc)[:200]}")
+            return
+        self._asbuilt[run.run_id] = docx_bytes
+        self._emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.generated",
+                   f"As-built ready for {data.name or data.serial_no or host} — {len(docx_bytes) // 1024} KB.",
+                   data={"serial": data.serial_no, "name": data.name, "customer": data.customer, "size": len(docx_bytes)})
+
+    def _collect_asbuilt(self, host: str, username: str, password: str):
+        creds = EndpointCreds(host=host, username=username, password=password)
+        lines: list[str] = []
+        with make_array_cli(creds) as cli:
+            for cmd in self._ASBUILT_COMMANDS:
+                lines.append(f"===== $ {cmd} =====")
+                lines.append(cli.run(cmd))
+        return parse_asbuilt("\n".join(lines))
+
+    def _render_asbuilt(self, data) -> bytes:
+        import os
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix=".docx")
+        os.close(fd)
+        try:
+            generate_asbuilt(data, path)
+            with open(path, "rb") as f:
+                return f.read()
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+    def get_asbuilt(self, run_id: str) -> bytes | None:
+        return self._asbuilt.get(run_id)
 
     # ------------------------------------------------------------------ storage provisioning (Phase 2)
 
