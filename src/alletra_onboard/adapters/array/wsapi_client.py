@@ -32,7 +32,8 @@ except Exception:  # noqa: BLE001 - import may pull eventlet; keep import errors
     HPE3ParClient = None
     hpe_exc = None
 
-from alletra_onboard.domain.storage import ArrayPort, normalize_wwpn
+from alletra_onboard.domain.shared import normalize_wwpn
+from alletra_onboard.domain.discovery import ArrayPort
 
 # WSAPI host-persona ids, resolved by NAME. The values are hpe3parclient's HOST_PERSONA_* constants —
 # the array's WSAPI persona enum: VMware=8, WindowsServer=11, Generic-ALUA=2. Verified 2026-07-22 against

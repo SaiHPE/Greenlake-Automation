@@ -15,10 +15,10 @@ from collections import OrderedDict
 from typing import Callable
 
 from alletra_onboard.application.storage.clients import make_wsapi
-from alletra_onboard.domain.storage import (
+from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.provisioning import (
     ActionOutcome,
     DiscoveredHostBrief,
-    DiscoveryReport,
     ExportRequest,
     PlannedAction,
     ProvisioningIntent,
