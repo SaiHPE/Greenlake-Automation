@@ -1,130 +1,76 @@
-import { Anchor, Box, Button, Notification, Spinner, Table, TableBody, TableCell, TableHeader, TableRow, Text, TextInput } from 'grommet';
-import { StatusCritical, StatusGood } from 'grommet-icons';
+import { Anchor, Box, Button, DataTable, Text, TextInput } from 'grommet';
 import { ReactNode, useEffect, useState } from 'react';
-import { API, ConnectivityResult, FirewallRule, ProxyStatus, checkConnectivity, firewallTxtUrl, getFirewall, getProxyStatus, saveProxy } from '../api';
+import {
+  API,
+  ConnectivityResult,
+  FirewallRule,
+  ProxyStatus,
+  checkConnectivity,
+  firewallTxtUrl,
+  getFirewall,
+  getProxyStatus,
+  saveProxy,
+} from '../api';
 import { ClockSync } from '../ClockSync';
-import { Instructions, Section } from '../components';
+import { Instructions } from '../components';
+import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
+import { StatusIndicator } from '../ui/status';
+import { StepShell } from '../ui/StepShell';
 
-function FirewallTable({ rules }: { rules: FirewallRule[] }) {
-  if (!rules.length) {
-    return (
-      <Text size="small" color="text-weak">
-        Loading firewall endpoints…
-      </Text>
-    );
-  }
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {['Endpoint (FQDN)', 'Port', 'Initiator', 'Purpose'].map((h) => (
-            <TableCell key={h} scope="col" border="bottom">
-              <Text size="xsmall" weight="bold">
-                {h}
-              </Text>
-            </TableCell>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rules.map((r) => (
-          <TableRow key={r.fqdn}>
-            <TableCell>
-              <Text size="xsmall">{r.fqdn}</Text>
-            </TableCell>
-            <TableCell>
-              <Text size="xsmall" color="text-weak">
-                {r.port}
-              </Text>
-            </TableCell>
-            <TableCell>
-              <Text size="xsmall" color="text-weak">
-                {r.initiator}
-              </Text>
-            </TableCell>
-            <TableCell>
-              <Text size="xsmall" color="text-weak">
-                {r.purpose}
-              </Text>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
-function Video({ src }: { src: string }) {
-  return (
-    <Box border round="xsmall" overflow="hidden" background="black" width={{ max: '560px' }} flex={false}>
-      <video src={src} controls preload="metadata" style={{ width: '100%', display: 'block' }} />
-    </Box>
-  );
-}
-
-// A numbered sub-step: its instructions plus the matching HPE walkthrough clip.
-function StepClip({ title, steps, src }: { title: string; steps: ReactNode[]; src: string }) {
+/** A numbered task with its HPE walkthrough recording. */
+function TaskClip({ title, steps, src }: { title: string; steps: ReactNode[]; src: string }) {
   return (
     <Box gap="xsmall" pad={{ top: 'small' }} flex={false}>
-      <Text weight="bold">{title}</Text>
+      <Text weight="bold" color="text-strong">
+        {title}
+      </Text>
       <Instructions items={steps} />
-      <Video src={src} />
+      <Box round="xsmall" overflow="hidden" background="black" width={{ max: 'large' }} flex={false}>
+        <video src={src} controls preload="metadata" style={{ width: '100%', display: 'block' }} />
+      </Box>
     </Box>
   );
 }
 
-// What the HPE engineer must do BEFORE running the automation — the manual steps from HPE's
-// official onboarding checklist that this tool does not (and should not) perform.
+/**
+ * The manual work HPE requires before any automation runs. This tool does not perform these, and
+ * deliberately does not pretend to — it verifies what it can and hands over the rest.
+ */
 export function PrereqStep({ onDone }: { onDone: () => void }) {
   const [rules, setRules] = useState<FirewallRule[]>([]);
-  const [conn, setConn] = useState<ConnectivityResult[] | null>(null);
+  const [connectivity, setConnectivity] = useState<ConnectivityResult[] | null>(null);
   const [allReachable, setAllReachable] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [proxy, setProxyState] = useState<ProxyStatus | null>(null);
+  const [proxy, setProxy] = useState<ProxyStatus | null>(null);
   const [proxyInput, setProxyInput] = useState('');
   const [savingProxy, setSavingProxy] = useState(false);
-  // DSCC region (the <instance> in <instance>.data.cloud.hpe.com). Editable — HPE keeps adding
-  // regions, so this is a suggestion list, not a closed set (confirmed: us1/eu1/jp1/uk1).
+  // The DSCC region is the <instance> in <instance>.data.cloud.hpe.com. HPE keeps adding regions, so
+  // this is a suggestion list rather than a closed set.
   const [region, setRegion] = useState('jp1');
 
   useEffect(() => {
     getProxyStatus()
-      .then((p) => {
-        setProxyState(p);
-        setProxyInput(p.manual ?? '');
+      .then((status) => {
+        setProxy(status);
+        setProxyInput(status.manual ?? '');
       })
       .catch(() => undefined);
   }, []);
 
   useEffect(() => {
     getFirewall(region)
-      .then((r) => setRules(r.rules))
+      .then((response) => setRules(response.rules))
       .catch(() => undefined);
   }, [region]);
 
-  const applyProxy = async (value: string | null) => {
-    setSavingProxy(true);
-    setError(null);
-    try {
-      const p = await saveProxy(value);
-      setProxyState(p);
-      setProxyInput(p.manual ?? '');
-      await runConnectivity(); // re-test through the new effective proxy
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
-    } finally {
-      setSavingProxy(false);
-    }
-  };
-
-  const runConnectivity = async () => {
+  const test = async () => {
     setBusy(true);
     setError(null);
     try {
-      const r = await checkConnectivity(region);
-      setConn(r.results);
-      setAllReachable(r.all_reachable);
+      const response = await checkConnectivity(region);
+      setConnectivity(response.results);
+      setAllReachable(response.all_reachable);
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
     } finally {
@@ -132,222 +78,302 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
     }
   };
 
+  const applyProxy = async (value: string | null) => {
+    setSavingProxy(true);
+    setError(null);
+    try {
+      const status = await saveProxy(value);
+      setProxy(status);
+      setProxyInput(status.manual ?? '');
+      await test();
+    } catch (exc: any) {
+      setError(String(exc.message ?? exc));
+    } finally {
+      setSavingProxy(false);
+    }
+  };
+
+  const reachable = connectivity?.filter((result) => result.reachable).length ?? 0;
+
   return (
-    <Box gap="medium">
-      <Notification
-        status="info"
-        title="Do these first — the automation starts after they're done"
-        message="This tool automates adding the device + subscription in GreenLake, the on-array Cloud Connectivity Wizard, and the DSCC Set Up System wizard. Everything below is manual setup HPE requires beforehand. The clips are HPE's own walkthroughs."
+    <StepShell
+      title="Prerequisites"
+      description="Validate connectivity from this workstation to HPE GreenLake and the array before proceeding."
+      state={connectivity && allReachable ? 'complete' : 'action_required'}
+      error={error}
+      onDismissError={() => setError(null)}
+      footerNote="This step makes no changes to the array."
+      actions={
+        <>
+          <Anchor href={`${API}/init-sheet/template`} download="Initialisation_sheet.xlsx">
+            <Button label="Download the initialisation sheet" />
+          </Anchor>
+          <Button primary label="Continue" onClick={onDone} />
+        </>
+      }
+    >
+      <InlineNotification
+        tone="info"
+        title="Complete these before starting"
+        message="This tool automates device and subscription registration in HPE GreenLake, the on-array Cloud Connectivity wizard, and DSCC setup. Everything on this page is preparation HPE requires beforehand; the recordings are HPE's own walkthroughs."
       />
 
-      <Section title="1 · HPE GreenLake account & workspace">
+      <Surface title="HPE GreenLake account and workspace">
         <Instructions
           items={[
-            <>Activate your software subscriptions from the <b>Electronic Software Delivery (ESD) Receipt</b> email.</>,
-            <>Create (or sign in to) your <Anchor href="https://console.greenlake.hpe.com" target="_blank" label="HPE GreenLake" /> account, then do the three steps below <b>in order</b>.</>,
+            <>Activate the software subscriptions from the Electronic Software Delivery receipt email.</>,
+            <>
+              Create or sign in to your{' '}
+              <Anchor href="https://console.greenlake.hpe.com" target="_blank" label="HPE GreenLake" /> account, then
+              complete the three tasks below in order.
+            </>,
           ]}
         />
-        <StepClip
+        <TaskClip
           title="1. Create the workspace"
           src="/prereq/videos/create-workspace.mp4"
           steps={[
-            <>Click <b>Create Workspace</b> and provide the workspace name, country, street address, city/state, ZIP, phone and email.</>,
-            <>Accept the legal terms and click <b>Create Workspace</b> — you become the workspace Administrator and your dashboard opens.</>,
+            <>Select Create Workspace and provide the name, country, address, phone and email.</>,
+            <>Accept the legal terms and select Create Workspace. You become the workspace administrator.</>,
           ]}
         />
-        <StepClip
+        <TaskClip
           title="2. Deploy Data Services Cloud Console"
           src="/prereq/videos/deploy-dscc.mp4"
           steps={[
-            <>On the workspace <b>Home</b>, click <b>Find Services</b> → scroll to <b>Storage</b> → <b>Data Services</b> → <b>Provision</b>.</>,
-            <>Select the <b>Deployment Region nearest the array</b>, accept the Terms of Service, and click <b>Deploy</b>.</>,
-            <>At the top of the page, click <b>Launch</b> to open Data Services Cloud Console.</>,
+            <>From the workspace home, select Find Services, then Storage, then Data Services, then Provision.</>,
+            <>Select the deployment region nearest the array, accept the terms, and select Deploy.</>,
+            <>Select Launch to open Data Services Cloud Console.</>,
           ]}
         />
-        <StepClip
-          title="3. Assign yourself the Data Services Administrator role"
+        <TaskClip
+          title="3. Assign the Data Services administrator role"
           src="/prereq/videos/assign-admin.mp4"
           steps={[
-            <><b>Manage Workspace → Identity &amp; Access → Assign Role</b>: select your user, set <b>Service Manager = Data Services</b> and <b>Role = Administrator</b>, leave <b>Limit Resource Access</b> off, and click <b>Assign Role</b>.</>,
-            <>Launch Data Services and confirm the <b>Setup</b>, <b>Block Storage</b> and <b>Data Ops Manager</b> services appear.</>,
+            <>
+              In Manage Workspace, Identity and Access, Assign Role: select your user, set service manager to Data
+              Services and role to Administrator, leave resource-access limits off, and assign.
+            </>,
+            <>Launch Data Services and confirm the Setup, Block Storage and Data Ops Manager services appear.</>,
           ]}
         />
-      </Section>
+      </Surface>
 
-      <Section title="2 · Create the API client (for this tool)">
-        <StepClip
+      <Surface title="API client" description="How this tool authenticates to HPE GreenLake.">
+        <TaskClip
           title="4. Create a personal API client"
           src="/prereq/videos/api-client-credentials.mp4"
           steps={[
-            <>In GreenLake, go to <b>Manage Workspace → API</b> and click <b>Create personal API client</b>.</>,
-            <>Give it a name and select the <b>HPE GreenLake Cloud Platform</b> service, then click <b>Create</b>.</>,
-            <>Copy the <b>Client ID</b>, <b>Client Secret</b>, and the per-workspace <b>token URL</b> (…/authorization/v2/oauth2/&lt;tenant&gt;/token) — you only see the secret once.</>,
-            <>Put those three into the <b>Initialisation sheet</b> (section 6 below) — that's how this tool authenticates to GreenLake.</>,
+            <>In Manage Workspace, API, select Create personal API client.</>,
+            <>Name it, select the HPE GreenLake Cloud Platform service, and create it.</>,
+            <>
+              Record the client ID, client secret and the per-workspace token URL. The secret is displayed only once.
+            </>,
+            <>Enter all three in the initialisation sheet.</>,
           ]}
         />
-        <Text size="xsmall" color="text-weak">The clip stops before the Client ID / secret are shown.</Text>
-      </Section>
-
-      <Section title="3 · Network, firewall & time">
-        <Text size="small">
-          The customer's network team must allow these HPE endpoints — all <b>TCP 443</b> outbound.
-          <i> &lt;instance&gt;</i> is your DSCC region — pick or type it below (e.g. <b>us1</b>, <b>eu1</b>,
-          <b>jp1</b>, <b>uk1</b>, or any other HPE region). Download the list to forward to them, then use
-          <b> Test connectivity</b> once they confirm the ports are open.
+        <Text size="xsmall" color="text-weak">
+          The recording stops before the client ID and secret are displayed.
         </Text>
-        <Box direction="row" gap="medium" align="center" wrap>
+      </Surface>
+
+      <Surface
+        title="Connectivity"
+        description="These endpoints must be reachable on outbound TCP 443. Request firewall exceptions from the network team for any shown as blocked."
+        actions={
+          <>
+            <Anchor href={firewallTxtUrl(region)} download="alletra-firewall-requirements.txt" label="Download list" />
+            <Button busy={busy} label={connectivity ? 'Retest' : 'Test connectivity'} onClick={test} />
+          </>
+        }
+      >
+        <Box direction="row" gap="small" align="center" flex={false}>
+          <Text size="small" color="text-weak">
+            DSCC region
+          </Text>
           <Box width="xsmall">
             <TextInput
               size="small"
               value={region}
               suggestions={['us1', 'eu1', 'jp1', 'uk1']}
-              onChange={(e) => setRegion(e.target.value.trim())}
-              onSelect={(e) => setRegion(String(e.suggestion))}
+              onChange={(event) => setRegion(event.target.value.trim())}
+              onSelect={(event) => setRegion(String(event.suggestion))}
               aria-label="DSCC region"
             />
           </Box>
-          <Anchor href={firewallTxtUrl(region)} download="alletra-firewall-requirements.txt" label="Download firewall list (.txt)" />
-          <Button
-            label={busy ? 'Testing…' : 'Test connectivity (TCP 443)'}
-            disabled={busy}
-            onClick={runConnectivity}
-          />
-          {busy && <Spinner />}
-        </Box>
-        <FirewallTable rules={rules} />
-
-        <Box border={{ color: 'border' }} round="xsmall" pad="small" gap="xsmall" flex={false}>
-          <Text size="small" weight="bold">Proxy</Text>
-          <Text size="xsmall" color="text-weak">
-            The tool auto-detects your system proxy (the same one the browser uses) and sends its
-            traffic through it. Override it here only if auto-detect is wrong or absent.
-          </Text>
-          {proxy && (
-            <Text size="xsmall">
-              {proxy.source === 'manual' && <>Using <b>manual proxy</b>: {proxy.effective}</>}
-              {proxy.source === 'system' && <>Using <b>auto-detected system proxy</b>: {proxy.detected}</>}
-              {proxy.source === 'direct' && <>No proxy detected — connecting <b>directly</b>.</>}
-            </Text>
-          )}
-          <Box direction="row" gap="small" align="center" wrap>
-            <Box width="small">
-              <TextInput
-                size="small"
-                placeholder="host:port (manual override)"
-                value={proxyInput}
-                onChange={(e) => setProxyInput(e.target.value)}
-              />
-            </Box>
-            <Button size="small" label={savingProxy ? 'Saving…' : 'Save & re-test'} disabled={savingProxy} onClick={() => applyProxy(proxyInput.trim() || null)} />
-            {proxy?.manual && <Button size="small" label="Clear (auto-detect)" disabled={savingProxy} onClick={() => applyProxy(null)} />}
-            {savingProxy && <Spinner />}
-          </Box>
         </Box>
 
-        {error && <Notification status="critical" title="Connectivity test failed" message={error} onClose={() => setError(null)} />}
-        {conn && (
-          <Box gap="xsmall" pad={{ top: 'xsmall' }} flex={false}>
-            <Notification
-              status={allReachable ? 'normal' : 'warning'}
-              title={allReachable ? 'All tested endpoints are reachable on TCP 443' : 'Some endpoints are not reachable'}
-              message={
-                allReachable
-                  ? `The tool can reach the HPE endpoints${proxy?.effective ? ' through the proxy' : ' directly'}.`
-                  : 'Ask the network team to open the blocked destinations below (outbound TCP 443), or set the correct proxy above.'
-              }
+        {connectivity && (
+          <>
+            <DataTable
+              columns={[
+                {
+                  property: 'host',
+                  header: 'Endpoint',
+                  render: (result: ConnectivityResult) => <Text size="small">{result.host}</Text>,
+                },
+                {
+                  property: 'reachable',
+                  header: 'Result',
+                  render: (result: ConnectivityResult) => (
+                    <StatusIndicator
+                      state={result.reachable ? 'complete' : 'failed'}
+                      label={result.reachable ? 'Reachable' : 'Blocked'}
+                    />
+                  ),
+                },
+                {
+                  property: 'detail',
+                  header: 'Detail',
+                  render: (result: ConnectivityResult) => (
+                    <Text size="small" color="text-weak">
+                      {result.detail}
+                      {result.via ? ` (via ${result.via})` : ''}
+                    </Text>
+                  ),
+                },
+              ]}
+              data={connectivity}
+              primaryKey="host"
             />
-            {conn.map((c) => (
-              <Box key={c.host} direction="row" gap="small" align="center">
-                {c.reachable ? (
-                  <StatusGood color="status-ok" size="small" />
-                ) : (
-                  <StatusCritical color="status-critical" size="small" />
-                )}
-                <Text size="xsmall">{c.host}</Text>
-                <Text size="xsmall" color="text-weak">
-                  — {c.detail}{c.via ? ` (via ${c.via})` : ''}
-                </Text>
-              </Box>
-            ))}
-          </Box>
+            <TableSummary>
+              {reachable} reachable · {connectivity.length - reachable} blocked
+            </TableSummary>
+          </>
         )}
+
+        {connectivity && !allReachable && (
+          <InlineNotification
+            tone="warning"
+            title="Some endpoints are not reachable"
+            message="Ask the network team to permit the blocked destinations on outbound TCP 443, or set the correct proxy below."
+          />
+        )}
+
+        {!connectivity && rules.length > 0 && (
+          <>
+            <DataTable
+              columns={[
+                { property: 'fqdn', header: 'Endpoint', render: (rule: FirewallRule) => <Text size="small">{rule.fqdn}</Text> },
+                { property: 'port', header: 'Port', render: (rule: FirewallRule) => <Text size="small">{rule.port}</Text> },
+                {
+                  property: 'initiator',
+                  header: 'Initiator',
+                  render: (rule: FirewallRule) => (
+                    <Text size="small" color="text-weak">
+                      {rule.initiator}
+                    </Text>
+                  ),
+                },
+                {
+                  property: 'purpose',
+                  header: 'Purpose',
+                  render: (rule: FirewallRule) => (
+                    <Text size="small" color="text-weak">
+                      {rule.purpose}
+                    </Text>
+                  ),
+                },
+              ]}
+              data={rules}
+              primaryKey="fqdn"
+            />
+            <TableSummary>{rules.length} endpoints required</TableSummary>
+          </>
+        )}
+
         <Instructions
           items={[
-            <>Local array discovery (HPE Discovery app) uses <b>mDNS on UDP 5353</b>.</>,
-            <>The array's DNS must resolve these global names (e.g. <b>device.cloud.hpe.com</b>).</>,
+            <>Local array discovery uses mDNS on UDP 5353.</>,
+            <>The array's DNS must resolve the HPE global names, for example device.cloud.hpe.com.</>,
             <>
-              Reserved for array operations — <b>do not assign these</b>: 16.1.8.11/27/43/59 and
-              16.1.9.11/27/43/59 (the CDM link-local range).
+              Reserved for array operations, do not assign: 16.1.8.11/27/43/59 and 16.1.9.11/27/43/59, the CDM
+              link-local range.
             </>,
-            <><b>System time must be within 2 minutes</b> of correct, or the array can't connect to DSCC. Use NTP, or the <b>Sync system clock</b> control below.</>,
           ]}
         />
-      </Section>
+      </Surface>
 
-      <ClockSync title="System clock (must be within 2 minutes of correct)" />
+      <Surface
+        title="Proxy"
+        description="Detected from the operating system, as a browser would resolve it. Provide an override only if the detected value is incorrect."
+      >
+        {proxy && (
+          <Text size="small">
+            {proxy.source === 'manual' && `In use: manual proxy ${proxy.effective}`}
+            {proxy.source === 'system' && `In use: detected system proxy ${proxy.detected}`}
+            {proxy.source === 'direct' && 'No proxy detected; connecting directly.'}
+          </Text>
+        )}
+        <Box direction="row" gap="small" align="center" wrap flex={false}>
+          <Box width="medium">
+            <TextInput
+              size="small"
+              placeholder="host:port"
+              value={proxyInput}
+              onChange={(event) => setProxyInput(event.target.value)}
+              aria-label="Manual proxy override"
+            />
+          </Box>
+          <Button
+            size="small"
+            busy={savingProxy}
+            label="Save and retest"
+            onClick={() => applyProxy(proxyInput.trim() || null)}
+          />
+          {proxy?.manual && (
+            <Button size="small" label="Clear override" disabled={savingProxy} onClick={() => applyProxy(null)} />
+          )}
+        </Box>
+      </Surface>
 
-      <Section title="4 · Management-network cabling (each controller → management switch)">
-        <Notification
-          status="warning"
+      {/* HPE GreenLake rejects authentication when the workstation clock has drifted. */}
+      <ClockSync title="Workstation clock" />
+
+      <Surface title="Management network cabling">
+        <InlineNotification
+          tone="warning"
           title="The array must be on the management network before onboarding"
-          message="The Cloud Connectivity Wizard and DSCC reach the array over its management network. HPE shares one management IP across the controllers and fails over to a standby link, so EVERY controller must be cabled for redundancy. Connect all three port types below to the management switch."
+          message="The Cloud Connectivity wizard and DSCC reach the array over its management network. One management IP is shared across controllers with failover to a standby link, so every controller must be cabled."
         />
         <Instructions
           items={[
             <>
-              <b>Admin port</b> — on <b>each controller</b>, run a CAT-5e / Cat 6 Ethernet cable from the Admin
-              port to the <b>management LAN switch</b>. The controllers share one admin IP and only one link is
-              active at a time (it fails over to the surviving link), so cable <b>all</b> controllers.
+              Admin port: on each controller, connect the admin port to the management LAN switch. Only one link is
+              active at a time, so cable all controllers.
             </>,
+            <>iLO port: on each controller, connect the out-of-band management port to the same network.</>,
             <>
-              <b>iLO port</b> — on <b>each controller</b>, connect the iLO (out-of-band management) port to the{' '}
-              <b>same management network</b>.
-            </>,
-            <>
-              <b>CDM ports</b> — connect each controller chassis&apos;s <b>CDM Ethernet port</b> (using the supplied
-              OCuLink-to-Ethernet dongle), plus at least one drive-chassis CDM per rack, to the <b>same network</b>{' '}
-              as the management ports. CDMs auto-configure <b>link-local</b> addresses and need <b>no external IP</b>.
+              CDM ports: connect each controller chassis CDM Ethernet port using the supplied OCuLink adapter, plus at
+              least one drive-chassis CDM per rack, to the same network. CDM ports self-assign link-local addresses and
+              require no external IP.
             </>,
           ]}
         />
         <Text size="xsmall" color="text-weak">
-          Source: HPE&apos;s{' '}
+          Source: HPE's{' '}
           <Anchor
             href="https://infosight.hpe.com/welcomecenter/getting-started/checklist?connectopt=HPE%20Cloud%20Connectivity%20Wizard%2FDiscovery%20Tool&greenlakeplatform=HPE%20GreenLake%20Cloud%20Platform&model=B10140&opt=factory&product=alletraB10k"
             target="_blank"
             label="onboarding checklist"
           />{' '}
-          and the <i>Installing and configuring factory-integrated system</i> guide (sd00002405).
+          and the installation guide sd00002405.
         </Text>
-      </Section>
+      </Surface>
 
-      <Section title="5 · This jump box">
+      <Surface title="This workstation">
         <Instructions
           items={[
-            <>The array is racked, cabled, and <b>powered on</b>.</>,
-            <>This jump box is on the <b>same subnet</b> as the array (so it can reach the link-local <b>169.254.x</b> Cloud Connectivity URL).</>,
-            <>Run this app <b>as Administrator</b> (so the clock-sync can set the system time).</>,
-            <>Browser runtime: the packaged <b>.exe ships the VC++ runtime</b> Chromium needs; for a source/pip install, ensure the <b>Microsoft Visual C++ Redistributable (x64)</b> is installed.</>,
+            <>The array is racked, cabled and powered on.</>,
+            <>This workstation is on the same subnet as the array, so it can reach the link-local wizard address.</>,
+            <>The application is running as administrator, so it can set the system clock.</>,
+            <>
+              The packaged executable ships the runtime the browser automation needs. For a source installation, ensure
+              the Microsoft Visual C++ redistributable (x64) is present.
+            </>,
           ]}
         />
-      </Section>
-
-      <Section title="6 · Get the Initialisation sheet">
-        <Text size="small">
-          Download the workbook now, fill every required field (API credentials, serial, subscription key,
-          network, DSCC details), and upload it on the next step. One workbook = one array. The workbook
-          includes a <b>Prerequisites</b> tab with this firewall list and the cabling checklist.
-        </Text>
-        <Box direction="row" gap="small">
-          <Anchor
-            href={`${API}/init-sheet/template`}
-            download="Initialisation_sheet.xlsx"
-            label="Download Initialisation_sheet.xlsx"
-          />
-        </Box>
-      </Section>
-
-      <Button primary label="I've completed these → Initialisation sheet" onClick={onDone} alignSelf="start" />
-    </Box>
+      </Surface>
+    </StepShell>
   );
 }

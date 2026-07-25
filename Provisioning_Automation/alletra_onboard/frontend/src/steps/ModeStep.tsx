@@ -1,39 +1,42 @@
-import { Box, Button, CheckBox, Notification, Text } from 'grommet';
+import { Box, Button, CheckBox, Text } from 'grommet';
 import { useState } from 'react';
-import { Section } from '../components';
 import { ActionKey, MODE_PRESETS, RunMode, ServedStep, subtitleFor } from '../modes';
+import { InlineNotification, Surface } from '../ui/primitives';
+import { StepShell } from '../ui/StepShell';
 
 interface Props {
   mode: RunMode;
   custom: ActionKey[];
   setMode: (mode: RunMode) => void;
   setCustom: (keys: ActionKey[]) => void;
-  onConfirm: () => Promise<void>; // mints the run from the uploaded sheet + this mode, then advances
-  locked?: boolean; // once a run exists the mode is fixed (it shaped the run)
-  initOnly?: boolean; // the Initialization accelerator: only the Initialization mode is offered
-  catalog: ServedStep[]; // the SERVED step registry (GET /app/profile) — drives the CUSTOM picker
+  onConfirm: () => Promise<void>;
+  locked?: boolean;
+  initOnly?: boolean;
+  catalog: ServedStep[];
 }
 
 export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, initOnly, catalog }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const toggle = (key: ActionKey, checked: boolean) =>
-    setCustom(checked ? [...custom, key] : custom.filter((k) => k !== key));
+    setCustom(checked ? [...custom, key] : custom.filter((item) => item !== key));
 
-  // SAN Zoning and Provision storage both COMPUTE over the Discovery results, so a custom run that
-  // includes either without Discovery dead-ends (the step can't run, and Restart is only on Finish).
-  // Require Discovery before the run is minted.
+  // Zoning and provisioning both compute over the discovery results, so a custom selection without
+  // discovery would dead-end at the first of them.
   const missingDiscovery =
-    !locked && mode === 'CUSTOM' && (custom.includes('zoning') || custom.includes('provision')) && !custom.includes('discover');
+    !locked &&
+    mode === 'CUSTOM' &&
+    (custom.includes('zoning') || custom.includes('provision')) &&
+    !custom.includes('discover');
 
-  // The init-only accelerator offers just Initialization (Full onboarding), relabelled.
-  const presets = initOnly ? MODE_PRESETS.filter((p) => p.mode === 'FULL_ONBOARDING') : MODE_PRESETS;
-  const labelFor = (p: (typeof MODE_PRESETS)[number]) =>
-    initOnly && p.mode === 'FULL_ONBOARDING' ? 'Initialization' : p.label;
-  const blurbFor = (p: (typeof MODE_PRESETS)[number]) =>
-    initOnly && p.mode === 'FULL_ONBOARDING'
-      ? 'Register in GreenLake, run the Cloud Connectivity wizard, complete DSCC Set Up, then verify.'
-      : p.blurb;
+  const presets = initOnly ? MODE_PRESETS.filter((preset) => preset.mode === 'FULL_ONBOARDING') : MODE_PRESETS;
+  const labelFor = (preset: (typeof MODE_PRESETS)[number]) =>
+    initOnly && preset.mode === 'FULL_ONBOARDING' ? 'Initialization' : preset.label;
+  const blurbFor = (preset: (typeof MODE_PRESETS)[number]) =>
+    initOnly && preset.mode === 'FULL_ONBOARDING'
+      ? 'Registers the array in HPE GreenLake, connects it, completes DSCC setup, then verifies the configuration.'
+      : preset.blurb;
 
   const confirm = async () => {
     setBusy(true);
@@ -48,14 +51,29 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
   };
 
   return (
-    <Box gap="medium">
-      <Section title={initOnly ? 'Initialization' : 'What do you want to run?'}>
-        <Text size="small" color="text-weak">
-          {initOnly
-            ? 'This accelerator runs array initialization only: GreenLake registration, Cloud Connectivity, and DSCC Set Up, then a read-only verify.'
-            : 'Pick a mode. The wizard then shows only the steps that mode needs — so you can verify or provision an already-initialised array without re-running initialisation.'}
-        </Text>
-        <Box gap="small" pad={{ top: 'small' }}>
+    <StepShell
+      title="Select mode"
+      description="The wizard presents only the steps the selected mode requires, enabling provisioning or verification of an array that is already initialised."
+      state={locked ? 'complete' : 'action_required'}
+      error={error}
+      onDismissError={() => setError(null)}
+      footerNote={
+        locked
+          ? 'The mode is fixed for the lifetime of the run.'
+          : 'Creating the run associates this workbook with the array.'
+      }
+      actions={
+        <Button
+          primary
+          busy={busy}
+          label={locked ? 'Continue' : 'Create run'}
+          disabled={(mode === 'CUSTOM' && custom.length === 0) || missingDiscovery}
+          onClick={confirm}
+        />
+      }
+    >
+      <Surface title={initOnly ? 'Initialization' : 'Mode'}>
+        <Box gap="xsmall" flex={false}>
           {presets.map((preset) => {
             const selected = mode === preset.mode;
             return (
@@ -63,12 +81,14 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
                 key={preset.mode}
                 direction="row"
                 gap="small"
-                align="center"
+                align="start"
                 pad="small"
                 round="small"
-                border={{ color: selected ? 'brand' : 'border', size: selected ? '2px' : '1px' }}
                 background={selected ? 'background-contrast' : undefined}
+                border={{ color: selected ? 'brand' : 'transparent', size: '2px' }}
                 onClick={locked ? undefined : () => setMode(preset.mode)}
+                focusIndicator={!locked}
+                flex={false}
                 style={{ cursor: locked ? 'default' : 'pointer', opacity: locked && !selected ? 0.5 : 1 }}
               >
                 <Box
@@ -76,14 +96,17 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
                   height="18px"
                   round="full"
                   flex={false}
+                  margin={{ top: 'xxsmall' }}
                   border={{ color: selected ? 'brand' : 'border', size: '2px' }}
                   align="center"
                   justify="center"
                 >
-                  {selected && <Box width="9px" height="9px" round="full" background="brand" />}
+                  {selected && <Box width="8px" height="8px" round="full" background="brand" />}
                 </Box>
                 <Box>
-                  <Text weight={selected ? 'bold' : undefined}>{labelFor(preset)}</Text>
+                  <Text weight={selected ? 'bold' : undefined} color={selected ? 'text-strong' : undefined}>
+                    {labelFor(preset)}
+                  </Text>
                   <Text size="small" color="text-weak">
                     {blurbFor(preset)}
                   </Text>
@@ -92,50 +115,39 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
             );
           })}
         </Box>
-      </Section>
+      </Surface>
 
       {mode === 'CUSTOM' && (
-        <Section title="Pick the steps to run">
-          <Box gap="xsmall">
-            {catalog.map((action) => (
+        <Surface title="Steps to run" description="Choose exactly the steps this run should include.">
+          <Box gap="xsmall" flex={false}>
+            {catalog.map((step) => (
               <CheckBox
-                key={action.key}
-                label={`${action.label} — ${subtitleFor(action.key)}`}
-                checked={custom.includes(action.key)}
+                key={step.key}
+                label={`${step.label} — ${subtitleFor(step.key)}`}
+                checked={custom.includes(step.key)}
                 disabled={locked}
-                onChange={(event) => toggle(action.key, event.target.checked)}
+                onChange={(event) => toggle(step.key, event.target.checked)}
               />
             ))}
           </Box>
-        </Section>
-      )}
-
-      {locked && (
-        <Text size="small" color="text-weak">
-          A run already exists for this session — the mode is locked. Use “Start over” (bottom of the
-          left sidebar) to begin a new run with a different mode.
-        </Text>
+        </Surface>
       )}
 
       {missingDiscovery && (
-        <Notification
-          status="warning"
-          title="Add Discovery"
-          message="SAN Zoning and Provision storage both work from the Discovery results — include “Discovery” in your selection."
+        <InlineNotification
+          tone="warning"
+          title="Discovery is required"
+          message="SAN zoning and Provision storage both work from the discovery results — include Discovery in the selection."
         />
       )}
 
-      {error && (
-        <Notification status="critical" title="Could not create the run" message={error} onClose={() => setError(null)} />
+      {locked && (
+        <InlineNotification
+          tone="info"
+          title="The mode is fixed for this run"
+          message="Cancel the run from the wizard bar to start again with a different mode."
+        />
       )}
-
-      <Button
-        primary
-        alignSelf="start"
-        label={busy ? 'Creating run…' : locked ? 'Continue →' : 'Create run & continue →'}
-        disabled={busy || (mode === 'CUSTOM' && custom.length === 0) || missingDiscovery}
-        onClick={confirm}
-      />
-    </Box>
+    </StepShell>
   );
 }
