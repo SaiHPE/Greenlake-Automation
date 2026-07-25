@@ -1,7 +1,8 @@
-import { Anchor, Box, Button, FormField, Notification, Spinner, Text, TextInput } from 'grommet';
+import { Anchor, Box, Button, FormField, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
 import { useState } from 'react';
 import { AsBuiltResult, RunEvent, RunRecord, asbuiltDownloadUrl, startAsbuilt } from '../api';
-import { EventLog, Section } from '../components';
+import { CredentialsFields, InlineNotification, Surface } from '../ui/primitives';
+import { StepShell } from '../ui/StepShell';
 
 interface Props {
   runId: string;
@@ -18,13 +19,13 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Like verify, _run_asbuilt never touches run.status — progress is derived from the events.
-  const stepEvents = events.filter((e) => e.phase === 'ASBUILT_DOCUMENT');
-  const last = stepEvents[stepEvents.length - 1];
-  const running = submitting || last?.event_type === 'asbuilt.started';
-
-  const terminal = [...stepEvents].reverse().find((e) => e.event_type === 'asbuilt.generated' || e.event_type === 'asbuilt.failed');
-  const result = terminal?.event_type === 'asbuilt.generated' ? ((terminal.data as unknown as AsBuiltResult) ?? null) : null;
+  const mine = events.filter((event) => event.phase === 'ASBUILT_DOCUMENT');
+  const running = submitting || mine[mine.length - 1]?.event_type === 'asbuilt.started';
+  const terminal = [...mine]
+    .reverse()
+    .find((event) => event.event_type === 'asbuilt.generated' || event.event_type === 'asbuilt.failed');
+  const result =
+    terminal?.event_type === 'asbuilt.generated' ? ((terminal.data as unknown as AsBuiltResult) ?? null) : null;
   const failure = terminal?.event_type === 'asbuilt.failed' ? terminal.message : null;
 
   const generate = async () => {
@@ -40,67 +41,94 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
   };
 
   return (
-    <Box gap="medium">
-      <Notification
-        status="normal"
-        title="Generate the as-built document"
-        message={`Reads array ${run?.serial_number ?? ''} over SSH (read-only: show* + checkhealth + showinventory) and produces the HPE-branded as-built .docx — Table 01 config, the full hardware inventory, and the checkhealth output. It changes nothing on the array.`}
-      />
-
-      <Section title="1 · Array admin credentials & cover details">
-        <Text size="small">
-          Use the array admin account (e.g. <b>3paradm</b>). The password is used only for this read-only SSH
-          session — never stored. Customer name / site fill the cover page (defaulting to the sheet values).
-        </Text>
-        <Box direction="row" gap="medium" wrap>
-          <FormField label="Username">
-            <TextInput value={username} onChange={(e) => setUsername(e.target.value)} placeholder="3paradm" />
-          </FormField>
-          <FormField label="Password">
-            <TextInput type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          </FormField>
-          <FormField label="Customer name (cover page)">
-            <TextInput value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="from the sheet" />
-          </FormField>
-          <FormField label="Site / location (optional)">
-            <TextInput value={site} onChange={(e) => setSite(e.target.value)} />
-          </FormField>
-        </Box>
-        <Box direction="row" gap="small" align="center">
+    <StepShell
+      title="As-built document"
+      description="Reads the array's final configuration and renders it into the HPE Word template as the handover deliverable."
+      stateDetail={result ? 'document ready' : undefined}
+      error={error}
+      onDismissError={() => setError(null)}
+      activityEmpty="Enter the array credentials and generate the document."
+      footerNote="Read-only — generation makes no changes to the array."
+      actions={
+        <>
           <Button
-            primary
-            label={running ? 'Building…' : 'Generate as-built'}
-            disabled={running || !username.trim() || !password}
+            busy={running}
+            label={result ? 'Regenerate' : running ? 'Generating' : 'Generate document'}
+            disabled={!username.trim() || !password}
             onClick={generate}
           />
-          {running && <Spinner />}
-        </Box>
-      </Section>
-
-      {error && <Notification status="critical" title="Request failed" message={error} onClose={() => setError(null)} />}
-      {failure && <Notification status="warning" title="Could not build the as-built" message={failure} />}
-
-      {result && (
-        <Section title="As-built ready">
-          <Notification
-            status="normal"
-            title={`As-built generated for ${result.name || result.serial}`}
-            message={`${Math.max(1, Math.round((result.size ?? 0) / 1024))} KB${result.customer ? ` · cover: ${result.customer}` : ''}. Download the .docx below.`}
-          />
-          <Box direction="row" gap="small" align="center">
+          {result ? (
             <Anchor href={asbuiltDownloadUrl(runId)} download>
-              <Button primary label="Download as-built (.docx)" />
+              <Button primary label="Download document" />
             </Anchor>
-            <Button label="Rebuild" onClick={generate} disabled={running} />
+          ) : (
+            <Button primary label="Continue" onClick={onDone} />
+          )}
+        </>
+      }
+    >
+      <Surface
+        title="Array credentials"
+        description={`Read-only access to ${run?.serial_number ?? 'the array'} to collect its configuration, inventory and status.`}
+      >
+        <CredentialsFields
+          username={username}
+          password={password}
+          onUsername={setUsername}
+          onPassword={setPassword}
+          help="Used for this read-only session only; never stored."
+        />
+      </Surface>
+
+      <Surface title="Cover details" description="Operator-supplied fields; not stored on the array.">
+        <Box direction="row" gap="medium" wrap>
+          <Box width="medium">
+            <FormField label="Customer name" htmlFor="asbuilt-customer">
+              <TextInput
+                id="asbuilt-customer"
+                value={customer}
+                onChange={(event) => setCustomer(event.target.value)}
+                placeholder="Defaults to the workbook value"
+              />
+            </FormField>
           </Box>
-        </Section>
+          <Box width="medium">
+            <FormField label="Site" htmlFor="asbuilt-site">
+              <TextInput
+                id="asbuilt-site"
+                value={site}
+                onChange={(event) => setSite(event.target.value)}
+                placeholder="Defaults to the workbook value"
+              />
+            </FormField>
+          </Box>
+        </Box>
+      </Surface>
+
+      {failure && (
+        <InlineNotification tone="warning" title="The document could not be generated" message={failure} />
       )}
 
-      <Section title="Progress">
-        <EventLog events={stepEvents} emptyText="Enter the credentials and generate to see progress here." />
-      </Section>
-
-      <Button primary label="Finish →" onClick={onDone} alignSelf="start" />
-    </Box>
+      {result && (
+        <Surface title="Document contents">
+          <InlineNotification
+            tone="ok"
+            title={`as-built-${result.serial || 'array'}.docx is ready`}
+            message={`${Math.max(1, Math.round((result.size ?? 0) / 1024))} KB. Inventory and status tables are included, formatted to the HPE template.`}
+          />
+          <NameValueList pairProps={{ direction: 'column' }}>
+            <NameValuePair name="System name">
+              <Text>{result.name || '—'}</Text>
+            </NameValuePair>
+            <NameValuePair name="Serial number">
+              <Text>{result.serial || '—'}</Text>
+            </NameValuePair>
+            <NameValuePair name="Customer">
+              <Text>{result.customer || '—'}</Text>
+            </NameValuePair>
+          </NameValueList>
+        </Surface>
+      )}
+    </StepShell>
   );
 }

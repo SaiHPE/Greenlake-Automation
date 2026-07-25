@@ -1,7 +1,8 @@
-import { Box, Button, CheckBox, Notification, Spinner, Text } from 'grommet';
+import { Box, Button, CheckBox, NameValueList, NameValuePair, Text } from 'grommet';
 import { useState } from 'react';
 import { RunEvent, RunRecord, startProvision } from '../api';
-import { EventLog, Section, StatusTag } from '../components';
+import { InlineNotification, Surface } from '../ui/primitives';
+import { StepShell } from '../ui/StepShell';
 
 interface Props {
   runId: string;
@@ -15,9 +16,8 @@ export function GreenLakeStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const running = run?.status === 'running';
-  const readyForCloudinit = run?.status === 'ready' && run?.current_phase === 'CLOUDINIT_CONNECT';
-  const failed = run?.status === 'retryable_failure' || run?.status === 'terminal_failure';
-  const glEvents = events.filter((e) => e.phase.startsWith('GL_') || e.phase === 'PREFLIGHT');
+  const registered = run?.status === 'ready' && run?.current_phase === 'CLOUDINIT_CONNECT';
+  const resources = events.find((event) => event.event_type === 'step.completed' && event.phase.startsWith('GL_'));
 
   const start = async () => {
     setError(null);
@@ -29,41 +29,63 @@ export function GreenLakeStep({ runId, run, events, onDone }: Props) {
   };
 
   return (
-    <Box gap="medium">
-      <Section title="Register the array in GreenLake">
-        <Text size="small">
-          Runs the GreenLake REST automation: discover the Data Services instance, add the subscription,
-          register the device, assign it to Data Services, and apply the subscription. A subscription-apply
-          warning is non-fatal — registration + assignment is what unblocks the array.
-        </Text>
-        <Box direction="row" gap="medium" align="center">
-          <Button primary disabled={running} label={running ? 'Running…' : 'Run GreenLake automation'} onClick={start} />
-          <CheckBox label="Dry run (preview, no writes)" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} disabled={running} />
-          {running && <Spinner />}
-          <StatusTag status={run?.status} />
-        </Box>
-      </Section>
-
-      {error && <Notification status="critical" title="Could not start" message={error} onClose={() => setError(null)} />}
-      {failed && (
-        <Notification
-          status="critical"
-          title="GreenLake provisioning failed"
-          message="See the log below — fix the cause (credentials, part number, subscription key) and run again."
-        />
-      )}
+    <StepShell
+      title="GreenLake registration"
+      description="Registers the array in HPE GreenLake, assigns it to Data Services and applies the subscription."
+      error={error}
+      onDismissError={() => setError(null)}
+      activityEmpty="Start the registration and each phase will be recorded here."
+      footerNote="Each write is idempotency-checked; re-running is safe."
+      actions={
+        <>
+          <CheckBox
+            label="Dry run (no writes)"
+            checked={dryRun}
+            onChange={(event) => setDryRun(event.target.checked)}
+            disabled={running}
+          />
+          {registered ? (
+            <Button primary label="Continue" onClick={onDone} />
+          ) : (
+            <Button primary busy={running} label={running ? 'Registering' : 'Register the array'} onClick={start} />
+          )}
+        </>
+      }
+    >
       {run?.warnings?.length ? (
-        <Notification status="warning" title="Warnings" message={run.warnings.join(' • ')} />
+        <InlineNotification
+          tone="warning"
+          title="Registration completed with warnings"
+          message={run.warnings.join(' · ')}
+        />
       ) : null}
 
-      <Section title="Progress">
-        <EventLog events={glEvents} emptyText="Click Run to start — phases stream here live." />
-      </Section>
-
-      {readyForCloudinit && (
-        <Notification status="normal" title="GreenLake registration complete" message="The array can now connect via the Cloud Connectivity Wizard." />
+      {registered && (
+        <InlineNotification
+          tone="ok"
+          title="The array is registered and assigned to Data Services"
+          message="It can now be connected to HPE GreenLake from the array console."
+        />
       )}
-      <Button primary label="Continue → Cloud Connectivity" disabled={!readyForCloudinit} onClick={onDone} alignSelf="start" />
-    </Box>
+
+      {resources && (
+        <Surface title="Created resources">
+          <NameValueList pairProps={{ direction: 'column' }} valueProps={{ width: 'medium' }}>
+            <NameValuePair name="Device">
+              <Text>{run?.serial_number ?? '—'}</Text>
+            </NameValuePair>
+            <NameValuePair name="Region">
+              <Text>{String(resources.data?.region ?? 'As configured in the workbook')}</Text>
+            </NameValuePair>
+          </NameValueList>
+        </Surface>
+      )}
+
+      <Box flex={false}>
+        <Text size="small" color="text-weak">
+          A subscription-apply warning is not fatal; registration and assignment are what release the array.
+        </Text>
+      </Box>
+    </StepShell>
   );
 }
