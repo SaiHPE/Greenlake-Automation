@@ -36,18 +36,22 @@ Control surface + status per cell. Legend: **✅ built** · **✔︎ confirmed b
 | **1 Initialize** | ✅ **built** — onboarding Components A→B→C→D (GreenLake register → cloudinit → DSCC Set Up → verify) | ◻︎ file init — **gap** |
 | **2 Discover** | array ports + nameserver ✅ · ESXi HBAs via vCenter ✔︎ · multi-OS host discovery (Win/Linux) + **source arrays** (migration) ◻︎ | ◻︎ hosts + shares/exports — **gap** |
 | **3 Connect** | FC **zoning**: verify ✅ (array-side) · Brocade remediate ✔︎ (deferred) · **Cisco MDS** ◻︎ | ◻︎ **VLAN / LAN** config — **gap** |
-| **4 Provision** | host/volume/VLUN ✅ (WSAPI, Phase 2) · via **DSCC** ✔︎ · snapshots + scheduling as **protection policies** ✔︎ | ◻︎ **views · ACLs (AD) · policies · share migration** — **gap** |
+| **4 Provision** | host/volume/VLUN ✅ (WSAPI) — **tiered create + read-only tier-2 path-verify, operator dropdown-builder, plural/heterogeneous; tier-1 create validated-LIVE (persona=8 on VZ); released v0.11.0** · via **DSCC** ✔︎ · snapshots + scheduling as **protection policies** ✔︎ | ◻︎ **views · ACLs (AD) · policies · share migration** — **gap** |
 | **5 Replicate / DR** | Remote Copy as **DSCC protection policies** ✔︎ · **failover/failback** + **Peer Persistence / Quorum Witness** trigger ◻︎ | ◻︎ file replication — **gap** |
 | **6 Report** | health + performance via **DSCC / Data Ops Manager** telemetry ✔︎ · **InfoSight** specifics ◻︎ | ◻︎ — **gap** |
-| **7 Document** | **as-built / HLD / LLD** generation ◻︎ | **as-built / HLD / LLD** ◻︎ |
+| **7 Document** | **as-built ✅ BUILT** — read-only `show*`+`checkhealth` → fills the HPE Block-Storage Word template (cover + customer name, Table 01, checkhealth as Word tables), HPE Graphik fonts; live-proven on the LZ array; **only the UI wiring left**. HLD / LLD ◻︎ | **as-built / HLD / LLD** ◻︎ |
 
 ## Where the tool is today
 
-The shipping app covers the **top-left**: Alletra MP **block** — Initialize (A/B/C/D) plus partial
-Discover / Zoning-verify / Provision (host·volume·VLUN over WSAPI, driven by discovery; operator
-picks a *mode*). Everything else in the matrix is new. Under [ADR 0006](adr/0006-hybrid-control-plane.md)
-today's direct-WSAPI provisioning becomes the "direct" tier beneath a new DSCC cloud client — nothing
-already shipped is discarded.
+The shipping app covers the **top-left**: Alletra MP **block** — Initialize (A/B/C/D) plus Discover /
+Zoning-verify / Provision. As of **v0.11.0** (2026-07-23) Provision is materially deeper: a tiered
+create + read-only path-verify, an operator **dropdown-builder** over discovered + to-be-created
+objects, plural/heterogeneous intent, and a row-table sheet — with the **tier-1 write path proven live**
+on real hardware (persona=8). The **as-built** document generator (Stage 7 block) is also **built**
+(read-only reads → filled HPE template, live-proven), needing only its UI step. Everything else in the
+matrix is still new. Under [ADR 0006](adr/0006-hybrid-control-plane.md) today's direct-WSAPI provisioning
+becomes the "direct" tier beneath a new DSCC cloud client — nothing already shipped is discarded. The two
+biggest structural gaps are unchanged: the **DSCC cloud control plane** and the **entire file column**.
 
 ## Phasing (north-star, built incrementally)
 
