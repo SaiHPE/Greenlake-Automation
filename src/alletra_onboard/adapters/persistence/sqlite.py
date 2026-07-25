@@ -70,6 +70,20 @@ class SqliteRunStore:
                 )
                 """
             )
+            # Step artifacts (discovery report / provisioning-plan marker / as-built docx), durable so
+            # a server restart mid-engagement doesn't force re-running discovery (ADR 0011, C7). No
+            # secrets: these are read results, not credentials.
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS run_artifacts (
+                    run_id TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    payload BLOB NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (run_id, kind)
+                )
+                """
+            )
 
     def upsert_run(self, run: RunRecord) -> None:
         with self._connect() as connection:
@@ -205,6 +219,24 @@ class SqliteRunStore:
             else None
         )
         return item, intent
+
+    def save_artifact(self, run_id: str, kind: str, payload: bytes) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO run_artifacts (run_id, kind, payload, updated_at) VALUES (?, ?, ?, ?)
+                ON CONFLICT(run_id, kind) DO UPDATE SET
+                    payload = excluded.payload, updated_at = excluded.updated_at
+                """,
+                (run_id, kind, payload, datetime.now(timezone.utc).isoformat()),
+            )
+
+    def load_artifact(self, run_id: str, kind: str) -> bytes | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM run_artifacts WHERE run_id = ? AND kind = ?", (run_id, kind)
+            ).fetchone()
+        return None if row is None else bytes(row[0])
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.database_path, timeout=5)

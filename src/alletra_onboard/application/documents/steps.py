@@ -94,6 +94,7 @@ class DocumentSteps:
                        f"As-built generation failed: {type(exc).__name__}: {str(exc)[:200]}")
             return
         self._asbuilt[run.run_id] = docx_bytes
+        coord.store.save_artifact(run.run_id, "asbuilt_docx", docx_bytes)
         coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.generated",
                    f"As-built ready for {data.name or data.serial_no or host} — {len(docx_bytes) // 1024} KB.",
                    data={"serial": data.serial_no, "name": data.name, "customer": data.customer, "size": len(docx_bytes)})
@@ -123,4 +124,10 @@ class DocumentSteps:
                 pass
 
     def get_asbuilt(self, run_id: str) -> bytes | None:
-        return self._asbuilt.get(run_id)
+        cached = self._asbuilt.get(run_id)
+        if cached is not None:
+            return cached
+        stored = self._coord.store.load_artifact(run_id, "asbuilt_docx")
+        if stored is not None:
+            self._asbuilt[run_id] = stored
+        return stored
