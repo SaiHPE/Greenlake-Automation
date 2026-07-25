@@ -33,3 +33,5 @@ desktop.ini
 
 # Committed templates (no secrets) — exceptions to the broad ignores above
 !**/config/arrays.example.csv
+# Design mockups: hand-authored, reviewed, and sanitised (documentation-range IPs only)
+!Provisioning_Automation/alletra_onboard/docs/ux/*.html
