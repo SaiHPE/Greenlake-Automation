@@ -508,6 +508,8 @@ def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
         cloudinit_url=values.get("cloudinit_url") or DEFAULT_CLOUDINIT_URL,
         network=network,
         dscc_setup=dscc_setup,
+        customer_name=values.get("customer_name", ""),
+        site=values.get("site", ""),
     )
     return ParsedInitSheet(
         work_item=work_item,

@@ -25,6 +25,7 @@ class WorkflowPhase(StrEnum):
     STORAGE_ZONING = "STORAGE_ZONING"
     STORAGE_PROVISION = "STORAGE_PROVISION"
     CONFIG_VERIFY = "CONFIG_VERIFY"
+    ASBUILT_DOCUMENT = "ASBUILT_DOCUMENT"
     COMPLETE = "COMPLETE"
 
 
@@ -116,6 +117,8 @@ class ArrayWorkItem(BaseModel):
     tags: dict[str, str] = Field(default_factory=dict)
     support_contact: dict[str, Any] = Field(default_factory=dict)
     storage_fleet_enabled: bool = False
+    customer_name: str = ""   # for the as-built cover page (operator-supplied; not stored on the array)
+    site: str = ""
 
     @field_validator("serial_number", "part_number", "service_catalog_region_id", "dscc_region_code")
     @classmethod

@@ -157,6 +157,13 @@ export const startVerify = (runId: string, username: string, password: string) =
   request<{ run: RunRecord }>('POST', `/runs/${runId}/verify`, { username, password });
 export const markComplete = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/complete`);
 
+// As-built document (the last step): read the array read-only and build the HPE .docx. The password is
+// used only for the SSH session. Download the generated file from the URL below.
+export interface AsBuiltResult { serial: string; name: string; customer: string; size: number }
+export const startAsbuilt = (runId: string, username: string, password: string, customer = '', site = '') =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/asbuilt`, { username, password, customer, site });
+export const asbuiltDownloadUrl = (runId: string) => `${API}/runs/${runId}/asbuilt/download`;
+
 // ------------------------------------------------------------------ storage provisioning (Phase 2)
 export interface ArrayPort {
   node: number; slot: number; card_port: number;
