@@ -28,7 +28,9 @@ STEP_REGISTRY: tuple[StepDef, ...] = (
     StepDef("discover", "Discovery", WorkflowPhase.STORAGE_DISCOVER, "provision"),
     StepDef("zoning", "SAN Zoning", WorkflowPhase.STORAGE_ZONING, "provision"),
     StepDef("provision", "Provision storage", WorkflowPhase.STORAGE_PROVISION, "provision"),
-    StepDef("verify", "Verify config & health", WorkflowPhase.CONFIG_VERIFY, "verify"),
+    # "Verify configuration", not "…& health": the HPE Design System prohibits "health" in UI copy —
+    # always "status". This label is served to the UI, so this is the only place it is spelled.
+    StepDef("verify", "Verify configuration", WorkflowPhase.CONFIG_VERIFY, "verify"),
     StepDef("asbuilt", "As-built document", WorkflowPhase.ASBUILT_DOCUMENT, "verify"),
 )
 
