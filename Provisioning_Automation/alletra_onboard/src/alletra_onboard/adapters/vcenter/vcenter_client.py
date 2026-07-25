@@ -17,7 +17,8 @@ except Exception:  # noqa: BLE001 - bundled in the .exe; optional otherwise
     Disconnect = None
     vim = None
 
-from alletra_onboard.domain.storage import HostHba, normalize_wwpn
+from alletra_onboard.domain.shared import normalize_wwpn
+from alletra_onboard.domain.discovery import HostHba
 
 
 class VCenterError(Exception):

@@ -265,7 +265,8 @@ async def test_verify_exception_never_unsucceeds_the_run(tmp_path):
 
 
 def _prov_intent():
-    from alletra_onboard.domain.storage import EndpointCreds, ProvisioningIntent
+    from alletra_onboard.domain.shared import EndpointCreds
+    from alletra_onboard.domain.provisioning import ProvisioningIntent
 
     def creds(host):
         return EndpointCreds(host=host, username="u", password=SecretStr("p"))
@@ -279,7 +280,8 @@ def _prov_intent():
 
 async def test_get_storage_objects_builds_the_dropdown_palette(tmp_path, monkeypatch):
     from alletra_onboard.application.storage import storage_provision as sp
-    from alletra_onboard.domain.storage import DiscoveryReport, HostHba, normalize_wwpn
+    from alletra_onboard.domain.shared import normalize_wwpn
+    from alletra_onboard.domain.discovery import DiscoveryReport, HostHba
 
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())
@@ -299,7 +301,7 @@ async def test_get_storage_objects_builds_the_dropdown_palette(tmp_path, monkeyp
 
 
 async def test_set_provisioning_builder_persists_membership_vvsets_and_exports(tmp_path):
-    from alletra_onboard.domain.storage import ExportRequest, HostSetRequest, ProvisioningBuilder
+    from alletra_onboard.domain.provisioning import ExportRequest, HostSetRequest, ProvisioningBuilder
 
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())
@@ -318,7 +320,8 @@ async def test_set_provisioning_builder_persists_membership_vvsets_and_exports(t
 
 async def test_path_verify_emits_per_host_report(tmp_path, monkeypatch):
     from alletra_onboard.application.storage import path_verify as pv
-    from alletra_onboard.domain.storage import DiscoveryReport, HostPathStatus, PathVerification
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import HostPathStatus, PathVerification
 
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())
@@ -403,9 +406,13 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
     from alletra_onboard.application.storage import discovery as sd
     from alletra_onboard.application.storage import storage_provision as sp
     from alletra_onboard.application.storage import zoning as sz
-    from alletra_onboard.domain.storage import (
-        ActionOutcome, DiscoveryReport, ExpectedZone, PlannedAction,
-        ProvisioningPlan, ProvisioningResult, ZoneRemediation, ZoningReport,
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.zoning import ExpectedZone, ZoneRemediation, ZoningReport
+    from alletra_onboard.domain.provisioning import (
+        ActionOutcome,
+        PlannedAction,
+        ProvisioningPlan,
+        ProvisioningResult,
     )
 
     monkeypatch.setattr(sd, "discover", lambda intent, progress=None: DiscoveryReport(notes=[]))

@@ -8,15 +8,9 @@ from pydantic import SecretStr
 from alletra_onboard.application.storage import discovery as disc
 from alletra_onboard.application.storage import storage_provision as prov
 from alletra_onboard.application.storage import zoning
-from alletra_onboard.domain.storage import (
-    ArrayHost,
-    ArrayPort,
-    EndpointCreds,
-    ExportRequest,
-    HostHba,
-    ProvisioningIntent,
-    normalize_wwpn,
-)
+from alletra_onboard.domain.shared import EndpointCreds, normalize_wwpn
+from alletra_onboard.domain.discovery import ArrayHost, ArrayPort, HostHba
+from alletra_onboard.domain.provisioning import ExportRequest, ProvisioningIntent
 
 # Concrete WWPNs (colon form for switch output; normalized for the domain objects).
 ARR_O1 = "20:31:00:02:ac:02:f6:29"  # node0 slot3 port1 (odd)
@@ -410,7 +404,7 @@ def test_host_briefs_summarize_fabric_login_status():
 
 
 def test_persona_derived_from_host_os():
-    from alletra_onboard.domain.storage import persona_for_os
+    from alletra_onboard.domain.provisioning import persona_for_os
 
     assert persona_for_os("VMware ESXi 8.0.3") == "VMware"
     assert persona_for_os("Microsoft Windows Server 2019") == "WindowsServer"

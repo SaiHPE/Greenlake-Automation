@@ -72,11 +72,7 @@ from alletra_onboard.application.health import greenlake_check
 from alletra_onboard.application.init_sheet import build_template_bytes, parse_workbook_bytes
 from alletra_onboard.application.proxy import ProxyResolver, apply_proxy_env, detect_system_proxy
 from alletra_onboard.domain.models import RunMode
-from alletra_onboard.domain.storage import (
-    ProvisioningBuilder,
-    ProvisioningComposition,
-    ProvisioningObjects,
-)
+from alletra_onboard.domain.provisioning import ProvisioningBuilder, ProvisioningComposition, ProvisioningObjects
 from alletra_onboard.application.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.onboarding_service import (
     OnboardingService,

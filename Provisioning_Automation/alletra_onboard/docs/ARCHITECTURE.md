@@ -49,8 +49,8 @@ Four layers, dependencies point inward (`api → application → domain`; `adapt
 ```
 
 - **`domain/`** — pure models + contracts, no I/O. `models.py` (onboarding: `ArrayWorkItem`, `RunRecord`,
-  `WorkflowPhase`, `RunMode`), `storage.py` (provisioning subdomain: `ProvisioningIntent`/`VolumeRequest`/
-  `HostSetRequest`/`ExportRequest`, discovery `DiscoveryReport`, zoning, `PathVerification`),
+  `WorkflowPhase`, `RunMode`); per-context storage models: `shared.py` (`EndpointCreds`, `Fabric`, WWPN
+  helpers), `discovery.py`, `zoning.py`, `provisioning.py` (intent/builder/plan/`PathVerification`);
   `workflow.py` (the **step registry** + mode→steps), `ports.py` (`RunStore` interface),
   `policies.py`, `errors.py`.
 - **`application/`** — services orchestrating domain + adapters. Split: onboarding/init + a `storage/`
@@ -83,7 +83,10 @@ Replicate/DR ⚪ · Report ⚪ · **Document ✅(as-built, v0.12.0)**. File colu
 | Module | Responsibility |
 |---|---|
 | `models.py` | Onboarding models + enums: `ArrayWorkItem` (per-array intake, now incl. `customer_name`/`site`), `RunRecord`/`RunStatus`, `WorkflowPhase`, `RunMode`, `NetworkConfig`, `DsccSetupConfig`, `VerificationReport` |
-| `storage.py` | Provisioning subdomain: `EndpointCreds`; **plural intent** (`ProvisioningIntent` = `volumes[]`+`host_sets[]`+`exports[]`, `from_simple`); `persona_for_os`→name; discovery (`ArrayPort`/`HostHba`/`ArrayHost`/`DiscoveryReport`); zoning (`ZoningReport`/`ZoningPlan`); builder palette (`ProvisioningObjects`/`ProvisioningBuilder`); plan+result; tier-2 (`PathVerification`). (As-built's `AsBuiltData` is a dataclass in `application/asbuilt.py`, not here) |
+| `shared.py` | Storage-context primitives: `EndpointCreds`, `Fabric`, `normalize_wwpn`/`wwpn_colons` |
+| `discovery.py` | Discovery context: `ArrayPort`/`HostHba`/`ArrayHost`/`DiscoveryReport` |
+| `zoning.py` | Zoning context: verify (`ZoningReport`) + read-only plan (`ZoningPlan`, `AliasedWwpn`) |
+| `provisioning.py` | Provisioning context: **plural intent** (`ProvisioningIntent` = `volumes[]`+`host_sets[]`+`exports[]`, `from_simple`); `persona_for_os`→name; builder palette (`ProvisioningObjects`/`ProvisioningBuilder`); plan+result; tier-2 (`PathVerification`). (As-built's `AsBuiltData` is a dataclass in `application/asbuilt.py`) |
 | `workflow.py` | **`STEP_REGISTRY`** (ordered `StepDef`s: greenlake, cloudinit, dscc, discover, zoning, provision, verify, **asbuilt**) + `_MODE_STEPS` (preset mode→steps) + `enabled_steps`/`initial_phase`/`next_enabled_phase` |
 | `ports.py` | `RunStore` interface (persistence contract) |
 | `policies.py`, `errors.py` | Domain rules + typed errors |
@@ -91,7 +94,7 @@ Replicate/DR ⚪ · Report ⚪ · **Document ✅(as-built, v0.12.0)**. File colu
 ### 5.2 application/ (onboarding + cross-cutting)
 | Module | Responsibility |
 |---|---|
-| **`onboarding_service.py`** | **The orchestrator** (see §8). Holds the event bus + store + all per-run transient state; every `start_*`/`_run_*` step lives here |
+| **`onboarding_service.py`** | The **composition-root façade**: wires `runs/coordinator.py` (lifecycle, guarded spawn, set_state/emit) + the four step services (`onboarding/steps.py`, `storage/steps.py`, `documents/steps.py`) and delegates one-to-one; step logic lives in the services |
 | `init_sheet.py` | The workbook: `build_template_bytes` (Initialisation + Provisioning + Volumes + Host sets + Prerequisites tabs) and `parse_workbook_bytes` → `ParsedInitSheet` (work item, GL creds, `ProvisioningIntent`, customer/site) |
 | `provisioning.py` | Component A — GreenLake onboarding provisioning (register/assign/subscribe) orchestration |
 | `verification.py` | Post-init read-only config+health verify (`verify(item, user, pw)` → `VerificationReport`) |
