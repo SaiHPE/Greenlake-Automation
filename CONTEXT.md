@@ -182,6 +182,15 @@ policy) — the file analogue of a block **Export (VLUN)**. Provisional: the fil
 yet researched; refine after the file research pass.
 _Avoid_: assuming it equals "share" (a view may front one or more shares/exports — confirm in file research).
 
+**As-built (document)**:
+The per-deployment record produced as the **final step** — the array's *actual initialised
+configuration* (identity, hardware, capacity, network, inventory, health), read **read-only** from the
+array's own `show*` / `checkhealth` and rendered into HPE's Word template (its cover page, HPE Graphik
+fonts, and Table 01 preserved). An engagement **deliverable**, not a live monitoring view. The
+**customer name** and **site** are the only operator-supplied fields — the array doesn't store them.
+_Avoid_: confusing it with **Post-init verification** (that *checks* the config against the sheet; the
+as-built *documents* what the array actually has).
+
 ## Language — proxy / connectivity
 
 **System proxy**:
