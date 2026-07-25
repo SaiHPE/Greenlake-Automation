@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunRecord
-from alletra_onboard.domain.storage import ProvisioningIntent
+from alletra_onboard.domain.provisioning import ProvisioningIntent
 
 
 class SqliteRunStore:

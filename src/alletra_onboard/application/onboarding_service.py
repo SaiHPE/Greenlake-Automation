@@ -36,7 +36,7 @@ from alletra_onboard.application.verification import verify
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunMode, RunRecord
 from alletra_onboard.domain.ports import RunStore
-from alletra_onboard.domain.storage import (
+from alletra_onboard.domain.provisioning import (
     ProvisioningBuilder,
     ProvisioningComposition,
     ProvisioningIntent,

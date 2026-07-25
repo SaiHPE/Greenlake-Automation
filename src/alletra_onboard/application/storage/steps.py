@@ -20,8 +20,8 @@ from alletra_onboard.application.storage import storage_provision
 from alletra_onboard.application.storage import zoning as storage_zoning
 from alletra_onboard.application.storage import zoning_plan as storage_zoning_plan
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
-from alletra_onboard.domain.storage import (
-    DiscoveryReport,
+from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.provisioning import (
     ProvisioningBuilder,
     ProvisioningComposition,
     ProvisioningObjects,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from alletra_onboard.domain.models import ArrayWorkItem, BrowserResultStatus, RunEvent, RunRecord
-from alletra_onboard.domain.storage import ProvisioningIntent
+from alletra_onboard.domain.provisioning import ProvisioningIntent
 
 
 class EventSink(Protocol):

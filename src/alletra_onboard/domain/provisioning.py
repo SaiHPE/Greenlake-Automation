@@ -1,35 +1,16 @@
-"""Domain models for storage provisioning (Phase 2).
-
-These are the contracts the WSAPI/vCenter/Brocade adapters fill and the discovery / zoning /
-provision services produce. Kept in their own module (distinct from the onboarding models) because
-storage provisioning is a separate subdomain — see docs/adr/0002-0004 and the FC provisioning runbook.
+"""Provisioning-context models: the intent (what the customer wants created), the Stage-2 builder
+palette/composition, the tier-1 plan + result, and tier-2 path verification (ADR 0010).
 """
 
 from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 
-Fabric = Literal["odd", "even"]
+from alletra_onboard.domain.shared import EndpointCreds
+
 ProvisioningType = Literal["tpvv", "reduce"]
-
-
-def normalize_wwpn(raw: str) -> str:
-    """Canonical WWPN for matching: hex only, uppercase, no separators.
-
-    ESXi reports colon-separated lowercase (``10:00:5c:ed:…``); the array (``showhost`` /
-    ``showport``) is colon-less uppercase (``10005CED…``). Normalising both to this form is what
-    lets host and array WWNs be compared (see the lab calibration notes).
-    """
-    return "".join(c for c in raw if c in "0123456789abcdefABCDEF").upper()
-
-
-def wwpn_colons(normalized: str) -> str:
-    """Render a normalized WWPN back as colon-separated lowercase (Brocade/zoning display form)."""
-    n = normalized.lower()
-    return ":".join(n[i : i + 2] for i in range(0, len(n), 2))
-
 
 # Host persona is DERIVED from the discovered host OS (discovery is vCenter/ESXi today → VMware default).
 # We return the persona NAME here and let the WSAPI adapter map it to the array's persona id, because the
@@ -53,14 +34,6 @@ def persona_for_os(os: str | None) -> PersonaName:
 
 
 # ------------------------------------------------------------------ provisioning intent (the sheet)
-
-class EndpointCreds(BaseModel):
-    """An IP/host + username + password for a device the tool logs into (array, vCenter, switch)."""
-
-    host: str
-    username: str
-    password: SecretStr
-
 
 class VolumeRequest(BaseModel):
     """One volume to create — its OWN name, size, provisioning type, CPG, and optional VV-set membership.
@@ -158,59 +131,6 @@ class ProvisioningIntent(BaseModel):
         )
 
 
-# ------------------------------------------------------------------ discovery
-
-class ArrayPort(BaseModel):
-    node: int
-    slot: int
-    card_port: int
-    protocol: str = "fc"    # "fc" | "iscsi"
-    wwpn: str = ""          # normalized FC port WWPN ("" for iSCSI)
-    address: str = ""       # iSCSI target IP ("" for FC)
-    link_state: str         # ready | offline | loss_sync | ...
-    # FC only. Derived from the switch this port attaches to (showportdev fcfabric) when it is
-    # 'ready' and resolvable; otherwise falls back to card-port parity (odd card_port -> odd fabric,
-    # even -> even). See docs/adr/0009.
-    fabric: Fabric | None = None
-    fabric_switch: str = ""  # the switch/fabric-entry name from showportdev fcfabric ("" if unknown)
-    usage: str = ""          # showport Label token: "RCFC"/"Peer" = replication/peer port, NOT a host target
-
-    @property
-    def label(self) -> str:
-        return f"{self.node}:{self.slot}:{self.card_port}"
-
-    @property
-    def identifier(self) -> str:
-        """WWPN for FC, target IP for iSCSI — the port's addressable id for display."""
-        return self.wwpn if self.protocol == "fc" else self.address
-
-
-class HostHba(BaseModel):
-    host_name: str
-    wwpn: str               # normalized
-    model: str | None = None
-    os: str | None = None
-    fabric: Fabric | None = None  # set from which array fabric the WWPN logs into (via showhost)
-
-
-class ArrayHost(BaseModel):
-    """A host the ARRAY knows (from `showhost -d`) — the authoritative, curated host view (real hosts
-    only, never storage ports). Each FC WWPN maps to the array ports (n:s:p) it is logged into; an
-    empty port list means the WWPN is configured on the array but NOT logged in (not zoned / offline)."""
-
-    name: str
-    persona: str = ""                                      # VMware | WindowsServer | Generic-ALUA | ...
-    wwpns: dict[str, list[str]] = Field(default_factory=dict)  # normalized WWPN -> [n:s:p logged in]
-
-
-class DiscoveryReport(BaseModel):
-    array_ports: list[ArrayPort] = Field(default_factory=list)
-    host_hbas: list[HostHba] = Field(default_factory=list)
-    array_hosts: list[ArrayHost] = Field(default_factory=list)  # from showhost -d (zoning source)
-    notes: list[str] = Field(default_factory=list)
-    error: str | None = None
-
-
 # ------------------------------------------------------------------ provisioning builder (ADR 0010 Stage 2)
 
 class DiscoveredHostBrief(BaseModel):
@@ -258,77 +178,6 @@ class ProvisioningComposition(BaseModel):
     host_sets: list[HostSetRequest] = Field(default_factory=list)
     exports: list[ExportRequest] = Field(default_factory=list)
     volumes: list[VolumeRequest] = Field(default_factory=list)
-
-
-# ------------------------------------------------------------------ zoning
-
-class ExpectedZone(BaseModel):
-    fabric: Fabric
-    switch_host: str
-    name: str               # computed zone name
-    host_wwpn: str          # normalized
-    array_wwpn: str         # normalized
-    present: bool = False    # already in the switch's active config?
-
-
-class ZoneRemediation(BaseModel):
-    """The exact, additive commands to create the missing zones on one fabric (preview before apply)."""
-
-    fabric: Fabric
-    switch_host: str
-    cfg_name: str           # the active config the zones are added to
-    commands: list[str]     # alicreate / zonecreate / cfgadd / cfgenable (never cfgsave-alone)
-
-
-class ZoningReport(BaseModel):
-    expected: list[ExpectedZone] = Field(default_factory=list)
-    remediations: list[ZoneRemediation] = Field(default_factory=list)
-    proper: bool = False     # every expected host zoned on both fabrics, none unverified
-    # Expected hosts the array could NOT confirm on EITHER fabric — could be "not zoned" OR the host
-    # is simply offline/not logged in (the array can't tell the two apart). Surfaced, never silently
-    # passed; confirm the host is up, or cross-check the switch/ESXi.
-    unverified_hosts: list[str] = Field(default_factory=list)
-    source: str = "array"    # 'array' (showportdev ns) — verification needs no switch
-    notes: list[str] = Field(default_factory=list)
-    error: str | None = None
-
-
-# ------------------------------------------------------------------ zoning plan (assisted builder)
-
-class AliasedWwpn(BaseModel):
-    """One WWPN in the zoning plan — a host HBA port or an array target port — with the alias(es) the
-    switch already has for it (there can be several on a shared fabric) and a suggested alias to
-    pre-fill (the convention-matching existing one, else empty for the operator to type). See ADR 0004."""
-
-    wwpn: str                                   # normalized (16 hex)
-    display: str                                # colon-lowercase (Brocade form)
-    role: Literal["host", "array"]
-    fabric: str = ""                            # "F1" | "F2" | "" (offline / on neither fabric)
-    nsp: str = ""                               # array target port n:s:p ("" for a host)
-    host_name: str = ""                         # owning host ("" for an array port)
-    existing_aliases: list[str] = Field(default_factory=list)  # every alias the switch has for this WWPN
-    suggested_alias: str = ""                   # pre-fill: the convention match, else ""
-
-
-class FabricZonePlan(BaseModel):
-    """The plan for one fabric: the host + array WWPNs present on it, and the SIST pairs to zone."""
-
-    fabric: str                                 # "F1" | "F2"
-    switch_host: str
-    active_cfg: str = ""                        # e.g. F1_CFG (from cfgshow Effective)
-    hosts: list[AliasedWwpn] = Field(default_factory=list)        # host HBA ports on this fabric
-    array_ports: list[AliasedWwpn] = Field(default_factory=list)  # array target ports online on this fabric
-    pairs: list[tuple[str, str]] = Field(default_factory=list)    # (host_wwpn, array_wwpn) single-init-single-target
-
-
-class ZoningPlan(BaseModel):
-    """The read-only assisted zoning plan (ADR 0004): per-fabric host↔array SIST pairs + aliases, for
-    the operator to name and the SAN team to apply. The tool never writes to the switch."""
-
-    fabrics: list[FabricZonePlan] = Field(default_factory=list)
-    offline_hosts: list[str] = Field(default_factory=list)  # host "name (wwpn)" on no fabric -> cable+power
-    notes: list[str] = Field(default_factory=list)
-    error: str | None = None
 
 
 # ------------------------------------------------------------------ provisioning plan + result

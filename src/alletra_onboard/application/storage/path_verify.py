@@ -19,13 +19,13 @@ from __future__ import annotations
 import re
 
 from alletra_onboard.application.storage.clients import make_array_cli
-from alletra_onboard.domain.storage import (
-    DiscoveryReport,
+from alletra_onboard.domain.shared import normalize_wwpn
+from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.provisioning import (
     HostPathStatus,
     PathVerification,
     ProvisioningIntent,
     VolumePath,
-    normalize_wwpn,
 )
 
 _NSP = re.compile(r"^\d+:\d+:\d+$")

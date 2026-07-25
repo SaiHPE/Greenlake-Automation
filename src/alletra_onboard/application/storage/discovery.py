@@ -17,14 +17,9 @@ from collections import OrderedDict
 from typing import Callable
 
 from alletra_onboard.application.storage.clients import make_array_cli, make_vcenter
-from alletra_onboard.domain.storage import (
-    ArrayHost,
-    ArrayPort,
-    DiscoveryReport,
-    Fabric,
-    ProvisioningIntent,
-    normalize_wwpn,
-)
+from alletra_onboard.domain.shared import Fabric, normalize_wwpn
+from alletra_onboard.domain.discovery import ArrayHost, ArrayPort, DiscoveryReport
+from alletra_onboard.domain.provisioning import ProvisioningIntent
 
 _LOGICAL_NAME_RE = re.compile(r"^\s*Logical Name:\s*(\S+)", re.IGNORECASE)
 

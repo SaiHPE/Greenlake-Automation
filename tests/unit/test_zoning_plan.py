@@ -4,9 +4,9 @@ build the per-fabric SIST plan from read-only switch data, keep every alias, ren
 from __future__ import annotations
 
 from alletra_onboard.application.storage import zoning_plan as zp
-from alletra_onboard.domain.storage import (
-    ArrayPort, DiscoveryReport, EndpointCreds, HostHba, ProvisioningIntent,
-)
+from alletra_onboard.domain.shared import EndpointCreds
+from alletra_onboard.domain.discovery import ArrayPort, DiscoveryReport, HostHba
+from alletra_onboard.domain.provisioning import ProvisioningIntent
 
 _ARR_031 = "20:31:00:02:ac:02:f6:29"
 _ARR_032 = "20:32:00:02:ac:02:f6:29"
@@ -162,7 +162,7 @@ def test_suggested_alias_prefers_unique_over_shared_junk():
 
 def test_render_commands_dedupes_colliding_zones():
     # If two hosts end up with the same alias, their SIST zone names collide -> emit each zone ONCE.
-    from alletra_onboard.domain.storage import AliasedWwpn, FabricZonePlan, ZoningPlan
+    from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, ZoningPlan
 
     h1 = AliasedWwpn(wwpn="AA", display="aa", role="host", fabric="F1", suggested_alias="H")
     h2 = AliasedWwpn(wwpn="BB", display="bb", role="host", fabric="F1", suggested_alias="H")  # same alias

@@ -16,7 +16,7 @@ from alletra_onboard.application.runs.coordinator import RunCoordinator
 from alletra_onboard.application.storage.clients import make_array_cli
 from alletra_onboard.application.verification import verify
 from alletra_onboard.domain.models import ArrayWorkItem, RunRecord, WorkflowPhase
-from alletra_onboard.domain.storage import EndpointCreds
+from alletra_onboard.domain.shared import EndpointCreds
 
 
 class DocumentSteps:
