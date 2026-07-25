@@ -167,6 +167,56 @@ def parse_checkhealth(text: str) -> tuple[list[tuple[str, str, str]], list[tuple
     return summary, detail
 
 
+def _columns(header: str, data_lines: list[str]) -> tuple[list[str], list[list[str]]]:
+    """Slice a fixed-width block by the header's column token positions. The first column is anchored
+    at index 0 (so a value left of its right-aligned header — e.g. the array-id row — isn't clipped)."""
+    tokens = [m.start() for m in re.finditer(r"\S+", header)]
+    if not tokens:
+        return [], []
+    starts = [0] + tokens[1:]
+    ends = tokens[1:] + [None]
+
+    def cut(line: str) -> list[str]:
+        return [(line[a:b] if b is not None else line[a:]).strip() for a, b in zip(starts, ends)]
+
+    headers = [h.strip("-").strip() for h in cut(header)]
+    rows = [cut(line) for line in data_lines]
+    return headers, [r for r in rows if any(c for c in r)]
+
+
+def parse_inventory(text: str) -> list[tuple[str, list[str], list[list[str]]]]:
+    """Split ``showinventory`` into its sub-sections -> [(title, headers, rows)]. A dash-wrapped line
+    ("----Midplane----") is a section title; the next block's first line is the column header, the rest
+    are data (footer "N total" rows dropped). Each block is sliced fixed-width via ``_columns``."""
+    out: list[tuple[str, list[str], list[list[str]]]] = []
+    title = ""
+    block: list[str] = []
+
+    def flush() -> None:
+        nonlocal block
+        data = [ln for ln in block[1:] if ln.strip() and not re.match(r"^\s*\d+\s+total", ln)]
+        if block and data:
+            headers, rows = _columns(block[0], data)
+            if headers and rows:
+                out.append((title, headers, rows))
+        block = []
+
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            flush()
+            continue
+        if stripped.startswith("-"):          # a title ("----Midplane----") or a plain separator
+            label = re.split(r"-{2,}", stripped.strip("-"))[0].strip()  # drop trailing dash-runs/units
+            if label:
+                title = label
+            flush()
+            continue
+        block.append(line)
+    flush()
+    return out
+
+
 def parse_asbuilt(dump: str) -> AsBuiltData:
     """Parse a full ``asbuilt_array.py`` dump into ``AsBuiltData`` (inventory + checkhealth verbatim)."""
     sec = split_sections(dump)
