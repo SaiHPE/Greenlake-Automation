@@ -20,11 +20,11 @@ from typing import Any
 
 import httpx
 
-from alletra_onboard.adapters.greenlake.auth import OAuthClientCredentials
 from alletra_onboard.adapters.greenlake.devices import DevicesClient
 from alletra_onboard.adapters.greenlake.http_client import GreenLakeAsyncOperationError, GreenLakeHttpClient
 from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogClient
 from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
+from alletra_onboard.application.onboarding.clients import make_greenlake, missing_credentials  # noqa: F401 - missing_credentials re-exported
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import ArrayWorkItem, WorkflowPhase
 from alletra_onboard.domain.policies import redact
@@ -271,34 +271,17 @@ class ProvisioningError(RuntimeError):
     """A provisioning phase failed in a way the operator must act on."""
 
 
-def missing_credentials(settings: Settings) -> list[str]:
-    return [
-        name
-        for name, value in {
-            "GL_CLIENT_ID": settings.gl_client_id,
-            "GL_CLIENT_SECRET": settings.gl_client_secret,
-            "GL_TOKEN_URL": settings.gl_token_url,
-        }.items()
-        if not value
-    ]
-
-
 def build_provisioning_service(
     settings: Settings,
     *,
     progress: Callable[[WorkflowPhase, str], None] | None = None,
 ) -> GreenLakeProvisioningService:
-    token_provider = OAuthClientCredentials(
-        settings.gl_token_url,
-        settings.gl_client_id or "",
-        settings.gl_client_secret or "",
-    )
-    http = GreenLakeHttpClient(settings.gl_base_url, token_provider)
+    clients = make_greenlake(settings)
     return GreenLakeProvisioningService(
-        http=http,
-        devices=DevicesClient(http),
-        subscriptions=SubscriptionsClient(http),
-        service_catalog=ServiceCatalogClient(http),
+        http=clients.http,
+        devices=clients.devices,
+        subscriptions=clients.subscriptions,
+        service_catalog=clients.service_catalog,
         progress=progress,
     )
 
