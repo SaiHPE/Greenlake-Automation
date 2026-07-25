@@ -3,7 +3,7 @@ import io
 import pytest
 from openpyxl import load_workbook
 
-from alletra_onboard.application.init_sheet import (
+from alletra_onboard.application.platform.init_sheet import (
     HOSTSET_COLUMNS,
     HOSTSETS_SHEET_NAME,
     PROVISIONING_SECTIONS,

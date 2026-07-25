@@ -3,8 +3,8 @@ from pydantic import SecretStr
 
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.api.app import create_app
-from alletra_onboard.application.event_bus import InMemoryEventBus
-from alletra_onboard.application.intake import csv_template
+from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+from alletra_onboard.application.platform.intake import csv_template
 from alletra_onboard.application.onboarding_service import OnboardingService
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import (
@@ -97,7 +97,7 @@ def test_prereq_firewall_and_connectivity(tmp_path, monkeypatch):
     assert "console.greenlake.hpe.com" in txt.text
 
     # Connectivity does real network I/O — stub it so the test stays hermetic.
-    from alletra_onboard.application import prereqs
+    from alletra_onboard.application.platform import prereqs
 
     async def fake_check(region="jp1", timeout=5.0, manual_proxy=None):
         return [
@@ -196,7 +196,7 @@ def _fill_template(template_bytes: bytes, values: dict[str, str], prov: dict | N
 
     from openpyxl import load_workbook
 
-    from alletra_onboard.application.init_sheet import (
+    from alletra_onboard.application.platform.init_sheet import (
         HOSTSET_COLUMNS,
         HOSTSETS_SHEET_NAME,
         PROVISIONING_SECTIONS,
@@ -253,7 +253,7 @@ def _upload_complete(client) -> str:
 def test_init_sheet_upload_holds_complete_sheet_and_saves_creds(tmp_path, monkeypatch):
     import base64
 
-    from alletra_onboard.application.configuring import read_env
+    from alletra_onboard.application.platform.configuring import read_env
 
     monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
     client = _client(tmp_path)
