@@ -76,6 +76,10 @@ SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
         ("secret_name", "Credential name", True, "e.g. b10000-admin"),
         ("secret_username", "Administrator name", True, "e.g. 3paradm — you enter the PASSWORD in the DSCC wizard, not here"),
     ]),
+    ("As-built document", [
+        ("customer_name", "Customer name", False, "goes on the as-built cover page (the array doesn't store it)"),
+        ("site", "Site / location", False, "deployment site/location for the as-built (optional)"),
+    ]),
 ]
 
 _LABEL_TO_KEY = {label: key for _, fields in SECTIONS for key, label, _, _ in fields}
@@ -182,6 +186,8 @@ class ParsedInitSheet:
     gl_client_secret: str
     gl_token_url: str
     provisioning_intent: ProvisioningIntent | None = None  # set when a provisioning step is selected
+    customer_name: str = ""  # for the as-built cover page (operator-supplied; not on the array)
+    site: str = ""
 
 
 def _provisioning_selected(mode: RunMode, selected_steps: list[str] | None) -> bool:
@@ -508,4 +514,6 @@ def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
         gl_client_id=get("gl_client_id"),
         gl_client_secret=get("gl_client_secret"),
         gl_token_url=get("gl_token_url"),
+        customer_name=values.get("customer_name", ""),
+        site=values.get("site", ""),
     )
