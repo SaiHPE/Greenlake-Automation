@@ -1,0 +1,909 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Alletra Onboard â€” full UX mockup set</title>
+<style>
+/* â•â•â•â•â•â•â•â•â•â• EXACT hpe-design-tokens (installed pkg) + design-system.hpe.design rules â•â•â•â•â•â•â•â•â•â• */
+:root{
+  --brand:#01a982;                     /* decorative.brand â€” the Element only */
+  --primary-strong:#008567; --primary-strong-hover:#006750;
+  --text-primary:#006750; --focus:#004233;
+  --bg-back:#f7f7f7; --bg-front:#fff; --bg-contrast:rgba(0,0,0,.04); --bg-hover:rgba(0,0,0,.04);
+  --bg-ok:#e3fdf4; --bg-warn:#fff3dd; --bg-crit:#ffecec; --bg-info:#e0f8ff;
+  --ic-ok:#009a71; --ic-warn:#d36d00; --ic-crit:#ec3331; --ic-info:#00567a; --ic-unk:#757575;
+  --text:#555; --text-strong:#2e2e2e; --text-weak:#676767; --text-crit:#cc1f1a;
+  --bd-weak:rgba(0,0,0,.12); --bd:rgba(0,0,0,.36);
+  /* spacing scale (hpe.spacing.*) */
+  --s-hair:1px; --s-4xs:4px; --s-3xs:6px; --s-xxs:8px; --s-xs:12px; --s-s:16px; --s-m:24px; --s-l:32px; --s-xl:48px; --s-xxl:64px;
+  /* radii + containers */
+  --r-xs:4px; --r-s:6px; --r-m:12px; --c-small:256px; --c-medium:384px; --c-large:512px; --c-xlarge:768px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'HPE Graphik','Metric',Arial,sans-serif;background:var(--bg-back);color:var(--text);
+  font-size:1.125rem;line-height:1.5rem}                    /* text.medium = 18px/24px */
+.mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:.9rem}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+svg{display:block;flex:none}
+p,.t-s{font-size:1rem;line-height:1.25rem}                  /* text.small */
+.t-xs{font-size:.875rem;line-height:1rem}                   /* text.xsmall */
+.weak{color:var(--text-weak)} .strong{color:var(--text-strong)}
+.maxread{max-width:30em}                                     /* DS: text maxWidth 30em */
+
+/* â•â•â•â•â•â•â•â•â•â• review toolbar (not part of the product) â•â•â•â•â•â•â•â•â•â• */
+.review{position:sticky;top:0;z-index:60;background:#2e2e2e;color:#fff;padding:var(--s-xxs) var(--s-m);
+  display:flex;align-items:center;gap:var(--s-s);flex-wrap:wrap}
+.review b{font-size:1rem;letter-spacing:.02em}
+.review .pill{background:rgba(255,255,255,.12);border:none;color:#fff;font:inherit;font-size:.85rem;
+  padding:4px 12px;border-radius:9999px;cursor:pointer;white-space:nowrap}
+.review .pill.on{background:var(--brand);color:#08251c;font-weight:600}
+.review .hint{font-size:.8rem;opacity:.7;margin-left:auto}
+
+/* â•â•â•â•â•â•â•â•â•â• app chrome â•â•â•â•â•â•â•â•â•â• */
+header.global{display:flex;align-items:center;justify-content:space-between;gap:var(--s-m);
+  background:var(--bg-front);padding:var(--s-xxs) var(--s-m);position:sticky;top:38px;z-index:40}
+.brand{display:flex;align-items:center;gap:var(--s-xs)}
+.brand .svc{font-size:1.125rem;font-weight:600;color:var(--text-strong)}
+.runmeta{display:flex;align-items:center;gap:var(--s-xs);font-size:1rem}
+.runmeta .dot{color:var(--bd)}
+.shell{display:flex;min-height:70vh}
+nav.rail{width:18rem;flex:none;background:var(--bg-front);padding:var(--s-m) var(--s-xs)}
+.rgroup{margin-bottom:var(--s-m)}
+.rgroup h4{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-weak);font-weight:600;padding:0 10px var(--s-3xs)}
+.rstep{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--r-s);cursor:pointer}
+.rstep:hover{background:var(--bg-hover)}
+.rstep.cur{background:var(--bg-contrast);box-shadow:inset 3px 0 0 var(--primary-strong)}
+.rstep .lbl{font-size:1rem;color:var(--text)} .rstep.cur .lbl{font-weight:600;color:var(--text-strong)}
+.rstep .hint{font-size:.8rem;color:var(--text-weak)}
+main{flex:1;min-width:0}
+.wizbar{position:sticky;top:calc(38px + 48px);z-index:30;background:var(--bg-back);
+  display:flex;align-items:center;justify-content:space-between;padding:var(--s-xs) var(--s-m);border-bottom:1px solid var(--bd-weak)}
+.linkbtn{display:inline-flex;align-items:center;gap:var(--s-3xs);background:none;border:none;color:var(--text-primary);
+  font:inherit;font-size:1rem;font-weight:600;cursor:pointer;padding:var(--s-4xs) var(--s-3xs);border-radius:var(--r-s)}
+.linkbtn:hover{background:var(--bg-hover)} .linkbtn[disabled]{color:var(--text-weak);opacity:.5;cursor:default;background:none}
+.page{max-width:64rem;padding:var(--s-m) var(--s-m) var(--s-xl)}
+
+/* PageHeader: title + subtitle + status */
+.pagehead .of{font-size:.875rem;color:var(--text-weak)}
+.pagehead h1{font-size:2.25rem;line-height:2.5rem;font-weight:400;color:var(--text-strong);margin:var(--s-4xs) 0 var(--s-3xs)}
+.pagehead .sub{color:var(--text-weak);font-size:1.125rem;line-height:1.5rem;max-width:30em}
+.pagehead .st{margin-top:var(--s-xs)}
+
+/* status indicator: colour + icon + shape + content (4/4 WCAG) */
+.status{display:inline-flex;align-items:center;gap:7px;font-size:1rem;color:var(--text-strong);white-space:nowrap}
+.status.sm{font-size:.875rem}
+
+/* inline notification */
+.note{display:flex;gap:var(--s-xs);align-items:flex-start;border-radius:var(--r-s);padding:var(--s-xs) var(--s-s);margin-top:var(--s-m)}
+.note.warn{background:var(--bg-warn)} .note.ok{background:var(--bg-ok)} .note.crit{background:var(--bg-crit)} .note.info{background:var(--bg-info)}
+.note b{color:var(--text-strong);font-weight:600;font-size:1rem}
+.note p{margin-top:2px}
+.note .x{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-weak);font-size:1.1rem;line-height:1}
+
+/* layered surfaces â€” DS: separate with colour, avoid borders */
+.surface{background:var(--bg-front);border-radius:var(--r-m);padding:var(--s-s) var(--s-m) var(--s-m);margin-top:var(--s-m)}
+.surface h2{font-size:1.375rem;line-height:1.75rem;font-weight:500;color:var(--text-strong)}
+.surface .sub{font-size:1rem;color:var(--text-weak);margin-top:2px;max-width:30em}
+.tbar{display:flex;align-items:center;justify-content:space-between;gap:var(--s-xs);margin:var(--s-xs) 0}
+
+table.dt{width:100%;border-collapse:collapse;font-size:1rem}
+.dt th{text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-weak);font-weight:600;padding:var(--s-xxs) 10px;border-bottom:1px solid var(--bd-weak)}
+.dt td{padding:9px 10px;border-bottom:1px solid var(--bd-weak);vertical-align:middle}
+.dt tfoot td{border-bottom:none;border-top:1px solid var(--bd-weak);color:var(--text-weak);font-size:.9rem}
+.meta{display:inline-block;border-radius:var(--r-xs);padding:1px 8px;font-size:.85rem;background:var(--bg-contrast)}
+
+/* NameValueList */
+.nvl{display:grid;grid-template-columns:max-content 1fr;gap:var(--s-xxs) var(--s-m);font-size:1rem}
+.nvl dt{color:var(--text-weak)} .nvl dd{color:var(--text-strong)}
+
+/* form */
+.field{margin-top:var(--s-s);max-width:var(--c-large)}
+.field label{display:block;font-size:.875rem;color:var(--text-weak);margin-bottom:var(--s-4xs)}
+.field input,.field select{width:100%;font:inherit;font-size:1rem;padding:8px 12px;border:1px solid var(--bd);
+  border-radius:var(--r-s);background:var(--bg-front);color:var(--text-strong)}
+.field .help{font-size:.8rem;color:var(--text-weak);margin-top:var(--s-4xs)}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s-s);max-width:var(--c-xlarge)}
+.drop{border:2px dashed var(--bd);border-radius:var(--r-m);padding:var(--s-l);text-align:center;background:var(--bg-contrast)}
+
+/* buttons */
+.btn{border:none;border-radius:9999px;padding:5px 18px;min-height:36px;font:inherit;font-size:1rem;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--primary-strong);color:#fff} .btn.primary:hover{background:var(--primary-strong-hover)}
+.btn.secondary{background:none;border:2px solid var(--primary-strong);color:var(--text-primary);padding:3px 16px}
+.btn.ghost{background:none;border:1px solid var(--bd);color:var(--text);font-weight:500}
+.btn[disabled]{background:var(--bg-contrast);color:rgba(0,0,0,.24);cursor:default}
+.btn.sm{min-height:30px;font-size:.9rem;padding:3px 14px}
+.spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;
+  display:inline-block;vertical-align:-3px;margin-right:7px;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* wizard footer */
+.wizfoot{display:flex;align-items:center;justify-content:space-between;gap:var(--s-s);margin-top:var(--s-m);
+  padding-top:var(--s-m);border-top:1px solid var(--bd-weak)}
+.wizfoot .acts{display:flex;gap:var(--s-xs);align-items:center}
+
+/* verdict rows */
+.vrow{display:flex;align-items:center;gap:var(--s-xs);padding:9px 2px;border-bottom:1px solid var(--bd-weak)}
+.vrow:last-child{border-bottom:none}
+.vrow .h{color:var(--text-strong);font-weight:600;min-width:5rem;font-size:1rem}
+.vrow .d{color:var(--text-weak);font-size:.9rem}
+
+/* timeline */
+.tl{list-style:none;margin-top:var(--s-xs);border-left:2px solid var(--bd-weak);padding-left:var(--s-s)}
+.tl li{position:relative;padding:var(--s-4xs) 0;font-size:1rem}
+.tl li::before{content:"";position:absolute;left:calc(-1 * var(--s-s) - 5px);top:11px;width:8px;height:8px;border-radius:50%;background:var(--bd-weak)}
+.tl li.ok::before{background:var(--ic-ok)} .tl li.warn::before{background:var(--ic-warn)} .tl li.crit::before{background:var(--ic-crit)}
+.tl .t{color:var(--text-weak);font-size:.8rem;margin-right:10px;font-variant-numeric:tabular-nums}
+
+/* skeleton */
+.sk{background:linear-gradient(90deg,rgba(0,0,0,.05),rgba(0,0,0,.09),rgba(0,0,0,.05));background-size:200% 100%;
+  animation:shim 1.4s infinite;border-radius:var(--r-xs);height:14px}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* modal */
+.scrim{background:rgba(0,0,0,.12);border-radius:var(--r-m);padding:var(--s-l);display:flex;justify-content:center}
+.modal{background:var(--bg-front);border-radius:var(--r-m);padding:var(--s-m);max-width:30rem;box-shadow:0 6px 24px rgba(0,0,0,.14)}
+.modal h3{font-size:1.5rem;color:var(--text-strong);font-weight:500}
+.modal .foot{display:flex;justify-content:flex-end;gap:var(--s-xs);margin-top:var(--s-m)}
+
+/* selector cards (mode picker) */
+.selector{display:flex;gap:var(--s-xs);align-items:flex-start;padding:var(--s-s);border-radius:var(--r-m);
+  background:var(--bg-front);cursor:pointer;border:2px solid transparent}
+.selector.on{border-color:var(--primary-strong);background:var(--bg-ok)}
+.selector .ind{width:20px;height:20px;border-radius:50%;border:2px solid var(--bd);flex:none;margin-top:2px;
+  display:flex;align-items:center;justify-content:center}
+.selector.on .ind{border-color:var(--primary-strong)}
+.selector.on .ind::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--primary-strong)}
+
+.screen{display:none} .screen.on{display:block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s-s)}
+.chips{display:flex;gap:var(--s-xs);flex-wrap:wrap;margin-top:var(--s-xs)}
+.chip{border-radius:9999px;padding:3px 12px;font-size:.85rem;background:var(--bg-contrast)}
+.spec table{width:100%;border-collapse:collapse;font-size:1rem}
+.spec td{padding:7px 8px;border-bottom:1px solid var(--bd-weak);vertical-align:top}
+.spec td:first-child{color:var(--text-strong);font-weight:600;width:32%}
+</style>
+</head>
+<body>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â• REVIEW TOOLBAR (not part of the product) â•â•â•â•â•â•â•â•â•â•â• -->
+<div class="review">
+  <b>Mockups</b>
+  <button class="pill" data-go="prereq">1 Prerequisites</button>
+  <button class="pill" data-go="sheet">2 Sheet</button>
+  <button class="pill" data-go="mode">3 Mode</button>
+  <button class="pill" data-go="greenlake">4 GreenLake</button>
+  <button class="pill" data-go="cloudinit">5 Cloud Connectivity</button>
+  <button class="pill" data-go="dscc">6 DSCC</button>
+  <button class="pill" data-go="discover">7 Discovery</button>
+  <button class="pill" data-go="zoning">8 Zoning</button>
+  <button class="pill" data-go="builder">9a Builder</button>
+  <button class="pill" data-go="provision">9b Plan &amp; create</button>
+  <button class="pill" data-go="verify">10 Verify</button>
+  <button class="pill" data-go="asbuilt">11 As-built</button>
+  <button class="pill" data-go="finish">12 Finish</button>
+  <button class="pill" data-go="states">States</button>
+  <button class="pill" data-go="spec">Spec</button>
+  <span class="hint">click a screen Â· every state is real markup, nothing is wired</span>
+</div>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â• GLOBAL HEADER â€” HPE Element top-left (DS rule). No GreenLake badge (retired). â•â•â•â•â•â•â•â•â•â•â• -->
+<header class="global">
+  <div class="brand">
+    <svg width="40" height="20" viewBox="0 0 48 24" role="img" aria-label="HPE"><path fill-rule="evenodd" clip-rule="evenodd" d="M2 6h44v12H2V6zm3 3h38v6H5V9z" fill="#01a982"/></svg>
+    <span class="svc">Alletra MP B10000 Onboarding</span>
+  </div>
+  <div class="runmeta">
+    <span class="mono" id="hdr-serial">SGH123XYZ0</span><span class="dot">Â·</span>
+    <span class="strong">Onboard, then provision</span><span class="dot">Â·</span>
+    <span class="status sm" id="hdr-status"></span>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail" id="rail" aria-label="Steps"></nav>
+  <main>
+    <div class="wizbar">
+      <button class="linkbtn" id="prevbtn"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M14.5 5.5L8 12l6.5 6.5" fill="none" stroke="#006750" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Previous step</button>
+      <button class="linkbtn" onclick="go('states')">Cancel run</button>
+    </div>
+    <div class="page" id="pages">
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 1 Â· PREREQUISITES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-prereq">
+  <div class="pagehead"><div class="of">Step 1 of 12</div><h1>Prerequisites</h1>
+    <div class="sub">Check the workstation can reach HPE GreenLake and the array before you start.</div>
+    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+
+  <section class="surface">
+    <h2>Connectivity</h2>
+    <div class="sub">These endpoints must be reachable. Ask your network team to allow anything blocked.</div>
+    <div class="tbar"><span class="t-s weak">4 endpoints</span><button class="btn ghost sm">Test again</button></div>
+    <table class="dt">
+      <thead><tr><th>Endpoint</th><th>Purpose</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">sso.common.cloud.hpe.com</td><td>GreenLake sign-in</td><td><span class="status sm" data-st="done">Reachable</span></td></tr>
+        <tr><td class="mono">global.api.greenlake.hpe.com</td><td>Device registration</td><td><span class="status sm" data-st="done">Reachable</span></td></tr>
+        <tr><td class="mono">169.254.0.0/16</td><td>On-array Cloud Connectivity wizard</td><td><span class="status sm" data-st="done">Reachable</span></td></tr>
+        <tr><td class="mono">192.0.2.40:443</td><td>Array WSAPI</td><td><span class="status sm" data-st="failed">Blocked</span></td></tr>
+      </tbody>
+      <tfoot><tr><td colspan="3">3 reachable Â· 1 blocked</td></tr></tfoot>
+    </table>
+    <div class="note crit"><span data-icon="crit"></span><div><b>The array is not reachable yet.</b>
+      <p>Provisioning steps need port 443 to <span class="mono">192.0.2.40</span>. Initialisation steps will still run.</p></div></div>
+  </section>
+
+  <section class="surface">
+    <h2>Proxy</h2>
+    <div class="sub">Detected from the system, the same way your browser resolves it. Override only if this is wrong.</div>
+    <dl class="nvl" style="margin-top:var(--s-xs)">
+      <dt>Detected</dt><dd class="mono">http://proxy.example.net:8080</dd>
+      <dt>In use</dt><dd>Detected system proxy</dd>
+      <dt>Bypassed</dt><dd class="mono">localhost Â· 169.254.* Â· 192.0.2.40</dd>
+    </dl>
+    <div class="field"><label for="px">Manual override</label><input id="px" placeholder="http://host:port â€” leave empty to use the detected proxy"></div>
+  </section>
+
+  <section class="surface">
+    <h2>Workstation clock</h2>
+    <div class="sub">GreenLake rejects requests when the clock has drifted.</div>
+    <div style="display:flex;align-items:center;gap:var(--s-s);margin-top:var(--s-xs)">
+      <span class="status" data-st="done">Within 2 seconds of HPE time</span><button class="btn ghost sm">Sync now</button></div>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">Nothing here changes the array.</span>
+    <div class="acts"><button class="btn secondary">Download the sheet</button><button class="btn primary">Continue</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 2 Â· INITIALISATION SHEET â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-sheet">
+  <div class="pagehead"><div class="of">Step 2 of 12</div><h1>Initialisation sheet</h1>
+    <div class="sub">One workbook per array, filled completely. The mode you pick next decides which parts are used.</div>
+    <div class="st"><span class="status" data-st="done">Uploaded</span></div></div>
+
+  <section class="surface">
+    <h2>Upload the filled workbook</h2>
+    <div class="drop" style="margin-top:var(--s-xs)">
+      <div class="strong">Initialisation_sheet_SGH123XYZ0.xlsx</div>
+      <p class="weak" style="margin-top:var(--s-4xs)">Parsed 42 values across 5 tabs</p>
+      <div style="margin-top:var(--s-s);display:flex;gap:var(--s-xs);justify-content:center">
+        <button class="btn ghost sm">Replace file</button><button class="btn ghost sm">Download blank template</button></div>
+    </div>
+    <div class="note ok"><span data-icon="ok"></span><div><b>Sheet accepted.</b>
+      <p>Device passwords stay on this machine â€” they are never sent to the browser.</p></div></div>
+  </section>
+
+  <section class="surface">
+    <h2>Review what we read</h2>
+    <div class="sub">Check these against the sheet before creating the run.</div>
+    <div class="grid2" style="margin-top:var(--s-xs)">
+      <dl class="nvl">
+        <dt>Serial number</dt><dd class="mono">SGH123XYZ0</dd>
+        <dt>Product number</dt><dd class="mono">S0B84A</dd>
+        <dt>Management IP</dt><dd class="mono">192.0.2.40</dd>
+        <dt>Subnet mask</dt><dd class="mono">255.255.248.0</dd>
+        <dt>Gateway</dt><dd class="mono">192.0.2.254</dd>
+      </dl>
+      <dl class="nvl">
+        <dt>System name</dt><dd>lab-b10000-01</dd>
+        <dt>Customer</dt><dd>Contoso Manufacturing</dd>
+        <dt>Site</dt><dd>Bengaluru DC-2</dd>
+        <dt>DSCC region</dt><dd>jp1 (Japan)</dd>
+        <dt>Volumes to create</dt><dd>4</dd>
+      </dl>
+    </div>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">The run is created on the next step.</span>
+    <div class="acts"><button class="btn secondary">Test GreenLake sign-in</button><button class="btn primary">Continue</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 3 Â· MODE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-mode">
+  <div class="pagehead"><div class="of">Step 3 of 12</div><h1>Choose what to run</h1>
+    <div class="sub">The wizard shows only the steps your choice needs, so you can provision or verify an array that is already initialised.</div>
+    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+
+  <section class="surface">
+    <h2>Mode</h2>
+    <div style="display:flex;flex-direction:column;gap:var(--s-xxs);margin-top:var(--s-xs)">
+      <div class="selector"><div class="ind"></div><div><div class="strong">Full onboarding</div>
+        <p class="weak">GreenLake, Cloud Connectivity and DSCC, then verify. For a brand-new array.</p></div></div>
+      <div class="selector"><div class="ind"></div><div><div class="strong">Provision storage only</div>
+        <p class="weak">Discovery, zoning and provisioning on an array that is already initialised.</p></div></div>
+      <div class="selector on"><div class="ind"></div><div><div class="strong">Onboard, then provision</div>
+        <p class="weak">The whole chain end to end: initialise the array, then provision storage.</p></div></div>
+      <div class="selector"><div class="ind"></div><div><div class="strong">Verify only</div>
+        <p class="weak">A read-only check of the array configuration and status.</p></div></div>
+      <div class="selector"><div class="ind"></div><div><div class="strong">Custom</div>
+        <p class="weak">Pick exactly the steps to run.</p></div></div>
+    </div>
+    <div class="note info"><span data-icon="info"></span><div><b>This run will have 9 steps.</b>
+      <p>The mode is fixed once the run is created. Use Cancel run to start again with a different one.</p></div></div>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">Creating the run stores the sheet against this array.</span>
+    <div class="acts"><button class="btn primary">Create run</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 4 Â· GREENLAKE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-greenlake">
+  <div class="pagehead"><div class="of">Step 4 of 12</div><h1>GreenLake registration</h1>
+    <div class="sub">Registers the array in HPE GreenLake, assigns it to Data Services and applies the subscription.</div>
+    <div class="st"><span class="status" data-st="running">Running</span></div></div>
+
+  <section class="surface">
+    <h2>Progress</h2>
+    <ul class="tl">
+      <li class="ok"><span class="t">09:14:02</span>Signed in to HPE GreenLake</li>
+      <li class="ok"><span class="t">09:14:05</span>Found Data Services in ap-northeast</li>
+      <li class="ok"><span class="t">09:14:11</span>Added the subscription key</li>
+      <li class="ok"><span class="t">09:14:19</span>Registered device SGH123XYZ0</li>
+      <li><span class="t">09:14:22</span>Assigning the device to Data Servicesâ€¦</li>
+    </ul>
+    <div style="margin-top:var(--s-s);display:flex;gap:var(--s-s);align-items:center">
+      <div class="sk" style="width:60%"></div></div>
+  </section>
+
+  <section class="surface">
+    <h2>What this created</h2>
+    <dl class="nvl" style="margin-top:var(--s-xs)">
+      <dt>Device ID</dt><dd class="mono">d3f1a0c8-â€¦-9b21</dd>
+      <dt>Subscription</dt><dd class="mono">SUB-4471902</dd>
+      <dt>Region</dt><dd>ap-northeast (jp1)</dd>
+    </dl>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">Every write is checked first, so re-running is safe.</span>
+    <div class="acts"><button class="btn secondary">Run without writing</button>
+      <button class="btn primary" disabled><span class="spin"></span>Registeringâ€¦</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 5 Â· CLOUD CONNECTIVITY (operator gate) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-cloudinit">
+  <div class="pagehead"><div class="of">Step 5 of 12</div><h1>Cloud Connectivity</h1>
+    <div class="sub">Fills the array's on-box wizard with the network settings from your sheet, then connects it to GreenLake.</div>
+    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+
+  <div class="note warn"><span data-icon="warn"></span><div><b>Check the values in the browser, then press Submit there.</b>
+    <p>A browser window is open on the array's wizard with everything filled in. This tool waits for you â€” it will not submit for you.</p></div></div>
+
+  <section class="surface">
+    <h2>What was filled in</h2>
+    <div class="sub">Compare this against the array's Review screen before you submit.</div>
+    <div class="grid2" style="margin-top:var(--s-xs)">
+      <dl class="nvl"><dt>Management IP</dt><dd class="mono">192.0.2.40</dd>
+        <dt>Subnet mask</dt><dd class="mono">255.255.248.0</dd><dt>Gateway</dt><dd class="mono">192.0.2.254</dd></dl>
+      <dl class="nvl"><dt>DNS</dt><dd class="mono">192.0.2.10</dd>
+        <dt>NTP</dt><dd class="mono">ntp.example.net</dd><dt>Time zone</dt><dd>Asia/Kolkata</dd></dl>
+    </div>
+  </section>
+
+  <section class="surface">
+    <h2>Array address</h2>
+    <div class="sub">The link-local address changes every time the array boots, so paste the current one.</div>
+    <div class="field"><label for="ci">Cloud Connectivity URL</label>
+      <input id="ci" class="mono" value="https://169.254.184.89/cloudinit">
+      <div class="help">Find it with the bundled HPE Discovery Tool, or on the array's front panel.</div></div>
+    <div style="margin-top:var(--s-xs)"><button class="btn ghost sm">Open the Discovery Tool</button></div>
+  </section>
+
+  <section class="surface"><h2 style="font-size:1.125rem">Activity</h2>
+    <ul class="tl">
+      <li class="ok"><span class="t">09:21:40</span>Opened the array wizard</li>
+      <li class="ok"><span class="t">09:21:58</span>Filled the network settings</li>
+      <li class="warn"><span class="t">09:22:03</span>Waiting for you to submit in the browser</li>
+    </ul></section>
+
+  <div class="wizfoot"><span class="t-s weak">Nothing is applied to the array until you submit.</span>
+    <div class="acts"><button class="btn secondary">Fill again</button><button class="btn primary">I have submitted it</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 6 Â· DSCC â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-dscc">
+  <div class="pagehead"><div class="of">Step 6 of 12</div><h1>DSCC setup</h1>
+    <div class="sub">Drives the Data Services Cloud Console Set Up System wizard as far as the credential step.</div>
+    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+
+  <div class="note warn"><span data-icon="warn"></span><div><b>Add the array credential in the browser, then finish the wizard.</b>
+    <p>Everything up to the Credentials step is filled in. Add the secret yourself, continue through Review, submit, then mark this step done.</p></div></div>
+
+  <section class="surface">
+    <h2>Filled in for you</h2>
+    <dl class="nvl" style="margin-top:var(--s-xs)">
+      <dt>System name</dt><dd>lab-b10000-01</dd>
+      <dt>Country</dt><dd>India</dd>
+      <dt>Credential name</dt><dd class="mono">b10000-admin</dd>
+      <dt>Support contact</dt><dd>A. Operator Â· ops@contoso.example</dd>
+    </dl>
+    <div class="note info" style="margin-top:var(--s-s)"><span data-icon="info"></span><div>
+      <b>Why you add the secret.</b><p>The array password is never typed by this tool into a cloud console.</p></div></div>
+  </section>
+
+  <section class="surface">
+    <h2>Browser</h2>
+    <div class="sub">DSCC needs you signed in, so the tool attaches to a browser you control.</div>
+    <div style="display:flex;gap:var(--s-xs);margin-top:var(--s-xs);flex-wrap:wrap">
+      <button class="btn ghost sm">Open the DSCC browser</button><button class="btn ghost sm">Re-attach</button></div>
+    <div class="chips"><span class="chip">Attached Â· port 9222</span><span class="chip">Signed in as ops@contoso.example</span></div>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">Mark it done only after DSCC shows the system as added.</span>
+    <div class="acts"><button class="btn secondary">Run again</button><button class="btn primary">Mark DSCC complete</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 7 Â· DISCOVERY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-discover">
+  <div class="pagehead"><div class="of">Step 7 of 12</div><h1>Discovery</h1>
+    <div class="sub">Reads the array ports, the ESXi host adapters from vCenter, and which of them are logged in on each fabric. Read-only.</div>
+    <div class="st"><span class="status" data-st="done">Done</span></div></div>
+
+  <section class="surface">
+    <h2>Array target ports</h2>
+    <div class="tbar"><span class="t-s weak">4 Fibre Channel ports</span>
+      <div style="display:flex;gap:var(--s-xxs)"><button class="btn ghost sm">Manage columns</button><button class="btn ghost sm">Export</button></div></div>
+    <table class="dt">
+      <thead><tr><th>Port</th><th>WWPN</th><th>Fabric</th><th>Link</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">0:3:1</td><td class="mono">20310002AC000000</td><td>Odd (F1)</td><td><span class="status sm" data-st="done">Ready</span></td></tr>
+        <tr><td class="mono">0:3:2</td><td class="mono">20320002AC000000</td><td>Even (F2)</td><td><span class="status sm" data-st="done">Ready</span></td></tr>
+        <tr><td class="mono">1:3:1</td><td class="mono">21310002AC000000</td><td>Odd (F1)</td><td><span class="status sm" data-st="done">Ready</span></td></tr>
+        <tr><td class="mono">1:3:2</td><td class="mono">21320002AC000000</td><td>Even (F2)</td><td><span class="status sm" data-st="failed">Loss of sync</span></td></tr>
+      </tbody>
+      <tfoot><tr><td colspan="4">3 ready Â· 1 needs a cable or switch port check</td></tr></tfoot>
+    </table>
+  </section>
+
+  <section class="surface">
+    <h2>Hosts from vCenter</h2>
+    <div class="sub">Which adapters are logged in tells you what is safe to provision to.</div>
+    <table class="dt" style="margin-top:var(--s-xs)">
+      <thead><tr><th>Host</th><th>OS</th><th>Adapters</th><th>Fabric logins</th></tr></thead>
+      <tbody>
+        <tr><td>esx1</td><td>VMware ESXi 8.0 U3</td><td>2</td><td><span class="status sm" data-st="done">Both fabrics</span></td></tr>
+        <tr><td>esx2</td><td>VMware ESXi 8.0 U3</td><td>2</td><td><span class="status sm" data-st="needs">Odd fabric only</span></td></tr>
+        <tr><td>esx3</td><td>VMware ESXi 8.0 U3</td><td>2</td><td><span class="status sm" data-st="notstarted">Not logged in</span></td></tr>
+      </tbody>
+      <tfoot><tr><td colspan="4">3 hosts Â· 6 adapters Â· 1 host ready on both fabrics</td></tr></tfoot>
+    </table>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">Discovery is saved with the run, so a restart will not lose it.</span>
+    <div class="acts"><button class="btn secondary">Run discovery again</button><button class="btn primary">Continue</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 8 Â· ZONING â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-zoning">
+  <div class="pagehead"><div class="of">Step 8 of 12</div><h1>SAN zoning</h1>
+    <div class="sub">Checks the zoning the array can see and drafts the commands for your SAN team. This tool never writes to a switch.</div>
+    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+
+  <div class="note warn"><span data-icon="warn"></span><div><b>Two hosts are missing zones on the even fabric.</b>
+    <p>Send the draft below to the SAN team. Re-check once they have applied it.</p></div></div>
+
+  <section class="surface">
+    <h2>What the array can see</h2>
+    <table class="dt" style="margin-top:var(--s-xs)">
+      <thead><tr><th>Host</th><th>Odd fabric (F1)</th><th>Even fabric (F2)</th></tr></thead>
+      <tbody>
+        <tr><td>esx1</td><td><span class="status sm" data-st="done">Zoned</span></td><td><span class="status sm" data-st="done">Zoned</span></td></tr>
+        <tr><td>esx2</td><td><span class="status sm" data-st="done">Zoned</span></td><td><span class="status sm" data-st="failed">Missing</span></td></tr>
+        <tr><td>esx3</td><td><span class="status sm" data-st="done">Zoned</span></td><td><span class="status sm" data-st="failed">Missing</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="surface">
+    <h2>Draft for the SAN team</h2>
+    <div class="sub">Single-initiator, single-target zones added to the active configuration on <span class="mono">192.0.2.52</span>.</div>
+    <div class="tbar"><span class="t-s weak">Even fabric (F2) Â· 4 commands</span>
+      <div style="display:flex;gap:var(--s-xxs)"><button class="btn ghost sm">Copy</button><button class="btn ghost sm">Download</button></div></div>
+    <pre class="mono" style="background:var(--bg-contrast);padding:var(--s-s);border-radius:var(--r-s);overflow:auto;line-height:1.6">alicreate "BLR_esx2_HBA1", "10:00:00:00:c9:aa:bb:02"
+zonecreate "BLR_esx2_HBA1__b10000_1_3_2", "BLR_esx2_HBA1;b10000_1_3_2"
+cfgadd "F2_CFG", "BLR_esx2_HBA1__b10000_1_3_2"
+cfgenable "F2_CFG"</pre>
+    <div class="note info"><span data-icon="info"></span><div><b>Have them run these in a change window.</b>
+      <p><span class="mono">cfgenable</span> reloads the active configuration on a shared fabric.</p></div></div>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">Provisioning can continue â€” exports go live when zoning lands.</span>
+    <div class="acts"><button class="btn secondary">Check again</button><button class="btn primary">Continue anyway</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 9a Â· BUILDER â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-builder">
+  <div class="pagehead"><div class="of">Step 9 of 12</div><h1>Provision storage</h1>
+    <div class="sub">Compose what to create from the objects discovered on the array and the ones in your sheet.</div>
+    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+
+  <section class="surface">
+    <h2>Host sets</h2>
+    <div class="sub">Group the hosts that should see the same volumes â€” usually one cluster.</div>
+    <table class="dt" style="margin-top:var(--s-xs)">
+      <thead><tr><th style="width:34%">Host set</th><th>Members</th><th style="width:8%"></th></tr></thead>
+      <tbody>
+        <tr><td class="mono">HS_PROD</td>
+          <td><div class="chips" style="margin:0"><span class="chip">esx1 âœ•</span><span class="chip">esx2 âœ•</span>
+            <button class="btn ghost sm">Add host</button></div></td>
+          <td><button class="btn ghost sm">Remove</button></td></tr>
+      </tbody>
+    </table>
+    <button class="btn ghost sm" style="margin-top:var(--s-xs)">Add host set</button>
+    <div class="note warn"><span data-icon="warn"></span><div><b>esx3 is not logged in on either fabric.</b>
+      <p>You can still add it â€” the export goes live when the host is powered on and zoned.</p></div></div>
+  </section>
+
+  <section class="surface">
+    <h2>Volumes</h2>
+    <table class="dt" style="margin-top:var(--s-xs)">
+      <thead><tr><th>Name</th><th>Size</th><th>Type</th><th>CPG</th><th>Volume set</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">VOL_SQL_01</td><td>500 GiB</td><td>Thin</td><td class="mono">SSD_r6</td><td class="mono">VVS_SQL</td></tr>
+        <tr><td class="mono">VOL_SQL_02</td><td>500 GiB</td><td>Thin</td><td class="mono">SSD_r6</td><td class="mono">VVS_SQL</td></tr>
+        <tr><td class="mono">VOL_LOG_01</td><td>200 GiB</td><td>Thin, reduced</td><td class="mono">SSD_r6</td><td>â€”</td></tr>
+      </tbody>
+      <tfoot><tr><td colspan="5">3 volumes Â· 1.2 TiB from the sheet</td></tr></tfoot>
+    </table>
+  </section>
+
+  <section class="surface">
+    <h2>Exports</h2>
+    <div class="sub">Which volumes each host set can see. Leave the LUN empty and the array assigns one.</div>
+    <table class="dt" style="margin-top:var(--s-xs)">
+      <thead><tr><th>Source</th><th>Target</th><th style="width:15%">LUN</th><th style="width:8%"></th></tr></thead>
+      <tbody>
+        <tr><td><span class="meta">volume set</span> <span class="mono">VVS_SQL</span></td>
+            <td><span class="meta">host set</span> <span class="mono">HS_PROD</span></td>
+            <td class="weak">Automatic</td><td><button class="btn ghost sm">Remove</button></td></tr>
+        <tr><td><span class="meta">volume</span> <span class="mono">VOL_LOG_01</span></td>
+            <td><span class="meta">host set</span> <span class="mono">HS_PROD</span></td>
+            <td class="mono">7</td><td><button class="btn ghost sm">Remove</button></td></tr>
+      </tbody>
+    </table>
+    <button class="btn ghost sm" style="margin-top:var(--s-xs)">Add export</button>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">Nothing is created yet â€” the next screen shows exactly what will be.</span>
+    <div class="acts"><button class="btn secondary">Reset to sheet</button><button class="btn primary">Review the plan</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 9b Â· PLAN & CREATE â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-provision">
+  <div class="pagehead"><div class="of">Step 9 of 12</div><h1>Provision storage</h1>
+    <div class="sub">Creates the hosts, host sets, volumes and exports on the array. Nothing is written until you confirm.</div>
+    <div class="st"><span class="status" data-st="needs">Needs you</span></div></div>
+
+  <div class="note warn"><span data-icon="warn"></span><div><b>Review the plan, then create.</b>
+    <p>Nothing has been written to the array yet. Creating is idempotent â€” anything that already exists is skipped.</p></div></div>
+
+  <section class="surface">
+    <h2>Plan</h2>
+    <div class="sub">What will be created on <span class="mono">192.0.2.40</span>.</div>
+    <div class="tbar"><span class="t-s weak">8 actions</span><button class="btn ghost sm">Export plan</button></div>
+    <table class="dt">
+      <thead><tr><th>Kind</th><th>Name</th><th>Action</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td><span class="meta">host</span></td><td class="mono">esx1</td><td><span class="status sm" data-st="create">Create</span></td><td>2 WWPNs Â· VMware persona</td></tr>
+        <tr><td><span class="meta">host</span></td><td class="mono">esx2</td><td><span class="status sm" data-st="exists">Exists</span></td><td>left untouched</td></tr>
+        <tr><td><span class="meta">host set</span></td><td class="mono">HS_PROD</td><td><span class="status sm" data-st="create">Create</span></td><td>esx1, esx2</td></tr>
+        <tr><td><span class="meta">volume</span></td><td class="mono">VOL_SQL_01</td><td><span class="status sm" data-st="create">Create</span></td><td>500 GiB Â· thin Â· SSD_r6</td></tr>
+        <tr><td><span class="meta">volume</span></td><td class="mono">VOL_SQL_02</td><td><span class="status sm" data-st="create">Create</span></td><td>500 GiB Â· thin Â· SSD_r6</td></tr>
+        <tr><td><span class="meta">volume</span></td><td class="mono">VOL_LOG_01</td><td><span class="status sm" data-st="create">Create</span></td><td>200 GiB Â· reduced Â· SSD_r6</td></tr>
+        <tr><td><span class="meta">volume set</span></td><td class="mono">VVS_SQL</td><td><span class="status sm" data-st="create">Create</span></td><td>VOL_SQL_01, VOL_SQL_02</td></tr>
+        <tr><td><span class="meta">export</span></td><td class="mono">VVS_SQL â†’ HS_PROD</td><td><span class="status sm" data-st="create">Create</span></td><td>LUN assigned by the array</td></tr>
+      </tbody>
+      <tfoot><tr><td colspan="4">7 to create Â· 1 already exists</td></tr></tfoot>
+    </table>
+  </section>
+
+  <section class="surface">
+    <h2>Path check</h2>
+    <div class="sub">Run after creating. It reads the array back and reports only â€” it never blocks the run.</div>
+    <div style="margin-top:var(--s-xs)">
+      <div class="vrow"><span class="h">esx1</span><span class="status sm" data-st="done">Live</span><span class="d">2 of 2 adapters Â· both fabrics</span></div>
+      <div class="vrow"><span class="h">esx2</span><span class="status sm" data-st="needs">Partial</span><span class="d">1 of 2 adapters Â· odd fabric only â€” the even-fabric zone is missing</span></div>
+      <div class="vrow"><span class="h">esx3</span><span class="status sm" data-st="failed">No path</span><span class="d">the export exists; it goes live when the host is on and zoned</span></div>
+    </div>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">Re-running skips whatever already exists.</span>
+    <div class="acts"><button class="btn secondary">Edit composition</button><button class="btn primary">Create storage objects</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 10 Â· VERIFY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-verify">
+  <div class="pagehead"><div class="of">Step 10 of 12</div><h1>Verify configuration</h1>
+    <div class="sub">Signs in to the array over SSH and compares what is running against your sheet. Read-only.</div>
+    <div class="st"><span class="status" data-st="done">Done Â· 1 difference</span></div></div>
+
+  <section class="surface">
+    <h2>Array sign-in</h2>
+    <div class="fgrid" style="margin-top:var(--s-xs)">
+      <div class="field" style="margin-top:0"><label for="u">User name</label><input id="u" value="3paradm"></div>
+      <div class="field" style="margin-top:0"><label for="p">Password</label><input id="p" type="password" value="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢">
+        <div class="help">Used for this check only. It is never stored.</div></div>
+    </div>
+  </section>
+
+  <section class="surface">
+    <h2>Configuration</h2>
+    <table class="dt" style="margin-top:var(--s-xs)">
+      <thead><tr><th>Setting</th><th>Expected</th><th>On the array</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>Management IP</td><td class="mono">192.0.2.40</td><td class="mono">192.0.2.40</td><td><span class="status sm" data-st="done">Match</span></td></tr>
+        <tr><td>Gateway</td><td class="mono">192.0.2.254</td><td class="mono">192.0.2.254</td><td><span class="status sm" data-st="done">Match</span></td></tr>
+        <tr><td>NTP server</td><td class="mono">ntp.example.net</td><td class="mono">pool.ntp.org</td><td><span class="status sm" data-st="needs">Differs</span></td></tr>
+        <tr><td>Time zone</td><td>Asia/Kolkata</td><td>Asia/Kolkata</td><td><span class="status sm" data-st="done">Match</span></td></tr>
+      </tbody>
+      <tfoot><tr><td colspan="4">3 match Â· 1 differs</td></tr></tfoot>
+    </table>
+  </section>
+
+  <section class="surface">
+    <h2>Array status</h2>
+    <div class="sub">Reported by the array's own status check.</div>
+    <table class="dt" style="margin-top:var(--s-xs)">
+      <thead><tr><th>Component</th><th>Summary</th><th>Count</th></tr></thead>
+      <tbody>
+        <tr><td>Alert</td><td>New alerts</td><td>2</td></tr>
+        <tr><td>Cage</td><td>All cages normal</td><td>0</td></tr>
+        <tr><td>Physical drive</td><td>All drives normal</td><td>0</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">A difference here never fails the run â€” it is for you to judge.</span>
+    <div class="acts"><button class="btn secondary">Check again</button><button class="btn primary">Continue</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 11 Â· AS-BUILT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-asbuilt">
+  <div class="pagehead"><div class="of">Step 11 of 12</div><h1>As-built document</h1>
+    <div class="sub">Reads the array's finished configuration and writes it into the HPE Word template as your handover document.</div>
+    <div class="st"><span class="status" data-st="done">Ready to download</span></div></div>
+
+  <section class="surface">
+    <h2>Cover details</h2>
+    <div class="sub">The only two things the array cannot tell us.</div>
+    <div class="fgrid" style="margin-top:var(--s-xs)">
+      <div class="field" style="margin-top:0"><label for="cn">Customer name</label><input id="cn" value="Contoso Manufacturing"></div>
+      <div class="field" style="margin-top:0"><label for="si">Site</label><input id="si" value="Bengaluru DC-2"></div>
+    </div>
+  </section>
+
+  <section class="surface">
+    <h2>What went into the document</h2>
+    <div class="grid2" style="margin-top:var(--s-xs)">
+      <dl class="nvl"><dt>System name</dt><dd>lab-b10000-01</dd><dt>Model</dt><dd>HPE Alletra Storage MP</dd>
+        <dt>Serial number</dt><dd class="mono">SGH123XYZ0</dd><dt>Controllers</dt><dd>2</dd></dl>
+      <dl class="nvl"><dt>Software</dt><dd>10.5.51</dd><dt>Raw capacity</dt><dd>36,608,000 MiB</dd>
+        <dt>Drives</dt><dd>24 Ã— 3.84 TB NVMe SSD</dd><dt>Host ports</dt><dd>4 Ã— 32 Gb FC</dd></dl>
+    </div>
+    <div class="note ok" style="margin-top:var(--s-s)"><span data-icon="ok"></span><div>
+      <b>as-built-SGH123XYZ0.docx is ready â€” 412 KB.</b>
+      <p>Inventory and status tables are included, formatted to the HPE template.</p></div></div>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">Read-only â€” generating this changes nothing on the array.</span>
+    <div class="acts"><button class="btn secondary">Generate again</button><button class="btn primary">Download document</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• 12 Â· FINISH â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-finish">
+  <div class="pagehead"><div class="of">Step 12 of 12</div><h1>Finish</h1>
+    <div class="sub">Everything this run did, and what is left for someone else to do.</div>
+    <div class="st"><span class="status" data-st="done">Run complete</span></div></div>
+
+  <div class="note ok"><span data-icon="ok"></span><div><b>SGH123XYZ0 is onboarded and provisioned.</b>
+    <p>It is registered in GreenLake, set up in DSCC, and serving 3 volumes to 2 hosts.</p></div></div>
+
+  <section class="surface">
+    <h2>Summary</h2>
+    <div class="grid2" style="margin-top:var(--s-xs)">
+      <dl class="nvl"><dt>Array</dt><dd class="mono">SGH123XYZ0</dd><dt>Customer</dt><dd>Contoso Manufacturing</dd>
+        <dt>Site</dt><dd>Bengaluru DC-2</dd><dt>Started</dt><dd>25 Jul 2026, 09:12</dd></dl>
+      <dl class="nvl"><dt>Finished</dt><dd>25 Jul 2026, 10:04</dd><dt>Steps run</dt><dd>9 of 9</dd>
+        <dt>Created</dt><dd>3 volumes Â· 1 host set Â· 2 exports</dd><dt>Document</dt><dd>as-built-SGH123XYZ0.docx</dd></dl>
+    </div>
+  </section>
+
+  <section class="surface">
+    <h2>Still to do</h2>
+    <div class="sub">Handed to other teams â€” this tool does not do these.</div>
+    <div style="margin-top:var(--s-xs)">
+      <div class="vrow"><span class="status sm" data-st="needs">SAN team</span><span class="d">Apply the even-fabric zones for esx2 and esx3, then re-check paths.</span></div>
+      <div class="vrow"><span class="status sm" data-st="needs">Virtualisation team</span><span class="d">Rescan the adapters in vCenter and create the datastores.</span></div>
+      <div class="vrow"><span class="status sm" data-st="notstarted">Optional</span><span class="d">Set the NTP server on the array to match the sheet.</span></div>
+    </div>
+  </section>
+
+  <div class="wizfoot"><span class="t-s weak">The run stays on this machine until you start a new one.</span>
+    <div class="acts"><button class="btn secondary">Download document</button><button class="btn primary">Start another array</button></div></div>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• STATES & PATTERNS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-states">
+  <div class="pagehead"><h1>States and patterns</h1>
+    <div class="sub">Every state a step can be in, and the shared pieces each screen is built from.</div></div>
+
+  <section class="surface">
+    <h2>Step status</h2>
+    <div class="sub">Colour, icon, shape and words â€” WCAG 2.1 needs at least three of the four, so status never depends on colour alone.</div>
+    <div style="display:flex;gap:var(--s-m);flex-wrap:wrap;margin-top:var(--s-s)">
+      <span class="status" data-st="notstarted">Not started</span>
+      <span class="status" data-st="running">Running</span>
+      <span class="status" data-st="needs">Needs you</span>
+      <span class="status" data-st="done">Done</span>
+      <span class="status" data-st="failed">Failed</span>
+    </div>
+  </section>
+
+  <section class="surface">
+    <h2>Notifications</h2>
+    <div class="note ok"><span data-icon="ok"></span><div><b>Done.</b><p>Confirms something finished.</p></div>
+      <button class="x">âœ•</button></div>
+    <div class="note info"><span data-icon="info"></span><div><b>Context.</b><p>Explains why a step behaves as it does.</p></div>
+      <button class="x">âœ•</button></div>
+    <div class="note warn"><span data-icon="warn"></span><div><b>Needs you.</b><p>Says what to do and where.</p></div></div>
+    <div class="note crit"><span data-icon="crit"></span><div><b>Failed â€” and what to try.</b>
+      <p class="mono t-xs" style="margin-top:6px">WSAPI 503 Â· the array is still starting its services</p>
+      <p>Wait for the array to finish booting, then run the step again.</p></div></div>
+  </section>
+
+  <section class="surface">
+    <h2>Failed step</h2>
+    <div class="sub">The message says what broke, in plain words, with the next move.</div>
+    <div class="wizfoot" style="border-top:none;padding-top:var(--s-xs)">
+      <span class="t-s weak">Nothing was written â€” safe to retry.</span>
+      <div class="acts"><button class="btn secondary">Show technical detail</button><button class="btn primary">Try again</button></div></div>
+  </section>
+
+  <section class="surface">
+    <h2>Empty and loading</h2>
+    <div class="grid2" style="margin-top:var(--s-xs)">
+      <div style="background:var(--bg-contrast);border-radius:var(--r-s);padding:var(--s-m);text-align:center">
+        <div class="strong">No hosts discovered yet</div>
+        <p class="weak" style="margin-top:var(--s-4xs)">Run discovery and the hosts vCenter knows about will appear here.</p>
+        <button class="btn secondary sm" style="margin-top:var(--s-xs)">Run discovery</button></div>
+      <div style="padding:var(--s-xs)">
+        <div class="sk" style="width:45%"></div><div class="sk" style="width:80%;margin-top:10px"></div>
+        <div class="sk" style="width:65%;margin-top:10px"></div><div class="sk" style="width:72%;margin-top:10px"></div>
+        <p class="t-xs weak" style="margin-top:var(--s-xs)">Skeletons hold the layout while data loads.</p></div>
+    </div>
+  </section>
+
+  <section class="surface">
+    <h2>Cancel run</h2>
+    <div class="sub">A double confirmation, because the run cannot be brought back.</div>
+    <div class="scrim" style="margin-top:var(--s-xs)">
+      <div class="modal"><h3>Discard this run?</h3>
+        <p style="margin-top:var(--s-3xs)">The array keeps everything already created. This clears the run from the tool so you can start a new one.</p>
+        <div class="foot"><button class="btn secondary">Keep run</button><button class="btn primary">Discard run</button></div></div>
+    </div>
+  </section>
+</section>
+
+<!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SPEC â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+<section class="screen" id="s-spec">
+  <div class="pagehead"><h1>Design spec</h1>
+    <div class="sub">The rules these mockups follow, scraped from design-system.hpe.design and the installed hpe-design-tokens.</div></div>
+
+  <section class="surface">
+    <h2>Brand</h2>
+    <div class="spec"><table>
+      <tr><td>HPE Element, top left</td><td>The DS says: â€œAlways use the HPE Element at the top-left of your service or product experience.â€ That is the green rectangle in our header.</td></tr>
+      <tr><td>HPE logo</td><td>The full wordmark, for brand-establishing or low-density layouts, top-left or bottom-left. Shown below â€” this is the file the design system itself serves.</td></tr>
+      <tr><td>GreenLake badge removed</td><td>Retired: â€œshould not be added to any new material.â€ Our old header used it.</td></tr>
+    </table></div>
+    <div style="margin-top:var(--s-s);background:var(--bg-contrast);border-radius:var(--r-s);padding:var(--s-s);display:flex;gap:var(--s-l);align-items:center;flex-wrap:wrap">
+      <svg width="150" height="43" viewBox="0 0 504 144" role="img" aria-label="Hewlett Packard Enterprise">
+        <path d="M391.2 81.27v35.46H504V144H362.4V54H504v27.27H391.2z" fill="#01a982"/>
+        <path d="M276.673 0h-89.254v144h28.8v-36.607h60.008c37.914 0 59.692-21.59 59.692-53.395C335.918 21.985 314.14 0 276.673 0zm-1.881 79.793h-58.573V27.27h58.573c22.679 0 31.281 10.484 31.281 26.728 0 16.079-8.602 25.795-31.281 25.795zM391.2 40.63h-28.8V0H504v27.27H391.2v13.36zM151.2 0v144h-28.8V84.984H28.8V144H0V0h28.8v57.384h93.6V0h28.8z"/></svg>
+      <svg width="80" height="40" viewBox="0 0 48 24" role="img" aria-label="HPE Element"><path fill-rule="evenodd" clip-rule="evenodd" d="M2 6h44v12H2V6zm3 3h38v6H5V9z" fill="#01a982"/></svg>
+      <div class="t-s weak">Full logo (HPE_logo_full-clr_pos_rgb.svg) Â· the Element</div>
+    </div>
+  </section>
+
+  <section class="surface">
+    <h2>Tokens in use</h2>
+    <div class="spec"><table>
+      <tr><td>Primary action</td><td><span class="mono">background.primary-strong #008567</span> with <span class="mono">text.onPrimaryStrong</span>. Brand green <span class="mono">#01a982</span> is the Element only.</td></tr>
+      <tr><td>Status icons</td><td><span class="mono">ok #009a71 Â· warning #d36d00 Â· critical #ec3331 Â· info #00567a Â· unknown #757575</span></td></tr>
+      <tr><td>Status surfaces</td><td><span class="mono">ok #e3fdf4 Â· warning #fff3dd Â· critical #ffecec Â· info #e0f8ff</span></td></tr>
+      <tr><td>Text</td><td><span class="mono">#555 default Â· #2e2e2e strong Â· #676767 weak</span>; body is text.medium 1.125rem/1.5rem; reading width capped at 30em</td></tr>
+      <tr><td>Spacing</td><td>4, 6, 8, 12, 16, 24, 32, 48, 64, 96 px â€” t-shirt tokens only, no ad-hoc pixels</td></tr>
+      <tr><td>Buttons</td><td>pill <span class="mono">9999px</span>, weight 600, padding 5/18, min height 36px</td></tr>
+      <tr><td>Focus</td><td><span class="mono">#004233</span>, 2px, 2px offset</td></tr>
+    </table></div>
+  </section>
+
+  <section class="surface">
+    <h2>Rules these screens follow</h2>
+    <div class="spec"><table>
+      <tr><td>Wizard anatomy</td><td>Sticky bar with Previous step and Cancel run; â€œStep X of Yâ€; the primary action sits far right in a footer that never moves.</td></tr>
+      <tr><td>Never say â€œhealthâ€</td><td>The DS forbids it in UI copy â€” always â€œstatusâ€. The old â€œVerify config &amp; healthâ€ step is now â€œVerify configurationâ€.</td></tr>
+      <tr><td>Status = 3 of 4 signals</td><td>Colour, icon, shape, words. Ours carry all four.</td></tr>
+      <tr><td>Layered backgrounds</td><td>One approach app-wide; sections separated by surface colour and spacing, not borders.</td></tr>
+      <tr><td>Verb + noun buttons</td><td>â€œCreate storage objectsâ€, â€œRun discoveryâ€, â€œDownload documentâ€. Create means â€œsubmit input and make the objectâ€.</td></tr>
+      <tr><td>DataTable</td><td>Controls above the table, a summary count in the footer.</td></tr>
+      <tr><td>NameValueList</td><td>For metadata, sentence-case names â€” used for parsed sheet values and array facts.</td></tr>
+      <tr><td>One spinner</td><td>Never more than one on a screen; skeletons hold layout while data loads.</td></tr>
+      <tr><td>Voice</td><td>Plain English, active, short, roughly grade 7, sentence case, no â€œpleaseâ€.</td></tr>
+    </table></div>
+  </section>
+
+  <section class="surface">
+    <h2>Where we deliberately differ</h2>
+    <div class="spec"><table>
+      <tr><td>Not a fullscreen modal</td><td>The DS wizard is a modal over a page. Ours is the whole application â€” there is no page behind it.</td></tr>
+      <tr><td>We keep a step rail</td><td>The DS wizard is linear and forward-only. Our steps are chosen by mode, gated by the operator and revisitable, so the rail is the only thing showing scope and position. We add â€œStep X of Yâ€ so the progress rule is still met.</td></tr>
+      <tr><td>Cancel means discard the run</td><td>There is nothing to return to, so Cancel run ends the run â€” and gets the DS double confirmation.</td></tr>
+    </table></div>
+  </section>
+</section>
+
+    </div>
+  </main>
+</div>
+
+<script>
+/* â•â•â• status indicator: icon + shape per status (never colour alone) â•â•â• */
+const ICONS = {
+  done:  '<svg width="17" height="17" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#009a71"/><path d="M8 12.5l2.5 2.5L16 9.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  needs: '<svg width="17" height="17" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5H2.5z" fill="#d36d00"/><path d="M12 9.5v4.2" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1.15" fill="#fff"/></svg>',
+  failed:'<svg width="17" height="17" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ec3331"/><path d="M9 9l6 6M15 9l-6 6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  running:'<svg width="17" height="17" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#00567a" stroke-width="2"/><path d="M12 6.5v5.5l3.5 2" fill="none" stroke="#00567a" stroke-width="2" stroke-linecap="round"/></svg>',
+  notstarted:'<svg width="17" height="17" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="#757575" stroke-width="2"/></svg>',
+  create:'<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#009a71"/><path d="M12 7.5v9M7.5 12h9" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  exists:'<svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#757575" stroke-width="2"/><path d="M8 12h8" stroke="#757575" stroke-width="2" stroke-linecap="round"/></svg>',
+  ok:'<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#009a71"/><path d="M8 12.5l2.5 2.5L16 9.5" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  warn:'<svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5H2.5z" fill="#d36d00"/><path d="M12 9.5v4.2" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1.15" fill="#fff"/></svg>',
+  crit:'<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ec3331"/><path d="M9 9l6 6M15 9l-6 6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  info:'<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#00567a"/><path d="M12 11v5.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7.9" r="1.2" fill="#fff"/></svg>'
+};
+document.querySelectorAll('[data-st]').forEach(el=>{ el.insertAdjacentHTML('afterbegin', ICONS[el.dataset.st]||''); });
+document.querySelectorAll('[data-icon]').forEach(el=>{ el.outerHTML = ICONS[el.dataset.icon]||''; });
+
+/* â•â•â• steps + rail â•â•â• */
+const STEPS = [
+  {k:'prereq',    g:'Prepare',    l:'Prerequisites',        st:'needs'},
+  {k:'sheet',     g:'Prepare',    l:'Initialisation sheet', st:'done'},
+  {k:'mode',      g:'Prepare',    l:'Mode',                 st:'done',  h:'Onboard, then provision'},
+  {k:'greenlake', g:'Initialize', l:'GreenLake registration', st:'running'},
+  {k:'cloudinit', g:'Initialize', l:'Cloud Connectivity',   st:'needs'},
+  {k:'dscc',      g:'Initialize', l:'DSCC setup',           st:'needs'},
+  {k:'discover',  g:'Provision',  l:'Discovery',            st:'done',  h:'4 ports Â· 6 adapters'},
+  {k:'zoning',    g:'Provision',  l:'SAN zoning',           st:'needs', h:'2 zones missing'},
+  {k:'builder',   g:'Provision',  l:'Provision storage',    st:'needs', h:'plan ready'},
+  {k:'provision', g:'Provision',  l:'Provision storage',    st:'needs', h:'plan ready', hide:true},
+  {k:'verify',    g:'Document',   l:'Verify configuration', st:'done',  h:'1 difference'},
+  {k:'asbuilt',   g:'Document',   l:'As-built document',    st:'done',  h:'ready'},
+  {k:'finish',    g:'Document',   l:'Finish',               st:'notstarted'}
+];
+function renderRail(active){
+  const groups = [];
+  STEPS.filter(s=>!s.hide).forEach(s=>{ let g = groups.find(x=>x.name===s.g); if(!g){g={name:s.g,items:[]};groups.push(g);} g.items.push(s); });
+  document.getElementById('rail').innerHTML = groups.map(g=>
+    '<div class="rgroup"><h4>'+g.name+'</h4>'+g.items.map(s=>{
+      const cur = (s.k===active) || (active==='provision' && s.k==='builder');
+      return '<div class="rstep'+(cur?' cur':'')+'" onclick="go(\''+s.k+'\')">'+(ICONS[s.st]||'')+
+        '<div><div class="lbl">'+s.l+'</div>'+(s.h?'<div class="hint">'+s.h+'</div>':'')+'</div></div>';
+    }).join('')+'</div>').join('');
+}
+function go(k){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  const el = document.getElementById('s-'+k); if(el) el.classList.add('on');
+  document.querySelectorAll('.review .pill').forEach(p=>p.classList.toggle('on', p.dataset.go===k));
+  renderRail(k);
+  const step = STEPS.find(s=>s.k===k);
+  document.getElementById('hdr-status').innerHTML = (ICONS[step?step.st:'running']||'') +
+    (k==='finish' ? 'Run complete' : 'Run in progress');
+  document.getElementById('prevbtn').disabled = (k==='prereq');
+  window.scrollTo({top:0});
+}
+document.querySelectorAll('.review .pill').forEach(p=>p.addEventListener('click',()=>go(p.dataset.go)));
+go('prereq');
+</script>
+</body>
+</html>
+
