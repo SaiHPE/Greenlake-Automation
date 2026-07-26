@@ -8,6 +8,10 @@ from pathlib import Path
 from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunRecord
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 
+# How many runs keep their step artifacts. Runs stay in the database; only their cached artifacts
+# are pruned, so an old run reopened after this can simply re-run discovery.
+ARTIFACT_RETENTION_RUNS = 20
+
 
 class SqliteRunStore:
     def __init__(self, database_path: Path) -> None:
@@ -229,6 +233,16 @@ class SqliteRunStore:
                     payload = excluded.payload, updated_at = excluded.updated_at
                 """,
                 (run_id, kind, payload, datetime.now(timezone.utc).isoformat()),
+            )
+            # Artifacts include the generated as-built document, hundreds of KB per run, and nothing
+            # else ever deletes them. Keep the recent runs — enough to resume anything in flight —
+            # and drop the rest, so a long-lived workstation's state file cannot grow without bound.
+            connection.execute(
+                """
+                DELETE FROM run_artifacts
+                 WHERE run_id NOT IN (SELECT run_id FROM runs ORDER BY updated_at DESC LIMIT ?)
+                """,
+                (ARTIFACT_RETENTION_RUNS,),
             )
 
     def load_artifact(self, run_id: str, kind: str) -> bytes | None:
