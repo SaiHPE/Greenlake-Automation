@@ -76,6 +76,11 @@ expected steps and that each screen matches its mockup.
 - [ ] Reload the browser mid-run: the run is restored and the wizard resumes on the right step.
 - [ ] Restart the application mid-run: discovery results and the as-built document are still
       available (they persist with the run).
+- [ ] Restart the application after building a provisioning plan: **Create storage objects is not
+      available** until the plan is rebuilt — the approval to write to the array does not survive a
+      restart. Same after editing the composition, and after re-running discovery.
+- [ ] Steps that use discovery state when the environment was last read; a run resumed more than
+      twelve hours later shows the staleness warning naming the age.
 - [ ] Stop the backend and trigger an action: the error appears in the step's error banner with a
       dismiss control, and the step stays usable.
 
