@@ -24,7 +24,6 @@ const STATES: Record<StepState, StateStyle> = {
 };
 
 export const stateLabel = (state: StepState) => STATES[state].label;
-export const stateColor = (state: StepState) => STATES[state].color;
 
 export function StatusIcon({ state, size = 'small' }: { state: StepState; size?: string }) {
   const { Icon, color, label } = STATES[state];

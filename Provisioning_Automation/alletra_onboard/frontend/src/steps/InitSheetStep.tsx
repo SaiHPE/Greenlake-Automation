@@ -2,12 +2,17 @@ import { Anchor, Box, Button, FileInput, NameValueList, NameValuePair, Text } fr
 import { useState } from 'react';
 import { API, CheckReport, checkConfig, InitSheetUploadResult, uploadInitSheet } from '../api';
 import { InlineNotification, Surface } from '../ui/primitives';
+import { StepState } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 import { fromParsedWorkItem, WorkItemForm } from '../workItem';
 
 interface Props {
   setForm: (form: WorkItemForm) => void;
   onUploaded: (token: string) => void;
+  /** Held by the shell, so navigating away and back does not lose the upload. */
+  result: InitSheetUploadResult | null;
+  setResult: (result: InitSheetUploadResult | null) => void;
+  state: StepState;
 }
 
 async function fileToBase64(file: File): Promise<string> {
@@ -17,8 +22,7 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
-export function InitSheetStep({ setForm, onUploaded }: Props) {
-  const [result, setResult] = useState<InitSheetUploadResult | null>(null);
+export function InitSheetStep({ setForm, onUploaded, result, setResult, state }: Props) {
   const [report, setReport] = useState<CheckReport | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +60,7 @@ export function InitSheetStep({ setForm, onUploaded }: Props) {
     <StepShell
       title="Initialisation sheet"
       description="One workbook per array, completed in full. The selected mode determines which sections are applied."
-      state={item ? 'complete' : 'action_required'}
+      state={state}
       error={error}
       onDismissError={() => setError(null)}
       footerNote="The run is created on the next step."

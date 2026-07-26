@@ -31,6 +31,26 @@ def _item():
     )
 
 
+def test_artifacts_are_pruned_to_the_recent_runs(tmp_path):
+    """The as-built document is large and nothing else deletes it, so retention has to be bounded."""
+    from alletra_onboard.adapters.persistence.sqlite import ARTIFACT_RETENTION_RUNS
+
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+
+    runs = []
+    for index in range(ARTIFACT_RETENTION_RUNS + 5):
+        run = RunRecord(serial_number=f"SGH{index:04d}")
+        store.upsert_run(run)
+        store.save_artifact(run.run_id, "asbuilt_docx", b"PK-payload")
+        runs.append(run)
+
+    assert store.load_artifact(runs[-1].run_id, "asbuilt_docx") == b"PK-payload"
+    assert store.load_artifact(runs[0].run_id, "asbuilt_docx") is None
+    # The run itself survives; only its cached artifact is dropped, so it can be re-read on demand.
+    assert store.get_run(runs[0].run_id) is not None
+
+
 def test_work_item_round_trip_preserves_secrets(tmp_path):
     store = SqliteRunStore(tmp_path / "state.db")
     store.initialize()

@@ -1,6 +1,6 @@
 import { Box, Button, Layer, Main, Text } from 'grommet';
 import { useEffect, useRef, useState } from 'react';
-import { createRunFromSheet, getAppProfile, getRun } from './api';
+import { createRunFromSheet, getAppProfile, getRun, InitSheetUploadResult } from './api';
 import { actionKeysFor, ActionKey, phaseToActionKey, RunMode, ServedStep, StepRegistry } from './modes';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
@@ -60,6 +60,9 @@ export default function App() {
   // The held-sheet token from the upload step; the Mode step mints the run from it. In memory only —
   // refreshing before a mode is chosen means re-uploading, which costs nothing because no run exists.
   const [sheetToken, setSheetToken] = useState<string | null>(null);
+  // The parsed workbook lives here, not inside the sheet step: returning to that step must not lose
+  // the upload and disable its own Continue button.
+  const [sheetResult, setSheetResult] = useState<InitSheetUploadResult | null>(null);
   const [initOnly, setInitOnly] = useState(false);
   const [appTitle, setAppTitle] = useState('Alletra MP B10000 Onboarding');
   const [registry, setRegistry] = useState<StepRegistry | null>(null);
@@ -127,6 +130,7 @@ export default function App() {
   const discardRun = () => {
     setRunId(null);
     setSheetToken(null);
+    setSheetResult(null);
     setForm(EMPTY_FORM);
     setCustomSteps([]);
     setMode('FULL_ONBOARDING');
@@ -149,12 +153,13 @@ export default function App() {
     next();
   };
 
-  // The rail: one entry per step, each showing how far it has got and what it found.
+  // The state of the steps that frame a run. One definition, used by the rail AND by the step
+  // itself — deriving it in both places is how a rail entry ends up disagreeing with its own header.
   const scaffoldState = (key: string): StepState => {
-    if (key === 'prereq') return stepIndex > 0 ? 'complete' : 'action_required';
-    if (key === 'sheet') return sheetToken || runId ? 'complete' : stepIndex === 1 ? 'action_required' : 'not_started';
-    if (key === 'mode') return runId ? 'complete' : stepIndex === 2 ? 'action_required' : 'not_started';
-    return run?.status === 'succeeded' ? 'complete' : 'not_started';
+    if (key === 'prereq') return maxStep > 0 ? 'complete' : 'action_required';
+    if (key === 'sheet') return sheetToken || runId ? 'complete' : maxStep >= 1 ? 'action_required' : 'not_started';
+    if (key === 'mode') return runId ? 'complete' : maxStep >= 2 ? 'action_required' : 'not_started';
+    return run?.status === 'succeeded' ? 'complete' : runId ? 'action_required' : 'not_started';
   };
   const railItems: RailItem[] = steps.map((item, index) => ({
     key: item.key,
@@ -216,10 +221,13 @@ export default function App() {
           />
           <Box pad="medium" width={{ max: 'xlarge' }} flex={false}>
             <StepProvider value={stepValue}>
-              {current.key === 'prereq' && <PrereqStep onDone={next} />}
+              {current.key === 'prereq' && <PrereqStep onDone={next} state={scaffoldState('prereq')} />}
               {current.key === 'sheet' && (
                 <InitSheetStep
                   setForm={setForm}
+                  result={sheetResult}
+                  setResult={setSheetResult}
+                  state={scaffoldState('sheet')}
                   onUploaded={(token) => {
                     setSheetToken(token);
                     next();
@@ -236,6 +244,7 @@ export default function App() {
                   locked={Boolean(runId)}
                   initOnly={initOnly}
                   catalog={registry?.steps ?? []}
+                  state={scaffoldState('mode')}
                 />
               )}
               {current.key === 'greenlake' && runId && <GreenLakeStep runId={runId} run={run} events={events} onDone={next} />}

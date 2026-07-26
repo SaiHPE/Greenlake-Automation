@@ -168,6 +168,11 @@ export function StepRail({
                 onClick={item.reachable ? () => onSelect(item.key) : undefined}
                 focusIndicator={item.reachable}
                 flex={false}
+                // Which step is active must be programmatic, not just bold text on a tinted row.
+                role={item.reachable ? 'button' : undefined}
+                aria-current={current ? 'step' : undefined}
+                aria-disabled={item.reachable ? undefined : true}
+                a11yTitle={`${item.label} — ${item.state.replace('_', ' ')}`}
                 style={{ opacity: item.reachable ? 1 : 0.5, cursor: item.reachable ? 'pointer' : 'default' }}
               >
                 <StatusIcon state={item.state} />
