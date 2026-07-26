@@ -38,13 +38,27 @@ class DiscoveryZoningSteps:
         # (a server restart mid-engagement must not force re-discovery), the dict avoids re-parsing.
         self._discovery: dict[str, DiscoveryReport] = {}
 
+    def current_discovery(self, run_id: str) -> DiscoveryReport | None:
+        """The discovery in effect, or None. Unlike require_discovery this never raises — callers use
+        it to detect that discovery has been re-run since they last read it."""
+        try:
+            return self.require_discovery(run_id)
+        except StepPreconditionError:
+            return None
+
     def require_discovery(self, run_id: str) -> DiscoveryReport:
         report = self._discovery.get(run_id)
         if report is None:
             raw = self._coord.store.load_artifact(run_id, "discovery")
             if raw is not None:
-                report = DiscoveryReport.model_validate_json(raw)
-                self._discovery[run_id] = report
+                try:
+                    report = DiscoveryReport.model_validate_json(raw)
+                    self._discovery[run_id] = report
+                except Exception:  # noqa: BLE001
+                    # A stored report the current model can no longer read (an upgrade changed the
+                    # schema, or the row is damaged). Treat it as absent so the operator can simply
+                    # re-run discovery, instead of every step failing with a 500 and no way out.
+                    report = None
         if report is None:
             raise StepPreconditionError("run discovery first — it provides the ports/HBAs zoning and provisioning need")
         return report
@@ -71,7 +85,10 @@ class DiscoveryZoningSteps:
 
         report = await asyncio.to_thread(storage_discovery.discover, intent, progress=progress)
         self._discovery[run.run_id] = report
-        coord.store.save_artifact(run.run_id, "discovery", report.model_dump_json().encode("utf-8"))
+        try:
+            coord.store.save_artifact(run.run_id, "discovery", report.model_dump_json().encode("utf-8"))
+        except Exception:  # noqa: BLE001 - discovery succeeded; failing to cache it must not fail the step.
+            pass
         coord.set_state(run, RunStatus.READY, WorkflowPhase.STORAGE_DISCOVER)
         coord.emit(
             run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.completed",
@@ -135,17 +152,29 @@ class ProvisioningSteps:
     def __init__(self, coord: RunCoordinator, discovery_steps: DiscoveryZoningSteps) -> None:
         self._coord = coord
         self._discovery_steps = discovery_steps
-        # The previewed plan, per run — the "was previewed" gate for apply. Durable (C7) so the gate
-        # survives a restart; cached to avoid re-parsing.
-        self._plan: dict[str, ProvisioningPlan] = {}
+        # The previewed plan, per run — the gate that stops the only step which writes to the array
+        # running against something the operator never saw.
+        #
+        # Deliberately NOT durable, unlike the discovery report and the as-built document. This is an
+        # approval, not a result: it must not outlive the process, and it is discarded the moment its
+        # inputs change (a re-run of discovery, or an edit to the composition). Persisting it would
+        # let a plan approved before a restart authorise an apply of a different composition.
+        # Held with the exact discovery it was built from, so a re-run of discovery withdraws it too.
+        self._plan: dict[str, tuple[ProvisioningPlan, DiscoveryReport]] = {}
+
+    def invalidate_plan(self, run_id: str) -> None:
+        """Withdraw a previous approval. The operator must preview again before anything is created."""
+        self._plan.pop(run_id, None)
 
     def _previewed_plan(self, run_id: str) -> ProvisioningPlan | None:
-        plan = self._plan.get(run_id)
-        if plan is None:
-            raw = self._coord.store.load_artifact(run_id, "provisioning_plan")
-            if raw is not None:
-                plan = ProvisioningPlan.model_validate_json(raw)
-                self._plan[run_id] = plan
+        entry = self._plan.get(run_id)
+        if entry is None:
+            return None
+        plan, approved_against = entry
+        if self._discovery_steps.current_discovery(run_id) is not approved_against:
+            # Discovery was re-run: the environment the operator approved against no longer applies.
+            self.invalidate_plan(run_id)
+            return None
         return plan
 
     def start_storage_preview(self, run_id: str) -> RunRecord:
@@ -161,8 +190,7 @@ class ProvisioningSteps:
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "step.started", "Building the provisioning plan…")
         plan = await asyncio.to_thread(storage_provision.build_plan, intent, discovery)
-        self._plan[run.run_id] = plan
-        coord.store.save_artifact(run.run_id, "provisioning_plan", plan.model_dump_json().encode("utf-8"))
+        self._plan[run.run_id] = (plan, discovery)
         status = RunStatus.RETRYABLE_FAILURE if plan.error else RunStatus.WAITING_FOR_OPERATOR
         coord.set_state(run, status, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(
@@ -260,4 +288,7 @@ class ProvisioningSteps:
             for v in updated.volumes:
                 v.vvset = vol_to_vvset.get(v.name)
         coord.store.save_provisioning_intent(run_id, updated)
+        # The composition just changed, so any plan the operator already approved described something
+        # else. Withdraw it — apply must not run against an approval for a different composition.
+        self.invalidate_plan(run_id)
         return ProvisioningComposition(host_sets=updated.host_sets, exports=updated.exports, volumes=updated.volumes)
