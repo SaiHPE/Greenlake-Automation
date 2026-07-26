@@ -65,10 +65,17 @@ export const MODE_PRESETS: ModePreset[] = [
 ];
 
 // Map a persisted run phase back to the action step key, so a refresh resumes on the right step.
-// A phase that matches no step (GL_* mid-phases) resumes on the first step; COMPLETE on the last.
-export function phaseToActionKey(registry: StepRegistry, phase: string): ActionKey {
+// A GL_* mid-phase resolves to the step that owns it (GreenLake).
+//
+// COMPLETE deliberately resolves to nothing. The backend marks the whole run complete when the
+// operator confirms DSCC, which in most modes happens with several steps still to go; resuming on
+// "the last step" would silently carry the operator past discovery, zoning, provisioning and
+// verification. Returning null lets the caller leave the operator where they were.
+export function phaseToActionKey(registry: StepRegistry, phase: string): ActionKey | null {
   const match = registry.steps.find((s) => s.phase === phase);
   if (match) return match.key;
-  if (phase === 'COMPLETE' && registry.steps.length) return registry.steps[registry.steps.length - 1].key;
-  return registry.steps[0]?.key ?? 'greenlake';
+  if (phase.startsWith('GL_') || phase === 'PREFLIGHT') {
+    return registry.steps.find((s) => s.phase === 'PREFLIGHT')?.key ?? null;
+  }
+  return null;
 }

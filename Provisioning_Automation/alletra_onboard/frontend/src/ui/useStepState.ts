@@ -63,7 +63,12 @@ const DEFAULT_SIGNALS: Signals = { complete: ['step.completed'], gate: [] };
 const FAILURE = /(failed|crashed|stalled)/;
 const ACTIVE = /(started|progress|checking)/;
 
-function fromRunStatus(status: string): StepState {
+/**
+ * The one mapping from a persisted run status to the shared vocabulary. Used for the run as a whole
+ * and for the step the run is currently on. Note `ready` is the IDLE status — it is what a new run
+ * gets and what every step returns to on success — so it is not "running".
+ */
+export function runStatusToState(status: string): StepState {
   if (status === 'running') return 'running';
   if (status === 'waiting_for_operator') return 'action_required';
   if (status === 'retryable_failure' || status === 'terminal_failure') return 'failed';
@@ -82,48 +87,75 @@ export function deriveStepState(step: ServedStep, run: RunRecord | null, events:
   const mine = events.filter((event) => owns(step, event.phase));
 
   for (let i = mine.length - 1; i >= 0; i -= 1) {
-    const type = mine[i].event_type;
+    const event = mine[i];
+    const type = event.event_type;
     if (signals.ignore?.includes(type)) continue;
     if (FAILURE.test(type)) return 'failed';
-    if (signals.complete.includes(type)) return 'complete';
+    if (signals.complete.includes(type)) {
+      // A GreenLake dry run reports step.completed too, but nothing was written, so the step is not
+      // done. The live run emits from GL_VERIFY_DEVICE; the dry run stays on PREFLIGHT.
+      if (step.key === 'greenlake' && event.phase === 'PREFLIGHT') return 'not_started';
+      // Discovery and zoning report completion even when the read itself failed; the error is in the
+      // payload, and the step component already surfaces it.
+      if (event.data?.report?.error) return 'failed';
+      return 'complete';
+    }
     if (signals.gate.includes(type)) return 'action_required';
     if (ACTIVE.test(type)) return 'running';
   }
 
-  if (run && owns(step, run.current_phase)) return fromRunStatus(run.status);
+  if (run && owns(step, run.current_phase)) return runStatusToState(run.status);
   return 'not_started';
 }
 
-/** A short result summary for the step rail, e.g. "4 ports · 6 adapters". Empty when there is none. */
+/**
+ * A short result summary for the step rail, e.g. "4 ports · 6 adapters".
+ *
+ * Derived from the SAME newest state-deciding event as the state itself. Asking "did this event
+ * ever happen" instead would let the rail say "verified on both fabrics" next to Action required
+ * after a re-verify, or "document ready" next to Failed after a failed regeneration.
+ */
 export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: RunEvent[]): string {
+  const signals = SIGNALS[step.key] ?? DEFAULT_SIGNALS;
   const mine = events.filter((event) => owns(step, event.phase));
-  const latest = (type: string) => [...mine].reverse().find((event) => event.event_type === type);
 
-  if (step.key === 'discover') {
-    const report = latest('discover.completed')?.data?.report;
-    if (report) return `${report.array_ports?.length ?? 0} ports · ${report.host_hbas?.length ?? 0} adapters`;
-  }
-  if (step.key === 'zoning') {
-    if (latest('zoning.proper')) return 'verified on both fabrics';
-    const report = latest('zoning.previewed')?.data?.report;
-    if (report) {
-      const missing = (report.expected ?? []).filter((zone: { present: boolean }) => !zone.present).length;
+  const deciding = [...mine]
+    .reverse()
+    .find(
+      (event) =>
+        !signals.ignore?.includes(event.event_type) &&
+        (FAILURE.test(event.event_type) ||
+          signals.complete.includes(event.event_type) ||
+          signals.gate.includes(event.event_type)),
+    );
+  if (!deciding) return '';
+
+  const report = deciding.data?.report;
+  const list = (value: unknown) => (Array.isArray(value) ? value : []);
+
+  switch (deciding.event_type) {
+    case 'discover.completed':
+      if (report?.error) return 'read failed';
+      return `${list(report?.array_ports).length} ports · ${list(report?.host_hbas).length} adapters`;
+    case 'zoning.proper':
+      return 'verified on both fabrics';
+    case 'zoning.previewed': {
+      const missing = list(report?.expected).filter((zone: { present: boolean }) => !zone.present).length;
       return missing ? `${missing} zone${missing === 1 ? '' : 's'} outstanding` : '';
     }
-  }
-  if (step.key === 'provision') {
-    if (latest('storage.applied')) return 'objects created';
-    if (latest('storage.previewed')) return 'awaiting approval';
-  }
-  if (step.key === 'verify') {
-    const report = latest('verify.completed')?.data?.report;
-    if (report) {
-      const mismatches = (report.checks ?? []).filter((check: { status: string }) => check.status !== 'pass').length;
-      return mismatches ? `${mismatches} discrepancy` : 'configuration matches';
+    case 'storage.applied':
+      return 'objects created';
+    case 'storage.previewed':
+      return 'awaiting approval';
+    case 'verify.completed': {
+      const mismatches = list(report?.checks).filter((check: { status: string }) => check.status !== 'pass').length;
+      return mismatches ? `${mismatches} to review` : 'configuration matches';
     }
+    case 'asbuilt.generated':
+      return 'document ready';
+    default:
+      return '';
   }
-  if (step.key === 'asbuilt' && latest('asbuilt.generated')) return 'document ready';
-  return '';
 }
 
 /** Live state for one step. */

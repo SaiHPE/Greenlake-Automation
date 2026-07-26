@@ -1,4 +1,4 @@
-import { Anchor, Box, Button, FormField, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
+import { Box, Button, FormField, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
 import { useState } from 'react';
 import { AsBuiltResult, RunEvent, RunRecord, asbuiltDownloadUrl, startAsbuilt } from '../api';
 import { CredentialsFields, InlineNotification, Surface } from '../ui/primitives';
@@ -57,13 +57,10 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
             disabled={!username.trim() || !password}
             onClick={generate}
           />
-          {result ? (
-            <Anchor href={asbuiltDownloadUrl(runId)} download>
-              <Button primary label="Download document" />
-            </Anchor>
-          ) : (
-            <Button primary label="Continue" onClick={onDone} />
-          )}
+          {/* Download never replaces Continue: this is the last action step, and losing Continue
+              here would leave no way to reach the summary. */}
+          {result && <Button as="a" href={asbuiltDownloadUrl(runId)} download label="Download document" />}
+          <Button primary label="Continue" onClick={onDone} />
         </>
       }
     >

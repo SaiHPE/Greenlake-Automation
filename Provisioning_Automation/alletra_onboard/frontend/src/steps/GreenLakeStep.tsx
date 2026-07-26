@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { RunEvent, RunRecord, startProvision } from '../api';
 import { InlineNotification, Surface } from '../ui/primitives';
 import { StepShell } from '../ui/StepShell';
+import { useStepContext } from '../ui/StepContext';
+import { useStepState } from '../ui/useStepState';
 
 interface Props {
   runId: string;
@@ -14,9 +16,13 @@ interface Props {
 export function GreenLakeStep({ runId, run, events, onDone }: Props) {
   const [dryRun, setDryRun] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { step } = useStepContext();
 
   const running = run?.status === 'running';
-  const registered = run?.status === 'ready' && run?.current_phase === 'CLOUDINIT_CONNECT';
+  // Derived from this step's own outcome, not from the phase of whichever step happens to follow —
+  // in a custom run there may not be one, which used to leave the operator with no way forward.
+  const { state } = useStepState(step, run, events);
+  const registered = state === 'complete';
   const resources = events.find((event) => event.event_type === 'step.completed' && event.phase.startsWith('GL_'));
 
   const start = async () => {
