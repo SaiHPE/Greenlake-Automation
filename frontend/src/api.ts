@@ -124,9 +124,8 @@ export const saveConfig = (values: Record<string, string | null>) =>
   request<{ configured: boolean; values: Record<string, string> }>('POST', '/config', values);
 export const checkConfig = () => request<{ report: CheckReport }>('POST', '/config/check');
 
-export const parseCsv = (csvText: string) => request<{ work_items: any[] }>('POST', '/work-items/parse', { csv_text: csvText });
-export const createRun = (workItem: any, mode = 'FULL_ONBOARDING', selectedSteps: string[] = []) =>
-  request<{ run: RunRecord }>('POST', '/runs', { work_item: workItem, mode, selected_steps: selectedSteps });
+// Note: the CSV intake and direct run creation endpoints still exist for the CLI, but the UI mints
+// every run from an uploaded workbook (createRunFromSheet), so it carries no client for them.
 
 export interface InitSheetUploadResult {
   token: string; // single-use hold for the parsed sheet; the run is minted from it + the chosen mode

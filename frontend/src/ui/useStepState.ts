@@ -134,14 +134,22 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
   const list = (value: unknown) => (Array.isArray(value) ? value : []);
 
   switch (deciding.event_type) {
-    case 'discover.completed':
+    case 'discover.completed': {
       if (report?.error) return 'read failed';
-      return `${list(report?.array_ports).length} ports · ${list(report?.host_hbas).length} adapters`;
+      // Fibre Channel ports only, matching the table the Discovery step shows.
+      const fc = list(report?.array_ports).filter((port: { protocol?: string }) => port.protocol === 'fc').length;
+      return `${fc} ports · ${list(report?.host_hbas).length} adapters`;
+    }
     case 'zoning.proper':
       return 'verified on both fabrics';
     case 'zoning.previewed': {
-      const missing = list(report?.expected).filter((zone: { present: boolean }) => !zone.present).length;
-      return missing ? `${missing} zone${missing === 1 ? '' : 's'} outstanding` : '';
+      // Counted per HOST, as the zoning step presents it — the report carries a row per host and
+      // fabric, and quoting zones here would contradict the number on the step itself.
+      const hosts = new Set<string>();
+      list(report?.expected)
+        .filter((zone: { present: boolean }) => !zone.present)
+        .forEach((zone: { name: string }) => hosts.add(zone.name.replace(/_(odd|even)$/, '')));
+      return hosts.size ? `${hosts.size} host${hosts.size === 1 ? '' : 's'} outstanding` : '';
     }
     case 'storage.applied':
       return 'objects created';
