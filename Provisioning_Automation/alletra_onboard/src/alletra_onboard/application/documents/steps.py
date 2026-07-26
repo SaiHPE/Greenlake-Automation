@@ -94,7 +94,13 @@ class DocumentSteps:
                        f"As-built generation failed: {type(exc).__name__}: {str(exc)[:200]}")
             return
         self._asbuilt[run.run_id] = docx_bytes
-        coord.store.save_artifact(run.run_id, "asbuilt_docx", docx_bytes)
+        try:
+            coord.store.save_artifact(run.run_id, "asbuilt_docx", docx_bytes)
+        except Exception:  # noqa: BLE001
+            # The document exists and is downloadable from memory. Failing to persist it must not
+            # escape: the guard around this task would mark a finished run failed, which this step
+            # is documented never to do.
+            pass
         coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.generated",
                    f"As-built ready for {data.name or data.serial_no or host} — {len(docx_bytes) // 1024} KB.",
                    data={"serial": data.serial_no, "name": data.name, "customer": data.customer, "size": len(docx_bytes)})

@@ -318,6 +318,94 @@ async def test_set_provisioning_builder_persists_membership_vvsets_and_exports(t
     assert saved.volumes[0].vvset == "myvvset"
 
 
+async def _preview(service, run_id, monkeypatch, actions=("host",)):
+    """Drive a provisioning preview so the apply gate is satisfied."""
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.domain.provisioning import PlannedAction, ProvisioningPlan
+
+    monkeypatch.setattr(
+        sp, "build_plan",
+        lambda intent, discovery: ProvisioningPlan(
+            actions=[PlannedAction(kind=k, name="x", description="d") for k in actions]
+        ),
+    )
+    service.start_storage_preview(run_id)
+    await service.wait(run_id)
+
+
+async def test_apply_requires_a_preview_from_this_session(tmp_path, monkeypatch):
+    """The approval to write to the array must not survive a restart.
+
+    Discovery and the as-built document are durable on purpose; the previewed plan is NOT. It is an
+    approval, and a new process has not shown the operator anything.
+    """
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(Settings(), store, InMemoryEventBus())
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    await _preview(service, run.run_id, monkeypatch)
+
+    restarted = OnboardingService(Settings(), store, InMemoryEventBus())
+    restarted.discovery_zoning._discovery[run.run_id] = DiscoveryReport()  # discovery does survive
+    with pytest.raises(StepPreconditionError):
+        restarted.start_storage_apply(run.run_id)
+
+
+async def test_editing_the_composition_withdraws_the_approval(tmp_path, monkeypatch):
+    """Apply must never run against a plan approved for a different composition."""
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import HostSetRequest, ProvisioningBuilder
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    await _preview(service, run.run_id, monkeypatch)
+
+    service.set_provisioning_builder(
+        run.run_id, ProvisioningBuilder(host_sets=[HostSetRequest(name="TOTALLY_DIFFERENT", members=["esx9"])])
+    )
+    with pytest.raises(StepPreconditionError):
+        service.start_storage_apply(run.run_id)
+
+
+async def test_rerunning_discovery_withdraws_the_approval(tmp_path, monkeypatch):
+    """A fresh environment read invalidates a plan approved against the previous one."""
+    from alletra_onboard.application.provisioning import discovery as sd
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    await _preview(service, run.run_id, monkeypatch)
+
+    monkeypatch.setattr(sd, "discover", lambda intent, progress=None: DiscoveryReport(notes=["re-read"]))
+    service.start_discover(run.run_id)
+    await service.wait(run.run_id)
+
+    with pytest.raises(StepPreconditionError):
+        service.start_storage_apply(run.run_id)
+
+
+async def test_unreadable_discovery_artifact_asks_for_a_re_run(tmp_path):
+    """A stored report the current model cannot parse must not 500 every step forever."""
+    from alletra_onboard.application.service import StepPreconditionError
+
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(Settings(), store, InMemoryEventBus())
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    store.save_artifact(run.run_id, "discovery", b"{not valid json")
+
+    with pytest.raises(StepPreconditionError):
+        service.discovery_zoning.require_discovery(run.run_id)
+
+
 async def test_path_verify_emits_per_host_report(tmp_path, monkeypatch):
     from alletra_onboard.application.provisioning import path_verify as pv
     from alletra_onboard.domain.discovery import DiscoveryReport
