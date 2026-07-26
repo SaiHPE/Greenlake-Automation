@@ -105,9 +105,12 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
       footerNote="This step makes no changes to the array."
       actions={
         <>
-          <Anchor href={`${API}/init-sheet/template`} download="Initialisation_sheet.xlsx">
-            <Button label="Download the initialisation sheet" />
-          </Anchor>
+          <Button
+            as="a"
+            href={`${API}/init-sheet/template`}
+            download="Initialisation_sheet.xlsx"
+            label="Download the initialisation sheet"
+          />
           <Button primary label="Continue" onClick={onDone} />
         </>
       }
