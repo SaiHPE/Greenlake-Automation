@@ -31,16 +31,30 @@ export function stepEvents(step: ServedStep | undefined, events: RunEvent[]): Ru
 interface Signals {
   complete: string[];
   gate: string[];
+  /** Report-only events that must not influence the step's state at all. */
+  ignore?: string[];
 }
 
-// Event types that end a step, per step. Anything matching FAILURE below is a failure for any step.
+// Event types that decide a step's state, per step. Anything matching FAILURE is a failure for any
+// step. Events are scanned newest-first, so a retry always overrides an earlier verdict.
+//
+// Only events that genuinely END a step belong here. Report-only artifacts must NOT: the zoning plan
+// and the tier-2 path verification are produced after their step's outcome is already decided, and
+// listing them would make a finished step report Action required again. Path verification in
+// particular never gates the run (ADR 0010).
 const SIGNALS: Record<string, Signals> = {
   greenlake: { complete: ['step.completed'], gate: [] },
   cloudinit: { complete: ['step.completed'], gate: ['operator.review_ready'] },
   dscc: { complete: [], gate: ['operator.credentials_ready'] },
   discover: { complete: ['discover.completed'], gate: [] },
-  zoning: { complete: ['zoning.proper'], gate: ['zoning.previewed', 'zoning.plan'] },
-  provision: { complete: ['storage.applied'], gate: ['storage.previewed', 'storage.paths.verified'] },
+  zoning: { complete: ['zoning.proper'], gate: ['zoning.previewed'], ignore: ['zoning.plan'] },
+  provision: {
+    complete: ['storage.applied'],
+    gate: ['storage.previewed'],
+    // Tier-2 path verification reports; it never decides the provisioning step, not even when it
+    // cannot run (ADR 0010). Its results are shown in their own panel.
+    ignore: ['storage.paths.checking', 'storage.paths.verified', 'storage.paths.failed'],
+  },
   verify: { complete: ['verify.completed'], gate: [] },
   asbuilt: { complete: ['asbuilt.generated'], gate: [] },
 };
@@ -69,6 +83,7 @@ export function deriveStepState(step: ServedStep, run: RunRecord | null, events:
 
   for (let i = mine.length - 1; i >= 0; i -= 1) {
     const type = mine[i].event_type;
+    if (signals.ignore?.includes(type)) continue;
     if (FAILURE.test(type)) return 'failed';
     if (signals.complete.includes(type)) return 'complete';
     if (signals.gate.includes(type)) return 'action_required';
