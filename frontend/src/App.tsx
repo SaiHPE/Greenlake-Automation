@@ -7,7 +7,7 @@ import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
 import { AppHeader, RailItem, StepRail, WizardBar } from './ui/AppChrome';
 import { StepProvider } from './ui/StepContext';
 import { StepState } from './ui/status';
-import { deriveStepHint, deriveStepState } from './ui/useStepState';
+import { deriveStepHint, deriveStepState, runStatusToState } from './ui/useStepState';
 import { AsBuiltStep } from './steps/AsBuiltStep';
 import { CloudinitStep } from './steps/CloudinitStep';
 import { DiscoveryStep } from './steps/DiscoveryStep';
@@ -106,7 +106,7 @@ export default function App() {
 
         const restoredSteps = buildSteps(registry, runMode, selected);
         const actionKey = phaseToActionKey(registry, detail.run.current_phase);
-        const found = restoredSteps.findIndex((item) => item.key === actionKey);
+        const found = actionKey ? restoredSteps.findIndex((item) => item.key === actionKey) : -1;
         const afterMode = restoredSteps.findIndex((item) => item.key === 'mode') + 1;
         setStep((currentStep) => (currentStep === 0 ? (found >= 0 ? found : afterMode) : currentStep));
         setMaxStep(restoredSteps.length - 1); // the run exists, so every step is navigable
@@ -165,23 +165,17 @@ export default function App() {
     reachable: index <= maxStep,
   }));
 
-  const runState: StepState | undefined = run
-    ? run.status === 'succeeded'
-      ? 'complete'
-      : run.status === 'retryable_failure' || run.status === 'terminal_failure'
-        ? 'failed'
-        : run.status === 'waiting_for_operator'
-          ? 'action_required'
-          : 'running'
-    : undefined;
+  // One mapper for run status, shared with the step model — 'ready' is idle, not running, so the
+  // header does not claim work is happening while the tool waits for the operator.
+  const runState: StepState | undefined = run ? runStatusToState(run.status) : undefined;
   const runLabel = run
-    ? run.status === 'succeeded'
-      ? 'Run complete'
-      : runState === 'failed'
-        ? 'Run needs attention'
-        : runState === 'action_required'
-          ? 'Action required'
-          : 'Run in progress'
+    ? {
+        complete: 'Run complete',
+        failed: 'Run needs attention',
+        action_required: 'Action required',
+        running: 'Run in progress',
+        not_started: 'Run open',
+      }[runState ?? 'not_started']
     : undefined;
 
   const needsRun = Boolean(current.served) && !runId;
@@ -204,7 +198,14 @@ export default function App() {
         runLabel={runLabel}
       />
       <Box direction="row" flex overflow="hidden">
-        <StepRail items={railItems} activeKey={current.key} onSelect={(key) => advance(steps.findIndex((s) => s.key === key))} />
+        <StepRail
+          items={railItems}
+          activeKey={current.key}
+          onSelect={(key) => {
+            const index = steps.findIndex((item) => item.key === key);
+            if (index >= 0) advance(index);
+          }}
+        />
         {/* A real <main> landmark: assistive technology needs to skip the rail to the step content. */}
         <Main flex overflow="auto" background="background-back">
           <WizardBar
@@ -249,7 +250,9 @@ export default function App() {
               {current.key === 'provision' && runId && <ProvisionStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'verify' && runId && <VerifyStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'asbuilt' && runId && <AsBuiltStep runId={runId} run={run} events={events} onDone={next} />}
-              {current.key === 'done' && <DoneStep run={run} events={events} onRestart={() => setConfirmCancel(true)} />}
+              {current.key === 'done' && (
+                <DoneStep runId={runId} run={run} events={events} onRestart={() => setConfirmCancel(true)} />
+              )}
               {needsRun && <Text color="text-weak">Select a mode first — that creates the run.</Text>}
             </StepProvider>
           </Box>

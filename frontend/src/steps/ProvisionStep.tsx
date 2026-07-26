@@ -1,4 +1,4 @@
-import { Box, Button, DataTable, Text } from 'grommet';
+import { Box, Button, CheckBox, DataTable, Text } from 'grommet';
 import { useState } from 'react';
 import {
   ActionOutcome,
@@ -37,13 +37,25 @@ function latest<T>(events: RunEvent[], type: string, key: string): T | null {
   return (event?.data?.[key] as T) ?? null;
 }
 
+/** Index of the newest event of this type, or -1. Used to compare which of two outcomes is current. */
+function latestIndex(events: RunEvent[], type: string): number {
+  for (let i = events.length - 1; i >= 0; i -= 1) if (events[i].event_type === type) return i;
+  return -1;
+}
+
 export function ProvisionStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
+  const [authorised, setAuthorised] = useState(false);
   const running = run?.status === 'running';
 
   const plan = latest<ProvisioningPlan>(events, 'storage.previewed', 'plan');
-  const result = latest<ProvisioningResult>(events, 'storage.applied', 'result');
   const paths = latest<PathVerification>(events, 'storage.paths.verified', 'verification');
+  // A result only reflects the plan on screen while it is newer than the newest preview. Rebuilding
+  // the plan after a successful apply must offer Create again, not leave the operator with no action.
+  const applied = latestIndex(events, 'storage.applied');
+  const previewed = latestIndex(events, 'storage.previewed');
+  const resultIsCurrent = applied > previewed;
+  const result = resultIsCurrent ? latest<ProvisioningResult>(events, 'storage.applied', 'result') : null;
 
   const toCreate = plan ? plan.actions.filter((action) => !action.exists).length : 0;
   const existing = plan ? plan.actions.length - toCreate : 0;
@@ -84,9 +96,16 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             onClick={call(() => storagePreview(runId))}
           />
           {plan && !plan.error && !result && (
-            <Button primary busy={running} label="Create storage objects" onClick={call(() => storageApply(runId))} />
+            <Button
+              busy={running}
+              label="Create storage objects"
+              disabled={!authorised}
+              onClick={call(() => storageApply(runId))}
+            />
           )}
-          {result && <Button primary label="Continue" onClick={onDone} />}
+          {/* Continue is always available: an operator may legitimately pass through this step
+              without creating anything. */}
+          <Button primary label="Continue" onClick={onDone} />
         </>
       }
     >
@@ -128,6 +147,16 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
           </TableSummary>
           {plan.notes.length > 0 && (
             <InlineNotification tone="info" title="Plan notes" message={plan.notes.join(' · ')} />
+          )}
+          {/* The only action in this tool that writes to a customer array, so it takes an explicit
+              authorisation rather than a single click. */}
+          {!result && (
+            <CheckBox
+              label="I have reviewed this plan and authorise creating these objects on the array."
+              checked={authorised}
+              disabled={running}
+              onChange={(event) => setAuthorised(event.target.checked)}
+            />
           )}
         </Surface>
       )}

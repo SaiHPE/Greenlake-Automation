@@ -4,6 +4,8 @@ import { launchDiscoveryTool, RunEvent, RunRecord, startCloudinit } from '../api
 import { InlineNotification, Surface } from '../ui/primitives';
 import { StatusIndicator } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
+import { useStepContext } from '../ui/StepContext';
+import { useStepState } from '../ui/useStepState';
 import { WorkItemForm } from '../workItem';
 
 interface Props {
@@ -21,10 +23,13 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [discoveryBusy, setDiscoveryBusy] = useState(false);
   const [discovery, setDiscovery] = useState<{ ok: boolean; text: string } | null>(null);
+  const { step } = useStepContext();
 
   const mine = events.filter((event) => event.phase === 'CLOUDINIT_CONNECT');
   const running = run?.status === 'running' && run?.current_phase === 'CLOUDINIT_CONNECT';
-  const connected = run?.current_phase === 'DSCC_SETUP_SYSTEM' && run?.status === 'ready';
+  // This step's own outcome, not the phase of whatever follows: a custom run may have no DSCC step.
+  const { state } = useStepState(step, run, events);
+  const connected = state === 'complete';
   const awaitingSubmit =
     run?.status === 'waiting_for_operator' &&
     run?.current_phase === 'CLOUDINIT_CONNECT' &&
