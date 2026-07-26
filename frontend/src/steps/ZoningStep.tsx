@@ -30,9 +30,8 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
       .find((event) => ['zoning.previewed', 'zoning.proper'].includes(event.event_type))?.data?.report as
       | ZoningReport
       | undefined) ?? null;
-  const plan =
-    ([...events].reverse().find((event) => event.event_type === 'zoning.plan')?.data?.plan as ZoningPlan | undefined) ??
-    null;
+  const planEvent = [...events].reverse().find((event) => event.event_type === 'zoning.plan');
+  const plan = (planEvent?.data?.plan as ZoningPlan | undefined) ?? null;
 
   // The report carries one row per host and fabric; the operator thinks in hosts, so roll them up.
   const byHost: Record<string, HostRow> = {};
@@ -143,7 +142,10 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
         <InlineNotification tone="info" title="Verification notes" message={report.notes.join(' · ')} />
       )}
 
-      {plan && <ZoningPlanView plan={plan} />}
+      {/* Keyed on the plan event: the alias fields are seeded once from the plan, so rebuilding must
+          mount a fresh view. Otherwise new WWPNs show an empty alias field while the generated
+          commands carry the suggested one — the SAN team would receive names shown nowhere. */}
+      {plan && <ZoningPlanView key={planEvent?.event_id} plan={plan} />}
     </StepShell>
   );
 }

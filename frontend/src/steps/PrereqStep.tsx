@@ -14,7 +14,7 @@ import {
 import { ClockSync } from '../ClockSync';
 import { Instructions } from '../components';
 import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
-import { StatusIndicator } from '../ui/status';
+import { StatusIndicator, StepState } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 
 /** A numbered task with its HPE walkthrough recording. */
@@ -36,7 +36,7 @@ function TaskClip({ title, steps, src }: { title: string; steps: ReactNode[]; sr
  * The manual work HPE requires before any automation runs. This tool does not perform these, and
  * deliberately does not pretend to — it verifies what it can and hands over the rest.
  */
-export function PrereqStep({ onDone }: { onDone: () => void }) {
+export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepState }) {
   const [rules, setRules] = useState<FirewallRule[]>([]);
   const [connectivity, setConnectivity] = useState<ConnectivityResult[] | null>(null);
   const [allReachable, setAllReachable] = useState(false);
@@ -99,7 +99,7 @@ export function PrereqStep({ onDone }: { onDone: () => void }) {
     <StepShell
       title="Prerequisites"
       description="Validate connectivity from this workstation to HPE GreenLake and the array before proceeding."
-      state={connectivity && allReachable ? 'complete' : 'action_required'}
+      state={state}
       error={error}
       onDismissError={() => setError(null)}
       footerNote="This step makes no changes to the array."

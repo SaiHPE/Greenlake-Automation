@@ -2,6 +2,7 @@ import { Box, Button, CheckBox, Text } from 'grommet';
 import { useState } from 'react';
 import { ActionKey, MODE_PRESETS, RunMode, ServedStep, subtitleFor } from '../modes';
 import { InlineNotification, Surface } from '../ui/primitives';
+import { StepState } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 
 interface Props {
@@ -13,9 +14,10 @@ interface Props {
   locked?: boolean;
   initOnly?: boolean;
   catalog: ServedStep[];
+  state: StepState;
 }
 
-export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, initOnly, catalog }: Props) {
+export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, initOnly, catalog, state }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +56,7 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
     <StepShell
       title="Select mode"
       description="The wizard presents only the steps the selected mode requires, enabling provisioning or verification of an array that is already initialised."
-      state={locked ? 'complete' : 'action_required'}
+      state={state}
       error={error}
       onDismissError={() => setError(null)}
       footerNote={

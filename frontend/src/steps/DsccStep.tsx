@@ -62,11 +62,12 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
             disabled={!cdpUrl || completed}
             onClick={() => call('dscc', () => startDscc(runId, cdpUrl ?? 'http://localhost:9222'))}
           />
+          {/* Never gated on our own automation having run: the operator may have completed the Set
+              Up System wizard by hand, and only they can confirm DSCC accepted the system. */}
           <Button
             primary
             busy={busy === 'complete'}
             label={completed ? 'Continue' : 'Mark DSCC complete'}
-            disabled={!credentialsReady && !completed}
             onClick={() => (completed ? onDone() : call('complete', () => markComplete(runId).then(onDone)))}
           />
         </>
