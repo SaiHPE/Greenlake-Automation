@@ -74,6 +74,7 @@ from alletra_onboard.application.platform.proxy import ProxyResolver, apply_prox
 from alletra_onboard.domain.models import RunMode
 from alletra_onboard.domain.provisioning import ProvisioningBuilder, ProvisioningComposition, ProvisioningObjects
 from alletra_onboard.domain.workflow import STEP_REGISTRY, mode_steps
+from alletra_onboard import __version__
 from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.service import (
     OnboardingService,
@@ -104,7 +105,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         service = OnboardingService(settings, store, InMemoryEventBus())
     env_path = Path(".env")
 
-    app = FastAPI(title="Alletra Onboard", version="0.12.0")
+    app = FastAPI(title="Alletra Onboard", version=__version__)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # vite dev server
