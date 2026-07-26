@@ -93,9 +93,13 @@ jobs:
             'dist\alletra-onboard-offline-win64.zip', 'dist\alletra-onboard-offline-win64.zip.sha256',
             'dist\alletra-mp-initialization-win64.zip', 'dist\alletra-mp-initialization-win64.zip.sha256'
           )
+          # A semver pre-release tag (v0.13.0-rc.1) is published as a pre-release, so a candidate
+          # built for review never presents itself as the current stable download.
+          $extra = @()
+          if ($tag -like '*-*') { $extra += '--prerelease' } else { $extra += '--latest' }
           gh release view $tag *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag @assets --clobber
           } else {
-            gh release create $tag @assets --title "Alletra Onboard $tag" --generate-notes
+            gh release create $tag @assets --title "Alletra Onboard $tag" --generate-notes @extra
           }
