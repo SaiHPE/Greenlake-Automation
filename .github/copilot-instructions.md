@@ -176,38 +176,49 @@ storage automation/                          ← workspace root
 │       │   │   └── schemas.py              ← request/response models incl. PreflightRequest.live_greenlake
 │       │   ├── cli/main.py                 ← typer: api, run, status, preflight [--live-greenlake]
 │       │   ├── domain/
-│       │   │   ├── models.py
-│       │   │   ├── workflow.py
+│       │   │   ├── models.py                ← onboarding models, WorkflowPhase, RunMode, RunRecord
+│       │   │   ├── workflow.py              ← STEP_REGISTRY + mode→steps; SERVED to the UI via /app/profile
+│       │   │   ├── shared.py                ← EndpointCreds, Fabric, WWPN helpers
+│       │   │   ├── discovery.py, zoning.py, provisioning.py  ← per-context storage models
 │       │   │   ├── policies.py             ← TokenBucket (sleep outside lock), redact()
-│       │   │   ├── ports.py
+│       │   │   ├── ports.py                 ← RunStore incl. save_artifact/load_artifact
 │       │   │   └── errors.py
-│       │   ├── application/
-│       │   │   ├── preflight_service.py    ← run_local() sync + run() async (local + optional live)
-│       │   │   ├── greenlake_preflight.py  ← live read-only GreenLake checks (opt-in)
-│       │   │   ├── orchestrator.py
-│       │   │   ├── run_service.py
-│       │   │   ├── intake.py               ← CSV loader, _split_semicolon() for DNS
-│       │   │   ├── event_bus.py
-│       │   │   └── validation_service.py
+│       │   ├── application/                ← bounded-context packages (ADR 0011)
+│       │   │   ├── service.py              ← OnboardingService: the composition-root façade the API drives
+│       │   │   ├── runs/
+│       │   │   │   ├── coordinator.py      ← RunCoordinator: lifecycle, guarded spawn, set_state/emit
+│       │   │   │   └── event_bus.py        ← InMemoryEventBus feeding SSE
+│       │   │   ├── onboarding/             ← the A→B→C init chain
+│       │   │   │   ├── steps.py            ← OnboardingSteps (GreenLake, Cloud Connectivity, DSCC)
+│       │   │   │   ├── greenlake_provision.py ← Component A orchestrator (was application/provisioning.py)
+│       │   │   │   ├── clients.py          ← make_greenlake(): the GreenLake adapter seam
+│       │   │   │   ├── greenlake_preflight.py, preflight_service.py, health.py
+│       │   │   ├── provisioning/           ← storage context (was application/storage/)
+│       │   │   │   ├── steps.py            ← DiscoveryZoningSteps + ProvisioningSteps
+│       │   │   │   ├── clients.py          ← make_wsapi/make_array_cli/make_vcenter/make_brocade
+│       │   │   │   ├── discovery.py, zoning.py, zoning_plan.py, storage_provision.py, path_verify.py
+│       │   │   ├── documents/              ← read-only outputs
+│       │   │   │   ├── steps.py            ← DocumentSteps (post-init verify + as-built)
+│       │   │   │   ├── verification.py, asbuilt.py, asbuilt_parse.py, asbuilt_docx.py
+│       │   │   └── platform/               ← cross-cutting
+│       │   │       ├── init_sheet.py, intake.py, configuring.py, proxy.py, prereqs.py
 │       │   └── adapters/
 │       │       ├── greenlake/
 │       │       │   ├── auth.py             ← OAuthClientCredentials (client_credentials, 30s buffer)
 │       │       │   ├── http_client.py      ← GreenLakeHttpClient + poll_location()
 │       │       │   ├── devices.py          ← DevicesClient; payload helpers use TYPE_CHECKING guard
 │       │       │   ├── subscriptions.py    ← SubscriptionsClient
-│       │       │   ├── service_catalog.py  ← ServiceCatalogClient + parse_service_manager_provision()
-│       │       │   └── storage_fleet.py    ← post-init only; regional hosts
+│       │       │   └── service_catalog.py  ← ServiceCatalogClient + parse_service_manager_provision()
 │       │       ├── browser/
 │       │       │   ├── cloudinit_wizard.py ← Track 2: fresh context, ignore_https_errors=True
 │       │       │   ├── dscc_setup.py       ← Track 3: CDP attach to localhost:9222
-│       │       │   ├── locators.py         ← all selector constants (CLOUDINIT_TEXT, DSCC_TEXT)
-│       │       │   └── session.py
-│       │       ├── persistence/
-│       │       │   ├── sqlite.py           ← WAL + busy_timeout=5000; runs + run_events tables
-│       │       │   └── artifacts.py
-│       │       └── secrets/
-│       │           └── env_provider.py
-│       ├── frontend/                       ← React + TypeScript + Vite dashboard (starter shell)
+│       │       │   └── locators.py         ← all selector constants (CLOUDINIT_TEXT, DSCC_TEXT)
+│       │       ├── array/, vcenter/, fabric/, system/
+│       │       └── persistence/
+│       │           └── sqlite.py           ← WAL + busy_timeout=5000; runs, events, run_artifacts
+│       ├── frontend/                       ← React + Vite + Grommet (grommet-theme-hpe)
+│       │   └── src/ui/                     ← StepShell, useStepState (the single progress model),
+│       │                                      AppChrome, status vocabulary; see docs/UX-GUIDELINES.md
 │       └── tests/
 │           ├── unit/                       ← workflow, policies, preflight, intake, GL preflight (17 tests)
 │           └── contract/                   ← payload shapes, service catalog parser, read filter params
