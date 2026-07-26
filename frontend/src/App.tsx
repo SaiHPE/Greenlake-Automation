@@ -1,4 +1,4 @@
-import { Box, Button, Layer, Text } from 'grommet';
+import { Box, Button, Layer, Main, Text } from 'grommet';
 import { useEffect, useRef, useState } from 'react';
 import { createRunFromSheet, getAppProfile, getRun } from './api';
 import { actionKeysFor, ActionKey, phaseToActionKey, RunMode, ServedStep, StepRegistry } from './modes';
@@ -205,7 +205,8 @@ export default function App() {
       />
       <Box direction="row" flex overflow="hidden">
         <StepRail items={railItems} activeKey={current.key} onSelect={(key) => advance(steps.findIndex((s) => s.key === key))} />
-        <Box flex overflow="auto">
+        {/* A real <main> landmark: assistive technology needs to skip the rail to the step content. */}
+        <Main flex overflow="auto" background="background-back">
           <WizardBar
             onPrevious={previous}
             canGoPrevious={stepIndex > 0}
@@ -252,7 +253,7 @@ export default function App() {
               {needsRun && <Text color="text-weak">Select a mode first — that creates the run.</Text>}
             </StepProvider>
           </Box>
-        </Box>
+        </Main>
       </Box>
 
       {/* Discarding a run cannot be undone, so it is confirmed twice. */}
