@@ -1,6 +1,7 @@
 import { Box, Button, DataTable, Text } from 'grommet';
 import { useState } from 'react';
 import { ArrayHost, ArrayPort, DiscoveryReport, HostHba, RunEvent, RunRecord, startDiscover } from '../api';
+import { DiscoveryFreshness } from '../ui/discoveryAge';
 import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
@@ -63,6 +64,8 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
           </Text>
         </Surface>
       )}
+
+      <DiscoveryFreshness events={events} action="continuing" />
 
       {report?.error && <InlineNotification tone="critical" title="Discovery reported a problem" message={report.error} />}
 

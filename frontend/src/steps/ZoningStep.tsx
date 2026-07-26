@@ -1,6 +1,7 @@
 import { Button, DataTable, Text } from 'grommet';
 import { useState } from 'react';
 import { RunEvent, RunRecord, zoningPlan, zoningPreview, ZoningPlan, ZoningReport } from '../api';
+import { DiscoveryFreshness } from '../ui/discoveryAge';
 import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
@@ -82,6 +83,8 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
         </>
       }
     >
+      <DiscoveryFreshness events={events} action="drafting commands for the SAN team" />
+
       {!report && (
         <Surface title="Zoning has not been verified yet">
           <Text size="small" color="text-weak">

@@ -14,6 +14,7 @@ import {
   storagePreview,
   verifyPaths,
 } from '../api';
+import { DiscoveryFreshness } from '../ui/discoveryAge';
 import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator, StepState } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
@@ -109,6 +110,9 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
         </>
       }
     >
+      {/* The hosts this step creates come from the discovery snapshot, so its age matters here most. */}
+      <DiscoveryFreshness events={events} action="creating objects on the array" />
+
       <ProvisioningBuilderView runId={runId} disabled={running} />
 
       {plan?.error && <InlineNotification tone="critical" title="The plan could not be built" message={plan.error} />}
