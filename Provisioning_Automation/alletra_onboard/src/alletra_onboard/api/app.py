@@ -113,6 +113,21 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.middleware("http")
+    async def _ui_cache_policy(request, call_next):
+        # Every release serves from the same origin (127.0.0.1:8765), and without a policy the
+        # browser caches index.html AND the old hashed bundle it references — so after an upgrade
+        # the operator keeps seeing the previous interface until a hard refresh (seen live on the
+        # v0.13.0 candidates). index.html must always be revalidated; the hashed assets it names
+        # are immutable and can be cached forever.
+        response = await call_next(request)
+        path = request.url.path
+        if path in ("/", "/index.html"):
+            response.headers["Cache-Control"] = "no-cache"
+        elif path.startswith("/assets/"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
     def _get_run_or_404(run_id: str):
         try:
             return service.get_run(run_id)
