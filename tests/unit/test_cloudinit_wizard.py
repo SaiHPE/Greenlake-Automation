@@ -89,3 +89,55 @@ async def test_review_guard_rejects_decayed_link_local_values():
 async def test_review_guard_handles_label_value_on_one_line():
     body = "IP address: 10.64.154.225\nNetmask: 255.255.248.0\nGateway: 10.64.159.254\n"
     assert await _review_ok_for(body) is True
+
+
+class _FakePage:
+    """Just enough page for the initializing wait: body text per poll, no real sleeping."""
+
+    def __init__(self, bodies: list[str]) -> None:
+        self._bodies = bodies
+        self._index = 0
+
+    def next_body(self) -> str:
+        body = self._bodies[min(self._index, len(self._bodies) - 1)]
+        self._index += 1
+        return body
+
+    async def wait_for_timeout(self, _ms: int) -> None:
+        return None
+
+
+def _adapter_with_page(bodies: list[str]) -> tuple[CloudinitWizardAdapter, _FakePage, list[str]]:
+    statuses: list[str] = []
+    adapter = CloudinitWizardAdapter(headless=True, on_status=statuses.append)
+    page = _FakePage(bodies)
+
+    async def fake_body_text(_page):
+        return page.next_body()
+
+    adapter._body_text = fake_body_text  # type: ignore[method-assign]
+    return adapter, page, statuses
+
+
+async def test_wizard_ready_immediately_when_not_initializing():
+    adapter, page, statuses = _adapter_with_page(["Welcome\nGet Started"])
+    assert await adapter._await_wizard_ready(page, "r1") is True
+    assert statuses == []  # no noise when the wizard is already up
+
+
+async def test_wizard_waits_out_the_initializing_state():
+    # Seen live 2026-07: the array shows "Initializing your system..." for minutes on first boot.
+    # The adapter previously fell through to the EULA locator and failed generically in ~40s.
+    bodies = ["Initializing your system..."] * 3 + ["Welcome\nGet Started"]
+    adapter, page, statuses = _adapter_with_page(bodies)
+    assert await adapter._await_wizard_ready(page, "r1") is True
+    assert any(status.startswith("initializing") for status in statuses)  # liveness was reported
+
+
+async def test_wizard_initializing_timeout_reports_a_specific_error(monkeypatch):
+    from alletra_onboard.adapters.browser import cloudinit_wizard as module
+
+    monkeypatch.setattr(module, "INIT_WAIT_S", 0.0)  # expire immediately
+    adapter, page, statuses = _adapter_with_page(["Initializing your system..."])
+    assert await adapter._await_wizard_ready(page, "r1") is False
+    assert any(status.startswith("error:") and "initializing" in status.lower() for status in statuses)
