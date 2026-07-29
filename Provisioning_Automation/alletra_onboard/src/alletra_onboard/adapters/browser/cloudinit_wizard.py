@@ -106,10 +106,12 @@ class CloudinitWizardAdapter:
                     await page.goto(item.cloudinit_url, wait_until="domcontentloaded")
 
                 page.set_default_timeout(STEP_TIMEOUT_MS)
-                if await self._page_has_any(page, CLOUDINIT_TEXT["success"]):
-                    return BrowserResultStatus.ALREADY_DONE  # connected; never touches Modify/Launch
+                # Readiness first: at goto time the page is a blank still-mounting SPA, so even the
+                # already-connected check would miss its text if it ran before anything rendered.
                 if not await self._await_wizard_ready(page, run_id):
                     return BrowserResultStatus.FAILED_RETRYABLE
+                if await self._page_has_any(page, CLOUDINIT_TEXT["success"]):
+                    return BrowserResultStatus.ALREADY_DONE  # connected; never touches Modify/Launch
                 await self._welcome(page)
                 await self._eula(page)
                 await self._network(page, item.network)
@@ -160,29 +162,52 @@ class CloudinitWizardAdapter:
         return pages[0] if pages else None
 
     async def _await_wizard_ready(self, page, run_id: str) -> bool:
-        """Wait out the wizard's "Initializing your system…" boot state.
+        """Wait until the wizard interface has actually rendered.
 
-        On first boot the array shows a full-page spinner while it finishes its own system
-        initialisation — for minutes, sometimes — and only then renders the Welcome screen. Without
-        this wait the adapter fell straight through _welcome (no Get Started button = "already past
-        Welcome") into a 30-second timeout on the EULA locator and a generic failure ~40 seconds
-        after starting, while the array was working normally.
+        Two non-wizard states precede it: a blank page while the single-page app mounts (goto
+        returns at domcontentloaded, before anything is drawn), and the array's "Initializing your
+        system…" boot spinner, which can persist for minutes on first boot. Waiting for the
+        ABSENCE of the spinner is not enough — a blank page has no spinner text either, which is
+        exactly how the first version of this wait fell through and timed out on the EULA locator.
+        So: wait FOR positive proof of a known wizard screen, reporting progress while the array
+        takes its time.
         """
         started = time.monotonic()
         next_notify = 0.0
+        saw_initializing = False
+        text = ""
         while True:
-            if not await self._page_has_any(page, CLOUDINIT_TEXT["initializing"]):
+            text = (await self._body_text(page)).lower()
+            if any(sig in text for sig in CLOUDINIT_TEXT["ready"]):
                 return True
+            if any(sig in text for sig in CLOUDINIT_TEXT["success"]) or any(
+                sig in text for sig in CLOUDINIT_TEXT["fail_prov"]
+            ):
+                return True  # a terminal screen — the caller's normal handling takes it from here
+            initializing = any(sig in text for sig in CLOUDINIT_TEXT["initializing"])
+            saw_initializing = saw_initializing or initializing
             elapsed = time.monotonic() - started
             if elapsed >= INIT_WAIT_S:
                 await self._dump(page, run_id, "initializing-timeout")
-                self._on_status(
-                    f"error:The array is still initializing its system after {int(INIT_WAIT_S // 60)} minutes. "
-                    "Leave it to finish (check the console for progress) and run this step again."
-                )
+                if saw_initializing:
+                    self._on_status(
+                        f"error:The array is still initializing its system after {int(INIT_WAIT_S // 60)} minutes. "
+                        "Leave it to finish (check the console for progress) and run this step again."
+                    )
+                else:
+                    # An unfamiliar screen: include what the page actually says, so the next
+                    # unknown state names itself instead of hiding behind a generic failure.
+                    snippet = " ".join(text.split())[:120]
+                    self._on_status(
+                        f"error:The wizard did not appear after {int(INIT_WAIT_S // 60)} minutes. "
+                        f"The page shows: '{snippet or 'a blank page'}'."
+                    )
                 return False
             if elapsed >= next_notify:
-                self._on_status(f"initializing:{int(elapsed)}")
+                if initializing:
+                    self._on_status(f"initializing:{int(elapsed)}")
+                elif elapsed >= INIT_NOTIFY_EVERY_S:  # the normal mount takes seconds; stay quiet
+                    self._on_status(f"wizard_pending:{int(elapsed)}")
                 next_notify = elapsed + INIT_NOTIFY_EVERY_S
             await page.wait_for_timeout(int(INIT_POLL_S * 1000))
 
