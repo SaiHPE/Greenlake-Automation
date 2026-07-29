@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, SecretStr, field_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 
 class WorkflowPhase(StrEnum):
@@ -82,6 +83,29 @@ class NetworkConfig(BaseModel):
     proxy_port: int | None = None
     proxy_username: str | None = None
     proxy_password_ref: str | None = None
+
+    @model_validator(mode="after")
+    def _normalize_proxy_host(self) -> "NetworkConfig":
+        """Accept the natural URL form for the proxy and store a bare host.
+
+        People copy the proxy from browser or environment settings, where it reads
+        ``http://host:port`` — but the array's Cloud Connectivity wizard validates Proxy Server as
+        an IPv4 or domain name and rejects a scheme outright (seen live: "Value must be valid IPv4
+        or domain name"). Normalising at intake means every consumer gets a clean host, and an
+        embedded port fills the port field when none was given separately.
+        """
+        host = (self.proxy_host or "").strip()
+        if not host:
+            return self
+        host = re.sub(r"^[a-z][a-z0-9+.-]*://", "", host, flags=re.IGNORECASE).rstrip("/")
+        if host.count(":") == 1:  # exactly one — leave IPv6 literals alone
+            bare, _, port = host.partition(":")
+            if port.isdigit():
+                host = bare
+                if self.proxy_port is None:
+                    self.proxy_port = int(port)
+        self.proxy_host = host
+        return self
 
 
 class DsccSetupConfig(BaseModel):
