@@ -49,6 +49,17 @@ def test_health(tmp_path):
     assert _client(tmp_path).get("/health").json() == {"status": "ok"}
 
 
+def test_index_is_revalidated_while_hashed_assets_cache_forever(tmp_path):
+    # The UI is served from the same origin every release; without this policy the browser keeps
+    # showing the PREVIOUS interface after an upgrade until a hard refresh (seen live on 0.13.0).
+    client = _client(tmp_path)
+    index = client.get("/")
+    assert index.status_code == 200
+    assert index.headers.get("cache-control") == "no-cache"
+    asset = client.get("/assets/anything.js")  # policy applies to the path, whatever the status
+    assert asset.headers.get("cache-control") == "public, max-age=31536000, immutable"
+
+
 def test_app_profile_serves_the_step_registry(tmp_path):
     # ADR 0011 Phase 2: the wizard renders from the SERVED registry — this payload IS the contract
     # that replaced the hand-synced frontend mirror (modes.ts).
