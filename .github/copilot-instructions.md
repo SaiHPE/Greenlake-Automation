@@ -219,6 +219,8 @@ storage automation/                          ← workspace root
 │       ├── frontend/                       ← React + Vite + Grommet (grommet-theme-hpe)
 │       │   └── src/ui/                     ← StepShell, useStepState (the single progress model),
 │       │                                      AppChrome, status vocabulary; see docs/UX-GUIDELINES.md
+│       ├── docs/LESSONS.md                 ← READ BEFORE wizard-automation, state/persistence or
+│       │                                      refactor work: incident→rule register from v0.13.0
 │       └── tests/
 │           ├── unit/                       ← workflow, policies, preflight, intake, GL preflight (17 tests)
 │           └── contract/                   ← payload shapes, service catalog parser, read filter params
