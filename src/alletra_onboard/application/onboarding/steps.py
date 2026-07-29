@@ -158,6 +158,16 @@ class OnboardingSteps:
                     "phase.progress",
                     f"The array is still initializing its system — the wizard is not ready yet{waited}.",
                 )
+            elif message.startswith("wizard_pending"):
+                # The page is up but no known wizard screen has rendered yet.
+                _, _, seconds = message.partition(":")
+                minutes = max(1, int(seconds or 0) // 60)
+                coord.emit(
+                    run.run_id,
+                    WorkflowPhase.CLOUDINIT_CONNECT,
+                    "phase.progress",
+                    f"Waiting for the wizard interface to load ({minutes} min so far)…",
+                )
             elif message == "review_ready":
                 review_ready = True
                 coord.set_state(run, RunStatus.WAITING_FOR_OPERATOR)

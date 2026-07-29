@@ -13,6 +13,10 @@ CLOUDINIT_TEXT = {
     # minutes on first boot, so the adapter waits for it to clear instead of timing out on the
     # first form locator.
     "initializing": ("initializing your system",),
+    # Positive proof a wizard screen has rendered. The adapter waits FOR one of these — merely not
+    # seeing the spinner is not enough, because a blank still-mounting SPA page has no spinner
+    # text either (which is exactly how the first fix fell through).
+    "ready": ("get started", "i have read and accept the agreement"),
 }
 
 # Locators authored from the live capture (HPE exposes stable name / data-test-id hooks).

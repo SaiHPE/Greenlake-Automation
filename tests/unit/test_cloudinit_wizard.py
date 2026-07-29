@@ -141,3 +141,36 @@ async def test_wizard_initializing_timeout_reports_a_specific_error(monkeypatch)
     adapter, page, statuses = _adapter_with_page(["Initializing your system..."])
     assert await adapter._await_wizard_ready(page, "r1") is False
     assert any(status.startswith("error:") and "initializing" in status.lower() for status in statuses)
+
+
+async def test_wizard_waits_through_the_blank_page_before_the_spinner():
+    # The live rc.2 failure: at goto time the SPA has rendered NOTHING, so "no spinner text" is
+    # also true of a blank page — waiting for the spinner's absence concluded ready instantly and
+    # the run timed out on the EULA locator 41 seconds later. The wait must demand positive proof
+    # of a wizard screen: blank -> blank -> spinner -> Welcome must succeed.
+    bodies = ["", "", "Initializing your system...", "Initializing your system...", "Welcome\nGet Started"]
+    adapter, page, statuses = _adapter_with_page(bodies)
+    assert await adapter._await_wizard_ready(page, "r1") is True
+    assert page._index >= len(bodies)  # it genuinely polled through every state
+
+
+async def test_wizard_ready_when_the_eula_screen_renders_directly():
+    # The Modify path opens on the EULA screen with no Welcome — that is proof enough.
+    adapter, page, statuses = _adapter_with_page(["I have read and accept the agreement"])
+    assert await adapter._await_wizard_ready(page, "r1") is True
+
+
+async def test_wizard_ready_passes_terminal_screens_to_the_normal_flow():
+    # An already-connected array renders its success page; the wait must hand it back, not stall.
+    adapter, page, statuses = _adapter_with_page(["Your system is now connected"])
+    assert await adapter._await_wizard_ready(page, "r1") is True
+
+
+async def test_wizard_unknown_page_timeout_reports_what_it_shows(monkeypatch):
+    from alletra_onboard.adapters.browser import cloudinit_wizard as module
+
+    monkeypatch.setattr(module, "INIT_WAIT_S", 0.0)
+    adapter, page, statuses = _adapter_with_page(["Some entirely different HPE page"])
+    assert await adapter._await_wizard_ready(page, "r1") is False
+    # The error names what the page actually says, so an unfamiliar state identifies itself.
+    assert any("some entirely different hpe page" in status.lower() for status in statuses)
