@@ -146,6 +146,18 @@ class OnboardingSteps:
             nonlocal review_ready, refused, last_error
             if message.startswith("error:"):
                 last_error = message[len("error:") :].strip()
+            elif message.startswith("initializing"):
+                # The array is still booting its own system; the wizard has no form yet. Emitted
+                # about once a minute so the operator sees the wait is deliberate, not a hang.
+                _, _, seconds = message.partition(":")
+                minutes = int(seconds or 0) // 60
+                waited = f" (waiting {minutes} min so far)" if minutes else ""
+                coord.emit(
+                    run.run_id,
+                    WorkflowPhase.CLOUDINIT_CONNECT,
+                    "phase.progress",
+                    f"The array is still initializing its system — the wizard is not ready yet{waited}.",
+                )
             elif message == "review_ready":
                 review_ready = True
                 coord.set_state(run, RunStatus.WAITING_FOR_OPERATOR)

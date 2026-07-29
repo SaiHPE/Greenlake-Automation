@@ -41,6 +41,12 @@ except ImportError:  # pragma: no cover - browser deps optional until B/C run.
 STEP_TIMEOUT_MS = 30_000
 CONNECT_TIMEOUT_S = 300.0
 REVIEW_WAIT_S = 1_800.0  # how long to keep the browser open for the operator to review + Submit
+# The wizard's "Initializing your system…" boot state can persist for minutes on first boot,
+# before the Welcome screen exists at all. Wait it out (with liveness updates) rather than
+# timing out on the first form locator with a generic failure.
+INIT_WAIT_S = 900.0
+INIT_POLL_S = 5.0
+INIT_NOTIFY_EVERY_S = 60.0
 
 
 class CloudinitWizardAdapter:
@@ -102,6 +108,8 @@ class CloudinitWizardAdapter:
                 page.set_default_timeout(STEP_TIMEOUT_MS)
                 if await self._page_has_any(page, CLOUDINIT_TEXT["success"]):
                     return BrowserResultStatus.ALREADY_DONE  # connected; never touches Modify/Launch
+                if not await self._await_wizard_ready(page, run_id):
+                    return BrowserResultStatus.FAILED_RETRYABLE
                 await self._welcome(page)
                 await self._eula(page)
                 await self._network(page, item.network)
@@ -117,8 +125,15 @@ class CloudinitWizardAdapter:
                 # product flow uses auto_submit, which re-verifies right before Submit.
                 self._on_status("review_ready")
                 return await self._wait_for_operator_submit(page, run_id)
-            except PlaywrightTimeoutError:
+            except PlaywrightTimeoutError as exc:
                 await self._dump(page, run_id, "timeout")
+                # Say WHAT the automation was waiting for — either our own diagnostic (raised by the
+                # fill/verify guards) or Playwright's "waiting for <locator>" line. The bare
+                # "did not complete" message left the operator with only a screenshot to go on.
+                lines = [line.strip() for line in str(exc).splitlines() if line.strip()]
+                detail = next((line for line in lines if "waiting for" in line), lines[0] if lines else "")
+                if detail:
+                    self._on_status(f"error:Timed out {detail[:200]}" if "waiting for" in detail else f"error:{detail[:200]}")
                 return BrowserResultStatus.FAILED_RETRYABLE
             except PlaywrightError as exc:
                 # Navigation / cert / driver errors (e.g. ERR_ADDRESS_UNREACHABLE on a wrong or
@@ -143,6 +158,33 @@ class CloudinitWizardAdapter:
                 await page.bring_to_front()
                 return page
         return pages[0] if pages else None
+
+    async def _await_wizard_ready(self, page, run_id: str) -> bool:
+        """Wait out the wizard's "Initializing your system…" boot state.
+
+        On first boot the array shows a full-page spinner while it finishes its own system
+        initialisation — for minutes, sometimes — and only then renders the Welcome screen. Without
+        this wait the adapter fell straight through _welcome (no Get Started button = "already past
+        Welcome") into a 30-second timeout on the EULA locator and a generic failure ~40 seconds
+        after starting, while the array was working normally.
+        """
+        started = time.monotonic()
+        next_notify = 0.0
+        while True:
+            if not await self._page_has_any(page, CLOUDINIT_TEXT["initializing"]):
+                return True
+            elapsed = time.monotonic() - started
+            if elapsed >= INIT_WAIT_S:
+                await self._dump(page, run_id, "initializing-timeout")
+                self._on_status(
+                    f"error:The array is still initializing its system after {int(INIT_WAIT_S // 60)} minutes. "
+                    "Leave it to finish (check the console for progress) and run this step again."
+                )
+                return False
+            if elapsed >= next_notify:
+                self._on_status(f"initializing:{int(elapsed)}")
+                next_notify = elapsed + INIT_NOTIFY_EVERY_S
+            await page.wait_for_timeout(int(INIT_POLL_S * 1000))
 
     async def _welcome(self, page) -> None:
         get_started = page.get_by_role("button", name=CLOUDINIT["get_started"])

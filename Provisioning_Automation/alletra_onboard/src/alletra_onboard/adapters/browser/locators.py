@@ -8,6 +8,11 @@ CLOUDINIT_TEXT = {
     ),
     # Surfaced when GreenLake register/assign hasn't propagated (Component A incomplete).
     "fail_prov": ("fail-prov-no-device", "fail-prov-no-rule"),
+    # The wizard's boot state: a full-page spinner shown while the array finishes its own system
+    # initialisation, BEFORE the Welcome screen exists. Seen live 2026-07 — it can persist for
+    # minutes on first boot, so the adapter waits for it to clear instead of timing out on the
+    # first form locator.
+    "initializing": ("initializing your system",),
 }
 
 # Locators authored from the live capture (HPE exposes stable name / data-test-id hooks).
