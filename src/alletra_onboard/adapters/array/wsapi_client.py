@@ -212,10 +212,13 @@ class WsapiClient:
             raise self._translate(exc, where=f"createHostSet {name}") from exc
 
     def ensure_volume(self, name: str, cpg: str, size_mib: int, provisioning_type: str) -> str:
-        if provisioning_type == "reduce":
-            optional = {"tdvv": True, "compression": True}  # DECO = inline dedup + compression
-        else:
-            optional = {"tpvv": True}
+        # Data reduction is ONE flag on the Alletra MP WSAPI: `reduce`. The legacy 3PAR pair
+        # {"tdvv": True, "compression": True} is rejected outright -- proven live on a B10000
+        # (WSAPI 1.15.60 / OS 10.5.60.36): `tdvv` returns code 78 "one of the parameters is
+        # required: tpvv,reduce", and `compression` returns code 42 "unrecognized name" in ANY
+        # body. `{"reduce": True}` alone is accepted and reads back provisioningType=6 with
+        # deduplication on -- so do not "restore" the compression flag; the array has no such field.
+        optional = {"reduce": True} if provisioning_type == "reduce" else {"tpvv": True}
         try:
             self._require().createVolume(name, cpg, size_mib, optional=optional)
             return "created"
