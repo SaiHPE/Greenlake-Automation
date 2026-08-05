@@ -52,11 +52,15 @@ _WSAPI_PERSONA: dict[str, int] = (
 )
 
 
-# WSAPI port enums -> the CLI (`showport`) vocabulary that ArrayPort documents. Only the values we
-# have actually observed are mapped; anything else falls through as its own string rather than being
-# guessed at or dropped. Observed live on 4UW0004497 (OS 10.5.60.36): every FC port reported
-# linkState=4 while the CLI calls those ports ready, and the host-serving ports reported mode=2
-# against mode=3 on the two ports the array does not present to hosts.
+# WSAPI port enums -> the CLI (`showport`) vocabulary that ArrayPort documents. Only values we have
+# actually observed are mapped; anything else falls through as its own string rather than being
+# guessed at or dropped.
+#
+# PROVEN by running both interfaces against the same array (4UW0004497, OS 10.5.60.36) and matching
+# them port for port: the six ports `showport` calls `target` are exactly the six the WSAPI reports
+# as mode=2, the two it calls `initiator` are exactly mode=3, and every port it calls `ready` is
+# linkState=4. The IP/peer ports (`peer`, protocol IP) come back as protocol=4/mode=4 and are
+# filtered out before this mapping applies.
 _PORT_LINK_STATE: dict[object, str] = {4: "ready", 5: "loss_sync", 10: "offline"}
 _PORT_MODE: dict[object, str] = {1: "suspended", 2: "target", 3: "initiator", 4: "peer"}
 
