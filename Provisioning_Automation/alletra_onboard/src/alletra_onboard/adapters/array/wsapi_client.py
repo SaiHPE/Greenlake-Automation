@@ -117,6 +117,15 @@ class WsapiClient:
         body = self._require().getCPGs()
         return [m.get("name", "") for m in _members(body)]
 
+    def cpg_free_mib(self) -> dict[str, int]:
+        """CPG name -> free capacity in MiB, for the readiness preflight. `freeSpaceMiB` is what the
+        array reports; a CPG missing the field reads as 0 rather than dropping out of the map."""
+        return {
+            m.get("name", ""): int(m.get("freeSpaceMiB") or 0)
+            for m in _members(self._require().getCPGs())
+            if m.get("name")
+        }
+
     def array_fc_ports(self) -> list[ArrayPort]:
         """FC *target* ports with their WWPN + state, fabric assigned by card-port parity."""
         ports: list[ArrayPort] = []

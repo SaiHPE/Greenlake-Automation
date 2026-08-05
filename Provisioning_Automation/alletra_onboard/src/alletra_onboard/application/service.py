@@ -39,6 +39,7 @@ from alletra_onboard.domain.ports import RunStore
 from alletra_onboard.domain.provisioning import (
     ProvisioningBuilder,
     ProvisioningComposition,
+    PreflightReport,
     ProvisioningIntent,
     ProvisioningObjects,
 )
@@ -159,6 +160,9 @@ class OnboardingService:
 
     def start_path_verify(self, run_id: str) -> RunRecord:
         return self.provisioning.start_path_verify(run_id)
+
+    def get_storage_preflight(self, run_id: str) -> PreflightReport:
+        return self.provisioning.get_storage_preflight(run_id)
 
     def get_storage_objects(self, run_id: str) -> ProvisioningObjects:
         return self.provisioning.get_storage_objects(run_id)

@@ -72,7 +72,12 @@ from alletra_onboard.application.onboarding.health import greenlake_check
 from alletra_onboard.application.platform.init_sheet import build_template_bytes, parse_workbook_bytes
 from alletra_onboard.application.platform.proxy import ProxyResolver, apply_proxy_env, detect_system_proxy
 from alletra_onboard.domain.models import RunMode
-from alletra_onboard.domain.provisioning import ProvisioningBuilder, ProvisioningComposition, ProvisioningObjects
+from alletra_onboard.domain.provisioning import (
+    PreflightReport,
+    ProvisioningBuilder,
+    ProvisioningComposition,
+    ProvisioningObjects,
+)
 from alletra_onboard.domain.workflow import STEP_REGISTRY, mode_steps
 from alletra_onboard import __version__
 from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
@@ -429,6 +434,16 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def run_zoning_plan(run_id: str) -> RunResponse:
         # Read-only: reads both fabric switches to build the zoning plan; makes NO switch writes.
         return _start_step(run_id, lambda: service.start_zoning_plan(run_id))
+
+    @app.get("/runs/{run_id}/storage/preflight", response_model=PreflightReport)
+    async def storage_preflight(run_id: str) -> PreflightReport:
+        # Read-only readiness of the array + vCenter the sheet points at, so a missing prerequisite is
+        # named BEFORE discovery runs instead of surfacing as a failed step. Makes no writes.
+        _get_run_or_404(run_id)
+        try:
+            return await asyncio.to_thread(service.get_storage_preflight, run_id)
+        except StepPreconditionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.get("/runs/{run_id}/storage/objects", response_model=ProvisioningObjects)
     async def storage_objects(run_id: str) -> ProvisioningObjects:

@@ -239,6 +239,12 @@ export interface ProvisioningObjects {
 export interface ProvisioningBuilder { host_sets: HostSetRequest[]; exports: ExportRequest[]; vvsets: Record<string, string[]>; }
 export interface ProvisioningComposition { host_sets: HostSetRequest[]; exports: ExportRequest[]; volumes: VolumeRequest[]; }
 
+// Read-only readiness of the array + vCenter, checked BEFORE discovery so a missing prerequisite is
+// named rather than surfacing as a failed step. Never writes to the array.
+export interface PreflightCheck { key: string; label: string; status: 'pass' | 'warn' | 'fail'; detail: string; }
+export interface PreflightReport { checks: PreflightCheck[]; ready: boolean; }
+export const getStoragePreflight = (runId: string) => request<PreflightReport>('GET', `/runs/${runId}/storage/preflight`);
+
 export const startDiscover = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/discover`);
 export const zoningPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/preview`);
 export const zoningPlan = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/plan`);
