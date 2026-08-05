@@ -52,6 +52,15 @@ _WSAPI_PERSONA: dict[str, int] = (
 )
 
 
+# WSAPI port enums -> the CLI (`showport`) vocabulary that ArrayPort documents. Only the values we
+# have actually observed are mapped; anything else falls through as its own string rather than being
+# guessed at or dropped. Observed live on 4UW0004497 (OS 10.5.60.36): every FC port reported
+# linkState=4 while the CLI calls those ports ready, and the host-serving ports reported mode=2
+# against mode=3 on the two ports the array does not present to hosts.
+_PORT_LINK_STATE: dict[object, str] = {4: "ready", 5: "loss_sync", 10: "offline"}
+_PORT_MODE: dict[object, str] = {1: "suspended", 2: "target", 3: "initiator", 4: "peer"}
+
+
 class WsapiError(Exception):
     """Couldn't reach, authenticate to, or drive WSAPI on the array."""
 
@@ -127,11 +136,16 @@ class WsapiClient:
         }
 
     def array_fc_ports(self) -> list[ArrayPort]:
-        """FC *target* ports with their WWPN + state, fabric assigned by card-port parity."""
+        """Every FC port with its WWPN, link state and role, fabric assigned by card-port parity.
+
+        The WSAPI reports linkState and mode as integers while the CLI (`showport`) reports words,
+        and ArrayPort is shared by both paths — so map the enums back to the CLI's vocabulary here
+        rather than leaking "4" into a field documented as "ready". Unknown values pass through as
+        their own string instead of being silently dropped.
+        """
         ports: list[ArrayPort] = []
         for member in _members(self._require().getPorts()):
-            # protocol 1 = FC; mode 2 = target (HPE WSAPI port enums). Be permissive on missing keys.
-            if member.get("protocol") not in (1, None):
+            if member.get("protocol") not in (1, None):  # 1 = FC
                 continue
             wwn = member.get("portWWN")
             pos = member.get("portPos") or {}
@@ -144,7 +158,8 @@ class WsapiClient:
                     slot=int(pos.get("slot", 0)),
                     card_port=card_port,
                     wwpn=normalize_wwpn(str(wwn)),
-                    link_state=str(member.get("linkState", "")),
+                    link_state=_PORT_LINK_STATE.get(member.get("linkState"), str(member.get("linkState", ""))),
+                    mode=_PORT_MODE.get(member.get("mode"), str(member.get("mode", ""))),
                     fabric="odd" if card_port % 2 == 1 else "even",
                 )
             )
