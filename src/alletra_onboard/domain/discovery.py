@@ -18,6 +18,10 @@ class ArrayPort(BaseModel):
     wwpn: str = ""          # normalized FC port WWPN ("" for iSCSI)
     address: str = ""       # iSCSI target IP ("" for FC)
     link_state: str         # ready | offline | loss_sync | ...
+    # Port role. Only a 'target' port serves hosts; 'initiator'/'peer' ports carry replication or
+    # migration traffic and must not be counted as host-facing capacity. The CLI (`showport`) gives
+    # this as a word; the WSAPI gives it as an enum the adapter maps back to the same word.
+    mode: str = ""          # target | initiator | peer | suspended | "" (unknown)
     # FC only. Derived from the switch this port attaches to (showportdev fcfabric) when it is
     # 'ready' and resolvable; otherwise falls back to card-port parity (odd card_port -> odd fabric,
     # even -> even). See docs/adr/0009.
