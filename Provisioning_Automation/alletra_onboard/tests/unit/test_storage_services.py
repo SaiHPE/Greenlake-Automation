@@ -423,6 +423,34 @@ def test_wsapi_persona_ids_match_the_array_enum():
     assert _WSAPI_PERSONA["Generic-ALUA"] == 2
 
 
+def test_wsapi_volume_bodies_match_what_the_array_accepts():
+    # Regression guard for the data-reduction body. Proven live on a B10000 (WSAPI 1.15.60 /
+    # OS 10.5.60.36) with throwaway zz_recon_* volumes in SSD_r6:
+    #   {"tdvv": True, "compression": True} -> 400 code 78 "one of the parameters is required: tpvv,reduce"
+    #   {"tpvv": True, "compression": True} -> 400 code 42 "unrecognized name: compression"
+    #   {"reduce": True}                    -> 201, reads back provisioningType=6, dedup on
+    # `compression` is not a field on this API at all, and `tdvv` is the legacy 3PAR spelling.
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+
+    class SpyClient:
+        def __init__(self) -> None:
+            self.calls: list[tuple] = []
+
+        def createVolume(self, name, cpg, size_mib, optional=None):  # noqa: N802 - SDK spelling
+            self.calls.append((name, cpg, size_mib, optional))
+
+    client = WsapiClient(host="array", username="3paradm", password="x")
+    spy = SpyClient()
+    client._client = spy
+
+    assert client.ensure_volume("v_reduce", "SSD_r6", 1024, "reduce") == "created"
+    assert client.ensure_volume("v_thin", "SSD_r6", 1024, "tpvv") == "created"
+
+    bodies = {call[0]: call[3] for call in spy.calls}
+    assert bodies["v_reduce"] == {"reduce": True}   # NOT tdvv, and no compression key
+    assert bodies["v_thin"] == {"tpvv": True}
+
+
 def test_apply_plan_sets_persona_per_host_os():
     d = disc.DiscoveryReport(host_hbas=[
         HostHba(host_name="esx1", wwpn=_A, os="VMware ESXi 8.0.3"),
