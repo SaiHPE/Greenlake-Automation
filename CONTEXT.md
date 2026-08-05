@@ -170,6 +170,15 @@ to one: the **cloud** plane (DSCC, multi-array), the **direct** plane (a single 
 and the **switch** (FC zoning). See ADR 0006.
 _Avoid_: conflating the control plane with the array itself (the data plane).
 
+**Array subscription**:
+The array's registration and entitlement state with HPE GreenLake. Until it completes, the array
+refuses *data-path configuration* — creating a virtual volume fails with "Array has not yet completed
+the subscription process". An array can be powered on, healthy, reachable over WSAPI, with normal
+drives and free capacity in its CPGs, and still create nothing, because subscription is a separate
+gate from hardware readiness.
+_Avoid_: "initialization" (that is the array's own network setup — a prerequisite of subscription,
+not the same thing); "licensing" (its failure mode is a hard refusal to configure, not a warning).
+
 **Protection policy**:
 A **DSCC**-managed rule set that applies **snapshots** and/or **replication** (Remote Copy) to
 volumes or volume-sets on a schedule, with retention — the cloud-native way to express snapshot + DR
