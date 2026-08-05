@@ -1,5 +1,31 @@
 # The tool verifies SAN zoning and produces a read-only zoning PLAN — it never writes to the switch
 
+> **DEFERRAL PREMISE MEASURED AND FOUND FALSE (2026-08-04). The decision is unchanged and
+> reconfirmed; the reason for waiting is not.** Two findings from live probes of 4UW0004497
+> (OS 10.5.60.36):
+>
+> - **The BGL lab IS a real dual fabric.** Diffing the switch membership of
+>   `showportdev fcfabric 0:3:1` against `0:3:2`: **28 switches on F1, 26 on F2, ZERO in common**,
+>   with the `_F1`/`_F2` suffix applied consistently across all ~54. Card-port parity AGREES with the
+>   switch-derived fabric (`resolve_port_fabrics` emitted no override notes). The "one big meshed
+>   fabric, both declared switches see everything, the split collapses" premise recorded below does
+>   not hold here. Why it was reached earlier is unresolved — possibly two switches on the same
+>   fabric, or a different array — but it must be re-measured before being relied on again.
+> - **Read-only SWITCH access is a hard prerequisite for PLANNING, not just for creating.**
+>   `showportdev ns <n:s:p>` is **zone-filtered**: 9 lines on `0:3:1`, 8 on `0:3:2` — the array's own
+>   ports plus the single host each port is *already* zoned to. None of the three vCenter ESXi hosts'
+>   six WWPNs appeared. **The array is structurally blind to exactly the hosts the operator wants to
+>   zone**, so the builder's dropdowns cannot be populated from array-side reads. The sheet hint
+>   claiming switch access was "only needed to CREATE zones" was wrong and is fixed (a1370d9).
+>
+> **Consequence for the deferral.** "Build this AFTER the clean lab lands" existed because an
+> *isolated* 2-switch bed was needed to make *writing* zones safe to test. With plan-only reconfirmed
+> (2026-08-04 — the operator copies the commands into his own switch session; the tool never holds
+> switch write credentials), that need evaporates: **reading a shared production fabric is harmless,
+> and is a strictly better test** — real aliases, hundreds of existing zones, real cabling. The
+> blocker is no longer a test bed but **read-only credentials for `SW6600_F23U40_F1` and
+> `SW6600_F23U39_F2`**.
+
 > **DESIGN REFINED (2026-07-04, from the SAN-team call with Panduranga). BUILD DEFERRED until a clean
 > test fabric exists.** The v0.10.x plan *auto-paired* each host WWPN with every same-fabric array
 > target port. That doesn't survive the field — fabric assignment must be **switch-based and
