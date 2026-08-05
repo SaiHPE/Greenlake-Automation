@@ -74,21 +74,29 @@ def _names_check(intent: ProvisioningIntent, existing: set[str]) -> PreflightChe
 
 
 def _ports_check(ports: list) -> PreflightCheck:
-    ready = [p for p in ports if str(getattr(p, "link_state", "")).lower() in _READY_LINK_STATES]
+    """Only TARGET-mode ports serve hosts. An array can have plenty of ready FC ports and still be
+    unable to present a LUN, because initiator/peer ports carry replication or migration traffic —
+    live example: 4UW0004497 has 8 ready FC ports of which only 6 are target mode."""
     if not ports:
         return PreflightCheck(
             key="ports", label="Array FC ports", status="fail",
-            detail="The array reports no FC target ports — hosts cannot be served over FC.",
+            detail="The array reports no FC ports — hosts cannot be served over FC.",
         )
+    targets = [p for p in ports if str(getattr(p, "mode", "")).lower() in ("target", "")]
+    ready = [p for p in targets if str(getattr(p, "link_state", "")).lower() in _READY_LINK_STATES]
     if not ready:
-        return PreflightCheck(
-            key="ports", label="Array FC ports", status="fail",
-            detail=f"None of the {len(ports)} FC target port(s) has a ready link.",
-        )
+        other = len(ports) - len(targets)
+        detail = f"None of the {len(targets)} FC target port(s) has a ready link"
+        detail += f" ({other} further port(s) are initiator or peer mode, which do not serve hosts)." if other else "."
+        return PreflightCheck(key="ports", label="Array FC ports", status="fail", detail=detail)
+
     fabrics = sorted({getattr(p, "fabric", "") for p in ready if getattr(p, "fabric", "")})
-    detail = f"{len(ready)} of {len(ports)} FC target port(s) ready"
+    detail = f"{len(ready)} of {len(targets)} FC target port(s) ready"
     if fabrics:
         detail += f" across {', '.join(fabrics)}"
+    non_target = len(ports) - len(targets)
+    if non_target:
+        detail += f"; {non_target} initiator/peer port(s) excluded"
     return PreflightCheck(key="ports", label="Array FC ports", status="pass", detail=detail + ".")
 
 

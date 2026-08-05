@@ -500,12 +500,47 @@ def test_preflight_fails_when_vcenter_reports_no_hosts_because_apply_would_refus
 
 def test_preflight_fails_when_no_fc_target_port_has_a_ready_link():
     dark = [ArrayPort(node=0, slot=3, card_port=1, wwpn=normalize_wwpn(ARR_O1),
-                      link_state="loss_sync", fabric="odd")]
+                      link_state="loss_sync", mode="target", fabric="odd")]
     report = _preflight(wsapi=FakeWsapi(ports=dark),
                         hbas=[HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A))])
     ports = _by_key(report)["ports"]
     assert report.ready is False
     assert ports.status == "fail" and "ready link" in ports.detail
+
+
+def test_preflight_does_not_count_initiator_ports_as_host_capacity():
+    # Live shape from 4UW0004497: ready FC ports, but two of them are mode 3 (initiator) and serve
+    # replication, not hosts. Counting them would overstate the array's host-facing capacity.
+    mixed = [
+        ArrayPort(node=0, slot=3, card_port=1, wwpn=normalize_wwpn(ARR_O1), link_state="ready", mode="target", fabric="odd"),
+        ArrayPort(node=0, slot=3, card_port=3, wwpn=normalize_wwpn(ARR_O2), link_state="ready", mode="initiator", fabric="odd"),
+    ]
+    report = _preflight(wsapi=FakeWsapi(ports=mixed),
+                        hbas=[HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A))])
+    ports = _by_key(report)["ports"]
+    assert ports.status == "pass"
+    assert "1 of 1 FC target port(s) ready" in ports.detail
+    assert "1 initiator/peer port(s) excluded" in ports.detail
+
+
+def test_preflight_fails_when_every_fc_port_is_initiator_mode():
+    only_initiators = [
+        ArrayPort(node=0, slot=3, card_port=3, wwpn=normalize_wwpn(ARR_O1), link_state="ready", mode="initiator", fabric="odd"),
+    ]
+    report = _preflight(wsapi=FakeWsapi(ports=only_initiators),
+                        hbas=[HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A))])
+    ports = _by_key(report)["ports"]
+    assert report.ready is False
+    assert ports.status == "fail" and "initiator or peer mode" in ports.detail
+
+
+def test_wsapi_port_enums_map_to_the_cli_vocabulary():
+    # ArrayPort.link_state is documented as "ready | offline | loss_sync"; the WSAPI reports integers.
+    # Leaking "4" into that field would break every consumer that compares against "ready".
+    from alletra_onboard.adapters.array.wsapi_client import _PORT_LINK_STATE, _PORT_MODE
+
+    assert _PORT_LINK_STATE[4] == "ready"
+    assert _PORT_MODE[2] == "target" and _PORT_MODE[3] == "initiator"
 
 
 def test_preflight_never_writes_to_the_array():
