@@ -123,10 +123,12 @@ class FakeVCenter:
 
 
 class FakeWsapi:
-    def __init__(self, *, ports=(), hosts=(), host_sets=(), volumes=(), vsets=(), cpgs=("SSD_r6",)):
+    def __init__(self, *, ports=(), hosts=(), host_sets=(), volumes=(), vsets=(), cpgs=("SSD_r6",),
+                 cpg_free=10_000_000):  # MiB free per CPG; default comfortably above the fake intent
         self._ports = list(ports)
         self.hosts, self.host_sets = set(hosts), set(host_sets)
         self.volumes, self.vsets, self.cpgs = set(volumes), set(vsets), set(cpgs)
+        self.cpg_free = cpg_free
         self.calls: list[tuple] = []
 
     def __enter__(self):
@@ -138,8 +140,14 @@ class FakeWsapi:
     def array_fc_ports(self):
         return self._ports
 
+    def system_name(self):
+        return "AlletraTest"
+
     def cpg_names(self):
         return list(self.cpgs)
+
+    def cpg_free_mib(self):
+        return {name: self.cpg_free for name in self.cpgs}
 
     def host_names(self):
         return list(self.hosts)
@@ -421,6 +429,91 @@ def test_wsapi_persona_ids_match_the_array_enum():
     assert _WSAPI_PERSONA["VMware"] == 8
     assert _WSAPI_PERSONA["WindowsServer"] == 11
     assert _WSAPI_PERSONA["Generic-ALUA"] == 2
+
+
+# ---------------- readiness preflight (read-only; runs BEFORE discovery) ----------------
+
+def _preflight(*, wsapi=None, hbas=(), **intent_over):
+    from alletra_onboard.application.provisioning import preflight
+
+    return preflight.run_preflight(
+        _intent(**intent_over),
+        wsapi_factory=lambda c: wsapi if wsapi is not None else FakeWsapi(ports=_ports()),
+        vcenter_factory=lambda c: FakeVCenter(hbas),
+    )
+
+
+def _by_key(report):
+    return {c.key: c for c in report.checks}
+
+
+def test_preflight_all_green_when_array_and_vcenter_are_ready():
+    report = _preflight(hbas=[HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A), os="VMware ESXi 8.0.3")])
+    assert report.ready is True
+    assert {c.status for c in report.checks} == {"pass"}
+    assert "esx1" in _by_key(report)["vcenter"].detail
+
+
+def test_preflight_fails_loudly_when_the_array_is_unreachable_but_still_reports_vcenter():
+    class Dead:
+        def __enter__(self):
+            raise OSError("connection refused")
+
+        def __exit__(self, *a):
+            return False
+
+    report = _preflight(wsapi=Dead(), hbas=[HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A))])
+    checks = _by_key(report)
+    assert report.ready is False
+    assert checks["array"].status == "fail" and "connection refused" in checks["array"].detail
+    # vCenter is independently reachable, so it is still answered rather than guessed at.
+    assert checks["vcenter"].status == "pass"
+    assert "cpg" not in checks and "names" not in checks  # unknowable without the array
+
+
+def test_preflight_fails_when_the_sheet_names_a_cpg_the_array_does_not_have():
+    report = _preflight(wsapi=FakeWsapi(ports=_ports(), cpgs=("NL_r6",)), cpg="SSD_r6",
+                        hbas=[HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A))])
+    cpg = _by_key(report)["cpg"]
+    assert report.ready is False
+    assert cpg.status == "fail" and "SSD_r6" in cpg.detail and "NL_r6" in cpg.detail
+
+
+def test_preflight_warns_but_does_not_block_on_tight_capacity_or_existing_names():
+    # Thin volumes do not consume their nominal size, and apply is idempotent — neither is fatal.
+    report = _preflight(
+        wsapi=FakeWsapi(ports=_ports(), cpg_free=1, volumes=("CRV_Prod01",)),
+        hbas=[HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A))],
+    )
+    checks = _by_key(report)
+    assert report.ready is True  # warnings never block
+    assert checks["cpg"].status == "warn"
+    assert checks["names"].status == "warn" and "CRV_Prod01" in checks["names"].detail
+
+
+def test_preflight_fails_when_vcenter_reports_no_hosts_because_apply_would_refuse():
+    report = _preflight(hbas=[])
+    vc = _by_key(report)["vcenter"]
+    assert report.ready is False
+    assert vc.status == "fail" and "no ESXi host" in vc.detail
+
+
+def test_preflight_fails_when_no_fc_target_port_has_a_ready_link():
+    dark = [ArrayPort(node=0, slot=3, card_port=1, wwpn=normalize_wwpn(ARR_O1),
+                      link_state="loss_sync", fabric="odd")]
+    report = _preflight(wsapi=FakeWsapi(ports=dark),
+                        hbas=[HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A))])
+    ports = _by_key(report)["ports"]
+    assert report.ready is False
+    assert ports.status == "fail" and "ready link" in ports.detail
+
+
+def test_preflight_never_writes_to_the_array():
+    # The whole contract: readiness is established by reads. A create here would be a defect —
+    # the subscription gate is translated at apply time, not probed with a throwaway volume.
+    fake = FakeWsapi(ports=_ports())
+    _preflight(wsapi=fake, hbas=[HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A))])
+    assert fake.calls == []
 
 
 def test_wsapi_volume_bodies_match_what_the_array_accepts():

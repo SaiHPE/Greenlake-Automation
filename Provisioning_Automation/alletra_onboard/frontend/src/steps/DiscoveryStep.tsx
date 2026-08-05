@@ -1,6 +1,17 @@
 import { Box, Button, DataTable, Text } from 'grommet';
 import { useState } from 'react';
-import { ArrayHost, ArrayPort, DiscoveryReport, HostHba, RunEvent, RunRecord, startDiscover } from '../api';
+import {
+  ArrayHost,
+  ArrayPort,
+  DiscoveryReport,
+  HostHba,
+  PreflightCheck,
+  PreflightReport,
+  RunEvent,
+  RunRecord,
+  getStoragePreflight,
+  startDiscover,
+} from '../api';
 import { DiscoveryFreshness } from '../ui/discoveryAge';
 import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator } from '../ui/status';
@@ -17,6 +28,8 @@ const mono = { fontFamily: 'ui-monospace, Consolas, monospace' };
 
 export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
+  const [preflight, setPreflight] = useState<PreflightReport | null>(null);
+  const [checking, setChecking] = useState(false);
   const running = run?.status === 'running';
 
   const report =
@@ -36,6 +49,18 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
     }
   };
 
+  const checkReadiness = async () => {
+    setError(null);
+    setChecking(true);
+    try {
+      setPreflight(await getStoragePreflight(runId));
+    } catch (exc: any) {
+      setError(String(exc.message ?? exc));
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
     <StepShell
       title="Discovery"
@@ -47,6 +72,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
       footerNote="Discovery results persist with the run and survive an application restart."
       actions={
         <>
+          <Button busy={checking} label={checking ? 'Checking' : 'Check readiness'} onClick={checkReadiness} />
           <Button
             busy={running}
             label={report ? 'Re-run discovery' : running ? 'Discovering' : 'Run discovery'}
@@ -56,6 +82,49 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
         </>
       }
     >
+      {preflight && (
+        <Surface
+          title="Environment readiness"
+          description="Read-only checks against the array and vCenter named in the sheet. Nothing is modified."
+        >
+          <DataTable
+            columns={[
+              {
+                property: 'label',
+                header: 'Check',
+                render: (check: PreflightCheck) => <Text size="small">{check.label}</Text>,
+              },
+              {
+                property: 'status',
+                header: 'Result',
+                render: (check: PreflightCheck) => (
+                  <StatusIndicator
+                    state={check.status === 'pass' ? 'complete' : check.status === 'warn' ? 'action_required' : 'failed'}
+                    label={check.status === 'pass' ? 'Ready' : check.status === 'warn' ? 'Review' : 'Blocked'}
+                  />
+                ),
+              },
+              {
+                property: 'detail',
+                header: 'Detail',
+                render: (check: PreflightCheck) => (
+                  <Text size="small" color="text-weak">
+                    {check.detail}
+                  </Text>
+                ),
+              },
+            ]}
+            data={preflight.checks}
+            primaryKey={false}
+          />
+          <TableSummary>
+            {preflight.ready
+              ? 'Every prerequisite is satisfied — discovery can run.'
+              : 'Resolve the blocked checks above; discovery cannot succeed until they pass.'}
+          </TableSummary>
+        </Surface>
+      )}
+
       {!report && !running && (
         <Surface title="Nothing discovered yet">
           <Text size="small" color="text-weak">
