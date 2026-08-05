@@ -127,12 +127,12 @@ PROVISIONING_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
         ("prov_vcenter_user", "vCenter username", True, "e.g. administrator@vsphere.local"),
         ("prov_vcenter_password", "vCenter password", True, ""),
     ]),
-    ("Targets — SAN switches (dual fabric) — OPTIONAL, only for zoning remediation", [
-        ("prov_sw1_host", "Switch 1 — odd / F1 — IP", False, "only needed to CREATE zones; verify is array-side"),
-        ("prov_sw1_user", "Switch 1 username", False, "e.g. admin"),
+    ("Targets — SAN switches (dual fabric) — needed for the SAN Zoning step (read-only)", [
+        ("prov_sw1_host", "Switch 1 — odd / F1 — IP", False, "read-only account is enough; required for SAN Zoning"),
+        ("prov_sw1_user", "Switch 1 username", False, "e.g. admin — the tool only READS the switch"),
         ("prov_sw1_password", "Switch 1 password", False, ""),
-        ("prov_sw2_host", "Switch 2 — even / F2 — IP", False, "only needed to CREATE zones; verify is array-side"),
-        ("prov_sw2_user", "Switch 2 username", False, "e.g. admin"),
+        ("prov_sw2_host", "Switch 2 — even / F2 — IP", False, "read-only account is enough; required for SAN Zoning"),
+        ("prov_sw2_user", "Switch 2 username", False, "e.g. admin — the tool only READS the switch"),
         ("prov_sw2_password", "Switch 2 password", False, ""),
     ]),
     ("Defaults — used when a Volumes row leaves CPG / Type blank (optional)", [
