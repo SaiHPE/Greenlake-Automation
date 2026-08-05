@@ -148,3 +148,53 @@ revision — before any component was written, and implementation then copied th
 verbatim. Changing a sentence in a mockup costs nothing; changing it across thirteen components
 does not. Where shipped behaviour forces a divergence from the mockup (Cloud Connectivity submits
 for a reason), record the divergence explicitly.
+
+## Diagnosing a system you can only see through someone else's terminal
+
+**23. Reproduce the reported symptom yourself — its error message is usually the diagnosis.**
+A lab array was reported as "SSD drives have old firmware, can't create a base VV", and days went
+into drive firmware, enclosure FRU data and a 3.4 GB OS upgrade. One command settled it:
+`createvv -tpvv SSD_r6 zz_test 1g` → *"Array has not yet completed the subscription process."* Not
+firmware, not the cage — a GreenLake subscription gate. Nobody had run the command the complaint was
+about. Before accepting anyone's diagnosis, execute the failing operation and read what the system
+says about itself.
+
+**24. Alerts persist; state does not. Check the timestamps before believing either.**
+`checkhealth` reported all twelve drives `Failed (Replace Drive, Unsupported Cage)`; `showpd -s`
+reported all twelve `normal`. `showalert -d` resolved it: every alert was timestamped four days
+earlier, from a fault that had been repaired and never cleared. A team had been working from that
+text ever since. An alert records an event; a state command records now. When they disagree the
+timestamps decide — and clearing alerts is part of finishing a repair.
+
+**25. When a transfer reports success but the artifact is wrong, split the path before theorising.**
+`scp` reported 3456 MB transferred; 204800 bytes landed — twice, at identical size, for a 3.4 GB and
+a 39 MB file. Two plausible hypotheses (a file-size `ulimit`, a full filesystem) were both wrong and
+both cost a round trip. What settled it was `dd if=/dev/zero of=… bs=1M count=50`: 52 MB written
+locally at 1.6 GB/s, no network involved, proving the destination innocent and the transport guilty
+in one step. Prefer the experiment that halves the problem over the hypothesis that explains it.
+
+**26. Quote what the tool printed; label what you concluded.**
+Arguing that a node's admin port was uncabled, I wrote "nobody has physically looked at the LED" —
+which no output supported and which asserted something about people I cannot observe. The defensible
+version was narrower and stronger: two checks four hours apart still failing, zero packets ever on
+that interface, `eth0 DOWN` holding a self-assigned link-local address. Findings get quoted;
+inferences get named as inferences. The narrow claim is the one that survives being challenged.
+
+**27. A liveness probe must treat any structured response as alive.**
+Our recon script declared WSAPI down because unauthenticated `GET /api` returned
+`403 {"code": 6, "desc": "invalid session key"}` — a service answering in its own protocol, which is
+proof of life. The array's own `showwsapi` said `Enabled Active`. Only a connection failure means
+dead. This is lesson 1 wearing different clothes: the probe asserted one specific success shape
+instead of distinguishing *answered* from *did not answer*.
+
+**28. An adapter that translates to a vendor API cannot be validated by a fake.**
+`ensure_volume` had sent `{"tdvv": true, "compression": true}` for data-reduction volumes since the
+day it was written, and every test passed — because every test used a fake WSAPI that accepted
+whatever it was handed. The real array rejects it twice over: `tdvv` is the legacy 3PAR spelling
+(`code 78 … required: tpvv,reduce`) and `compression` is not a field on that API at all
+(`code 42 unrecognized name`). Fakes prove our code calls what we think it calls; only the endpoint
+proves that is what it wants. Every vendor-API adapter needs one live probe, with the accepted body
+recorded in a test so nobody restores the plausible-looking wrong one.
+Corollary: the failure was identical at 1 GiB and 16 GiB, which refuted the "compressed volumes have
+a 16 GiB minimum" theory outright. When two very different inputs fail the same way, the input is not
+the variable — read the error text instead of pattern-matching it to a known constraint.
