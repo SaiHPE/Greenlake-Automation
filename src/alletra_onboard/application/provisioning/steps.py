@@ -16,6 +16,7 @@ import asyncio
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.application.provisioning import discovery as storage_discovery
 from alletra_onboard.application.provisioning import path_verify as storage_path_verify
+from alletra_onboard.application.provisioning import preflight as storage_preflight
 from alletra_onboard.application.provisioning import storage_provision
 from alletra_onboard.application.provisioning import zoning as storage_zoning
 from alletra_onboard.application.provisioning import zoning_plan as storage_zoning_plan
@@ -26,6 +27,7 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningComposition,
     ProvisioningObjects,
     ProvisioningPlan,
+    PreflightReport,
 )
 
 
@@ -251,6 +253,13 @@ class ProvisioningSteps:
         )
 
     # ------------------------------------------------------------------ provisioning builder (Stage 2)
+
+    def get_storage_preflight(self, run_id: str) -> PreflightReport:
+        """Read-only readiness of the array + vCenter the sheet points at. Deliberately does NOT
+        require discovery — the point is to name the missing prerequisite *before* discovery runs.
+        Synchronous (network reads); the caller runs it off the event loop."""
+        intent = self._coord.get_provisioning_intent(run_id)
+        return storage_preflight.run_preflight(intent)
 
     def get_storage_objects(self, run_id: str) -> ProvisioningObjects:
         """The dropdown 'palette': array objects (WSAPI read) + to-be-created (sheet intent) + discovered
