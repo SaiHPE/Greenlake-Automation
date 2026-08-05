@@ -180,6 +180,34 @@ class ProvisioningComposition(BaseModel):
     volumes: list[VolumeRequest] = Field(default_factory=list)
 
 
+# ------------------------------------------------------------------ readiness preflight
+
+CheckStatus = Literal["pass", "warn", "fail"]
+
+
+class PreflightCheck(BaseModel):
+    """One deterministic readiness check with the evidence that decided it. `warn` never blocks —
+    it flags something the operator should see (a name that already exists, a thin-provisioned
+    request larger than current free space) that the run can still proceed through."""
+
+    key: str
+    label: str
+    status: CheckStatus
+    detail: str = ""
+
+
+class PreflightReport(BaseModel):
+    """Read-only readiness of the environment the sheet points at, run BEFORE discovery so a missing
+    prerequisite is named plainly instead of surfacing as a failed step. Never writes to the array."""
+
+    checks: list[PreflightCheck] = Field(default_factory=list)
+    ready: bool = True          # False when any check failed
+
+    @classmethod
+    def of(cls, checks: list[PreflightCheck]) -> "PreflightReport":
+        return cls(checks=checks, ready=not any(c.status == "fail" for c in checks))
+
+
 # ------------------------------------------------------------------ provisioning plan + result
 
 ActionKind = Literal["host", "hostset", "volume", "vvset", "vlun"]
