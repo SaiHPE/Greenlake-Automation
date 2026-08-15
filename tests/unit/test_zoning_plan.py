@@ -1,7 +1,14 @@
 """Zoning PLAN (ADR 0004 revised) — the read-only, assisted command builder. No switch writes:
-build the per-fabric SIST plan from read-only switch data, keep every alias, render the preview."""
+build the per-fabric SIST plan from read-only switch data, keep every alias, render the preview.
+
+Two kinds of tests here: small synthetic cases for the plan/render logic, and REAL-CAPTURE tests
+against tests/fixtures/vz_fabric — full `nsshow`/`nscamshow`/`alishow`/`cfgactvshow` output taken
+from the live VZ fabric switches on 2026-08-14. The synthetic cases alone let the alias-pollution
+bug survive (a fake never dumps the trailing effective section the way a real switch does)."""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 from alletra_onboard.application.provisioning import zoning_plan as zp
 from alletra_onboard.domain.shared import EndpointCreds
@@ -173,6 +180,65 @@ def test_render_commands_dedupes_colliding_zones():
     )])
     zones = [c for c in zp.render_commands(plan, {})["F1"] if c.startswith("zonecreate")]
     assert len(zones) == 1   # both pairs collide on zone "H_A" -> deduped
+
+
+# ---------------- real captures (tests/fixtures/vz_fabric, live VZ fabric 2026-08-14) ----------------
+
+_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "vz_fabric"
+
+
+def _fixture(name: str) -> str:
+    return (_FIXTURES / name).read_text(encoding="utf-8", errors="replace")
+
+
+def test_real_nsshow_classifies_devices_and_extracts_identity():
+    devices = zp.parse_nameserver(_fixture("F1_nsshow.txt"))
+    assert len(devices) == 7  # 2 physical array ports + 2 NPIV shadows + 3 host HBAs
+
+    # Host identity comes from the SWITCH — no vCenter needed (and vCenter names these by IP anyway).
+    hosts = {d.host_name: d for d in devices.values() if d.is_physical_initiator}
+    assert set(hosts) == {"DL360G11D24U25", "DL360G11D24U26", "DL360G11D24U27"}
+    assert all(d.os == "VMware ESXi 8.0.3" for d in hosts.values())
+
+    # Array ports self-describe serial + n:s:p in PortSymb.
+    targets = [d for d in devices.values() if d.is_physical_target]
+    assert {d.array_nsp for d in targets} == {"0:3:1", "1:3:1"}
+    assert all(d.array_serial == "SGHD44LQLS" for d in targets)
+
+    # THE TRAP: each FC-NVMe-capable array port registers twice; the NPIV shadow has its own WWPN
+    # but points at the physical port via Permanent Port Name. Zoning must use physical ports only.
+    npiv = [d for d in devices.values() if d.is_npiv]
+    assert len(npiv) == 2
+    assert {d.permanent_wwpn for d in npiv} == {d.wwpn for d in targets}
+    assert all(not d.is_physical_target and not d.is_physical_initiator for d in npiv)
+
+
+def test_real_nscamshow_scales_to_the_shared_fabric():
+    # The fabric-wide remote view: hundreds of devices across 28 switches. The parser must classify
+    # them without choking, and still surface host identity for the ones that advertise it.
+    devices = zp.parse_nameserver(_fixture("F1_nscamshow.txt"))
+    assert len(devices) > 250
+    windows_host = devices.get("10000090FA376EEA")
+    assert windows_host is not None and windows_host.host_name == "BL460CG82WB63"
+    assert "Windows" in windows_host.os
+
+
+def test_real_alishow_is_not_polluted_by_the_trailing_effective_section():
+    # alishow dumps the ENTIRE zone DB. Before the section guard, every WWPN in the trailing
+    # effective configuration was attributed to the LAST alias — winhost_fc_port_2 came back bound
+    # to 888 WWPNs; the zone database binds it to exactly one.
+    aliases = zp.parse_aliases(_fixture("F1_alishow.txt"))
+    carriers = [w for w, names in aliases.items() if "winhost_fc_port_2" in names]
+    assert carriers == ["1000441EA1529015"]
+
+    # And the genuine bindings survive: the site's own convention aliases resolve exactly.
+    assert "CRV_VZ_DL360G11D24U25_Port1" in aliases["10009440C9D01212"]
+    assert "MPB10K_D24U21_VZ_031" in aliases["20310002AC02F584"]
+
+
+def test_real_cfgactvshow_yields_the_active_cfg_per_fabric():
+    assert zp.parse_active_cfg(_fixture("F1_cfgactvshow.txt")) == "F1_CFG"
+    assert zp.parse_active_cfg(_fixture("F2_cfgactvshow.txt")) == "F2_CFG"
 
 
 def test_rcfc_and_peer_ports_excluded_from_host_zoning():

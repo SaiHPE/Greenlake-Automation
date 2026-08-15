@@ -19,46 +19,74 @@ from typing import Callable
 from alletra_onboard.application.provisioning.clients import make_brocade
 from alletra_onboard.domain.shared import normalize_wwpn, wwpn_colons
 from alletra_onboard.domain.discovery import DiscoveryReport
-from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, ZoningPlan
+from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, NsDevice, ZoningPlan
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 
 _WWPN_COLON = re.compile(r"(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}")
 
 
-def parse_nameserver(text: str) -> dict[str, dict]:
-    """`nsshow`/`nscamshow` -> {normalized WWPN: {'type':…, 'symb':…}} for every ONLINE device. A
-    device is here iff it is FLOGI'd — zoned or not — which is how we place an unzoned host on a fabric
-    (the array can't; its NS queries are zone-filtered)."""
-    devices: dict[str, dict] = {}
-    wwpn: str | None = None
+# An array port's PortSymb self-describes it: "SGHD44LQLS - 0:3:1 - HPE64004-B" (serial, n:s:p).
+_ARRAY_PORT_SYMB = re.compile(r"^(\S+) - (\d+:\d+:\d+) - ")
+
+
+def parse_nameserver(text: str) -> dict[str, NsDevice]:
+    """`nsshow`/`nscamshow` -> {normalized WWPN: NsDevice} for every ONLINE device. A device is here
+    iff it is FLOGI'd — zoned or not — which is how we place an unzoned host on a fabric (the array
+    can't; its NS queries are zone-filtered).
+
+    Beyond placement, the entries carry identity (see NsDevice): host name + OS from NodeSymb
+    ``HN:``/``OS:``, an array port's serial + n:s:p from PortSymb, and the initiator/target/NPIV
+    classification — all measured against live captures in tests/fixtures/vz_fabric."""
+    devices: dict[str, NsDevice] = {}
+    current: NsDevice | None = None
     for line in (text or "").splitlines():
         if re.match(r"\s*N\s+\S+;", line):
             parts = line.split(";")
-            candidate = normalize_wwpn(parts[2]) if len(parts) > 2 else ""
-            wwpn = candidate if len(candidate) == 16 else None
-            if wwpn:
-                devices.setdefault(wwpn, {"type": "", "symb": ""})
+            wwpn = normalize_wwpn(parts[2]) if len(parts) > 2 else ""
+            current = devices.setdefault(wwpn, NsDevice(wwpn=wwpn)) if len(wwpn) == 16 else None
             continue
-        if wwpn:
-            sym = re.search(r'PortSymb:\s*\[\d+\]\s*"(.*)"', line)
-            dev = re.search(r"Device type:\s*(.+)", line)
-            if sym:
-                devices[wwpn]["symb"] = sym.group(1).strip()
-            if dev:
-                devices[wwpn]["type"] = dev.group(1).strip()
+        if current is None:
+            continue
+        if sym := re.search(r'PortSymb:\s*\[\d+\]\s*"(.*)"', line):
+            current.port_symb = sym.group(1).strip()
+            if arr := _ARRAY_PORT_SYMB.match(current.port_symb):
+                current.array_serial, current.array_nsp = arr.group(1), arr.group(2)
+        elif node := re.search(r'NodeSymb:\s*\[\d+\]\s*"(.*)"', line):
+            current.node_symb = node.group(1).strip()
+            if hn := re.search(r"\bHN:(\S+)", current.node_symb):
+                current.host_name = hn.group(1)
+            if os_ := re.search(r"\bOS:(.+)$", current.node_symb):
+                current.os = os_.group(1).strip()
+        elif dev := re.search(r"Device type:\s*(.+)", line):
+            current.device_type = dev.group(1).strip()
+        elif perm := re.search(r"Permanent Port Name:\s*(\S+)", line):
+            current.permanent_wwpn = normalize_wwpn(perm.group(1))
     return devices
 
 
 def parse_aliases(text: str) -> dict[str, list[str]]:
     """`alishow` -> {normalized WWPN: [aliases…]}. A WWPN can carry MANY aliases on a shared fabric, so
-    EVERY one is kept in order (last-wins would silently pick a wrong/stale name)."""
+    EVERY one is kept in order (last-wins would silently pick a wrong/stale name).
+
+    `alishow` does NOT print only aliases: on a real fabric it dumps the whole zone database — the
+    defined cfg + zone blocks, then the alias blocks, then the ENTIRE effective configuration, whose
+    zone members are raw WWPNs. So collect WWPNs only while inside an alias block, and stop at the
+    effective section. Measured on the live F1 capture (tests/fixtures/vz_fabric) before this guard:
+    every WWPN in the effective section was attributed to whichever alias happened to be listed last —
+    `winhost_fc_port_2` came back bound to 888 WWPNs when the zone database binds it to exactly one.
+    (That pollution is also how an honest per-device alias can be misjudged as shared junk.)"""
     out: dict[str, list[str]] = defaultdict(list)
     name: str | None = None
     for line in (text or "").splitlines():
+        if "effective configuration" in line.lower():
+            break  # aliases live in the DEFINED section; what follows is active zones as raw WWPNs
         m = re.match(r"\s*alias:\s+(\S+)", line)
         if m:
             name = m.group(1)
             rest = line[m.end():]
+        elif re.match(r"\s*(?:zone|cfg):", line):
+            name = None  # a new non-alias block ends the current alias's member list
+            continue
         else:
             rest = line
         if name:
