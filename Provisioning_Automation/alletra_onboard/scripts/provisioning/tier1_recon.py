@@ -7,12 +7,13 @@
 # host. Prints a summary + writes ~/alletra_probe_out/tier1_recon.txt.
 #   run:  python tier1_recon.py     (password via env, no prompt)
 # =====================================================================
-import json, ssl, os, urllib.request, urllib.error
+import json, ssl, os, sys, urllib.request, urllib.error
 from pathlib import Path
 
 ARRAY = os.environ.get("ARRAY_IP", "10.64.122.140")
 USER  = os.environ.get("ARRAY_USER", "3paradm")
-PW    = os.environ.get("ARRAY_PW", "3pardata")
+# This repository is PUBLIC — no credential defaults, not even the vendor default (LESSONS.md 21).
+PW    = os.environ.get("ARRAY_PW") or sys.exit("Set $ARRAY_PW — credentials are never stored in this repository.")
 BASE  = f"https://{ARRAY}:443/api/v1"
 OUT   = Path.home() / "alletra_probe_out"; OUT.mkdir(parents=True, exist_ok=True)
 
