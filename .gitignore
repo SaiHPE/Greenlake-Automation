@@ -11,6 +11,11 @@ docx_images/
 
 # Raw research scratch files
 *.txt
+# ...except captured device output kept deliberately as TEST FIXTURES. These are checked for
+# credentials and IPs before committing (the blanket rule above exists because lab dumps leak —
+# see docs/LESSONS.md 21). Nothing here may contain an address, a password or a hostname of a
+# machine outside the lab.
+!Provisioning_Automation/alletra_onboard/tests/fixtures/**/*.txt
 *.html
 *.yaml
 *.pdf
