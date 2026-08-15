@@ -17,6 +17,7 @@ from collections import OrderedDict, defaultdict
 from typing import Callable
 
 from alletra_onboard.application.provisioning.clients import make_brocade
+from alletra_onboard.application.provisioning.zoning import parse_active_zones
 from alletra_onboard.domain.shared import normalize_wwpn, wwpn_colons
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, NsDevice, ZoningPlan
@@ -154,6 +155,7 @@ def build_zoning_plan(
     ns: dict[str, dict[str, dict]] = {}
     aliases: dict[str, list[str]] = {}
     active_cfg: dict[str, str] = {}
+    active_zones: dict[str, dict[str, set[str]]] = {}   # fabric -> {zone name: member WWPNs}
     switch_host: dict[str, str] = {}
     for label, creds in (("F1", intent.switch_f1), ("F2", intent.switch_f2)):
         switch_host[label] = creds.host
@@ -165,10 +167,13 @@ def build_zoning_plan(
                         aliases.setdefault(wwpn, [])
                         if alias not in aliases[wwpn]:
                             aliases[wwpn].append(alias)
-                active_cfg[label] = parse_active_cfg(switch.cfgshow())
+                cfg_text = switch.cfgshow()
+                active_cfg[label] = parse_active_cfg(cfg_text)
+                active_zones[label], _ = parse_active_zones(cfg_text)
         except Exception as exc:  # noqa: BLE001 - one unreachable switch must not sink the plan
             ns[label] = {}
             active_cfg[label] = ""
+            active_zones[label] = {}
             plan.notes.append(f"Could not read the {label} switch {creds.host}: {exc}")
 
     # How many distinct WWPNs each alias is bound to — a shared alias is junk (never suggested).
@@ -214,9 +219,18 @@ def build_zoning_plan(
             for p in array_ports if fabric_of(p.wwpn) == label
         ]
         pairs = [(host.wwpn, port.wwpn) for host in hosts for port in ports]
+        # The DELTA: a candidate pair is already zoned iff some zone in this fabric's effective
+        # config contains BOTH WWPNs (aliases were resolved by parse_active_zones). Proven against
+        # the live VZ captures: all 12 host<->array pairs land in already_zoned, so the preview
+        # creates nothing on a bed that is already correct.
+        zones = active_zones.get(label, {})
+        already = [
+            pair for pair in pairs
+            if any(pair[0] in members and pair[1] in members for members in zones.values())
+        ]
         plan.fabrics.append(FabricZonePlan(
             fabric=label, switch_host=switch_host[label], active_cfg=active_cfg.get(label, ""),
-            hosts=hosts, array_ports=ports, pairs=pairs,
+            hosts=hosts, array_ports=ports, pairs=pairs, already_zoned=already,
         ))
 
     # 5) Host WWPNs on NO fabric -> offline; can't be placed (cable + power, then re-run).
@@ -238,16 +252,27 @@ def render_commands(plan: ZoningPlan, aliases: dict[str, str]) -> dict[str, list
         def alias_for(wwpn: str) -> str:
             return aliases.get(wwpn) or by_wwpn[wwpn].suggested_alias
 
+        # The DELTA only: pairs the fabric's effective config already covers create NOTHING —
+        # re-proposing existing zones against a production config is the failure this guards.
+        zoned = set(fabric.already_zoned)
+        new_pairs = [pair for pair in fabric.pairs if pair not in zoned]
+
+        # alicreate only for WWPNs that participate in at least one NEW zone (an alias for a
+        # fully-zoned device is dead weight in the preview), and only for names the switch
+        # doesn't already have.
         cmds: list[str] = []
         emitted: set[str] = set()
+        in_new = {wwpn for pair in new_pairs for wwpn in pair}
         for entry in fabric.hosts + fabric.array_ports:
+            if entry.wwpn not in in_new:
+                continue
             name = alias_for(entry.wwpn)
             if name and name not in entry.existing_aliases and name not in emitted:
                 cmds.append(f'alicreate "{name}","{entry.display}"')
                 emitted.add(name)
 
         zone_names: list[str] = []
-        for host_wwpn, array_wwpn in fabric.pairs:
+        for host_wwpn, array_wwpn in new_pairs:
             host_alias, array_alias = alias_for(host_wwpn), alias_for(array_wwpn)
             if not host_alias or not array_alias:
                 continue
