@@ -327,6 +327,77 @@ _BGL_PORTS = [
 ]
 
 
+def test_switch_derived_hosts_when_vcenter_reports_none():
+    # vCenter unreachable is ROUTINE on a vault network. The fallback is the DECLARED switches' own
+    # (local) name servers — nsshow, never the fabric-wide nscamshow, which on a shared SAN would
+    # drag in every other team's initiators. Names come from the NS HN: field (Emulex advertises it).
+    plan = zp.build_zoning_plan(
+        _intent(), DiscoveryReport(host_hbas=[], array_ports=_VZ_PORTS),
+        brocade_factory=_real_factory,
+    )
+    for fabric in plan.fabrics:
+        assert len(fabric.hosts) == 3
+        assert {h.host_name for h in fabric.hosts} == {"DL360G11D24U25", "DL360G11D24U26", "DL360G11D24U27"}
+        assert all(h.host_source == "switch" for h in fabric.hosts)
+        # Same WWPNs as the zoned bed -> the delta still recognises everything as existing.
+        assert sorted(fabric.already_zoned) == sorted(fabric.pairs)
+    assert any("vCenter reported no hosts" in n for n in plan.notes)
+
+
+def test_vcenter_hosts_win_when_present_and_carry_their_source():
+    plan = zp.build_zoning_plan(
+        _intent(), DiscoveryReport(host_hbas=_VZ_HOSTS, array_ports=_VZ_PORTS),
+        brocade_factory=_real_factory,
+    )
+    for fabric in plan.fabrics:
+        assert len(fabric.hosts) == 3                       # no switch-derived duplicates
+        assert all(h.host_source == "vcenter" for h in fabric.hosts)
+    assert not any("vCenter reported no hosts" in n for n in plan.notes)
+
+
+def test_switch_derived_host_without_hn_falls_back_to_empty_name():
+    # QLogic HBAs advertise no HN: in NodeSymb — the host still appears (the WWPN identifies it);
+    # host_name stays "" and the UI shows the WWPN instead.
+    ns = (
+        f" N    010200;   3;{_ARR_031};2f:f7:00:02:ac:02:f6:29; 0x0\n"
+        '    PortSymb: [10] "MPB10K - 0:3:1"\n'
+        "    Device type: Physical Target\n"
+        f" N    010300;   3;{_HOST_A};20:00:00:00:00:00:00:aa; 0x0\n"
+        '    NodeSymb: [40] "QMH2572 FW:v8.08.207 DVR:v10.02.09.300-k"\n'
+        "    Device type: Physical Initiator\n"
+    )
+
+    def factory(creds):
+        return FakeBrocade(ns, "", _F1_CFG) if creds.host == "sw-f1" else FakeBrocade("", "", _F2_CFG)
+
+    plan = zp.build_zoning_plan(
+        _intent(), DiscoveryReport(host_hbas=[], array_ports=_discovery().array_ports),
+        brocade_factory=factory,
+    )
+    f1 = next(f for f in plan.fabrics if f.fabric == "F1")
+    host = next(h for h in f1.hosts if h.wwpn == "10000000000000AA")
+    assert host.host_name == "" and host.host_source == "switch"
+
+
+def test_render_commands_honours_the_operator_selection():
+    # ADR 0004 refinement: candidates are a MENU. The operator picks which array ports serve each
+    # host; only the selected NEW pairs are rendered, and a selection can never resurrect a pair
+    # the effective config already covers.
+    plan = zp.build_zoning_plan(
+        _intent(), DiscoveryReport(host_hbas=_BGL_HOSTS, array_ports=_BGL_PORTS),
+        brocade_factory=_real_factory,
+    )
+    names = {h.wwpn: f"H{i}" for i, h in enumerate(_BGL_HOSTS)}
+    names |= {p.wwpn: f"A{i}" for i, p in enumerate(_BGL_PORTS)}
+
+    chosen = [("100070106F583FD1", "20310002AC07EFDC"), ("100070106F583FD1", "21310002AC07EFDC")]
+    f1 = zp.render_commands(plan, names, chosen)["F1"]
+    assert sum(1 for c in f1 if c.startswith("zonecreate")) == 2
+    assert sum(1 for c in f1 if c.startswith("alicreate")) == 3     # 1 host + 2 array ports, no more
+
+    assert zp.render_commands(plan, names, [])["F1"] == []          # empty selection -> no commands
+
+
 def test_delta_on_the_unzoned_bgl_hosts_proposes_everything_as_new():
     # Same fixtures, opposite answer: the BGL ESXi hosts are online in these fabrics (nscamshow)
     # but zoned to nothing — every candidate pair is NEW, and the preview creates all of it.
