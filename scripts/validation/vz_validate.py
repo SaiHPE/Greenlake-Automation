@@ -155,7 +155,12 @@ def phase_zoning_verify(intent, discovery):
     head("PHASE 3 - zoning VERIFY, array-side compute only  [zoning.build_report]")
     rep = zoning.build_report(intent, discovery)
     print(f"   {rep.model_dump_json(indent=2)[:2500]}")
-    record("3 zoning verify", rep.error is None, f"error={rep.error}")
+    # `error is None` is NOT success: build_report degrades gracefully and reports why in notes.
+    # An empty report with "run Discovery first" is a non-answer, not a pass.
+    answered = bool(rep.expected)
+    record("3 zoning verify", answered,
+           f"{len(rep.expected)} expected host(s), proper={rep.proper}"
+           + ("" if answered else "  <-- produced no answer; see notes"))
     return rep
 
 
@@ -163,8 +168,20 @@ def phase_zoning_plan(intent, discovery):
     head("PHASE 4 - zoning PLAN, reads BOTH switches READ-ONLY  [zoning_plan.build_zoning_plan]")
     plan = zoning_plan.build_zoning_plan(intent, discovery)
     print(f"   {plan.model_dump_json(indent=2)[:4000]}")
-    record("4 zoning plan", plan.error is None,
-           f"error={plan.error} — on VZ (fully zoned) the correct answer is an EMPTY plan")
+    # CRITICAL: an empty plan because everything is already zoned looks IDENTICAL to an empty plan
+    # because the switch could not be read. Only the second is a failure, and `error` is None for
+    # both — the reason lives in notes/active_cfg. Never treat "empty" as "nothing to do" without
+    # first proving both fabrics were actually read.
+    unread = [f.fabric for f in plan.fabrics if not f.active_cfg]
+    if unread:
+        record("4 zoning plan", False,
+               f"fabric(s) {unread} were NOT READ (no active cfg) — the empty plan is a non-answer, "
+               f"not 'nothing to do'. notes={plan.notes}")
+    else:
+        record("4 zoning plan", True,
+               f"both fabrics read (cfgs: {[f.active_cfg for f in plan.fabrics]}); "
+               f"{sum(len(f.pairs) for f in plan.fabrics)} pair(s) proposed — on the fully-zoned VZ "
+               f"the correct answer is 0")
     return plan
 
 
@@ -272,8 +289,16 @@ def phase_switch_zone_test(discovery):
 
 # =========================================================================== main
 def main() -> int:
-    print(f"VZ VALIDATION — array={ARRAY_IP} vcenter={VC_IP} switches={SW1_IP}/{SW2_IP} cpg={CPG}")
-    print(f"WRITE={DO_WRITE}  SWITCH={DO_SWITCH}  prefix={PREFIX}  test LUN={TEST_LUN}")
+    # Print every resolved target INCLUDING usernames. These come from the environment, and a shell
+    # that ran an earlier probe will still carry its variables — a stale $SW_USER/$SW1_IP silently
+    # points this harness at the wrong fabric and every result becomes meaningless.
+    print("VZ VALIDATION — resolved targets (override via environment):")
+    print(f"   array    {ARRAY_USER}@{ARRAY_IP}   cpg={CPG}")
+    print(f"   vcenter  {VC_USER}@{VC_IP}")
+    print(f"   switches {SW_USER}@{SW1_IP} (F1) / {SW_USER}@{SW2_IP} (F2)")
+    print(f"   WRITE={DO_WRITE}  SWITCH={DO_SWITCH}  prefix={PREFIX}  test LUN={TEST_LUN}")
+    if VC_IP.startswith("10.99.") :
+        print("   NOTE: vCenter is on the isolated vault VLAN — this must run on the VZ jump box.")
     intent = make_intent()
 
     discovery = None
