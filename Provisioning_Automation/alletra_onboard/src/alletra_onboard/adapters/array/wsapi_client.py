@@ -28,9 +28,15 @@ import os
 try:
     from hpe3parclient import exceptions as hpe_exc
     from hpe3parclient.client import HPE3ParClient
-except Exception:  # noqa: BLE001 - import may pull eventlet; keep import errors non-fatal at module load
+
+    SDK_IMPORT_ERROR: str | None = None
+except Exception as _exc:  # noqa: BLE001 - import may pull eventlet; keep import errors non-fatal at module load
     HPE3ParClient = None
     hpe_exc = None
+    # Keep the REASON. A frozen build that fails this import degrades silently until WSAPI is first
+    # touched (v0.14.0-rc.1 shipped that way), and "not available" without the cause forces a
+    # diagnose-by-rebuild loop. Served via /app/profile capabilities and appended to the error.
+    SDK_IMPORT_ERROR = f"{type(_exc).__name__}: {_exc}"
 
 from alletra_onboard.domain.shared import normalize_wwpn
 from alletra_onboard.domain.discovery import ArrayPort
@@ -96,7 +102,9 @@ class WsapiClient:
 
     def connect(self) -> None:
         if HPE3ParClient is None:
-            raise WsapiError("python-3parclient is not available in this build.")
+            raise WsapiError(
+                f"python-3parclient is not available in this build ({SDK_IMPORT_ERROR})."
+            )
         _bypass_proxy_for(self.host)
         try:
             client = HPE3ParClient(self.api_url, secure=False, timeout=self.timeout, suppress_ssl_warnings=True)
