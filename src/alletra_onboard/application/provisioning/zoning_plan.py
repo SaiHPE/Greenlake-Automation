@@ -133,10 +133,12 @@ def _suggest_alias(existing: list[str], role: str, nsp: str, alias_freq: dict[st
 
 
 def _aliased(wwpn: str, role: str, fabric: str, aliases: dict[str, list[str]],
-             alias_freq: dict[str, int], *, nsp: str = "", host_name: str = "") -> AliasedWwpn:
+             alias_freq: dict[str, int], *, nsp: str = "", host_name: str = "",
+             host_source: str = "") -> AliasedWwpn:
     existing = aliases.get(wwpn, [])
     return AliasedWwpn(
         wwpn=wwpn, display=wwpn_colons(wwpn), role=role, fabric=fabric, nsp=nsp, host_name=host_name,
+        host_source=host_source,
         existing_aliases=existing, suggested_alias=_suggest_alias(existing, role, nsp, alias_freq),
     )
 
@@ -157,11 +159,14 @@ def build_zoning_plan(
     active_cfg: dict[str, str] = {}
     active_zones: dict[str, dict[str, set[str]]] = {}   # fabric -> {zone name: member WWPNs}
     switch_host: dict[str, str] = {}
+    local_ns: dict[str, dict[str, "NsDevice"]] = {}   # nsshow ONLY: devices on the declared switch itself
     for label, creds in (("F1", intent.switch_f1), ("F2", intent.switch_f2)):
         switch_host[label] = creds.host
         try:
             with brocade_factory(creds) as switch:
-                ns[label] = parse_nameserver(switch.nsshow() + "\n" + switch.nscamshow())
+                nsshow_text = switch.nsshow()
+                local_ns[label] = parse_nameserver(nsshow_text)
+                ns[label] = parse_nameserver(nsshow_text + "\n" + switch.nscamshow())
                 for wwpn, found in parse_aliases(switch.alishow()).items():
                     for alias in found:
                         aliases.setdefault(wwpn, [])
@@ -172,6 +177,7 @@ def build_zoning_plan(
                 active_zones[label], _ = parse_active_zones(cfg_text)
         except Exception as exc:  # noqa: BLE001 - one unreachable switch must not sink the plan
             ns[label] = {}
+            local_ns[label] = {}
             active_cfg[label] = ""
             active_zones[label] = {}
             plan.notes.append(f"Could not read the {label} switch {creds.host}: {exc}")
@@ -185,10 +191,29 @@ def build_zoning_plan(
     def fabric_of(wwpn: str) -> str:
         return next((label for label in ("F1", "F2") if wwpn in ns.get(label, {})), "")
 
-    # 2) Host HBA WWPNs (vCenter is the authoritative host list) -> host name.
+    # 2) Host HBA WWPNs. vCenter is the authoritative host list when it answered; when it reported
+    #    NOTHING (unreachable — routine on a vault network), fall back to the DECLARED switches'
+    #    LOCAL name servers (`nsshow`, not the fabric-wide `nscamshow`): devices plugged into the
+    #    edge switch the operator declared are that deployment's own hosts, while the fabric-wide
+    #    view on a shared SAN would drag in every other team's initiators. Names come from the NS
+    #    `HN:` field where the HBA advertises one (Emulex does; QLogic does not -> name stays ""
+    #    and the UI falls back to the WWPN).
     host_by_wwpn: "OrderedDict[str, str]" = OrderedDict()
     for hba in discovery.host_hbas:
         host_by_wwpn.setdefault(normalize_wwpn(hba.wwpn), hba.host_name)
+    host_source = dict.fromkeys(host_by_wwpn, "vcenter")
+    if not host_by_wwpn:
+        for label in ("F1", "F2"):
+            for wwpn, device in local_ns.get(label, {}).items():
+                if device.is_physical_initiator and wwpn not in host_by_wwpn:
+                    host_by_wwpn[wwpn] = device.host_name
+                    host_source[wwpn] = "switch"
+        if host_by_wwpn:
+            plan.notes.append(
+                f"vCenter reported no hosts — {len(host_by_wwpn)} host port(s) were identified from "
+                "the declared switches' own name servers instead (names from the fabric where the "
+                "HBA advertises one)."
+            )
 
     # 3) Array FC target ports (discovery), EXCLUDING Remote-Copy-FC and Peer ports (showport Label
     #    "RCFC" / "Peer") — those are replication/peer ports, not host targets. HPE/3PAR guidance:
@@ -211,7 +236,8 @@ def build_zoning_plan(
     # 4) Per fabric: the host + array WWPNs present, and every SIST pair (each host port x each array port).
     for label in ("F1", "F2"):
         hosts = [
-            _aliased(wwpn, "host", label, aliases, alias_freq, host_name=host_by_wwpn[wwpn])
+            _aliased(wwpn, "host", label, aliases, alias_freq,
+                     host_name=host_by_wwpn[wwpn], host_source=host_source.get(wwpn, ""))
             for wwpn in host_by_wwpn if fabric_of(wwpn) == label
         ]
         ports = [
@@ -240,12 +266,21 @@ def build_zoning_plan(
     return plan
 
 
-def render_commands(plan: ZoningPlan, aliases: dict[str, str]) -> dict[str, list[str]]:
+def render_commands(
+    plan: ZoningPlan,
+    aliases: dict[str, str],
+    selected_pairs: list[tuple[str, str]] | None = None,
+) -> dict[str, list[str]]:
     """Assemble the read-only command preview per fabric from the plan + the operator's chosen aliases
     (`wwpn -> alias name`, falling back to each WWPN's suggested alias). `alicreate` only for aliases
     that do NOT already exist on the switch; SIST `zonecreate`; then `cfgadd` + `cfgenable`. The tool
-    never RUNS these — this is the script for the SAN team."""
+    never RUNS these — this is the script for the SAN team.
+
+    `selected_pairs` is the operator's selection (ADR 0004 refinement: the operator PICKS which array
+    ports serve each host — candidates are a menu, not a mandate). None means every candidate, which
+    is only appropriate for headless/preview use; the UI always passes an explicit selection."""
     out: dict[str, list[str]] = {}
+    wanted = None if selected_pairs is None else {tuple(pair) for pair in selected_pairs}
     for fabric in plan.fabrics:
         by_wwpn = {entry.wwpn: entry for entry in (fabric.hosts + fabric.array_ports)}
 
@@ -254,8 +289,12 @@ def render_commands(plan: ZoningPlan, aliases: dict[str, str]) -> dict[str, list
 
         # The DELTA only: pairs the fabric's effective config already covers create NOTHING —
         # re-proposing existing zones against a production config is the failure this guards.
+        # The operator's selection then narrows further; it can never resurrect a zoned pair.
         zoned = set(fabric.already_zoned)
-        new_pairs = [pair for pair in fabric.pairs if pair not in zoned]
+        new_pairs = [
+            pair for pair in fabric.pairs
+            if pair not in zoned and (wanted is None or tuple(pair) in wanted)
+        ]
 
         # alicreate only for WWPNs that participate in at least one NEW zone (an alias for a
         # fully-zoned device is dead weight in the preview), and only for names the switch
