@@ -270,7 +270,7 @@ def render_commands(
     plan: ZoningPlan,
     aliases: dict[str, str],
     selected_pairs: list[tuple[str, str]] | None = None,
-) -> dict[str, list[str]]:
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """Assemble the read-only command preview per fabric from the plan + the operator's chosen aliases
     (`wwpn -> alias name`, falling back to each WWPN's suggested alias). `alicreate` only for aliases
     that do NOT already exist on the switch; SIST `zonecreate`; then `cfgadd` + `cfgenable`. The tool
@@ -278,8 +278,14 @@ def render_commands(
 
     `selected_pairs` is the operator's selection (ADR 0004 refinement: the operator PICKS which array
     ports serve each host — candidates are a menu, not a mandate). None means every candidate, which
-    is only appropriate for headless/preview use; the UI always passes an explicit selection."""
+    is only appropriate for headless/preview use; the UI always passes an explicit selection.
+
+    Returns (commands, skipped) per fabric. A selected pair whose member has NO alias name cannot be
+    zoned — but it must never vanish silently: on the live BGL run the operator ticked 0:3:4 (a port
+    the fabric has no alias for), got an unchanged preview, and had no way to know why. Every such
+    pair is reported in `skipped` naming exactly which member needs a name."""
     out: dict[str, list[str]] = {}
+    skipped_out: dict[str, list[str]] = {}
     wanted = None if selected_pairs is None else {tuple(pair) for pair in selected_pairs}
     for fabric in plan.fabrics:
         by_wwpn = {entry.wwpn: entry for entry in (fabric.hosts + fabric.array_ports)}
@@ -296,14 +302,33 @@ def render_commands(
             if pair not in zoned and (wanted is None or tuple(pair) in wanted)
         ]
 
-        # alicreate only for WWPNs that participate in at least one NEW zone (an alias for a
-        # fully-zoned device is dead weight in the preview), and only for names the switch
-        # doesn't already have.
+        def describe(wwpn: str) -> str:
+            entry = by_wwpn[wwpn]
+            if entry.role == "array":
+                return f"array port {entry.nsp or entry.display}"
+            return f"host {entry.host_name or entry.display}"
+
+        # Classify FIRST: a pair renders only when both members have names; the rest is reported.
+        renderable: list[tuple[str, str]] = []
+        skipped: list[str] = []
+        for host_wwpn, array_wwpn in new_pairs:
+            nameless = [describe(w) for w in (host_wwpn, array_wwpn) if not alias_for(w)]
+            if nameless:
+                skipped.append(
+                    f"{describe(host_wwpn)} × {describe(array_wwpn)} — enter an alias name for "
+                    + " and ".join(nameless)
+                )
+            else:
+                renderable.append((host_wwpn, array_wwpn))
+
+        # alicreate only for WWPNs that participate in at least one RENDERED zone (not merely a
+        # selected one — a skipped pair must not leave an orphan alicreate behind), and only for
+        # names the switch doesn't already have.
         cmds: list[str] = []
         emitted: set[str] = set()
-        in_new = {wwpn for pair in new_pairs for wwpn in pair}
+        in_rendered = {wwpn for pair in renderable for wwpn in pair}
         for entry in fabric.hosts + fabric.array_ports:
-            if entry.wwpn not in in_new:
+            if entry.wwpn not in in_rendered:
                 continue
             name = alias_for(entry.wwpn)
             if name and name not in entry.existing_aliases and name not in emitted:
@@ -311,18 +336,16 @@ def render_commands(
                 emitted.add(name)
 
         zone_names: list[str] = []
-        for host_wwpn, array_wwpn in new_pairs:
-            host_alias, array_alias = alias_for(host_wwpn), alias_for(array_wwpn)
-            if not host_alias or not array_alias:
-                continue
-            zone = f"{host_alias}_{array_alias}"
+        for host_wwpn, array_wwpn in renderable:
+            zone = f"{alias_for(host_wwpn)}_{alias_for(array_wwpn)}"
             if zone in zone_names:            # dedupe: colliding aliases must not double a zone
                 continue
             zone_names.append(zone)
-            cmds.append(f'zonecreate "{zone}","{host_alias};{array_alias}"')
+            cmds.append(f'zonecreate "{zone}","{alias_for(host_wwpn)};{alias_for(array_wwpn)}"')
 
         if zone_names and fabric.active_cfg:
             cmds.append(f'cfgadd "{fabric.active_cfg}","{";".join(zone_names)}"')
             cmds.append(f"cfgenable {fabric.active_cfg}")
         out[fabric.fabric] = cmds
-    return out
+        skipped_out[fabric.fabric] = skipped
+    return out, skipped_out
