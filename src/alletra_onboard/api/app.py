@@ -121,6 +121,9 @@ class ZoningRenderRequest(BaseModel):
 
 class ZoningRenderResponse(BaseModel):
     commands: dict[str, list[str]]
+    # Selected pairs that could NOT be rendered (a member has no alias name), per fabric — surfaced
+    # so a tick that produces no command explains itself instead of silently disappearing.
+    skipped: dict[str, list[str]]
 
 
 def create_app(service: OnboardingService | None = None) -> FastAPI:
@@ -471,9 +474,8 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # Pure + stateless: assemble the read-only command preview from the plan + the operator's
         # aliases and selected pairs. The tool never RUNS these commands (ADR 0004) — this is the
         # script the SAN team applies by hand.
-        return ZoningRenderResponse(
-            commands=render_commands(request.plan, request.aliases, request.selected_pairs)
-        )
+        commands, skipped = render_commands(request.plan, request.aliases, request.selected_pairs)
+        return ZoningRenderResponse(commands=commands, skipped=skipped)
 
     @app.get("/runs/{run_id}/storage/preflight", response_model=PreflightReport)
     async def storage_preflight(run_id: str) -> PreflightReport:

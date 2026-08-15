@@ -222,7 +222,7 @@ export interface ZoningPlan {
 }
 export const renderZoningCommands = (
   plan: ZoningPlan, aliases: Record<string, string>, selectedPairs: [string, string][],
-) => request<{ commands: Record<string, string[]> }>('POST', '/zoning/render', {
+) => request<{ commands: Record<string, string[]>; skipped: Record<string, string[]> }>('POST', '/zoning/render', {
   plan, aliases, selected_pairs: selectedPairs,
 });
 export interface PlannedAction {

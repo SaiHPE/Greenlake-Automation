@@ -107,6 +107,7 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
   });
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [commands, setCommands] = useState<Record<string, string[]> | null>(null);
+  const [skipped, setSkipped] = useState<Record<string, string[]> | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,6 +118,10 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
     f.pairs.filter(([h, a]) => selected[pairKey(h, a)]),
   );
   const totalZoned = plan.fabrics.reduce((n, f) => n + f.already_zoned.length, 0);
+  // A selected pair whose member has no alias name cannot be zoned — say so BEFORE the operator
+  // clicks (the live rc.1 test ticked the alias-less 0:3:4 and got an unchanged preview with no
+  // explanation). The backend reports the same condition authoritatively after rendering.
+  const unnamed = selectedPairs.filter(([h, a]) => !(aliases[h] ?? '').trim() || !(aliases[a] ?? '').trim()).length;
 
   const generate = async () => {
     setBusy(true);
@@ -124,6 +129,7 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
     try {
       const res = await renderZoningCommands(plan, aliases, selectedPairs);
       setCommands(res.commands);
+      setSkipped(res.skipped);
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
     } finally {
@@ -143,6 +149,15 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
       {plan.fabrics.map((fab) => (
         <Surface key={fab.fabric} title={`${fab.fabric} — ${fab.switch_host} (cfg ${fab.active_cfg || 'not read'})`}>
           <FabricBuilder fab={fab} aliases={aliases} setAlias={setAlias} selected={selected} toggle={toggle} />
+          {skipped && (skipped[fab.fabric] ?? []).length > 0 && (
+            <Box margin={{ top: 'small' }}>
+              <InlineNotification
+                tone="warning"
+                title="Not included in the preview"
+                message={skipped[fab.fabric].join(' · ')}
+              />
+            </Box>
+          )}
           {commands && commands[fab.fabric] && (
             <Box background="background-contrast" round="xsmall" pad="small" margin={{ top: 'small' }}>
               {commands[fab.fabric].length === 0
@@ -163,6 +178,11 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
         />
         {totalZoned > 0 && (
           <Text size="small" color="text-weak">{totalZoned} pair(s) already zoned — excluded automatically.</Text>
+        )}
+        {unnamed > 0 && (
+          <Text size="small" color="status-warning">
+            {unnamed} selected pair(s) need an alias name before they can be zoned.
+          </Text>
         )}
       </Box>
 
