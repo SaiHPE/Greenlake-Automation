@@ -126,7 +126,7 @@ def test_build_plan_maps_fabrics_pairs_and_prefers_convention_alias():
 
 def test_render_commands_reuses_existing_alias_no_alicreate():
     plan = zp.build_zoning_plan(_intent(), _discovery(), brocade_factory=_factory)
-    f1 = zp.render_commands(plan, {})["F1"]
+    f1 = zp.render_commands(plan, {})[0]["F1"]
     assert not any(c.startswith("alicreate") for c in f1)          # both aliases already exist
     assert 'zonecreate "hostx_HBA1_Port1_CRVLZ_MPB10K_LZ_031","hostx_HBA1_Port1;CRVLZ_MPB10K_LZ_031"' in f1
     assert 'cfgadd "F1_CFG","hostx_HBA1_Port1_CRVLZ_MPB10K_LZ_031"' in f1
@@ -135,7 +135,7 @@ def test_render_commands_reuses_existing_alias_no_alicreate():
 
 def test_render_commands_alicreate_for_a_new_operator_alias():
     plan = zp.build_zoning_plan(_intent(), _discovery(), brocade_factory=_factory)
-    cmds = zp.render_commands(plan, {"10000000000000AA": "CRVLZ_HOSTX_R1U1_HBA_1_Port_1"})
+    cmds, _ = zp.render_commands(plan, {"10000000000000AA": "CRVLZ_HOSTX_R1U1_HBA_1_Port_1"})
     assert 'alicreate "CRVLZ_HOSTX_R1U1_HBA_1_Port_1","10:00:00:00:00:00:00:aa"' in cmds["F1"]
 
 
@@ -178,7 +178,7 @@ def test_render_commands_dedupes_colliding_zones():
         fabric="F1", switch_host="s", active_cfg="F1_CFG",
         hosts=[h1, h2], array_ports=[arr], pairs=[("AA", "CC"), ("BB", "CC")],
     )])
-    zones = [c for c in zp.render_commands(plan, {})["F1"] if c.startswith("zonecreate")]
+    zones = [c for c in zp.render_commands(plan, {})[0]["F1"] if c.startswith("zonecreate")]
     assert len(zones) == 1   # both pairs collide on zone "H_A" -> deduped
 
 
@@ -303,7 +303,7 @@ def test_delta_on_the_fully_zoned_vz_bed_creates_nothing():
         assert sorted(fabric.already_zoned) == sorted(fabric.pairs)   # every pair already covered
     assert not plan.offline_hosts
 
-    commands = zp.render_commands(plan, {})
+    commands, _skipped = zp.render_commands(plan, {})
     assert commands == {"F1": [], "F2": []}              # nothing to create, nothing suggested
 
 
@@ -391,11 +391,36 @@ def test_render_commands_honours_the_operator_selection():
     names |= {p.wwpn: f"A{i}" for i, p in enumerate(_BGL_PORTS)}
 
     chosen = [("100070106F583FD1", "20310002AC07EFDC"), ("100070106F583FD1", "21310002AC07EFDC")]
-    f1 = zp.render_commands(plan, names, chosen)["F1"]
+    f1 = zp.render_commands(plan, names, chosen)[0]["F1"]
     assert sum(1 for c in f1 if c.startswith("zonecreate")) == 2
     assert sum(1 for c in f1 if c.startswith("alicreate")) == 3     # 1 host + 2 array ports, no more
 
-    assert zp.render_commands(plan, names, [])["F1"] == []          # empty selection -> no commands
+    assert zp.render_commands(plan, names, [])[0]["F1"] == []          # empty selection -> no commands
+
+
+def test_selected_pair_without_an_alias_is_reported_not_silently_dropped():
+    # LIVE UI finding (v0.14.0-rc.1): the operator ticked 0:3:4 — a port the fabric has NO alias
+    # for — clicked Generate, and the preview simply did not change. The pair was skipped inside
+    # render_commands with no trace. A tick that produces nothing must explain itself.
+    plan = zp.build_zoning_plan(
+        _intent(), DiscoveryReport(host_hbas=_BGL_HOSTS, array_ports=_BGL_PORTS),
+        brocade_factory=_real_factory,
+    )
+    host_wwpn = "100070106F583FD1"
+    chosen = [(host_wwpn, "20340002AC07EFDC")]      # 0:3:4 — no alias exists on the fabric
+    commands, skipped = zp.render_commands(plan, {host_wwpn: "H1"}, chosen)
+    assert commands["F1"] == []                     # nothing renderable — correct
+    assert len(skipped["F1"]) == 1                  # ...but SAID, not swallowed
+    assert "array port 0:3:4" in skipped["F1"][0]
+    assert "alias" in skipped["F1"][0]
+
+    # Naming the port resolves it: the same selection now renders fully and skips nothing.
+    commands, skipped = zp.render_commands(
+        plan, {host_wwpn: "H1", "20340002AC07EFDC": "T_AlletraMPF22U13_0_3_4"}, chosen,
+    )
+    assert any(c.startswith('zonecreate "H1_T_AlletraMPF22U13_0_3_4"') for c in commands["F1"])
+    assert 'alicreate "T_AlletraMPF22U13_0_3_4","20:34:00:02:ac:07:ef:dc"' in commands["F1"]
+    assert skipped["F1"] == []
 
 
 def test_delta_on_the_unzoned_bgl_hosts_proposes_everything_as_new():
@@ -418,7 +443,7 @@ def test_delta_on_the_unzoned_bgl_hosts_proposes_everything_as_new():
     # With operator-chosen aliases, the preview creates every alias + zone and enables once.
     names = {h.wwpn: f"H{i}" for i, h in enumerate(_BGL_HOSTS)}
     names |= {p.wwpn: f"A{i}" for i, p in enumerate(_BGL_PORTS)}
-    f1_cmds = zp.render_commands(plan, names)["F1"]
+    f1_cmds = zp.render_commands(plan, names)[0]["F1"]
     assert sum(1 for c in f1_cmds if c.startswith("zonecreate")) == 9
     assert sum(1 for c in f1_cmds if c.startswith("alicreate")) == 6   # 3 host + 3 array aliases
     assert f1_cmds[-1] == "cfgenable F1_CFG"
