@@ -241,6 +241,118 @@ def test_real_cfgactvshow_yields_the_active_cfg_per_fabric():
     assert zp.parse_active_cfg(_fixture("F2_cfgactvshow.txt")) == "F2_CFG"
 
 
+# ---------------- the two DELTA acceptance cases, both from the same real captures ----------------
+
+class _RealBrocade:
+    """FakeBrocade fed the REAL switch output for one fabric."""
+
+    def __init__(self, label: str):
+        self._label = label
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def nsshow(self):
+        return _fixture(f"{self._label}_nsshow.txt")
+
+    def nscamshow(self):
+        return _fixture(f"{self._label}_nscamshow.txt")
+
+    def alishow(self):
+        return _fixture(f"{self._label}_alishow.txt")
+
+    def cfgshow(self):
+        return _fixture(f"{self._label}_cfgactvshow.txt")
+
+
+def _real_factory(creds):
+    return _RealBrocade("F1" if creds.host == "sw-f1" else "F2")
+
+
+# VZ: the fully-zoned green bed. 3 hosts x 2 HBAs; array ports 0:3:1/1:3:1 (F1), 0:3:2/1:3:2 (F2).
+_VZ_HOSTS = [
+    HostHba(host_name="CRV_VZ_DL360G11D24U25", wwpn="10009440C9D01212"),
+    HostHba(host_name="CRV_VZ_DL360G11D24U25", wwpn="10009440C9D01213"),
+    HostHba(host_name="CRV_VZ_DL360G11D24U26", wwpn="10005CBA2CFC835A"),
+    HostHba(host_name="CRV_VZ_DL360G11D24U26", wwpn="10005CBA2CFC835B"),
+    HostHba(host_name="CRV_VZ_DL360G11D24U27", wwpn="10005CBA2CFC8366"),
+    HostHba(host_name="CRV_VZ_DL360G11D24U27", wwpn="10005CBA2CFC8367"),
+]
+_VZ_PORTS = [
+    ArrayPort(node=0, slot=3, card_port=1, protocol="fc", wwpn="20310002AC02F584", link_state="ready"),
+    ArrayPort(node=0, slot=3, card_port=2, protocol="fc", wwpn="20320002AC02F584", link_state="ready"),
+    ArrayPort(node=1, slot=3, card_port=1, protocol="fc", wwpn="21310002AC02F584", link_state="ready"),
+    ArrayPort(node=1, slot=3, card_port=2, protocol="fc", wwpn="21320002AC02F584", link_state="ready"),
+]
+
+
+def test_delta_on_the_fully_zoned_vz_bed_creates_nothing():
+    # THE safety-critical acceptance case: VZ is already correctly zoned (12 SIST zones live).
+    # Every candidate pair must land in already_zoned and the command preview must be EMPTY —
+    # a generator that re-proposes existing zones against a production config is worse than none.
+    plan = zp.build_zoning_plan(
+        _intent(), DiscoveryReport(host_hbas=_VZ_HOSTS, array_ports=_VZ_PORTS),
+        brocade_factory=_real_factory,
+    )
+    for fabric in plan.fabrics:
+        assert fabric.active_cfg == f"{fabric.fabric}_CFG"
+        assert len(fabric.pairs) == 6                    # 3 host HBAs x 2 array ports per fabric
+        assert sorted(fabric.already_zoned) == sorted(fabric.pairs)   # every pair already covered
+    assert not plan.offline_hosts
+
+    commands = zp.render_commands(plan, {})
+    assert commands == {"F1": [], "F2": []}              # nothing to create, nothing suggested
+
+
+# BGL 4UW0004497: the SAME shared fabrics, but its 3 ESXi hosts are NOT yet zoned to it.
+_BGL_HOSTS = [
+    HostHba(host_name="10.55.235.120", wwpn="100070106F583FD1"),
+    HostHba(host_name="10.55.235.120", wwpn="100070106F583FD9"),
+    HostHba(host_name="10.55.235.121", wwpn="100070106F582F91"),
+    HostHba(host_name="10.55.235.121", wwpn="100070106F582F99"),
+    HostHba(host_name="10.55.235.122", wwpn="100070106F58EF21"),
+    HostHba(host_name="10.55.235.122", wwpn="100070106F58EF29"),
+]
+_BGL_PORTS = [
+    # Real showport: 0:3:1, 0:3:4, 1:3:1 sit on F1 (0:3:4 despite even parity), 0:3:2/1:3:2/1:3:4 on F2.
+    ArrayPort(node=0, slot=3, card_port=1, protocol="fc", wwpn="20310002AC07EFDC", link_state="ready"),
+    ArrayPort(node=0, slot=3, card_port=2, protocol="fc", wwpn="20320002AC07EFDC", link_state="ready"),
+    ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC07EFDC", link_state="ready"),
+    ArrayPort(node=1, slot=3, card_port=1, protocol="fc", wwpn="21310002AC07EFDC", link_state="ready"),
+    ArrayPort(node=1, slot=3, card_port=2, protocol="fc", wwpn="21320002AC07EFDC", link_state="ready"),
+    ArrayPort(node=1, slot=3, card_port=4, protocol="fc", wwpn="21340002AC07EFDC", link_state="ready"),
+]
+
+
+def test_delta_on_the_unzoned_bgl_hosts_proposes_everything_as_new():
+    # Same fixtures, opposite answer: the BGL ESXi hosts are online in these fabrics (nscamshow)
+    # but zoned to nothing — every candidate pair is NEW, and the preview creates all of it.
+    plan = zp.build_zoning_plan(
+        _intent(), DiscoveryReport(host_hbas=_BGL_HOSTS, array_ports=_BGL_PORTS),
+        brocade_factory=_real_factory,
+    )
+    f1 = next(f for f in plan.fabrics if f.fabric == "F1")
+    f2 = next(f for f in plan.fabrics if f.fabric == "F2")
+    # One HBA per host per fabric; the fabric membership comes from the real name server.
+    assert len(f1.hosts) == 3 and len(f2.hosts) == 3
+    # 0:3:4 lands on F1 by the NAME SERVER even though its parity says even — placement here is
+    # by actual fabric presence, so the miscabled port cannot be planned into the wrong fabric.
+    assert {p.wwpn for p in f1.array_ports} == {"20310002AC07EFDC", "20340002AC07EFDC", "21310002AC07EFDC"}
+    assert len(f1.pairs) == 9 and len(f2.pairs) == 9     # 3 HBAs x 3 ports per fabric
+    assert f1.already_zoned == [] and f2.already_zoned == []
+
+    # With operator-chosen aliases, the preview creates every alias + zone and enables once.
+    names = {h.wwpn: f"H{i}" for i, h in enumerate(_BGL_HOSTS)}
+    names |= {p.wwpn: f"A{i}" for i, p in enumerate(_BGL_PORTS)}
+    f1_cmds = zp.render_commands(plan, names)["F1"]
+    assert sum(1 for c in f1_cmds if c.startswith("zonecreate")) == 9
+    assert sum(1 for c in f1_cmds if c.startswith("alicreate")) == 6   # 3 host + 3 array aliases
+    assert f1_cmds[-1] == "cfgenable F1_CFG"
+
+
 def test_rcfc_and_peer_ports_excluded_from_host_zoning():
     # RCFC (Remote-Copy-FC) + Peer ports are NOT host targets (HPE/3PAR) — exclude them, note it.
     rcfc = "20:34:00:02:ac:02:f6:29"   # 0:3:4, showport Label "RCFC"
