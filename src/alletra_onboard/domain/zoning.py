@@ -94,7 +94,13 @@ class AliasedWwpn(BaseModel):
 
 
 class FabricZonePlan(BaseModel):
-    """The plan for one fabric: the host + array WWPNs present on it, and the SIST pairs to zone."""
+    """The plan for one fabric: the host + array WWPNs present on it, and the SIST pairs to zone.
+
+    `pairs` is every CANDIDATE (host, array) pair; `already_zoned` is the subset the fabric's
+    effective configuration already permits (both WWPNs share a zone). The DELTA — what the
+    command preview may create — is pairs minus already_zoned. On a fully-zoned bed (VZ) that
+    delta is empty and the preview must emit NOTHING: proposing zones that already exist against
+    a production config is the failure mode this field exists to prevent (ADR 0004)."""
 
     fabric: str                                 # "F1" | "F2"
     switch_host: str
@@ -102,6 +108,7 @@ class FabricZonePlan(BaseModel):
     hosts: list[AliasedWwpn] = Field(default_factory=list)        # host HBA ports on this fabric
     array_ports: list[AliasedWwpn] = Field(default_factory=list)  # array target ports online on this fabric
     pairs: list[tuple[str, str]] = Field(default_factory=list)    # (host_wwpn, array_wwpn) single-init-single-target
+    already_zoned: list[tuple[str, str]] = Field(default_factory=list)  # subset of pairs the active cfg covers
 
 
 class ZoningPlan(BaseModel):

@@ -1,5 +1,13 @@
 # The tool verifies SAN zoning and produces a read-only zoning PLAN — it never writes to the switch
 
+> **SCOPE (decided 2026-08-14): Brocade FOS only.** The parsers, the read-only command allowlist and
+> the generated command grammar all assume Brocade Fabric OS. Cisco MDS is out of scope — every
+> fabric available to test against is Brocade, HPE's zoning guidance for this array family is
+> written against FOS, and shipping an untestable MDS path would violate the validate-live rule this
+> project runs on. The UI must say "Brocade fabrics only" so an MDS site fails honestly. If MDS
+> becomes a requirement, the entry point is a switch-vendor adapter seam in front of
+> `BrocadeClient` + the parsers — design it then, against a real MDS to test on.
+
 > **DEFERRAL PREMISE MEASURED AND FOUND FALSE (2026-08-04). The decision is unchanged and
 > reconfirmed; the reason for waiting is not.** Two findings from live probes of 4UW0004497
 > (OS 10.5.60.36):
