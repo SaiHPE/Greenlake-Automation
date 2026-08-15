@@ -761,6 +761,28 @@ def test_verify_paths_partial_single_fabric():
     assert "missing the even fabric" in h.detail
 
 
+def test_verify_paths_uses_discovered_fabric_over_parity_on_miscabled_ports():
+    # MEASURED environment (4UW0004497): port 0:3:4 has an EVEN card port but is cabled to the F1
+    # (odd) switch. A host with paths on 0:3:1 + 0:3:4 has both paths on ONE fabric — parity alone
+    # would call it "live on both fabrics", a false redundancy claim. Discovery's switch-derived
+    # fabric map must win; parity remains the fallback when no map is supplied.
+    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
+
+    text = (
+        "Lun VVName HostName -Host_WWN- Port Type Status ID\n"
+        "  1 Vol1 esx1 10000000AAAA0001 0:3:1 host set active 10\n"
+        "  1 Vol1 esx1 10000000AAAA0002 0:3:4 host set active 10\n"   # even parity, but F1-cabled
+    )
+    paths = parse_showvlun_active(text)
+
+    with_map = verify_paths({"esx1"}, {"Vol1"}, paths, {"0:3:1": "odd", "0:3:4": "odd"})
+    assert with_map.hosts[0].verdict == "partial"           # the truth: one fabric, no redundancy
+    assert with_map.hosts[0].fabrics == ["odd"]
+
+    parity_only = verify_paths({"esx1"}, {"Vol1"}, paths)
+    assert parity_only.hosts[0].verdict == "live"           # the lie parity tells on this cabling
+
+
 def test_verify_provisioned_paths_reads_showvlun_and_reports():
     from alletra_onboard.application.provisioning.path_verify import verify_provisioned_paths
 

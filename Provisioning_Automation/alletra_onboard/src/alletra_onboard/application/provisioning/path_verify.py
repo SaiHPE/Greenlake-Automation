@@ -33,8 +33,14 @@ _NSP = re.compile(r"^\d+:\d+:\d+$")
 _LIVE_STATUS = {"active", "nonopt"}
 
 
-def _fabric(port: str) -> str:
-    """odd/even by array card-port parity (the ADR-0009 default: P=1,3 -> odd; P=2,4 -> even)."""
+def _fabric(port: str, fabric_by_port: dict[str, str] | None = None) -> str:
+    """The fabric a path's array port sits on: the DISCOVERED (switch-derived) fabric when we have
+    it, card-port parity only as the fallback (ADR 0009). Parity alone is a measured hazard: on
+    4UW0004497 port 0:3:4 is even-parity but cabled to the F1 switch, so parity would count a
+    0:3:1 + 0:3:4 host as redundant across both fabrics when both its paths are on F1 — a false
+    redundancy claim, which is the one wrong answer a path VERIFIER must not produce."""
+    if fabric_by_port and port in fabric_by_port:
+        return fabric_by_port[port]
     try:
         return "odd" if int(port.split(":")[2]) % 2 == 1 else "even"
     except (ValueError, IndexError):
@@ -70,11 +76,14 @@ def verify_paths(
     target_hosts: set[str],
     target_volumes: set[str],
     vlun_paths: list[VolumePath],
+    fabric_by_port: dict[str, str] | None = None,
 ) -> PathVerification:
     """Per target host, classify the live paths to the target volumes (from `showvlun -a`).
 
     verdict: `live` (paths on BOTH fabrics), `partial` (one fabric only), `no_path` (none — host off or
     not zoned). `target_volumes` empty => consider every volume the host has an active path to.
+    `fabric_by_port` (n:s:p -> odd/even, from discovery's switch-derived resolution) corrects the
+    parity fallback on non-standard cabling — see _fabric.
     """
     report = PathVerification()
     if not target_hosts:
@@ -90,7 +99,7 @@ def verify_paths(
         ]
         live_vols = sorted({vp.volume for vp in paths})
         dead_vols = sorted(target_volumes - set(live_vols)) if target_volumes else []
-        fabrics = sorted({_fabric(vp.port) for vp in paths} - {"?"})
+        fabrics = sorted({_fabric(vp.port, fabric_by_port) for vp in paths} - {"?"})
         hbas = len({vp.host_wwpn for vp in paths})
 
         if not paths:
@@ -129,4 +138,9 @@ def verify_provisioned_paths(
     except Exception as exc:  # noqa: BLE001
         return PathVerification(error=f"Could not read 'showvlun -a' over SSH: {exc}")
     hosts = {h.host_name for h in discovery.host_hbas} or {ah.name for ah in discovery.array_hosts}
-    return verify_paths(hosts, {v.name for v in intent.volumes}, parse_showvlun_active(text))
+    # Discovery resolved each port's REAL fabric from the switch it attaches to (parity is only its
+    # fallback) — hand that to the classifier so non-standard cabling can't fake dual-fabric redundancy.
+    fabric_by_port = {
+        p.label: p.fabric for p in discovery.array_ports if p.protocol == "fc" and p.fabric
+    }
+    return verify_paths(hosts, {v.name for v in intent.volumes}, parse_showvlun_active(text), fabric_by_port)
