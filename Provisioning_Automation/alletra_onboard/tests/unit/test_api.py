@@ -72,6 +72,10 @@ def test_app_profile_serves_the_step_registry(tmp_path):
     assert body["modes"]["FULL_ONBOARDING"] == ["greenlake", "cloudinit", "dscc", "verify", "asbuilt"]
     assert body["modes"]["PROVISION_ONLY"] == ["discover", "zoning", "provision", "verify", "asbuilt"]
     assert body["modes"]["BOTH"] == [s["key"] for s in body["steps"]]
+    # Optional-dependency capability: a frozen build that fails to bundle the 3PAR SDK degrades
+    # silently until WSAPI is first touched (how v0.14.0-rc.1 shipped broken). In the dev env the
+    # SDK is installed so this must be True; on a packaged build, this one field is the smoke test.
+    assert body["capabilities"]["wsapi_sdk"] is True
 
 
 def test_create_get_and_list_runs_masks_secret(tmp_path):
