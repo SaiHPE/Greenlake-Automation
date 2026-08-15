@@ -79,6 +79,8 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningObjects,
 )
 from alletra_onboard.domain.workflow import STEP_REGISTRY, mode_steps
+from alletra_onboard.domain.zoning import ZoningPlan
+from alletra_onboard.application.provisioning.zoning_plan import render_commands
 from alletra_onboard import __version__
 from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.service import (
@@ -97,6 +99,21 @@ SSE_HEARTBEAT_S = 15.0
 
 class CsvParseRequest(BaseModel):
     csv_text: str
+
+
+class ZoningRenderRequest(BaseModel):
+    """Render the read-only zoning command preview: the plan the UI already holds (from the
+    zoning.plan event), the operator's alias names, and the operator's SELECTED pairs. Pure and
+    stateless — rendering lives in the backend so the frontend never mirrors the command grammar
+    (a hand-synced mirror of render_commands drifted once already)."""
+
+    plan: ZoningPlan
+    aliases: dict[str, str] = {}
+    selected_pairs: list[tuple[str, str]] = []
+
+
+class ZoningRenderResponse(BaseModel):
+    commands: dict[str, list[str]]
 
 
 def create_app(service: OnboardingService | None = None) -> FastAPI:
@@ -434,6 +451,15 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def run_zoning_plan(run_id: str) -> RunResponse:
         # Read-only: reads both fabric switches to build the zoning plan; makes NO switch writes.
         return _start_step(run_id, lambda: service.start_zoning_plan(run_id))
+
+    @app.post("/zoning/render", response_model=ZoningRenderResponse)
+    async def zoning_render(request: ZoningRenderRequest) -> ZoningRenderResponse:
+        # Pure + stateless: assemble the read-only command preview from the plan + the operator's
+        # aliases and selected pairs. The tool never RUNS these commands (ADR 0004) — this is the
+        # script the SAN team applies by hand.
+        return ZoningRenderResponse(
+            commands=render_commands(request.plan, request.aliases, request.selected_pairs)
+        )
 
     @app.get("/runs/{run_id}/storage/preflight", response_model=PreflightReport)
     async def storage_preflight(run_id: str) -> PreflightReport:

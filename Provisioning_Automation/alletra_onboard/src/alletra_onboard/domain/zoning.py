@@ -88,7 +88,11 @@ class AliasedWwpn(BaseModel):
     role: Literal["host", "array"]
     fabric: str = ""                            # "F1" | "F2" | "" (offline / on neither fabric)
     nsp: str = ""                               # array target port n:s:p ("" for a host)
-    host_name: str = ""                         # owning host ("" for an array port)
+    host_name: str = ""                         # owning host ("" for an array port, or a host that
+    #                                             advertises no name — QLogic HBAs publish no HN:)
+    host_source: str = ""                       # "vcenter" | "switch" — where the host identity came
+    #                                             from ("switch" = the declared switch's local NS,
+    #                                             used when vCenter reports nothing)
     existing_aliases: list[str] = Field(default_factory=list)  # every alias the switch has for this WWPN
     suggested_alias: str = ""                   # pre-fill: the convention match, else ""
 
