@@ -107,6 +107,13 @@ the commit that actually survived hardware.
 frozen-build lookups, and the `.github` guidance tree all bind by name at build/read time, not
 import time. Build and smoke-test the packaged executable locally before tagging — a rename that
 imports cleanly can still ship a broken exe.
+Addendum (v0.14.0-rc.1): **a guarded optional import is a packaging blind spot** — every exe ever
+shipped lacked a working WSAPI SDK because `try: import hpe3parclient` swallowed a frozen-only
+failure (`eventlet` dynamically imports dnspython; PyInstaller's analysis can't see it), and no
+packaged feature touched WSAPI until the preflight found it on hardware. Two rules follow: give
+every guarded optional import a **capability flag the API serves** (`/app/profile
+capabilities.wsapi_sdk` + the captured import error) so one localhost request proves any build,
+and check that flag on the locally built exe as part of cutting every release.
 
 ## Refactoring discipline
 
