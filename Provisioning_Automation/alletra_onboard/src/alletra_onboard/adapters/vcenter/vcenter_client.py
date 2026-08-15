@@ -77,16 +77,26 @@ class VCenterClient:
         content = self._si.RetrieveContent()
         view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
         hbas: list[HostHba] = []
+        # One physical port can surface as SEVERAL adapter objects — a CNA reports the same
+        # portWorldWideName through more than one vmhba. Measured live on the VZ ESXi 8.0.3 hosts:
+        # 12 adapters for 6 real ports, every WWPN listed twice. The WWPN is the identity that
+        # matters for zoning and host creation, so keep the first sighting of each (host, wwpn);
+        # otherwise every count and every per-HBA note the operator sees is silently doubled.
+        seen: set[tuple[str, str]] = set()
         try:
             for esxi in view.view:
                 os_version = self._os_string(esxi)
                 adapters = getattr(getattr(esxi.config, "storageDevice", None), "hostBusAdapter", []) or []
                 for hba in adapters:
                     if isinstance(hba, vim.host.FibreChannelHba):
+                        wwpn = _wwpn_hex(hba.portWorldWideName)
+                        if (esxi.name, wwpn) in seen:
+                            continue
+                        seen.add((esxi.name, wwpn))
                         hbas.append(
                             HostHba(
                                 host_name=esxi.name,
-                                wwpn=_wwpn_hex(hba.portWorldWideName),
+                                wwpn=wwpn,
                                 model=getattr(hba, "model", None),
                                 os=os_version,
                             )
