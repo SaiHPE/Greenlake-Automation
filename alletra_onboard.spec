@@ -35,6 +35,19 @@ for _dll in _VC_DLLS:
 hiddenimports = collect_submodules("uvicorn") + collect_submodules("alletra_onboard")
 hiddenimports += collect_submodules("paramiko")  # SSH client for post-init verification
 hiddenimports += ["anyio", "httptools", "websockets", "watchfiles", "h11"]
+# The WSAPI SDK chain. wsapi_client imports hpe3parclient in a guarded try/except, so if the
+# bundle misses any link (hpe3parclient -> requests, and its ssh module -> eventlet, whose hub
+# modules load dynamically by name), the frozen app degrades SILENTLY to "python-3parclient is
+# not available in this build" — which is exactly how v0.14.0-rc.1 shipped: the readiness
+# preflight was the first packaged feature ever to touch WSAPI, and its Array check failed on
+# hardware while every unpackaged code path passed. Collect the chain explicitly, and check
+# GET /app/profile capabilities.wsapi_sdk on any new build before tagging.
+hiddenimports += collect_submodules("hpe3parclient")
+hiddenimports += collect_submodules("eventlet")
+# eventlet's greendns imports dnspython ("dns") DYNAMICALLY, so analysis misses it — the frozen
+# import then dies with "No module named 'dns'" (measured via capabilities.wsapi_sdk_error).
+hiddenimports += collect_submodules("dns")
+hiddenimports += ["requests"]
 
 a = Analysis(
     ["packaging/app_main.py"],

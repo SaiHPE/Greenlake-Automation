@@ -81,6 +81,13 @@ from alletra_onboard.domain.provisioning import (
 from alletra_onboard.domain.workflow import STEP_REGISTRY, mode_steps
 from alletra_onboard.domain.zoning import ZoningPlan
 from alletra_onboard.application.provisioning.zoning_plan import render_commands
+
+
+def _wsapi_capability() -> dict:
+    """Whether this build (frozen or not) actually imported the 3PAR SDK — and if not, WHY."""
+    from alletra_onboard.adapters.array.wsapi_client import HPE3ParClient, SDK_IMPORT_ERROR
+
+    return {"wsapi_sdk": HPE3ParClient is not None, "wsapi_sdk_error": SDK_IMPORT_ERROR}
 from alletra_onboard import __version__
 from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.service import (
@@ -178,6 +185,13 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                 for s in STEP_REGISTRY
             ],
             "modes": {mode.value: list(keys) for mode, keys in mode_steps().items()},
+            # Optional-dependency capabilities of THIS build. wsapi_client imports the 3PAR SDK in
+            # a guarded try/except, so a frozen build that failed to bundle it degrades silently to
+            # "python-3parclient is not available in this build" the first time WSAPI is touched —
+            # which is how every exe before v0.14.0-rc.2 shipped without anyone noticing (the
+            # preflight was the first packaged feature to call WSAPI). Reporting it here makes a
+            # packaging regression visible on ANY build with one request, no array needed.
+            "capabilities": _wsapi_capability(),
         }
 
     @app.get("/config", response_model=ConfigStatusResponse)
