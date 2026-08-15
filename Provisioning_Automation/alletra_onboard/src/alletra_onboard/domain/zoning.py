@@ -42,6 +42,42 @@ class ZoningReport(BaseModel):
     error: str | None = None
 
 
+class NsDevice(BaseModel):
+    """One device from the fabric name server (`nsshow` local / `nscamshow` remote) — the ONLY view
+    that sees unzoned-but-online devices, and richer than we first assumed. Measured on live VZ
+    switches (tests/fixtures/vz_fabric): NodeSymb carries the HOST's own name and OS
+    (``HN:DL360G11D24U25 OS:VMware ESXi 8.0.3``), an array port's PortSymb carries its serial and
+    n:s:p (``SGHD44LQLS - 0:3:1 - HPE64004-B``), and Device type classifies initiator vs target
+    outright — so the zoning builder can identify hosts from the switch alone, without vCenter
+    (which on a vault network is routinely unreachable, and names hosts by IP anyway).
+
+    TRAP the model exists to make unmissable: every FC-NVMe-capable array port registers TWICE —
+    the physical FCP entry plus an ``NPIV Target`` shadow with its own WWPN. Zones must pair
+    physical ports only; use the ``is_physical_*`` properties, never bare membership."""
+
+    wwpn: str                   # normalized (16 hex)
+    device_type: str = ""       # raw: "Physical Initiator" | "Physical Target" | "NPIV Target" | ...
+    port_symb: str = ""
+    node_symb: str = ""
+    permanent_wwpn: str = ""    # an NPIV entry points at its physical port here (normalized)
+    host_name: str = ""         # from NodeSymb "HN:<name>" ("" when not advertised)
+    os: str = ""                # from NodeSymb "OS:<text>"
+    array_serial: str = ""      # from an array port's PortSymb ("" for hosts)
+    array_nsp: str = ""         # n:s:p from the same ("" for hosts)
+
+    @property
+    def is_npiv(self) -> bool:
+        return "npiv" in self.device_type.lower()
+
+    @property
+    def is_physical_initiator(self) -> bool:
+        return "initiator" in self.device_type.lower() and not self.is_npiv
+
+    @property
+    def is_physical_target(self) -> bool:
+        return "target" in self.device_type.lower() and not self.is_npiv
+
+
 class AliasedWwpn(BaseModel):
     """One WWPN in the zoning plan — a host HBA port or an array target port — with the alias(es) the
     switch already has for it (there can be several on a shared fabric) and a suggested alias to
