@@ -179,6 +179,16 @@ def build_zoning_plan(
                 cfg_text = switch.cfgshow()
                 active_cfg[label] = parse_active_cfg(cfg_text)
                 active_zones[label], _ = parse_active_zones(cfg_text)
+                if not local_ns[label]:
+                    # Measured live 2026-08-15: one plan run got an empty local NS from a healthy
+                    # switch (transient), so its resident array ports vanished from the plan with
+                    # no explanation. An empty LOCAL name server on a production switch is an
+                    # anomaly to report, not a fact to silently accept.
+                    plan.notes.append(
+                        f"The {label} switch {creds.host} returned no LOCAL name-server entries "
+                        "(nsshow) — devices plugged into that switch (typically this deployment's "
+                        "array ports) cannot be placed. Likely transient: rebuild the plan."
+                    )
         except Exception as exc:  # noqa: BLE001 - one unreachable switch must not sink the plan
             ns[label] = {}
             local_ns[label] = {}
@@ -295,6 +305,19 @@ def build_zoning_plan(
     for wwpn, name in host_by_wwpn.items():
         if not fabric_of(wwpn):
             plan.offline_hosts.append(f"{name} ({wwpn_colons(wwpn)})")
+
+    # 6) A READY array port in neither fabric's name server is an anomaly (a link-up port IS
+    #    FLOGI'd into some fabric): either a transient switch read or the wrong declared switches.
+    #    Measured live: F2's plan lost both its array ports this way while those ports carried
+    #    ACTIVE VLUNs — the plan must say so instead of quietly offering fewer candidates.
+    unplaced = [p.label for p in array_ports if p.link_state == "ready" and not fabric_of(p.wwpn)]
+    if unplaced:
+        plan.notes.append(
+            "Array port(s) ONLINE but present in neither declared fabric's name server: "
+            + ", ".join(unplaced)
+            + " — likely a transient switch read (or the declared switches front the wrong "
+            "fabrics). Rebuild the plan before acting on it."
+        )
     return plan
 
 
