@@ -8,7 +8,7 @@ the B10000 (see ADR 0003 + the deep-research findings in the runbook). Design po
 - **Readiness gate**: login() is the gate. A degraded/initialising array returns 503 (code 68,
   "system services required for operation are not ready"); we surface that as a clear, retry-later
   error instead of half-provisioning.
-- **Idempotency**: every create is lookup-before-create (findHost) or catches the array's
+- **Idempotency**: every create is lookup-before-create (getHosts-derived WWN ownership) or catches the array's
   HTTPConflict so a re-run reports "exists" rather than failing — EXISTENT_HOST / EXISTENT_SV
   (volume; NOT EXISTENT_VV) / EXISTENT_VLUN, and EXISTENT_PATH (a WWN already on another host) which
   is a real conflict we do NOT swallow.
@@ -195,17 +195,28 @@ class WsapiClient:
         except Exception:  # noqa: BLE001
             return []
 
+    def wwn_owners(self) -> dict[str, str]:
+        """{normalized FC WWN: owning host name} for EVERY host on the array, from one getHosts()
+        read. This exists because the SDK's findHost() is a TRAP: it does not query — it runs
+        `createhost` over the SDK's OWN SSH channel (which this client never configures), so on
+        this client it always raised, the broad except returned None, and every WWN looked
+        unowned. PROVEN LIVE 2026-08-15: ensure_host re-added an already-present WWN, the array
+        answered EXISTENT_PATH, and the conflict-swallow reported 'exists' while the new WWN was
+        silently dropped. Ownership is now computed from the array's own host list — no SSH, no
+        probe-host creation, one round trip."""
+        owners: dict[str, str] = {}
+        for member in _members(self._require().getHosts()):
+            name = member.get("name", "")
+            for path in member.get("FCPaths") or []:
+                wwn = normalize_wwpn(str(path.get("wwn", "")))
+                if len(wwn) == 16 and name:
+                    owners[wwn] = name
+        return owners
+
     def find_host_by_wwn(self, wwn: str) -> str | None:
-        """Return the name of the host owning this FC WWN, or None (lookup-before-create primitive)."""
-        try:
-            host = self._require().findHost(wwn=wwn)
-        except Exception:  # noqa: BLE001 - findHost raises if not found in some versions
-            return None
-        if isinstance(host, str):
-            return host or None
-        if isinstance(host, dict):
-            return host.get("name")
-        return host or None
+        """Return the name of the host owning this FC WWN, or None. Backed by wwn_owners(), never
+        by the SDK's findHost (see wwn_owners for why)."""
+        return self.wwn_owners().get(normalize_wwpn(wwn))
 
     # ------------------------------------------------------------------ writes (idempotent)
 
@@ -221,27 +232,32 @@ class WsapiClient:
         persona_id = _WSAPI_PERSONA.get(persona)
         if persona_id is None:
             raise WsapiError(f"unknown host persona '{persona}' (expected one of {sorted(_WSAPI_PERSONA)})")
-        owners = {w: self.find_host_by_wwn(w) for w in fc_wwns}
-        other = {o for o in owners.values() if o is not None and o != name}
+        # ONE getHosts read answers both questions: who owns each WWN, and does the host exist.
+        owners_map = self.wwn_owners()
+        host_exists = name in set(self.host_names())
+        by_norm = {w: normalize_wwpn(w) for w in fc_wwns}
+        other = {owners_map[n] for n in by_norm.values() if n in owners_map and owners_map[n] != name}
         if other:
             raise WsapiError(
                 f"WWN(s) for host '{name}' already belong to another host definition: {sorted(other)}. "
                 "Resolve this on the array before provisioning."
             )
-        missing = [w for w, o in owners.items() if o is None]
-        if not missing:
+        missing = [w for w, n in by_norm.items() if owners_map.get(n) != name]
+        if host_exists and not missing:
             return "exists"
-        if len(missing) == len(fc_wwns) and name not in set(self.host_names()):
+        if not host_exists:
             try:
                 self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": persona_id})
                 return "created"
             except Exception as exc:  # noqa: BLE001
                 if not self._is_conflict(exc):
                     raise self._translate(exc, where=f"createHost {name}") from exc
-                # EXISTENT_HOST race: someone created the name since host_names() — fall through and add.
+                # EXISTENT_HOST race: someone created the name since our read — fall through and add.
         # The host object exists but lacks some of these WWNs. Reporting "exists" here would be the
         # silent single-path trap: the object looks green while the unregistered HBAs' paths never
-        # light up. Reconcile by ADDing the missing WWNs — never removing or adopting anyone else's.
+        # light up. Reconcile by ADDing exactly the missing WWNs — never re-adding present ones
+        # (the array answers EXISTENT_PATH even for a WWN already on the SAME host — proven live),
+        # and never removing or adopting anyone else's.
         try:
             self._require().modifyHost(
                 name,
@@ -249,8 +265,8 @@ class WsapiClient:
             )
             return "updated"
         except Exception as exc:  # noqa: BLE001
-            if self._is_conflict(exc):  # another writer registered them between our lookup and now
-                return "exists"
+            # No conflict-swallow here: `missing` excludes WWNs already on this host, so a 409 now
+            # means a real race or another owner — masking it as 'exists' is how the live bug hid.
             raise self._translate(exc, where=f"modifyHost {name} (add {len(missing)} WWN)") from exc
 
     def _existing_set_members(self, getter, name: str) -> list[str] | None:
