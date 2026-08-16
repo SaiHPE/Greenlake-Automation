@@ -315,16 +315,18 @@ def test_array_side_zoning_all_present_is_proper():
     assert report.proper is True and not report.unverified_hosts
 
 
-def test_brocade_client_is_read_only_no_write_path():
-    # ADR 0004 (revised): the tool NEVER writes to the switch — it produces a read-only zoning plan.
-    # Guard that no write allowlist / apply path / write command can creep back in.
+def test_brocade_write_surface_is_additive_only_no_delete_no_activation():
+    # ADR 0004 (revised 2026-08-15, write-path mandate): the write surface is EXACTLY the three
+    # additive shapes + cfgsave_defined/cfgtransabort. Guard that no delete verb and no cfgenable
+    # can ever creep in — activation is a human action, and existing zones must be untouchable.
     from alletra_onboard.adapters.fabric import brocade_client as bc
 
-    assert not hasattr(bc, "ALLOWED_WRITE")
-    assert not hasattr(bc.BrocadeClient, "apply")
-    assert not hasattr(zoning, "apply_remediation")
-    for write_cmd in ("alicreate", "aliadd", "zonecreate", "zoneadd", "cfgadd", "cfgenable", "cfgsave", "zonedelete"):
-        assert write_cmd not in bc.ALLOWED_READ
+    assert set(bc.ALLOWED_WRITE) == {"alicreate", "zonecreate", "cfgadd"}
+    for forbidden in ("cfgenable", "cfgsave", "zonedelete", "alidelete", "cfgremove", "cfgclear",
+                      "cfgdelete", "zoneremove", "aliremove"):
+        assert forbidden not in bc.ALLOWED_WRITE
+        assert forbidden not in bc.ALLOWED_READ
+    assert not hasattr(zoning, "apply_remediation")   # the legacy remediation text is never executed
 
 
 # ------------------------------------------------------------------ provisioning plan + apply
@@ -429,6 +431,201 @@ def test_wsapi_persona_ids_match_the_array_enum():
     assert _WSAPI_PERSONA["VMware"] == 8
     assert _WSAPI_PERSONA["WindowsServer"] == 11
     assert _WSAPI_PERSONA["Generic-ALUA"] == 2
+
+
+# ---------------- ensure_host reconciliation (adapter-level, stub SDK) ----------------
+
+class _StubSdk:
+    """Stands in for hpe3parclient: just enough surface for ensure_host."""
+
+    def __init__(self, hosts=None):
+        self.hosts = {n: set(w) for n, w in (hosts or {}).items()}
+        self.calls = []
+
+    def findHost(self, wwn=None):
+        for name, wwns in self.hosts.items():
+            if wwn in wwns:
+                return name
+        raise LookupError(wwn)                      # the SDK raises when nothing owns the WWN
+
+    def getHosts(self):
+        return {"members": [{"name": n} for n in self.hosts]}
+
+    def createHost(self, name, FCWwns=None, optional=None):
+        self.calls.append(("create", name, list(FCWwns), dict(optional or {})))
+        self.hosts[name] = set(FCWwns)
+
+    def modifyHost(self, name, mods):
+        self.calls.append(("modify", name, dict(mods)))
+        self.hosts.setdefault(name, set()).update(mods.get("FCWWNs", []))
+
+
+def _client_with(stub):
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+
+    c = WsapiClient("192.0.2.1", "u", "p")
+    c._client = stub
+    return c
+
+
+def test_ensure_host_adds_missing_wwpns_to_existing_host():
+    # The silent single-path trap (audit G4): a host object holding only HBA-1 must GAIN HBA-2,
+    # not report "exists" and leave the second HBA's paths dark forever.
+    stub = _StubSdk(hosts={"esx1": {"W1"}})
+    assert _client_with(stub).ensure_host("esx1", ["W1", "W2"]) == "updated"
+    op, name, mods = stub.calls[0]
+    assert (op, name) == ("modify", "esx1")
+    assert mods == {"pathOperation": 1, "FCWWNs": ["W2"]}   # ADD, and only the missing one
+    assert stub.hosts["esx1"] == {"W1", "W2"}
+
+
+def test_ensure_host_exists_only_when_every_wwn_is_registered():
+    stub = _StubSdk(hosts={"esx1": {"W1", "W2"}})
+    assert _client_with(stub).ensure_host("esx1", ["W1", "W2"]) == "exists"
+    assert stub.calls == []                                  # a true no-op stays a no-op
+
+
+def test_ensure_host_creates_with_wsapi_persona():
+    stub = _StubSdk()
+    assert _client_with(stub).ensure_host("esx1", ["W1"], persona="VMware") == "created"
+    assert stub.calls == [("create", "esx1", ["W1"], {"persona": 8})]
+
+
+def test_ensure_host_refuses_wwn_owned_by_another_host():
+    import pytest
+    from alletra_onboard.adapters.array.wsapi_client import WsapiError
+
+    stub = _StubSdk(hosts={"other": {"W2"}})
+    with pytest.raises(WsapiError, match="other"):
+        _client_with(stub).ensure_host("esx1", ["W1", "W2"])
+    assert stub.calls == []                                  # refused before any write
+
+
+def test_ensure_host_repopulates_an_empty_existing_host():
+    # The host object exists by name with no WWNs at all (a half-finished manual create):
+    # reconcile by adding, not by crashing into EXISTENT_HOST.
+    stub = _StubSdk(hosts={"esx1": set()})
+    assert _client_with(stub).ensure_host("esx1", ["W1", "W2"]) == "updated"
+    assert stub.hosts["esx1"] == {"W1", "W2"}
+
+
+# ---------------- provisioning corrections (2026-08-15 methodology audit) ----------------
+
+def test_build_plan_hard_gates_on_a_missing_cpg():
+    # sd00003946: volume create fails with NON_EXISTENT_CPG — a missing CPG is a blocker, not a note.
+    intent = _intent()
+    for v in intent.volumes:
+        v.cpg = "NOT_THERE"
+    plan = prov.build_plan(intent, _discovered(), wsapi_factory=lambda c: FakeWsapi())
+    assert plan.error and "NOT_THERE" in plan.error
+    assert plan.actions == []                     # nothing offered for approval on a broken premise
+
+
+def test_apply_creates_only_the_selected_hosts():
+    # ADR 0010's ideal subset (audit G6): the operator composed esx1 into the host set — the other
+    # vCenter hosts must NOT get array host objects (a shared vCenter is a whole datacenter).
+    from alletra_onboard.domain.provisioning import HostSetRequest
+
+    intent = _intent()
+    intent.host_sets = [HostSetRequest(name="HS", members=["esx1"])]
+    report = _discovered()
+    report.host_hbas.append(HostHba(host_name="esx2", wwpn=normalize_wwpn(_C), fabric="odd"))
+    fake = FakeWsapi()
+    result = prov.apply_plan(intent, report, wsapi_factory=lambda c: fake)
+    assert result.error is None
+    assert [c[1] for c in fake.calls if c[0] == "host"] == ["esx1"]
+
+
+def test_default_export_refuses_the_multi_hostset_cross_product():
+    # The old default presented EVERY volume to EVERY host set — the same VMFS volume to unrelated
+    # clusters. With >1 host set and no composed exports, both preview and apply refuse (audit G7).
+    from alletra_onboard.domain.provisioning import HostSetRequest
+
+    intent = _intent()
+    intent.host_sets = [
+        HostSetRequest(name="HS1", members=["esx1"]),
+        HostSetRequest(name="HS2", members=["esx1"]),
+    ]
+    plan = prov.build_plan(intent, _discovered(), wsapi_factory=lambda c: FakeWsapi())
+    assert plan.error and "refusing" in plan.error
+    result = prov.apply_plan(intent, _discovered(), wsapi_factory=lambda c: FakeWsapi())
+    assert result.error and "Compose the exports" in result.error
+
+
+def test_export_lun_id_bounded_by_the_platform_range():
+    # 0..16383 on the 3PAR lineage — LUN 4000 was observed live on a production Primera, so the
+    # "obvious" 0..255 bound would be wrong in both directions.
+    import pytest
+    from pydantic import ValidationError
+    from alletra_onboard.domain.provisioning import ExportRequest
+
+    def _ex(lun):
+        return ExportRequest(source_kind="volume", source_name="v",
+                             target_kind="hostset", target_name="h", lun=lun)
+
+    for ok in (0, 4000, 16383):
+        _ex(ok)
+    with pytest.raises(ValidationError):
+        _ex(16384)
+    with pytest.raises(ValidationError):
+        _ex(-1)
+
+
+def test_subscription_refusal_is_translated_to_the_onboarding_gate():
+    # Hit live on a fresh B10000: every create refused until GreenLake onboarding completes. The
+    # raw message reads like a WSAPI defect — the translation names the sequencing fix.
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiError
+
+    err = WsapiClient("h", "u", "p")._translate(
+        Exception("Error: Array has not yet completed the subscription process"),
+        where="createVolume CRV_Prod01",
+    )
+    assert isinstance(err, WsapiError) and "GreenLake" in str(err)
+
+
+class _StubSdkSets(_StubSdk):
+    """_StubSdk plus host/volume sets, for the set-membership reconciliation."""
+
+    def __init__(self, sets=None):
+        super().__init__()
+        self.sets = {n: list(m) for n, m in (sets or {}).items()}
+
+    def getHostSet(self, name):
+        if name not in self.sets:
+            raise LookupError(name)
+        return {"setmembers": list(self.sets[name])}
+
+    getVolumeSet = getHostSet
+
+    def createHostSet(self, name, setmembers=None):
+        self.calls.append(("createset", name, list(setmembers or [])))
+        self.sets[name] = list(setmembers or [])
+
+    def modifyHostSet(self, name, action=None, setmembers=None):
+        self.calls.append(("modifyset", name, action, list(setmembers or [])))
+        self.sets[name].extend(setmembers or [])
+
+
+def test_ensure_host_set_adds_missing_members():
+    # Same reconciliation principle as ensure_host (audit G4): exists-with-missing-members must
+    # GAIN them — additive only, a member someone else added is never removed.
+    stub = _StubSdkSets(sets={"HS": ["esx1"]})
+    assert _client_with(stub).ensure_host_set("HS", ["esx1", "esx2"]) == "updated"
+    op, name, action, members = stub.calls[-1]
+    assert (op, name, members) == ("modifyset", "HS", ["esx2"]) and action is not None
+    assert stub.sets["HS"] == ["esx1", "esx2"]
+
+
+def test_ensure_host_set_exists_means_every_member_verified():
+    stub = _StubSdkSets(sets={"HS": ["esx1", "esx2", "someone_elses_host"]})
+    assert _client_with(stub).ensure_host_set("HS", ["esx1", "esx2"]) == "exists"
+    assert stub.calls == []                       # the extra member is none of our business
+
+
+def test_ensure_host_set_creates_when_absent():
+    stub = _StubSdkSets()
+    assert _client_with(stub).ensure_host_set("HS", ["esx1"]) == "created"
+    assert stub.calls == [("createset", "HS", ["esx1"])]
 
 
 # ---------------- readiness preflight (read-only; runs BEFORE discovery) ----------------
@@ -759,6 +956,28 @@ def test_verify_paths_partial_single_fabric():
     h = rep.hosts[0]
     assert h.verdict == "partial" and h.fabrics == ["odd"]
     assert "missing the even fabric" in h.detail
+
+
+def test_verify_paths_joins_by_wwpn_across_naming_namespaces():
+    # MEASURED live 2026-08-15: vCenter names hosts by bare IP (10.55.235.120 / 10.99.1.1) while the
+    # array's host objects carry rack names (CRV_VZ_DL360G11D24U25) — zero exact-name matches across
+    # three arrays, so an exact-name join reported no_path for every pre-existing host. The HBA WWPN
+    # is the only key the two namespaces share.
+    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
+
+    paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
+    rep = verify_paths(
+        {"10.99.1.1"}, {"VZ_ESXi_Profile_bk"}, paths,
+        wwpns_by_host={"10.99.1.1": {"10009440C9D01212", "10009440C9D01213"}},
+    )
+    h = rep.hosts[0]
+    assert h.verdict == "live"                              # not the old no_path lie
+    assert h.hbas_with_paths == 2
+    assert "CRV_VZ_DL360G11D24U25" in h.detail              # names the array object it matched
+
+    # Without the WWPN map the name join still finds nothing — the regression this test pins.
+    bare = verify_paths({"10.99.1.1"}, {"VZ_ESXi_Profile_bk"}, paths)
+    assert bare.hosts[0].verdict == "no_path"
 
 
 def test_verify_paths_uses_discovered_fabric_over_parity_on_miscabled_ports():

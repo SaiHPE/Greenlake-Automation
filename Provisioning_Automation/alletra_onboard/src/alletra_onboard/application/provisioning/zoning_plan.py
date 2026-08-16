@@ -134,11 +134,11 @@ def _suggest_alias(existing: list[str], role: str, nsp: str, alias_freq: dict[st
 
 def _aliased(wwpn: str, role: str, fabric: str, aliases: dict[str, list[str]],
              alias_freq: dict[str, int], *, nsp: str = "", host_name: str = "",
-             host_source: str = "") -> AliasedWwpn:
+             host_source: str = "", caution: str = "") -> AliasedWwpn:
     existing = aliases.get(wwpn, [])
     return AliasedWwpn(
         wwpn=wwpn, display=wwpn_colons(wwpn), role=role, fabric=fabric, nsp=nsp, host_name=host_name,
-        host_source=host_source,
+        host_source=host_source, caution=caution,
         existing_aliases=existing, suggested_alias=_suggest_alias(existing, role, nsp, alias_freq),
     )
 
@@ -155,7 +155,11 @@ def build_zoning_plan(
 
     # 1) Read each fabric switch (F1 = odd, F2 = even), read-only.
     ns: dict[str, dict[str, dict]] = {}
-    aliases: dict[str, list[str]] = {}
+    # Aliases are PER FABRIC. One flat pool looks harmless but is wrong twice over: an alias that
+    # exists only on F2 would suppress the F1 alicreate (leaving F1's zonecreate referencing an
+    # undefined name, which the switch rejects), and "uniquely bound" for suggestions must mean
+    # unique on ITS fabric. Measured live 2026-08-15: 41 alias names exist on BOTH lab fabrics.
+    aliases: dict[str, dict[str, list[str]]] = {"F1": {}, "F2": {}}
     active_cfg: dict[str, str] = {}
     active_zones: dict[str, dict[str, set[str]]] = {}   # fabric -> {zone name: member WWPNs}
     switch_host: dict[str, str] = {}
@@ -169,9 +173,9 @@ def build_zoning_plan(
                 ns[label] = parse_nameserver(nsshow_text + "\n" + switch.nscamshow())
                 for wwpn, found in parse_aliases(switch.alishow()).items():
                     for alias in found:
-                        aliases.setdefault(wwpn, [])
-                        if alias not in aliases[wwpn]:
-                            aliases[wwpn].append(alias)
+                        per = aliases[label].setdefault(wwpn, [])
+                        if alias not in per:
+                            per.append(alias)
                 cfg_text = switch.cfgshow()
                 active_cfg[label] = parse_active_cfg(cfg_text)
                 active_zones[label], _ = parse_active_zones(cfg_text)
@@ -182,11 +186,37 @@ def build_zoning_plan(
             active_zones[label] = {}
             plan.notes.append(f"Could not read the {label} switch {creds.host}: {exc}")
 
-    # How many distinct WWPNs each alias is bound to — a shared alias is junk (never suggested).
-    alias_freq: dict[str, int] = defaultdict(int)
-    for names in aliases.values():
-        for alias in set(names):
-            alias_freq[alias] += 1
+    # How many distinct WWPNs each alias is bound to ON ITS FABRIC — a shared alias is junk (never
+    # suggested).
+    alias_freq: dict[str, dict[str, int]] = {"F1": defaultdict(int), "F2": defaultdict(int)}
+    for label in ("F1", "F2"):
+        for names in aliases[label].values():
+            for alias in set(names):
+                alias_freq[label][alias] += 1
+
+    # The declared switches must front two DISJOINT fabrics. If they are ISL'd into ONE merged fabric,
+    # first-match placement lands every device on F1 and the "dual-fabric" plan is fiction — the exact
+    # silent failure the meshed-lab episode produced. Measured healthy baseline 2026-08-15: 73 of ~955
+    # WWPNs (≈8%) appear in both name servers (stale nscamshow cache), so a small overlap only warrants
+    # a verify note; a large one means merged.
+    seen_f1, seen_f2 = set(ns.get("F1", {})), set(ns.get("F2", {}))
+    overlap = seen_f1 & seen_f2
+    if seen_f1 and seen_f2 and overlap:
+        share = len(overlap) / min(len(seen_f1), len(seen_f2))
+        if share > 0.2:
+            plan.notes.append(
+                f"The declared F1 and F2 switches see {len(overlap)} of the same device WWPNs "
+                f"({share:.0%} of the smaller fabric) — they appear to be ONE merged fabric, not a "
+                "dual fabric. Fabric placement below is unreliable (dual-seen devices land on F1). "
+                "Fix the fabric split (or declare switches from two separate fabrics) before acting "
+                "on this plan."
+            )
+        else:
+            plan.notes.append(
+                f"{len(overlap)} device WWPN(s) appear in BOTH fabrics' name servers (likely stale "
+                "nscamshow cache) — each is placed on F1. Verify placement for any of these you "
+                "intend to zone."
+            )
 
     def fabric_of(wwpn: str) -> str:
         return next((label for label in ("F1", "F2") if wwpn in ns.get(label, {})), "")
@@ -215,33 +245,35 @@ def build_zoning_plan(
                 "HBA advertises one)."
             )
 
-    # 3) Array FC target ports (discovery), EXCLUDING Remote-Copy-FC and Peer ports (showport Label
-    #    "RCFC" / "Peer") — those are replication/peer ports, not host targets. HPE/3PAR guidance:
-    #    RCFC ports are excluded from host zoning (they get their own RCFC<->RCFC zones). Only the
-    #    ports online in a fabric NS end up placed.
-    def _is_host_target(p) -> bool:
+    # 3) Array FC ports (discovery). RCFC/Peer-labelled ports are INCLUDED but FLAGGED, never
+    #    hard-dropped (ADR 0004 refinement 2026-07-04, re-proven live 2026-08-15: a production
+    #    Primera's RCFC-labelled target ports carry HOST logins — Type=host — so a hard exclusion
+    #    removes host-serving ports). They are never pre-selected; the operator sees the label and
+    #    decides. Only ports online in a fabric NS end up placed either way.
+    def _caution(p) -> str:
         u = p.usage.upper()
-        return p.protocol == "fc" and bool(p.wwpn) and u != "RCFC" and not u.startswith("PEER")
+        if u == "RCFC" or u.startswith("PEER"):
+            return f"{p.usage}: usually a replication/peer port — select only knowingly"
+        return ""
 
-    array_ports = [p for p in discovery.array_ports if _is_host_target(p)]
-    excluded = [
-        f"{p.label} ({p.usage})" for p in discovery.array_ports
-        if p.protocol == "fc" and p.wwpn and not _is_host_target(p)
-    ]
-    if excluded:
+    array_ports = [p for p in discovery.array_ports if p.protocol == "fc" and p.wwpn]
+    flagged = [f"{p.label} ({p.usage})" for p in array_ports if _caution(p)]
+    if flagged:
         plan.notes.append(
-            "Excluded from host zoning (replication/peer ports, not host targets): " + ", ".join(excluded)
+            "Flagged, not excluded — RCFC/Peer labels usually mean replication, but such ports can "
+            "serve hosts; select them only knowingly: " + ", ".join(flagged)
         )
 
     # 4) Per fabric: the host + array WWPNs present, and every SIST pair (each host port x each array port).
     for label in ("F1", "F2"):
         hosts = [
-            _aliased(wwpn, "host", label, aliases, alias_freq,
+            _aliased(wwpn, "host", label, aliases[label], alias_freq[label],
                      host_name=host_by_wwpn[wwpn], host_source=host_source.get(wwpn, ""))
             for wwpn in host_by_wwpn if fabric_of(wwpn) == label
         ]
         ports = [
-            _aliased(p.wwpn, "array", label, aliases, alias_freq, nsp=p.label)
+            _aliased(p.wwpn, "array", label, aliases[label], alias_freq[label], nsp=p.label,
+                     caution=_caution(p))
             for p in array_ports if fabric_of(p.wwpn) == label
         ]
         pairs = [(host.wwpn, port.wwpn) for host in hosts for port in ports]
