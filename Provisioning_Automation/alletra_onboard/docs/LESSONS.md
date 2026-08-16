@@ -205,3 +205,17 @@ recorded in a test so nobody restores the plausible-looking wrong one.
 Corollary: the failure was identical at 1 GiB and 16 GiB, which refuted the "compressed volumes have
 a 16 GiB minimum" theory outright. When two very different inputs fail the same way, the input is not
 the variable — read the error text instead of pattern-matching it to a known constraint.
+
+**29. Read the SDK function you depend on; "find" may be spelled "create".**
+`ensure_host` leaned on python-3parclient's `findHost()` for WWN ownership — which does not query
+anything: it runs `createhost <uuid> <wwn>` over the SDK's *own* SSH channel (never configured by
+our client), parses "already used by host", and deletes its probe host. On our client it always
+raised; a broad `except → None` made every WWN look unowned; the reconcile path then re-added an
+already-present WWN, the array answered `EXISTENT_PATH` (it does so even against the *same* host),
+and a conflict-swallow reported `exists` while silently dropping the new WWN — three defects
+stacked so the failure looked like success. The unit stub had faithfully implemented `findHost` as
+a working query, so every test was green; only the live zz_probe lifecycle caught it. Fixes worth
+generalising: derive state from a read you already trust (`getHosts` → FCPaths), never from a
+helper you haven't read; make the stub model the vendor's real surface (the fixed stub has **no**
+`findHost`, so the trap cannot re-hide); and treat a conflict-swallow as a claim — it is only safe
+if the request provably contains nothing the server could legitimately conflict on.
