@@ -50,6 +50,18 @@ def _members_for(host_set, all_hosts: "OrderedDict[str, list[str]]") -> list[str
     return list(host_set.members) if host_set.members else list(all_hosts)
 
 
+def _selected_hosts(intent: ProvisioningIntent, discovery: DiscoveryReport) -> "OrderedDict[str, list[str]]":
+    """The hosts tier-1 will CREATE: only those the operator composed into a host set (ADR 0010's
+    ideal subset) — never the whole vCenter inventory. On a shared vCenter, creating an array host
+    object for every ESXi server in the inventory is pollution, not provisioning. With no host sets
+    (the from_simple single-cluster shortcut) every discovered host is in scope, as before."""
+    all_hosts = _hosts_by_name(discovery)
+    if not intent.host_sets:
+        return all_hosts
+    wanted = {m for hs in intent.host_sets for m in _members_for(hs, all_hosts)}
+    return OrderedDict((n, w) for n, w in all_hosts.items() if n in wanted)
+
+
 def _vvsets(intent: ProvisioningIntent) -> "OrderedDict[str, list[str]]":
     """Group volume names by the VV-set each volume asked to join (order preserved)."""
     sets: OrderedDict[str, list[str]] = OrderedDict()
@@ -100,11 +112,26 @@ def host_briefs(discovery: DiscoveryReport) -> list[DiscoveredHostBrief]:
     return briefs
 
 
+class ExportDefaultError(ValueError):
+    """No exports were composed and the default cannot be chosen safely."""
+
+
 def _resolve_exports(intent: ProvisioningIntent) -> list[ExportRequest]:
     """The presentations (VLUNs) to create: the operator's explicit export list, or — when none was
-    composed — the Stage-1 default of every volume -> every host set at an auto LUN (ADR 0010)."""
+    composed and there is exactly ONE host set — every volume to that set at an auto LUN (the
+    verified single-cluster model: the array keeps the LUN id consistent across the set's hosts).
+
+    With MULTIPLE host sets and no composed exports this REFUSES: the old default (every volume ×
+    every host set) presents the same VMFS volume to unrelated clusters — a corruption-shaped
+    default, not a convenience."""
     if intent.exports:
         return list(intent.exports)
+    if len(intent.host_sets) > 1:
+        raise ExportDefaultError(
+            "No exports were composed and more than one host set is defined — refusing the "
+            "every-volume-to-every-host-set default (it would present the same volume to unrelated "
+            "clusters). Compose the exports explicitly in the builder."
+        )
     return [
         ExportRequest(source_kind="volume", source_name=v.name, target_kind="hostset", target_name=hs.name)
         for hs in intent.host_sets
@@ -119,7 +146,7 @@ def build_plan(
     wsapi_factory: Callable = make_wsapi,
 ) -> ProvisioningPlan:
     plan = ProvisioningPlan()
-    hosts = _hosts_by_name(discovery)
+    hosts = _selected_hosts(intent, discovery)
     if not hosts:
         plan.notes.append("No ESXi host HBAs discovered — nothing to provision until discovery finds hosts.")
 
@@ -134,9 +161,17 @@ def build_plan(
         plan.error = f"Could not read the array over WSAPI: {exc}"
         return plan
 
-    for cpg in sorted({v.cpg for v in intent.volumes}):
-        if cpg not in cpgs:
-            plan.notes.append(f"CPG '{cpg}' was not found on the array — volume creation will fail for it.")
+    # HARD gate, not a note (sd00003946: volume create fails with NON_EXISTENT_CPG; SSD_r6 is
+    # auto-created at array init, so a missing CPG means the sheet or the array is wrong — verify,
+    # never auto-create).
+    missing_cpgs = sorted({v.cpg for v in intent.volumes} - cpgs)
+    if missing_cpgs:
+        plan.error = (
+            "CPG(s) not found on the array: " + ", ".join(missing_cpgs)
+            + ". Volume creation is hard-gated on the CPG existing — fix the sheet's CPG name or "
+            "have the CPG created on the array first."
+        )
+        return plan
 
     personas = _persona_by_host(discovery)
     for host_name, wwns in hosts.items():
@@ -174,8 +209,14 @@ def build_plan(
         ))
 
     # Presentation: the operator-composed exports (source volume|vvset x target host|hostset x LUN),
-    # or the Stage-1 default (each volume -> each host set, auto LUN) when none were composed (ADR 0010).
-    for ex in _resolve_exports(intent):
+    # or the single-host-set default (each volume -> the set, auto LUN). Multiple host sets with no
+    # composed exports REFUSE — see _resolve_exports.
+    try:
+        exports = _resolve_exports(intent)
+    except ExportDefaultError as exc:
+        plan.error = str(exc)
+        return plan
+    for ex in exports:
         lun_txt = "auto LUN" if ex.lun is None else f"LUN {ex.lun}"
         plan.actions.append(PlannedAction(
             kind="vlun", name=ex.source_name,
@@ -192,9 +233,14 @@ def apply_plan(
     wsapi_factory: Callable = make_wsapi,
 ) -> ProvisioningResult:
     result = ProvisioningResult()
-    hosts = _hosts_by_name(discovery)
+    hosts = _selected_hosts(intent, discovery)
     if not hosts:
         result.error = "No ESXi host HBAs discovered — refusing to provision with no hosts."
+        return result
+    try:
+        exports = _resolve_exports(intent)
+    except ExportDefaultError as exc:
+        result.error = str(exc)
         return result
 
     personas = _persona_by_host(discovery)
@@ -216,7 +262,7 @@ def apply_plan(
                 status = array.ensure_volume_set(vvset, vols)
                 result.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
 
-            for ex in _resolve_exports(intent):
+            for ex in exports:
                 status = array.ensure_vlun(ex.source_ref, ex.target_ref, lun=ex.lun)
                 result.outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status=status))
     except Exception as exc:  # noqa: BLE001 - record what we got, surface the failure

@@ -139,6 +139,42 @@ def test_render_commands_alicreate_for_a_new_operator_alias():
     assert 'alicreate "CRVLZ_HOSTX_R1U1_HBA_1_Port_1","10:00:00:00:00:00:00:aa"' in cmds["F1"]
 
 
+def test_alias_on_the_other_fabric_does_not_suppress_alicreate():
+    # MEASURED live 2026-08-15: 41 alias names exist on BOTH lab fabrics. With one flat alias pool,
+    # an alias defined only on F2 suppressed the F1 alicreate — so F1's zonecreate referenced a name
+    # F1 has never defined, and the switch would reject the script. Alias existence is per fabric.
+    f1_alis = f" alias:\tCRVLZ_MPB10K_LZ_031\n\t\t{_ARR_031}\n"     # F1 has NO alias for the host
+    f2_alis = (
+        f" alias:\thostx_HBA1_Port1\n\t\t{_HOST_A}\n"               # the host's alias lives on F2 only
+        f" alias:\tCRVLZ_MPB10K_LZ_032\n\t\t{_ARR_032}\n"
+    )
+
+    def factory(creds):
+        if creds.host == "sw-f1":
+            return FakeBrocade(_F1_NS, f1_alis, _F1_CFG)
+        return FakeBrocade(_F2_NS, f2_alis, _F2_CFG)
+
+    plan = zp.build_zoning_plan(_intent(), _discovery(), brocade_factory=factory)
+    host = next(f for f in plan.fabrics if f.fabric == "F1").hosts[0]
+    assert host.existing_aliases == []                              # per-fabric truth: F1 has none
+
+    cmds, _ = zp.render_commands(plan, {"10000000000000AA": "hostx_HBA1_Port1"})
+    assert 'alicreate "hostx_HBA1_Port1","10:00:00:00:00:00:00:aa"' in cmds["F1"]
+
+
+def test_merged_fabric_is_called_out_not_silently_collapsed():
+    # The meshed-lab failure mode: both declared switches are ISL'd into ONE fabric, both name
+    # servers see the same devices, first-match placement lands everything on F1 and F2 comes back
+    # empty. The plan must SAY so instead of presenting single-fabric zoning as dual-fabric.
+    def factory(creds):
+        return FakeBrocade(_F1_NS, _F1_ALIS, _F1_CFG)               # identical view from both switches
+
+    plan = zp.build_zoning_plan(_intent(), _discovery(), brocade_factory=factory)
+    assert any("merged fabric" in n.lower() for n in plan.notes)
+    f2 = next(f for f in plan.fabrics if f.fabric == "F2")
+    assert f2.hosts == [] and f2.array_ports == []                  # everything landed on F1
+
+
 def test_offline_host_is_flagged_never_guessed():
     plan = zp.build_zoning_plan(
         _intent(),
@@ -449,8 +485,11 @@ def test_delta_on_the_unzoned_bgl_hosts_proposes_everything_as_new():
     assert f1_cmds[-1] == "cfgenable F1_CFG"
 
 
-def test_rcfc_and_peer_ports_excluded_from_host_zoning():
-    # RCFC (Remote-Copy-FC) + Peer ports are NOT host targets (HPE/3PAR) — exclude them, note it.
+def test_rcfc_and_peer_ports_are_flagged_not_excluded():
+    # ADR 0004 (2026-07-04, re-proven live 2026-08-15): RCFC/Peer labels USUALLY mean replication,
+    # but a production Primera's RCFC-labelled target ports carry host logins (Type=host) — a hard
+    # exclusion removes host-serving ports. So the port stays a candidate, carries a caution, is
+    # never pre-selected, and the notes call it out.
     rcfc = "20:34:00:02:ac:02:f6:29"   # 0:3:4, showport Label "RCFC"
     ns_f1 = _F1_NS + f"\n N    010400;   3;{rcfc};2f:f7:00:02:ac:02:f6:29; 0x0\n    Device type: Physical Target\n"
 
@@ -462,7 +501,10 @@ def test_rcfc_and_peer_ports_excluded_from_host_zoning():
         ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC02F629", link_state="ready", usage="RCFC")
     )
     plan = zp.build_zoning_plan(_intent(), disc, brocade_factory=factory)
-    placed = [a.wwpn for f in plan.fabrics for a in f.array_ports]
-    assert "20340002AC02F629" not in placed        # the RCFC port is excluded even though it's online
-    assert "20310002AC02F629" in placed            # the real host target port is kept
-    assert any("RCFC" in note for note in plan.notes)
+    f1 = next(f for f in plan.fabrics if f.fabric == "F1")
+    flagged = next(p for p in f1.array_ports if p.wwpn == "20340002AC02F629")
+    assert "RCFC" in flagged.caution                       # a candidate, but marked
+    plain = next(p for p in f1.array_ports if p.wwpn == "20310002AC02F629")
+    assert plain.caution == ""                             # ordinary target ports carry no caution
+    assert (flagged.wwpn not in {w for pair in f1.already_zoned for w in pair})  # never pre-selected
+    assert any("RCFC" in note and "not excluded" in note for note in plan.notes)

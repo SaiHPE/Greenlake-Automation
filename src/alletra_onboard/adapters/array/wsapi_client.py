@@ -211,8 +211,9 @@ class WsapiClient:
 
     def ensure_host(self, name: str, fc_wwns: list[str], persona: str = "VMware") -> str:
         """Create ONE host carrying all FC WWNs at the given persona NAME (default 'VMware'), resolved to
-        the WSAPI persona id via `_WSAPI_PERSONA`. Returns 'created' or 'exists'. An existing host is never
-        modified — its persona is left as-is.
+        the WSAPI persona id via `_WSAPI_PERSONA`. Returns 'created', 'updated' (the host existed but was
+        missing some of these WWNs — they were added), or 'exists' (already carries every WWN). The
+        persona of an existing host is never modified.
 
         Raises WsapiError if any WWN already belongs to a *different* host (EXISTENT_PATH) — that is a
         real conflict the operator must resolve, not something to silently adopt.
@@ -220,32 +221,73 @@ class WsapiClient:
         persona_id = _WSAPI_PERSONA.get(persona)
         if persona_id is None:
             raise WsapiError(f"unknown host persona '{persona}' (expected one of {sorted(_WSAPI_PERSONA)})")
-        owners = {self.find_host_by_wwn(w) for w in fc_wwns}
-        owners.discard(None)
-        if owners == {name}:
-            return "exists"
-        other = owners - {name}
+        owners = {w: self.find_host_by_wwn(w) for w in fc_wwns}
+        other = {o for o in owners.values() if o is not None and o != name}
         if other:
             raise WsapiError(
                 f"WWN(s) for host '{name}' already belong to another host definition: {sorted(other)}. "
                 "Resolve this on the array before provisioning."
             )
+        missing = [w for w, o in owners.items() if o is None]
+        if not missing:
+            return "exists"
+        if len(missing) == len(fc_wwns) and name not in set(self.host_names()):
+            try:
+                self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": persona_id})
+                return "created"
+            except Exception as exc:  # noqa: BLE001
+                if not self._is_conflict(exc):
+                    raise self._translate(exc, where=f"createHost {name}") from exc
+                # EXISTENT_HOST race: someone created the name since host_names() — fall through and add.
+        # The host object exists but lacks some of these WWNs. Reporting "exists" here would be the
+        # silent single-path trap: the object looks green while the unregistered HBAs' paths never
+        # light up. Reconcile by ADDing the missing WWNs — never removing or adopting anyone else's.
         try:
-            self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": persona_id})
-            return "created"
+            self._require().modifyHost(
+                name,
+                {"pathOperation": getattr(HPE3ParClient, "HOST_EDIT_ADD", 1), "FCWWNs": missing},
+            )
+            return "updated"
         except Exception as exc:  # noqa: BLE001
-            if self._is_conflict(exc):
+            if self._is_conflict(exc):  # another writer registered them between our lookup and now
                 return "exists"
-            raise self._translate(exc, where=f"createHost {name}") from exc
+            raise self._translate(exc, where=f"modifyHost {name} (add {len(missing)} WWN)") from exc
+
+    def _existing_set_members(self, getter, name: str) -> list[str] | None:
+        """The set's current members, or None if the set does not exist. Sets share ensure_host's
+        reconciliation problem: exists-with-missing-members must gain them, never report 'exists'."""
+        try:
+            data = getter(name)
+        except Exception:  # noqa: BLE001 - not-found raises in the SDK
+            return None
+        if isinstance(data, dict):
+            return list(data.get("setmembers") or [])
+        return list(getattr(data, "setmembers", None) or [])
 
     def ensure_host_set(self, name: str, members: list[str]) -> str:
+        """Create the host set, or ADD any missing members to an existing one (additive only — a
+        member someone else added is never removed). 'exists' means every requested member verified."""
+        existing = self._existing_set_members(self._require().getHostSet, name)
+        if existing is None:
+            try:
+                self._require().createHostSet(name, setmembers=list(members))
+                return "created"
+            except Exception as exc:  # noqa: BLE001
+                if not self._is_conflict(exc):
+                    raise self._translate(exc, where=f"createHostSet {name}") from exc
+                existing = self._existing_set_members(self._require().getHostSet, name) or []
+        missing = [m for m in members if m not in existing]
+        if not missing:
+            return "exists"
         try:
-            self._require().createHostSet(name, setmembers=members)
-            return "created"
+            self._require().modifyHostSet(
+                name, action=getattr(HPE3ParClient, "SET_MEM_ADD", 1), setmembers=missing,
+            )
+            return "updated"
         except Exception as exc:  # noqa: BLE001
             if self._is_conflict(exc):
                 return "exists"
-            raise self._translate(exc, where=f"createHostSet {name}") from exc
+            raise self._translate(exc, where=f"modifyHostSet {name} (add {len(missing)})") from exc
 
     def ensure_volume(self, name: str, cpg: str, size_mib: int, provisioning_type: str) -> str:
         # Data reduction is ONE flag on the Alletra MP WSAPI: `reduce`. The legacy 3PAR pair
@@ -264,13 +306,28 @@ class WsapiClient:
             raise self._translate(exc, where=f"createVolume {name}") from exc
 
     def ensure_volume_set(self, name: str, members: list[str]) -> str:
+        """Create the VV set, or ADD any missing members to an existing one (additive only)."""
+        existing = self._existing_set_members(self._require().getVolumeSet, name)
+        if existing is None:
+            try:
+                self._require().createVolumeSet(name, setmembers=list(members))
+                return "created"
+            except Exception as exc:  # noqa: BLE001
+                if not self._is_conflict(exc):
+                    raise self._translate(exc, where=f"createVolumeSet {name}") from exc
+                existing = self._existing_set_members(self._require().getVolumeSet, name) or []
+        missing = [m for m in members if m not in existing]
+        if not missing:
+            return "exists"
         try:
-            self._require().createVolumeSet(name, setmembers=members)
-            return "created"
+            self._require().modifyVolumeSet(
+                name, action=getattr(HPE3ParClient, "SET_MEM_ADD", 1), setmembers=missing,
+            )
+            return "updated"
         except Exception as exc:  # noqa: BLE001
             if self._is_conflict(exc):
                 return "exists"
-            raise self._translate(exc, where=f"createVolumeSet {name}") from exc
+            raise self._translate(exc, where=f"modifyVolumeSet {name} (add {len(missing)})") from exc
 
     def ensure_vlun(self, volume_name: str, host_name: str, lun: int | None = None) -> str:
         """Export a source to a target as a VLUN. ``volume_name`` is a bare volume or ``set:<vvset>``;
@@ -305,6 +362,15 @@ class WsapiClient:
             return WsapiNotReady(
                 f"The array's WSAPI is reachable but not ready (during {where}). This tracks array "
                 "health, not config — check `checkhealth -svc -detail` and retry once it clears."
+            )
+        # The GreenLake gate, hit live on a fresh B10000: every create is refused with "Array has
+        # not yet completed the subscription process" until onboarding (Component A/B/C) finishes.
+        # Without this translation it reads like a WSAPI defect instead of a sequencing problem.
+        if "subscri" in str(exc).lower():
+            return WsapiError(
+                f"The array refused {where}: it has not completed GreenLake subscription/onboarding. "
+                "Finish the onboarding steps (GreenLake registration → cloud connection) and retry — "
+                f"array said: {str(exc)[:200]}"
             )
         desc = ""
         if hpe_exc is not None and isinstance(exc, hpe_exc.ClientException):

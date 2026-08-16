@@ -1,15 +1,20 @@
 import { Box, Button, CheckBox, Text, TextInput } from 'grommet';
 import { useMemo, useState } from 'react';
-import { AliasedWwpn, FabricZonePlan, ZoningPlan, renderZoningCommands } from '../api';
+import {
+  AliasedWwpn, FabricZonePlan, ZoningPlan, ZoningStageResult, renderZoningCommands, stageZoning,
+} from '../api';
 import { InlineNotification, Surface } from '../ui/primitives';
 
-// ADR 0004 (refined): the two-part zoning screen.
+// ADR 0004 (refined; write path added 2026-08-15): the two-part zoning screen.
 //   1. The current-connection map — pairs the fabric's effective config ALREADY covers, shown
 //      pre-selected and disabled: nothing the tool proposes can recreate them.
 //   2. The operator-selected builder — candidates are a MENU: the operator picks which array
-//      ports serve each host, names the aliases, and generates the command preview.
-// The commands are rendered by the BACKEND (POST /zoning/render) so the grammar has exactly one
-// implementation, and they are a read-only script for the SAN team — the tool never runs them.
+//      ports serve each host, names the aliases, then either generates the command preview for
+//      the SAN team or STAGES the zones (alicreate/zonecreate/cfgadd + cfgsave, DEFINED config
+//      only). The backend's write surface has no delete verb and no cfgenable — existing zones
+//      cannot be touched, and activation is always a manual SAN-team action (the hand-off).
+// Commands are rendered by the BACKEND (POST /zoning/render) so the grammar has exactly one
+// implementation.
 
 const mono = { fontFamily: 'ui-monospace, Consolas, monospace' };
 
@@ -78,9 +83,12 @@ function FabricBuilder({
                   checked={isZoned || Boolean(selected[key])}
                   disabled={isZoned}
                   label={
-                    <Text size="small">
+                    <Text size="small" color={port.caution && !isZoned ? 'status-warning' : undefined}>
                       {port.nsp || portByWwpn[port.wwpn]?.display}
                       {isZoned && <Text size="xsmall" color="text-weak"> (zoned)</Text>}
+                      {port.caution && !isZoned && (
+                        <Text size="xsmall" color="status-warning"> ⚠ {port.caution}</Text>
+                      )}
                     </Text>
                   }
                   onChange={(e) => toggle(key, e.target.checked)}
@@ -99,7 +107,12 @@ function FabricBuilder({
   );
 }
 
-export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
+export function ZoningPlanView({ plan, runId, running, stageResult }: {
+  plan: ZoningPlan;
+  runId: string;
+  running: boolean;
+  stageResult: ZoningStageResult | null;
+}) {
   const [aliases, setAliases] = useState<Record<string, string>>(() => {
     const seed: Record<string, string> = {};
     plan.fabrics.forEach((f) => [...f.hosts, ...f.array_ports].forEach((w) => { seed[w.wwpn] = w.suggested_alias; }));
@@ -137,14 +150,27 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
     }
   };
 
+  const stage = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await stageZoning(runId, plan, aliases, selectedPairs);  // result arrives via run events
+    } catch (exc: any) {
+      setError(String(exc.message ?? exc));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Box gap="medium">
       <Text size="small" color="text-weak">
         Existing zones are pre-selected and cannot be recreated. Select the array ports that should
-        serve each host, name the aliases, then generate the command preview — a <b>read-only script
-        for the SAN team</b>. The tool never writes to the switch.
+        serve each host, name the aliases, then preview the commands and <b>stage the zones</b> —
+        written to the switch&apos;s <b>defined configuration only</b> (cfgsave). The tool cannot
+        delete zones and never runs cfgenable: <b>activation is always a manual SAN-team action</b>.
       </Text>
-      {error && <InlineNotification tone="critical" title="Could not generate the command preview" message={error} />}
+      {error && <InlineNotification tone="critical" title="The request failed" message={error} />}
 
       {plan.fabrics.map((fab) => (
         <Surface key={fab.fabric} title={`${fab.fabric} — ${fab.switch_host} (cfg ${fab.active_cfg || 'not read'})`}>
@@ -168,13 +194,19 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
         </Surface>
       ))}
 
-      <Box direction="row" gap="small" align="center">
+      <Box direction="row" gap="small" align="center" wrap>
         <Button
-          primary
           busy={busy}
           disabled={selectedPairs.length === 0}
           label={`Generate command preview (${selectedPairs.length} new zone${selectedPairs.length === 1 ? '' : 's'})`}
           onClick={generate}
+        />
+        <Button
+          primary
+          busy={busy || running}
+          disabled={selectedPairs.length === 0 || unnamed > 0 || !commands}
+          label={`Stage ${selectedPairs.length} zone${selectedPairs.length === 1 ? '' : 's'} on the switches`}
+          onClick={stage}
         />
         {totalZoned > 0 && (
           <Text size="small" color="text-weak">{totalZoned} pair(s) already zoned — excluded automatically.</Text>
@@ -184,7 +216,43 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
             {unnamed} selected pair(s) need an alias name before they can be zoned.
           </Text>
         )}
+        {!commands && selectedPairs.length > 0 && (
+          <Text size="small" color="text-weak">Preview first — staging runs exactly the commands shown.</Text>
+        )}
       </Box>
+
+      {stageResult && (
+        <Surface title="Staged to the defined configuration">
+          {stageResult.fabrics.map((fr) => (
+            <Box key={fr.fabric} gap="xxsmall" margin={{ bottom: 'small' }}>
+              <Text size="small" weight={600}>{fr.fabric} — {fr.switch_host}</Text>
+              {fr.error && <InlineNotification tone="critical" title={`${fr.fabric}: staging failed`} message={fr.error} />}
+              {!fr.error && fr.staged.length === 0 && (
+                <Text size="small" color="text-weak">Nothing to stage on this fabric.</Text>
+              )}
+              {fr.staged.length > 0 && (
+                <Box background="background-contrast" round="xsmall" pad="small">
+                  {fr.staged.map((c, i) => <Text key={i} size="small" style={mono}>{c}</Text>)}
+                  <Text size="small" style={mono}>cfgsave  (committed — defined configuration only)</Text>
+                </Box>
+              )}
+              {fr.verified && (
+                <Text size="small" color="status-ok">
+                  Verified on read-back: zones present in the defined configuration; effective configuration unchanged.
+                </Text>
+              )}
+              {fr.handoff && (
+                <Text size="small">
+                  Manual activation (SAN team, maintenance window): <Text size="small" style={mono} weight={600}>{fr.handoff}</Text>
+                </Text>
+              )}
+            </Box>
+          ))}
+          {stageResult.warning && (
+            <InlineNotification tone="warning" title="Activation pending" message={stageResult.warning} />
+          )}
+        </Surface>
+      )}
 
       {plan.offline_hosts.length > 0 && (
         <Surface title={`Offline — cable and power the host, then run the plan again (${plan.offline_hosts.length})`}>
