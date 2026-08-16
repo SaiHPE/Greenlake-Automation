@@ -436,20 +436,22 @@ def test_wsapi_persona_ids_match_the_array_enum():
 # ---------------- ensure_host reconciliation (adapter-level, stub SDK) ----------------
 
 class _StubSdk:
-    """Stands in for hpe3parclient: just enough surface for ensure_host."""
+    """Stands in for hpe3parclient: just enough surface for ensure_host.
+
+    Deliberately does NOT implement findHost — the real SDK's findHost runs `createhost` over its
+    own (unconfigured) SSH channel, and modelling it as a working query is exactly how the live
+    reconciliation bug hid behind green tests. Ownership comes from getHosts + FCPaths, the same
+    surface the shipped client now reads."""
 
     def __init__(self, hosts=None):
         self.hosts = {n: set(w) for n, w in (hosts or {}).items()}
         self.calls = []
 
-    def findHost(self, wwn=None):
-        for name, wwns in self.hosts.items():
-            if wwn in wwns:
-                return name
-        raise LookupError(wwn)                      # the SDK raises when nothing owns the WWN
-
     def getHosts(self):
-        return {"members": [{"name": n} for n in self.hosts]}
+        return {"members": [
+            {"name": n, "FCPaths": [{"wwn": w} for w in sorted(wwns)]}
+            for n, wwns in self.hosts.items()
+        ]}
 
     def createHost(self, name, FCWwns=None, optional=None):
         self.calls.append(("create", name, list(FCWwns), dict(optional or {})))
@@ -468,36 +470,41 @@ def _client_with(stub):
     return c
 
 
+# 16-hex like the real thing — normalize_wwpn strips non-hex, so "W1"-style tokens would vanish.
+_WA, _WB = "AABBCCDDEE000001", "AABBCCDDEE000002"
+
+
 def test_ensure_host_adds_missing_wwpns_to_existing_host():
-    # The silent single-path trap (audit G4): a host object holding only HBA-1 must GAIN HBA-2,
-    # not report "exists" and leave the second HBA's paths dark forever.
-    stub = _StubSdk(hosts={"esx1": {"W1"}})
-    assert _client_with(stub).ensure_host("esx1", ["W1", "W2"]) == "updated"
+    # The silent single-path trap (audit G4), REPRODUCED LIVE 2026-08-15 before this design: a host
+    # holding only HBA-1 must GAIN HBA-2 via modifyHost ADD carrying ONLY the missing WWN —
+    # re-adding a present WWN draws EXISTENT_PATH from the array even against the same host.
+    stub = _StubSdk(hosts={"esx1": {_WA}})
+    assert _client_with(stub).ensure_host("esx1", [_WA, _WB]) == "updated"
     op, name, mods = stub.calls[0]
     assert (op, name) == ("modify", "esx1")
-    assert mods == {"pathOperation": 1, "FCWWNs": ["W2"]}   # ADD, and only the missing one
-    assert stub.hosts["esx1"] == {"W1", "W2"}
+    assert mods == {"pathOperation": 1, "FCWWNs": [_WB]}    # ADD, and ONLY the missing one
+    assert stub.hosts["esx1"] == {_WA, _WB}
 
 
 def test_ensure_host_exists_only_when_every_wwn_is_registered():
-    stub = _StubSdk(hosts={"esx1": {"W1", "W2"}})
-    assert _client_with(stub).ensure_host("esx1", ["W1", "W2"]) == "exists"
+    stub = _StubSdk(hosts={"esx1": {_WA, _WB}})
+    assert _client_with(stub).ensure_host("esx1", [_WA, _WB]) == "exists"
     assert stub.calls == []                                  # a true no-op stays a no-op
 
 
 def test_ensure_host_creates_with_wsapi_persona():
     stub = _StubSdk()
-    assert _client_with(stub).ensure_host("esx1", ["W1"], persona="VMware") == "created"
-    assert stub.calls == [("create", "esx1", ["W1"], {"persona": 8})]
+    assert _client_with(stub).ensure_host("esx1", [_WA], persona="VMware") == "created"
+    assert stub.calls == [("create", "esx1", [_WA], {"persona": 8})]
 
 
 def test_ensure_host_refuses_wwn_owned_by_another_host():
     import pytest
     from alletra_onboard.adapters.array.wsapi_client import WsapiError
 
-    stub = _StubSdk(hosts={"other": {"W2"}})
+    stub = _StubSdk(hosts={"other": {_WB}})
     with pytest.raises(WsapiError, match="other"):
-        _client_with(stub).ensure_host("esx1", ["W1", "W2"])
+        _client_with(stub).ensure_host("esx1", [_WA, _WB])
     assert stub.calls == []                                  # refused before any write
 
 
@@ -505,8 +512,20 @@ def test_ensure_host_repopulates_an_empty_existing_host():
     # The host object exists by name with no WWNs at all (a half-finished manual create):
     # reconcile by adding, not by crashing into EXISTENT_HOST.
     stub = _StubSdk(hosts={"esx1": set()})
-    assert _client_with(stub).ensure_host("esx1", ["W1", "W2"]) == "updated"
-    assert stub.hosts["esx1"] == {"W1", "W2"}
+    assert _client_with(stub).ensure_host("esx1", [_WA, _WB]) == "updated"
+    assert stub.hosts["esx1"] == {_WA, _WB}
+
+
+def test_find_host_by_wwn_reads_getHosts_never_sdk_findHost():
+    # The SDK's findHost is a trap (it runs `createhost` over its own unconfigured SSH channel and
+    # this client's old broad-except turned that into None-for-everything). The lookup must work on
+    # a stub with NO findHost at all, from getHosts alone.
+    stub = _StubSdk(hosts={"esx1": {_WA}})
+    c = _client_with(stub)
+    assert c.find_host_by_wwn(_WA) == "esx1"
+    assert c.find_host_by_wwn(_WA.lower()) == "esx1"         # normalization on the lookup side
+    assert c.find_host_by_wwn(_WB) is None
+    assert not hasattr(stub, "findHost")
 
 
 # ---------------- provisioning corrections (2026-08-15 methodology audit) ----------------

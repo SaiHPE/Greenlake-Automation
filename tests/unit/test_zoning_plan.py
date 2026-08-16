@@ -162,6 +162,24 @@ def test_alias_on_the_other_fabric_does_not_suppress_alicreate():
     assert 'alicreate "hostx_HBA1_Port1","10:00:00:00:00:00:00:aa"' in cmds["F1"]
 
 
+def test_transient_empty_nameserver_is_called_out_not_silently_accepted():
+    # MEASURED live 2026-08-15: one plan run got an EMPTY local NS from a healthy F2 switch, so
+    # both F2-resident array ports (carrying ACTIVE VLUNs!) silently vanished from the plan. A
+    # ready port in neither fabric's NS is an anomaly the plan must report, twice over: the empty
+    # local NS itself, and the specific unplaced ports.
+    def factory(creds):
+        if creds.host == "sw-f1":
+            return FakeBrocade(_F1_NS, _F1_ALIS, _F1_CFG)
+        return FakeBrocade("", "", _F2_CFG)                  # F2: nothing in the name server
+
+    plan = zp.build_zoning_plan(_intent(), _discovery(), brocade_factory=factory)
+    assert any("no LOCAL name-server entries" in n for n in plan.notes)
+    unplaced = [n for n in plan.notes if "neither declared fabric's name server" in n]
+    assert unplaced and "0:3:2" in unplaced[0]               # the ready F2-resident port, by name
+    f2 = next(f for f in plan.fabrics if f.fabric == "F2")
+    assert f2.array_ports == []                              # still absent — but never silently
+
+
 def test_merged_fabric_is_called_out_not_silently_collapsed():
     # The meshed-lab failure mode: both declared switches are ISL'd into ONE fabric, both name
     # servers see the same devices, first-match placement lands everything on F1 and F2 comes back
