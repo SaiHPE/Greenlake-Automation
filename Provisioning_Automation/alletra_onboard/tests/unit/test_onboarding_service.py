@@ -319,7 +319,9 @@ async def test_set_provisioning_builder_persists_membership_vvsets_and_exports(t
 
 
 async def _preview(service, run_id, monkeypatch, actions=("host",)):
-    """Drive a provisioning preview so the apply gate is satisfied."""
+    """Drive a provisioning preview so the apply PREVIEW gate is satisfied, and mark zoning staged —
+    zoning is a hard prerequisite for apply (2026-08-15) and these tests exercise the preview
+    approval, not the zoning gate (test_apply_is_gated_on_zoning covers that)."""
     from alletra_onboard.application.provisioning import storage_provision as sp
     from alletra_onboard.domain.provisioning import PlannedAction, ProvisioningPlan
 
@@ -329,6 +331,7 @@ async def _preview(service, run_id, monkeypatch, actions=("host",)):
             actions=[PlannedAction(kind=k, name="x", description="d") for k in actions]
         ),
     )
+    service.discovery_zoning._save_zoning_state(run_id, "staged")
     service.start_storage_preview(run_id)
     await service.wait(run_id)
 
@@ -389,6 +392,57 @@ async def test_rerunning_discovery_withdraws_the_approval(tmp_path, monkeypatch)
     await service.wait(run.run_id)
 
     with pytest.raises(StepPreconditionError):
+        service.start_storage_apply(run.run_id)
+
+
+async def test_apply_is_gated_on_zoning(tmp_path, monkeypatch):
+    """Zoning is a HARD prerequisite for apply (2026-08-15, supersedes 'Proceed anyway'): refused
+    until the verify says proper OR the planned zones were staged. Live paths are NOT required —
+    exports created against staged-but-unactivated zones go live when a human runs cfgenable."""
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import ActionOutcome, ProvisioningPlan, ProvisioningResult
+
+    monkeypatch.setattr(sp, "build_plan", lambda i, d: ProvisioningPlan(actions=[]))
+    monkeypatch.setattr(sp, "apply_plan", lambda i, d: ProvisioningResult(
+        outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]
+    ))
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    service.start_storage_preview(run.run_id)
+    await service.wait(run.run_id)
+
+    with pytest.raises(StepPreconditionError, match="zoning"):
+        service.start_storage_apply(run.run_id)                     # no zoning state at all
+
+    service.discovery_zoning._save_zoning_state(run.run_id, "incomplete")
+    with pytest.raises(StepPreconditionError, match="zoning"):
+        service.start_storage_apply(run.run_id)                     # verified NOT proper still blocks
+
+    service.discovery_zoning._save_zoning_state(run.run_id, "verified-proper")
+    service.start_storage_apply(run.run_id)                         # the gate opens
+    await service.wait(run.run_id)
+    assert any(e.event_type == "storage.applied" for e in service.list_events(run.run_id))
+
+
+async def test_apply_refuses_a_failed_preview(tmp_path, monkeypatch):
+    """A previewed-but-FAILED plan (e.g. the CPG hard gate) is not an approval."""
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import ProvisioningPlan
+
+    monkeypatch.setattr(sp, "build_plan", lambda i, d: ProvisioningPlan(error="CPG(s) not found: X"))
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    service.discovery_zoning._save_zoning_state(run.run_id, "verified-proper")
+    service.start_storage_preview(run.run_id)
+    await service.wait(run.run_id)
+
+    with pytest.raises(StepPreconditionError, match="blocking problem"):
         service.start_storage_apply(run.run_id)
 
 
@@ -528,6 +582,26 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
     service.start_storage_preview(run.run_id)
     await service.wait(run.run_id)
     assert any(e.event_type == "storage.previewed" for e in service.list_events(run.run_id))
+
+    # Zoning is a HARD prerequisite (2026-08-15): the verify was not proper and nothing is staged,
+    # so apply must refuse — the old "Proceed anyway" path no longer exists.
+    from alletra_onboard.application.service import StepPreconditionError
+    with pytest.raises(StepPreconditionError, match="zoning"):
+        service.start_storage_apply(run.run_id)
+
+    # Stage the planned zones (write path faked); the gate opens and apply proceeds.
+    from alletra_onboard.application.provisioning import zoning_stage as zs
+    from alletra_onboard.domain.zoning import FabricStageResult, ZoningPlan, ZoningStageResult
+    monkeypatch.setattr(zs, "stage_zones", lambda *a, **k: ZoningStageResult(
+        fabrics=[FabricStageResult(
+            fabric="F1", switch_host="sw1", staged=['zonecreate "H_A","H;A"'],
+            verified=True, handoff="cfgenable CFG",
+        )],
+        warning="defined != effective",
+    ))
+    service.start_zoning_stage(run.run_id, ZoningPlan(), {}, [])
+    await service.wait(run.run_id)
+    assert any(e.event_type == "zoning.staged" for e in service.list_events(run.run_id))
 
     service.start_storage_apply(run.run_id)
     await service.wait(run.run_id)

@@ -95,6 +95,9 @@ class AliasedWwpn(BaseModel):
     #                                             used when vCenter reports nothing)
     existing_aliases: list[str] = Field(default_factory=list)  # every alias the switch has for this WWPN
     suggested_alias: str = ""                   # pre-fill: the convention match, else ""
+    caution: str = ""                           # non-empty = select knowingly (e.g. an RCFC/Peer-labelled
+    #                                             array port: usually replication, but proven live to
+    #                                             carry host logins — flagged, never hard-dropped)
 
 
 class FabricZonePlan(BaseModel):
@@ -123,3 +126,26 @@ class ZoningPlan(BaseModel):
     offline_hosts: list[str] = Field(default_factory=list)  # host "name (wwpn)" on no fabric -> cable+power
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
+
+
+class FabricStageResult(BaseModel):
+    """What staging did to ONE fabric switch: the additive commands executed and committed to the
+    DEFINED config (cfgsave), the read-back verification, and the manual activation hand-off. The
+    tool never runs `cfgenable`; `handoff` is the command a human runs during a maintenance window."""
+
+    fabric: str                                  # "F1" | "F2"
+    switch_host: str = ""
+    staged: list[str] = Field(default_factory=list)   # commands the switch accepted (committed)
+    skipped: list[str] = Field(default_factory=list)  # selected pairs that could not render (no alias)
+    verified: bool = False                       # cfgshow re-read: zones in DEFINED, effective cfg unchanged
+    handoff: str = ""                            # e.g. 'cfgenable F1_CFG' — for the human, never run
+    error: str | None = None
+
+
+class ZoningStageResult(BaseModel):
+    """The staged-write outcome across both fabrics, plus the Broadcom defined≠effective warning that
+    must be shown until a human activates (the divergence is documented to yield different effective
+    zoning across switches on a zone merge or HA failover)."""
+
+    fabrics: list[FabricStageResult] = Field(default_factory=list)
+    warning: str = ""

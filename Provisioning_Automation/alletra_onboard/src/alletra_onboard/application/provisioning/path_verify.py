@@ -77,6 +77,7 @@ def verify_paths(
     target_volumes: set[str],
     vlun_paths: list[VolumePath],
     fabric_by_port: dict[str, str] | None = None,
+    wwpns_by_host: dict[str, set[str]] | None = None,
 ) -> PathVerification:
     """Per target host, classify the live paths to the target volumes (from `showvlun -a`).
 
@@ -84,6 +85,14 @@ def verify_paths(
     not zoned). `target_volumes` empty => consider every volume the host has an active path to.
     `fabric_by_port` (n:s:p -> odd/even, from discovery's switch-derived resolution) corrects the
     parity fallback on non-standard cabling — see _fabric.
+
+    `wwpns_by_host` maps a target host to its HBA WWPNs, and a path whose Host_WWN is one of them
+    counts for that host EVEN when the array's host-object name differs. The two names come from
+    different namespaces — vCenter reports bare IPs/FQDNs while array host objects carry names like
+    `CRV_VZ_DL360G11D24U25` (measured live: zero exact-name matches across three arrays) — so an
+    exact-name join would report `no_path` for every pre-existing host, the one wrong answer a path
+    verifier must not produce. The name match remains as the secondary key for hosts with no
+    discovered HBAs.
     """
     report = PathVerification()
     if not target_hosts:
@@ -91,9 +100,10 @@ def verify_paths(
         return report
 
     for host in sorted(target_hosts):
+        hba_wwpns = (wwpns_by_host or {}).get(host, set())
         paths = [
             vp for vp in vlun_paths
-            if vp.host == host
+            if (vp.host == host or vp.host_wwpn in hba_wwpns)
             and vp.status in _LIVE_STATUS
             and (not target_volumes or vp.volume in target_volumes)
         ]
@@ -115,6 +125,11 @@ def verify_paths(
 
         if dead_vols:
             detail += f"; exported-but-no-path: {', '.join(dead_vols)}"
+        # WWPN-matched under a different array host-object name: say which, so the operator can
+        # correlate this verdict with `showhost` output on the array.
+        object_names = sorted({vp.host for vp in paths if vp.host != host})
+        if object_names:
+            detail += f" [array host object: {', '.join(object_names)}]"
         report.hosts.append(HostPathStatus(
             host=host, verdict=verdict, hbas_with_paths=hbas, fabrics=fabrics,
             live_volumes=live_vols, dead_volumes=dead_vols, detail=detail,
@@ -138,9 +153,17 @@ def verify_provisioned_paths(
     except Exception as exc:  # noqa: BLE001
         return PathVerification(error=f"Could not read 'showvlun -a' over SSH: {exc}")
     hosts = {h.host_name for h in discovery.host_hbas} or {ah.name for ah in discovery.array_hosts}
+    # The join key between "the hosts vCenter knows" and "the paths the array reports" is the HBA
+    # WWPN, never the name — the two namespaces don't intersect on real arrays (see verify_paths).
+    wwpns_by_host: dict[str, set[str]] = {}
+    for h in discovery.host_hbas:
+        wwpns_by_host.setdefault(h.host_name, set()).add(normalize_wwpn(h.wwpn))
     # Discovery resolved each port's REAL fabric from the switch it attaches to (parity is only its
     # fallback) — hand that to the classifier so non-standard cabling can't fake dual-fabric redundancy.
     fabric_by_port = {
         p.label: p.fabric for p in discovery.array_ports if p.protocol == "fc" and p.fabric
     }
-    return verify_paths(hosts, {v.name for v in intent.volumes}, parse_showvlun_active(text), fabric_by_port)
+    return verify_paths(
+        hosts, {v.name for v in intent.volumes}, parse_showvlun_active(text),
+        fabric_by_port, wwpns_by_host,
+    )

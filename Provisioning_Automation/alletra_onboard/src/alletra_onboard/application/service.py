@@ -150,6 +150,9 @@ class OnboardingService:
     def start_zoning_plan(self, run_id: str) -> RunRecord:
         return self.discovery_zoning.start_zoning_plan(run_id)
 
+    def start_zoning_stage(self, run_id: str, plan, aliases, selected_pairs) -> RunRecord:
+        return self.discovery_zoning.start_zoning_stage(run_id, plan, aliases, selected_pairs)
+
     # ------------------------------------------------------------------ provisioning tiers + builder
 
     def start_storage_preview(self, run_id: str) -> RunRecord:
