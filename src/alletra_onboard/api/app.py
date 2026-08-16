@@ -83,11 +83,6 @@ from alletra_onboard.domain.zoning import ZoningPlan
 from alletra_onboard.application.provisioning.zoning_plan import render_commands
 
 
-def _wsapi_capability() -> dict:
-    """Whether this build (frozen or not) actually imported the 3PAR SDK — and if not, WHY."""
-    from alletra_onboard.adapters.array.wsapi_client import HPE3ParClient, SDK_IMPORT_ERROR
-
-    return {"wsapi_sdk": HPE3ParClient is not None, "wsapi_sdk_error": SDK_IMPORT_ERROR}
 from alletra_onboard import __version__
 from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.service import (
@@ -102,6 +97,13 @@ from alletra_onboard.application.onboarding.preflight_service import PreflightSe
 from alletra_onboard.config import load_settings
 
 SSE_HEARTBEAT_S = 15.0
+
+
+def _wsapi_capability() -> dict:
+    """Whether this build (frozen or not) actually imported the 3PAR SDK — and if not, WHY."""
+    from alletra_onboard.adapters.array.wsapi_client import HPE3ParClient, SDK_IMPORT_ERROR
+
+    return {"wsapi_sdk": HPE3ParClient is not None, "wsapi_sdk_error": SDK_IMPORT_ERROR}
 
 
 class CsvParseRequest(BaseModel):
@@ -468,6 +470,18 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def run_zoning_plan(run_id: str) -> RunResponse:
         # Read-only: reads both fabric switches to build the zoning plan; makes NO switch writes.
         return _start_step(run_id, lambda: service.start_zoning_plan(run_id))
+
+    @app.post("/runs/{run_id}/zoning/stage", response_model=RunResponse)
+    async def run_zoning_stage(run_id: str, request: ZoningRenderRequest) -> RunResponse:
+        # STAGED WRITE: alicreate/zonecreate/cfgadd + cfgsave into the DEFINED config only. The
+        # adapter's write patterns contain no delete verb and no cfgenable — existing zones cannot
+        # be touched and activation stays a manual human action.
+        return _start_step(
+            run_id,
+            lambda: service.start_zoning_stage(
+                run_id, request.plan, request.aliases, request.selected_pairs
+            ),
+        )
 
     @app.post("/zoning/render", response_model=ZoningRenderResponse)
     async def zoning_render(request: ZoningRenderRequest) -> ZoningRenderResponse:

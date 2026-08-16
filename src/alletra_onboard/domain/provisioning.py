@@ -72,7 +72,10 @@ class ExportRequest(BaseModel):
     source_name: str
     target_kind: ExportTargetKind
     target_name: str
-    lun: int | None = None          # None = let the array auto-assign
+    # None = let the array auto-assign. Explicit ids are bounded by the platform's VLUN range —
+    # 0..16383 on the 3PAR lineage (LUN 4000 observed live on a production Primera, so 0..255 would
+    # be wrong in BOTH directions).
+    lun: int | None = Field(default=None, ge=0, le=16383)
 
     @property
     def source_ref(self) -> str:

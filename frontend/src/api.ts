@@ -211,6 +211,7 @@ export interface ZoningReport {
 export interface AliasedWwpn {
   wwpn: string; display: string; role: 'host' | 'array'; fabric: string; nsp: string;
   host_name: string; host_source: string; existing_aliases: string[]; suggested_alias: string;
+  caution: string;  // non-empty = select knowingly (RCFC/Peer-labelled port)
 }
 export interface FabricZonePlan {
   fabric: string; switch_host: string; active_cfg: string;
@@ -223,6 +224,19 @@ export interface ZoningPlan {
 export const renderZoningCommands = (
   plan: ZoningPlan, aliases: Record<string, string>, selectedPairs: [string, string][],
 ) => request<{ commands: Record<string, string[]>; skipped: Record<string, string[]> }>('POST', '/zoning/render', {
+  plan, aliases, selected_pairs: selectedPairs,
+});
+// Staged write: alicreate/zonecreate/cfgadd + cfgsave into the DEFINED config only. The backend's
+// write patterns contain no delete verb and no cfgenable — existing zones cannot be touched and
+// activation is always a manual SAN-team action (the per-fabric `handoff` command).
+export interface FabricStageResult {
+  fabric: string; switch_host: string; staged: string[]; skipped: string[];
+  verified: boolean; handoff: string; error: string | null;
+}
+export interface ZoningStageResult { fabrics: FabricStageResult[]; warning: string; }
+export const stageZoning = (
+  runId: string, plan: ZoningPlan, aliases: Record<string, string>, selectedPairs: [string, string][],
+) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/stage`, {
   plan, aliases, selected_pairs: selectedPairs,
 });
 export interface PlannedAction {
