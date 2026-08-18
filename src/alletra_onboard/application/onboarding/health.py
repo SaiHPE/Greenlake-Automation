@@ -9,6 +9,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from alletra_onboard.application.onboarding.clients import make_greenlake, missing_credentials
+from alletra_onboard.application.platform.tls import is_tls_trust_error, tls_trust_guidance
 from alletra_onboard.config import Settings
 
 
@@ -25,6 +26,10 @@ class GreenLakeCheckReport(BaseModel):
     error: str | None = None
     missing_credentials: list[str] = Field(default_factory=list)
     provisions: list[ProvisionSummary] = Field(default_factory=list)
+    # The check failed before the credentials were ever evaluated: the TLS certificate could not be
+    # verified. Reporting that as "credentials rejected" sends the operator to re-check a client
+    # secret that was never sent — the failure reported live from an HPE laptop.
+    tls_trust_failure: bool = False
 
 
 async def greenlake_check(settings: Settings) -> GreenLakeCheckReport:
@@ -46,6 +51,12 @@ async def greenlake_check(settings: Settings) -> GreenLakeCheckReport:
         )
         raw = response.json().get("items", [])
     except Exception as exc:  # noqa: BLE001 - operator-facing health check reports, not crashes.
+        if is_tls_trust_error(exc):
+            return GreenLakeCheckReport(
+                ok=False,
+                tls_trust_failure=True,
+                error=tls_trust_guidance("the HPE GreenLake API") + f" [{type(exc).__name__}: {str(exc)[:160]}]",
+            )
         return GreenLakeCheckReport(ok=False, error=f"{type(exc).__name__}: {str(exc)[:200]}")
 
     provisions = [
