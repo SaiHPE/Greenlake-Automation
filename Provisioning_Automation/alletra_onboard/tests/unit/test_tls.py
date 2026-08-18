@@ -24,24 +24,51 @@ def _clear(monkeypatch):
         monkeypatch.delenv(var, raising=False)
 
 
+def _ca_count(ctx) -> int | None:
+    """CA count, or None where it cannot be asked. A machine with `truststore` injected into ssl
+    (a common Zscaler workaround — observed live on an HPE laptop) returns a context whose
+    get_ca_certs() raises NotImplementedError. That must not fail the suite."""
+    try:
+        return len(ctx.get_ca_certs())
+    except NotImplementedError:
+        return None
+
+
 def test_context_verifies_and_carries_ca_certificates(monkeypatch):
     _clear(monkeypatch)
     ctx = ssl_context()
     assert ctx.verify_mode == ssl.CERT_REQUIRED       # verification is never disabled
     assert ctx.check_hostname is True
-    assert len(ctx.get_ca_certs()) > 0                 # OS store and/or certifi actually loaded
+    count = _ca_count(ctx)
+    assert count is None or count > 0                  # OS store and/or certifi actually loaded
 
 
-def test_explicit_ca_bundle_wins(monkeypatch, tmp_path):
-    """A site whose root lives in a file, not the store: ALLETRA_CA_BUNDLE points at it."""
+def test_explicit_ca_bundle_is_added_not_substituted(monkeypatch, tmp_path):
+    """A configured bundle must EXTEND trust, never replace it.
+
+    Using the bundle exclusively is the obvious reading of SSL_CERT_FILE and it is wrong: a Zscaler
+    root PEM alone cannot verify a genuine Amazon-issued HPE certificate, so the moment we "fixed"
+    the intercepted endpoint every non-intercepted one would start failing.
+    """
+    _clear(monkeypatch)
+    baseline = _ca_count(ssl_context())
+
+    # A real, loadable PEM that is NOT already in any store: a self-signed throwaway would need a
+    # crypto lib, so use one certifi root written to its own file — loading it must not shrink trust.
     import certifi
 
-    _clear(monkeypatch)
+    with open(certifi.where(), encoding="ascii") as handle:
+        blocks = handle.read().split("-----END CERTIFICATE-----")
     bundle = tmp_path / "corp.pem"
-    bundle.write_bytes(open(certifi.where(), "rb").read())   # a real, loadable PEM
+    bundle.write_text(blocks[0] + "-----END CERTIFICATE-----\n", encoding="ascii")
+
     monkeypatch.setenv("ALLETRA_CA_BUNDLE", str(bundle))
     assert ca_bundle_override() == str(bundle)
-    assert ssl_context().verify_mode == ssl.CERT_REQUIRED
+    ctx = ssl_context()
+    assert ctx.verify_mode == ssl.CERT_REQUIRED
+    after = _ca_count(ctx)
+    if baseline is not None and after is not None:
+        assert after >= baseline, "the override replaced the default trust instead of extending it"
 
 
 def test_a_nonexistent_bundle_path_is_ignored_not_fatal(monkeypatch, tmp_path):
@@ -49,6 +76,30 @@ def test_a_nonexistent_bundle_path_is_ignored_not_fatal(monkeypatch, tmp_path):
     monkeypatch.setenv("SSL_CERT_FILE", str(tmp_path / "nope.pem"))
     assert ca_bundle_override() is None
     assert ssl_context().verify_mode == ssl.CERT_REQUIRED    # falls back to the OS store
+
+
+def test_ssl_cert_file_is_honoured(monkeypatch, tmp_path):
+    """The variable an HPE laptop already had set to its Zscaler root — httpx ignores it, we don't."""
+    import certifi
+
+    _clear(monkeypatch)
+    bundle = tmp_path / "zscaler-root-ca.pem"
+    bundle.write_bytes(open(certifi.where(), "rb").read())
+    monkeypatch.setenv("SSL_CERT_FILE", str(bundle))
+    assert ca_bundle_override() == str(bundle)
+    assert ssl_context().verify_mode == ssl.CERT_REQUIRED
+
+
+def test_an_unreadable_bundle_does_not_break_the_other_sources(monkeypatch, tmp_path):
+    """Garbage in the configured bundle must not take the OS store down with it."""
+    _clear(monkeypatch)
+    junk = tmp_path / "junk.pem"
+    junk.write_text("this is not a certificate\n", encoding="ascii")
+    monkeypatch.setenv("ALLETRA_CA_BUNDLE", str(junk))
+    ctx = ssl_context()                                      # must not raise
+    assert ctx.verify_mode == ssl.CERT_REQUIRED
+    count = _ca_count(ctx)
+    assert count is None or count > 0                        # OS store + certifi still there
 
 
 def test_is_tls_trust_error_sees_through_the_wrapping():
