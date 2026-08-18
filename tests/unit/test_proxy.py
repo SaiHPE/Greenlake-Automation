@@ -5,10 +5,12 @@ from __future__ import annotations
 import os
 
 from alletra_onboard.application.platform.proxy import (
+    DIRECT,
     ProxyResolver,
     _first_proxy,
     apply_proxy_env,
     is_bypassed,
+    is_direct,
     normalize_proxy,
 )
 
@@ -19,6 +21,44 @@ def test_normalize_proxy():
     assert normalize_proxy("user:pass@h:8080") == "http://user:pass@h:8080"
     assert normalize_proxy("") is None
     assert normalize_proxy(None) is None
+
+
+def test_normalize_proxy_rejects_a_url_with_no_host():
+    """REPORTED FROM THE UI: "In use: detected system proxy http://" with no way to remove it.
+
+    Windows' registry yields exactly that when ProxyEnable is set with an empty ProxyServer entry
+    (urllib's getproxies_registry prefixes the bare protocol -> 'http://'). The old passthrough
+    ("://" in value -> return as-is) then published that host-less string into HTTPS_PROXY, which
+    breaks every outbound call, and showed it to the operator as the detected system proxy.
+    """
+    assert normalize_proxy("http://") is None
+    assert normalize_proxy("https://") is None
+    assert normalize_proxy("://") is None
+    assert normalize_proxy("   ") is None
+    assert normalize_proxy("http:// ") is None
+
+
+def test_direct_sentinel_is_recognised_and_normalises_to_no_proxy():
+    for word in ("direct", "direct://", "DIRECT", "none", "off", "no", "-", "  direct  "):
+        assert is_direct(word), word
+        assert normalize_proxy(word) is None          # a decision, not a proxy address
+    assert not is_direct("proxy.corp:3128")
+    assert not is_direct("")                          # empty means AUTO-DETECT, not direct
+    assert not is_direct(None)
+
+
+def test_registry_garbage_never_reaches_the_env(monkeypatch):
+    """The full path from a broken OS setting to the process env: 'http://' must resolve to direct."""
+    from alletra_onboard.application.platform import proxy as mod
+
+    for var in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(mod, "_win_system_proxy", lambda url: None)
+    monkeypatch.setattr(mod, "getproxies_registry", lambda: {"https": "http://"})
+    monkeypatch.setattr(mod, "_IS_WINDOWS", True)
+    assert mod.os_system_proxy("https://common.cloud.hpe.com") is None
+    assert apply_proxy_env(None) is None
+    assert "HTTPS_PROXY" not in os.environ
 
 
 def test_first_proxy_parses_winhttp_strings():
@@ -60,6 +100,41 @@ def test_apply_proxy_env_publishes_manual_and_bypass(monkeypatch):
     assert proxy == "http://mp:3128"
     assert os.environ["HTTPS_PROXY"] == "http://mp:3128"
     assert "10.65.234.220" in os.environ["NO_PROXY"] and "169.254.*" in os.environ["NO_PROXY"]
+
+
+def test_forced_direct_overrides_a_detected_proxy_and_clears_the_env(monkeypatch):
+    """The operator's "there is no proxy here" must beat detection AND erase what we published.
+
+    The second half is the other reason removal appeared not to work: apply_proxy_env only ever
+    SET the vars, so a previously-published (or externally `setx`-ed) value kept routing traffic
+    after the operator asked for a direct connection.
+    """
+    from alletra_onboard.application.platform import proxy as mod
+
+    monkeypatch.setattr(mod, "_win_system_proxy", lambda url: "http://detected:8080")
+    monkeypatch.setenv("HTTPS_PROXY", "http://stale:9999")
+    monkeypatch.setenv("http_proxy", "http://stale:9999")
+
+    r = ProxyResolver(manual=DIRECT)
+    assert r.force_direct and r.for_url("https://common.cloud.hpe.com") is None
+
+    assert apply_proxy_env(DIRECT) is None
+    for var in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        assert var not in os.environ, f"{var} survived a forced-direct apply"
+    # ...while an empty override still means AUTO-DETECT, which finds the system proxy again.
+    assert apply_proxy_env(None) == "http://detected:8080"
+    assert os.environ["HTTPS_PROXY"] == "http://detected:8080"
+
+
+def test_status_reporting_never_echoes_the_override_as_detected(monkeypatch):
+    """`detected` must be the machine's setting; os_system_proxy ignores the env we publish."""
+    from alletra_onboard.application.platform import proxy as mod
+
+    monkeypatch.setattr(mod, "_win_system_proxy", lambda url: None)
+    monkeypatch.setattr(mod, "getproxies_registry", lambda: {})
+    monkeypatch.setenv("HTTPS_PROXY", "http://our-own-override:3128")
+    assert mod.os_system_proxy("https://common.cloud.hpe.com") is None       # not the echo
+    assert mod.detect_system_proxy("https://common.cloud.hpe.com") == "http://our-own-override:3128"
 
 
 # --------------- regression: v0.9.0 heap-corruption crash on a box WITH a system proxy ---------------
