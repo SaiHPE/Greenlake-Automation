@@ -99,11 +99,15 @@ export const checkConnectivity = (region = 'jp1') =>
 
 // Proxy: the tool auto-detects the system proxy (like the browser); a manual override can be saved.
 export interface ProxyStatus {
-  detected: string | null;
-  manual: string | null;
-  effective: string | null;
+  detected: string | null;   // the OS's own setting (never an echo of our override)
+  manual: string | null;     // the saved override: a host:port, or 'direct://' to force no proxy
+  effective: string | null;  // what the tool will use; null = direct
   source: 'manual' | 'system' | 'direct' | string;
+  forced_direct: boolean;    // the operator chose to ignore any detected proxy
 }
+// 'direct://' is the saved value that means "no proxy". It must be non-empty: an empty override
+// means "auto-detect", so blanking the field can never express a decision to bypass the proxy.
+export const PROXY_DIRECT = 'direct://';
 export const getProxyStatus = () => request<ProxyStatus>('GET', '/prereqs/proxy');
 export const saveProxy = (proxy: string | null) => request<ProxyStatus>('POST', '/prereqs/proxy', { proxy });
 

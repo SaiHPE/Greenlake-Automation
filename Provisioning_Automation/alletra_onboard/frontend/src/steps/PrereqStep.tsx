@@ -4,6 +4,7 @@ import {
   API,
   ConnectivityResult,
   FirewallRule,
+  PROXY_DIRECT,
   ProxyStatus,
   checkConnectivity,
   firewallTxtUrl,
@@ -53,7 +54,8 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
     getProxyStatus()
       .then((status) => {
         setProxy(status);
-        setProxyInput(status.manual ?? '');
+        // Never seed the box with the direct sentinel — it is a decision, not a proxy address.
+        setProxyInput(status.forced_direct ? '' : status.manual ?? '');
       })
       .catch(() => undefined);
   }, []);
@@ -84,7 +86,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
     try {
       const status = await saveProxy(value);
       setProxy(status);
-      setProxyInput(status.manual ?? '');
+      setProxyInput(status.forced_direct ? '' : status.manual ?? '');
       await test();
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
@@ -299,13 +301,19 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
 
       <Surface
         title="Proxy"
-        description="Detected from the operating system, as a browser would resolve it. Provide an override only if the detected value is incorrect."
+        description="Detected from the operating system, as a browser would resolve it. Enter an override if the detected value is wrong, or connect directly to ignore it entirely."
       >
         {proxy && (
           <Text size="small">
-            {proxy.source === 'manual' && `In use: manual proxy ${proxy.effective}`}
-            {proxy.source === 'system' && `In use: detected system proxy ${proxy.detected}`}
-            {proxy.source === 'direct' && 'No proxy detected; connecting directly.'}
+            {proxy.forced_direct && 'In use: no proxy — connecting directly (detected value ignored).'}
+            {!proxy.forced_direct && proxy.source === 'manual' && `In use: manual proxy ${proxy.effective}`}
+            {!proxy.forced_direct && proxy.source === 'system' && `In use: detected system proxy ${proxy.detected}`}
+            {!proxy.forced_direct && proxy.source === 'direct' && 'No proxy detected; connecting directly.'}
+          </Text>
+        )}
+        {proxy?.forced_direct && proxy.detected && (
+          <Text size="xsmall" color="text-weak">
+            The operating system reports {proxy.detected}; the tool is ignoring it by your choice.
           </Text>
         )}
         <Box direction="row" gap="small" align="center" wrap flex={false}>
@@ -322,10 +330,32 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
             size="small"
             busy={savingProxy}
             label="Save and retest"
-            onClick={() => applyProxy(proxyInput.trim() || null)}
+            disabled={savingProxy || !proxyInput.trim()}
+            onClick={() => applyProxy(proxyInput.trim())}
           />
+          {/* The only way to say "there is no proxy here" — an empty field means auto-detect, so it
+              can never express this. Saves the 'direct://' sentinel, which persists across restarts. */}
+          {!proxy?.forced_direct && (
+            <Button
+              size="small"
+              label="Connect directly (no proxy)"
+              disabled={savingProxy}
+              onClick={() => {
+                setProxyInput('');
+                applyProxy(PROXY_DIRECT);
+              }}
+            />
+          )}
           {proxy?.manual && (
-            <Button size="small" label="Clear override" disabled={savingProxy} onClick={() => applyProxy(null)} />
+            <Button
+              size="small"
+              label="Use detected setting"
+              disabled={savingProxy}
+              onClick={() => {
+                setProxyInput('');
+                applyProxy(null);
+              }}
+            />
           )}
         </Box>
       </Surface>

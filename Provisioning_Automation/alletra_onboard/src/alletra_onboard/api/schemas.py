@@ -183,11 +183,16 @@ class ConnectivityResponse(BaseModel):
 
 
 class ProxyStatusResponse(BaseModel):
-    detected: str | None = None   # the auto-detected system proxy (WinINET/PAC), if any
+    detected: str | None = None   # the OS's OWN system proxy (WinINET/PAC/registry), if any
     manual: str | None = None     # the operator's manual override, if set
-    effective: str | None = None  # what the tool will actually use (manual > detected > direct)
+    effective: str | None = None  # what the tool will actually use (None = direct)
     source: str = "direct"        # "manual" | "system" | "direct"
+    # True when the operator explicitly chose to ignore any detected proxy (saved "direct://").
+    # Distinct from source == "direct" meaning "nothing was detected".
+    forced_direct: bool = False
 
 
 class ProxySaveRequest(BaseModel):
-    proxy: str | None = None      # manual override host:port (or user:pass@host:port); null/"" clears it
+    # host:port (or user:pass@host:port) to force that proxy; "direct://" to force NO proxy;
+    # null/"" to go back to auto-detecting the OS setting.
+    proxy: str | None = None

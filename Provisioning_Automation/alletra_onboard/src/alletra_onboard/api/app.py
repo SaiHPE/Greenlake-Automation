@@ -70,7 +70,14 @@ from alletra_onboard.application.platform.configuring import (
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.onboarding.health import greenlake_check
 from alletra_onboard.application.platform.init_sheet import build_template_bytes, parse_workbook_bytes
-from alletra_onboard.application.platform.proxy import ProxyResolver, apply_proxy_env, detect_system_proxy
+from alletra_onboard.application.platform.proxy import (
+    DIRECT,
+    ProxyResolver,
+    apply_proxy_env,
+    is_direct,
+    normalize_proxy,
+    os_system_proxy,
+)
 from alletra_onboard.domain.models import RunMode
 from alletra_onboard.domain.provisioning import (
     PreflightReport,
@@ -260,16 +267,26 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     @app.get("/prereqs/proxy", response_model=ProxyStatusResponse)
     async def prereq_proxy_status() -> ProxyStatusResponse:
         manual = load_settings().alletra_proxy or None
-        detected = detect_system_proxy("https://common.cloud.hpe.com")
+        # os_system_proxy, NOT detect_system_proxy: the latter reads the HTTPS_PROXY env that
+        # apply_proxy_env publishes, so it would report our own override back as "detected".
+        detected = os_system_proxy("https://common.cloud.hpe.com")
         effective = ProxyResolver(manual).for_url("https://common.cloud.hpe.com")
-        source = "manual" if manual else ("system" if detected else "direct")
-        return ProxyStatusResponse(detected=detected, manual=manual, effective=effective, source=source)
+        forced = is_direct(manual)
+        source = "direct" if forced or not effective else ("manual" if normalize_proxy(manual) else "system")
+        return ProxyStatusResponse(
+            detected=detected, manual=manual, effective=effective, source=source, forced_direct=forced,
+        )
 
     @app.post("/prereqs/proxy", response_model=ProxyStatusResponse)
     async def prereq_proxy_save(request: ProxySaveRequest) -> ProxyStatusResponse:
         # os.environ is the source of truth for the running process (pydantic reads it); .env persists
         # a set across restarts. Then re-publish the effective proxy for httpx + browser.
         value = (request.proxy or "").strip()
+        # Normalize a direct request to the canonical sentinel so what persists is unambiguous, and
+        # so it is NON-EMPTY: set_env_values ignores empty values (it must never wipe a saved
+        # secret), which is precisely why blanking the field could not persist "go direct".
+        if is_direct(value):
+            value = DIRECT
         os.environ["ALLETRA_PROXY"] = value
         if value:
             set_env_values(env_path, {"ALLETRA_PROXY": value})
