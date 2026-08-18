@@ -367,6 +367,41 @@ def test_proxy_status_and_manual_override(tmp_path, monkeypatch):
             os.environ.pop(v, None)
 
 
+def test_proxy_can_be_forced_direct_and_the_choice_persists(tmp_path, monkeypatch):
+    """REPORTED FROM THE UI: a detected proxy could not be removed — an empty override means
+    "auto-detect", so there was no way to say "this machine has no proxy". Saving the direct
+    sentinel must: report forced_direct, resolve to no proxy, clear the published env, and land in
+    .env so it survives a restart (an empty value cannot — set_env_values ignores empties by design
+    so a blank field never wipes a saved secret)."""
+    import os
+
+    from alletra_onboard.application.platform import proxy as proxymod
+
+    monkeypatch.chdir(tmp_path)
+    for v in ("ALLETRA_PROXY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        monkeypatch.delenv(v, raising=False)
+    # A machine WITH a system proxy, so forcing direct has something to override.
+    monkeypatch.setattr(proxymod, "_win_system_proxy", lambda url: "http://detected:8080")
+    try:
+        client = _client(tmp_path)
+        auto = client.get("/prereqs/proxy").json()
+        assert auto["source"] == "system" and auto["detected"] == "http://detected:8080"
+
+        forced = client.post("/prereqs/proxy", json={"proxy": "direct"}).json()   # any accepted word
+        assert forced["forced_direct"] is True
+        assert forced["effective"] is None and forced["source"] == "direct"
+        assert forced["detected"] == "http://detected:8080"    # still reported, just not used
+        assert "HTTPS_PROXY" not in os.environ                 # and nothing left routing traffic
+
+        assert "ALLETRA_PROXY=direct://" in (tmp_path / ".env").read_text(encoding="utf-8")
+
+        back = client.post("/prereqs/proxy", json={"proxy": ""}).json()           # -> auto-detect
+        assert back["forced_direct"] is False and back["effective"] == "http://detected:8080"
+    finally:
+        for v in ("ALLETRA_PROXY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy"):
+            os.environ.pop(v, None)
+
+
 def test_app_profile_defaults_to_full(tmp_path, monkeypatch):
     monkeypatch.delenv("ALLETRA_PROFILE", raising=False)
     prof = _client(tmp_path).get("/app/profile").json()
