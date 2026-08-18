@@ -23,14 +23,41 @@ _IS_WINDOWS = sys.platform == "win32"
 DEFAULT_BYPASS: tuple[str, ...] = ("localhost", "127.0.0.1", "169.254.*")
 
 
+#: The operator's "there is no proxy here" answer. A non-empty sentinel ON PURPOSE: an empty
+#: override means "auto-detect", and `set_env_values` deliberately ignores empty values (so a blank
+#: field can never wipe a saved secret) — so blanking the field could never persist a *decision* to
+#: go direct. Saving this does. Matches the existing BROWSER_PROXY=direct:// convention.
+DIRECT = "direct://"
+_DIRECT_WORDS = frozenset({"direct", "direct://", "none", "no", "off", "-"})
+
+
+def is_direct(value: str | None) -> bool:
+    """Does this override mean "force a direct connection, ignore any detected proxy"?"""
+    return (value or "").strip().lower() in _DIRECT_WORDS
+
+
 def normalize_proxy(value: str | None) -> str | None:
-    """A proxy spec (``host:port``, ``user:pass@host:port``, or a full URL) -> ``http://…``; '' -> None."""
+    """A proxy spec (``host:port``, ``user:pass@host:port``, or a full URL) -> ``http://…``.
+
+    Returns None for: empty, a direct sentinel, and — the case that bit us — anything that does not
+    resolve to a real HOST. Windows' own registry yields ``'http://'`` when ProxyEnable is set with
+    an empty ProxyServer entry (urllib's getproxies_registry prefixes the bare protocol), and the
+    old passthrough published that host-less string into HTTPS_PROXY and reported it to the operator
+    as "detected system proxy http://" — an unusable proxy that broke every outbound cloud call and
+    could not be removed from the UI. A proxy URL with no hostname is not a proxy.
+    """
     if not value:
         return None
     value = value.strip()
-    if not value:
+    if not value or is_direct(value):
         return None
-    return value if "://" in value else f"http://{value}"
+    candidate = value if "://" in value else f"http://{value}"
+    try:
+        if not urlparse(candidate).hostname:
+            return None
+    except ValueError:  # malformed (e.g. a bad IPv6 literal)
+        return None
+    return candidate
 
 
 def _first_proxy(proxy_list: str | None) -> str | None:
@@ -192,27 +219,38 @@ else:  # pragma: no cover - the packaged app is Windows-only
         return None
 
 
-def detect_system_proxy(url: str) -> str | None:
-    """The system proxy for `url`: explicit HTTPS_PROXY env, else WinINET static + PAC/WPAD, else None."""
-    env = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
-    if env:
-        return normalize_proxy(env)
+def os_system_proxy(url: str) -> str | None:
+    """The OS's OWN system proxy for `url` (WinINET static + PAC/WPAD, else the registry), ignoring
+    the ``HTTPS_PROXY`` env this module publishes. Reporting "detected" must never echo back the
+    value we ourselves exported, or a manual override shows up as the machine's own setting."""
     win = _win_system_proxy(url)
     if win:
         return win
     return normalize_proxy(getproxies_registry().get("https")) if _IS_WINDOWS else None
 
 
+def detect_system_proxy(url: str) -> str | None:
+    """The system proxy for `url`: explicit HTTPS_PROXY env, else the OS's own configuration."""
+    env = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    if env:
+        return normalize_proxy(env)
+    return os_system_proxy(url)
+
+
 class ProxyResolver:
-    """Resolves the effective proxy for a URL: manual override > system proxy > direct; on-prem bypassed."""
+    """Resolves the effective proxy for a URL: forced-direct > manual override > system proxy >
+    direct; on-prem targets always bypassed."""
 
     def __init__(self, manual: str | None = None, bypass: list[str] | None = None) -> None:
+        self.force_direct = is_direct(manual)
         self.manual = normalize_proxy(manual)
         self.bypass = list(DEFAULT_BYPASS) + [b for b in (bypass or []) if b]
 
     def for_url(self, url: str) -> str | None:
         host = urlparse(url).hostname
         if is_bypassed(host, self.bypass):
+            return None
+        if self.force_direct:
             return None
         return self.manual or detect_system_proxy(url)
 
@@ -231,13 +269,17 @@ def apply_proxy_env(
     go through it, and on-prem targets bypass it. Returns the proxy URL (or None = direct). Called at
     startup and whenever the operator saves a manual proxy; cheap enough but not per-request."""
     resolver = ProxyResolver(manual, list(extra_bypass or []))
-    # Resolve from the override + the OS system proxy — NOT via detect_system_proxy, which reads the
-    # HTTPS_PROXY env we manage here (that would echo a stale value back when the override is cleared).
-    registry = normalize_proxy(getproxies_registry().get("https")) if _IS_WINDOWS else None
-    proxy = resolver.manual or _win_system_proxy(cloud_url) or registry
-    if proxy:
-        for var in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+    # Resolve from the override + the OS's own system proxy — NOT via detect_system_proxy, which
+    # reads the HTTPS_PROXY env we manage here (that would echo a stale value back on every call).
+    proxy = None if resolver.force_direct else (resolver.manual or os_system_proxy(cloud_url))
+    for var in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        if proxy:
             os.environ[var] = proxy
+        else:
+            # CLEAR, don't just skip. Leaving a previously-published (or externally `setx`-ed) value
+            # in place is why "remove the proxy" appeared to do nothing: the operator forced direct,
+            # the app stopped setting the var, and the stale one kept routing every request.
+            os.environ.pop(var, None)
     no_proxy = ",".join(resolver.bypass)
     os.environ["NO_PROXY"] = no_proxy
     os.environ["no_proxy"] = no_proxy
