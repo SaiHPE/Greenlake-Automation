@@ -178,8 +178,14 @@ class OnboardingService:
     def start_verify(self, run_id: str, *, username: str, password: str) -> RunRecord:
         return self.documents.start_verify(run_id, username=username, password=password)
 
-    def start_asbuilt(self, run_id: str, *, username: str, password: str, customer: str = "", site: str = "") -> RunRecord:
-        return self.documents.start_asbuilt(run_id, username=username, password=password, customer=customer, site=site)
+    def start_asbuilt(
+        self, run_id: str, *, username: str, password: str, customer: str = "", site: str = "",
+        application_workload: str = "", purpose: str = "",
+    ) -> RunRecord:
+        return self.documents.start_asbuilt(
+            run_id, username=username, password=password, customer=customer, site=site,
+            application_workload=application_workload, purpose=purpose,
+        )
 
     def get_asbuilt(self, run_id: str) -> bytes | None:
         return self.documents.get_asbuilt(run_id)

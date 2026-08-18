@@ -141,6 +141,11 @@ class ArrayWorkItem(BaseModel):
     support_contact: dict[str, Any] = Field(default_factory=dict)
     customer_name: str = ""   # for the as-built cover page (operator-supplied; not stored on the array)
     site: str = ""
+    # As-built narrative fields the template asks for and the array cannot know. Optional on
+    # purpose: existing workbooks predate them, and an unfilled one leaves a visible placeholder
+    # plus a warning rather than blocking the document.
+    application_workload: str = ""   # e.g. "VMware vSphere cluster"
+    storage_purpose: str = ""        # e.g. "primary datastore for the vault zone"
 
     @field_validator("serial_number", "part_number", "service_catalog_region_id", "dscc_region_code")
     @classmethod

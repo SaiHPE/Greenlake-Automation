@@ -75,6 +75,8 @@ SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
     ("As-built document", [
         ("customer_name", "Customer name", False, "goes on the as-built cover page (the array doesn't store it)"),
         ("site", "Site / location", False, "deployment site/location for the as-built (optional)"),
+        ("application_workload", "Application / workload", False, "e.g. VMware vSphere cluster — names the workload in the as-built (optional)"),
+        ("storage_purpose", "Purpose of using Block storage", False, "e.g. primary datastore for the vault zone (optional)"),
     ]),
 ]
 
@@ -506,6 +508,8 @@ def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
         dscc_setup=dscc_setup,
         customer_name=values.get("customer_name", ""),
         site=values.get("site", ""),
+        application_workload=values.get("application_workload", ""),
+        storage_purpose=values.get("storage_purpose", ""),
     )
     return ParsedInitSheet(
         work_item=work_item,

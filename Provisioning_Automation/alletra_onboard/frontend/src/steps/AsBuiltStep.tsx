@@ -16,6 +16,8 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
   const [password, setPassword] = useState('');
   const [customer, setCustomer] = useState('');
   const [site, setSite] = useState('');
+  const [workload, setWorkload] = useState('');
+  const [purpose, setPurpose] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -32,7 +34,10 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await startAsbuilt(runId, username.trim(), password, customer.trim(), site.trim());
+      await startAsbuilt(
+        runId, username.trim(), password, customer.trim(), site.trim(),
+        workload.trim(), purpose.trim(),
+      );
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
     } finally {
@@ -90,12 +95,32 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
             </FormField>
           </Box>
           <Box width="medium">
-            <FormField label="Site" htmlFor="asbuilt-site">
+            <FormField label="Site / location" htmlFor="asbuilt-site">
               <TextInput
                 id="asbuilt-site"
                 value={site}
                 onChange={(event) => setSite(event.target.value)}
                 placeholder="Defaults to the workbook value"
+              />
+            </FormField>
+          </Box>
+          <Box width="medium">
+            <FormField label="Application / workload" htmlFor="asbuilt-workload">
+              <TextInput
+                id="asbuilt-workload"
+                value={workload}
+                onChange={(event) => setWorkload(event.target.value)}
+                placeholder="e.g. VMware vSphere cluster"
+              />
+            </FormField>
+          </Box>
+          <Box width="medium">
+            <FormField label="Purpose of using Block storage" htmlFor="asbuilt-purpose">
+              <TextInput
+                id="asbuilt-purpose"
+                value={purpose}
+                onChange={(event) => setPurpose(event.target.value)}
+                placeholder="e.g. primary datastore for the vault zone"
               />
             </FormField>
           </Box>
@@ -108,8 +133,17 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
 
       {result && (
         <Surface title="Document contents">
+          {/* The document is always produced, so anything that did not fill has to be impossible
+              to miss here — it is the last screen before it goes to the customer. */}
+          {(result.warnings ?? []).length > 0 && (
+            <InlineNotification
+              tone="critical"
+              title={`Check ${result.warnings.length} item(s) before sending this document`}
+              message={result.warnings.join(' · ')}
+            />
+          )}
           <InlineNotification
-            tone="ok"
+            tone={(result.warnings ?? []).length > 0 ? 'warning' : 'ok'}
             title={`as-built-${result.serial || 'array'}.docx is ready`}
             message={`${Math.max(1, Math.round((result.size ?? 0) / 1024))} KB. Inventory and status tables are included, formatted to the HPE template.`}
           />

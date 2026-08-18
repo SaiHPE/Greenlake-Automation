@@ -452,6 +452,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             lambda: service.start_asbuilt(
                 run_id, username=request.username, password=request.password,
                 customer=request.customer, site=request.site,
+                application_workload=request.application_workload, purpose=request.purpose,
             ),
         )
 
