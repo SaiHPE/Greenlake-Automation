@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     # box sets it). Set BROWSER_PROXY=direct:// in .env to force no proxy on a machine that has
     # HTTPS_PROXY set but reaches DSCC directly.
     browser_proxy: str | None = None
-    browser_proxy_bypass: str = "localhost;127.0.0.1;169.254.*"
+    # Both link-local families: the array wizard may answer only on IPv6 (see domain/cloudinit_url).
+    browser_proxy_bypass: str = "localhost;127.0.0.1;169.254.*;[fe80::]/10;::1"
     # Manual proxy override (env ALLETRA_PROXY / .env). Blank -> the tool auto-detects the system
     # proxy (WinINET static + PAC/WPAD), like the browser. host:port or user:pass@host:port. ADR 0008.
     alletra_proxy: str | None = None

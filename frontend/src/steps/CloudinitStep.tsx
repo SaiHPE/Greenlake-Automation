@@ -16,6 +16,16 @@ interface Props {
   onDone: () => void;
 }
 
+/** IPv4 169.254.x.x (not the 169.254.0.0 placeholder) or bracketed IPv6 fe80::, zone optional. */
+export function isLinkLocalWizardUrl(raw: string): boolean {
+  const value = (raw ?? '').trim();
+  if (!/^https:\/\//i.test(value)) return false;
+  const ipv4 = /^https:\/\/169\.254\.\d{1,3}\.\d{1,3}(?::\d+)?(?:\/.*)?$/i;
+  const ipv6 = /^https:\/\/\[fe80:[0-9a-f:]*(?:%25?[A-Za-z0-9._-]+)?\](?::\d+)?(?:\/.*)?$/i;
+  if (ipv4.test(value)) return !/\/\/169\.254\.0\.0(?:[:/]|$)/.test(value);
+  return ipv6.test(value);
+}
+
 export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
   // 169.254.0.0 is the placeholder the workbook carries when no per-boot address was recorded, so
   // the field starts empty and the operator must paste the current one.
@@ -34,7 +44,12 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
     run?.status === 'waiting_for_operator' &&
     run?.current_phase === 'CLOUDINIT_CONNECT' &&
     mine.some((event) => event.event_type === 'operator.review_ready');
-  const valid = url.trim().startsWith('https://169.254.') && !url.trim().includes('169.254.0.0');
+  // Accepts BOTH link-local families — the Discovery Tool reports whichever it found the array on,
+  // and an IPv6-only result is normal (reported live: serial CZ2D2K014S returned only
+  // https://[fe80::6095:14a0:b25d:fcb0], and this gate rejected it so the step could not start).
+  // The path is optional here because the tool's Launch field gives a bare origin; the backend
+  // normalises and is authoritative — see domain/cloudinit_url.py.
+  const valid = isLinkLocalWizardUrl(url);
 
   const dns = form.dns
     .split(';')
@@ -111,12 +126,16 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
           <FormField
             label="Cloud Connectivity URL"
             htmlFor="cloudinit-url"
-            help={`Search the Discovery Tool for ${run?.serial_number ?? 'the serial number'} and copy the wizard link.`}
-            error={url.trim() && !valid ? 'Enter the link-local address, for example https://169.254.12.34/cloudinit' : undefined}
+            help={`Search the Discovery Tool for ${run?.serial_number ?? 'the serial number'} and copy the wizard link. IPv4 or IPv6 — paste whichever it reports.`}
+            error={
+              url.trim() && !valid
+                ? 'Enter the array’s link-local address — https://169.254.12.34/cloudinit or https://[fe80::1]/cloudinit'
+                : undefined
+            }
           >
             <TextInput
               id="cloudinit-url"
-              placeholder="https://169.254.x.x/cloudinit"
+              placeholder="https://169.254.x.x/cloudinit or https://[fe80::…]/cloudinit"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
             />

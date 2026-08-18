@@ -20,7 +20,10 @@ from urllib.request import getproxies_registry
 _IS_WINDOWS = sys.platform == "win32"
 
 # Reached DIRECTLY, never via the proxy. Extended per-run with the array/vCenter/switch IPs.
-DEFAULT_BYPASS: tuple[str, ...] = ("localhost", "127.0.0.1", "169.254.*")
+# BOTH link-local families: the array's setup wizard may only be reachable on IPv6 (the Discovery
+# Tool reports whichever it found), and sending link-local traffic to a corporate proxy cannot work
+# — the proxy has no route to an address that is only meaningful on this cable.
+DEFAULT_BYPASS: tuple[str, ...] = ("localhost", "127.0.0.1", "169.254.*", "fe80:*", "::1")
 
 
 #: The operator's "there is no proxy here" answer. A non-empty sentinel ON PURPOSE: an empty
@@ -76,16 +79,19 @@ def is_bypassed(host: str | None, bypass: list[str]) -> bool:
     """Should `host` be reached directly (not via the proxy)? Matches exact, glob (169.254.*), CIDR."""
     if not host:
         return True
-    host = host.strip().lower()
+    host = host.strip().lower().strip("[]")
+    # An IPv6 zone ("fe80::1%eth0") is a local interface selector, not part of the address — strip
+    # it so CIDR entries still match. Glob entries match either form.
+    bare = host.split("%", 1)[0]
     for raw in bypass:
-        entry = (raw or "").strip().lower()
+        entry = (raw or "").strip().lower().strip("[]")
         if not entry:
             continue
-        if entry == host or ("*" in entry and fnmatch.fnmatch(host, entry)):
+        if entry in (host, bare) or ("*" in entry and fnmatch.fnmatch(host, entry)):
             return True
         if "/" in entry:
             try:
-                if ipaddress.ip_address(host) in ipaddress.ip_network(entry, strict=False):
+                if ipaddress.ip_address(bare) in ipaddress.ip_network(entry.strip("[]"), strict=False):
                     return True
             except ValueError:
                 pass
@@ -280,7 +286,13 @@ def apply_proxy_env(
             # in place is why "remove the proxy" appeared to do nothing: the operator forced direct,
             # the app stopped setting the var, and the stale one kept routing every request.
             os.environ.pop(var, None)
-    no_proxy = ",".join(resolver.bypass)
+    # NO_PROXY is consumed by third-party libraries, and httpx parses each entry as a URL: an IPv6
+    # pattern like "fe80:*" is read as host "fe80" port "*" and raises InvalidURL for EVERY client
+    # constructed in the process (proven: httpx.Client(trust_env=True) fails outright). Since
+    # apply_proxy_env runs at startup, publishing one would break every cloud call in the product.
+    # So export only colon-free entries; link-local bypass is enforced where it actually matters —
+    # ProxyResolver.for_url (our own calls) and the browser's --proxy-bypass-list (Chrome syntax).
+    no_proxy = ",".join(entry for entry in resolver.bypass if ":" not in entry)
     os.environ["NO_PROXY"] = no_proxy
     os.environ["no_proxy"] = no_proxy
     return proxy

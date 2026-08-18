@@ -16,8 +16,10 @@ from alletra_onboard.application.onboarding.greenlake_provision import (
     WARNING,
     build_provisioning_service,
 )
-from alletra_onboard.application.runs.coordinator import RunCoordinator
+from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.config import Settings
+from alletra_onboard.domain.cloudinit_url import EXAMPLE as CLOUDINIT_EXAMPLE
+from alletra_onboard.domain.cloudinit_url import normalize_cloudinit_url
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
     BrowserResultStatus,
@@ -124,7 +126,13 @@ class OnboardingSteps:
         run, item = coord.get_run(run_id), coord.get_work_item(run_id)
         if cloudinit_url:
             # The link-local URL changes per boot — the operator pastes the fresh one at runtime.
-            item = item.model_copy(update={"cloudinit_url": cloudinit_url})
+            # Normalise here so what is stored (and shown, and driven) is canonical: the path
+            # filled in, and an IPv6 zone percent-encoded. The Discovery Tool's Launch field gives
+            # a bare origin, and it may be IPv4 or IPv6 (see domain/cloudinit_url.py).
+            normalized, reason = normalize_cloudinit_url(cloudinit_url)
+            if reason:
+                raise StepPreconditionError(reason)
+            item = item.model_copy(update={"cloudinit_url": normalized})
             coord.store.save_work_item(run_id, item)
         coord.spawn(run_id, self._run_cloudinit(run, item, auto_submit))
         return run
@@ -222,7 +230,11 @@ class OnboardingSteps:
             )
         elif result == BrowserResultStatus.FAILED_TERMINAL:
             coord.set_state(run, RunStatus.TERMINAL_FAILURE)
-            coord.emit(run.run_id, WorkflowPhase.CLOUDINIT_CONNECT, "step.failed", "Invalid cloudinit URL (must be https://169.254.x.x/cloudinit)")
+            coord.emit(
+                run.run_id, WorkflowPhase.CLOUDINIT_CONNECT, "step.failed",
+                "Invalid wizard address — it must be the array's link-local URL "
+                f"({CLOUDINIT_EXAMPLE})",
+            )
         else:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE)
             coord.emit(

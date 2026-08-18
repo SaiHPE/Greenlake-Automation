@@ -7,6 +7,7 @@ from alletra_onboard.application.onboarding.greenlake_preflight import (
     build_greenlake_read_preflight,
 )
 from alletra_onboard.config import Settings
+from alletra_onboard.domain.cloudinit_url import EXAMPLE, normalize_cloudinit_url
 from alletra_onboard.domain.models import ArrayWorkItem, CheckStatus, PreflightCheck, PreflightReport
 
 
@@ -64,12 +65,15 @@ class PreflightService:
         )
 
     def _check_cloudinit_url(self, item: ArrayWorkItem) -> PreflightCheck:
-        if not item.cloudinit_url.startswith("https://169.254."):
+        # IPv4 AND IPv6 link-local — the Discovery Tool reports whichever family it found the array
+        # on, and only reporting an IPv6 address is normal (see domain/cloudinit_url.py).
+        _url, reason = normalize_cloudinit_url(item.cloudinit_url)
+        if reason:
             return PreflightCheck(
                 name="cloudinit_url",
                 status=CheckStatus.FAIL,
-                message="Cloudinit URL is not a link-local HTTPS URL.",
-                remediation="Run the Discovery Tool manually and provide the https://169.254.x/cloudinit URL.",
+                message=f"Cloudinit URL is not a link-local HTTPS URL: {reason}",
+                remediation=f"Search the Discovery Tool for this serial and paste the current link ({EXAMPLE}).",
             )
         return PreflightCheck(
             name="cloudinit_url",

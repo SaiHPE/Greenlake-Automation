@@ -102,6 +102,28 @@ def test_apply_proxy_env_publishes_manual_and_bypass(monkeypatch):
     assert "10.65.234.220" in os.environ["NO_PROXY"] and "169.254.*" in os.environ["NO_PROXY"]
 
 
+def test_published_no_proxy_never_breaks_an_httpx_client(monkeypatch):
+    """NO_PROXY is parsed as URLs by httpx, and apply_proxy_env runs at STARTUP.
+
+    Regression: adding the IPv6 link-local patterns ("fe80:*", "::1") to the bypass list published
+    them here, and httpx then read "fe80:*" as host "fe80" port "*" — raising InvalidURL for every
+    client constructed in the process, i.e. every cloud call in the product. The link-local bypass
+    belongs in ProxyResolver.for_url and the browser's own bypass list, not in this variable.
+    """
+    import httpx
+
+    for var in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(var, raising=False)
+    apply_proxy_env("mp:3128", extra_bypass=["10.65.234.220", "fe80:*", "::1"])
+
+    published = os.environ["NO_PROXY"]
+    assert ":" not in published, f"NO_PROXY carries a colon entry httpx cannot parse: {published}"
+    httpx.Client(trust_env=True).close()          # would raise InvalidURL before the fix
+
+    # ...while the resolver itself still sends link-local traffic direct.
+    assert ProxyResolver("mp:3128").for_url("https://[fe80::1]/cloudinit") is None
+
+
 def test_forced_direct_overrides_a_detected_proxy_and_clears_the_env(monkeypatch):
     """The operator's "there is no proxy here" must beat detection AND erase what we published.
 
