@@ -49,6 +49,9 @@ export interface CheckReport {
   error: string | null;
   missing_credentials: string[];
   provisions: { region: string; status: string; service_manager_id: string; is_data_services: boolean }[];
+  // The TLS certificate could not be verified, so the credentials were never sent. Reported
+  // separately because "credentials rejected" sends the operator hunting the wrong problem.
+  tls_trust_failure: boolean;
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
