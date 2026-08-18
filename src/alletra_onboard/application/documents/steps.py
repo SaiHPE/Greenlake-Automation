@@ -69,16 +69,22 @@ class DocumentSteps:
 
     # ------------------------------------------------------------------ as-built document (last step)
 
-    def start_asbuilt(self, run_id: str, *, username: str, password: str, customer: str = "", site: str = "") -> RunRecord:
+    def start_asbuilt(
+        self, run_id: str, *, username: str, password: str, customer: str = "", site: str = "",
+        application_workload: str = "", purpose: str = "",
+    ) -> RunRecord:
         coord = self._coord
         run, item = coord.get_run(run_id), coord.get_work_item(run_id)
         intent = coord.store.get_provisioning_intent(run_id)
         host = intent.array.host if intent else item.network.mgmt_ipv4
-        coord.spawn(run_id, self._run_asbuilt(run, item, host, username, password, customer, site))
+        coord.spawn(run_id, self._run_asbuilt(
+            run, item, host, username, password, customer, site, application_workload, purpose,
+        ))
         return run
 
     async def _run_asbuilt(self, run: RunRecord, item: ArrayWorkItem, host: str, username: str,
-                           password: str, customer: str, site: str) -> None:
+                           password: str, customer: str, site: str,
+                           application_workload: str = "", purpose: str = "") -> None:
         # Read-only (SSH show*/checkhealth/showinventory -csvtable) -> the as-built .docx. Post-onboarding
         # and read-only, so like verify it NEVER changes the run status; the UI reacts to the events.
         coord = self._coord
@@ -86,9 +92,13 @@ class DocumentSteps:
                    f"Reading {host} (read-only) and building the as-built document…")
         try:
             data = await asyncio.to_thread(self._collect_asbuilt, host, username, password)
+            # The step's own fields win over the workbook's — the operator is looking at the
+            # document about to be produced, and the sheet may have been filled weeks earlier.
             data.customer = customer or item.customer_name or ""
             data.site = site or item.site or ""
-            docx_bytes = await asyncio.to_thread(self._render_asbuilt, data)
+            data.application_workload = application_workload or item.application_workload or ""
+            data.purpose = purpose or item.storage_purpose or ""
+            docx_bytes, warnings = await asyncio.to_thread(self._render_asbuilt, data)
         except Exception as exc:  # noqa: BLE001 - report, never propagate (would mark the run failed)
             coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.failed",
                        f"As-built generation failed: {type(exc).__name__}: {str(exc)[:200]}")
@@ -101,9 +111,14 @@ class DocumentSteps:
             # escape: the guard around this task would mark a finished run failed, which this step
             # is documented never to do.
             pass
-        coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.generated",
-                   f"As-built ready for {data.name or data.serial_no or host} — {len(docx_bytes) // 1024} KB.",
-                   data={"serial": data.serial_no, "name": data.name, "customer": data.customer, "size": len(docx_bytes)})
+        summary = f"As-built ready for {data.name or data.serial_no or host} — {len(docx_bytes) // 1024} KB."
+        if warnings:
+            # The document is produced regardless, so the warnings must travel WITH it — in the
+            # message and in the event data — or a rushed operator sends an incomplete as-built.
+            summary += f" {len(warnings)} item(s) need attention before sending."
+        coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.generated", summary,
+                   data={"serial": data.serial_no, "name": data.name, "customer": data.customer,
+                         "size": len(docx_bytes), "warnings": warnings})
 
     def _collect_asbuilt(self, host: str, username: str, password: str):
         creds = EndpointCreds(host=host, username=username, password=password)
@@ -114,15 +129,15 @@ class DocumentSteps:
                 lines.append(cli.run(cmd))
         return parse_asbuilt("\n".join(lines))
 
-    def _render_asbuilt(self, data) -> bytes:
+    def _render_asbuilt(self, data) -> tuple[bytes, list[str]]:
         import os
         import tempfile
         fd, path = tempfile.mkstemp(suffix=".docx")
         os.close(fd)
         try:
-            generate_asbuilt(data, path)
+            _out, warnings = generate_asbuilt(data, path)
             with open(path, "rb") as f:
-                return f.read()
+                return f.read(), warnings
         finally:
             try:
                 os.unlink(path)

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import sys
 import zipfile
 from dataclasses import dataclass
@@ -31,6 +32,16 @@ from alletra_onboard.application.documents.asbuilt_docx import hpe_table
 
 # Template Table-01 label (column 0, as it appears in the doc) -> AsBuiltData field. Match is
 # whitespace-normalised + case-insensitive (the template mixes "InServ"/"Inserv").
+#: Narrative placeholders in the template -> the AsBuiltData field that fills them. Matched
+#: case-insensitively; HPE's own template varies the capitalisation of the same field.
+_PLACEHOLDER_TO_FIELD: dict[str, str] = {
+    "<Customer Name>": "customer",
+    "<Site Location>": "site",
+    "<Application/Workload>": "application_workload",
+    "<Purpose of using Block storage>": "purpose",
+}
+_PLACEHOLDER = re.compile(r"<[^<>]{1,60}>")
+
 _LABEL_TO_FIELD: dict[str, str] = {
     "name": "name",
     "model": "model",
@@ -56,8 +67,10 @@ _LABEL_TO_FIELD: dict[str, str] = {
 class AsBuiltData:
     """The per-deployment values that fill the as-built (from read-only array reads + operator input)."""
 
-    customer: str = ""       # operator-supplied — fills the cover page <Customer Name>
+    customer: str = ""       # operator-supplied — fills <Customer Name> / <Customer name>
     site: str = ""           # operator-supplied — the array doesn't store a Location/Site
+    application_workload: str = ""   # operator-supplied — <Application/Workload> (Introduction)
+    purpose: str = ""                # operator-supplied — <Purpose of using Block storage>
     name: str = ""
     model: str = ""
     serial_no: str = ""
@@ -129,13 +142,45 @@ def _load_document(template: str | Path | None):
 
 
 def _replace_text(doc, old: str, new: str) -> int:
-    """Replace ``old`` with ``new`` across every text run in the body (incl. the cover-page sdt)."""
+    """Replace ``old`` with ``new`` across every text run in the body (incl. the cover-page sdt).
+
+    CASE-INSENSITIVE on the placeholder: HPE's template spells the same field three ways —
+    ``<Customer name>`` in Executive Summary, ``<Customer Name>`` in Introduction and Environment
+    Overview. An exact match filled two of the three and shipped a literal placeholder in the
+    document's opening paragraph.
+    """
     count = 0
+    pattern = re.compile(re.escape(old), re.IGNORECASE)
     for t in doc.element.body.iter(qn("w:t")):
-        if t.text and old in t.text:
-            t.text = t.text.replace(old, new)
+        if t.text and pattern.search(t.text):
+            t.text = pattern.sub(new, t.text)
             count += 1
     return count
+
+
+def _remaining_placeholders(doc) -> list[str]:
+    """Every ``<...>`` still in the finished document, in first-seen order."""
+    found: list[str] = []
+    for t in doc.element.body.iter(qn("w:t")):
+        for match in _PLACEHOLDER.findall(t.text or ""):
+            if match not in found:
+                found.append(match)
+    return found
+
+
+def _drop_blank_paragraphs_after(heading) -> None:
+    """Remove the run of empty paragraphs directly under a section heading.
+
+    The template leaves ~23 blank paragraphs as space for the content we generate; without this the
+    inserted tables are followed by a page of whitespace before the next heading.
+    """
+    node = heading._p.getnext()
+    while node is not None and node.tag == qn("w:p"):
+        following = node.getnext()
+        if "".join(node.itertext()).strip():
+            break
+        node.getparent().remove(node)
+        node = following
 
 
 def _set_cell_text(cell, text: str) -> None:
@@ -221,14 +266,31 @@ def _add_checkhealth_after(heading, text: str, doc) -> None:
         anchor = _place_after(anchor, tbl)
 
 
-def generate_asbuilt(data: AsBuiltData, out_path: str | Path, *, template: str | Path | None = ...) -> Path:
-    """Fill the bundled template with ``data`` and write the finished as-built .docx to ``out_path``."""
+def generate_asbuilt(
+    data: AsBuiltData, out_path: str | Path, *, template: str | Path | None = ...,
+) -> tuple[Path, list[str]]:
+    """Fill the bundled template with ``data`` and write the finished as-built .docx to ``out_path``.
+
+    Returns ``(path, warnings)``. The document is ALWAYS produced — an operator in the field would
+    rather hand over a partial document than be blocked — but anything that did not fill is
+    reported so it can be seen before the document is sent:
+
+      * a section whose heading could not be found (its content would be missing entirely)
+      * any ``<placeholder>`` still present in the finished text
+
+    Section headings are matched by INTENT, not by exact string. HPE renamed "Alletra Inventory" to
+    "HPE GreenLake for Block hardware Inventory" between template revisions; the old exact match
+    silently produced an as-built with no inventory section at all.
+    """
     if template is ...:
         template = default_template()
     doc = _load_document(template)
+    warnings: list[str] = []
 
-    if data.customer:
-        _replace_text(doc, "<Customer Name>", data.customer)
+    for placeholder, field in _PLACEHOLDER_TO_FIELD.items():
+        value = getattr(data, field, "")
+        if value:
+            _replace_text(doc, placeholder, value)
 
     values = {label: getattr(data, field) for label, field in _LABEL_TO_FIELD.items()}
     for table in doc.tables:
@@ -242,15 +304,36 @@ def generate_asbuilt(data: AsBuiltData, out_path: str | Path, *, template: str |
         if not para.style.name.lower().startswith("heading"):
             continue
         heading = _norm(para.text).lower()
-        if heading == "alletra inventory":
+        if "inventory" in heading:
             inv_heading = para
         elif "checkhealth" in heading:
             ch_heading = para
+
     if inv_heading is not None:
+        _drop_blank_paragraphs_after(inv_heading)
         _add_inventory_after(inv_heading, data.inventory, doc)
+    else:
+        warnings.append(
+            "No 'Inventory' heading was found in the template, so the hardware inventory is NOT in "
+            "this document."
+        )
     if ch_heading is not None:
+        _drop_blank_paragraphs_after(ch_heading)
         _add_checkhealth_after(ch_heading, data.checkhealth, doc)
+    else:
+        warnings.append(
+            "No 'checkhealth' heading was found in the template, so the health report is NOT in "
+            "this document."
+        )
+
+    left = _remaining_placeholders(doc)
+    if left:
+        warnings.append(
+            "Placeholders are still unfilled and will be visible to the customer: "
+            + ", ".join(left) + ". Fill them in the workbook (or the As-built step) and regenerate, "
+            "or edit the document before sending."
+        )
 
     out_path = Path(out_path)
     doc.save(str(out_path))
-    return out_path
+    return out_path, warnings
