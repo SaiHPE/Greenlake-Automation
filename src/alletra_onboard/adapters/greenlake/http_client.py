@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -83,25 +84,46 @@ class GreenLakeHttpClient:
         bucket: str = "device_async_poll",
         max_wait_seconds: float = 900.0,
         default_interval: float = 5.0,
+        on_progress: Callable[[str, float], None] | None = None,
+        settled: Callable[[], Awaitable[bool]] | None = None,
     ) -> dict[str, Any]:
         """Poll a 202 Location async-operation resource until a terminal state.
 
         Honors ``suggestedPollingIntervalSeconds`` when the payload provides it. Returns
         the final payload on success; raises GreenLakeAsyncOperationError on terminal
         failure and TimeoutError if the operation does not settle within the budget.
+
+        ``on_progress(status, elapsed_seconds)`` is called on every poll. Without it this loop can
+        run for the whole 15-minute budget in total silence: MEASURED on a live registration, the
+        device add SUCCEEDED (GreenLake showed it registered and ASSIGNED_TO_SERVICE) while the
+        operation resource never reported a terminal status, so the UI sat on "Running" with no new
+        line and the operator could not tell a working system from a hung one.
+
+        ``settled()`` is the escape from that same trap: an optional check of the REAL end state
+        (e.g. "is the serial in inventory yet?"). The operation resource describes the work; the
+        inventory *is* the work. When it says the outcome already exists, stop waiting.
         """
         deadline = time.monotonic() + max_wait_seconds
+        started = time.monotonic()
         while True:
             payload = (await self.request("GET", location, bucket=bucket)).json()
             status = str(payload.get("status") or payload.get("state") or "").upper()
+            elapsed = time.monotonic() - started
             if status in TERMINAL_OK:
                 return payload
             if status in TERMINAL_FAIL:
                 raise GreenLakeAsyncOperationError(
                     f"Async operation {location} ended in {status}: {_async_error_detail(payload)}"
                 )
+            if settled is not None and await settled():
+                return {"status": "SETTLED_BY_STATE", "lastReportedStatus": status or "unknown"}
+            if on_progress is not None:
+                on_progress(status or "no status reported", elapsed)
             if time.monotonic() >= deadline:
-                raise TimeoutError(f"Async operation {location} did not finish within {max_wait_seconds:.0f}s")
+                raise TimeoutError(
+                    f"Async operation {location} did not finish within {max_wait_seconds:.0f}s "
+                    f"(last reported status: {status or 'none'})"
+                )
             interval = float(payload.get("suggestedPollingIntervalSeconds") or default_interval)
             await asyncio.sleep(max(1.0, min(interval, 30.0)))
 
