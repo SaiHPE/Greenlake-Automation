@@ -132,7 +132,14 @@ class GreenLakeProvisioningService:
             return
         location = await self.subscriptions.add_subscription(key)
         if location:
-            await self.http.poll_async(location, bucket="subscription_async_poll")
+            await self.http.poll_async(
+                location,
+                bucket="subscription_async_poll",
+                on_progress=lambda status, elapsed: self._progress(
+                    phase, f"waiting for the subscription to register: {status} ({elapsed:.0f}s)"
+                ),
+                settled=lambda: self._subscription_present(key),
+            )
         added = await self.subscriptions.find_by_key(key)
         if not added:
             raise ProvisioningError("Subscription add completed but the key is still not queryable.")
@@ -157,12 +164,39 @@ class GreenLakeProvisioningService:
             return
         location = await self.devices.add_storage_device(item.serial_number, item.part_number, item.tags)
         if location:
-            await self.http.poll_async(location, bucket="device_async_poll")
+            # The async-operation resource can stay non-terminal long after the device is really
+            # registered (MEASURED live: inventory showed it registered + ASSIGNED_TO_SERVICE while
+            # the operation never settled and this poll ran on in silence). So report every poll,
+            # and stop as soon as the SERIAL IS IN INVENTORY — that is the outcome we are waiting
+            # for; the operation resource is only a description of it.
+            await self.http.poll_async(
+                location,
+                bucket="device_async_poll",
+                on_progress=lambda status, elapsed: self._progress(
+                    phase, f"waiting for GreenLake to register {item.serial_number}: {status} ({elapsed:.0f}s)"
+                ),
+                settled=lambda: self._serial_in_inventory(item.serial_number),
+            )
         added = await self.devices.find_by_serial(item.serial_number)
         if not added:
             raise ProvisioningError("Device add completed but the serial is still not in inventory.")
         result.device_id = _res_id(added)
         self._record(result, phase, DONE, f"device registered as {result.device_id}")
+
+    async def _subscription_present(self, key: str) -> bool:
+        """Is the subscription key queryable yet? Ends the add poll early. Unreadable = 'not yet'."""
+        try:
+            return await self.subscriptions.find_by_key(key) is not None
+        except Exception:  # noqa: BLE001
+            return False
+
+    async def _serial_in_inventory(self, serial: str) -> bool:
+        """Is the device visible in inventory yet? Used to end an async poll early. A failure to
+        answer must never end the poll — an unreachable read is 'not yet', not 'done'."""
+        try:
+            return await self.devices.find_by_serial(serial) is not None
+        except Exception:  # noqa: BLE001
+            return False
 
     async def _assign_application(self, result: ProvisionResult, *, dry_run: bool) -> None:
         phase = WorkflowPhase.GL_ASSIGN_APPLICATION
@@ -182,7 +216,14 @@ class GreenLakeProvisioningService:
             return
         location = await self.devices.assign_application(result.device_id, result.service_manager_id, result.region or "")
         if location:
-            await self.http.poll_async(location, bucket="device_async_poll")
+            await self.http.poll_async(
+                location,
+                bucket="device_async_poll",
+                on_progress=lambda status, elapsed: self._progress(
+                    phase, f"waiting for the application assignment: {status} ({elapsed:.0f}s)"
+                ),
+                settled=lambda: self._device_assigned(result.device_id or ""),
+            )
         device = await self._wait_for_device_state(result.device_id, ASSIGNED_STATE_TARGET)
         result.assigned_state = _assigned_state(device)
         self._record(result, phase, DONE, f"assignedState={result.assigned_state}")
@@ -251,15 +292,43 @@ class GreenLakeProvisioningService:
 
     # ----------------------------------------------------------------- helpers
 
+    async def _device_assigned(self, device_id: str) -> bool:
+        """Has the device already reached the assigned state? Ends the assignment poll early when
+        the operation resource lags behind the device's real state. Unreadable = 'not yet'."""
+        if not device_id:
+            return False
+        try:
+            return _assigned_state(await self.devices.get(device_id)) == ASSIGNED_STATE_TARGET
+        except Exception:  # noqa: BLE001
+            return False
+
     async def _wait_for_device_state(self, device_id: str, target_state: str) -> dict[str, Any]:
+        """Wait for the device to reach `target_state`, reporting each check.
+
+        Like poll_async, this used to run to its full budget in silence — a second way for a live
+        step to look identical to a hung one. It deliberately RETURNS the last device on timeout
+        rather than raising: the caller records whatever state was reached.
+        """
         deadline = time.monotonic() + self.device_state_timeout
+        started = time.monotonic()
         device: dict[str, Any] = {}
         while True:
             device = await self.devices.get(device_id)
-            if _assigned_state(device) == target_state:
+            state = _assigned_state(device)
+            if state == target_state:
                 return device
+            elapsed = time.monotonic() - started
             if time.monotonic() >= deadline:
+                self._progress(
+                    WorkflowPhase.GL_ASSIGN_APPLICATION,
+                    f"device state is still {state or 'unknown'} after {elapsed:.0f}s "
+                    f"(wanted {target_state}) — continuing",
+                )
                 return device
+            self._progress(
+                WorkflowPhase.GL_ASSIGN_APPLICATION,
+                f"waiting for assignedState={target_state}: currently {state or 'unknown'} ({elapsed:.0f}s)",
+            )
             await asyncio.sleep(5.0)
 
     def _record(self, result: ProvisionResult, phase: WorkflowPhase, status: str, detail: str) -> None:
