@@ -195,10 +195,28 @@ _Avoid_: assuming it equals "share" (a view may front one or more shares/exports
 The per-deployment record produced as the **final step** — the array's *actual initialised
 configuration* (identity, hardware, capacity, network, inventory, health), read **read-only** from the
 array's own `show*` / `checkhealth` and rendered into HPE's Word template (its cover page, HPE Graphik
-fonts, and Table 01 preserved). An engagement **deliverable**, not a live monitoring view. The
-**customer name** and **site** are the only operator-supplied fields — the array doesn't store them.
+fonts, and Table 01 preserved). An engagement **deliverable**, not a live monitoring view.
 _Avoid_: confusing it with **Post-init verification** (that *checks* the config against the sheet; the
 as-built *documents* what the array actually has).
+
+**Narrative fields (as-built)**:
+The values the template asks for in prose that the array cannot know, so an operator supplies them:
+**customer name**, **site/location**, **application/workload** (what runs on the array, e.g. "VMware
+vSphere cluster") and **purpose** (why block storage is used here). All optional and all captured
+twice — as workbook columns filled up front, and as editable fields in the As-built step, where the
+step's value wins. An unfilled one leaves its `<placeholder>` visible in the document and raises a
+**warning**; it never blocks generation.
+_Avoid_: treating these as array facts — nothing in `show*` output can produce them.
+
+**As-built warning**:
+Something that did not fill: a template **section heading** that could not be found (so its content
+is absent from the document), or a `<placeholder>` still present in the finished text. The document
+is **always produced** — an operator in the field would rather hand over a partial document than be
+blocked — so warnings are the mechanism that stops an incomplete as-built reaching a customer
+unnoticed. Section headings are matched by **intent** ("contains inventory"), never by exact string:
+HPE renamed "Alletra Inventory" to "HPE GreenLake for Block hardware Inventory" between template
+revisions, and the exact match silently dropped the entire inventory section.
+_Avoid_: reading a generated document as complete without checking its warnings.
 
 ## Language — proxy / connectivity
 
