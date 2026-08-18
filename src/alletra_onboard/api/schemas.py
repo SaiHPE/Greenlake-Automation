@@ -92,6 +92,8 @@ class AsBuiltStepRequest(BaseModel):
     password: str = Field(description="Array admin password — used for the SSH session only, never stored.")
     customer: str = Field(default="", description="Customer name for the as-built cover page (overrides the sheet value).")
     site: str = Field(default="", description="Deployment site/location (optional; the array doesn't store it).")
+    application_workload: str = Field(default="", description="Application/workload the array serves, e.g. 'VMware vSphere cluster' (overrides the sheet value).")
+    purpose: str = Field(default="", description="Why block storage is used here, e.g. 'primary datastore for the vault zone' (overrides the sheet value).")
 
 
 # ------------------------------------------------------------------ browser
