@@ -153,7 +153,12 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
           tone={report.ok && report.ready ? 'ok' : report.ok ? 'warning' : 'critical'}
           title={
             !report.ok
-              ? 'GreenLake credentials were rejected'
+              ? report.tls_trust_failure
+                ? // The credentials were never sent — say so, or the operator re-checks a secret for an hour.
+                  'Could not verify the HPE certificate — credentials were not checked'
+                : report.missing_credentials.length > 0
+                  ? 'GreenLake credentials are not configured'
+                  : 'GreenLake credentials were rejected'
               : report.ready
                 ? 'GreenLake credentials accepted; Data Services is provisioned'
                 : 'GreenLake credentials accepted, but no provisioned Data Services instance was found'

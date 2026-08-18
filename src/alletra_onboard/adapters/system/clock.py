@@ -19,6 +19,8 @@ from email.utils import parsedate_to_datetime
 import httpx
 from pydantic import BaseModel
 
+from alletra_onboard.application.platform.tls import ssl_context
+
 # Tried in order; the caller's preferred source (e.g. the DSCC console, known reachable in
 # context) is tried first, then these fall-backs, so the check works wherever the host has
 # HTTPS egress — not just where one specific host is reachable.
@@ -68,7 +70,9 @@ async def _server_utc(preferred: str | None = None) -> tuple[datetime, str]:
     last = "no time sources tried"
     for url in _candidates(preferred):
         try:
-            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(
+                timeout=10.0, follow_redirects=True, verify=ssl_context()
+            ) as client:
                 resp = await client.get(url)
             date = resp.headers.get("date")
             if date:

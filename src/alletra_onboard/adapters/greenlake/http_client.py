@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from alletra_onboard.application.platform.tls import ssl_context
 from alletra_onboard.domain.policies import RateBudget, TokenBucket
 
 # Async-operation status vocabulary (Devices/Subscriptions async-operations).
@@ -64,7 +65,9 @@ class GreenLakeHttpClient:
             await self._bucket(bucket).acquire()
             token = await self.token_provider.token()
             headers = {**base_headers, "Authorization": f"Bearer {token}"}
-            async with httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout_seconds) as client:
+            async with httpx.AsyncClient(
+                base_url=self.base_url, timeout=self.timeout_seconds, verify=ssl_context()
+            ) as client:
                 response = await client.request(method, path, headers=headers, **kwargs)
             if response.status_code in RETRYABLE_STATUS and attempt < self.max_retries:
                 attempt += 1
