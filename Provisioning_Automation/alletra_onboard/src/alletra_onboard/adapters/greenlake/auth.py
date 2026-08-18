@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
+from alletra_onboard.application.platform.tls import ssl_context
+
 
 class OAuthClientCredentials:
     """OAuth2 client-credentials token provider for HPE GreenLake personal API clients.
@@ -24,7 +26,9 @@ class OAuthClientCredentials:
     async def token(self) -> str:
         if self._access_token and datetime.now(UTC) < self._expires_at - timedelta(seconds=60):
             return self._access_token
-        async with httpx.AsyncClient(timeout=30) as client:
+        # verify against the OS trust store + certifi, so a corporate TLS-inspection root that the
+        # browser already trusts does not fail here as a bogus "credentials rejected".
+        async with httpx.AsyncClient(timeout=30, verify=ssl_context()) as client:
             response = await client.post(
                 self.token_url,
                 data={
