@@ -71,9 +71,11 @@ def default_profile_dir() -> str:
 
 # Chrome ignores the HTTPS_PROXY env var (it uses the Windows system proxy), so behind a lab
 # proxy the DSCC SSO token exchange hangs at "Authenticating…". We pass the proxy explicitly.
-# localhost/127.0.0.1 must bypass it (the CDP endpoint + local API) and 169.254.* must bypass it
-# (the array's link-local cloudinit). Everything else — incl. data.cloud.hpe.com — goes via proxy.
-DEFAULT_PROXY_BYPASS = "localhost;127.0.0.1;169.254.*"
+# localhost/127.0.0.1 must bypass it (the CDP endpoint + local API) and BOTH link-local families
+# must bypass it — the array's cloudinit wizard answers on 169.254.x.x or on fe80:: (the Discovery
+# Tool reports whichever it found), and a proxy has no route to an address that only means anything
+# on this cable. Everything else — incl. data.cloud.hpe.com — goes via the proxy.
+DEFAULT_PROXY_BYPASS = "localhost;127.0.0.1;169.254.*;[fe80::]/10;[::1]"
 
 
 def resolve_browser_proxy(explicit: str | None) -> str | None:
