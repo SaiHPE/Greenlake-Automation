@@ -22,6 +22,7 @@ from typing import Callable
 
 from alletra_onboard.adapters.browser.debug_browser import preferred_channel
 from alletra_onboard.adapters.browser.locators import CLOUDINIT, CLOUDINIT_TEXT
+from alletra_onboard.domain.cloudinit_url import is_valid_cloudinit_url
 from alletra_onboard.domain.models import ArrayWorkItem, BrowserResultStatus, NetworkConfig
 
 try:
@@ -67,8 +68,11 @@ class CloudinitWizardAdapter:
         self._on_status = on_status or (lambda message: None)
 
     async def run(self, item: ArrayWorkItem, run_id: str, *, auto_submit: bool = False) -> BrowserResultStatus:
-        # Reject a non-link-local URL and the 169.254.0.0 placeholder (not a real host).
-        if not item.cloudinit_url.startswith("https://169.254.") or "169.254.0.0" in item.cloudinit_url:
+        # Reject anything that is not a link-local wizard address (IPv4 169.254.x.x or IPv6 fe80::),
+        # including the 169.254.0.0 placeholder. ONE implementation of that rule lives in
+        # domain/cloudinit_url.py — this adapter carried its own IPv4-only copy, which rejected the
+        # IPv6 address the HPE Discovery Tool produced even after every other check accepted it.
+        if not is_valid_cloudinit_url(item.cloudinit_url):
             return BrowserResultStatus.FAILED_TERMINAL
         if async_playwright is None:
             return BrowserResultStatus.WAITING_FOR_OPERATOR  # playwright not installed
