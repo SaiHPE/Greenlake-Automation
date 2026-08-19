@@ -37,6 +37,47 @@ async def test_placeholder_url_is_terminal():
     assert result == BrowserResultStatus.FAILED_TERMINAL
 
 
+async def test_ipv6_link_local_url_is_accepted_by_the_adapter(monkeypatch):
+    """REGRESSION (reported live, array CZ2D2K014S): the adapter carried its OWN IPv4-only copy of
+    the link-local rule — `startswith("https://169.254.")` — so it returned FAILED_TERMINAL for the
+    IPv6 address the HPE Discovery Tool produced, even after the validator, preflight, UI and proxy
+    had all been taught to accept it. The rule now has one implementation (domain/cloudinit_url).
+
+    Asserted by getting PAST the guard: with Playwright absent the adapter answers
+    WAITING_FOR_OPERATOR, which is only reachable once the URL has been accepted.
+    """
+    from alletra_onboard.adapters.browser import cloudinit_wizard as cw
+
+    monkeypatch.setattr(cw, "async_playwright", None)
+    for url in (
+        "https://[fe80::6095:14a0:b25d:fcb0]/cloudinit",     # exactly what the tool reported
+        "https://[fe80::1%25eth0]/cloudinit",                 # RFC 6874 zone form
+        "https://169.254.239.27/cloudinit",                   # IPv4 still works
+    ):
+        result = await cw.CloudinitWizardAdapter(headless=True).run(_item(url), run_id="r1")
+        assert result == BrowserResultStatus.WAITING_FOR_OPERATOR, url
+
+
+async def test_routable_ipv6_is_still_terminal(monkeypatch):
+    """The wizard is unauthenticated — accepting IPv6 must not mean accepting any IPv6."""
+    from alletra_onboard.adapters.browser import cloudinit_wizard as cw
+
+    monkeypatch.setattr(cw, "async_playwright", None)
+    result = await cw.CloudinitWizardAdapter(headless=True).run(
+        _item("https://[2001:db8::1]/cloudinit"), run_id="r1")
+    assert result == BrowserResultStatus.FAILED_TERMINAL
+
+
+def test_browser_proxy_bypass_covers_both_link_local_families():
+    """MEASURED on the jump box: an HTTPS GET to the array's fe80:: wizard returned 502 Bad Gateway
+    — the corporate proxy answering, because IPv6 link-local was not in the bypass list. Chromium
+    would have done the same, so the wizard was unreachable even with a valid address."""
+    from alletra_onboard.adapters.browser.debug_browser import DEFAULT_PROXY_BYPASS
+
+    assert "169.254.*" in DEFAULT_PROXY_BYPASS
+    assert "fe80::" in DEFAULT_PROXY_BYPASS
+
+
 def test_locators_cover_every_wizard_field():
     for key in (
         "get_started", "eula_accept_input", "next", "mgmt_ip", "netmask", "gateway",
