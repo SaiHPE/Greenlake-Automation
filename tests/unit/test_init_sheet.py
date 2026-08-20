@@ -218,6 +218,49 @@ def test_provisioning_row_tables_are_plural_and_heterogeneous():
     assert intent.host_sets[1].members == []
 
 
+def test_a_workbook_naming_two_different_arrays_is_refused():
+    """A run covers ONE array. The management IP is stated on the Initialisation tab and again on
+    the Provisioning tab (the second exists so a PROVISION_ONLY run has an address at all), and
+    nothing used to tie them together — so a workbook could name two arrays and the run half-worked:
+    verify checked one box while the as-built read the other and timed out. MEASURED LIVE:
+    init 10.132.30.121 (rack13arcus, freshly onboarded) vs provisioning 10.64.186.90.
+    """
+    prov = {"targets": dict(_PROV_TARGETS), "volumes": _PROV_VOLUMES, "hostsets": _PROV_HOSTSETS}
+    prov["targets"]["prov_array_host"] = "10.64.186.90"
+    with pytest.raises(ValueError) as exc:
+        parse_workbook_bytes(
+            _fill_tabs({"serial_number": "CZ2D2K014S", "mgmt_ipv4": "10.132.30.121"}, prov),
+            mode=RunMode.PROVISION_ONLY,
+        )
+    message = str(exc.value)
+    assert "10.132.30.121" in message and "10.64.186.90" in message   # BOTH values, so it is fixable
+    assert "one array" in message.lower()
+
+
+def test_the_same_array_in_both_tabs_is_accepted():
+    prov = {"targets": dict(_PROV_TARGETS), "volumes": _PROV_VOLUMES, "hostsets": _PROV_HOSTSETS}
+    prov["targets"]["prov_array_host"] = "10.132.30.121"
+    parsed = parse_workbook_bytes(
+        _fill_tabs({"serial_number": "CZ2D2K014S", "mgmt_ipv4": "10.132.30.121"}, prov),
+        mode=RunMode.PROVISION_ONLY,
+    )
+    assert parsed.work_item.network.mgmt_ipv4 == "10.132.30.121"
+    assert parsed.provisioning_intent.array.host == "10.132.30.121"
+
+
+def test_only_the_provisioning_address_is_not_a_conflict():
+    """Every mode that runs verify or cloudinit requires the Initialisation IP, so the two normally
+    coexist. A run of provisioning steps ALONE has no Network section, and the Provisioning tab's
+    address is then the only one stated — which is not a disagreement."""
+    prov = {"targets": _PROV_TARGETS, "volumes": _PROV_VOLUMES, "hostsets": _PROV_HOSTSETS}
+    parsed = parse_workbook_bytes(
+        _fill_tabs({"serial_number": "SGHD45FF0Y"}, prov),
+        mode=RunMode.CUSTOM, selected_steps=["discover", "zoning", "provision"],
+    )
+    assert parsed.work_item.network.mgmt_ipv4 == ""
+    assert parsed.provisioning_intent.array.host == "10.64.122.140"
+
+
 def test_provision_only_reports_missing_target_fields():
     incomplete = {"targets": dict(_PROV_TARGETS), "volumes": _PROV_VOLUMES, "hostsets": _PROV_HOSTSETS}
     del incomplete["targets"]["prov_array_password"]
