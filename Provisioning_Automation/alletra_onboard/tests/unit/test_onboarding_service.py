@@ -446,6 +446,41 @@ async def test_apply_refuses_a_failed_preview(tmp_path, monkeypatch):
         service.start_storage_apply(run.run_id)
 
 
+async def test_verify_and_asbuilt_read_the_same_array(tmp_path, monkeypatch):
+    """MEASURED LIVE: verify passed against 10.132.30.121 (the array just onboarded) while the
+    as-built timed out against 10.64.186.90, in the SAME run — the two steps chose the array
+    independently. The sheet parser now refuses a workbook naming two arrays, but a run created
+    before that guard can still carry a divergent intent, so the steps must agree by construction.
+    """
+    from alletra_onboard.application.documents import steps as doc_steps
+    from alletra_onboard.domain.provisioning import ProvisioningIntent
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    service = _service(tmp_path)
+    item = _item()                                    # network.mgmt_ipv4 = the run's array
+    run = service.create_run(item)
+    # A run whose provisioning intent points somewhere else entirely (the pre-guard shape).
+    service.store.save_provisioning_intent(run.run_id, ProvisioningIntent.from_simple(
+        host_set_name="hs",
+        array=EndpointCreds(host="10.64.186.90", username="u", password="p"),
+        vcenter=EndpointCreds(host="vc", username="u", password="p"),
+        switch_f1=EndpointCreds(host="s1", username="u", password="p"),
+        switch_f2=EndpointCreds(host="s2", username="u", password="p"),
+        name_prefix="v", size_gib=1,
+    ))
+
+    assert service.coordinator.array_host(run.run_id) == item.network.mgmt_ipv4
+
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(doc_steps.DocumentSteps, "_collect_asbuilt",
+                        lambda self, host, u, p: seen.setdefault("host", host) and None)
+    service.start_asbuilt(run.run_id, username="u", password="p")
+    await service.wait(run.run_id)
+
+    assert seen["host"] == item.network.mgmt_ipv4, "the as-built read a different array than verify"
+    assert seen["host"] != "10.64.186.90"
+
+
 async def test_unreadable_discovery_artifact_asks_for_a_re_run(tmp_path):
     """A stored report the current model cannot parse must not 500 every step forever."""
     from alletra_onboard.application.service import StepPreconditionError
