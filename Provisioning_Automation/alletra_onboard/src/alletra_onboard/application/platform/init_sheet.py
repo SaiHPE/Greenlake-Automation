@@ -360,7 +360,40 @@ def parse_workbook_bytes(
 
     if complete or _provisioning_selected(mode, selected_steps):
         parsed.provisioning_intent = _parse_provisioning_tab(workbook)
+        _reject_two_arrays(parsed)
     return parsed
+
+
+def _reject_two_arrays(parsed: ParsedInitSheet) -> None:
+    """A run is ONE array. Refuse a workbook that names two.
+
+    The array's management IP appears twice — 'IP address' on the Initialisation tab (what
+    cloudinit APPLIES to the array, and what verify reads) and 'Array management IP' on the
+    Provisioning tab (where discovery/zoning/provisioning connect). They are the same array by
+    definition, and the second field exists only because a PROVISION_ONLY run has no Initialisation
+    section to read.
+
+    Nothing used to tie them together, so a workbook could name two different arrays and the run
+    would half-work: verify checked one box while the as-built read the other and timed out
+    (measured live — init 10.132.30.121, provisioning 10.64.186.90, same run). Resolving that with
+    a precedence rule only hides which array each step actually touched. Refuse it here instead,
+    while there is still a human looking at the workbook, and say exactly which two values disagree.
+    """
+    intent = parsed.provisioning_intent
+    if intent is None:
+        return
+    init_ip = (parsed.work_item.network.mgmt_ipv4 or "").strip()
+    prov_ip = (intent.array.host or "").strip()
+    # Empty means "this run doesn't use that tab" (a PROVISION_ONLY sheet has no Network section),
+    # which is not a conflict — only two DIFFERENT stated addresses are.
+    if not init_ip or not prov_ip or init_ip == prov_ip:
+        return
+    raise ValueError(
+        f"This workbook names two different arrays: the Initialisation tab's 'IP address' is "
+        f"{init_ip} and the Provisioning tab's 'Array management IP' is {prov_ip}. A run covers one "
+        "array — every step (initialise, verify, provision, as-built) acts on it. Correct whichever "
+        "is wrong, or use a separate workbook/run for the other array."
+    )
 
 
 def _read_tab(sheet, label_to_key: dict[str, str]) -> dict[str, str]:

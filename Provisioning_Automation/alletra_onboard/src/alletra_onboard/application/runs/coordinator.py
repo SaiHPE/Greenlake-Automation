@@ -137,6 +137,27 @@ class RunCoordinator:
             raise RunNotFoundError(run_id)
         return item
 
+    def array_host(self, run_id: str) -> str:
+        """The address of THE array this run is about — one answer, for every step.
+
+        A run covers one array, but its address is stated in up to two places: the Initialisation
+        tab's management IP (present whenever the array is initialised or verified) and the
+        Provisioning tab's array host (present whenever a provisioning step is selected). The sheet
+        parser REFUSES a workbook where both are given and disagree, so whichever exists here is
+        THE array — this is not a preference between two candidates.
+
+        Steps used to make this choice independently and reached different boxes in the same run:
+        verify read the Initialisation IP while the as-built read the Provisioning one, so verify
+        passed against the array being onboarded and the as-built timed out against another
+        (measured live: 10.132.30.121 vs 10.64.186.90).
+        """
+        item = self.get_work_item(run_id)
+        mgmt = (item.network.mgmt_ipv4 or "").strip()
+        if mgmt:
+            return mgmt
+        intent = self.store.get_provisioning_intent(run_id)
+        return (intent.array.host or "").strip() if intent else ""
+
     def list_runs(self) -> list[RunRecord]:
         return self.store.list_runs()
 
