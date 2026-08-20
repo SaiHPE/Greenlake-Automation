@@ -75,8 +75,8 @@ class DocumentSteps:
     ) -> RunRecord:
         coord = self._coord
         run, item = coord.get_run(run_id), coord.get_work_item(run_id)
-        intent = coord.store.get_provisioning_intent(run_id)
-        host = intent.array.host if intent else item.network.mgmt_ipv4
+        # The run's array — the same one verify checks. Not chosen here; see RunCoordinator.array_host.
+        host = coord.array_host(run_id)
         coord.spawn(run_id, self._run_asbuilt(
             run, item, host, username, password, customer, site, application_workload, purpose,
         ))
