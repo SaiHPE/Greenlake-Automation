@@ -68,6 +68,17 @@ def _repeat_header(row) -> None:
     row._tr.get_or_add_trPr().append(th)
 
 
+def _no_split(row) -> None:
+    """Keep a row whole across a page boundary.
+
+    The inventory and health tables regularly run past a page end; without this Word splits a row
+    mid-height, leaving the top of the text on one page and the bottom on the next.
+    """
+    cs = OxmlElement("w:cantSplit")
+    cs.set(qn("w:val"), "true")
+    row._tr.get_or_add_trPr().append(cs)
+
+
 def _content_width_emu(doc) -> int:
     sec = doc.sections[-1]
     return int(sec.page_width) - int(sec.left_margin) - int(sec.right_margin)
@@ -108,6 +119,7 @@ def hpe_table(doc, headers: list[str], rows, *, widths=None, font_size=8, header
 
     header_row = tbl.rows[0]
     _repeat_header(header_row)
+    _no_split(header_row)
     for i, text in enumerate(headers):
         cell = header_row.cells[i]
         cell.width = Emu(col_emu[i])
@@ -118,7 +130,9 @@ def hpe_table(doc, headers: list[str], rows, *, widths=None, font_size=8, header
         _reorder(cell._tc.get_or_add_tcPr(), _TCPR_ORDER)
 
     for ri, row in enumerate(rows):
-        cells = tbl.add_row().cells
+        new_row = tbl.add_row()
+        _no_split(new_row)
+        cells = new_row.cells
         for i in range(ncol):
             cell = cells[i]
             cell.width = Emu(col_emu[i])
