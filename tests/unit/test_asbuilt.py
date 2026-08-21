@@ -100,6 +100,85 @@ def test_every_narrative_placeholder_is_filled(tmp_path):
     assert warnings == []
 
 
+def _all_text(doc):
+    """Body + headers/footers — what the reader actually sees on every page."""
+    from docx.oxml.ns import qn as _qn
+
+    from alletra_onboard.application.documents.asbuilt import _text_parts
+
+    return "".join(t.text or "" for part in _text_parts(doc) for t in part.iter(_qn("w:t")))
+
+
+def test_customer_name_is_filled_in_the_running_header_and_footer(tmp_path):
+    """MEASURED on the template: the running header is
+    '<Customer Name> HPE GreenLake for Block … Technical Whitepaper' and the footer carries
+    '<CustomerName>' — a FOURTH spelling, with no space. Word keeps both in separate XML parts, so
+    walking doc.element.body left a raw placeholder on every page after the cover.
+    """
+    out, warnings = generate_asbuilt(_SAMPLE, tmp_path / "hdr.docx")
+    doc = docx.Document(str(out))
+
+    header = "".join(
+        t.text or "" for s in doc.sections for t in s.header._element.iter(qn("w:t"))
+    )
+    footer = "".join(
+        t.text or "" for s in doc.sections for t in s.footer._element.iter(qn("w:t"))
+    )
+    assert "ACME Corp" in header, f"header not filled: {header!r}"
+    assert "<" not in header, f"placeholder left in header: {header!r}"
+    assert "ACME Corp" in footer, f"footer not filled: {footer!r}"
+    assert "<" not in footer, f"placeholder left in footer: {footer!r}"
+    assert warnings == []
+
+
+def test_spelling_variants_of_one_field_all_fill():
+    """Four spellings of the same field across cover, body, header and footer."""
+    from alletra_onboard.application.documents.asbuilt import _FIELD_BY_KEY, _placeholder_key
+
+    for spelling in ("<Customer Name>", "<Customer name>", "<CustomerName>", "<customer  name>"):
+        assert _FIELD_BY_KEY.get(_placeholder_key(spelling)) == "customer", spelling
+
+
+def test_remaining_placeholders_sees_headers_and_split_runs(tmp_path):
+    """An unfilled placeholder in a header must be WARNED about, not silently shipped."""
+    out, warnings = generate_asbuilt(AsBuiltData(serial_no="SGH123"), tmp_path / "empty.docx")
+    doc = docx.Document(str(out))
+    header = "".join(t.text or "" for s in doc.sections for t in s.header._element.iter(qn("w:t")))
+
+    assert "<" in header                                   # nothing to fill it with
+    assert any("Placeholders are still unfilled" in w for w in warnings)
+
+
+def test_every_top_level_section_starts_on_a_new_page(tmp_path):
+    """The template has exactly ONE explicit page break; every other Heading 1 flowed inline, so
+    the generated tables pushed later headings into the middle of a page."""
+    out, _warnings = generate_asbuilt(_SAMPLE, tmp_path / "breaks.docx")
+    doc = docx.Document(str(out))
+
+    h1 = [p for p in doc.paragraphs if (p.style.name or "").lower() == "heading 1"]
+    assert len(h1) >= 6
+    for para in h1:
+        explicit = any(b.get(qn("w:type")) == "page" for b in para._p.iter(qn("w:br")))
+        assert para.paragraph_format.page_break_before or explicit, f"no break before {para.text!r}"
+        assert para.paragraph_format.keep_with_next, f"heading can be stranded: {para.text!r}"
+
+
+def test_generated_table_rows_do_not_split_across_pages(tmp_path):
+    """A long inventory/health table must break BETWEEN rows, not through one."""
+    out, _warnings = generate_asbuilt(_SAMPLE, tmp_path / "rows.docx")
+    doc = docx.Document(str(out))
+
+    generated = [t for t in doc.tables if "Component" in t.rows[0].cells[0].text or
+                 "Cage" in t.rows[0].cells[0].text or "Id" in t.rows[0].cells[0].text]
+    assert generated, "no generated tables found"
+    for table in generated:
+        for row in table.rows:
+            trPr = row._tr.find(qn("w:trPr"))
+            assert trPr is not None and trPr.find(qn("w:cantSplit")) is not None
+        header_trPr = table.rows[0]._tr.find(qn("w:trPr"))
+        assert header_trPr.find(qn("w:tblHeader")) is not None   # repeats on every page
+
+
 def test_inventory_section_is_found_despite_the_heading_rename(tmp_path):
     """REGRESSION: the heading was matched with `== "alletra inventory"`. HPE renamed it to
     "HPE GreenLake for Block hardware Inventory", so the anchor missed and the ENTIRE hardware

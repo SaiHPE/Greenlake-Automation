@@ -141,31 +141,132 @@ def _load_document(template: str | Path | None):
     return docx.Document(str(template))
 
 
-def _replace_text(doc, old: str, new: str) -> int:
-    """Replace ``old`` with ``new`` across every text run in the body (incl. the cover-page sdt).
+def _text_parts(doc):
+    """Every XML part whose text this document fills: the body AND each section's headers/footers.
 
-    CASE-INSENSITIVE on the placeholder: HPE's template spells the same field three ways —
-    ``<Customer name>`` in Executive Summary, ``<Customer Name>`` in Introduction and Environment
-    Overview. An exact match filled two of the three and shipped a literal placeholder in the
-    document's opening paragraph.
+    Word keeps running headers and footers in SEPARATE parts, so walking ``doc.element.body`` alone
+    silently skips them — measured on HPE's template, the running header is
+    ``"<Customer Name> HPE GreenLake for Block … Technical Whitepaper"`` and the footer carries
+    ``<CustomerName>``, so every page after the cover shipped with a raw placeholder on it.
+
+    Only parts this section actually OWNS are yielded: a header linked to the previous section has
+    no definition of its own, and asking python-docx for one would create an empty part.
     """
-    count = 0
-    pattern = re.compile(re.escape(old), re.IGNORECASE)
-    for t in doc.element.body.iter(qn("w:t")):
-        if t.text and pattern.search(t.text):
-            t.text = pattern.sub(new, t.text)
-            count += 1
-    return count
+    yield doc.element.body
+    for section in doc.sections:
+        for part in (
+            section.first_page_header, section.header, section.even_page_header,
+            section.first_page_footer, section.footer, section.even_page_footer,
+        ):
+            try:
+                if part.is_linked_to_previous:
+                    continue
+                yield part._element
+            except Exception:  # noqa: BLE001 - a malformed part must not stop the fill
+                continue
+
+
+def _placeholder_key(text: str) -> str:
+    """``'<Customer Name>'``/``'<CustomerName>'``/``'<Customer name>'`` -> ``'customername'``.
+
+    HPE's template spells one field FOUR ways across the cover, body, header and footer. Matching
+    on the squeezed, lower-cased inner text makes the spelling irrelevant.
+    """
+    return re.sub(r"\s+", "", text.strip().strip("<>")).lower()
+
+
+_FIELD_BY_KEY: dict[str, str] = {
+    _placeholder_key(p): field for p, field in _PLACEHOLDER_TO_FIELD.items()
+}
+
+
+def _fill_placeholders(doc, data) -> int:
+    """Replace every known ``<placeholder>`` with its value, across the body and headers/footers.
+
+    Two passes, because Word splits text into runs at arbitrary points (revision marks,
+    spell-check), so a placeholder can be *fragmented* across runs and never match a per-run
+    search. Pass 1 replaces within each run — fast, and preserves any per-run formatting. Pass 2
+    only touches paragraphs whose JOINED text still holds a known placeholder: it rewrites the
+    paragraph's text into its first run, which is the price of repairing a split placeholder.
+    """
+    filled = 0
+
+    def _value_for(match) -> str:
+        field = _FIELD_BY_KEY.get(_placeholder_key(match.group(0)))
+        if field:
+            value = getattr(data, field, "")
+            if value:
+                return value
+        return match.group(0)
+
+    for part in _text_parts(doc):
+        for node in part.iter(qn("w:t")):                      # pass 1: within a run
+            if node.text and "<" in node.text:
+                replaced = _PLACEHOLDER.sub(_value_for, node.text)
+                if replaced != node.text:
+                    node.text = replaced
+                    filled += 1
+
+        for para in part.iter(qn("w:p")):                      # pass 2: split across runs
+            nodes = list(para.iter(qn("w:t")))
+            if len(nodes) < 2:
+                continue
+            joined = "".join(n.text or "" for n in nodes)
+            if "<" not in joined:
+                continue
+            if not any(_placeholder_key(m) in _FIELD_BY_KEY for m in _PLACEHOLDER.findall(joined)):
+                continue
+            replaced = _PLACEHOLDER.sub(_value_for, joined)
+            if replaced == joined:
+                continue
+            nodes[0].text = replaced
+            for extra in nodes[1:]:
+                extra.text = ""
+            filled += 1
+    return filled
 
 
 def _remaining_placeholders(doc) -> list[str]:
-    """Every ``<...>`` still in the finished document, in first-seen order."""
+    """Every ``<...>`` still in the finished document — body, headers and footers — first seen first.
+
+    Per-paragraph, not per-run: a placeholder fragmented across runs is still visible to the reader
+    and must be reported, or the warning quietly under-counts what the customer will see.
+    """
     found: list[str] = []
-    for t in doc.element.body.iter(qn("w:t")):
-        for match in _PLACEHOLDER.findall(t.text or ""):
-            if match not in found:
-                found.append(match)
+    for part in _text_parts(doc):
+        for para in part.iter(qn("w:p")):
+            joined = "".join(n.text or "" for n in para.iter(qn("w:t")))
+            for match in _PLACEHOLDER.findall(joined):
+                if match not in found:
+                    found.append(match)
     return found
+
+
+def _start_sections_on_new_pages(doc) -> int:
+    """Begin every top-level section on a fresh page.
+
+    The template carries exactly ONE explicit page break (before Executive Summary); every other
+    Heading 1 flows inline, so once the generated inventory and health tables are injected the
+    later headings land halfway down a page. ``page_break_before`` is the Word-native way to say
+    this — it survives content reflow, unlike an inserted break paragraph that drifts as the tables
+    above it grow. Headings that already carry an explicit break are left alone so no blank page
+    appears, and each heading is kept with the content under it.
+    """
+    added = 0
+    for para in doc.paragraphs:
+        style = (para.style.name or "").lower() if para.style is not None else ""
+        if not style.startswith("heading"):
+            continue
+        para.paragraph_format.keep_with_next = True          # never strand a heading at a page foot
+        if style != "heading 1":
+            continue
+        if any(b.get(qn("w:type")) == "page" for b in para._p.iter(qn("w:br"))):
+            continue                                          # the template already breaks here
+        if para.paragraph_format.page_break_before:
+            continue
+        para.paragraph_format.page_break_before = True
+        added += 1
+    return added
 
 
 def _drop_blank_paragraphs_after(heading) -> None:
@@ -287,10 +388,7 @@ def generate_asbuilt(
     doc = _load_document(template)
     warnings: list[str] = []
 
-    for placeholder, field in _PLACEHOLDER_TO_FIELD.items():
-        value = getattr(data, field, "")
-        if value:
-            _replace_text(doc, placeholder, value)
+    _fill_placeholders(doc, data)
 
     values = {label: getattr(data, field) for label, field in _LABEL_TO_FIELD.items()}
     for table in doc.tables:
@@ -325,6 +423,8 @@ def generate_asbuilt(
             "No 'checkhealth' heading was found in the template, so the health report is NOT in "
             "this document."
         )
+
+    _start_sections_on_new_pages(doc)
 
     left = _remaining_placeholders(doc)
     if left:
