@@ -590,6 +590,46 @@ def test_export_lun_id_bounded_by_the_platform_range():
         _ex(-1)
 
 
+class _UndescribableTimeout(Exception):
+    """hpe3parclient's own Timeout: str() RAISES because __str__ reads a .message attribute that
+    modern Python no longer provides."""
+
+    def __str__(self):
+        raise AttributeError("'Timeout' object has no attribute 'message'")
+
+
+def test_translate_survives_an_exception_whose_str_raises():
+    """MEASURED against a wedged WSAPI on the LZ array: the SDK raised its Timeout, our translator
+    called str() on it, str() itself raised AttributeError — and the operator saw THAT traceback
+    instead of "the array did not respond". Describing a failure must never fail."""
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiNotReady
+
+    err = WsapiClient("h", "u", "p")._translate(_UndescribableTimeout(), where="login")
+
+    assert isinstance(err, WsapiNotReady)          # classified by TYPE name, not by str()
+    assert "did not respond" in str(err)
+    assert "stopwsapi" in str(err) and "startwsapi" in str(err)   # names the remedy
+
+
+def test_a_read_timeout_names_the_wedged_service_not_the_network():
+    """A WSAPI that accepts TLS and never answers looks like a firewall problem; showwsapi still
+    reports Enabled/Active. The message has to point at the service, or it costs an hour."""
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiNotReady
+
+    err = WsapiClient("h", "u", "p")._translate(
+        Exception("HTTPSConnectionPool(host='10.64.154.225', port=443): Read timed out."),
+        where="login",
+    )
+    assert isinstance(err, WsapiNotReady) and "not serving" in str(err)
+
+
+def test_safe_str_falls_back_rather_than_raising():
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+
+    assert "_UndescribableTimeout" in WsapiClient._safe_str(_UndescribableTimeout())
+    assert WsapiClient._safe_str(ValueError("plain")) == "plain"
+
+
 def test_subscription_refusal_is_translated_to_the_onboarding_gate():
     # Hit live on a fresh B10000: every create refused until GreenLake onboarding completes. The
     # raw message reads like a WSAPI defect — the translation names the sequencing fix.
