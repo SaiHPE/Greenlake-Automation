@@ -152,7 +152,9 @@ def verify_provisioned_paths(
             text = cli.run("showvlun -a")
     except Exception as exc:  # noqa: BLE001
         return PathVerification(error=f"Could not read 'showvlun -a' over SSH: {exc}")
-    hosts = {h.host_name for h in discovery.host_hbas} or {ah.name for ah in discovery.array_hosts}
+    # `if ah.name` drops the array's UNCLAIMED logins (see discovery.UNCLAIMED_HOST): they are real
+    # WWPN logins, but not a host anyone can name, so they must never appear as a verify target.
+    hosts = {h.host_name for h in discovery.host_hbas} or {ah.name for ah in discovery.array_hosts if ah.name}
     # The join key between "the hosts vCenter knows" and "the paths the array reports" is the HBA
     # WWPN, never the name — the two namespaces don't intersect on real arrays (see verify_paths).
     wwpns_by_host: dict[str, set[str]] = {}

@@ -225,11 +225,22 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
       {report && report.array_hosts.length > 0 && (
         <Surface
           title="Hosts known to the array"
-          description="An adapter with no ports listed is configured on the array but not logged in — it is not zoned, or the host is offline."
+          description="An adapter with no ports listed is configured on the array but not logged in — it is not zoned, or the host is offline. An unclaimed login is the reverse: zoned and logged in, but no host object has been created for it yet. Provisioning creates one."
         >
           <DataTable
             columns={[
-              { property: 'name', header: 'Host', render: (host: ArrayHost) => <Text size="small">{host.name}</Text> },
+              {
+                property: 'name',
+                header: 'Host',
+                render: (host: ArrayHost) =>
+                  host.name ? (
+                    <Text size="small">{host.name}</Text>
+                  ) : (
+                    <Text size="small" color="text-weak">
+                      Unclaimed logins
+                    </Text>
+                  ),
+              },
               { property: 'persona', header: 'Persona', render: (host: ArrayHost) => <Text size="small">{host.persona || '—'}</Text> },
               {
                 property: 'wwpns',

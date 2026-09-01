@@ -121,7 +121,10 @@ def build_report(intent: ProvisioningIntent, discovery: DiscoveryReport) -> Zoni
         )
         return report
 
-    # Which host WWPNs the ARRAY sees LOGGED IN, by fabric — from showhost (real hosts only).
+    # Which host WWPNs the ARRAY sees LOGGED IN, by fabric — from showhost. This INCLUDES the
+    # array's unclaimed logins (host object not created yet): a WWPN that is logged in is zoned,
+    # whether or not anyone has named it. Excluding them reported a cabled, zoned, logged-in host
+    # as "not zoned on either fabric" — measured on rack13arcus, host 10.132.30.136.
     port_fabric: dict[str, Fabric] = {p.label: p.fabric for p in fc_ports if p.fabric}
     union: dict[Fabric, set[str]] = {"odd": set(), "even": set()}
     name_by_wwpn: dict[str, str] = {}
@@ -143,6 +146,8 @@ def build_report(intent: ProvisioningIntent, discovery: DiscoveryReport) -> Zoni
         host_wwpns.setdefault(hba.host_name, set()).add(normalize_wwpn(hba.wwpn))
     if not host_wwpns:
         for host in discovery.array_hosts:
+            if not host.name:      # the array's UNCLAIMED logins — real WWPNs, but not a named host
+                continue
             logged_in = {w for w, ports in host.wwpns.items() if any(port_fabric.get(nsp) for nsp in ports)}
             if logged_in:
                 host_wwpns.setdefault(host.name, set()).update(logged_in)
