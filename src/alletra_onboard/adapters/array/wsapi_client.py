@@ -371,22 +371,58 @@ class WsapiClient:
     def _is_conflict(exc: Exception) -> bool:
         return hpe_exc is not None and isinstance(exc, hpe_exc.HTTPConflict)
 
+    @staticmethod
+    def _safe_str(exc: BaseException) -> str:
+        """``str(exc)`` without trusting the exception to be describable.
+
+        MEASURED against a wedged WSAPI: ``str()`` on hpe3parclient's own ``Timeout`` RAISES —
+        its ``__str__`` reads a ``.message`` attribute that no longer exists on modern Python — so
+        this translator crashed with ``AttributeError`` and the operator saw that instead of "the
+        array did not respond". Describing a failure must never fail.
+        """
+        try:
+            text = str(exc)
+        except Exception:  # noqa: BLE001 - the exception's own __str__ is broken
+            text = ""
+        if not text:
+            # Its args may still carry the detail. Only use them when there ARE any: repr(()) is
+            # the string "''", which is truthy and would mask the type-name fallback below.
+            try:
+                args = tuple(getattr(exc, "args", ()) or ())
+                text = "; ".join(str(a) for a in args) if args else ""
+            except Exception:  # noqa: BLE001
+                text = ""
+        return text or f"{type(exc).__name__} (no detail available)"
+
     def _translate(self, exc: Exception, *, where: str) -> WsapiError:
+        detail = self._safe_str(exc)
+        lowered = detail.lower()
+        name = type(exc).__name__.lower()
         # Readiness: a 503 (services not ready) on login is the documented degraded-array condition.
         status = getattr(exc, "http_status", None) or getattr(exc, "code", None)
-        if status == 503 or "not ready" in str(exc).lower():
+        if status == 503 or "not ready" in lowered:
             return WsapiNotReady(
                 f"The array's WSAPI is reachable but not ready (during {where}). This tracks array "
                 "health, not config — check `checkhealth -svc -detail` and retry once it clears."
             )
+        # A wedged WSAPI: the TLS connection is ACCEPTED and then nothing answers, so this looks
+        # like a network fault while `showwsapi` still reports Enabled/Active. Seen live on the LZ
+        # array. Name the remedy, because "timed out" sends people to check firewalls for an hour.
+        if "timeout" in name or "timed out" in lowered or "timeout" in lowered:
+            return WsapiNotReady(
+                f"The array accepted the connection but its WSAPI did not respond during {where}. "
+                "The service is listening yet not serving — `showwsapi` will still say "
+                "Enabled/Active. Restart it on the array over SSH (`stopwsapi` then `startwsapi`), "
+                "then retry."
+            )
         # The GreenLake gate, hit live on a fresh B10000: every create is refused with "Array has
         # not yet completed the subscription process" until onboarding (Component A/B/C) finishes.
         # Without this translation it reads like a WSAPI defect instead of a sequencing problem.
-        if "subscri" in str(exc).lower():
+        if "subscri" in lowered:
             return WsapiError(
                 f"The array refused {where}: it has not completed GreenLake subscription/onboarding. "
                 "Finish the onboarding steps (GreenLake registration → cloud connection) and retry — "
-                f"array said: {str(exc)[:200]}"
+                f"array said: {detail[:200]}"
             )
         desc = ""
         if hpe_exc is not None and isinstance(exc, hpe_exc.ClientException):
@@ -394,7 +430,7 @@ class WsapiClient:
                 desc = exc.get_description() or ""
             except Exception:  # noqa: BLE001
                 desc = ""
-        return WsapiError(f"WSAPI {where} failed: {desc or type(exc).__name__}: {str(exc)[:200]}")
+        return WsapiError(f"WSAPI {where} failed: {desc or type(exc).__name__}: {detail[:200]}")
 
 
 def _members(body) -> list[dict]:
