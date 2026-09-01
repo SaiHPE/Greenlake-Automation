@@ -67,6 +67,12 @@ def parse_ports(showport: str, iscsi_ips: dict[str, str]) -> list[ArrayPort]:
     return out
 
 
+#: Name given to the array's UNCLAIMED FC logins — WWPNs logged in with no host object. Empty on
+#: purpose: it is a real set of logins for fabric lookup, but never a host anyone can name, so any
+#: caller assembling a list of host NAMES must filter it out.
+UNCLAIMED_HOST = ""
+
+
 def parse_showhost(showhost_d: str) -> list[ArrayHost]:
     """`showhost -d` -> [ArrayHost]. Columns: Id  Name  Persona  WWN/iSCSI_Name  Port  IP_addr.
 
@@ -77,10 +83,20 @@ def parse_showhost(showhost_d: str) -> list[ArrayHost]:
     hosts: "OrderedDict[str, ArrayHost]" = OrderedDict()
     for line in (showhost_d or "").splitlines():
         p = line.split()
-        if len(p) < 6 or not p[0].isdigit():
+        if len(p) < 6:
             continue
+        claimed = p[0].isdigit()
+        if not claimed and p[0] != "--":
+            continue          # a header or a continuation line, not a login row
         port, wwn, persona = p[-2], p[-3], p[-4]
-        name = " ".join(p[1:-4]) or p[1]
+        # UNCLAIMED logins ('-- -- --  <wwpn>  n:s:p') are REAL logins that simply have no host
+        # object yet — the normal state of a freshly zoned host, before provisioning creates one.
+        # Skipping them (the old `p[0].isdigit()` guard) hid their WWPNs from fabric_by_wwpn, so a
+        # host that was cabled, zoned AND logged in was reported "not zoned on either fabric".
+        # MEASURED on rack13arcus: 10.132.30.136 (WWPNs …12:a8/…12:a9) is zoned in Vmware_Alletra
+        # and kiranzone1 and visible in both name servers, yet the verify called it unzoned.
+        # They are kept under the EMPTY host name, which callers building a host LIST must skip.
+        name = (" ".join(p[1:-4]) or p[1]) if claimed else UNCLAIMED_HOST
         host = hosts.setdefault(name, ArrayHost(name=name, persona=persona))
         wwpn = normalize_wwpn(wwn)
         if len(wwpn) != 16:  # an iqn / NQN / '--' / 'digtest' — not an FC WWPN
@@ -247,7 +263,12 @@ def discover(
             report.array_hosts = parse_showhost(cli.run("showhost -d"))
             fc = sum(1 for p in report.array_ports if p.protocol == "fc")
             isc = sum(1 for p in report.array_ports if p.protocol == "iscsi")
-            _p(f"Array: {fc} FC + {isc} iSCSI target port(s), {len(report.array_hosts)} host(s). Resolving fabrics…")
+            # Count NAMED hosts and unclaimed logins separately: the unclaimed entry is one bucket
+            # holding many WWPNs, so folding it into "N host(s)" would both inflate and understate.
+            named = sum(1 for h in report.array_hosts if h.name)
+            unclaimed = sum(len(h.wwpns) for h in report.array_hosts if not h.name)
+            extra = f", {unclaimed} unclaimed login(s)" if unclaimed else ""
+            _p(f"Array: {fc} FC + {isc} iSCSI target port(s), {named} host(s){extra}. Resolving fabrics…")
             report.notes.extend(_refine_fabrics_from_switches(cli, report.array_ports, progress=_p))
     except Exception as exc:  # noqa: BLE001
         report.notes.append(f"Array discovery (SSH) failed: {exc}")

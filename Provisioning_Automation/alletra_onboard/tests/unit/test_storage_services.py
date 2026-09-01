@@ -528,6 +528,81 @@ def test_find_host_by_wwn_reads_getHosts_never_sdk_findHost():
     assert not hasattr(stub, "findHost")
 
 
+# ---------------- unclaimed array logins (rack13arcus, 2026-08-31) ----------------
+
+# Real `showhost -d` rows from rack13arcus. 10.132.30.136's two HBA ports are logged in on all four
+# FC ports and zoned (Vmware_Alletra + kiranzone1), but NO host object claims them - the normal
+# state of a freshly zoned host, before provisioning creates one. The rows start with '--'.
+_ARCUS_SHOWHOST = """\
+Id Name          Persona      ---WWN/iSCSI_Name/NQN--- Port  IP/IP:Port
+ 4 Node1         Generic-ALUA 10005CBA2CFF6BD0         0:3:3 n/a
+ 4 Node1         Generic-ALUA 10005CBA2CFF6BD0         1:3:4 n/a
+-- --            --           10005CED8C5312A8         0:3:3 n/a
+-- --            --           10005CED8C5312A8         1:3:4 n/a
+-- --            --           10005CED8C5312A9         1:3:3 n/a
+-- --            --           10005CED8C5312A9         0:3:4 n/a
+"""
+
+
+def test_unclaimed_logins_are_parsed_not_discarded():
+    """A WWPN logged in with no host object is still a REAL login.
+
+    The old guard `not p[0].isdigit()` dropped these rows, so their WWPNs never reached
+    fabric_by_wwpn and a host that was cabled, zoned AND logged in was reported "not zoned on
+    either fabric" - measured live on rack13arcus for 10.132.30.136.
+    """
+    from alletra_onboard.application.provisioning.discovery import parse_showhost
+
+    hosts = parse_showhost(_ARCUS_SHOWHOST)
+    named = {h.name: h for h in hosts if h.name}
+    unclaimed = [h for h in hosts if not h.name]
+
+    assert set(named) == {"Node1"}
+    assert unclaimed, "the unclaimed logins were discarded"
+    wwpns = unclaimed[0].wwpns
+    assert set(wwpns) == {"10005CED8C5312A8", "10005CED8C5312A9"}
+    assert sorted(wwpns["10005CED8C5312A8"]) == ["0:3:3", "1:3:4"]
+    assert sorted(wwpns["10005CED8C5312A9"]) == ["0:3:4", "1:3:3"]
+
+
+def test_unclaimed_logins_give_a_vcenter_host_its_fabrics():
+    """The end of the chain: vCenter names the host, the array's unclaimed login supplies the
+    fabric, and the zoning verify must therefore see it as zoned on BOTH fabrics."""
+    from alletra_onboard.application.provisioning.discovery import fabric_by_wwpn, parse_showhost
+
+    # rack13arcus is CROSS-CABLED: 0:3:3 + 1:3:4 are one fabric, 0:3:4 + 1:3:3 the other.
+    ports = [
+        ArrayPort(node=0, slot=3, card_port=3, protocol="fc", wwpn="20330002AC02D495", link_state="ready", fabric="even"),
+        ArrayPort(node=1, slot=3, card_port=4, protocol="fc", wwpn="21340002AC02D495", link_state="ready", fabric="even"),
+        ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC02D495", link_state="ready", fabric="odd"),
+        ArrayPort(node=1, slot=3, card_port=3, protocol="fc", wwpn="21330002AC02D495", link_state="ready", fabric="odd"),
+    ]
+    by_wwpn = fabric_by_wwpn(parse_showhost(_ARCUS_SHOWHOST), ports)
+
+    assert by_wwpn["10005CED8C5312A8"] == {"even"}
+    assert by_wwpn["10005CED8C5312A9"] == {"odd"}
+    # ...so the host owning both ports is on BOTH fabrics - which is what "zoned" means here.
+    assert by_wwpn["10005CED8C5312A8"] | by_wwpn["10005CED8C5312A9"] == {"odd", "even"}
+
+
+def test_unclaimed_logins_never_appear_as_a_named_host():
+    """They are logins, not hosts: no verify target may be an empty-named pseudo-host."""
+    from alletra_onboard.application.provisioning import zoning as z
+    from alletra_onboard.application.provisioning.discovery import parse_showhost
+
+    report = z.build_report(
+        _intent(),
+        disc.DiscoveryReport(
+            array_ports=[ArrayPort(node=0, slot=3, card_port=3, protocol="fc",
+                                   wwpn="20330002AC02D495", link_state="ready", fabric="odd")],
+            array_hosts=parse_showhost(_ARCUS_SHOWHOST),
+            host_hbas=[],                       # force the array-side fallback host list
+        ),
+    )
+    assert all(z_.name.strip() for z_ in report.expected), [z_.name for z_ in report.expected]
+    assert not any(z_.name.startswith("_") for z_ in report.expected)
+
+
 # ---------------- provisioning corrections (2026-08-15 methodology audit) ----------------
 
 def test_build_plan_hard_gates_on_a_missing_cpg():
