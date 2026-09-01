@@ -109,6 +109,29 @@ def _all_text(doc):
     return "".join(t.text or "" for part in _text_parts(doc) for t in part.iter(_qn("w:t")))
 
 
+def test_host_ports_row_is_not_in_the_template_or_the_document(tmp_path):
+    """"Host Ports" was REMOVED from the bundled template (2026-08-18, operator decision).
+
+    It rendered the port STATES — e.g. "8 x 32Gbps FC target; ready: 0:3:1, 0:3:2, 1:3:1, 1:3:2;
+    loss_sync: 0:3:3, 0:3:4, 1:3:3, 1:3:4" — which in a customer handover reads as "half your ports
+    are broken" when those ports are simply uncabled. The data is still parsed and still correct;
+    it is just not published.
+
+    This test is the guard on that decision: HPE revises this template (twice this month), and a
+    revision that reinstates the row would otherwise put the states back in front of a customer
+    silently. If this fails, that is the conversation to have — not a line to delete.
+    """
+    doc = docx.Document(str(default_template()))
+    labels = [" ".join(r.cells[0].text.split()).strip().lower() for r in doc.tables[0].rows]
+    assert "host ports" not in labels, f"the template reinstated the row: {labels}"
+    assert len(labels) == 16
+
+    out, _warnings = generate_asbuilt(_SAMPLE, tmp_path / "no_ports.docx")
+    _doc, text = _read(out)
+    assert "Host Ports" not in text
+    assert "8 x 32Gbps FC target" not in text          # the value must not surface anywhere else
+
+
 def test_customer_name_is_filled_in_the_running_header_and_footer(tmp_path):
     """MEASURED on the template: the running header is
     '<Customer Name> HPE GreenLake for Block … Technical Whitepaper' and the footer carries
