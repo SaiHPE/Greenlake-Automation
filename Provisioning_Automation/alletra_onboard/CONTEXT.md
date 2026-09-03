@@ -95,10 +95,26 @@ _Avoid_: treating fabric as a property of the port number alone (the switch cabl
 Two things: (1) the **current-connection map** — per host WWPN, the storage port WWPN(s) + `n:s:p` it
 is actually logged into (`showhost` + `showport`), host WWPN ↔ storage WWPN, both sides; and (2) the
 **operator-selected builder** — per host WWPN a parity-filtered dropdown of same-fabric storage ports
-the operator *selects*, which the tool turns into the **read-only** `alicreate` → `zonecreate` →
-`cfgadd` → `cfgenable` preview for the **SAN team to apply by hand**. **The tool never writes to the
-switch.** See ADR 0004.
-_Avoid_: "remediation" (the tool produces a plan; it does not create zones), "auto-pair" (the operator selects).
+the operator *selects*, which the tool turns into the **command set**. **The tool never writes to the
+switch.** See ADR 0004 and ADR 0012.
+_Avoid_: "remediation" (the tool produces a plan; it does not create zones), "auto-pair" (the operator selects), "staging" (see **Command set**).
+
+**Command set**:
+The zoning step's deliverable: the exact, correctly-ordered `alicreate` → `zonecreate` → `cfgadd` →
+`cfgenable` text for this fabric, which a **consultant reviews and applies by hand**. It is the
+product of the zoning step, not a preview of something the tool will then do — the tool has no
+ability to run it. `cfgenable` is presented separately from the additive commands, because activating
+the configuration is a scheduled SAN-team act and not part of the paste. See ADR 0012.
+_Avoid_: "staging" / "apply" (both imply the tool executes it; it does not), "preview" (it is the deliverable, not a rehearsal).
+
+**Unclaimed login**:
+A WWPN **logged into an array target port but claimed by no Host record** — `showhost -d` prints it
+with `--` in the Id/Name/Persona columns. It is a real login: the port is cabled, zoned and active,
+and the array can see it. It simply is not yet anybody's named Host. This is the *normal* state of a
+freshly zoned server before provisioning creates its Host, so on a greenfield array every server
+starts here. Unclaimed logins are authoritative for **fabric** lookup, and must never appear in a
+list of host *names*.
+_Avoid_: reading it as "not zoned" (a login is proof of zoning); treating it as a Host (nobody can name it).
 
 **Discovered fact**:
 Anything about the environment the automation *reads at run time* instead of asking for — array
