@@ -219,3 +219,37 @@ generalising: derive state from a read you already trust (`getHosts` → FCPaths
 helper you haven't read; make the stub model the vendor's real surface (the fixed stub has **no**
 `findHost`, so the trap cannot re-hide); and treat a conflict-swallow as a claim — it is only safe
 if the request provably contains nothing the server could legitimately conflict on.
+
+---
+
+## When a decision lives only in a code comment
+
+**30. A capability that no document authorises will still ship, and its own operator will not know it is there.**
+ADR 0004 decided the tool never writes to a SAN switch. `CONTEXT.md` said the same in the glossary.
+Neither was ever amended. A write path shipped anyway in v0.14.0/v0.15.0 on a verbal mandate recorded
+in a docstring (`zoning_stage.py:2`) and an assistant's memory file, and nowhere else: `ALLOWED_WRITE`
+came back to `brocade_client.py:47` while ADR 0004 line 98 still asserted it had been removed, and
+`POST /zoning/stage` was added ungated. On 2026-08-31 the operator drove it against a live production
+fabric and it created a zone and ran `cfgsave`. Two days later, reviewing that same session, **he
+stated the tool had not written anything and that he had pasted the commands himself** — his SSH
+transcript contains only `cfgshow`, `cfgtransshow` and `alishow`. His belief was consistent with every
+document in the repository; only the code disagreed, and the code is what ran. A verbal mandate is not
+a decision until it lands in the ADR and the glossary. Until then it is drift, and the person operating
+the tool is the last to find out.
+
+**31. "It never activates" is not the same promise as "it never writes" — say which one you mean.**
+The staging design was scrupulous about the first: `cfgenable` was stripped from the batch AND absent
+from the write allowlist, two independent guards, verified before the live run. It said nothing about
+the second, and the operator heard the safety language and concluded the tool could not touch the
+switch at all. The UI reinforced it by rendering `cfgenable <cfg>` in the same monospace block, weight
+and colour as the four commands that had just executed, so the screen showed no boundary between what
+the tool did and what a human must do. When a step both writes and withholds, the writing needs naming
+at least as loudly as the withholding.
+
+**32. A gate on intent-to-do is not a gate on done.**
+`ZONING_OK = ("verified-proper", "staged")` let a staged-but-unactivated zone unlock provisioning.
+Staging writes to the *defined* configuration; only `cfgenable` makes zoning real. On 2026-08-31 host
+`10.132.30.86` was staged, the gate opened, and path verification then correctly reported `no_path`
+for it, because that host still had no route to the array. The gate and the verifier disagreed and the
+verifier was right. Gate on the observable end state — the host is logged in — never on the fact that
+somebody asked for it.
