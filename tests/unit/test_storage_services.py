@@ -3,6 +3,7 @@ cfgshow parser without a live array / vCenter / switches."""
 
 from __future__ import annotations
 
+import pytest
 from pydantic import SecretStr
 
 from alletra_onboard.application.provisioning import discovery as disc
@@ -256,6 +257,11 @@ def test_discovery_reads_all_ports_and_hosts_from_showhost():
 
 # ------------------------------------------------------------------ zoning report + remediation
 
+# Every host the fixtures use. Tests that are NOT about the zoning gate pass this, so they exercise
+# the behaviour they were written for; the gate has its own tests (see the ADR 0012 block below).
+_ZONED = {"esx1", "esx2", "esx3", "esx9", "winbox", "CRV_VZ_DL360G11D24U25"}
+
+
 def _discovered():
     return disc.DiscoveryReport(
         array_ports=_ports(),
@@ -315,18 +321,44 @@ def test_array_side_zoning_all_present_is_proper():
     assert report.proper is True and not report.unverified_hosts
 
 
-def test_brocade_write_surface_is_additive_only_no_delete_no_activation():
-    # ADR 0004 (revised 2026-08-15, write-path mandate): the write surface is EXACTLY the three
-    # additive shapes + cfgsave_defined/cfgtransabort. Guard that no delete verb and no cfgenable
-    # can ever creep in — activation is a human action, and existing zones must be untouchable.
+def test_the_switch_client_cannot_write_at_all():
+    """ADR 0012: the tool emits the command set; a consultant applies it. This asserts the ABSENCE of
+    a capability, so it is written against the module surface rather than against behaviour — a
+    reintroduced write path would have to delete this test to pass, which is the point.
+
+    A write surface (alicreate/zonecreate/cfgadd + cfgsave) shipped here in v0.14.0 and v0.15.0 and
+    created a zone on a live production fabric before anyone noticed no ADR authorised it.
+    """
     from alletra_onboard.adapters.fabric import brocade_client as bc
 
-    assert set(bc.ALLOWED_WRITE) == {"alicreate", "zonecreate", "cfgadd"}
-    for forbidden in ("cfgenable", "cfgsave", "zonedelete", "alidelete", "cfgremove", "cfgclear",
-                      "cfgdelete", "zoneremove", "aliremove"):
-        assert forbidden not in bc.ALLOWED_WRITE
+    assert not hasattr(bc, "ALLOWED_WRITE")
+    for gone in ("write", "cfgsave_defined", "cfgtransabort", "apply"):
+        assert not hasattr(bc.BrocadeClient, gone), f"BrocadeClient.{gone} is a write path"
+
+    # Every allowed verb is a read. No create/delete/commit/activate verb is reachable.
+    for forbidden in ("alicreate", "zonecreate", "cfgadd", "cfgenable", "cfgsave", "zonedelete",
+                      "alidelete", "cfgremove", "cfgclear", "cfgdelete", "zoneremove", "aliremove"):
         assert forbidden not in bc.ALLOWED_READ
+
+    # _guard is the only door, and it refuses anything off the read allowlist.
+    client = bc.BrocadeClient("h", "u", "p")
+    for cmd in ('alicreate "a","10:00:00:00:00:00:00:01"', "cfgsave", "cfgenable mycfg"):
+        with pytest.raises(bc.BrocadeRefused):
+            client._guard(cmd)
+
     assert not hasattr(zoning, "apply_remediation")   # the legacy remediation text is never executed
+
+
+def test_the_stage_module_and_its_models_are_gone():
+    """The removal is at every layer, not just the button (ADR 0012)."""
+    import importlib
+
+    from alletra_onboard.domain import zoning as zoning_models
+
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module("alletra_onboard.application.provisioning.zoning_stage")
+    assert not hasattr(zoning_models, "ZoningStageResult")
+    assert not hasattr(zoning_models, "FabricStageResult")
 
 
 # ------------------------------------------------------------------ provisioning plan + apply
@@ -335,7 +367,7 @@ def test_build_plan_flags_existing_and_lists_actions():
     plan = prov.build_plan(
         _intent(),
         _discovered(),
-        wsapi_factory=lambda c: FakeWsapi(hosts={"esx1"}, volumes={"CRV_Prod01"}),
+        zoned_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi(hosts={"esx1"}, volumes={"CRV_Prod01"}),
     )
     kinds = [(a.kind, a.name, a.exists) for a in plan.actions]
     assert ("host", "esx1", True) in kinds          # esx1 already exists
@@ -347,7 +379,7 @@ def test_build_plan_flags_existing_and_lists_actions():
 
 def test_apply_plan_is_idempotent_and_exports_to_host_set():
     fake = FakeWsapi(hosts={"esx1"})
-    result = prov.apply_plan(_intent(), _discovered(), wsapi_factory=lambda c: fake)
+    result = prov.apply_plan(_intent(), _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: fake)
     statuses = {(o.kind, o.name): o.status for o in result.outcomes}
     assert statuses[("host", "esx1")] == "exists"
     assert statuses[("volume", "CRV_Prod01")] == "created"
@@ -366,7 +398,7 @@ def test_explicit_exports_override_the_default_and_carry_source_target_and_lun()
                       target_name="esx1"),
     ]})
     fake = FakeWsapi(hosts={"esx1"})
-    result = prov.apply_plan(intent, _discovered(), wsapi_factory=lambda c: fake)
+    result = prov.apply_plan(intent, _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: fake)
     # source/target refs get the WSAPI set: prefix; explicit LUN is recorded, auto LUN is not
     assert ("vlun", "set:CRV_VVSet", "set:CRVLZ_Hostset", 100) in fake.calls
     assert ("vlun", "CRV_Prod01", "esx1") in fake.calls
@@ -381,7 +413,7 @@ def test_build_plan_previews_explicit_exports_with_lun_text():
                       target_name="CRVLZ_Hostset", lun=7),
     ]})
     fake = FakeWsapi(hosts={"esx1"})
-    plan = prov.build_plan(intent, _discovered(), wsapi_factory=lambda c: fake)
+    plan = prov.build_plan(intent, _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: fake)
     vluns = [a for a in plan.actions if a.kind == "vlun"]
     assert len(vluns) == 1  # only the one composed export, not the each-vol default
     assert "LUN 7" in vluns[0].description
@@ -610,7 +642,7 @@ def test_build_plan_hard_gates_on_a_missing_cpg():
     intent = _intent()
     for v in intent.volumes:
         v.cpg = "NOT_THERE"
-    plan = prov.build_plan(intent, _discovered(), wsapi_factory=lambda c: FakeWsapi())
+    plan = prov.build_plan(intent, _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
     assert plan.error and "NOT_THERE" in plan.error
     assert plan.actions == []                     # nothing offered for approval on a broken premise
 
@@ -625,7 +657,7 @@ def test_apply_creates_only_the_selected_hosts():
     report = _discovered()
     report.host_hbas.append(HostHba(host_name="esx2", wwpn=normalize_wwpn(_C), fabric="odd"))
     fake = FakeWsapi()
-    result = prov.apply_plan(intent, report, wsapi_factory=lambda c: fake)
+    result = prov.apply_plan(intent, report, zoned_hosts=_ZONED, wsapi_factory=lambda c: fake)
     assert result.error is None
     assert [c[1] for c in fake.calls if c[0] == "host"] == ["esx1"]
 
@@ -640,9 +672,9 @@ def test_default_export_refuses_the_multi_hostset_cross_product():
         HostSetRequest(name="HS1", members=["esx1"]),
         HostSetRequest(name="HS2", members=["esx1"]),
     ]
-    plan = prov.build_plan(intent, _discovered(), wsapi_factory=lambda c: FakeWsapi())
+    plan = prov.build_plan(intent, _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
     assert plan.error and "refusing" in plan.error
-    result = prov.apply_plan(intent, _discovered(), wsapi_factory=lambda c: FakeWsapi())
+    result = prov.apply_plan(intent, _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
     assert result.error and "Compose the exports" in result.error
 
 
@@ -916,7 +948,7 @@ def test_apply_plan_sets_persona_per_host_os():
         HostHba(host_name="winbox", wwpn=_B, os="Microsoft Windows Server 2022"),
     ])
     fake = FakeWsapi()
-    prov.apply_plan(_intent(), d, wsapi_factory=lambda c: fake)
+    prov.apply_plan(_intent(), d, zoned_hosts=_ZONED, wsapi_factory=lambda c: fake)
     personas = {c[1]: c[3] for c in fake.calls if c[0] == "host"}  # ("host", name, wwns, persona)
     assert personas == {"esx1": "VMware", "winbox": "WindowsServer"}  # name per host, not hardcoded
 
@@ -1161,3 +1193,66 @@ def test_verify_provisioned_paths_reads_showvlun_and_reports():
     assert "showvlun -a" in fake.cmds                        # it read the array, read-only
     h = next(x for x in rep.hosts if x.host == "CRV_VZ_DL360G11D24U25")
     assert h.verdict == "live" and "VZ_ESXi_Profile_bk" in h.live_volumes
+
+
+# ---------------- the per-host zoning gate (ADR 0012) ----------------
+
+def _two_hosts():
+    """esx1 zoned on both fabrics; esx2 discovered but not zoned — the 2026-08-31 situation."""
+    return disc.DiscoveryReport(
+        array_ports=_ports(),
+        host_hbas=[
+            HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_A), fabric="odd"),
+            HostHba(host_name="esx1", wwpn=normalize_wwpn(HOST_B), fabric="even"),
+            HostHba(host_name="esx2", wwpn=normalize_wwpn("10:00:00:00:c9:00:00:03"), fabric="odd"),
+        ],
+    )
+
+
+def test_build_plan_excludes_unzoned_hosts_by_name():
+    plan = prov.build_plan(
+        _intent(), _two_hosts(), zoned_hosts={"esx1"}, wsapi_factory=lambda c: FakeWsapi(),
+    )
+    hosts = [a.name for a in plan.actions if a.kind == "host"]
+    assert hosts == ["esx1"]
+    assert any("esx2" in n and "not zoned" in n for n in plan.notes), plan.notes
+    # ...and the host set it would have joined does not carry it either.
+    members = [a.detail["members"] for a in plan.actions if a.kind == "hostset"]
+    assert members and all("esx2" not in m for m in members)
+
+
+def test_apply_refuses_when_no_composed_host_is_zoned():
+    result = prov.apply_plan(
+        _intent(), _two_hosts(), zoned_hosts=set(), wsapi_factory=lambda c: FakeWsapi(),
+    )
+    assert result.error and "zoned on both fabrics" in result.error
+
+
+def test_apply_creates_only_zoned_hosts_even_though_the_intent_names_more():
+    """apply re-derives its host list from the intent rather than replaying the plan, so the gate has
+    to be applied in BOTH places. Without it here the exclusion is cosmetic and the array still gets
+    the unzoned host."""
+    fake = FakeWsapi()
+    prov.apply_plan(_intent(), _two_hosts(), zoned_hosts={"esx1"}, wsapi_factory=lambda c: fake)
+    created = [c[1] for c in fake.calls if c[0] == "host"]
+    assert created == ["esx1"]
+
+
+def test_an_explicit_member_that_is_not_zoned_is_dropped_from_the_host_set():
+    from alletra_onboard.domain.provisioning import HostSetRequest
+
+    intent = _intent()
+    intent.host_sets = [HostSetRequest(name="hs", members=["esx1", "esx2"])]
+    plan = prov.build_plan(
+        intent, _two_hosts(), zoned_hosts={"esx1"}, wsapi_factory=lambda c: FakeWsapi(),
+    )
+    members = next(a.detail["members"] for a in plan.actions if a.kind == "hostset")
+    assert members == ["esx1"]
+
+
+def test_zoning_report_lists_only_hosts_on_both_fabrics_as_the_gate():
+    """The gate's source of truth. esx1 is logged in on both fabrics, esx2 only on odd."""
+    report = zoning.build_report(_intent(), _disc_for_zoning([]))
+    assert report.zoned_hosts == ["esx1"]
+    assert not report.proper          # esx2 is still outstanding...
+    assert report.zoned_hosts         # ...but esx1 is provisionable anyway
