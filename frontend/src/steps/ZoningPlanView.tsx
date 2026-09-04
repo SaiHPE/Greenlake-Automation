@@ -1,24 +1,75 @@
 import { Box, Button, CheckBox, Text, TextInput } from 'grommet';
 import { useMemo, useState } from 'react';
-import {
-  AliasedWwpn, FabricZonePlan, ZoningPlan, ZoningStageResult, renderZoningCommands, stageZoning,
-} from '../api';
+import { AliasedWwpn, FabricZonePlan, ZoningPlan, renderZoningCommands } from '../api';
 import { InlineNotification, Surface } from '../ui/primitives';
 
-// ADR 0004 (refined; write path added 2026-08-15): the two-part zoning screen.
+// ADR 0004 + ADR 0012: the two-part zoning screen.
 //   1. The current-connection map — pairs the fabric's effective config ALREADY covers, shown
 //      pre-selected and disabled: nothing the tool proposes can recreate them.
-//   2. The operator-selected builder — candidates are a MENU: the operator picks which array
-//      ports serve each host, names the aliases, then either generates the command preview for
-//      the SAN team or STAGES the zones (alicreate/zonecreate/cfgadd + cfgsave, DEFINED config
-//      only). The backend's write surface has no delete verb and no cfgenable — existing zones
-//      cannot be touched, and activation is always a manual SAN-team action (the hand-off).
+//   2. The operator-selected builder — candidates are a MENU: the operator picks which array ports
+//      serve each host, names the aliases, and generates the COMMAND SET. That set is the
+//      deliverable; the tool cannot run it. It has no switch write path at any layer.
 // Commands are rendered by the BACKEND (POST /zoning/render) so the grammar has exactly one
 // implementation.
 
 const mono = { fontFamily: 'ui-monospace, Consolas, monospace' };
 
 const pairKey = (host: string, arr: string) => `${host}|${arr}`;
+
+/** The command set for one fabric.
+ *
+ * `cfgenable` is separated from the additive commands on purpose. Until 2026-09-02 it was rendered
+ * in the same block, weight and colour as commands the tool had just executed, so the screen drew no
+ * boundary between "done" and "yours to do" — and an operator could reasonably select the whole
+ * block and paste it, activating the configuration. Activation replaces the effective config
+ * fabric-wide; it belongs to the SAN team, in a window, deliberately.
+ */
+function CommandSet({ commands }: { commands: string[] }) {
+  const additive = commands.filter((c) => !c.startsWith('cfgenable'));
+  const activation = commands.filter((c) => c.startsWith('cfgenable'));
+  const [copied, setCopied] = useState(false);
+
+  if (commands.length === 0) {
+    return (
+      <Box margin={{ top: 'small' }}>
+        <Text size="small" color="text-weak">No commands — nothing selected that does not already exist.</Text>
+      </Box>
+    );
+  }
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(additive.join('\n'));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);   // clipboard blocked; the text is on screen to select by hand
+    }
+  };
+  return (
+    <Box gap="xsmall" margin={{ top: 'small' }}>
+      <Box background="background-contrast" round="xsmall" pad="small">
+        {additive.map((c, i) => <Text key={i} size="small" style={mono}>{c}</Text>)}
+      </Box>
+      <Box direction="row" gap="small" align="center" wrap>
+        <Button size="small" label={copied ? 'Copied' : 'Copy commands'} onClick={copy} />
+        <Text size="small" color="text-weak">Additive only. Creates nothing that already exists, and removes nothing.</Text>
+      </Box>
+      {activation.length > 0 && (
+        <Box
+          border={{ color: 'status-warning', side: 'left', size: '3px' }}
+          pad={{ left: 'small', vertical: 'xsmall' }}
+        >
+          <Text size="small" weight={600}>Then, separately — activation</Text>
+          <Text size="small" color="text-weak">
+            Not part of the paste above. This replaces the effective configuration across the whole
+            fabric, so the SAN team runs it in a maintenance window once they are satisfied.
+          </Text>
+          {activation.map((c, i) => <Text key={i} size="small" style={mono}>{c}</Text>)}
+        </Box>
+      )}
+    </Box>
+  );
+}
 
 function hostLabel(w: AliasedWwpn): string {
   // QLogic HBAs advertise no HN: on the fabric — fall back to the WWPN as the host's identity.
@@ -107,12 +158,7 @@ function FabricBuilder({
   );
 }
 
-export function ZoningPlanView({ plan, runId, running, stageResult }: {
-  plan: ZoningPlan;
-  runId: string;
-  running: boolean;
-  stageResult: ZoningStageResult | null;
-}) {
+export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
   const [aliases, setAliases] = useState<Record<string, string>>(() => {
     const seed: Record<string, string> = {};
     plan.fabrics.forEach((f) => [...f.hosts, ...f.array_ports].forEach((w) => { seed[w.wwpn] = w.suggested_alias; }));
@@ -150,25 +196,13 @@ export function ZoningPlanView({ plan, runId, running, stageResult }: {
     }
   };
 
-  const stage = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await stageZoning(runId, plan, aliases, selectedPairs);  // result arrives via run events
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <Box gap="medium">
       <Text size="small" color="text-weak">
         Existing zones are pre-selected and cannot be recreated. Select the array ports that should
-        serve each host, name the aliases, then preview the commands and <b>stage the zones</b> —
-        written to the switch&apos;s <b>defined configuration only</b> (cfgsave). The tool cannot
-        delete zones and never runs cfgenable: <b>activation is always a manual SAN-team action</b>.
+        serve each host and name the aliases, then generate the command set. <b>This tool never
+        writes to a switch</b> — copy the commands to your SAN team, who review and apply them.
       </Text>
       {error && <InlineNotification tone="critical" title="The request failed" message={error} />}
 
@@ -185,11 +219,7 @@ export function ZoningPlanView({ plan, runId, running, stageResult }: {
             </Box>
           )}
           {commands && commands[fab.fabric] && (
-            <Box background="background-contrast" round="xsmall" pad="small" margin={{ top: 'small' }}>
-              {commands[fab.fabric].length === 0
-                ? <Text size="small" color="text-weak">No commands — nothing selected that does not already exist.</Text>
-                : commands[fab.fabric].map((c, i) => <Text key={i} size="small" style={mono}>{c}</Text>)}
-            </Box>
+            <CommandSet commands={commands[fab.fabric]} />
           )}
         </Surface>
       ))}
@@ -198,15 +228,9 @@ export function ZoningPlanView({ plan, runId, running, stageResult }: {
         <Button
           busy={busy}
           disabled={selectedPairs.length === 0}
-          label={`Generate command preview (${selectedPairs.length} new zone${selectedPairs.length === 1 ? '' : 's'})`}
-          onClick={generate}
-        />
-        <Button
           primary
-          busy={busy || running}
-          disabled={selectedPairs.length === 0 || unnamed > 0 || !commands}
-          label={`Stage ${selectedPairs.length} zone${selectedPairs.length === 1 ? '' : 's'} on the switches`}
-          onClick={stage}
+          label={`Generate command set (${selectedPairs.length} new zone${selectedPairs.length === 1 ? '' : 's'})`}
+          onClick={generate}
         />
         {totalZoned > 0 && (
           <Text size="small" color="text-weak">{totalZoned} pair(s) already zoned — excluded automatically.</Text>
@@ -216,43 +240,11 @@ export function ZoningPlanView({ plan, runId, running, stageResult }: {
             {unnamed} selected pair(s) need an alias name before they can be zoned.
           </Text>
         )}
-        {!commands && selectedPairs.length > 0 && (
-          <Text size="small" color="text-weak">Preview first — staging runs exactly the commands shown.</Text>
+        {commands && (
+          <Text size="small" color="text-weak">Give these to your SAN team to apply.</Text>
         )}
       </Box>
 
-      {stageResult && (
-        <Surface title="Staged to the defined configuration">
-          {stageResult.fabrics.map((fr) => (
-            <Box key={fr.fabric} gap="xxsmall" margin={{ bottom: 'small' }}>
-              <Text size="small" weight={600}>{fr.fabric} — {fr.switch_host}</Text>
-              {fr.error && <InlineNotification tone="critical" title={`${fr.fabric}: staging failed`} message={fr.error} />}
-              {!fr.error && fr.staged.length === 0 && (
-                <Text size="small" color="text-weak">Nothing to stage on this fabric.</Text>
-              )}
-              {fr.staged.length > 0 && (
-                <Box background="background-contrast" round="xsmall" pad="small">
-                  {fr.staged.map((c, i) => <Text key={i} size="small" style={mono}>{c}</Text>)}
-                  <Text size="small" style={mono}>cfgsave  (committed — defined configuration only)</Text>
-                </Box>
-              )}
-              {fr.verified && (
-                <Text size="small" color="status-ok">
-                  Verified on read-back: zones present in the defined configuration; effective configuration unchanged.
-                </Text>
-              )}
-              {fr.handoff && (
-                <Text size="small">
-                  Manual activation (SAN team, maintenance window): <Text size="small" style={mono} weight={600}>{fr.handoff}</Text>
-                </Text>
-              )}
-            </Box>
-          ))}
-          {stageResult.warning && (
-            <InlineNotification tone="warning" title="Activation pending" message={stageResult.warning} />
-          )}
-        </Surface>
-      )}
 
       {plan.offline_hosts.length > 0 && (
         <Surface title={`Offline — cable and power the host, then run the plan again (${plan.offline_hosts.length})`}>

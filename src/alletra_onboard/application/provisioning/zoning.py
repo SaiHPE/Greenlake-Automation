@@ -8,8 +8,11 @@ what each array FC target port can SEE *is* its effective zoning, and the array 
 
 A host is correctly zoned when its WWPNs appear on BOTH fabrics. The array can only see hosts that
 are logged in, so a host expected (from vCenter) but seen on NEITHER fabric is reported as
-**unverified** ("not zoned OR offline") — never silently passed. The switch is NOT needed to verify;
-it is only needed to CREATE missing zones (remediation, additive cfgadd->cfgenable), which is gated.
+**unverified** ("not zoned OR offline") — never silently passed. The switch is NOT needed to verify.
+
+`_remediations` below builds command TEXT for the missing zones. It is a string generator, nothing
+more: this tool has no switch write path at any layer, so a consultant applies what it prints
+(ADR 0012). `build_report` also fills `zoned_hosts` — the per-host provisioning gate.
 
 `parse_active_zones` (the switch cfgshow parser) is kept for an optional config-hygiene audit / for
 generating remediation, but the verify path no longer requires the switch.
@@ -167,6 +170,8 @@ def build_report(intent: ProvisioningIntent, discovery: DiscoveryReport) -> Zoni
                 array_wwpn=array_ports_str[fabric],
                 present=bool(on[fabric]),
             ))
+        if on["odd"] and on["even"]:
+            report.zoned_hosts.append(host)
         if not on["odd"] and not on["even"]:
             report.unverified_hosts.append(host)
             report.notes.append(

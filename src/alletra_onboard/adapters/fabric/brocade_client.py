@@ -1,21 +1,16 @@
-"""Brocade Fabric OS (FOS) SSH client for SAN zoning — reads, plus ADDITIVE staged writes only.
+"""Brocade Fabric OS (FOS) SSH client for SAN zoning — STRICTLY READ-ONLY.
 
-Reads the live fabric to build the zoning report + plan (ADR 0004). The write surface (revised
-2026-08-15, after the write-path mandate) is deliberately minimal and ADDITIVE-ONLY:
+Reads the live fabric to build the zoning report + plan. **This client cannot write to a switch.**
+Every command goes through `_guard`, which rejects shell metacharacters and anything outside
+`ALLOWED_READ`, so there is no verb here that creates, deletes, commits or activates zoning — not
+`alicreate`, not `cfgsave`, not `cfgenable`. The zoning step's deliverable is the *command set*,
+which a consultant reviews and applies by hand (ADR 0012).
 
-- `alicreate` / `zonecreate` / `cfgadd`, each validated against a strict per-verb REGEX (not a loose
-  token check) — the shape, the object names and the WWPN format must all match, which doubles as
-  FOS name validation for operator-typed aliases.
-- `cfgsave` (via `cfgsave_defined`) — commits the transaction to the DEFINED configuration only.
-  Measured live on FOS 9.2.2: the confirmation prompt renders even on a no-pty exec channel, a piped
-  answer is consumed, and a canceled save exits 248 — so the answer is piped and the exit status is
-  checked, and callers must STILL verify via `cfgshow` that the objects landed.
-- `cfgtransabort` (own method, never part of a command list) — rolls back this tool's OWN
-  uncommitted transaction after a mid-sequence failure. It cannot touch committed config.
-
-**There is no delete and no activation.** No `*delete`/`cfgremove`/`cfgclear` verb matches any write
-pattern, and `cfgenable` — which REPLACES the effective config fabric-wide and auto-aborts other
-admins' transactions — is excluded by design: activation is always a human action (standing mandate).
+An additive write surface (`alicreate`/`zonecreate`/`cfgadd` + `cfgsave`) existed here in v0.14.0
+and v0.15.0 and was removed. It worked — it created a zone on a live production fabric on
+2026-08-31 — but no ADR or glossary entry ever authorised it, and only Brocade FOS was ever tested
+while Cisco MDS needs entirely different verbs. Applying zoning is the SAN team's act, on their
+schedule, in their dialect. See docs/adr/0012 and docs/validation/2026-08-31-rack13arcus-live-test.md.
 
 The name-server reads (`nsshow` = local, `nscamshow` = fabric-wide) map an unzoned-but-online host
 WWPN to its fabric — which the array cannot see, because FC name-server *queries* are zone-filtered
@@ -25,7 +20,6 @@ aliases. See ADR 0004.
 
 from __future__ import annotations
 
-import re
 import time
 
 try:
@@ -37,18 +31,9 @@ ALLOWED_READ = (
     "cfgshow", "zoneshow", "alishow", "nsshow", "nscamshow", "nsallshow", "fabricshow", "switchshow",
     "cfgtransshow",
 )
+# `;` stays forbidden everywhere: with no write verbs there is no command whose quoted argument
+# legitimately contains one.
 _FORBIDDEN_CHARS = set(";|&`$><\n\r")
-
-# FOS zone-object names: start with a letter, then letters/digits/underscore/hyphen, max 64 chars.
-_NAME = r"[A-Za-z][A-Za-z0-9_-]{0,63}"
-_WWPN = r"(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}"
-# The ONLY writable command shapes. `;` is a zone-member separator INSIDE the quoted argument of
-# these exact forms — everywhere else it stays a forbidden metacharacter.
-ALLOWED_WRITE = {
-    "alicreate": re.compile(rf'^alicreate "({_NAME})","({_WWPN})"$'),
-    "zonecreate": re.compile(rf'^zonecreate "({_NAME})","({_NAME});({_NAME})"$'),
-    "cfgadd": re.compile(rf'^cfgadd "({_NAME})","({_NAME}(?:;{_NAME})*)"$'),
-}
 
 
 class BrocadeError(Exception):
@@ -131,43 +116,6 @@ class BrocadeClient:
     def cfgtransshow(self) -> str:
         return self.read("cfgtransshow")
 
-    # ------------------------------------------------------------------ staged writes (additive only)
-
-    def write(self, command: str) -> str:
-        """Run ONE additive zoning command (`alicreate`/`zonecreate`/`cfgadd`), validated against the
-        strict shape patterns. These commands are silent on success (measured: exit 0, no output), so
-        ANY output or a non-zero exit is a refusal by the switch and raises with FOS's own words."""
-        verb = command.split()[0] if command.split() else ""
-        pattern = ALLOWED_WRITE.get(verb)
-        if pattern is None:
-            raise BrocadeRefused(f"refused: '{verb}' is not an allowed additive zoning command")
-        if not pattern.match(command):
-            raise BrocadeRefused(
-                f"refused: '{verb}' arguments do not match the required shape "
-                "(FOS object names start with a letter; letters/digits/_/- only, max 64 chars)"
-            )
-        status, out = self._exec_status(command)
-        if status != 0 or out.strip():
-            raise BrocadeError(f"the switch refused '{command}': {out.strip() or f'exit {status}'}")
-        return out
-
-    def cfgsave_defined(self) -> str:
-        """Commit the open transaction to the DEFINED configuration only — never activates anything.
-        Answers the confirmation prompt with 'y' via stdin (measured on FOS 9.2.2: the prompt renders
-        on a plain exec channel; a canceled save exits 248). The caller must still verify via
-        `cfgshow` that the objects are present in the defined config — never trust this alone."""
-        status, out = self._exec_status("cfgsave", stdin_data="y\n")
-        low = out.lower()
-        if status != 0 or "operation cancel" in low:
-            raise BrocadeError(f"cfgsave did not commit (exit {status}): {out.strip()}")
-        return out
-
-    def cfgtransabort(self) -> str:
-        """Roll back this session's OWN uncommitted zoning transaction (after a mid-sequence failure).
-        Discards unsaved work only — it cannot delete anything from the committed configuration."""
-        status, out = self._exec_status("cfgtransabort")
-        return out
-
     # ------------------------------------------------------------------ internals
 
     def _guard(self, command: str) -> None:
@@ -181,9 +129,13 @@ class BrocadeClient:
         _status, out = self._exec_status(command)
         return out
 
-    def _exec_status(self, command: str, stdin_data: str | None = None) -> tuple[int, str]:
-        """Run a command and return (exit_status, combined output). `stdin_data` pre-answers an
-        interactive prompt (cfgsave) — written immediately so the command never blocks on a read."""
+    def _exec_status(self, command: str) -> tuple[int, str]:
+        """Run a read command and return (exit_status, combined output).
+
+        Nothing is ever written to the channel's stdin. FOS prompts interactively for confirmation on
+        its config-changing verbs, so a client that cannot answer a prompt cannot complete one even if
+        a write verb were somehow reintroduced — the command would hang and time out rather than
+        silently commit. That is deliberate belt-and-braces behind `_guard` (ADR 0012)."""
         if self._client is None:
             raise BrocadeError("not connected")
         try:
@@ -191,8 +143,6 @@ class BrocadeClient:
             chan = transport.open_session()
             chan.settimeout(self.exec_timeout)
             chan.exec_command(command)
-            if stdin_data:
-                chan.sendall(stdin_data.encode())
             buf = bytearray()
             deadline = time.monotonic() + self.exec_timeout
             while time.monotonic() < deadline:

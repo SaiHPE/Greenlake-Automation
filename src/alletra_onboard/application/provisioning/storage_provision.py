@@ -46,8 +46,14 @@ def _persona_by_host(discovery: DiscoveryReport) -> dict[str, str]:
 
 
 def _members_for(host_set, all_hosts: "OrderedDict[str, list[str]]") -> list[str]:
-    """A host set's members: the operator's selection, or ALL discovered hosts when none is given."""
-    return list(host_set.members) if host_set.members else list(all_hosts)
+    """A host set's members: the operator's selection, or ALL provisionable hosts when none is given.
+
+    An explicit selection is still intersected with `all_hosts`, so a member that is not discovered —
+    or that the zoning gate excluded — cannot reach the array as a set member with no host object
+    behind it."""
+    if not host_set.members:
+        return list(all_hosts)
+    return [m for m in host_set.members if m in all_hosts]
 
 
 def _selected_hosts(intent: ProvisioningIntent, discovery: DiscoveryReport) -> "OrderedDict[str, list[str]]":
@@ -143,12 +149,29 @@ def build_plan(
     intent: ProvisioningIntent,
     discovery: DiscoveryReport,
     *,
+    zoned_hosts: set[str],
     wsapi_factory: Callable = make_wsapi,
 ) -> ProvisioningPlan:
+    """Preview what tier-1 will create. `zoned_hosts` is the zoning gate (ADR 0012): only hosts the
+    last verify saw logged in on BOTH fabrics are provisioned, and the rest are excluded BY NAME in
+    the plan the operator approves. Required, not defaulted — a gate with a default-open value is how
+    the switch write path shipped unauthorised, and every caller should have to state its answer."""
     plan = ProvisioningPlan()
-    hosts = _selected_hosts(intent, discovery)
+    composed = _selected_hosts(intent, discovery)
+    hosts = OrderedDict((n, w) for n, w in composed.items() if n in zoned_hosts)
+    excluded = sorted(n for n in composed if n not in zoned_hosts)
+    if excluded:
+        plan.notes.append(
+            "Excluded — not zoned on both fabrics: " + ", ".join(excluded)
+            + ". Each joins the run as soon as the SAN team applies its zoning and the zoning step "
+            "re-verifies; nothing here needs redoing."
+        )
     if not hosts:
-        plan.notes.append("No ESXi host HBAs discovered — nothing to provision until discovery finds hosts.")
+        plan.notes.append(
+            "No ESXi host HBAs discovered — nothing to provision until discovery finds hosts."
+            if not composed else
+            "No composed host is zoned on both fabrics, so there is nothing to create yet."
+        )
 
     try:
         with wsapi_factory(intent.array) as array:
@@ -230,12 +253,21 @@ def apply_plan(
     intent: ProvisioningIntent,
     discovery: DiscoveryReport,
     *,
+    zoned_hosts: set[str],
     wsapi_factory: Callable = make_wsapi,
 ) -> ProvisioningResult:
+    """Create the objects. `zoned_hosts` must be the SAME gate `build_plan` was given: apply
+    re-derives its host list from the intent rather than replaying the plan, so without the filter
+    here the exclusion would be cosmetic and the array would get the unzoned hosts anyway."""
     result = ProvisioningResult()
-    hosts = _selected_hosts(intent, discovery)
+    composed = _selected_hosts(intent, discovery)
+    hosts = OrderedDict((n, w) for n, w in composed.items() if n in zoned_hosts)
     if not hosts:
-        result.error = "No ESXi host HBAs discovered — refusing to provision with no hosts."
+        result.error = (
+            "No ESXi host HBAs discovered — refusing to provision with no hosts." if not composed
+            else "No composed host is zoned on both fabrics — refusing to provision. Apply the "
+                 "zoning command set, then re-verify zoning."
+        )
         return result
     try:
         exports = _resolve_exports(intent)

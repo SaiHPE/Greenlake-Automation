@@ -489,23 +489,15 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # Read-only: reads both fabric switches to build the zoning plan; makes NO switch writes.
         return _start_step(run_id, lambda: service.start_zoning_plan(run_id))
 
-    @app.post("/runs/{run_id}/zoning/stage", response_model=RunResponse)
-    async def run_zoning_stage(run_id: str, request: ZoningRenderRequest) -> RunResponse:
-        # STAGED WRITE: alicreate/zonecreate/cfgadd + cfgsave into the DEFINED config only. The
-        # adapter's write patterns contain no delete verb and no cfgenable — existing zones cannot
-        # be touched and activation stays a manual human action.
-        return _start_step(
-            run_id,
-            lambda: service.start_zoning_stage(
-                run_id, request.plan, request.aliases, request.selected_pairs
-            ),
-        )
+    # POST /runs/{run_id}/zoning/stage was removed on 2026-09-02 (ADR 0012). It wrote zones to the
+    # switch; the tool no longer has that capability at any layer. /zoning/render is the whole
+    # zoning output now.
 
     @app.post("/zoning/render", response_model=ZoningRenderResponse)
     async def zoning_render(request: ZoningRenderRequest) -> ZoningRenderResponse:
-        # Pure + stateless: assemble the read-only command preview from the plan + the operator's
-        # aliases and selected pairs. The tool never RUNS these commands (ADR 0004) — this is the
-        # script the SAN team applies by hand.
+        # Pure + stateless: assemble the command set from the plan + the operator's aliases and
+        # selected pairs. The tool never RUNS these commands (ADR 0004, ADR 0012) — this is the
+        # script the SAN team applies by hand, and it is the deliverable, not a rehearsal.
         commands, skipped = render_commands(request.plan, request.aliases, request.selected_pairs)
         return ZoningRenderResponse(commands=commands, skipped=skipped)
 
