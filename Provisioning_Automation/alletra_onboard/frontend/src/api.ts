@@ -244,19 +244,9 @@ export const renderZoningCommands = (
 ) => request<{ commands: Record<string, string[]>; skipped: Record<string, string[]> }>('POST', '/zoning/render', {
   plan, aliases, selected_pairs: selectedPairs,
 });
-// Staged write: alicreate/zonecreate/cfgadd + cfgsave into the DEFINED config only. The backend's
-// write patterns contain no delete verb and no cfgenable — existing zones cannot be touched and
-// activation is always a manual SAN-team action (the per-fabric `handoff` command).
-export interface FabricStageResult {
-  fabric: string; switch_host: string; staged: string[]; skipped: string[];
-  verified: boolean; handoff: string; error: string | null;
-}
-export interface ZoningStageResult { fabrics: FabricStageResult[]; warning: string; }
-export const stageZoning = (
-  runId: string, plan: ZoningPlan, aliases: Record<string, string>, selectedPairs: [string, string][],
-) => request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/stage`, {
-  plan, aliases, selected_pairs: selectedPairs,
-});
+// stageZoning + the ZoningStageResult models were removed on 2026-09-02 (ADR 0012). They posted to
+// /runs/{id}/zoning/stage, which wrote zones to the switch. renderZoning above is the whole zoning
+// output now: the command set a consultant applies by hand.
 export interface PlannedAction {
   kind: string; name: string; description: string; exists: boolean; detail: Record<string, any>;
 }

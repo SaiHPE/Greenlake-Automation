@@ -1,7 +1,7 @@
 import { Button, DataTable, Text } from 'grommet';
 import { useState } from 'react';
 import {
-  RunEvent, RunRecord, zoningPlan, zoningPreview, ZoningPlan, ZoningReport, ZoningStageResult,
+  RunEvent, RunRecord, zoningPlan, zoningPreview, ZoningPlan, ZoningReport,
 } from '../api';
 import { DiscoveryFreshness } from '../ui/discoveryAge';
 import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
@@ -34,11 +34,6 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
       | undefined) ?? null;
   const planEvent = [...events].reverse().find((event) => event.event_type === 'zoning.plan');
   const plan = (planEvent?.data?.plan as ZoningPlan | undefined) ?? null;
-  const stageEvent = [...events]
-    .reverse()
-    .find((event) => ['zoning.staged', 'zoning.stage.failed'].includes(event.event_type));
-  const stageResult = (stageEvent?.data?.result as ZoningStageResult | undefined) ?? null;
-  const staged = stageEvent?.event_type === 'zoning.staged';
 
   // The report carries one row per host and fabric; the operator thinks in hosts, so roll them up.
   const byHost: Record<string, HostRow> = {};
@@ -62,18 +57,18 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
   return (
     <StepShell
       title="SAN zoning"
-      description="Verifies zoning as observed by the array, and stages operator-selected zones into the switches' defined configuration. Activation (cfgenable) is always a manual SAN-team action; existing zones are never modified."
+      description="Verifies zoning as observed by the array and produces the exact command set for the pairs you select. The tool never writes to a switch: your SAN team reviews and applies the commands, and provisioning unlocks per host as the array sees each one log in."
       stateDetail={report ? (outstanding ? `${outstanding} host${outstanding === 1 ? '' : 's'} outstanding` : undefined) : undefined}
       error={error}
       onDismissError={() => setError(null)}
       activityEmpty="Verify zoning to see what the array can reach."
-      footerNote="Zoning is a prerequisite: provisioning will not create exports until zoning is verified complete or the planned zones are staged."
+      footerNote="Zoning is a prerequisite, enforced per host: a host is provisioned once this step confirms it logged in on both fabrics. Others are skipped by name and join a later run."
       gate={
-        report && !report.proper && !staged
+        report && !report.proper
           ? {
               title: 'Zoning is incomplete on at least one fabric',
               message:
-                'Build the plan, select the pairs and stage them (defined configuration only), or hand the command preview to the SAN team — then re-verify. Provisioning stays locked until zoning is complete or staged.',
+                'Build the plan, select the pairs, and give the command set to your SAN team to apply. Re-verify afterwards — each host becomes provisionable as soon as the array sees it zoned on both fabrics.',
             }
           : null
       }
@@ -85,7 +80,7 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
             onClick={call(() => zoningPreview(runId))}
           />
           <Button busy={running} label={plan ? 'Rebuild plan' : 'Build zoning plan'} onClick={call(() => zoningPlan(runId))} />
-          {(report?.proper || staged) && <Button primary label="Continue" onClick={onDone} />}
+          {report?.proper && <Button primary label="Continue" onClick={onDone} />}
         </>
       }
     >
@@ -153,13 +148,7 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
           mount a fresh view. Otherwise new WWPNs show an empty alias field while the generated
           commands carry the suggested one — the SAN team would receive names shown nowhere. */}
       {plan && (
-        <ZoningPlanView
-          key={planEvent?.event_id}
-          plan={plan}
-          runId={runId}
-          running={running}
-          stageResult={stageResult}
-        />
+        <ZoningPlanView key={planEvent?.event_id} plan={plan} />
       )}
     </StepShell>
   );
