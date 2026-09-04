@@ -12,6 +12,7 @@ monkeypatch the modules themselves.
 from __future__ import annotations
 
 import asyncio
+from functools import partial
 
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.application.provisioning import discovery as storage_discovery
@@ -20,10 +21,8 @@ from alletra_onboard.application.provisioning import preflight as storage_prefli
 from alletra_onboard.application.provisioning import storage_provision
 from alletra_onboard.application.provisioning import zoning as storage_zoning
 from alletra_onboard.application.provisioning import zoning_plan as storage_zoning_plan
-from alletra_onboard.application.provisioning import zoning_stage as storage_zoning_stage
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.discovery import DiscoveryReport
-from alletra_onboard.domain.zoning import ZoningPlan
 from alletra_onboard.domain.provisioning import (
     ProvisioningBuilder,
     ProvisioningComposition,
@@ -101,19 +100,23 @@ class DiscoveryZoningSteps:
             data={"report": report.model_dump(mode="json")},
         )
 
-    # Zoning states that satisfy the provisioning prerequisite (revised decision 2026-08-15:
-    # zoning is a HARD prerequisite — the old "Proceed anyway" escape hatch is gone). Either the
-    # array already sees every host zoned on both fabrics, or the operator staged the planned
-    # zones (defined config; activation stays manual and exports go live when a human activates).
-    ZONING_OK = ("verified-proper", "staged")
+    def zoned_hosts(self, run_id: str) -> set[str]:
+        """The hosts the last zoning verify confirmed on BOTH fabrics — the provisioning gate.
 
-    def zoning_state(self, run_id: str) -> str:
-        raw = self._coord.store.load_artifact(run_id, "zoning_state")
-        return raw.decode("utf-8", "replace") if raw else ""
+        Per host, not one global flag (ADR 0012). The old gate also accepted a "staged" state, set
+        when the tool wrote zones to the switch itself; the tool no longer does that, and staging was
+        the wrong thing to gate on anyway: it recorded that somebody had asked for zoning, not that
+        zoning was live. On 2026-08-31 a staged-but-unactivated zone opened the gate for a host that
+        then correctly reported `no_path`, because writing the defined config is not activation.
+        """
+        raw = self._coord.store.load_artifact(run_id, "zoned_hosts")
+        if not raw:
+            return set()
+        return {h for h in raw.decode("utf-8", "replace").split("\n") if h}
 
-    def _save_zoning_state(self, run_id: str, state: str) -> None:
+    def _save_zoned_hosts(self, run_id: str, hosts: list[str]) -> None:
         try:
-            self._coord.store.save_artifact(run_id, "zoning_state", state.encode("utf-8"))
+            self._coord.store.save_artifact(run_id, "zoned_hosts", "\n".join(hosts).encode("utf-8"))
         except Exception:  # noqa: BLE001 - the step succeeded; persisting the gate must not fail it
             pass
 
@@ -130,21 +133,20 @@ class DiscoveryZoningSteps:
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
         coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "step.started", "Verifying SAN zoning on both fabrics…")
         report = await asyncio.to_thread(storage_zoning.build_report, intent, discovery)
-        # Every verify OVERWRITES the durable gate state: proper unlocks provisioning, not-proper
-        # re-locks it (unless zones were staged afterwards — staging writes its own state).
-        if report.proper:
-            self._save_zoning_state(run.run_id, "verified-proper")
-        elif self.zoning_state(run.run_id) != "staged":
-            self._save_zoning_state(run.run_id, "incomplete")
+        # Every verify OVERWRITES the gate. The verify is the ONLY thing that can open it, because a
+        # host is provisionable exactly when the array can see it logged in on both fabrics.
+        self._save_zoned_hosts(run.run_id, report.zoned_hosts)
         coord.set_state(run, RunStatus.READY if report.proper else RunStatus.WAITING_FOR_OPERATOR, WorkflowPhase.STORAGE_ZONING)
         missing = sum(1 for z in report.expected if not z.present)
+        ready = len(report.zoned_hosts)
         coord.emit(
             run.run_id, WorkflowPhase.STORAGE_ZONING,
             "zoning.proper" if report.proper else "zoning.previewed",
             "Zoning is correct on both fabrics." if report.proper
-            else f"Zoning needs {missing} zone(s) — build the plan, select the pairs, then stage them "
-            "on the switches (defined config only; activation always stays manual) or hand the "
-            "command preview to the SAN team and re-verify.",
+            else f"Zoning needs {missing} zone(s). Build the plan, select the pairs and hand the "
+            "command set to the SAN team to apply, then re-verify. "
+            + (f"{ready} host(s) are already zoned and can be provisioned now."
+               if ready else "No host is zoned on both fabrics yet, so nothing can be provisioned."),
             data={"report": report.model_dump(mode="json")},
         )
 
@@ -170,47 +172,6 @@ class DiscoveryZoningSteps:
             + (f"; {len(plan.offline_hosts)} host WWPN(s) offline (cable + power)" if plan.offline_hosts else "")
             + (f"; {len(plan.notes)} note(s)" if plan.notes else ""),
             data={"plan": plan.model_dump(mode="json")},
-        )
-
-    def start_zoning_stage(
-        self, run_id: str, plan: ZoningPlan, aliases: dict[str, str],
-        selected_pairs: list[tuple[str, str]],
-    ) -> RunRecord:
-        """Stage the operator's selected zones into each fabric's DEFINED config (additive commands
-        + cfgsave). Never activates — `cfgenable` is excluded at the adapter level and handed off to
-        a human. The plan comes back from the UI (same stateless pattern as /zoning/render)."""
-        coord = self._coord
-        run = coord.get_run(run_id)
-        intent = coord.get_provisioning_intent(run_id)
-        coord.spawn(run_id, self._run_zoning_stage(run, intent, plan, aliases, selected_pairs))
-        return run
-
-    async def _run_zoning_stage(self, run: RunRecord, intent, plan, aliases, selected_pairs) -> None:
-        coord = self._coord
-        coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
-        coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.stage.started",
-                   "Staging the selected zones into the defined configuration (cfgsave only — "
-                   "activation stays manual)…")
-        result = await asyncio.to_thread(
-            storage_zoning_stage.stage_zones, intent, plan, aliases, selected_pairs,
-        )
-        staged = sum(len(f.staged) for f in result.fabrics if f.verified)
-        errors = [f"{f.fabric}: {f.error}" for f in result.fabrics if f.error]
-        ok = staged > 0 and not errors
-        if ok:
-            self._save_zoning_state(run.run_id, "staged")
-        coord.set_state(
-            run,
-            RunStatus.WAITING_FOR_OPERATOR if ok else RunStatus.RETRYABLE_FAILURE,
-            WorkflowPhase.STORAGE_ZONING,
-        )
-        coord.emit(
-            run.run_id, WorkflowPhase.STORAGE_ZONING,
-            "zoning.staged" if ok else "zoning.stage.failed",
-            (f"Staged {staged} command(s) into the defined configuration and verified them on "
-             "read-back. Activation (cfgenable) is a manual SAN-team action — see the hand-off."
-             ) if ok else ("Staging failed — nothing partial was committed. " + " · ".join(errors)),
-            data={"result": result.model_dump(mode="json")},
         )
 
 
@@ -257,7 +218,10 @@ class ProvisioningSteps:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "step.started", "Building the provisioning plan…")
-        plan = await asyncio.to_thread(storage_provision.build_plan, intent, discovery)
+        zoned = self._discovery_steps.zoned_hosts(run.run_id)
+        plan = await asyncio.to_thread(
+            partial(storage_provision.build_plan, intent, discovery, zoned_hosts=zoned)
+        )
         self._plan[run.run_id] = (plan, discovery)
         status = RunStatus.RETRYABLE_FAILURE if plan.error else RunStatus.WAITING_FOR_OPERATOR
         coord.set_state(run, status, WorkflowPhase.STORAGE_PROVISION)
@@ -273,16 +237,14 @@ class ProvisioningSteps:
         run = coord.get_run(run_id)
         intent = coord.get_provisioning_intent(run_id)
         discovery = self._discovery_steps.require_discovery(run_id)
-        # Zoning is a HARD prerequisite (decision 2026-08-15, superseding the old "Proceed anyway"):
-        # apply refuses unless zoning is verified complete OR the planned zones were staged. It does
-        # NOT require live paths — host/volume/export creation against not-yet-active zones is
-        # API-supported (sd00003946: host-create has no reachability precondition) and the exports
-        # activate when a human runs cfgenable.
-        if self._discovery_steps.zoning_state(run_id) not in DiscoveryZoningSteps.ZONING_OK:
+        # Zoning is a HARD prerequisite, enforced PER HOST (ADR 0012). Apply needs at least one host
+        # the last verify saw zoned on both fabrics; unzoned hosts are excluded from the plan by name
+        # rather than blocking the whole run, because a partly racked cluster is the normal case.
+        if not self._discovery_steps.zoned_hosts(run_id):
             raise StepPreconditionError(
-                "SAN zoning is a prerequisite for provisioning: in the zoning step, verify zoning as "
-                "complete on both fabrics, or stage the planned zones on the switches, before "
-                "creating exports."
+                "SAN zoning is a prerequisite for provisioning, and no host is currently zoned on "
+                "both fabrics. Hand the zoning command set to the SAN team to apply, then re-verify "
+                "zoning — hosts become provisionable as soon as the array sees them logged in."
             )
         plan = self._previewed_plan(run_id)
         if plan is None:
@@ -297,7 +259,10 @@ class ProvisioningSteps:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.apply.started", "Creating host, volumes and exports…")
-        result = await asyncio.to_thread(storage_provision.apply_plan, intent, discovery)
+        zoned = self._discovery_steps.zoned_hosts(run.run_id)
+        result = await asyncio.to_thread(
+            partial(storage_provision.apply_plan, intent, discovery, zoned_hosts=zoned)
+        )
         created = sum(1 for o in result.outcomes if o.status == "created")
         coord.set_state(run, RunStatus.RETRYABLE_FAILURE if result.error else RunStatus.READY, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(

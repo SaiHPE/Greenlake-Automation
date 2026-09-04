@@ -33,6 +33,11 @@ class ZoningReport(BaseModel):
     expected: list[ExpectedZone] = Field(default_factory=list)
     remediations: list[ZoneRemediation] = Field(default_factory=list)
     proper: bool = False     # every expected host zoned on both fabrics, none unverified
+    # Hosts confirmed zoned on BOTH fabrics. This is the provisioning gate (ADR 0012): the run
+    # proceeds for these and excludes the rest by name, rather than one global pass/fail. A partly
+    # racked cluster is the normal case — on 2026-08-31, .136 was zoned and provisionable while .47
+    # and .86 were not, and a global gate blocked the whole run.
+    zoned_hosts: list[str] = Field(default_factory=list)
     # Expected hosts the array could NOT confirm on EITHER fabric — could be "not zoned" OR the host
     # is simply offline/not logged in (the array can't tell the two apart). Surfaced, never silently
     # passed; confirm the host is up, or cross-check the switch/ESXi.
@@ -128,24 +133,6 @@ class ZoningPlan(BaseModel):
     error: str | None = None
 
 
-class FabricStageResult(BaseModel):
-    """What staging did to ONE fabric switch: the additive commands executed and committed to the
-    DEFINED config (cfgsave), the read-back verification, and the manual activation hand-off. The
-    tool never runs `cfgenable`; `handoff` is the command a human runs during a maintenance window."""
-
-    fabric: str                                  # "F1" | "F2"
-    switch_host: str = ""
-    staged: list[str] = Field(default_factory=list)   # commands the switch accepted (committed)
-    skipped: list[str] = Field(default_factory=list)  # selected pairs that could not render (no alias)
-    verified: bool = False                       # cfgshow re-read: zones in DEFINED, effective cfg unchanged
-    handoff: str = ""                            # e.g. 'cfgenable F1_CFG' — for the human, never run
-    error: str | None = None
-
-
-class ZoningStageResult(BaseModel):
-    """The staged-write outcome across both fabrics, plus the Broadcom defined≠effective warning that
-    must be shown until a human activates (the divergence is documented to yield different effective
-    zoning across switches on a zone merge or HA failover)."""
-
-    fabrics: list[FabricStageResult] = Field(default_factory=list)
-    warning: str = ""
+# FabricStageResult / ZoningStageResult lived here until 2026-09-02. They modelled the outcome of
+# the tool writing zones to a switch, which it no longer does — the command set is handed to a
+# consultant instead, so there is no tool-side outcome to model. See ADR 0012.
