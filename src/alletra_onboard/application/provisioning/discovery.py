@@ -18,7 +18,16 @@ from typing import Callable
 
 from alletra_onboard.application.provisioning.clients import make_array_cli, make_vcenter
 from alletra_onboard.domain.shared import Fabric, normalize_wwpn
-from alletra_onboard.domain.discovery import ArrayHost, ArrayPort, DiscoveryReport, EthernetPort
+from alletra_onboard.domain.discovery import (
+    ArrayHost,
+    ArrayPort,
+    DiscoveredHost,
+    DiscoveryReport,
+    EthernetPort,
+    node_name_from_iqn,
+    os_from_iqn,
+    os_from_switch_string,
+)
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 
 _LOGICAL_NAME_RE = re.compile(r"^\s*Logical Name:\s*(\S+)", re.IGNORECASE)
@@ -146,9 +155,12 @@ def parse_rcip_detail(showport_rcip: str) -> dict[str, dict[str, str]]:
         p = line.split()
         if len(p) < 8 or not p[0][:1].isdigit() or ":" not in p[0]:
             continue
+        # "-" is the CLI's "unset" marker, normalised to "" exactly as parse_file_ports does — on LZ
+        # the RCIP links carry no gateway and the raw "-" reached the UI as literal text.
+        clean = lambda v: "" if v in ("-", "") else v  # noqa: E731
         out[p[0]] = {
-            "netmask": p[4], "gateway": p[5], "mtu": p[6], "rate": p[7],
-            "duplex": p[8] if len(p) > 8 else "", "autoneg": p[9] if len(p) > 9 else "",
+            "netmask": clean(p[4]), "gateway": clean(p[5]), "mtu": clean(p[6]), "rate": clean(p[7]),
+            "duplex": clean(p[8]) if len(p) > 8 else "", "autoneg": clean(p[9]) if len(p) > 9 else "",
         }
     return out
 
@@ -195,9 +207,14 @@ UNCLAIMED_HOST = ""
 def parse_showhost(showhost_d: str) -> list[ArrayHost]:
     """`showhost -d` -> [ArrayHost]. Columns: Id  Name  Persona  WWN/iSCSI_Name  Port  IP_addr.
 
-    Parsed from the RIGHT (so a multi-word host name is tolerated). Keeps only real FC WWPNs (16 hex)
-    and real n:s:p logins; a WWPN with no n:s:p (Port '---'/'--') is configured-but-not-logged-in.
-    iSCSI IQNs / NQNs are not 16-hex so they are ignored for FC zoning.
+    Parsed from the RIGHT (so a multi-word host name is tolerated). An initiator with no n:s:p
+    (Port '---'/'--') is configured-but-not-logged-in.
+
+    FC WWPNs (16 hex) and iSCSI IQNs are kept in SEPARATE fields. Until 2026-09-02 the IQN rows were
+    dropped on a length check, so the array was telling us about every Windows, Linux and HPE VME
+    iSCSI initiator attached to it and the parser threw them away — measured on rack13arcus, which
+    reports `iqn.1991-05.com.microsoft:win-tn3n7rujk3v` at 10.132.30.87 and eight `HPE_VM_*` hosts.
+    They stay out of `wwpns` because an IQN cannot be zoned and must never reach the fabric lookup.
     """
     hosts: "OrderedDict[str, ArrayHost]" = OrderedDict()
     for line in (showhost_d or "").splitlines():
@@ -217,13 +234,132 @@ def parse_showhost(showhost_d: str) -> list[ArrayHost]:
         # They are kept under the EMPTY host name, which callers building a host LIST must skip.
         name = (" ".join(p[1:-4]) or p[1]) if claimed else UNCLAIMED_HOST
         host = hosts.setdefault(name, ArrayHost(name=name, persona=persona))
+        logged_in = ":" in port          # a real login (Port == n:s:p), not '---' / '--'
+        if wwn.lower().startswith(("iqn.", "nqn.")):
+            ports = host.iqns.setdefault(wwn, [])
+            if logged_in and port not in ports:
+                ports.append(port)
+            # showhost's last column is the initiator's IP for iSCSI and 'n/a' for FC. Some rows
+            # carry a placeholder (`f6ff:ffff:…`) for a configured-but-not-connected initiator, so
+            # only a real login's address is trusted.
+            addr = p[-1]
+            if logged_in and addr not in ("n/a", "-", "--") and not host.address:
+                host.address = addr
+            continue
         wwpn = normalize_wwpn(wwn)
-        if len(wwpn) != 16:  # an iqn / NQN / '--' / 'digtest' — not an FC WWPN
+        if len(wwpn) != 16:  # '--' / 'digtest' / anything that is not an FC WWPN
             continue
         ports = host.wwpns.setdefault(wwpn, [])
-        if ":" in port and port not in ports:  # a real login (Port == n:s:p), not '---' / '--'
+        if logged_in and port not in ports:
             ports.append(port)
     return list(hosts.values())
+
+
+def assemble_hosts(report: DiscoveryReport, ns_os: dict[str, str] | None = None) -> list[DiscoveredHost]:
+    """Join every source into one host per physical server, grouped by OS for display.
+
+    Sources and what each contributes:
+      * vCenter (`host_hbas`) — the ESXi name, its FC WWPNs and the ESXi version. Authoritative for
+        naming an ESXi host; blind to everything that is not in that vCenter.
+      * the array (`array_hosts`) — WWPNs and IQNs actually logged in, the array's own host-object
+        name, and the initiator IP for iSCSI. Blind to OS.
+      * the fabric name server (`ns_os`, WWPN -> OS string) — the OS an FC HBA registers. Blind to
+        iSCSI entirely, since an iSCSI initiator never performs an FC login.
+
+    Joined on the INITIATOR ID, never the name: the array calls a host `CRV_VZ_DL360G11D24U25` while
+    vCenter calls it `10.99.1.1`, and those namespaces do not intersect. An exact-name join is what
+    made path verification report no_path for every pre-existing host.
+
+    Unclaimed logins (no array host object) still become hosts here — they are a real server someone
+    has cabled — named from their IQN where it carries one, else from the initiator id.
+    """
+    ns_os = ns_os or {}
+    by_initiator: dict[str, DiscoveredHost] = {}
+    hosts: list[DiscoveredHost] = []
+
+    def host_for(ids: list[str], name: str, source: str) -> DiscoveredHost:
+        """The existing host owning any of these initiator ids, else a new one."""
+        for i in ids:
+            existing = by_initiator.get(i)
+            if existing is not None:
+                if source not in existing.sources:
+                    existing.sources.append(source)
+                return existing
+        fresh = DiscoveredHost(name=name, sources=[source])
+        hosts.append(fresh)
+        return fresh
+
+    # 1) vCenter first: it gives the best names, so it should win the naming race.
+    for hba in report.host_hbas:
+        host = host_for([normalize_wwpn(hba.wwpn)], hba.host_name, "vcenter")
+        host.name = hba.host_name
+        host.os = "esxi"                      # only ESXi hosts are in a vCenter inventory
+        wwpn = normalize_wwpn(hba.wwpn)
+        if wwpn not in host.wwpns:
+            host.wwpns.append(wwpn)
+        by_initiator[wwpn] = host
+        if hba.fabric and hba.fabric not in host.fabrics:
+            host.fabrics.append(hba.fabric)
+
+    # 2) The array: what is actually logged in, plus every iSCSI initiator.
+    port_fabric = {p.label: p.fabric for p in report.array_ports if p.protocol == "fc" and p.fabric}
+    # UNCLAIMED logins are not one host. They are the array's bucket for every initiator no host
+    # object claims, and on rack13arcus that single bucket holds a Windows IQN at 10.132.30.87 AND
+    # an unrelated FC WWPN — two different machines. Nothing tells us which initiators belong
+    # together, so each becomes its own unidentified server until a real source joins them.
+    expanded: list[ArrayHost] = []
+    for ah in report.array_hosts:
+        if ah.name:
+            expanded.append(ah)
+            continue
+        for wwpn, ports in ah.wwpns.items():
+            expanded.append(ArrayHost(name="", persona=ah.persona, wwpns={wwpn: ports}))
+        for iqn, ports in ah.iqns.items():
+            expanded.append(ArrayHost(name="", persona=ah.persona, iqns={iqn: ports}, address=ah.address))
+
+    for ah in expanded:
+        ids = [*ah.wwpns, *ah.iqns]
+        if not ids:
+            continue
+        # The array's own name is preferred, EXCEPT when it is an auto-generated opaque one. HPE VME
+        # registers as `HPE_VM_07dc508b8e41df1fcf6ab266` while its IQN says
+        # `iqn.2024-12.com.hpe:hvm3:50796` — `hvm3` is the node an operator would recognise, and the
+        # hash is not a name anyone should be shown. The array's version is kept in array_host_name.
+        from_iqn = next((node_name_from_iqn(i) for i in ah.iqns if node_name_from_iqn(i)), "")
+        opaque = ah.name.startswith("HPE_VM_")
+        name = (from_iqn if (opaque and from_iqn) else ah.name) or from_iqn or ids[0]
+        host = host_for(ids, name, "array")
+        if ah.name and not host.array_host_name:
+            host.array_host_name = ah.name
+        if ah.address and not host.address:
+            host.address = ah.address
+        for wwpn, ports in ah.wwpns.items():
+            if wwpn not in host.wwpns:
+                host.wwpns.append(wwpn)
+            by_initiator[wwpn] = host
+            for nsp in ports:
+                host.logged_in = True
+                fabric = port_fabric.get(nsp)
+                if fabric and fabric not in host.fabrics:
+                    host.fabrics.append(fabric)
+        for iqn, ports in ah.iqns.items():
+            if iqn not in host.iqns:
+                host.iqns.append(iqn)
+            by_initiator[iqn] = host
+            if ports:
+                host.logged_in = True
+            if host.os == "unknown":
+                host.os = os_from_iqn(iqn)
+
+    # 3) The fabric name server: the only OS signal for an FC host nothing else identified.
+    for wwpn, os_text in ns_os.items():
+        host = by_initiator.get(normalize_wwpn(wwpn))
+        if host is not None and host.os == "unknown":
+            host.os = os_from_switch_string(os_text)
+            if "switch" not in host.sources:
+                host.sources.append("switch")
+
+    return sorted(hosts, key=lambda h: (h.os, h.name.lower()))
 
 
 def fabric_by_wwpn(array_hosts: list[ArrayHost], array_ports: list[ArrayPort]) -> dict[str, set[Fabric]]:
@@ -442,4 +578,19 @@ def discover(
                 f"Host {hba.host_name} HBA {hba.wwpn} is not logged in on either fabric per the array "
                 "(showhost) — check zoning/cabling, or that the host is powered on."
             )
+
+    # 4) Join every source into one record per server, grouped by OS. Done last so it sees the
+    #    fabric assignment above.
+    #
+    #    No `ns_os` yet: the fabric name server's OS string is read by the ZONING step, which logs
+    #    into the switches; discovery deliberately needs only the array and vCenter, and the sheet
+    #    makes switch credentials optional. So an FC host that is not in vCenter is reported with an
+    #    unknown OS rather than guessed at. Wiring nsshow in here would make switch credentials a
+    #    discovery prerequisite, which is a bigger change than this one.
+    report.hosts = assemble_hosts(report)
+    by_os: dict[str, int] = {}
+    for host in report.hosts:
+        by_os[host.os] = by_os.get(host.os, 0) + 1
+    if by_os:
+        _p("Hosts: " + ", ".join(f"{n} {os_}" for os_, n in sorted(by_os.items())))
     return report

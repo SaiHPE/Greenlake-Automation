@@ -145,32 +145,70 @@ def _resolve_exports(intent: ProvisioningIntent) -> list[ExportRequest]:
     ]
 
 
+def _reachable_targets(
+    exports: list[ExportRequest],
+    intent: ProvisioningIntent,
+    all_hosts: "OrderedDict[str, list[str]]",
+    reachable_hosts: set[str],
+) -> tuple[list[ExportRequest], list[str]]:
+    """Split the exports into (do now, skip) on whether the array can REACH the target.
+
+    Gating the export and not the host is deliberate (ADR 0012, revised 2026-09-02). HPE's own
+    documented order is register-first: `createhost -iscsi <name> <iqn>` takes an IQN the array has
+    never seen, and the VME guidance says to register a host's IQN BEFORE it ever establishes a
+    session. Host creation is harmless and reversible; an export to a host that cannot reach the
+    array is the thing that reports "created" and is silently dead.
+
+    A HOST-SET export needs only ONE reachable member. Exporting to the set is the practice HPE
+    recommends for a cluster, and the remaining members pick the LUN up as they come online — that
+    is the point of the set. It is skipped only when NO member can reach the array, because then
+    there is nothing for it to be live for.
+    """
+    members_of = {hs.name: _members_for(hs, all_hosts) for hs in intent.host_sets}
+    do: list[ExportRequest] = []
+    skip: list[str] = []
+    for ex in exports:
+        if ex.target_kind == "hostset":
+            members = members_of.get(ex.target_name, [])
+            live = [m for m in members if m in reachable_hosts]
+            if live:
+                do.append(ex)
+            else:
+                skip.append(
+                    f"{ex.source_name} → {ex.target_name}: no member of the host set can reach the "
+                    f"array yet ({', '.join(members) or 'no members'})"
+                )
+        elif ex.target_name in reachable_hosts:
+            do.append(ex)
+        else:
+            skip.append(f"{ex.source_name} → {ex.target_name}: the array cannot reach this host yet")
+    return do, skip
+
+
 def build_plan(
     intent: ProvisioningIntent,
     discovery: DiscoveryReport,
     *,
-    zoned_hosts: set[str],
+    reachable_hosts: set[str],
     wsapi_factory: Callable = make_wsapi,
 ) -> ProvisioningPlan:
-    """Preview what tier-1 will create. `zoned_hosts` is the zoning gate (ADR 0012): only hosts the
-    last verify saw logged in on BOTH fabrics are provisioned, and the rest are excluded BY NAME in
-    the plan the operator approves. Required, not defaulted — a gate with a default-open value is how
-    the switch write path shipped unauthorised, and every caller should have to state its answer."""
+    """Preview what tier-1 will create.
+
+    `reachable_hosts` is the gate, and it gates the EXPORT only (ADR 0012 revised 2026-09-02). Hosts,
+    host sets, volumes and VV sets are always created: HPE's documented order is register-first, and
+    creating a host object for a server that is not cabled yet is harmless and reversible. Required,
+    not defaulted — a gate with a default-open value is how the switch write path shipped
+    unauthorised, and every caller should have to state its answer."""
     plan = ProvisioningPlan()
-    composed = _selected_hosts(intent, discovery)
-    hosts = OrderedDict((n, w) for n, w in composed.items() if n in zoned_hosts)
-    excluded = sorted(n for n in composed if n not in zoned_hosts)
-    if excluded:
-        plan.notes.append(
-            "Excluded — not zoned on both fabrics: " + ", ".join(excluded)
-            + ". Each joins the run as soon as the SAN team applies its zoning and the zoning step "
-            "re-verifies; nothing here needs redoing."
-        )
+    hosts = _selected_hosts(intent, discovery)
+    unreachable = sorted(n for n in hosts if n not in reachable_hosts)
     if not hosts:
+        plan.notes.append("No ESXi host HBAs discovered — nothing to provision until discovery finds hosts.")
+    elif unreachable:
         plan.notes.append(
-            "No ESXi host HBAs discovered — nothing to provision until discovery finds hosts."
-            if not composed else
-            "No composed host is zoned on both fabrics, so there is nothing to create yet."
+            "Created but not yet reachable: " + ", ".join(unreachable)
+            + ". The host objects are made now; their exports wait until the array sees them logged "
+            "in. Nothing here needs redoing once zoning is applied and re-verified."
         )
 
     try:
@@ -239,6 +277,7 @@ def build_plan(
     except ExportDefaultError as exc:
         plan.error = str(exc)
         return plan
+    exports, skipped = _reachable_targets(exports, intent, hosts, reachable_hosts)
     for ex in exports:
         lun_txt = "auto LUN" if ex.lun is None else f"LUN {ex.lun}"
         plan.actions.append(PlannedAction(
@@ -246,6 +285,8 @@ def build_plan(
             description=f"Export {ex.source_kind} {ex.source_name} → {ex.target_kind} {ex.target_name} ({lun_txt})",
             detail={"source": ex.source_ref, "target": ex.target_ref, "lun": ex.lun},
         ))
+    if skipped:
+        plan.notes.append("Exports held back until the array can reach the target: " + "; ".join(skipped))
     return plan
 
 
@@ -253,27 +294,23 @@ def apply_plan(
     intent: ProvisioningIntent,
     discovery: DiscoveryReport,
     *,
-    zoned_hosts: set[str],
+    reachable_hosts: set[str],
     wsapi_factory: Callable = make_wsapi,
 ) -> ProvisioningResult:
-    """Create the objects. `zoned_hosts` must be the SAME gate `build_plan` was given: apply
-    re-derives its host list from the intent rather than replaying the plan, so without the filter
-    here the exclusion would be cosmetic and the array would get the unzoned hosts anyway."""
+    """Create the objects. `reachable_hosts` must be the SAME gate `build_plan` was given: apply
+    re-derives everything from the intent rather than replaying the plan, so without the filter here
+    the held-back exports would be cosmetic and the array would get them anyway."""
     result = ProvisioningResult()
-    composed = _selected_hosts(intent, discovery)
-    hosts = OrderedDict((n, w) for n, w in composed.items() if n in zoned_hosts)
+    hosts = _selected_hosts(intent, discovery)
     if not hosts:
-        result.error = (
-            "No ESXi host HBAs discovered — refusing to provision with no hosts." if not composed
-            else "No composed host is zoned on both fabrics — refusing to provision. Apply the "
-                 "zoning command set, then re-verify zoning."
-        )
+        result.error = "No ESXi host HBAs discovered — refusing to provision with no hosts."
         return result
     try:
         exports = _resolve_exports(intent)
     except ExportDefaultError as exc:
         result.error = str(exc)
         return result
+    exports, held = _reachable_targets(exports, intent, hosts, reachable_hosts)
 
     personas = _persona_by_host(discovery)
     try:
