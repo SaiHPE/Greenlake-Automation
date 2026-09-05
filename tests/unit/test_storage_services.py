@@ -1453,7 +1453,7 @@ def test_iqns_are_kept_and_never_mixed_into_the_fc_wwpns():
     assert list(vme.iqns) == ["iqn.2024-12.com.hpe:hvm3:50796"]
     assert sorted(vme.iqns["iqn.2024-12.com.hpe:hvm3:50796"]) == ["0:4:1", "1:4:1"]
     assert vme.wwpns == {}                       # an IQN must never reach the fabric lookup
-    assert vme.address == "10.132.30.132"
+    assert vme.addresses == {"iqn.2024-12.com.hpe:hvm3:50796": "10.132.30.132"}
 
     esxi = hosts["10.132.30.136"]
     assert set(esxi.wwpns) == {"10005CED8C5312A8", "10005CED8C5312A9"} and esxi.iqns == {}
@@ -1464,14 +1464,15 @@ def test_a_configured_but_not_connected_iscsi_initiator_gets_no_address():
     hosts = {h.name: h for h in disc.parse_showhost(_ARCUS_MIXED)}
     idle = hosts["HPE_VM_68957800ae29ed0cb49788c9"]
     assert idle.iqns == {"iqn.2024-12.com.hpe:vmenode3:2469": []}   # known, but no login
-    assert idle.address == ""
+    assert idle.addresses == {}
 
 
 def test_unclaimed_fc_and_iscsi_logins_share_the_empty_host_but_stay_in_their_own_fields():
     unclaimed = next(h for h in disc.parse_showhost(_ARCUS_MIXED) if not h.name)
     assert set(unclaimed.wwpns) == {"51402EC02089CC1C"}
     assert set(unclaimed.iqns) == {"iqn.1991-05.com.microsoft:win-tn3n7rujk3v"}
-    assert unclaimed.address == "10.132.30.87"
+    # PER INITIATOR: one nameless row can hold initiators from several different machines.
+    assert unclaimed.addresses == {"iqn.1991-05.com.microsoft:win-tn3n7rujk3v": "10.132.30.87"}
 
 
 def test_hosts_are_assembled_and_grouped_by_os():
@@ -1528,3 +1529,39 @@ def test_the_unclaimed_bucket_is_split_into_one_host_per_initiator():
     assert win is not fc
     assert win.transports == ["iscsi"] and win.os == "windows"
     assert fc.transports == ["fc"] and fc.os == "unknown"     # an FC WWPN alone identifies no OS
+
+
+_ARCUS_TWO_WINDOWS = """Id Name Persona ---WWN/iSCSI_Name/NQN--- Port  IP/IP:Port
+-- --  --      iqn.1991-05.com.microsoft:win-tn3n7rujk3v                    1:4:1 10.132.30.87
+-- --  --      iqn.1991-05.com.microsoft:eljr0nb1uv.asiapacific.hpqcorp.net 1:4:1 10.132.26.26
+"""
+
+_ARCUS_VME_COLLIDING = """Id Name Persona ---WWN/iSCSI_Name/NQN--- Port  IP/IP:Port
+ 1 HPE_VM_2354af6a103486c7b3fd7c48 Generic-ALUA iqn.2024-12.com.hpe:vmenode2:38298 0:4:1 10.132.26.53
+14 HPE_VM_a3664b2a19f0ed21f2c5f344 Generic-ALUA iqn.2024-12.com.hpe:vmenode2:45566 1:4:1 10.132.28.70
+11 HPE_VM_a1b9f0fa2b4a8b1379e57b56 Generic-ALUA iqn.2024-12.com.hpe:vmenode2:62276 ---   f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff
+"""
+
+
+def test_each_iscsi_initiator_keeps_its_own_address():
+    """Found by running the assembly over the full live showhost: `showhost` files every unclaimed
+    login under ONE row, so a single per-host `address` gave the first initiator's IP to all of them
+    and the second Windows box was displayed at 10.132.30.87 instead of 10.132.26.26."""
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    hosts = disc.assemble_hosts(DiscoveryReport(array_hosts=disc.parse_showhost(_ARCUS_TWO_WINDOWS)))
+    by_name = {h.name: h.address for h in hosts}
+    assert by_name["win-tn3n7rujk3v"] == "10.132.30.87"
+    assert by_name["eljr0nb1uv.asiapacific.hpqcorp.net"] == "10.132.26.26"
+
+
+def test_colliding_iqn_node_names_are_disambiguated():
+    """rack13arcus has three separate array host objects whose IQNs all say `vmenode2`, on different
+    IPs. Three identical rows read as one host listed three times."""
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    hosts = disc.assemble_hosts(DiscoveryReport(array_hosts=disc.parse_showhost(_ARCUS_VME_COLLIDING)))
+    names = [h.name for h in hosts]
+    assert len(names) == len(set(names)) == 3
+    assert set(names) == {"vmenode2:38298", "vmenode2:45566", "vmenode2:62276"}
+    assert {h.address for h in hosts} == {"10.132.26.53", "10.132.28.70", ""}

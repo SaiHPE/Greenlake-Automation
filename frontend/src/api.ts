@@ -212,7 +212,7 @@ export interface HostHba {
 // into (empty = configured but not logged in / not zoned).
 export interface ArrayHost {
   name: string; persona: string; wwpns: Record<string, string[]>;
-  iqns: Record<string, string[]>; address: string;
+  iqns: Record<string, string[]>; addresses: Record<string, string>;
 }
 // One physical server, joined across vCenter, the array and the fabric name server on INITIATOR ID
 // (never on name — those namespaces do not intersect). `os` is inferred from the IQN authority or
