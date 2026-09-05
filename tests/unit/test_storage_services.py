@@ -1565,3 +1565,58 @@ def test_colliding_iqn_node_names_are_disambiguated():
     assert len(names) == len(set(names)) == 3
     assert set(names) == {"vmenode2:38298", "vmenode2:45566", "vmenode2:62276"}
     assert {h.address for h in hosts} == {"10.132.26.53", "10.132.28.70", ""}
+
+
+# Verbatim AlletraMP_D22U27 `showhost -d` — all FC, no vCenter, no switch creds: the array is the
+# ONLY source, which is the normal case for a Windows or Linux server.
+_D22U27_SHOWHOST = """Id Name                Persona       -WWN/iSCSI_Name/NQN- Port  IP/IP:Port
+ 3 DL380G11D21U6_3D1X  WindowsServer 10005CBA2CFC3D15     ---   n/a
+ 3 DL380G11D21U6_3D1X  WindowsServer 10005CBA2CFC3D16     ---   n/a
+ 0 ESX1                VMware        1000D0BF9CB7A3C9     1:3:1 n/a
+ 0 ESX1                VMware        1000D0BF9CB7A3D1     1:3:4 n/a
+ 4 test2-alletra       Generic-ALUA  --                   --    --
+ 2 winhost_CDS         WindowsServer 50060B0000C2EE2C     ---   n/a
+-- --                  --            1000040973C52791     0:3:1 n/a
+"""
+
+
+def test_the_array_persona_identifies_the_os_when_it_is_the_only_source():
+    """Found by running the assembly over real D22U27 output: all nine hosts landed in
+    'Unidentified' while the array was saying VMware and WindowsServer in the Persona column. With
+    no vCenter and no switch credentials the persona is the ONLY OS signal an FC host carries."""
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    hosts = {h.name: h for h in disc.assemble_hosts(
+        DiscoveryReport(array_hosts=disc.parse_showhost(_D22U27_SHOWHOST))
+    )}
+    assert hosts["ESX1"].os == "esxi"
+    assert hosts["DL380G11D21U6_3D1X"].os == "windows"
+    assert hosts["winhost_CDS"].os == "windows"
+    # Generic-ALUA is HPE's catch-all — Linux, VME and anything unclassified — so it stays unknown
+    # rather than inventing a Linux host.
+    assert hosts["test2-alletra"].os == "unknown"
+    # An unclaimed FC WWPN has no persona at all.
+    assert hosts["1000040973C52791"].os == "unknown"
+
+
+def test_a_host_object_with_no_initiators_is_still_reported():
+    """`test2-alletra` prints as `-- -- --`: a host object with nothing configured. It cannot be
+    zoned or provisioned, but it exists on the array and must not vanish from the table."""
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    hosts = {h.name: h for h in disc.assemble_hosts(
+        DiscoveryReport(array_hosts=disc.parse_showhost(_D22U27_SHOWHOST))
+    )}
+    empty = hosts["test2-alletra"]
+    assert empty.wwpns == [] and empty.iqns == [] and empty.transports == []
+    assert empty.logged_in is False
+    assert empty.array_host_name == "test2-alletra"
+
+
+def test_an_iqn_authority_beats_the_array_persona():
+    """A VME host is Generic-ALUA on the array but com.hpe in its IQN. The more specific signal wins."""
+    from alletra_onboard.domain.discovery import DiscoveryReport, os_from_persona
+
+    assert os_from_persona("Generic-ALUA") == "unknown"
+    hosts = disc.assemble_hosts(DiscoveryReport(array_hosts=disc.parse_showhost(_ARCUS_VME_COLLIDING)))
+    assert {h.os for h in hosts} == {"vme"}
