@@ -50,6 +50,29 @@ class VolumeRequest(BaseModel):
         return self.size_gib * 1024
 
 
+class DeclaredHost(BaseModel):
+    """A host the operator TYPED into the sheet, for a server nothing can see yet.
+
+    Every connected host is discovered: a cabled FC host is in the fabric name server with its WWPN
+    and OS, a connected iSCSI host is in the array's `showhost` with its IQN and IP, and an ESXi host
+    in vCenter is read directly. This model exists only for the greenfield case — the server is
+    racked but not yet cabled or not yet configured for iSCSI, so no wire carries its identity and a
+    human has to read it off the machine.
+
+    HPE's documented order supports this: `createhost -iscsi <name> <iqn>` takes an IQN the array has
+    never seen, and the VME guidance says to register a host before it establishes a session.
+
+    Either transport may be blank. A host with neither is rejected at parse time — it identifies
+    nothing and could not be created.
+    """
+
+    name: str
+    os: str = ""                       # esxi | windows | linux | vme | "" (unknown)
+    address: str = ""
+    wwpns: list[str] = Field(default_factory=list)
+    iqn: str = ""
+
+
 class HostSetRequest(BaseModel):
     """A host set to create + its SELECTED members (host names). Empty members => all discovered hosts
     (the cluster). A run may create one or more host sets (ADR 0010)."""
@@ -99,6 +122,8 @@ class ProvisioningIntent(BaseModel):
     switch_f2: EndpointCreds      # even fabric (F2)
     volumes: list[VolumeRequest] = Field(default_factory=list)
     host_sets: list[HostSetRequest] = Field(default_factory=list)
+    # Hosts the operator declared because nothing can see them yet (see DeclaredHost).
+    declared_hosts: list[DeclaredHost] = Field(default_factory=list)
     exports: list[ExportRequest] = Field(default_factory=list)  # empty => default each-volume->each-host-set
 
     @classmethod
