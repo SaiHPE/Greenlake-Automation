@@ -1256,3 +1256,111 @@ def test_zoning_report_lists_only_hosts_on_both_fabrics_as_the_gate():
     assert report.zoned_hosts == ["esx1"]
     assert not report.proper          # esx2 is still outstanding...
     assert report.zoned_hosts         # ...but esx1 is provisionable anyway
+
+
+# ---------------- port roles: file + replication (real captures, 2026-09-02) ----------------
+
+# Verbatim `showport` from AlletraMP_D22U27 (10.64.122.99) — the first array seen with file ports.
+_D22U27_SHOWPORT = """N:S:P      Mode     State --Node_WWN/IP--- -Port_WWN/HW_Addr- Type Protocol      Label
+0:1:1 initiator     ready       16.1.14.90       88E9A4DBB31C disk     NVMe       DP-1
+0:2:1 initiator     ready         16.1.8.1       88E9A4DB73E6 disk     NVMe       DP-1
+0:3:1    target     ready 2FF70002AC02DEF6   20310002AC02DEF6 host       FC  peer port
+0:3:2    target     ready 2FF70002AC02DEF6   20320002AC02DEF6 free       FC          -
+0:3:3    target loss_sync 2FF70002AC02DEF6   20330002AC02DEF6 free       FC          -
+0:3:4    target     ready 2FF70002AC02DEF6   20340002AC02DEF6 host       FC          -
+0:4:1    target     ready      10.54.90.70       40A6B7D8E6A0 file       IP          -
+0:4:2    target     ready      10.54.90.71       40A6B7D8E6A1 file       IP          -
+0:4:3      peer     ready     10.54.122.92       40A6B7D8E6A2 rcip       IP          -
+0:4:4      peer   offline                -       40A6B7D8E6A3 free       IP          -
+1:2:1 initiator   offline         16.1.8.2       88E9A4DBC216 free     NVMe       DP-1
+1:3:1    target     ready 2FF70002AC02DEF6   21310002AC02DEF6 host       FC peer 1:3:1
+1:3:2    target     ready 2FF70002AC02DEF6   21320002AC02DEF6 host       FC  Peer_port
+1:4:3      peer     ready     10.54.122.93       40A6B7D900C2 rcip       IP          -
+1:4:4      peer   offline                -       40A6B7D900C3 free       IP          -
+"""
+
+# rack13arcus: slot-4 ports 1-2 are iSCSI here, and slot 5 is the NODE INTERCONNECT.
+_ARCUS_PEER_PORTS = """N:S:P      Mode               State --Node_WWN/IP--- -Port_WWN/HW_Addr-    Type Protocol Label
+0:4:1    target               ready      10.93.18.10       40A6B7D7D1E8    host    iSCSI iscsi
+0:4:3      peer             offline                -       40A6B7D7D1EA    free       IP     -
+0:5:1      peer link_idle_for_reset                -        202AC000103 cluster       IP     -
+1:5:2      peer link_idle_for_reset                -        202AC000106 cluster       IP     -
+"""
+
+_SHOWPORT_FILE = """N:S:P  Mode   State     IPAddr/PrefixLen IPDisable Gateway VLAN     MTU  Rate    Eth  Link FailoverIPs
+0:4:1 target ready     10.1.1.60/24        N        -      untagged 1500 25Gbps  eth6 up   -
+0:4:2 target ready     10.1.1.61/24        N        -      untagged 1500 25Gbps  eth8 up   -
+1:4:1 target loss_sync 10.1.1.63/24        Y        -      untagged 1500 n/a     eth7 down -
+1:4:2 target ready     10.1.1.64/24        N        -      untagged 1500 25Gbps  eth8 up   10.1.1.63
+"""
+
+
+def test_host_port_list_still_excludes_disk_cluster_file_and_replication():
+    """The guarantee the port filters have always existed for: nothing that cannot serve a host may
+    reach array_ports, because that list populates the zoning dropdowns."""
+    ports = disc.parse_ports(_D22U27_SHOWPORT, {})
+    labels = {p.label for p in ports}
+    assert labels == {"0:3:1", "0:3:2", "0:3:3", "0:3:4", "1:3:1", "1:3:2"}
+    assert all(p.protocol == "fc" for p in ports)          # the IP file/rcip rows are not here
+    assert "0:1:1" not in labels and "0:4:3" not in labels  # nor disk, nor replication
+
+
+def test_the_type_column_is_captured_and_the_label_is_kept_verbatim():
+    by = {p.label: p for p in disc.parse_ports(_D22U27_SHOWPORT, {})}
+    assert by["0:3:1"].port_type == "host"
+    assert by["0:3:2"].port_type == "free"
+    # Label is free text and may contain spaces — the old parser took token[7] and truncated it.
+    assert by["0:3:1"].usage == "peer port"
+    assert by["1:3:1"].usage == "peer 1:3:1"
+    assert by["1:3:2"].usage == "Peer_port"
+
+
+def test_a_host_port_labelled_peer_is_not_flagged_as_a_replication_port():
+    """The live defect: three host-serving ports on this array are labelled 'peer' in three different
+    spellings, and the old Label-based caution flagged all three."""
+    from alletra_onboard.application.provisioning import zoning_plan as zp
+
+    intent = _intent()
+    report = disc.DiscoveryReport(array_ports=disc.parse_ports(_D22U27_SHOWPORT, {}))
+    plan = zp.build_zoning_plan(
+        intent, report,
+        brocade_factory=lambda c: FakeBrocade("", ""),
+    )
+    assert not any("select them only knowingly" in n for n in plan.notes), plan.notes
+
+
+def test_replication_ports_are_found_and_the_cluster_interconnect_is_not():
+    rep = {p.label: p for p in disc.parse_replication_ports(_D22U27_SHOWPORT)}
+    assert set(rep) == {"0:4:3", "0:4:4", "1:4:3", "1:4:4"}
+    assert rep["0:4:3"].role == "rcip" and rep["0:4:3"].address == "10.54.122.92"
+    assert rep["0:4:4"].role == "free" and rep["0:4:4"].address == ""   # capable, not configured
+
+    # The trap: slot 5 is also peer+IP, and it is the node interconnect.
+    arcus = {p.label: p for p in disc.parse_replication_ports(_ARCUS_PEER_PORTS)}
+    assert set(arcus) == {"0:4:3"}
+    assert "0:5:1" not in arcus and "1:5:2" not in arcus
+
+
+def test_file_ports_parse_including_the_down_port_and_its_failover_partner():
+    ports = {p.label: p for p in disc.parse_file_ports(_SHOWPORT_FILE)}
+    assert set(ports) == {"0:4:1", "0:4:2", "1:4:1", "1:4:2"}
+
+    ok = ports["0:4:1"]
+    assert (ok.role, ok.address, ok.prefix_len) == ("file", "10.1.1.60", "24")
+    assert ok.gateway == "" and ok.vlan == "untagged" and ok.rate == "25Gbps" and ok.link == "up"
+    assert ok.ip_disabled is False and ok.failover_ips == []
+
+    down = ports["1:4:1"]
+    assert down.link_state == "loss_sync" and down.ip_disabled is True
+    assert down.rate == "" and down.link == "down"        # Rate reads "n/a" on a down link
+    # ...and it is not simply dead: 1:4:2 is carrying its address.
+    assert ports["1:4:2"].failover_ips == ["10.1.1.63"]
+    assert down.address in ports["1:4:2"].failover_ips
+
+
+def test_file_and_iscsi_share_the_same_nsp_so_position_cannot_classify():
+    """0:4:1 is file on one array and iSCSI on another. Only the array's Type separates them."""
+    file_ports = {p.label for p in disc.parse_file_ports(_SHOWPORT_FILE)}
+    iscsi = {p.label for p in disc.parse_ports(_ARCUS_PEER_PORTS, {"0:4:1": "10.93.18.10"})
+             if p.protocol == "iscsi"}
+    assert "0:4:1" in file_ports and "0:4:1" in iscsi

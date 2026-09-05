@@ -503,12 +503,16 @@ def test_delta_on_the_unzoned_bgl_hosts_proposes_everything_as_new():
     assert f1_cmds[-1] == "cfgenable F1_CFG"
 
 
-def test_rcfc_and_peer_ports_are_flagged_not_excluded():
-    # ADR 0004 (2026-07-04, re-proven live 2026-08-15): RCFC/Peer labels USUALLY mean replication,
-    # but a production Primera's RCFC-labelled target ports carry host logins (Type=host) — a hard
-    # exclusion removes host-serving ports. So the port stays a candidate, carries a caution, is
-    # never pre-selected, and the notes call it out.
-    rcfc = "20:34:00:02:ac:02:f6:29"   # 0:3:4, showport Label "RCFC"
+def test_a_non_host_type_port_is_flagged_not_excluded():
+    # ADR 0004 (2026-07-04, re-proven live 2026-08-15): a port the array does not call host-serving
+    # USUALLY carries replication, but a production Primera's RCFC ports carry host logins too — a
+    # hard exclusion removes host-serving ports. So it stays a candidate, carries a caution, is never
+    # pre-selected, and the notes call it out.
+    #
+    # The caution keys off the array's Type, never the Label. The Label is free text: on
+    # AlletraMP_D22U27 three Type=host ports read "peer port", "peer 1:3:1" and "Peer_port", and the
+    # old Label rule flagged all three while the array's genuine peer ports (IP) never reached here.
+    rcfc = "20:34:00:02:ac:02:f6:29"   # 0:3:4
     ns_f1 = _F1_NS + f"\n N    010400;   3;{rcfc};2f:f7:00:02:ac:02:f6:29; 0x0\n    Device type: Physical Target\n"
 
     def factory(creds):
@@ -516,13 +520,28 @@ def test_rcfc_and_peer_ports_are_flagged_not_excluded():
 
     disc = _discovery()
     disc.array_ports.append(
-        ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC02F629", link_state="ready", usage="RCFC")
+        ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC02F629",
+                  link_state="ready", port_type="peer", usage="RCFC")
     )
     plan = zp.build_zoning_plan(_intent(), disc, brocade_factory=factory)
     f1 = next(f for f in plan.fabrics if f.fabric == "F1")
     flagged = next(p for p in f1.array_ports if p.wwpn == "20340002AC02F629")
-    assert "RCFC" in flagged.caution                       # a candidate, but marked
+    assert "peer" in flagged.caution                       # a candidate, but marked
     plain = next(p for p in f1.array_ports if p.wwpn == "20310002AC02F629")
     assert plain.caution == ""                             # ordinary target ports carry no caution
     assert (flagged.wwpn not in {w for pair in f1.already_zoned for w in pair})  # never pre-selected
-    assert any("RCFC" in note and "not excluded" in note for note in plan.notes)
+    assert any("not excluded" in note for note in plan.notes)
+
+
+def test_a_host_port_whose_operator_label_says_peer_is_never_flagged():
+    """The live defect on AlletraMP_D22U27: Type=host ports labelled 'peer port' / 'Peer_port' were
+    all flagged as replication, because the caution read the free-text Label instead of the Type."""
+    def factory(creds):
+        return FakeBrocade(_F1_NS, _F1_ALIS, _F1_CFG) if creds.host == "sw-f1" else FakeBrocade(_F2_NS, _F2_ALIS, _F2_CFG)
+
+    disc = _discovery()
+    for port in disc.array_ports:
+        port.port_type, port.usage = "host", "peer port"
+    plan = zp.build_zoning_plan(_intent(), disc, brocade_factory=factory)
+    assert not any("not excluded" in note for note in plan.notes), plan.notes
+    assert all(p.caution == "" for f in plan.fabrics for p in f.array_ports)
