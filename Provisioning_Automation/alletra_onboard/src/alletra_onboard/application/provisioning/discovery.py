@@ -256,7 +256,11 @@ def parse_showhost(showhost_d: str) -> list[ArrayHost]:
     return list(hosts.values())
 
 
-def assemble_hosts(report: DiscoveryReport, ns_os: dict[str, str] | None = None) -> list[DiscoveredHost]:
+def assemble_hosts(
+    report: DiscoveryReport,
+    ns_os: dict[str, str] | None = None,
+    declared: list | None = None,
+) -> list[DiscoveredHost]:
     """Join every source into one host per physical server, grouped by OS for display.
 
     Sources and what each contributes:
@@ -368,7 +372,32 @@ def assemble_hosts(report: DiscoveryReport, ns_os: dict[str, str] | None = None)
         if host.os == "unknown":
             host.os = os_from_persona(ah.persona)
 
-    # 3) The fabric name server: the only OS signal for an FC host nothing else identified.
+    # 3) Hosts the operator DECLARED in the sheet, for servers nothing can see yet. Merged on the
+    #    initiator id like every other source, so a declared host that later comes online joins its
+    #    own discovered record instead of appearing twice. Its OS and name are authoritative: a human
+    #    typed them, and they are the only source for a machine no wire is carrying.
+    for dh in declared or []:
+        ids = [normalize_wwpn(w) for w in dh.wwpns] + ([dh.iqn] if dh.iqn else [])
+        if not ids:
+            continue
+        host = host_for(ids, dh.name, "sheet")
+        host.name = dh.name
+        if dh.os:
+            host.os = dh.os
+        if dh.address and not host.address:
+            host.address = dh.address
+        for wwpn in (normalize_wwpn(w) for w in dh.wwpns):
+            if wwpn not in host.wwpns:
+                host.wwpns.append(wwpn)
+            by_initiator[wwpn] = host
+        if dh.iqn:
+            if dh.iqn not in host.iqns:
+                host.iqns.append(dh.iqn)
+            by_initiator[dh.iqn] = host
+            if host.os == "unknown":
+                host.os = os_from_iqn(dh.iqn)
+
+    # 4) The fabric name server: the only OS signal for an FC host nothing else identified.
     for wwpn, os_text in ns_os.items():
         host = by_initiator.get(normalize_wwpn(wwpn))
         if host is not None and host.os == "unknown":
@@ -617,7 +646,7 @@ def discover(
     #    makes switch credentials optional. So an FC host that is not in vCenter is reported with an
     #    unknown OS rather than guessed at. Wiring nsshow in here would make switch credentials a
     #    discovery prerequisite, which is a bigger change than this one.
-    report.hosts = assemble_hosts(report)
+    report.hosts = assemble_hosts(report, declared=intent.declared_hosts)
     by_os: dict[str, int] = {}
     for host in report.hosts:
         by_os[host.os] = by_os.get(host.os, 0) + 1

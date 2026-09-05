@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 
+from alletra_onboard.application.provisioning import storage_provision
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.domain.shared import normalize_wwpn
 from alletra_onboard.domain.discovery import DiscoveryReport
@@ -73,18 +74,23 @@ def parse_showvlun_active(text: str) -> list[VolumePath]:
 
 
 def verify_paths(
-    target_hosts: set[str],
-    target_volumes: set[str],
+    expected_by_host: dict[str, set[str]],
     vlun_paths: list[VolumePath],
     fabric_by_port: dict[str, str] | None = None,
     wwpns_by_host: dict[str, set[str]] | None = None,
 ) -> PathVerification:
-    """Per target host, classify the live paths to the target volumes (from `showvlun -a`).
+    """Per host, classify the live paths to the volumes EXPORTED TO THAT HOST (from `showvlun -a`).
 
-    verdict: `live` (paths on BOTH fabrics), `partial` (one fabric only), `no_path` (none — host off or
-    not zoned). `target_volumes` empty => consider every volume the host has an active path to.
-    `fabric_by_port` (n:s:p -> odd/even, from discovery's switch-derived resolution) corrects the
-    parity fallback on non-standard cabling — see _fabric.
+    `expected_by_host` is {host: volumes exported to it}, so the verifier reports on what was
+    actually presented rather than on the intent as a whole. It replaces a (target_hosts,
+    target_volumes) pair that crossed every host with every volume: on 2026-08-31 that told `.47`
+    and `.86` they had a dead export of a volume only ever destined for `.136`. An empty volume set
+    means "this host is a target but nothing is exported to it yet", which is a real state now that
+    exports can be held back while host objects are created (ADR 0012 revised).
+
+    verdict: `live` (paths on BOTH fabrics), `partial` (one fabric only), `no_path` (none — host off
+    or not zoned). `fabric_by_port` (n:s:p -> odd/even, from discovery's switch-derived resolution)
+    corrects the parity fallback on non-standard cabling — see _fabric.
 
     `wwpns_by_host` maps a target host to its HBA WWPNs, and a path whose Host_WWN is one of them
     counts for that host EVEN when the array's host-object name differs. The two names come from
@@ -95,26 +101,38 @@ def verify_paths(
     discovered HBAs.
     """
     report = PathVerification()
-    if not target_hosts:
-        report.notes.append("No target hosts to verify.")
+    if not expected_by_host:
+        report.notes.append("No exports to verify.")
         return report
 
-    for host in sorted(target_hosts):
+    for host in sorted(expected_by_host):
+        expected = expected_by_host[host]
         hba_wwpns = (wwpns_by_host or {}).get(host, set())
         paths = [
             vp for vp in vlun_paths
             if (vp.host == host or vp.host_wwpn in hba_wwpns)
             and vp.status in _LIVE_STATUS
-            and (not target_volumes or vp.volume in target_volumes)
+            and (not expected or vp.volume in expected)
         ]
         live_vols = sorted({vp.volume for vp in paths})
-        dead_vols = sorted(target_volumes - set(live_vols)) if target_volumes else []
+        # PER HOST, from what was actually exported TO THIS HOST. Until 2026-09-02 this was
+        # "every intent volume minus the live ones" for every host verified, so a host in no export
+        # row at all was reported as having an export with no path — measured on 2026-08-31, where
+        # .47 and .86 were both told they had a dead export of a volume destined only for .136.
+        dead_vols = sorted(expected - set(live_vols))
         fabrics = sorted({_fabric(vp.port, fabric_by_port) for vp in paths} - {"?"})
         hbas = len({vp.host_wwpn for vp in paths})
 
         if not paths:
             verdict = "no_path"
-            detail = "0 live paths — host off OR not zoned (export exists; it activates once the host is on + zoned)"
+            # Only claim an export exists when one does. The old wording asserted it unconditionally
+            # and was printed for volumes that had never been created, which reads as reassurance.
+            detail = (
+                f"0 live paths for {len(expected)} exported volume(s) — the host is off or not zoned; "
+                "each activates once it is on and zoned"
+                if expected else
+                "0 live paths, and nothing is exported to this host"
+            )
         elif len(fabrics) >= 2:
             verdict = "live"
             detail = f"{hbas} HBA(s) live on both fabrics ({', '.join(fabrics)})"
@@ -123,8 +141,8 @@ def verify_paths(
             missing = "even" if fabrics == ["odd"] else "odd"
             detail = f"{hbas} HBA(s) live on {fabrics[0]} fabric only — missing the {missing} fabric (single path)"
 
-        if dead_vols:
-            detail += f"; exported-but-no-path: {', '.join(dead_vols)}"
+        if dead_vols and paths:
+            detail += f"; exported but no path yet: {', '.join(dead_vols)}"
         # WWPN-matched under a different array host-object name: say which, so the operator can
         # correlate this verdict with `showhost` output on the array.
         object_names = sorted({vp.host for vp in paths if vp.host != host})
@@ -141,20 +159,22 @@ def verify_provisioned_paths(
     intent: ProvisioningIntent,
     discovery: DiscoveryReport,
     *,
+    reachable_hosts: set[str],
     array_cli_factory=make_array_cli,
 ) -> PathVerification:
     """Flow hook: read `showvlun -a` from the array (read-only SSH) and verify the exported LUNs are
-    actually LIVE to the provisioned hosts. Target hosts = the discovered host-set members (the vCenter
-    host list, else the array's own `showhost` hosts); target volumes = the intent's volumes. This is the
-    tier-2 step called after `apply_plan` — read-only, and it reports rather than gating."""
+    actually LIVE on the hosts they were presented to.
+
+    Targets come from the PROVISIONING INTENT's exports, resolved per host — not from the vCenter
+    inventory. Verifying every host vCenter happens to know produced verdicts about machines this run
+    never touched (2026-08-31: `.47` and `.86`, neither of them in any export row, were both reported
+    as having a dead export). Read-only, and it reports rather than gating (ADR 0010)."""
     try:
         with array_cli_factory(intent.array) as cli:
             text = cli.run("showvlun -a")
     except Exception as exc:  # noqa: BLE001
         return PathVerification(error=f"Could not read 'showvlun -a' over SSH: {exc}")
-    # `if ah.name` drops the array's UNCLAIMED logins (see discovery.UNCLAIMED_HOST): they are real
-    # WWPN logins, but not a host anyone can name, so they must never appear as a verify target.
-    hosts = {h.host_name for h in discovery.host_hbas} or {ah.name for ah in discovery.array_hosts if ah.name}
+    expected_by_host = storage_provision.exported_volumes_by_host(intent, discovery, reachable_hosts)
     # The join key between "the hosts vCenter knows" and "the paths the array reports" is the HBA
     # WWPN, never the name — the two namespaces don't intersect on real arrays (see verify_paths).
     wwpns_by_host: dict[str, set[str]] = {}
@@ -166,6 +186,5 @@ def verify_provisioned_paths(
         p.label: p.fabric for p in discovery.array_ports if p.protocol == "fc" and p.fabric
     }
     return verify_paths(
-        hosts, {v.name for v in intent.volumes}, parse_showvlun_active(text),
-        fabric_by_port, wwpns_by_host,
+        dict(expected_by_host), parse_showvlun_active(text), fabric_by_port, wwpns_by_host,
     )

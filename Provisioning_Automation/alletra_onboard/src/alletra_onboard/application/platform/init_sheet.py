@@ -19,8 +19,13 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from alletra_onboard.application.platform import prereqs
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, RunMode
-from alletra_onboard.domain.shared import EndpointCreds
-from alletra_onboard.domain.provisioning import HostSetRequest, ProvisioningIntent, VolumeRequest
+from alletra_onboard.domain.shared import normalize_wwpn, EndpointCreds
+from alletra_onboard.domain.provisioning import (
+    DeclaredHost,
+    HostSetRequest,
+    ProvisioningIntent,
+    VolumeRequest,
+)
 from alletra_onboard.domain.workflow import enabled_steps
 
 SHEET_NAME = "Initialisation"
@@ -117,6 +122,7 @@ _STEP_REQUIRES: dict[str, tuple[str, ...]] = {
 PROVISIONING_SHEET_NAME = "Provisioning"
 VOLUMES_SHEET_NAME = "Volumes"
 HOSTSETS_SHEET_NAME = "Host sets"
+HOSTS_SHEET_NAME = "Hosts"
 
 PROVISIONING_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
     ("Targets — array", [
@@ -154,6 +160,16 @@ VOLUME_COLUMNS: list[tuple[str, str, bool]] = [
 HOSTSET_COLUMNS: list[tuple[str, str, bool]] = [
     ("name", "Host set name", True),
     ("members", "Members — comma-separated host names; blank = all discovered", False),
+]
+# Only for servers NOTHING can see yet. Everything already cabled is discovered: an FC host from the
+# fabric name server, an iSCSI host from the array's showhost, an ESXi host from vCenter. Leave a
+# transport blank if the host does not have it.
+HOSTS_COLUMNS: list[tuple[str, str, bool]] = [
+    ("name", "Host name", True),
+    ("os", "OS (esxi / windows / linux / vme)", False),
+    ("address", "IP address (optional)", False),
+    ("wwpns", "FC WWPN(s) — comma-separated; blank if none", False),
+    ("iqn", "iSCSI IQN — blank if none", False),
 ]
 
 _PROV_LABEL_TO_KEY = {label: key for _, fields in PROVISIONING_SECTIONS for key, label, _, _ in fields}
@@ -274,6 +290,15 @@ def _add_provisioning_sheet(wb: Workbook) -> None:
     _write_table_tab(
         wb.create_sheet(VOLUMES_SHEET_NAME), VOLUME_COLUMNS, blank_rows=15,
         intro="Volumes to create — one per row. Type/CPG blank = the Provisioning-tab defaults.",
+    )
+    _write_table_tab(
+        wb.create_sheet(HOSTS_SHEET_NAME), HOSTS_COLUMNS, blank_rows=10,
+        intro=(
+            "OPTIONAL — only for hosts that are not cabled/configured yet, so nothing can discover "
+            "them. Anything already connected is found automatically. Read the values off the host: "
+            "Windows 'Get-InitiatorPort'; Linux 'cat /etc/iscsi/initiatorname.iscsi' for the IQN and "
+            "'cat /sys/class/fc_host/host*/port_name' for the WWPN; ESXi 'esxcli storage san fc list'."
+        ),
     )
     _write_table_tab(
         wb.create_sheet(HOSTSETS_SHEET_NAME), HOSTSET_COLUMNS, blank_rows=8,
@@ -485,6 +510,33 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
         for r in hs_rows
     ]
 
+    # OPTIONAL tab: only servers nothing can discover yet. Absent on an older workbook, which must
+    # still parse — the tab adds capability, it is not a new requirement.
+    declared: list[DeclaredHost] = []
+    if HOSTS_SHEET_NAME in workbook.sheetnames:
+        for r in _read_table(workbook[HOSTS_SHEET_NAME], HOSTS_COLUMNS):
+            wwpns = [normalize_wwpn(w) for w in (r.get("wwpns") or "").replace(";", ",").split(",") if w.strip()]
+            iqn = (r.get("iqn") or "").strip()
+            bad = [w for w in wwpns if len(w) != 16]
+            if bad:
+                raise ValueError(
+                    f"Hosts tab — host '{r['name']}' has an FC WWPN that is not 16 hex digits: "
+                    + ", ".join(bad) + ". A mistyped WWPN produces a zone that matches nothing."
+                )
+            if iqn and not iqn.lower().startswith("iqn."):
+                raise ValueError(f"Hosts tab — host '{r['name']}' has an iSCSI IQN that does not start with 'iqn.': {iqn}")
+            if not wwpns and not iqn:
+                raise ValueError(
+                    f"Hosts tab — host '{r['name']}' has neither an FC WWPN nor an iSCSI IQN. It "
+                    "identifies nothing, so it could not be created on the array. Add one, or remove the row."
+                )
+            os_ = (r.get("os") or "").strip().lower()
+            if os_ and os_ not in ("esxi", "windows", "linux", "vme"):
+                raise ValueError(f"Hosts tab — host '{r['name']}' has an unrecognised OS '{os_}' (esxi / windows / linux / vme).")
+            declared.append(DeclaredHost(
+                name=r["name"], os=os_, address=(r.get("address") or "").strip(), wwpns=wwpns, iqn=iqn,
+            ))
+
     return ProvisioningIntent(
         array=EndpointCreds(host=targets["prov_array_host"], username=targets["prov_array_user"], password=targets["prov_array_password"]),
         vcenter=EndpointCreds(host=targets["prov_vcenter_host"], username=targets["prov_vcenter_user"], password=targets["prov_vcenter_password"]),
@@ -493,6 +545,7 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
         switch_f2=EndpointCreds(host=targets.get("prov_sw2_host", ""), username=targets.get("prov_sw2_user", ""), password=targets.get("prov_sw2_password", "")),
         volumes=volumes,
         host_sets=host_sets,
+        declared_hosts=declared,
     )
 
 
