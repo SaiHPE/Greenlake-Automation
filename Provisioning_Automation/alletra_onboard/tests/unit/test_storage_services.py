@@ -1092,7 +1092,7 @@ def test_verify_paths_live_both_fabrics():
     from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
 
     paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
-    rep = verify_paths({"CRV_VZ_DL360G11D24U25"}, {"VZ_ESXi_Profile_bk"}, paths)
+    rep = verify_paths({"CRV_VZ_DL360G11D24U25": {"VZ_ESXi_Profile_bk"}}, paths)
     h = rep.hosts[0]
     assert h.verdict == "live"
     assert h.fabrics == ["even", "odd"]                     # 0:3:1/1:3:1 odd + 0:3:2/1:3:2 even
@@ -1104,7 +1104,7 @@ def test_verify_paths_no_path_when_host_absent():
     from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
 
     paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
-    rep = verify_paths({"esx-offline"}, {"VZ_ESXi_Profile_bk"}, paths)
+    rep = verify_paths({"esx-offline": {"VZ_ESXi_Profile_bk"}}, paths)
     h = rep.hosts[0]
     assert h.verdict == "no_path" and h.hbas_with_paths == 0
     assert h.dead_volumes == ["VZ_ESXi_Profile_bk"]         # exported target with no live path
@@ -1118,7 +1118,7 @@ def test_verify_paths_partial_single_fabric():
         "Lun VVName HostName -Host_WWN- Port Type Status ID\n"
         "  1 Vol1 esx1 10000000AAAA0001 0:3:1 host set active 10\n"   # odd fabric only
     )
-    rep = verify_paths({"esx1"}, {"Vol1"}, parse_showvlun_active(text))
+    rep = verify_paths({"esx1": {"Vol1"}}, parse_showvlun_active(text))
     h = rep.hosts[0]
     assert h.verdict == "partial" and h.fabrics == ["odd"]
     assert "missing the even fabric" in h.detail
@@ -1133,7 +1133,7 @@ def test_verify_paths_joins_by_wwpn_across_naming_namespaces():
 
     paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
     rep = verify_paths(
-        {"10.99.1.1"}, {"VZ_ESXi_Profile_bk"}, paths,
+        {"10.99.1.1": {"VZ_ESXi_Profile_bk"}}, paths,
         wwpns_by_host={"10.99.1.1": {"10009440C9D01212", "10009440C9D01213"}},
     )
     h = rep.hosts[0]
@@ -1142,7 +1142,7 @@ def test_verify_paths_joins_by_wwpn_across_naming_namespaces():
     assert "CRV_VZ_DL360G11D24U25" in h.detail              # names the array object it matched
 
     # Without the WWPN map the name join still finds nothing — the regression this test pins.
-    bare = verify_paths({"10.99.1.1"}, {"VZ_ESXi_Profile_bk"}, paths)
+    bare = verify_paths({"10.99.1.1": {"VZ_ESXi_Profile_bk"}}, paths)
     assert bare.hosts[0].verdict == "no_path"
 
 
@@ -1160,11 +1160,11 @@ def test_verify_paths_uses_discovered_fabric_over_parity_on_miscabled_ports():
     )
     paths = parse_showvlun_active(text)
 
-    with_map = verify_paths({"esx1"}, {"Vol1"}, paths, {"0:3:1": "odd", "0:3:4": "odd"})
+    with_map = verify_paths({"esx1": {"Vol1"}}, paths, {"0:3:1": "odd", "0:3:4": "odd"})
     assert with_map.hosts[0].verdict == "partial"           # the truth: one fabric, no redundancy
     assert with_map.hosts[0].fabrics == ["odd"]
 
-    parity_only = verify_paths({"esx1"}, {"Vol1"}, paths)
+    parity_only = verify_paths({"esx1": {"Vol1"}}, paths)
     assert parity_only.hosts[0].verdict == "live"           # the lie parity tells on this cabling
 
 
@@ -1188,11 +1188,55 @@ def test_verify_provisioned_paths_reads_showvlun_and_reports():
     fake = _FakeCli()
     intent = _intent(name_prefix="VZ_ESXi_Profile_bk", size_gib=10, count=1)
     d = disc.DiscoveryReport(host_hbas=[HostHba(host_name="CRV_VZ_DL360G11D24U25", wwpn=_A)])
-    rep = verify_provisioned_paths(intent, d, array_cli_factory=lambda creds: fake)
+    rep = verify_provisioned_paths(
+        intent, d,
+        reachable_hosts={"CRV_VZ_DL360G11D24U25"},
+        array_cli_factory=lambda creds: fake,
+    )
 
     assert "showvlun -a" in fake.cmds                        # it read the array, read-only
     h = next(x for x in rep.hosts if x.host == "CRV_VZ_DL360G11D24U25")
     assert h.verdict == "live" and "VZ_ESXi_Profile_bk" in h.live_volumes
+
+
+def test_verify_targets_only_the_hosts_something_was_exported_to():
+    """The 2026-08-31 defect: the verifier walked the whole vCenter inventory, so `.47` and `.86` —
+    in no export row at all — were each reported as having a dead export of `.136`'s volume."""
+    from alletra_onboard.application.provisioning.path_verify import verify_provisioned_paths
+    from alletra_onboard.domain.provisioning import HostSetRequest
+
+    class _NoVluns:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def run(self, cmd, **k):
+            return ""                                   # no active VLUNs at all
+
+    intent = _intent()
+    intent.host_sets = [HostSetRequest(name="hs", members=["esx1"])]
+    rep = verify_provisioned_paths(
+        intent, _two_hosts(),
+        reachable_hosts={"esx1"},
+        array_cli_factory=lambda creds: _NoVluns(),
+    )
+    assert [h.host for h in rep.hosts] == ["esx1"]       # esx2 was never presented anything
+    assert rep.hosts[0].verdict == "no_path"
+    assert "exported volume(s)" in rep.hosts[0].detail   # counted, not asserted blindly
+
+
+def test_a_host_with_a_held_back_export_is_not_told_one_exists():
+    """With the export gate, 'held back' and 'exported but dead' are different states. The old
+    message asserted '(export exists...)' unconditionally, which conflated them."""
+    from alletra_onboard.application.provisioning.path_verify import verify_paths
+
+    rep = verify_paths({"esx2": set()}, [])
+    assert rep.hosts[0].verdict == "no_path"
+    assert "nothing is exported to this host" in rep.hosts[0].detail
+    assert "export exists" not in rep.hosts[0].detail
+    assert rep.hosts[0].dead_volumes == []
 
 
 # ---------------- the per-host zoning gate (ADR 0012) ----------------
@@ -1620,3 +1664,122 @@ def test_an_iqn_authority_beats_the_array_persona():
     assert os_from_persona("Generic-ALUA") == "unknown"
     hosts = disc.assemble_hosts(DiscoveryReport(array_hosts=disc.parse_showhost(_ARCUS_VME_COLLIDING)))
     assert {h.os for h in hosts} == {"vme"}
+
+
+# ---------------- the Hosts tab: servers nothing can see yet ----------------
+
+def _sheet_with_hosts(rows: list[dict]) -> bytes:
+    """A complete workbook with the optional Hosts tab filled from `rows`."""
+    import io
+
+    import openpyxl
+
+    from alletra_onboard.application.platform.init_sheet import (
+        HOSTS_COLUMNS,
+        HOSTS_SHEET_NAME,
+        build_template_bytes,
+    )
+
+    wb = openpyxl.load_workbook(io.BytesIO(build_template_bytes()))
+
+    def fill(tab, values):
+        ws = wb[tab]
+        want = {" ".join(k.replace("*", "").split()).lower(): v for k, v in values.items()}
+        for row in ws.iter_rows(min_row=1, max_col=2):
+            key = " ".join(str(row[0].value or "").replace("*", "").split()).lower()
+            if key in want:
+                ws.cell(row=row[0].row, column=2, value=want[key])
+
+    # Required in every mode: the serial gates the run, and the array IP must match the Provisioning
+    # tab's or _reject_two_arrays refuses the workbook as naming two arrays.
+    fill("Initialisation", {"Storage system serial number": "TESTSERIAL", "IP address": "10.0.0.5"})
+    prov = {
+        "Array management IP": "10.0.0.5", "Array admin username": "u", "Array admin password": "p",
+        "vCenter host or IP": "vc", "vCenter username": "u", "vCenter password": "p",
+    }
+    fill("Provisioning", prov)
+    wb["Volumes"].cell(row=3, column=1, value="v1")
+    wb["Volumes"].cell(row=3, column=2, value=1)
+    wb["Host sets"].cell(row=3, column=1, value="hs")
+    hosts = wb[HOSTS_SHEET_NAME]
+    for i, r in enumerate(rows, start=3):
+        for col, (key, _h, _req) in enumerate(HOSTS_COLUMNS, start=1):
+            hosts.cell(row=i, column=col, value=r.get(key, ""))
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _parse_hosts(rows: list[dict]):
+    from alletra_onboard.application.platform.init_sheet import parse_workbook_bytes
+    from alletra_onboard.domain.models import RunMode
+
+    parsed = parse_workbook_bytes(_sheet_with_hosts(rows), mode=RunMode.PROVISION_ONLY)
+    return parsed.provisioning_intent.declared_hosts
+
+
+def test_a_declared_host_carries_either_transport_or_both():
+    declared = _parse_hosts([
+        {"name": "newwin01", "os": "windows", "iqn": "iqn.1991-05.com.microsoft:newwin01"},
+        {"name": "newesx01", "os": "esxi", "wwpns": "10:00:00:00:c9:11:22:33, 10:00:00:00:c9:11:22:34"},
+    ])
+    assert {d.name for d in declared} == {"newwin01", "newesx01"}
+    win = next(d for d in declared if d.name == "newwin01")
+    assert win.iqn.startswith("iqn.") and win.wwpns == []
+    esx = next(d for d in declared if d.name == "newesx01")
+    assert esx.wwpns == ["10000000C9112233", "10000000C9112234"]   # normalised, colons stripped
+
+
+def test_the_hosts_tab_is_optional_so_older_workbooks_still_parse():
+    from alletra_onboard.application.platform.init_sheet import parse_workbook_bytes
+    from alletra_onboard.domain.models import RunMode
+
+    import io
+
+    import openpyxl
+
+    from alletra_onboard.application.platform.init_sheet import HOSTS_SHEET_NAME
+
+    raw = _sheet_with_hosts([])
+    wb = openpyxl.load_workbook(io.BytesIO(raw))
+    del wb[HOSTS_SHEET_NAME]                            # a workbook produced before the tab existed
+    buf = io.BytesIO()
+    wb.save(buf)
+    parsed = parse_workbook_bytes(buf.getvalue(), mode=RunMode.PROVISION_ONLY)
+    assert parsed.provisioning_intent.declared_hosts == []
+
+
+def test_a_declared_host_that_identifies_nothing_is_refused():
+    """A row with neither transport could not be created on the array, so it is caught while a human
+    is still looking at the workbook."""
+    with pytest.raises(ValueError, match="neither an FC WWPN nor an iSCSI IQN"):
+        _parse_hosts([{"name": "ghost", "os": "linux"}])
+
+
+def test_a_mistyped_wwpn_is_refused_rather_than_zoned_against_nothing():
+    with pytest.raises(ValueError, match="not 16 hex digits"):
+        _parse_hosts([{"name": "typo", "wwpns": "10:00:00:00:c9:11:22"}])
+
+
+def test_a_declared_host_joins_its_discovered_record_when_it_comes_online():
+    """Merged on the initiator id like every other source, so declaring a host that later appears on
+    the array does not produce two rows for one server."""
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    showhost = (
+        "Id Name Persona ---WWN--- Port  IP\n"
+        " 1 arrayname WindowsServer 10000000C9112233 0:3:1 n/a\n"
+    )
+    report = DiscoveryReport(
+        array_ports=[ArrayPort(node=0, slot=3, card_port=1, protocol="fc",
+                               wwpn="20310002AC02D495", link_state="ready", fabric="odd")],
+        array_hosts=disc.parse_showhost(showhost),
+    )
+    hosts = disc.assemble_hosts(report, declared=[
+        DeclaredHost(name="newesx01", os="esxi", wwpns=["10:00:00:00:c9:11:22:33"]),
+    ])
+    assert len(hosts) == 1                              # one server, not two
+    assert hosts[0].name == "newesx01" and hosts[0].os == "esxi"
+    assert sorted(hosts[0].sources) == ["array", "sheet"]
+    assert hosts[0].logged_in is True                   # the array's view of it survives the merge
