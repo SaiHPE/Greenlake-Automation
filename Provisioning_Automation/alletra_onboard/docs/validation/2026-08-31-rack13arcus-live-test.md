@@ -126,6 +126,26 @@ path shipped in v0.14.0/v0.15.0 on a mandate recorded only in a docstring. **The
 this session, stated he had pasted the commands himself.** He had not — his transcript contains only
 read commands. See ADR 0012 and LESSONS 30-32.
 
+## Defect status, 2026-09-02
+
+All six are now closed in code. None of the fixes has been driven through the app against hardware.
+
+| # | Defect | Fixed in |
+|---|---|---|
+| 1 | Unclaimed logins discarded, so a zoned host reported unzoned | `80d002d` |
+| 2 | Path verify asserts "export exists" without checking | `aada08c` |
+| 3 | "exported-but-no-path" for hosts in no export row | `aada08c` |
+| 4 | `cfgenable` rendered identically to executed commands | `ca32a62` |
+| 5 | Gate accepted intent (staged) instead of completion | `ca32a62`, revised in `2908382` |
+| 6 | Switch write access no document authorises | `ca32a62` |
+
+Found and fixed in the same window, none of them from this run's list, all by reading real output
+rather than by a test failing: the array persona ignored as an OS signal (nine hosts reported
+"Unidentified" while the array said VMware and WindowsServer); every iSCSI initiator in an unclaimed
+row given the first one's IP; colliding IQN-derived host names rendered as duplicate rows; host
+objects with no adapters dropped silently; the RCIP "unset" gateway marker reaching the UI as a
+literal `-`.
+
 ## Owed
 
 - **Cleanup, manual.** Array: `removevlun -f zz_test_vol01 0 set:zz_test_hs` → `removevv -f
@@ -134,5 +154,6 @@ read commands. See ADR 0012 and LESSONS 30-32.
   ×2 → `cfgsave`. No `cfgenable`.
 - **Disclosure to the SAN team** must state that the onboarding tool logged into F2 with the sheet
   credentials and created the zone, not that an engineer pasted it.
-- **Defects 2, 3, 4** unfixed at time of writing. **5 and 6** are addressed by ADR 0012, which is
-  accepted but not yet implemented.
+- **A run of the current build against hardware.** Everything since this test is verified against
+  captured command output, not driven through the application. That is the same gap this run existed
+  to close: on 2026-08-31 the zoning parser was correct and the step still gave the wrong answer.
