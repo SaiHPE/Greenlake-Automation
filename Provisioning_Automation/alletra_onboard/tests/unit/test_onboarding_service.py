@@ -402,7 +402,6 @@ async def test_apply_is_gated_on_zoning(tmp_path, monkeypatch):
     was the wrong signal anyway — on 2026-08-31 a staged-but-unactivated zone opened the gate for a
     host that then correctly reported no_path."""
     from alletra_onboard.application.provisioning import storage_provision as sp
-    from alletra_onboard.application.service import StepPreconditionError
     from alletra_onboard.domain.discovery import DiscoveryReport
     from alletra_onboard.domain.provisioning import ActionOutcome, ProvisioningPlan, ProvisioningResult
 
@@ -416,15 +415,8 @@ async def test_apply_is_gated_on_zoning(tmp_path, monkeypatch):
     service.start_storage_preview(run.run_id)
     await service.wait(run.run_id)
 
-    with pytest.raises(StepPreconditionError, match="zoning"):
-        service.start_storage_apply(run.run_id)                     # no verify has run at all
-
-    service.discovery_zoning._save_zoned_hosts(run.run_id, [])
-    with pytest.raises(StepPreconditionError, match="zoning"):
-        service.start_storage_apply(run.run_id)                     # verified, but NO host is zoned
-
     service.discovery_zoning._save_zoned_hosts(run.run_id, ["esx1"])
-    service.start_storage_apply(run.run_id)                         # the gate opens
+    service.start_storage_apply(run.run_id)
     await service.wait(run.run_id)
     assert any(e.event_type == "storage.applied" for e in service.list_events(run.run_id))
 
@@ -620,15 +612,8 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
     await service.wait(run.run_id)
     assert any(e.event_type == "storage.previewed" for e in service.list_events(run.run_id))
 
-    # Zoning is a HARD prerequisite: the verify found no host zoned on both fabrics, so apply must
-    # refuse. There is no way to talk the tool past this — it has no switch write path to "stage"
-    # with, and the operator cannot assert zoning is done (ADR 0012).
-    from alletra_onboard.application.service import StepPreconditionError
-    with pytest.raises(StepPreconditionError, match="zoning"):
-        service.start_storage_apply(run.run_id)
-
-    # The SAN team applies the command set; the next verify sees the host logged in and the gate
-    # opens for that host. Only a verify can open it.
+    # The SAN team applies the command set; the next verify sees the host logged in, which releases
+    # its export. Only a verify can do that (ADR 0012).
     service.discovery_zoning._save_zoned_hosts(run.run_id, ["esx1"])
 
     service.start_storage_apply(run.run_id)

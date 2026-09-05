@@ -220,7 +220,7 @@ class ProvisioningSteps:
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "step.started", "Building the provisioning plan…")
         zoned = self._discovery_steps.zoned_hosts(run.run_id)
         plan = await asyncio.to_thread(
-            partial(storage_provision.build_plan, intent, discovery, zoned_hosts=zoned)
+            partial(storage_provision.build_plan, intent, discovery, reachable_hosts=zoned)
         )
         self._plan[run.run_id] = (plan, discovery)
         status = RunStatus.RETRYABLE_FAILURE if plan.error else RunStatus.WAITING_FOR_OPERATOR
@@ -237,15 +237,10 @@ class ProvisioningSteps:
         run = coord.get_run(run_id)
         intent = coord.get_provisioning_intent(run_id)
         discovery = self._discovery_steps.require_discovery(run_id)
-        # Zoning is a HARD prerequisite, enforced PER HOST (ADR 0012). Apply needs at least one host
-        # the last verify saw zoned on both fabrics; unzoned hosts are excluded from the plan by name
-        # rather than blocking the whole run, because a partly racked cluster is the normal case.
-        if not self._discovery_steps.zoned_hosts(run_id):
-            raise StepPreconditionError(
-                "SAN zoning is a prerequisite for provisioning, and no host is currently zoned on "
-                "both fabrics. Hand the zoning command set to the SAN team to apply, then re-verify "
-                "zoning — hosts become provisionable as soon as the array sees them logged in."
-            )
+        # Zoning gates the EXPORT, per host, not the whole run (ADR 0012 revised 2026-09-02). Host
+        # objects are created regardless: HPE's documented order is register-first, and a host object
+        # for a server that is not cabled yet is harmless and reversible. The exports for hosts the
+        # array cannot reach are held back and named in the plan the operator approves.
         plan = self._previewed_plan(run_id)
         if plan is None:
             raise StepPreconditionError("no provisioning plan to apply — run the provisioning preview first")
@@ -261,7 +256,7 @@ class ProvisioningSteps:
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.apply.started", "Creating host, volumes and exports…")
         zoned = self._discovery_steps.zoned_hosts(run.run_id)
         result = await asyncio.to_thread(
-            partial(storage_provision.apply_plan, intent, discovery, zoned_hosts=zoned)
+            partial(storage_provision.apply_plan, intent, discovery, reachable_hosts=zoned)
         )
         created = sum(1 for o in result.outcomes if o.status == "created")
         coord.set_state(run, RunStatus.RETRYABLE_FAILURE if result.error else RunStatus.READY, WorkflowPhase.STORAGE_PROVISION)
