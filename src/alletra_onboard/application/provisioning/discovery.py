@@ -126,6 +126,33 @@ def parse_replication_ports(showport: str) -> list[EthernetPort]:
     return out
 
 
+def parse_rcip_detail(showport_rcip: str) -> dict[str, dict[str, str]]:
+    """`showport -rcip` -> {n:s:p: {netmask, gateway, mtu, rate, duplex, autoneg}}.
+
+    A THIRD column layout, sharing only N:S:P with the others and carrying no Mode column at all:
+
+        N:S:P State HwAddr IPAddr Netmask/PrefixLen Gateway MTU Rate Duplex AutoNeg
+
+    It lists only CONFIGURED links — on AlletraMP_D22U27 it returns 0:4:3 and 1:4:3 but not the
+    idle 0:4:4 / 1:4:4, and on an array with no RCIP at all it answers "There is no specified port
+    information". That is why the port LIST comes from plain `showport` and this view only enriches
+    it: used alone, every capable-but-unconfigured port would vanish.
+
+    The netmask and gateway are the reason to read it. Plain `showport` gives the address and
+    nothing else, and an operator configuring replication needs the subnet it sits on.
+    """
+    out: dict[str, dict[str, str]] = {}
+    for line in (showport_rcip or "").splitlines():
+        p = line.split()
+        if len(p) < 8 or not p[0][:1].isdigit() or ":" not in p[0]:
+            continue
+        out[p[0]] = {
+            "netmask": p[4], "gateway": p[5], "mtu": p[6], "rate": p[7],
+            "duplex": p[8] if len(p) > 8 else "", "autoneg": p[9] if len(p) > 9 else "",
+        }
+    return out
+
+
 def parse_file_ports(showport_file: str) -> list[EthernetPort]:
     """`showport -file` -> [EthernetPort]. A separate view with its own columns:
 
@@ -356,6 +383,17 @@ def discover(
             # -rcip` only reports CONFIGURED links and answers "There is no specified port
             # information" when none exist, so it cannot enumerate the capable-but-idle ports.
             report.replication_ports = parse_replication_ports(showport)
+            # `showport -rcip` adds the netmask + gateway a replication link actually needs. It
+            # covers only CONFIGURED ports, so it enriches the list above rather than replacing it.
+            try:
+                detail = parse_rcip_detail(cli.run("showport -rcip"))
+            except Exception:  # noqa: BLE001 - enrichment only; the ports are already listed
+                detail = {}
+            for port in report.replication_ports:
+                extra = detail.get(port.label)
+                if extra:
+                    for field, value in extra.items():
+                        setattr(port, field, value)
             # File services are a separate view with different columns, and are absent on arrays
             # without file configured — an empty result is normal, not a failure.
             try:

@@ -1364,3 +1364,45 @@ def test_file_and_iscsi_share_the_same_nsp_so_position_cannot_classify():
     iscsi = {p.label for p in disc.parse_ports(_ARCUS_PEER_PORTS, {"0:4:1": "10.93.18.10"})
              if p.protocol == "iscsi"}
     assert "0:4:1" in file_ports and "0:4:1" in iscsi
+
+
+# `showport -rcip` from AlletraMP_D22U27 — a THIRD column layout, and no Mode column.
+_D22U27_RCIP = """N:S:P State ---HwAddr---       IPAddr Netmask/PrefixLen       Gateway  MTU   Rate Duplex AutoNeg
+0:4:3 ready 40A6B7D8E6A2 10.54.122.92     255.255.248.0 10.54.127.254 1500 10Gbps   Full     Yes
+1:4:3 ready 40A6B7D900C2 10.54.122.93     255.255.248.0 10.54.127.254 1500 10Gbps   Full     Yes
+"""
+
+# `showport -file` from AlletraMP_D22U27. Differs from the earlier capture in two ways that matter:
+# a gateway is SET here (it was "-" there), and 1:4:2 sits on eth9 rather than eth8.
+_D22U27_FILE = """N:S:P   Mode State IPAddr/PrefixLen IPDisable      Gateway     VLAN  MTU   Rate  Eth Link FailoverIPs
+0:4:1 target ready   10.54.90.70/21         N 10.54.95.254 untagged 1500 10Gbps eth6   up           -
+1:4:2 target ready   10.54.90.74/21         N 10.54.95.254 untagged 1500 10Gbps eth9   up           -
+"""
+
+
+def test_file_ports_parse_on_a_second_array_with_a_gateway_set():
+    """Written against Panduranga's captures, confirmed against a different array before release."""
+    ports = {p.label: p for p in disc.parse_file_ports(_D22U27_FILE)}
+    assert set(ports) == {"0:4:1", "1:4:2"}
+    assert ports["0:4:1"].address == "10.54.90.70" and ports["0:4:1"].prefix_len == "21"
+    assert ports["0:4:1"].gateway == "10.54.95.254"       # "-" on the other array; both must work
+    assert ports["1:4:2"].eth == "eth9"
+
+
+def test_rcip_detail_enriches_configured_ports_only():
+    detail = disc.parse_rcip_detail(_D22U27_RCIP)
+    assert set(detail) == {"0:4:3", "1:4:3"}              # the idle 0:4:4 / 1:4:4 are NOT here
+    assert detail["0:4:3"] == {
+        "netmask": "255.255.248.0", "gateway": "10.54.127.254",
+        "mtu": "1500", "rate": "10Gbps", "duplex": "Full", "autoneg": "Yes",
+    }
+
+
+def test_rcip_detail_cannot_be_the_port_list_on_its_own():
+    """The reason the list comes from plain showport: -rcip omits every capable-but-idle port, and
+    answers with prose when nothing is configured at all."""
+    assert disc.parse_rcip_detail("There is no specified port information.\n") == {}
+    capable = {p.label for p in disc.parse_replication_ports(_D22U27_SHOWPORT)}
+    configured = set(disc.parse_rcip_detail(_D22U27_RCIP))
+    assert configured < capable                            # strict subset: 2 of 4
+    assert capable - configured == {"0:4:4", "1:4:4"}

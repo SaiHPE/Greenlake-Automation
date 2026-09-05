@@ -200,9 +200,9 @@ export interface EthernetPort {
   node: number; slot: number; card_port: number;
   role: string;          // file | rcip | free (capable, not yet configured)
   mode: string; link_state: string;
-  address: string; prefix_len: string; ip_disabled: boolean;
+  address: string; prefix_len: string; netmask: string; ip_disabled: boolean;
   gateway: string; vlan: string; mtu: string; rate: string;
-  eth: string; link: string; failover_ips: string[];
+  eth: string; link: string; duplex: string; autoneg: string; failover_ips: string[];
 }
 export interface HostHba {
   host_name: string; wwpn: string; model: string | null; os: string | null;

@@ -66,13 +66,16 @@ class EthernetPort(BaseModel):
     link_state: str = ""         # ready | offline | loss_sync | ...
     address: str = ""            # IPv4 ("" when unconfigured)
     prefix_len: str = ""         # from showport -file "IPAddr/PrefixLen"
+    netmask: str = ""            # from showport -rcip, which gives a dotted mask not a prefix
     ip_disabled: bool = False
     gateway: str = ""            # "-" in the CLI means unset, normalised to ""
-    vlan: str = ""               # "untagged" or a tag id
+    vlan: str = ""               # "untagged" or a tag id (file only)
     mtu: str = ""
     rate: str = ""               # "n/a" on a down link
-    eth: str = ""                # eth6 / eth7 / eth8
-    link: str = ""               # up | down
+    eth: str = ""                # eth6 / eth7 / eth8 (file only)
+    link: str = ""               # up | down (file only)
+    duplex: str = ""             # rcip only
+    autoneg: str = ""            # rcip only
     failover_ips: list[str] = Field(default_factory=list)
 
     @property

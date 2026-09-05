@@ -257,13 +257,15 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
                 ),
               },
               { property: 'address', header: 'IP address', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.address || '—'}</Text> },
+              { property: 'netmask', header: 'Netmask', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.netmask || '—'}</Text> },
+              { property: 'gateway', header: 'Gateway', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.gateway || '—'}</Text> },
               {
                 property: 'link_state',
                 header: 'Link',
                 render: (p: EthernetPort) => (
                   <StatusIndicator
                     state={p.link_state === 'ready' ? 'complete' : 'action_required'}
-                    label={p.link_state}
+                    label={p.link_state === 'ready' && p.rate ? `${p.link_state} · ${p.rate}` : p.link_state}
                   />
                 ),
               },
