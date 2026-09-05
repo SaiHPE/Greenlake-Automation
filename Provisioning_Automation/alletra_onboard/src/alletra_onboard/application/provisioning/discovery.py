@@ -243,8 +243,8 @@ def parse_showhost(showhost_d: str) -> list[ArrayHost]:
             # carry a placeholder (`f6ff:ffff:…`) for a configured-but-not-connected initiator, so
             # only a real login's address is trusted.
             addr = p[-1]
-            if logged_in and addr not in ("n/a", "-", "--") and not host.address:
-                host.address = addr
+            if logged_in and addr not in ("n/a", "-", "--"):
+                host.addresses.setdefault(wwn, addr)
             continue
         wwpn = normalize_wwpn(wwn)
         if len(wwpn) != 16:  # '--' / 'digtest' / anything that is not an FC WWPN
@@ -315,7 +315,10 @@ def assemble_hosts(report: DiscoveryReport, ns_os: dict[str, str] | None = None)
         for wwpn, ports in ah.wwpns.items():
             expanded.append(ArrayHost(name="", persona=ah.persona, wwpns={wwpn: ports}))
         for iqn, ports in ah.iqns.items():
-            expanded.append(ArrayHost(name="", persona=ah.persona, iqns={iqn: ports}, address=ah.address))
+            expanded.append(ArrayHost(
+                name="", persona=ah.persona, iqns={iqn: ports},
+                addresses={iqn: ah.addresses[iqn]} if iqn in ah.addresses else {},
+            ))
 
     for ah in expanded:
         ids = [*ah.wwpns, *ah.iqns]
@@ -331,8 +334,9 @@ def assemble_hosts(report: DiscoveryReport, ns_os: dict[str, str] | None = None)
         host = host_for(ids, name, "array")
         if ah.name and not host.array_host_name:
             host.array_host_name = ah.name
-        if ah.address and not host.address:
-            host.address = ah.address
+        for iqn, addr in ah.addresses.items():
+            if addr and not host.address:
+                host.address = addr
         for wwpn, ports in ah.wwpns.items():
             if wwpn not in host.wwpns:
                 host.wwpns.append(wwpn)
@@ -358,6 +362,19 @@ def assemble_hosts(report: DiscoveryReport, ns_os: dict[str, str] | None = None)
             host.os = os_from_switch_string(os_text)
             if "switch" not in host.sources:
                 host.sources.append("switch")
+
+    # Names derived from an IQN can collide: rack13arcus has three separate array host objects whose
+    # IQNs all say `vmenode2` (…:38298, …:45566, …:62276) on different IPs. Three identical rows read
+    # as one host listed thrice, so a collision falls back to the IQN's trailing id, which is what
+    # distinguishes them. Names that came from vCenter or an array host object are left alone.
+    seen: dict[str, int] = {}
+    for host in hosts:
+        seen[host.name] = seen.get(host.name, 0) + 1
+    for host in hosts:
+        if seen.get(host.name, 0) > 1 and host.iqns and not host.array_host_name.startswith(host.name):
+            suffix = (host.iqns[0].rsplit(":", 1) + [""])[1]
+            if suffix:
+                host.name = f"{host.name}:{suffix}"
 
     return sorted(hosts, key=lambda h: (h.os, h.name.lower()))
 

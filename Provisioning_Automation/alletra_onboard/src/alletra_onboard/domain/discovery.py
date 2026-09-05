@@ -193,7 +193,10 @@ class ArrayHost(BaseModel):
     # one WWPN per HBA port. Kept separate because an IQN cannot be zoned and must never reach the
     # fabric lookup.
     iqns: dict[str, list[str]] = Field(default_factory=dict)
-    address: str = ""                                      # host IP, which showhost reports for iSCSI
+    # IQN -> the initiator's IP. PER INITIATOR, not per host: `showhost` files every unclaimed login
+    # under one nameless row, so a single ArrayHost can carry initiators belonging to several
+    # different machines. A single `address` field gave the first one's IP to all of them.
+    addresses: dict[str, str] = Field(default_factory=dict)
 
 
 class DiscoveryReport(BaseModel):
