@@ -18,7 +18,7 @@ from typing import Callable
 
 from alletra_onboard.application.provisioning.clients import make_array_cli, make_vcenter
 from alletra_onboard.domain.shared import Fabric, normalize_wwpn
-from alletra_onboard.domain.discovery import ArrayHost, ArrayPort, DiscoveryReport
+from alletra_onboard.domain.discovery import ArrayHost, ArrayPort, DiscoveryReport, EthernetPort
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 
 _LOGICAL_NAME_RE = re.compile(r"^\s*Logical Name:\s*(\S+)", re.IGNORECASE)
@@ -34,11 +34,33 @@ def parse_iscsi_ips(showport_iscsi: str) -> dict[str, str]:
     return ips
 
 
+#: Slot-4 card ports 1-2 carry data services (file OR iSCSI); 3-4 are the RCIP-capable ports. A
+#: convention, not a law: it holds on every array measured (rack13arcus, AlletraMP_D22U27, and the
+#: two Panduranga sampled), but Type is the array's own answer and always wins. Position is used
+#: only to say what an UNCONFIGURED port could become, which Type cannot express — a capable-but-idle
+#: RCIP port reports Type `free`, indistinguishable from any other spare.
+RCIP_CAPABLE_PORTS = (3, 4)
+DATA_SERVICES_PORTS = (1, 2)
+
+
+def _nsp(token: str) -> tuple[int, int, int] | None:
+    try:
+        node, slot, card_port = (int(x) for x in token.split(":"))
+    except ValueError:
+        return None
+    return node, slot, card_port
+
+
 def parse_ports(showport: str, iscsi_ips: dict[str, str]) -> list[ArrayPort]:
-    """ALL FC + iSCSI TARGET ports (any state) -> [ArrayPort]. Skips SAS/disk + IP/rcip peer ports.
+    """HOST-FACING FC + iSCSI TARGET ports (any state) -> [ArrayPort].
+
+    Deliberately narrow: this list feeds the zoning candidates, fabric resolution and path
+    verification, all of which mean "ports that can serve a host". Disk, cluster, file and RCIP ports
+    are parsed by the functions below into their own lists, never into this one.
 
     showport columns: N:S:P  Mode  State  Node_WWN/IP  Port_WWN/HW_Addr  Type  Protocol  Label ...
-    (a multi-word Label like "Peer Port 2" trails Protocol, so token[6] is always the Protocol).
+    Label is LAST and may contain spaces ("peer port"), so it is joined from token 7 onward rather
+    than read as a single token.
     """
     out: list[ArrayPort] = []
     for line in (showport or "").splitlines():
@@ -48,22 +70,92 @@ def parse_ports(showport: str, iscsi_ips: dict[str, str]) -> list[ArrayPort]:
         protocol = p[6]
         if protocol not in ("FC", "iSCSI"):
             continue
-        try:
-            node, slot, card_port = (int(x) for x in p[0].split(":"))
-        except ValueError:
+        nsp = _nsp(p[0])
+        if nsp is None:
             continue
+        node, slot, card_port = nsp
+        port_type = p[5]
         if protocol == "FC":
             fabric: Fabric = "odd" if card_port % 2 == 1 else "even"
             out.append(ArrayPort(
                 node=node, slot=slot, card_port=card_port, protocol="fc",
                 wwpn=normalize_wwpn(p[4]), link_state=p[2], fabric=fabric,
-                usage=p[7] if len(p) > 7 else "",   # Label token: "RCFC"/"Peer" -> not a host target port
+                mode=p[1], port_type=port_type,
+                usage=" ".join(p[7:]) if len(p) > 7 else "",
             ))
         else:
             out.append(ArrayPort(
                 node=node, slot=slot, card_port=card_port, protocol="iscsi",
                 address=iscsi_ips.get(p[0], ""), link_state=p[2], fabric=None,
+                mode=p[1], port_type=port_type,
+                usage=" ".join(p[7:]) if len(p) > 7 else "",
             ))
+    return out
+
+
+def parse_replication_ports(showport: str) -> list[EthernetPort]:
+    """RCIP (IP replication) ports from plain `showport`.
+
+    Type `rcip` when configured, `free` when the port exists but has no RCIP config yet — both are
+    reported, because "0:4:4 is available for replication" is the answer an operator planning
+    replication actually needs.
+
+    The trap this guards: on rack13arcus 0:5:1/0:5:2/1:5:1/1:5:2 are ALSO `peer` mode on `IP`
+    protocol, and they are the node interconnect. Type `cluster` is the only thing separating them
+    from a replication port, so a mode+protocol rule would invite an operator to configure the
+    array's own inter-node links.
+    """
+    out: list[EthernetPort] = []
+    for line in (showport or "").splitlines():
+        p = line.split()
+        if len(p) < 7 or not p[0][:1].isdigit() or ":" not in p[0]:
+            continue
+        mode, state, port_type, protocol = p[1], p[2], p[5], p[6]
+        if mode != "peer" or protocol != "IP" or port_type == "cluster":
+            continue
+        nsp = _nsp(p[0])
+        if nsp is None:
+            continue
+        node, slot, card_port = nsp
+        # p[3] is the IP for a configured port and "-" for an unconfigured one.
+        address = p[3] if p[3] not in ("-", "") else ""
+        out.append(EthernetPort(
+            node=node, slot=slot, card_port=card_port, role=port_type,
+            mode=mode, link_state=state, address=address,
+        ))
+    return out
+
+
+def parse_file_ports(showport_file: str) -> list[EthernetPort]:
+    """`showport -file` -> [EthernetPort]. A separate view with its own columns:
+
+        N:S:P  Mode  State  IPAddr/PrefixLen  IPDisable  Gateway  VLAN  MTU  Rate  Eth  Link  FailoverIPs
+
+    File ports occupy the SAME n:s:p as iSCSI ports (x:4:1 / x:4:2), so position cannot tell the two
+    apart — only the array's own Type and this view can. Real-output hazards, all present in the two
+    captures this was written against: Gateway is "-" when unset, Rate is "n/a" on a down link, VLAN
+    reads "untagged" rather than a number, and FailoverIPs is "-" or an address. On the second array
+    1:4:1 is loss_sync with IPDisable Y and Link down, and its address appears as the FailoverIPs
+    value of 1:4:2 — the pair must be read together or a covered port looks simply dead.
+    """
+    out: list[EthernetPort] = []
+    for line in (showport_file or "").splitlines():
+        p = line.split()
+        if len(p) < 12 or not p[0][:1].isdigit() or ":" not in p[0]:
+            continue
+        nsp = _nsp(p[0])
+        if nsp is None:
+            continue
+        node, slot, card_port = nsp
+        address, _, prefix = p[3].partition("/")
+        dash = lambda v: "" if v in ("-", "") else v  # noqa: E731 - the CLI's "unset" marker
+        out.append(EthernetPort(
+            node=node, slot=slot, card_port=card_port, role="file",
+            mode=p[1], link_state=p[2], address=address, prefix_len=prefix,
+            ip_disabled=p[4].upper() == "Y", gateway=dash(p[5]), vlan=p[6], mtu=p[7],
+            rate=dash(p[8]) if p[8] != "n/a" else "", eth=p[9], link=p[10],
+            failover_ips=[ip for ip in p[11:] if dash(ip)],
+        ))
     return out
 
 
@@ -258,7 +350,18 @@ def discover(
         with array_cli_factory(intent.array) as cli:
             _p("Reading FC + iSCSI target ports (showport)…")
             iscsi_ips = parse_iscsi_ips(cli.run("showport -iscsi"))
-            report.array_ports = parse_ports(cli.run("showport"), iscsi_ips)
+            showport = cli.run("showport")
+            report.array_ports = parse_ports(showport, iscsi_ips)
+            # RCIP comes out of the SAME showport (Type rcip / free on a peer IP port). `showport
+            # -rcip` only reports CONFIGURED links and answers "There is no specified port
+            # information" when none exist, so it cannot enumerate the capable-but-idle ports.
+            report.replication_ports = parse_replication_ports(showport)
+            # File services are a separate view with different columns, and are absent on arrays
+            # without file configured — an empty result is normal, not a failure.
+            try:
+                report.file_ports = parse_file_ports(cli.run("showport -file"))
+            except Exception:  # noqa: BLE001 - `showport -file` is unsupported on some releases
+                report.notes.append("Could not read 'showport -file' — file ports not reported.")
             _p("Reading the array's host view (showhost)…")
             report.array_hosts = parse_showhost(cli.run("showhost -d"))
             fc = sum(1 for p in report.array_ports if p.protocol == "fc")
@@ -268,7 +371,15 @@ def discover(
             named = sum(1 for h in report.array_hosts if h.name)
             unclaimed = sum(len(h.wwpns) for h in report.array_hosts if not h.name)
             extra = f", {unclaimed} unclaimed login(s)" if unclaimed else ""
-            _p(f"Array: {fc} FC + {isc} iSCSI target port(s), {named} host(s){extra}. Resolving fabrics…")
+            roles = []
+            if report.file_ports:
+                roles.append(f"{len(report.file_ports)} file")
+            if report.replication_ports:
+                configured = sum(1 for p in report.replication_ports if p.role == "rcip")
+                roles.append(f"{configured}/{len(report.replication_ports)} replication configured")
+            role_text = f", {', '.join(roles)}" if roles else ""
+            _p(f"Array: {fc} FC + {isc} iSCSI target port(s){role_text}, {named} host(s){extra}. "
+               "Resolving fabrics…")
             report.notes.extend(_refine_fabrics_from_switches(cli, report.array_ports, progress=_p))
     except Exception as exc:  # noqa: BLE001
         report.notes.append(f"Array discovery (SSH) failed: {exc}")

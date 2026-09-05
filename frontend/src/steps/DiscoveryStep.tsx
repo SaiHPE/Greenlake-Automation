@@ -4,6 +4,7 @@ import {
   ArrayHost,
   ArrayPort,
   DiscoveryReport,
+  EthernetPort,
   HostHba,
   PreflightCheck,
   PreflightReport,
@@ -188,6 +189,92 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             data={iscsiPorts}
             primaryKey={false}
           />
+        </Surface>
+      )}
+
+      {report && report.file_ports.length > 0 && (
+        <Surface
+          title="File service ports"
+          description="Ethernet ports serving file protocols. These occupy the same n:s:p as iSCSI ports, so the role comes from the array's own port type, never from the slot number."
+        >
+          <DataTable
+            columns={[
+              { property: 'label', header: 'Port', render: (p: EthernetPort) => <Text size="small" style={mono}>{`${p.node}:${p.slot}:${p.card_port}`}</Text> },
+              {
+                property: 'address',
+                header: 'IP address',
+                render: (p: EthernetPort) => (
+                  <Text size="small" style={mono}>{p.address ? `${p.address}/${p.prefix_len}` : '—'}</Text>
+                ),
+              },
+              { property: 'vlan', header: 'VLAN', render: (p: EthernetPort) => <Text size="small">{p.vlan || '—'}</Text> },
+              { property: 'mtu', header: 'MTU', render: (p: EthernetPort) => <Text size="small">{p.mtu || '—'}</Text> },
+              { property: 'eth', header: 'Interface', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.eth || '—'}</Text> },
+              {
+                property: 'link',
+                header: 'Link',
+                render: (p: EthernetPort) => (
+                  <Box gap="xxsmall">
+                    <StatusIndicator
+                      state={p.link === 'up' ? 'complete' : 'action_required'}
+                      label={p.link === 'up' ? `up · ${p.rate}` : p.link_state}
+                    />
+                    {/* A port whose address is carried by its partner is covered, not simply dead. */}
+                    {p.ip_disabled && <Text size="xsmall" color="text-weak">IP disabled</Text>}
+                  </Box>
+                ),
+              },
+              {
+                property: 'failover_ips',
+                header: 'Failover for',
+                render: (p: EthernetPort) => (
+                  <Text size="small" style={mono} color="text-weak">{p.failover_ips.join(', ') || '—'}</Text>
+                ),
+              },
+            ]}
+            data={report.file_ports}
+            primaryKey={false}
+          />
+        </Surface>
+      )}
+
+      {report && report.replication_ports.length > 0 && (
+        <Surface
+          title="Replication ports (RCIP)"
+          description="IP replication ports. A port reported as available is cabled and capable but has no replication configuration yet. The array's node interconnect looks identical apart from its port type and is deliberately excluded."
+        >
+          <DataTable
+            columns={[
+              { property: 'label', header: 'Port', render: (p: EthernetPort) => <Text size="small" style={mono}>{`${p.node}:${p.slot}:${p.card_port}`}</Text> },
+              {
+                property: 'role',
+                header: 'State',
+                render: (p: EthernetPort) => (
+                  <StatusIndicator
+                    state={p.role === 'rcip' ? 'complete' : 'not_started'}
+                    label={p.role === 'rcip' ? 'Configured' : 'Available'}
+                  />
+                ),
+              },
+              { property: 'address', header: 'IP address', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.address || '—'}</Text> },
+              {
+                property: 'link_state',
+                header: 'Link',
+                render: (p: EthernetPort) => (
+                  <StatusIndicator
+                    state={p.link_state === 'ready' ? 'complete' : 'action_required'}
+                    label={p.link_state}
+                  />
+                ),
+              },
+            ]}
+            data={report.replication_ports}
+            primaryKey={false}
+          />
+          <TableSummary>
+            {report.replication_ports.filter((p) => p.role === 'rcip').length} of{' '}
+            {report.replication_ports.length} replication-capable ports configured
+          </TableSummary>
         </Surface>
       )}
 
