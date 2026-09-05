@@ -261,17 +261,23 @@ def build_zoning_plan(
     #    removes host-serving ports). They are never pre-selected; the operator sees the label and
     #    decides. Only ports online in a fabric NS end up placed either way.
     def _caution(p) -> str:
-        u = p.usage.upper()
-        if u == "RCFC" or u.startswith("PEER"):
-            return f"{p.usage}: usually a replication/peer port — select only knowingly"
+        """Warn on the array's own Type, never on the Label.
+
+        The Label is free text an operator typed. On AlletraMP_D22U27 three FC ports carry
+        "peer port", "peer 1:3:1" and "Peer_port" — three spellings on one array — and all three are
+        Type `host`, actively serving hosts. Keying the warning off that string flagged exactly the
+        wrong ports, while the array's genuine peer ports are IP and never reach this code at all.
+        """
+        if p.port_type and p.port_type not in ("host", "free"):
+            return f"Type {p.port_type}: the array does not report this as host-serving"
         return ""
 
     array_ports = [p for p in discovery.array_ports if p.protocol == "fc" and p.wwpn]
-    flagged = [f"{p.label} ({p.usage})" for p in array_ports if _caution(p)]
+    flagged = [f"{p.label} (Type {p.port_type})" for p in array_ports if _caution(p)]
     if flagged:
         plan.notes.append(
-            "Flagged, not excluded — RCFC/Peer labels usually mean replication, but such ports can "
-            "serve hosts; select them only knowingly: " + ", ".join(flagged)
+            "Flagged, not excluded — the array reports these as something other than host-serving, "
+            "but such a port can still serve hosts; select them only knowingly: " + ", ".join(flagged)
         )
 
     # 4) Per fabric: the host + array WWPNs present, and every SIST pair (each host port x each array port).

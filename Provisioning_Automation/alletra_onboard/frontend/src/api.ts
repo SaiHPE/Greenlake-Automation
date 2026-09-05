@@ -191,6 +191,18 @@ export interface ArrayPort {
   wwpn: string; address: string; link_state: string;
   fabric: 'odd' | 'even' | null;
   fabric_switch: string; // switch the port attaches to (showportdev fcfabric); '' if by parity
+  port_type: string;     // showport Type — the array's own role: host | free | disk | cluster
+  usage: string;         // showport Label — FREE TEXT an operator typed. Display only; never classify on it.
+}
+// A non-host-facing ethernet data port: file services or RCIP replication. Kept out of ArrayPort so
+// these can never appear as zoning candidates.
+export interface EthernetPort {
+  node: number; slot: number; card_port: number;
+  role: string;          // file | rcip | free (capable, not yet configured)
+  mode: string; link_state: string;
+  address: string; prefix_len: string; ip_disabled: boolean;
+  gateway: string; vlan: string; mtu: string; rate: string;
+  eth: string; link: string; failover_ips: string[];
 }
 export interface HostHba {
   host_name: string; wwpn: string; model: string | null; os: string | null;
@@ -203,6 +215,8 @@ export interface ArrayHost {
 }
 export interface DiscoveryReport {
   array_ports: ArrayPort[];
+  replication_ports: EthernetPort[];
+  file_ports: EthernetPort[];
   host_hbas: HostHba[];
   array_hosts: ArrayHost[];
   notes: string[];
