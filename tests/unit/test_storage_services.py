@@ -367,7 +367,7 @@ def test_build_plan_flags_existing_and_lists_actions():
     plan = prov.build_plan(
         _intent(),
         _discovered(),
-        zoned_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi(hosts={"esx1"}, volumes={"CRV_Prod01"}),
+        reachable_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi(hosts={"esx1"}, volumes={"CRV_Prod01"}),
     )
     kinds = [(a.kind, a.name, a.exists) for a in plan.actions]
     assert ("host", "esx1", True) in kinds          # esx1 already exists
@@ -379,7 +379,7 @@ def test_build_plan_flags_existing_and_lists_actions():
 
 def test_apply_plan_is_idempotent_and_exports_to_host_set():
     fake = FakeWsapi(hosts={"esx1"})
-    result = prov.apply_plan(_intent(), _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    result = prov.apply_plan(_intent(), _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
     statuses = {(o.kind, o.name): o.status for o in result.outcomes}
     assert statuses[("host", "esx1")] == "exists"
     assert statuses[("volume", "CRV_Prod01")] == "created"
@@ -398,7 +398,7 @@ def test_explicit_exports_override_the_default_and_carry_source_target_and_lun()
                       target_name="esx1"),
     ]})
     fake = FakeWsapi(hosts={"esx1"})
-    result = prov.apply_plan(intent, _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    result = prov.apply_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
     # source/target refs get the WSAPI set: prefix; explicit LUN is recorded, auto LUN is not
     assert ("vlun", "set:CRV_VVSet", "set:CRVLZ_Hostset", 100) in fake.calls
     assert ("vlun", "CRV_Prod01", "esx1") in fake.calls
@@ -413,7 +413,7 @@ def test_build_plan_previews_explicit_exports_with_lun_text():
                       target_name="CRVLZ_Hostset", lun=7),
     ]})
     fake = FakeWsapi(hosts={"esx1"})
-    plan = prov.build_plan(intent, _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    plan = prov.build_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
     vluns = [a for a in plan.actions if a.kind == "vlun"]
     assert len(vluns) == 1  # only the one composed export, not the each-vol default
     assert "LUN 7" in vluns[0].description
@@ -642,7 +642,7 @@ def test_build_plan_hard_gates_on_a_missing_cpg():
     intent = _intent()
     for v in intent.volumes:
         v.cpg = "NOT_THERE"
-    plan = prov.build_plan(intent, _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
+    plan = prov.build_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
     assert plan.error and "NOT_THERE" in plan.error
     assert plan.actions == []                     # nothing offered for approval on a broken premise
 
@@ -657,7 +657,7 @@ def test_apply_creates_only_the_selected_hosts():
     report = _discovered()
     report.host_hbas.append(HostHba(host_name="esx2", wwpn=normalize_wwpn(_C), fabric="odd"))
     fake = FakeWsapi()
-    result = prov.apply_plan(intent, report, zoned_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    result = prov.apply_plan(intent, report, reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
     assert result.error is None
     assert [c[1] for c in fake.calls if c[0] == "host"] == ["esx1"]
 
@@ -672,9 +672,9 @@ def test_default_export_refuses_the_multi_hostset_cross_product():
         HostSetRequest(name="HS1", members=["esx1"]),
         HostSetRequest(name="HS2", members=["esx1"]),
     ]
-    plan = prov.build_plan(intent, _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
+    plan = prov.build_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
     assert plan.error and "refusing" in plan.error
-    result = prov.apply_plan(intent, _discovered(), zoned_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
+    result = prov.apply_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
     assert result.error and "Compose the exports" in result.error
 
 
@@ -948,7 +948,7 @@ def test_apply_plan_sets_persona_per_host_os():
         HostHba(host_name="winbox", wwpn=_B, os="Microsoft Windows Server 2022"),
     ])
     fake = FakeWsapi()
-    prov.apply_plan(_intent(), d, zoned_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    prov.apply_plan(_intent(), d, reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
     personas = {c[1]: c[3] for c in fake.calls if c[0] == "host"}  # ("host", name, wwns, persona)
     assert personas == {"esx1": "VMware", "winbox": "WindowsServer"}  # name per host, not hardcoded
 
@@ -1209,45 +1209,51 @@ def _two_hosts():
     )
 
 
-def test_build_plan_excludes_unzoned_hosts_by_name():
+def test_unreachable_hosts_are_created_but_their_exports_are_held():
+    """ADR 0012 revised: HPE's documented order is register-first, so the host object is made even
+    for a server the array cannot see. Only the EXPORT waits."""
     plan = prov.build_plan(
-        _intent(), _two_hosts(), zoned_hosts={"esx1"}, wsapi_factory=lambda c: FakeWsapi(),
+        _intent(), _two_hosts(), reachable_hosts={"esx1"}, wsapi_factory=lambda c: FakeWsapi(),
     )
     hosts = [a.name for a in plan.actions if a.kind == "host"]
-    assert hosts == ["esx1"]
-    assert any("esx2" in n and "not zoned" in n for n in plan.notes), plan.notes
-    # ...and the host set it would have joined does not carry it either.
-    members = [a.detail["members"] for a in plan.actions if a.kind == "hostset"]
-    assert members and all("esx2" not in m for m in members)
+    assert sorted(hosts) == ["esx1", "esx2"]          # esx2 is created despite being unreachable
+    assert any("esx2" in n and "not yet reachable" in n for n in plan.notes), plan.notes
 
 
-def test_apply_refuses_when_no_composed_host_is_zoned():
-    result = prov.apply_plan(
-        _intent(), _two_hosts(), zoned_hosts=set(), wsapi_factory=lambda c: FakeWsapi(),
-    )
-    assert result.error and "zoned on both fabrics" in result.error
-
-
-def test_apply_creates_only_zoned_hosts_even_though_the_intent_names_more():
-    """apply re-derives its host list from the intent rather than replaying the plan, so the gate has
-    to be applied in BOTH places. Without it here the exclusion is cosmetic and the array still gets
-    the unzoned host."""
-    fake = FakeWsapi()
-    prov.apply_plan(_intent(), _two_hosts(), zoned_hosts={"esx1"}, wsapi_factory=lambda c: fake)
-    created = [c[1] for c in fake.calls if c[0] == "host"]
-    assert created == ["esx1"]
-
-
-def test_an_explicit_member_that_is_not_zoned_is_dropped_from_the_host_set():
-    from alletra_onboard.domain.provisioning import HostSetRequest
-
-    intent = _intent()
-    intent.host_sets = [HostSetRequest(name="hs", members=["esx1", "esx2"])]
+def test_a_host_set_export_survives_one_unreachable_member():
+    """Exporting to the set is HPE's practice for a cluster: the remaining members pick the LUN up as
+    they come online. One reachable member is enough for the export to be worth making."""
     plan = prov.build_plan(
-        intent, _two_hosts(), zoned_hosts={"esx1"}, wsapi_factory=lambda c: FakeWsapi(),
+        _intent(), _two_hosts(), reachable_hosts={"esx1"}, wsapi_factory=lambda c: FakeWsapi(),
     )
-    members = next(a.detail["members"] for a in plan.actions if a.kind == "hostset")
-    assert members == ["esx1"]
+    assert [a.kind for a in plan.actions].count("vlun") > 0
+    assert not any("held back" in n for n in plan.notes), plan.notes
+
+
+def test_an_export_is_held_when_no_member_can_reach_the_array():
+    plan = prov.build_plan(
+        _intent(), _two_hosts(), reachable_hosts=set(), wsapi_factory=lambda c: FakeWsapi(),
+    )
+    assert not [a for a in plan.actions if a.kind == "vlun"]
+    assert any("held back" in n for n in plan.notes), plan.notes
+    # ...but the hosts, host set and volumes are all still created.
+    assert {a.kind for a in plan.actions} >= {"host", "hostset", "volume"}
+
+
+def test_apply_holds_the_same_exports_the_plan_showed():
+    """apply re-derives from the intent rather than replaying the plan, so the filter has to be in
+    both places or the array gets an export the operator was told was held."""
+    fake = FakeWsapi()
+    prov.apply_plan(_intent(), _two_hosts(), reachable_hosts=set(), wsapi_factory=lambda c: fake)
+    assert not [c for c in fake.calls if c[0] == "vlun"]
+    assert [c[1] for c in fake.calls if c[0] == "host"]      # hosts still created
+
+
+def test_apply_still_refuses_when_discovery_found_no_hosts_at_all():
+    result = prov.apply_plan(
+        _intent(), disc.DiscoveryReport(), reachable_hosts=set(), wsapi_factory=lambda c: FakeWsapi(),
+    )
+    assert result.error and "no hosts" in result.error
 
 
 def test_zoning_report_lists_only_hosts_on_both_fabrics_as_the_gate():
@@ -1406,3 +1412,119 @@ def test_rcip_detail_cannot_be_the_port_list_on_its_own():
     configured = set(disc.parse_rcip_detail(_D22U27_RCIP))
     assert configured < capable                            # strict subset: 2 of 4
     assert capable - configured == {"0:4:4", "1:4:4"}
+
+
+# Live LZ (10.64.154.225) output: its RCIP links carry NO gateway, so the column is "-".
+_LZ_RCIP = """N:S:P State ---HwAddr---     IPAddr Netmask/PrefixLen Gateway  MTU   Rate Duplex AutoNeg
+0:4:3 loss_sync 40A6B7D7D1EA 10.222.1.1     255.255.255.0       - 1500 10Gbps   Full     Yes
+0:4:4 loss_sync 40A6B7D7D1EB 10.222.1.2     255.255.255.0       - 1500 10Gbps   Full     Yes
+"""
+
+
+def test_an_unset_rcip_gateway_is_normalised_not_shown_as_a_dash():
+    """Measured live on LZ: the raw '-' reached the UI as literal text, while the file parser had
+    always normalised it. Both views use the CLI's same 'unset' marker and must agree."""
+    detail = disc.parse_rcip_detail(_LZ_RCIP)
+    assert detail["0:4:3"]["gateway"] == ""
+    assert detail["0:4:3"]["netmask"] == "255.255.255.0"   # a real value is untouched
+    assert detail["0:4:3"]["rate"] == "10Gbps"
+
+
+# ---------------- host identity: IQNs, OS grouping (rack13arcus, 2026-09-02) ----------------
+
+# Verbatim rows from rack13arcus `showhost -d`: an FC ESXi host, HPE VME iSCSI hosts, an unclaimed
+# Windows iSCSI initiator, and an unclaimed FC login.
+_ARCUS_MIXED = """Id Name                            Persona      ---WWN/iSCSI_Name/NQN--- Port  IP/IP:Port
+16 10.132.30.136                   VMware       10005CED8C5312A8         0:3:3 n/a
+16 10.132.30.136                   VMware       10005CED8C5312A9         1:3:3 n/a
+ 9 HPE_VM_07dc508b8e41df1fcf6ab266 Generic-ALUA iqn.2024-12.com.hpe:hvm3:50796 1:4:1 10.132.30.132
+ 9 HPE_VM_07dc508b8e41df1fcf6ab266 Generic-ALUA iqn.2024-12.com.hpe:hvm3:50796 0:4:1 10.132.30.132
+15 HPE_VM_68957800ae29ed0cb49788c9 Generic-ALUA iqn.2024-12.com.hpe:vmenode3:2469 ---   f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff
+-- --                              --           iqn.1991-05.com.microsoft:win-tn3n7rujk3v 1:4:1 10.132.30.87
+-- --                              --           51402EC02089CC1C         0:3:3 n/a
+"""
+
+
+def test_iqns_are_kept_and_never_mixed_into_the_fc_wwpns():
+    """Until 2026-09-02 every IQN row was dropped on a length check, so the array was reporting each
+    Windows/Linux/VME initiator and the parser threw it away."""
+    hosts = {h.name: h for h in disc.parse_showhost(_ARCUS_MIXED)}
+    vme = hosts["HPE_VM_07dc508b8e41df1fcf6ab266"]
+    assert list(vme.iqns) == ["iqn.2024-12.com.hpe:hvm3:50796"]
+    assert sorted(vme.iqns["iqn.2024-12.com.hpe:hvm3:50796"]) == ["0:4:1", "1:4:1"]
+    assert vme.wwpns == {}                       # an IQN must never reach the fabric lookup
+    assert vme.address == "10.132.30.132"
+
+    esxi = hosts["10.132.30.136"]
+    assert set(esxi.wwpns) == {"10005CED8C5312A8", "10005CED8C5312A9"} and esxi.iqns == {}
+
+
+def test_a_configured_but_not_connected_iscsi_initiator_gets_no_address():
+    """Its Port is '---' and the IP column carries an f6ff:… placeholder, not a real address."""
+    hosts = {h.name: h for h in disc.parse_showhost(_ARCUS_MIXED)}
+    idle = hosts["HPE_VM_68957800ae29ed0cb49788c9"]
+    assert idle.iqns == {"iqn.2024-12.com.hpe:vmenode3:2469": []}   # known, but no login
+    assert idle.address == ""
+
+
+def test_unclaimed_fc_and_iscsi_logins_share_the_empty_host_but_stay_in_their_own_fields():
+    unclaimed = next(h for h in disc.parse_showhost(_ARCUS_MIXED) if not h.name)
+    assert set(unclaimed.wwpns) == {"51402EC02089CC1C"}
+    assert set(unclaimed.iqns) == {"iqn.1991-05.com.microsoft:win-tn3n7rujk3v"}
+    assert unclaimed.address == "10.132.30.87"
+
+
+def test_hosts_are_assembled_and_grouped_by_os():
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    report = DiscoveryReport(
+        array_ports=[ArrayPort(node=0, slot=3, card_port=3, protocol="fc",
+                               wwpn="20330002AC02D495", link_state="ready", fabric="odd")],
+        array_hosts=disc.parse_showhost(_ARCUS_MIXED),
+        host_hbas=[HostHba(host_name="esx-prod-01", wwpn="10005CED8C5312A8", fabric="odd")],
+    )
+    hosts = {h.name: h for h in disc.assemble_hosts(report)}
+
+    # vCenter wins the naming race, and its WWPN joins to the array's rows for the SAME server.
+    assert "esx-prod-01" in hosts and "10.132.30.136" not in hosts
+    esxi = hosts["esx-prod-01"]
+    assert esxi.os == "esxi"
+    assert set(esxi.wwpns) == {"10005CED8C5312A8", "10005CED8C5312A9"}
+    assert esxi.array_host_name == "10.132.30.136"   # the array's own name, kept but not displayed
+    assert sorted(esxi.sources) == ["array", "vcenter"]
+
+    # VME is named from its IQN, not from the array's hash.
+    assert "hvm3" in hosts and hosts["hvm3"].os == "vme"
+    assert hosts["hvm3"].address == "10.132.30.132"
+
+    # The unclaimed Windows initiator becomes a host named from its own IQN.
+    assert "win-tn3n7rujk3v" in hosts
+    assert hosts["win-tn3n7rujk3v"].os == "windows"
+    assert hosts["win-tn3n7rujk3v"].transports == ["iscsi"]
+
+
+def test_os_is_inferred_from_the_iqn_authority_and_never_guessed():
+    from alletra_onboard.domain.discovery import os_from_iqn, os_from_switch_string
+
+    assert os_from_iqn("iqn.1991-05.com.microsoft:win-x") == "windows"
+    assert os_from_iqn("iqn.2005-03.org.open-iscsi:abc") == "linux"
+    assert os_from_iqn("iqn.1998-01.com.vmware:esx1") == "esxi"
+    assert os_from_iqn("iqn.2024-12.com.hpe:hvm3:1") == "vme"
+    assert os_from_iqn("iqn.2001-04.com.example:storage") == "unknown"   # not guessed
+    assert os_from_switch_string("VMware ESXi 8.0.3") == "esxi"
+    assert os_from_switch_string("") == "unknown"
+
+
+def test_the_unclaimed_bucket_is_split_into_one_host_per_initiator():
+    """`showhost -d` files EVERY unclaimed login under one nameless row, but on rack13arcus that
+    bucket holds a Windows IQN at 10.132.30.87 and an unrelated FC WWPN — two different machines.
+    Nothing says which initiators belong together, so they must not be merged into one server."""
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    hosts = disc.assemble_hosts(DiscoveryReport(array_hosts=disc.parse_showhost(_ARCUS_MIXED)))
+    unnamed = [h for h in hosts if not h.array_host_name]
+    win = next(h for h in unnamed if h.iqns)
+    fc = next(h for h in unnamed if h.wwpns)
+    assert win is not fc
+    assert win.transports == ["iscsi"] and win.os == "windows"
+    assert fc.transports == ["fc"] and fc.os == "unknown"     # an FC WWPN alone identifies no OS

@@ -212,6 +212,21 @@ export interface HostHba {
 // into (empty = configured but not logged in / not zoned).
 export interface ArrayHost {
   name: string; persona: string; wwpns: Record<string, string[]>;
+  iqns: Record<string, string[]>; address: string;
+}
+// One physical server, joined across vCenter, the array and the fabric name server on INITIATOR ID
+// (never on name — those namespaces do not intersect). `os` is inferred from the IQN authority or
+// the name server's OS string, and 'unknown' is a real answer rather than a failure.
+export interface DiscoveredHost {
+  name: string;
+  os: 'esxi' | 'windows' | 'linux' | 'vme' | 'unknown';
+  address: string;
+  wwpns: string[];
+  iqns: string[];
+  fabrics: string[];
+  logged_in: boolean;
+  array_host_name: string;
+  sources: string[];
 }
 export interface DiscoveryReport {
   array_ports: ArrayPort[];
@@ -219,6 +234,7 @@ export interface DiscoveryReport {
   file_ports: EthernetPort[];
   host_hbas: HostHba[];
   array_hosts: ArrayHost[];
+  hosts: DiscoveredHost[];
   notes: string[];
   error: string | null;
 }

@@ -3,6 +3,29 @@
 **Status:** accepted, 2026-09-02. Reaffirms [ADR 0004](0004-auto-remediate-san-zoning.md); removes
 the write path that shipped against it in v0.14.0 and v0.15.0.
 
+> **REVISED the same day: the gate moved from the RUN to the EXPORT.** As first written this ADR
+> said provisioning "unlocks per host on verified zoning", implemented as a refusal of the whole
+> apply until at least one host verified. Looking up the iSCSI case showed that is the wrong
+> operation to gate.
+>
+> HPE's documented order is **register first**. `createhost -persona 15 "Hera" -iscsi
+> "iqn.1991-05.com.microsoft:hera.lionetti.lab"` takes an IQN the array has never seen, and the VME
+> guidance is explicit that *"if the host has never established an iSCSI session, the IQN may not
+> appear automatically"* and should be registered beforehand. The earlier deep research had already
+> found that host creation is not gated on zoning by the API either, so our gate was refusing a
+> legitimate order of operations on **both** transports. It only became obvious via iSCSI.
+>
+> So hosts, host sets, volumes and VV sets are always created. Only the **export** waits, on whether
+> the array can reach the target: logged in on both fabrics for FC, an active session for iSCSI once
+> that transport is built. Creating a host object for a server that is not cabled yet is harmless and
+> reversible; an export to a host that cannot reach the array is the thing that reports "created" and
+> is silently dead, which is the property the gate existed to protect.
+>
+> A **host-set** export needs only ONE reachable member. Exporting to the set is HPE's practice for a
+> cluster and the remaining members pick the LUN up as they come online. It is held back only when no
+> member can reach the array. Sources: the ESXi Implementation Guide (which also states that
+> exporting one VLUN over both iSCSI and FC is unsupported) and the HPE VME iSCSI guidance.
+
 **Decision.** The application has no ability to write to a fibre-channel switch. `BrocadeClient`
 keeps `ALLOWED_READ` and nothing else. The zoning step's deliverable is the **command set**: the
 exact, correctly-ordered `alicreate` / `zonecreate` / `cfgadd` / `cfgenable` text for the operator's

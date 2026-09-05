@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   ArrayHost,
   ArrayPort,
+  DiscoveredHost,
   DiscoveryReport,
   EthernetPort,
   HostHba,
@@ -26,6 +27,17 @@ interface Props {
 }
 
 const mono = { fontFamily: 'ui-monospace, Consolas, monospace' };
+
+// Hosts are grouped by OS because what an operator must do next differs per platform. "unknown" is
+// listed last and is a real answer: an FC initiator that is not in vCenter registers no OS the tool
+// can read, and an unrecognised IQN authority is not guessed into a bucket.
+const OS_SECTIONS = [
+  { os: 'esxi', title: 'ESXi hosts', description: 'From vCenter, joined to what the array sees logged in.' },
+  { os: 'windows', title: 'Windows hosts', description: 'Identified from the iSCSI IQN authority (com.microsoft), which is the only OS signal an iSCSI initiator carries.' },
+  { os: 'linux', title: 'Linux hosts', description: 'Identified from the iSCSI IQN authority (open-iscsi, redhat and similar).' },
+  { os: 'vme', title: 'HPE VM Essentials hosts', description: 'Named from the IQN node rather than the array’s generated HPE_VM_ identifier.' },
+  { os: 'unknown', title: 'Unidentified hosts', description: 'Logged in, but nothing available reports an operating system. Add them to the sheet if you need them named.' },
+] as const;
 
 export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
@@ -278,6 +290,80 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             {report.replication_ports.length} replication-capable ports configured
           </TableSummary>
         </Surface>
+      )}
+
+      {report && (report.hosts ?? []).length > 0 && (
+        <>
+          {OS_SECTIONS.map(({ os, title, description }) => {
+            const rows = (report.hosts ?? []).filter((h) => h.os === os);
+            if (rows.length === 0) return null;
+            return (
+              <Surface key={os} title={`${title} (${rows.length})`} description={description}>
+                <DataTable
+                  columns={[
+                    {
+                      property: 'name',
+                      header: 'Host',
+                      render: (h: DiscoveredHost) => (
+                        <Box gap="xxsmall">
+                          <Text size="small">{h.name}</Text>
+                          {/* The array's own name for the same server, when it differs — an operator
+                              cross-checking showhost needs to recognise the row. */}
+                          {h.array_host_name && h.array_host_name !== h.name && (
+                            <Text size="xsmall" color="text-weak">on the array: {h.array_host_name}</Text>
+                          )}
+                        </Box>
+                      ),
+                    },
+                    {
+                      property: 'address',
+                      header: 'IP address',
+                      render: (h: DiscoveredHost) => <Text size="small" style={mono}>{h.address || '—'}</Text>,
+                    },
+                    {
+                      property: 'wwpns',
+                      header: 'WWPN (FC)',
+                      render: (h: DiscoveredHost) => (
+                        <Box gap="xxsmall">
+                          {h.wwpns.length === 0
+                            ? <Text size="small" color="text-weak">—</Text>
+                            : h.wwpns.map((w) => <Text key={w} size="small" style={mono}>{w}</Text>)}
+                        </Box>
+                      ),
+                    },
+                    {
+                      property: 'iqns',
+                      header: 'IQN (iSCSI)',
+                      render: (h: DiscoveredHost) => (
+                        <Box gap="xxsmall">
+                          {h.iqns.length === 0
+                            ? <Text size="small" color="text-weak">—</Text>
+                            : h.iqns.map((q) => <Text key={q} size="small" style={mono}>{q}</Text>)}
+                        </Box>
+                      ),
+                    },
+                    {
+                      property: 'logged_in',
+                      header: 'Seen by the array',
+                      render: (h: DiscoveredHost) => (
+                        <StatusIndicator
+                          state={h.logged_in ? 'complete' : 'not_started'}
+                          label={
+                            h.logged_in
+                              ? (h.fabrics.length ? `Logged in (${h.fabrics.join(', ')})` : 'Logged in')
+                              : 'Not logged in'
+                          }
+                        />
+                      ),
+                    },
+                  ]}
+                  data={rows}
+                  primaryKey={false}
+                />
+              </Surface>
+            );
+          })}
+        </>
       )}
 
       {report && report.host_hbas.length > 0 && (
