@@ -497,7 +497,7 @@ async def test_path_verify_emits_per_host_report(tmp_path, monkeypatch):
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())
     service._discovery[run.run_id] = DiscoveryReport()  # tier-2 needs discovery present
-    monkeypatch.setattr(pv, "verify_provisioned_paths", lambda intent, discovery: PathVerification(
+    monkeypatch.setattr(pv, "verify_provisioned_paths", lambda intent, discovery, **kw: PathVerification(
         hosts=[HostPathStatus(host="esx1", verdict="live", hbas_with_paths=2, fabrics=["odd", "even"], detail="ok")]))
 
     service.start_path_verify(run.run_id)

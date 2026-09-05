@@ -185,6 +185,36 @@ def _reachable_targets(
     return do, skip
 
 
+def exported_volumes_by_host(
+    intent: ProvisioningIntent,
+    discovery: DiscoveryReport,
+    reachable_hosts: set[str],
+) -> "OrderedDict[str, set[str]]":
+    """{host: the volumes actually exported to it} — the tier-2 verification target.
+
+    Resolves host-set exports down to their members and expands a VV-set source to its volumes, so
+    the verifier asks "is THIS volume live on THIS host" instead of crossing every host with every
+    volume in the intent. Every provisioned host appears, including those with an empty set: a host
+    whose export is held back is a real state worth reporting, not an absence.
+    """
+    hosts = _selected_hosts(intent, discovery)
+    out: "OrderedDict[str, set[str]]" = OrderedDict((name, set()) for name in hosts)
+    try:
+        exports = _resolve_exports(intent)
+    except ExportDefaultError:
+        return out                       # the plan refuses; there is nothing presented to verify
+    exports, _held = _reachable_targets(exports, intent, hosts, reachable_hosts)
+    vvsets = _vvsets(intent)
+    members_of = {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}
+    for ex in exports:
+        volumes = set(vvsets.get(ex.source_name, [])) if ex.source_kind == "vvset" else {ex.source_name}
+        targets = members_of.get(ex.target_name, []) if ex.target_kind == "hostset" else [ex.target_name]
+        for target in targets:
+            if target in out:
+                out[target] |= volumes
+    return out
+
+
 def build_plan(
     intent: ProvisioningIntent,
     discovery: DiscoveryReport,

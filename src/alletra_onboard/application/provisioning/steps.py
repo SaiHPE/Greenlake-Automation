@@ -282,7 +282,10 @@ class ProvisioningSteps:
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.paths.checking",
                    "Reading showvlun -a to verify the exported LUNs are live (read-only)…")
-        verification = await asyncio.to_thread(storage_path_verify.verify_provisioned_paths, intent, discovery)
+        zoned = self._discovery_steps.zoned_hosts(run.run_id)
+        verification = await asyncio.to_thread(partial(
+            storage_path_verify.verify_provisioned_paths, intent, discovery, reachable_hosts=zoned,
+        ))
         live = sum(1 for h in verification.hosts if h.verdict == "live")
         status = RunStatus.RETRYABLE_FAILURE if verification.error else RunStatus.WAITING_FOR_OPERATOR
         coord.set_state(run, status, WorkflowPhase.STORAGE_PROVISION)
