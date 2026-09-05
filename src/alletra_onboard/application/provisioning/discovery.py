@@ -26,6 +26,7 @@ from alletra_onboard.domain.discovery import (
     EthernetPort,
     node_name_from_iqn,
     os_from_iqn,
+    os_from_persona,
     os_from_switch_string,
 )
 from alletra_onboard.domain.provisioning import ProvisioningIntent
@@ -323,6 +324,13 @@ def assemble_hosts(report: DiscoveryReport, ns_os: dict[str, str] | None = None)
     for ah in expanded:
         ids = [*ah.wwpns, *ah.iqns]
         if not ids:
+            # A host OBJECT with no initiators configured — `test2-alletra` on AlletraMP_D22U27
+            # prints as `-- -- --`. It cannot be joined, zoned or provisioned, but it exists on the
+            # array and an operator looking for it should see it rather than wonder where it went.
+            hosts.append(DiscoveredHost(
+                name=ah.name, os=os_from_persona(ah.persona), array_host_name=ah.name,
+                sources=["array"],
+            ))
             continue
         # The array's own name is preferred, EXCEPT when it is an auto-generated opaque one. HPE VME
         # registers as `HPE_VM_07dc508b8e41df1fcf6ab266` while its IQN says
@@ -354,6 +362,11 @@ def assemble_hosts(report: DiscoveryReport, ns_os: dict[str, str] | None = None)
                 host.logged_in = True
             if host.os == "unknown":
                 host.os = os_from_iqn(iqn)
+        # The array's own persona, after the IQN authority: an IQN is more specific (a VME host is
+        # Generic-ALUA on the array but com.hpe in its IQN), and vCenter above is more specific
+        # still. Without either, this is the only thing that identifies a Windows or ESXi FC host.
+        if host.os == "unknown":
+            host.os = os_from_persona(ah.persona)
 
     # 3) The fabric name server: the only OS signal for an FC host nothing else identified.
     for wwpn, os_text in ns_os.items():

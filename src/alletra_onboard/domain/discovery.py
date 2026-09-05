@@ -133,6 +133,26 @@ def os_from_switch_string(os_text: str) -> HostOs:
     return "unknown"
 
 
+def os_from_persona(persona: str) -> HostOs:
+    """The OS the array's own host PERSONA implies.
+
+    The most direct signal there is for an FC host, and the only one available when there is no
+    vCenter and no switch credentials — which is the normal case for a Windows or Linux server.
+    Measured on AlletraMP_D22U27, where all nine hosts are FC-only and the array reports
+    `VMware` for the ESXi ones and `WindowsServer` for `DL380G11D21U6_3D1X` and `winhost_CDS`.
+
+    `Generic-ALUA` deliberately maps to unknown. It is HPE's catch-all — Linux hosts, HPE VME hosts
+    and anything unclassified all sit under it — so treating it as Linux would invent a fact. An
+    IQN authority is more specific and takes precedence where one exists.
+    """
+    low = (persona or "").strip().lower()
+    if low == "vmware":
+        return "esxi"
+    if low.startswith("windows"):
+        return "windows"
+    return "unknown"
+
+
 def node_name_from_iqn(iqn: str) -> str:
     """The host part an IQN carries after its colon, when it has one.
 
