@@ -34,9 +34,14 @@ So the **jump box runs the entire flow (A + B + C) from the one web app** — no
 
 ## Repositories & machines
 
-GitHub (HPE Enterprise): **`github.hpe.com/g-sai-roopesh/greenlake-automation`** (`origin`). The
-earlier `github.com/SaiHPE/Greenlake-Automation` is no longer reachable and is kept only as the
-`github-com` remote on the dev workstation. There are **two branches** that matter:
+The code is pushed to **two** GitHubs, kept identical:
+
+| Remote | URL | Role |
+|---|---|---|
+| `origin` | `github.hpe.com/g-sai-roopesh/greenlake-automation` (HPE Enterprise, private) | canonical for HPE machines (jump box, laptop); releases published by hand with `scripts\publish_release.ps1` — Actions is disabled there |
+| `github-com` | `github.com/SaiHPE/Greenlake-Automation` (public) | mirror with **GitHub Actions on hosted Windows runners**: every `main` push refreshes the `latest` zip, every `v*` tag builds and attaches the `.exe` zips |
+
+There are **two branches** that matter:
 
 | Branch | Contents | Used by |
 |---|---|---|
@@ -54,23 +59,25 @@ needs Node — they just pull and run.
 
 ### Syncing (the important part)
 
-**Dev workstation → GitHub** (after changing the package). Push `main`, refresh the subtree branch
-so the jump box can pull it, then publish the release zip (Actions cannot do it — see *Releasing*):
+**Dev workstation → GitHub** (after changing the package). Push `main` and the tags to **both**
+remotes, refresh the subtree branch so the jump box can pull it, then publish the zip on GHES
+(github.com publishes itself through Actions):
 
 ```powershell
 # from the repo root, after committing to main
-git push origin main
+git push origin main --tags; git push github-com main --tags
 git branch -D jumpbox-package
 git subtree split --prefix=Provisioning_Automation/alletra_onboard -b jumpbox-package
-git push -f origin jumpbox-package
-cd Provisioning_Automation\alletra_onboard; .\scripts\publish_release.ps1     # refresh /releases/latest
+git push -f origin jumpbox-package; git push -f github-com jumpbox-package
+cd Provisioning_Automation\alletra_onboard; .\scripts\publish_release.ps1     # GHES: refresh /releases/latest
 ```
 Do this **every time** a push to `main` touches the package, or the jump box will lag.
 If a UI source file changed, run `npm run build` in `frontend/` and commit the new `frontend/dist`
 **before** pushing (`publish_release.ps1` rebuilds it for the zip regardless).
 
-Authentication on the workstation is the GitHub CLI: `gh auth login --hostname github.hpe.com`
-once, then `gh auth setup-git --hostname github.hpe.com` so plain `git push` uses the same token.
+Authentication on the workstation is the GitHub CLI, once per host: `gh auth login --hostname
+github.hpe.com` and `gh auth login --hostname github.com`, each followed by `gh auth setup-git
+--hostname <host>` so plain `git push` uses the same token.
 
 **Jump box ← GitHub** (flat copy, `jumpbox-package` branch):
 ```powershell
@@ -99,9 +106,10 @@ git log -1 --oneline
 Three ways, easiest first. The full repo is deeply nested; you don't need to navigate it.
 
 **1. Release zip (operators — no git, no Node).** Download **`alletra-onboard-latest.zip`** from
-the [latest release](https://github.hpe.com/g-sai-roopesh/greenlake-automation/releases/latest)
-(refreshed on every release — see *Releasing* below), extract, and **double-click
-`start.cmd`** (or run it from a terminal). It bypasses the PowerShell execution policy that blocks
+the latest release — [github.hpe.com](https://github.hpe.com/g-sai-roopesh/greenlake-automation/releases/latest)
+or [github.com](https://github.com/SaiHPE/Greenlake-Automation/releases/latest), same file —
+extract, and **double-click `start.cmd`** (or run it from a terminal). It bypasses the PowerShell
+execution policy that blocks
 unsigned/downloaded scripts and self-elevates (so the in-app clock-sync works), then runs the
 launcher. The PowerShell-native equivalent:
 ```powershell
@@ -123,9 +131,9 @@ cd alletra-onboard; .\start.ps1
 `Provisioning_Automation/alletra_onboard/`.
 
 **4. Packaged `.exe` (customers — no Python, no git, no Node).** Three self-contained Windows builds
-are attached to a **tagged** GitHub Release (built on Windows with
-`scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe`, or by `.github/workflows/exe.yml` once a
-self-hosted Windows runner exists):
+are attached to a **tagged** GitHub Release. On github.com they are built automatically by
+`.github/workflows/exe.yml` when a `v*` tag is pushed (hosted Windows runner); on github.hpe.com
+build them on a Windows box with `scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe`:
 - **`alletra-onboard-win64.zip`** (~60 MB) — the **slim** build. It **drives an already-installed
   Chrome/Edge** (which almost every Windows box has) — no download. Only if *no* branded browser is
   present does it download Chromium (~150 MB) on first launch. Use this by default. (Force a choice
@@ -144,34 +152,41 @@ SmartScreen may warn (the build is unsigned) — click **More info → Run anywa
 
 ### Releasing
 
-One script does it, from any machine with `git`, Node and the GitHub CLI signed in to
-`github.hpe.com`: **`scripts\publish_release.ps1`**. It reads the host/owner/repo from the `origin`
-remote, so the same script targets whichever GitHub the clone came from.
+One script does it — **`scripts\publish_release.ps1`** — and the two workflows in `.github/workflows/`
+just call it. It reads the host/owner/repo from a git remote (`-Remote`, default `origin`), so the
+same script targets whichever GitHub you point it at.
+
+| Where | How the rolling `latest` zip is refreshed | How a `vX.Y.Z` tag gets its `.exe` zips |
+|---|---|---|
+| **github.com** (`github-com`) | automatically: `release.yml` on every push to `main` that touches the app | automatically: `exe.yml` on tag push builds slim, offline and init-only on `windows-latest`, smoke-tests each, and attaches them (pre-release when the tag has a `-`) |
+| **github.hpe.com** (`origin`) | by hand: `.\scripts\publish_release.ps1` from any machine with Node + `gh` signed in | by hand on Windows: `.\scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe` |
 
 ```powershell
 cd Provisioning_Automation\alletra_onboard
-.\scripts\publish_release.ps1                          # build the zip, refresh the rolling `latest` release
-.\scripts\publish_release.ps1 -Tag v0.16.0-rc.6 -BuildExe   # Windows only: build the 3 .exe zips, upload to the tag
+.\scripts\publish_release.ps1                                 # origin: build the zip, refresh `latest`
+.\scripts\publish_release.ps1 -Remote github-com               # same, against github.com (normally Actions does this)
+.\scripts\publish_release.ps1 -Tag v0.16.0-rc.6 -BuildExe       # Windows only: build the 3 .exe zips, upload to the tag
 ```
 The rolling **`latest`** release is refreshed in place (assets clobbered, never deleted and
 recreated), so `/releases/latest` never points at nothing. A tag containing `-` (an `rc`) is
 published as a **pre-release**.
 
-**Why not GitHub Actions?** `.github/workflows/release.yml` and `exe.yml` do exactly the above, but
-`github.hpe.com` is GitHub Enterprise Server: there are no GitHub-hosted runners, and as of
-2026-09-12 Actions is disabled by enterprise policy for this user-owned repository (enabling it
-via the API returns 204 and stays `false`; no runner packages are offered). The workflows are kept
-current and target `[self-hosted, windows, x64]`; the day a runner can be registered (Settings →
-Actions → Runners, on a Windows box with Node 20, Python 3.12 and `gh`), they take over untouched.
+**Why by hand on github.hpe.com?** It is GitHub Enterprise Server: there are no GitHub-hosted
+runners, and as of 2026-09-12 Actions is disabled by enterprise policy for this user-owned
+repository (enabling it via the API returns 204 and stays `false`; no runner packages are offered).
+The workflows select their runner from `github.server_url` — `windows-latest` on github.com, a
+`[self-hosted, windows, x64]` label set on GHES — so the day a runner can be registered there
+(Settings → Actions → Runners, on a Windows box with Node 20, Python 3.12 and `gh`), they take
+over untouched.
 
 To build the zip without publishing (needs Node):
 ```powershell
 .\scripts\build_release.ps1     # -> release\alletra-onboard-<version>.zip + .sha256
 ```
 The zip excludes `node_modules`, `.venv`, tests, and captures — just `src/`, the prebuilt
-`frontend/dist/`, `config/arrays.example.csv`, the scripts, and `start.ps1` (~210 KB). Bump the
-version in `pyproject.toml` (and `src/alletra_onboard/__init__.py`, `frontend/package.json`) to
-change the versioned asset name.
+`frontend/dist/`, `config/arrays.example.csv`, the scripts, and `start.ps1` (~5 MB with the
+prerequisite videos). Bump the version in `pyproject.toml` (and `src/alletra_onboard/__init__.py`,
+`frontend/package.json`) to change the versioned asset name.
 
 ---
 
