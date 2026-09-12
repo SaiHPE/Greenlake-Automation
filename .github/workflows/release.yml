@@ -1,9 +1,18 @@
 name: Release (latest from main)
 
-# Every push/merge to main rebuilds the operator app and refreshes a single rolling
-# "latest" GitHub Release, so https://github.com/SaiHPE/Greenlake-Automation/releases/latest
-# always has the newest build. Scoped to the app + this workflow so doc-only changes elsewhere
-# don't trigger builds; workflow_dispatch lets you run it by hand.
+# Every push/merge to main rebuilds the operator app and refreshes a single rolling "latest"
+# GitHub Release, so <server>/<owner>/<repo>/releases/latest always has the newest build. Scoped to
+# the app + this workflow so doc-only changes elsewhere don't trigger builds; workflow_dispatch lets
+# you run it by hand.
+#
+# RUNNER. This repo lives on GitHub Enterprise Server (github.hpe.com), which has no GitHub-hosted
+# runners: the job needs a SELF-HOSTED Windows runner registered on this repo (Settings > Actions >
+# Runners) with Node 20, Python 3.12 and the GitHub CLI installed. As of 2026-09-12 Actions is
+# disabled by enterprise policy for this user-owned repo (the permissions PUT returns 204 and
+# `enabled` stays false; the runner-downloads list is empty), so this workflow is DORMANT and the
+# same publish step runs by hand from the dev workstation or the jump box:
+#     .\scripts\publish_release.ps1
+# The workflow is kept current so it activates untouched the day a runner is available.
 on:
   push:
     branches: [main]
@@ -23,10 +32,16 @@ concurrency:
 
 jobs:
   release:
-    runs-on: windows-latest
+    runs-on: [self-hosted, windows, x64]
     defaults:
       run:
+        shell: pwsh
         working-directory: Provisioning_Automation/alletra_onboard
+    env:
+      # gh reads GH_TOKEN for github.com and GH_ENTERPRISE_TOKEN for any other host; set both so the
+      # publish script works wherever this repo is hosted.
+      GH_TOKEN: ${{ github.token }}
+      GH_ENTERPRISE_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,42 +51,13 @@ jobs:
           cache: npm
           cache-dependency-path: Provisioning_Automation/alletra_onboard/frontend/package-lock.json
 
-      - name: Build release zip
-        shell: pwsh
-        run: .\scripts\build_release.ps1
-
-      - name: Read version
-        id: ver
-        shell: pwsh
+      - name: Ensure GitHub CLI
         run: |
-          $m = Select-String -Path pyproject.toml -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1
-          "version=$($m.Matches[0].Groups[1].Value)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
-      - name: Stable-name copy
-        shell: pwsh
-        run: Copy-Item "release/alletra-onboard-${{ steps.ver.outputs.version }}.zip" "release/alletra-onboard-latest.zip" -Force
-
-      - name: Publish rolling "latest" release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          COMMIT_MSG: ${{ github.event.head_commit.message }}
-        run: |
-          $ver = "${{ steps.ver.outputs.version }}"
-          $sha = $env:GITHUB_SHA.Substring(0, 7)
-          $notes = "Automated build from ``main`` @ $sha.`n`n$($env:COMMIT_MSG)`n`nDownload **alletra-onboard-latest.zip**, extract, and run ``start.ps1``."
-          $assets = @(
-            "release/alletra-onboard-$ver.zip",
-            "release/alletra-onboard-latest.zip",
-            "release/alletra-onboard-$ver.zip.sha256"
-          )
-          $title = "Alletra Onboard v$ver (latest build from main)"
-
-          # Create the release once; thereafter refresh notes + clobber the assets in place.
-          gh release view latest 2>$null | Out-Null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create latest @assets --title $title --notes $notes --latest
-          } else {
-            gh release edit latest --title $title --notes $notes --latest
-            gh release upload latest @assets --clobber
+          if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            winget install --id GitHub.cli -e --silent --accept-package-agreements --accept-source-agreements
+            $env:PATH = "$env:ProgramFiles\GitHub CLI;$env:PATH"
           }
+          gh --version
+
+      - name: Build zip and refresh the rolling "latest" release
+        run: .\scripts\publish_release.ps1
