@@ -104,6 +104,18 @@ if (-not $Tag) {
     Invoke-Gh release create latest --repo $target --title $title --notes $notes --latest @assets | Out-Null
   }
   Assert-Assets 'latest' $assets
+
+  # The rolling release is ONE download for operators. Versioned zips from earlier builds
+  # accumulate there (86 assets by rc.6 on github.com) and bury alletra-onboard-latest.zip; the
+  # tagged releases hold the history, so drop everything on `latest` that is not this build.
+  $ErrorActionPreference = "Continue"
+  try { $json = & gh release view latest --repo $target --json assets 2>$null | Out-String } finally { $ErrorActionPreference = "Stop" }
+  $keep = @($assets | ForEach-Object { Split-Path $_ -Leaf })
+  $stale = @(($json | ConvertFrom-Json).assets | ForEach-Object { $_.name } | Where-Object { $_ -notin $keep })
+  foreach ($name in $stale) {
+    Write-Host "Removing stale asset $name from 'latest'" -ForegroundColor DarkGray
+    Invoke-Gh release delete-asset latest $name --repo $target --yes | Out-Null
+  }
   Write-Host "Published https://$target/releases/latest" -ForegroundColor Green
   exit 0
 }
