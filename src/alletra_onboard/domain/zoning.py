@@ -93,13 +93,22 @@ class AliasedWwpn(BaseModel):
     role: Literal["host", "array"]
     fabric: str = ""                            # "F1" | "F2" | "" (offline / on neither fabric)
     nsp: str = ""                               # array target port n:s:p ("" for a host)
+    node: int | None = None                     # array controller node (from n:s:p); None for a host
     host_name: str = ""                         # owning host ("" for an array port, or a host that
     #                                             advertises no name — QLogic HBAs publish no HN:)
-    host_source: str = ""                       # "vcenter" | "switch" — where the host identity came
-    #                                             from ("switch" = the declared switch's local NS,
-    #                                             used when vCenter reports nothing)
+    host_source: str = ""                       # where the host identity came from:
+    #                                             "vcenter" | "sheet" (Hosts tab) | "array" (showhost -d)
+    #                                             | "switch" (declared switch's local NS) | "" (array port)
+    os: str = ""                                # host OS where a source reports one ("" otherwise)
+    placed_on_switch: str = ""                  # a host reached via nscamshow: the REMOTE switch in this
+    #                                             fabric it is plugged into ("" = the declared switch)
     existing_aliases: list[str] = Field(default_factory=list)  # every alias the switch has for this WWPN
-    suggested_alias: str = ""                   # pre-fill: the convention match, else ""
+    suggested_alias: str = ""                   # pre-fill: the convention match among EXISTING aliases,
+    #                                             else "" — the render fallback, so an unnamed pair is
+    #                                             reported, never invented
+    proposed_alias: str = ""                    # UI pre-fill ONLY when no alias exists: a name built from
+    #                                             the HPE convention (<host>_hba<n> / <serial>_N<n>S<s>P<p>),
+    #                                             FOS-safe. Never used by render_commands as a fallback.
     caution: str = ""                           # non-empty = select knowingly (e.g. an RCFC/Peer-labelled
     #                                             array port: usually replication, but proven live to
     #                                             carry host logins — flagged, never hard-dropped)
@@ -117,10 +126,17 @@ class FabricZonePlan(BaseModel):
     fabric: str                                 # "F1" | "F2"
     switch_host: str
     active_cfg: str = ""                        # e.g. F1_CFG (from cfgshow Effective)
+    switch_name: str = ""                       # switchshow switchName of the declared switch
+    fabric_name: str = ""                       # fabricshow "Fabric Name" ("" when unnamed / unread)
+    switch_count: int = 0                       # switches in this fabric per fabricshow (0 = unread)
     hosts: list[AliasedWwpn] = Field(default_factory=list)        # host HBA ports on this fabric
     array_ports: list[AliasedWwpn] = Field(default_factory=list)  # array target ports online on this fabric
     pairs: list[tuple[str, str]] = Field(default_factory=list)    # (host_wwpn, array_wwpn) single-init-single-target
     already_zoned: list[tuple[str, str]] = Field(default_factory=list)  # subset of pairs the active cfg covers
+    # "<host_wwpn>|<array_wwpn>" -> the effective zone name(s) that cover that pair. The operator's
+    # first question on the live screen was "zoned by which zone?" — the answer was in the cfgshow we
+    # had already read and thrown away.
+    zone_names: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class ZoningPlan(BaseModel):

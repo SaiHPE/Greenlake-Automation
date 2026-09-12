@@ -113,6 +113,104 @@ def parse_active_cfg(cfgshow: str) -> str:
     return ""
 
 
+def parse_switchshow(text: str) -> tuple[str, int | None]:
+    """`switchshow` -> (switchName, switchDomain). Either may be missing on a partial read."""
+    name, domain = "", None
+    for line in (text or "").splitlines():
+        if m := re.match(r"\s*switchName:\s*(\S+)", line):
+            name = m.group(1)
+        elif m := re.match(r"\s*switchDomain:\s*(\d+)", line):
+            domain = int(m.group(1))
+    return name, domain
+
+
+def parse_fabricshow(text: str) -> tuple[str, dict[int, str]]:
+    """`fabricshow` -> (fabric name, {domain id: switch name}). One row per switch in the fabric:
+    ``  12: fffc0c 10:00:88:94:71:af:36:a0 10.132.30.11 0.0.0.0 "SN6000B-SANB-ZR07U40"`` (the
+    principal switch carries a leading ``>``). Measured on rack13 2026-09-12: both declared switches
+    were ISL'd to a second switch each, and one host the plan offered lived on that other switch."""
+    fabric_name = ""
+    switches: dict[int, str] = {}
+    for line in (text or "").splitlines():
+        if m := re.match(r"\s*Fabric Name:\s*(.+?)\s*$", line):
+            fabric_name = m.group(1)
+        elif m := re.match(r'\s*(\d+):\s+fffc[0-9a-f]+\s+\S+\s+\S+\s+\S+\s+>?"([^"]+)"', line):
+            switches[int(m.group(1))] = m.group(2)
+    return fabric_name, switches
+
+
+def parse_nscam_domains(text: str) -> dict[str, int]:
+    """`nscamshow` -> {normalized WWPN: domain id of the REMOTE switch it is logged into}. The output
+    is grouped: ``Switch entry for 32`` then that switch's ``N ...;`` device lines."""
+    out: dict[str, int] = {}
+    domain: int | None = None
+    for line in (text or "").splitlines():
+        if m := re.match(r"\s*Switch entry for\s+(\d+)", line):
+            domain = int(m.group(1))
+        elif domain is not None and re.match(r"\s*N\s+\S+;", line):
+            parts = line.split(";")
+            wwpn = normalize_wwpn(parts[2]) if len(parts) > 2 else ""
+            if len(wwpn) == 16:
+                out[wwpn] = domain
+    return out
+
+
+# Brocade FOS zone-object names (FOS Command Reference, aliCreate/zoneCreate): first character a
+# letter or digit; then letters, digits, `_`, `-`, `$`, `^`; case-sensitive; zone names ≤ 64.
+# `-`, `$`, `^` and a leading digit are "enhanced" names that need EVERY switch in the fabric on
+# FOS 8.1.0+ — an older switch joining segments the fabric — so they are legal-but-warned.
+_FOS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-$^]*$")
+_FOS_ENHANCED = re.compile(r"^[0-9]|[-$^]")
+FOS_NAME_MAX = 64
+
+
+def fos_name_problem(name: str) -> str:
+    """Why FOS would REJECT this alias/zone name ("" = acceptable). Rejection is the only thing that
+    stops a render; portability concerns are `fos_name_warning`."""
+    if not name:
+        return "is empty"
+    if len(name) > FOS_NAME_MAX:
+        return f"is {len(name)} characters; FOS allows {FOS_NAME_MAX}"
+    if not _FOS_NAME.match(name):
+        bad = sorted({c for c in name if not re.match(r"[A-Za-z0-9_\-$^]", c)})
+        return "contains " + ", ".join(repr(c) for c in bad) + " — FOS names allow letters, digits and _ (- $ ^ on FOS 8.1+)"
+    return ""
+
+
+def fos_name_warning(name: str) -> str:
+    """A legal name that is not portable to every fabric ("" = plain)."""
+    if name and not fos_name_problem(name) and _FOS_ENHANCED.search(name):
+        return "uses - $ ^ or starts with a digit: every switch in the fabric must run FOS 8.1.0 or later"
+    return ""
+
+
+def _fos_safe(text: str) -> str:
+    """Fold arbitrary text (an IP, a DNS name, a serial) into a plain FOS name fragment."""
+    return re.sub(r"[^A-Za-z0-9]+", "_", text or "").strip("_")
+
+
+def _proposed_alias(role: str, *, host_name: str, wwpn: str, hba_index: int, nsp: str, serial: str) -> str:
+    """A UI pre-fill for a WWPN that has NO alias on the switch, from the HPE field convention
+    (ADR 0004): host HBA port -> ``<host>_hba<n>``; array port -> ``<serial>_N<n>S<s>P<p>``. Always
+    FOS-plain (letters, digits, underscore; starts with a letter) and ≤ 64 characters."""
+    if role == "array":
+        parts = nsp.split(":")
+        code = "N{}S{}P{}".format(*parts) if len(parts) == 3 else _fos_safe(wwpn)[-6:]
+        base = _fos_safe(serial) or "array"
+        name = f"{base}_{code}"
+    else:
+        base = _fos_safe(host_name) or f"host_{wwpn[-4:].lower()}"
+        name = f"{base}_hba{hba_index}"
+    if not name[0].isalpha():
+        name = ("array_" if role == "array" else "host_") + name
+    return name[:FOS_NAME_MAX]
+
+
+def _node_of(nsp: str) -> int | None:
+    parts = nsp.split(":")
+    return int(parts[0]) if len(parts) == 3 and parts[0].isdigit() else None
+
+
 def _suggest_alias(existing: list[str], role: str, nsp: str, alias_freq: dict[str, int]) -> str:
     """Pre-fill: prefer an alias UNIQUELY bound to this WWPN — the real per-device name. A *shared* alias
     (bound to many WWPNs on a busy fabric, e.g. `winhost_fc_port_2`, `sy480g108wlrb_0012`) is junk and
@@ -134,12 +232,17 @@ def _suggest_alias(existing: list[str], role: str, nsp: str, alias_freq: dict[st
 
 def _aliased(wwpn: str, role: str, fabric: str, aliases: dict[str, list[str]],
              alias_freq: dict[str, int], *, nsp: str = "", host_name: str = "",
-             host_source: str = "", caution: str = "") -> AliasedWwpn:
+             host_source: str = "", caution: str = "", os: str = "", placed_on_switch: str = "",
+             hba_index: int = 1, serial: str = "") -> AliasedWwpn:
     existing = aliases.get(wwpn, [])
     return AliasedWwpn(
-        wwpn=wwpn, display=wwpn_colons(wwpn), role=role, fabric=fabric, nsp=nsp, host_name=host_name,
-        host_source=host_source, caution=caution,
+        wwpn=wwpn, display=wwpn_colons(wwpn), role=role, fabric=fabric, nsp=nsp, node=_node_of(nsp),
+        host_name=host_name, host_source=host_source, caution=caution, os=os,
+        placed_on_switch=placed_on_switch,
         existing_aliases=existing, suggested_alias=_suggest_alias(existing, role, nsp, alias_freq),
+        proposed_alias="" if existing else _proposed_alias(
+            role, host_name=host_name, wwpn=wwpn, hba_index=hba_index, nsp=nsp, serial=serial,
+        ),
     )
 
 
@@ -164,13 +267,19 @@ def build_zoning_plan(
     active_zones: dict[str, dict[str, set[str]]] = {}   # fabric -> {zone name: member WWPNs}
     switch_host: dict[str, str] = {}
     local_ns: dict[str, dict[str, "NsDevice"]] = {}   # nsshow ONLY: devices on the declared switch itself
+    switch_name: dict[str, str] = {}
+    fabric_name: dict[str, str] = {}
+    fabric_switches: dict[str, dict[int, str]] = {}    # fabric -> {domain: switch name} (fabricshow)
+    remote_domain: dict[str, dict[str, int]] = {}      # fabric -> {wwpn: remote domain} (nscamshow)
     for label, creds in (("F1", intent.switch_f1), ("F2", intent.switch_f2)):
         switch_host[label] = creds.host
         try:
             with brocade_factory(creds) as switch:
                 nsshow_text = switch.nsshow()
+                nscam_text = switch.nscamshow()
                 local_ns[label] = parse_nameserver(nsshow_text)
-                ns[label] = parse_nameserver(nsshow_text + "\n" + switch.nscamshow())
+                ns[label] = parse_nameserver(nsshow_text + "\n" + nscam_text)
+                remote_domain[label] = parse_nscam_domains(nscam_text)
                 for wwpn, found in parse_aliases(switch.alishow()).items():
                     for alias in found:
                         per = aliases[label].setdefault(wwpn, [])
@@ -179,6 +288,16 @@ def build_zoning_plan(
                 cfg_text = switch.cfgshow()
                 active_cfg[label] = parse_active_cfg(cfg_text)
                 active_zones[label], _ = parse_active_zones(cfg_text)
+                # Identity reads are best-effort: a fake or an older FOS without them must not sink
+                # the plan, which is complete without names.
+                try:
+                    switch_name[label], _domain = parse_switchshow(switch.read("switchshow"))
+                except Exception:  # noqa: BLE001
+                    switch_name[label] = ""
+                try:
+                    fabric_name[label], fabric_switches[label] = parse_fabricshow(switch.fabricshow())
+                except Exception:  # noqa: BLE001
+                    fabric_name[label], fabric_switches[label] = "", {}
                 if not local_ns[label]:
                     # Measured live 2026-08-15: one plan run got an empty local NS from a healthy
                     # switch (transient), so its resident array ports vanished from the plan with
@@ -192,8 +311,12 @@ def build_zoning_plan(
         except Exception as exc:  # noqa: BLE001 - one unreachable switch must not sink the plan
             ns[label] = {}
             local_ns[label] = {}
+            remote_domain[label] = {}
             active_cfg[label] = ""
             active_zones[label] = {}
+            switch_name.setdefault(label, "")
+            fabric_name.setdefault(label, "")
+            fabric_switches.setdefault(label, {})
             plan.notes.append(f"Could not read the {label} switch {creds.host}: {exc}")
 
     # How many distinct WWPNs each alias is bound to ON ITS FABRIC — a shared alias is junk (never
@@ -231,29 +354,75 @@ def build_zoning_plan(
     def fabric_of(wwpn: str) -> str:
         return next((label for label in ("F1", "F2") if wwpn in ns.get(label, {})), "")
 
-    # 2) Host HBA WWPNs. vCenter is the authoritative host list when it answered; when it reported
-    #    NOTHING (unreachable — routine on a vault network), fall back to the DECLARED switches'
-    #    LOCAL name servers (`nsshow`, not the fabric-wide `nscamshow`): devices plugged into the
-    #    edge switch the operator declared are that deployment's own hosts, while the fabric-wide
-    #    view on a shared SAN would drag in every other team's initiators. Names come from the NS
-    #    `HN:` field where the HBA advertises one (Emulex does; QLogic does not -> name stays ""
-    #    and the UI falls back to the WWPN).
+    # 2) Host HBA WWPNs — the UNION of every source that can name or see an initiator, in order of
+    #    trust for the NAME: vCenter (ESXi, authoritative for its hosts), the sheet's Hosts tab (the
+    #    customer's Windows/Linux servers), the array's own host objects (showhost -d), and finally
+    #    the DECLARED switches' LOCAL name servers (`nsshow`, never the fabric-wide `nscamshow`,
+    #    which on a shared SAN would drag in every other team's initiators).
+    #
+    #    Until 2026-09-12 the list was vCenter-only whenever vCenter answered, with the switches
+    #    consulted only as a fallback. Measured live on rack13arcus that day: a Windows host's
+    #    unzoned HBA (51:40:2e:c0:20:89:cc:1e) and two other live initiators sat in the declared
+    #    switches' name servers and the step could not zone any of them — the exact mixed-estate
+    #    case (Windows/Linux beside a vCenter) the tool exists for. A first source names a WWPN; a
+    #    later one only fills a name that is still empty. Array UNCLAIMED logins carry no name.
     host_by_wwpn: "OrderedDict[str, str]" = OrderedDict()
+    host_source: dict[str, str] = {}
+    host_os: dict[str, str] = {}
+
+    def _claim(wwpn: str, name: str, source: str, os_: str = "") -> None:
+        if wwpn not in host_by_wwpn:
+            host_by_wwpn[wwpn] = name
+            host_source[wwpn] = source
+            host_os[wwpn] = os_
+        elif name and not host_by_wwpn[wwpn]:
+            host_by_wwpn[wwpn] = name
+            host_source[wwpn] = source
+        if os_ and not host_os.get(wwpn):
+            host_os[wwpn] = os_
+
     for hba in discovery.host_hbas:
-        host_by_wwpn.setdefault(normalize_wwpn(hba.wwpn), hba.host_name)
-    host_source = dict.fromkeys(host_by_wwpn, "vcenter")
-    if not host_by_wwpn:
-        for label in ("F1", "F2"):
-            for wwpn, device in local_ns.get(label, {}).items():
-                if device.is_physical_initiator and wwpn not in host_by_wwpn:
-                    host_by_wwpn[wwpn] = device.host_name
-                    host_source[wwpn] = "switch"
-        if host_by_wwpn:
-            plan.notes.append(
-                f"vCenter reported no hosts — {len(host_by_wwpn)} host port(s) were identified from "
-                "the declared switches' own name servers instead (names from the fabric where the "
-                "HBA advertises one)."
-            )
+        _claim(normalize_wwpn(hba.wwpn), hba.host_name, "vcenter", hba.os or "")
+    vcenter_count = len(host_by_wwpn)
+    for declared in getattr(intent, "declared_hosts", None) or []:
+        for wwpn in declared.wwpns:
+            _claim(normalize_wwpn(wwpn), declared.name, "sheet", declared.os or "")
+    for array_host in discovery.array_hosts:
+        for wwpn in array_host.wwpns:
+            _claim(normalize_wwpn(wwpn), array_host.name, "array")
+    for label in ("F1", "F2"):
+        for wwpn, device in local_ns.get(label, {}).items():
+            if device.is_physical_initiator:
+                _claim(wwpn, device.host_name, "switch", device.os)
+    added = len(host_by_wwpn) - vcenter_count
+    if not vcenter_count and host_by_wwpn:
+        plan.notes.append(
+            f"vCenter reported no hosts — {len(host_by_wwpn)} host port(s) were identified from "
+            "the sheet, the array's logins and the declared switches' own name servers instead "
+            "(names from the fabric where the HBA advertises one)."
+        )
+    elif added:
+        by_source = defaultdict(int)
+        for wwpn in host_by_wwpn:
+            if host_source[wwpn] != "vcenter":
+                by_source[host_source[wwpn]] += 1
+        detail = ", ".join(
+            f"{n} from {({'sheet': 'the sheet', 'array': 'array logins', 'switch': 'the fabric name servers'})[s]}"
+            for s, n in by_source.items()
+        )
+        plan.notes.append(
+            f"{added} host port(s) not known to vCenter were added ({detail}). Unnamed ones are "
+            "shown by WWPN — name them on the sheet's Hosts tab if you intend to zone them."
+        )
+
+    # For the convention pre-fill: which HBA of its host each WWPN is (1-based, by WWPN order).
+    hba_index: dict[str, int] = {}
+    by_host: dict[str, list[str]] = defaultdict(list)
+    for wwpn, name in host_by_wwpn.items():
+        by_host[name or wwpn].append(wwpn)
+    for wwpns in by_host.values():
+        for i, wwpn in enumerate(sorted(wwpns), start=1):
+            hba_index[wwpn] = i
 
     # 3) Array FC ports (discovery). RCFC/Peer-labelled ports are INCLUDED but FLAGGED, never
     #    hard-dropped (ADR 0004 refinement 2026-07-04, re-proven live 2026-08-15: a production
@@ -281,15 +450,27 @@ def build_zoning_plan(
         )
 
     # 4) Per fabric: the host + array WWPNs present, and every SIST pair (each host port x each array port).
+    def _remote_switch(label: str, wwpn: str) -> str:
+        # Placed via nscamshow => plugged into another switch of this fabric; name it so the
+        # operator can see WHY a host they never cabled to the declared switch is offered here.
+        remote = remote_domain.get(label, {})
+        if wwpn in local_ns.get(label, {}) or wwpn not in remote:
+            return ""
+        return fabric_switches.get(label, {}).get(remote[wwpn]) or f"domain {remote[wwpn]}"
+
     for label in ("F1", "F2"):
+        names_by_domain = fabric_switches.get(label, {})
         hosts = [
             _aliased(wwpn, "host", label, aliases[label], alias_freq[label],
-                     host_name=host_by_wwpn[wwpn], host_source=host_source.get(wwpn, ""))
+                     host_name=host_by_wwpn[wwpn], host_source=host_source.get(wwpn, ""),
+                     os=host_os.get(wwpn, ""), placed_on_switch=_remote_switch(label, wwpn),
+                     hba_index=hba_index.get(wwpn, 1))
             for wwpn in host_by_wwpn if fabric_of(wwpn) == label
         ]
         ports = [
             _aliased(p.wwpn, "array", label, aliases[label], alias_freq[label], nsp=p.label,
-                     caution=_caution(p))
+                     caution=_caution(p),
+                     serial=(ns.get(label, {}).get(p.wwpn).array_serial if ns.get(label, {}).get(p.wwpn) else ""))
             for p in array_ports if fabric_of(p.wwpn) == label
         ]
         pairs = [(host.wwpn, port.wwpn) for host in hosts for port in ports]
@@ -298,13 +479,18 @@ def build_zoning_plan(
         # the live VZ captures: all 12 host<->array pairs land in already_zoned, so the preview
         # creates nothing on a bed that is already correct.
         zones = active_zones.get(label, {})
-        already = [
-            pair for pair in pairs
-            if any(pair[0] in members and pair[1] in members for members in zones.values())
-        ]
+        already: list[tuple[str, str]] = []
+        zone_names: dict[str, list[str]] = {}
+        for pair in pairs:
+            covering = [z for z, members in zones.items() if pair[0] in members and pair[1] in members]
+            if covering:
+                already.append(pair)
+                zone_names[f"{pair[0]}|{pair[1]}"] = covering
         plan.fabrics.append(FabricZonePlan(
             fabric=label, switch_host=switch_host[label], active_cfg=active_cfg.get(label, ""),
-            hosts=hosts, array_ports=ports, pairs=pairs, already_zoned=already,
+            switch_name=switch_name.get(label, ""), fabric_name=fabric_name.get(label, ""),
+            switch_count=len(names_by_domain),
+            hosts=hosts, array_ports=ports, pairs=pairs, already_zoned=already, zone_names=zone_names,
         ))
 
     # 5) Host WWPNs on NO fabric -> offline; can't be placed (cable + power, then re-run).
@@ -324,7 +510,27 @@ def build_zoning_plan(
             + " — likely a transient switch read (or the declared switches front the wrong "
             "fabrics). Rebuild the plan before acting on it."
         )
+
+    # 7) Discovery's cabling notes belong on THIS screen: the array is cross-cabled on rack13 (0:3:4
+    #    on the odd fabric), discovery said so, and the zoning step never showed it.
+    for note in discovery.notes:
+        if re.search(r"parity|fabric", note, re.IGNORECASE) and note not in plan.notes:
+            plan.notes.append(note)
     return plan
+
+
+def alias_name_warnings(plan: ZoningPlan, aliases: dict[str, str]) -> dict[str, list[str]]:
+    """Per fabric: legal-but-non-portable alias names among the operator's entries (FOS 8.1+ only
+    characters). Advisory — rendering proceeds; `render_commands` skips only names FOS would reject."""
+    out: dict[str, list[str]] = {}
+    for fabric in plan.fabrics:
+        notes: list[str] = []
+        for entry in fabric.hosts + fabric.array_ports:
+            name = aliases.get(entry.wwpn) or entry.suggested_alias
+            if name and name not in entry.existing_aliases and (why := fos_name_warning(name)):
+                notes.append(f"alias '{name}' {why}")
+        out[fabric.fabric] = notes
+    return out
 
 
 def render_commands(
@@ -369,7 +575,9 @@ def render_commands(
                 return f"array port {entry.nsp or entry.display}"
             return f"host {entry.host_name or entry.display}"
 
-        # Classify FIRST: a pair renders only when both members have names; the rest is reported.
+        # Classify FIRST: a pair renders only when both members have names FOS will accept; the
+        # rest is reported. A name the switch would reject (a dot, a space, 65 characters) is as
+        # useless as no name — the paste would fail half-way and leave an open transaction.
         renderable: list[tuple[str, str]] = []
         skipped: list[str] = []
         for host_wwpn, array_wwpn in new_pairs:
@@ -379,6 +587,14 @@ def render_commands(
                     f"{describe(host_wwpn)} × {describe(array_wwpn)} — enter an alias name for "
                     + " and ".join(nameless)
                 )
+                continue
+            illegal = [
+                f"alias '{alias_for(w)}' for {describe(w)} {fos_name_problem(alias_for(w))}"
+                for w in (host_wwpn, array_wwpn)
+                if alias_for(w) not in by_wwpn[w].existing_aliases and fos_name_problem(alias_for(w))
+            ]
+            if illegal:
+                skipped.append(f"{describe(host_wwpn)} × {describe(array_wwpn)} — " + "; ".join(illegal))
             else:
                 renderable.append((host_wwpn, array_wwpn))
 
@@ -406,6 +622,10 @@ def render_commands(
 
         if zone_names and fabric.active_cfg:
             cmds.append(f'cfgadd "{fabric.active_cfg}","{";".join(zone_names)}"')
+            # Activation, kept apart by the UI: `cfgsave` commits the defined config and CLOSES the
+            # zoning transaction (FOS 9 holds a fabric lock while one is open); `cfgenable` then
+            # replaces the effective config fabric-wide — the SAN team's act, in a window.
+            cmds.append("cfgsave")
             cmds.append(f"cfgenable {fabric.active_cfg}")
         out[fabric.fabric] = cmds
         skipped_out[fabric.fabric] = skipped

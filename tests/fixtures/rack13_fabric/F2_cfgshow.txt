@@ -1,0 +1,122 @@
+Defined configuration:
+ cfg:	CFG1	Zone1; Zone2
+ cfg:	cfg1	zone1
+ cfg:	cfg3	zone3
+ cfg:	cfg_haji	
+		zone_haji
+ cfg:	jul2	arcus_vmware136
+ cfg:	jul2prabhu	
+		arcus__windows137_zone1; arcus__windows137_zone2; nvmezone1; 
+		primera_arcus_rcfc1; primera_arcus_rcfc2; 
+		primera_windows137_zone1; primera_windows137_zone2; 
+		train-july29; vmezone1; vmezone2; vmezone3; Vmware_Alletra; 
+		Vmware_Primera
+ zone:	Vmware_Alletra	
+		10:00:5c:ed:8c:53:12:a8; 20:33:00:02:ac:02:d4:95; 
+		21:34:00:02:ac:02:d4:95
+ zone:	Vmware_Primera	
+		10:00:5c:ed:8c:53:12:a8; 21:31:00:02:ac:02:ac:38
+ zone:	Zone1	Alletra_T1; ESXi_Host
+ zone:	Zone2	Alletra_T2; ESXi_Host
+ zone:	arcus__windows137_zone1	
+		20:33:00:02:ac:02:d4:95; 21:34:00:02:ac:02:d4:95; 
+		51:40:2e:c0:20:89:cc:1e
+ zone:	arcus__windows137_zone2	
+		20:33:00:02:ac:02:d4:95; 21:34:00:02:ac:02:d4:95; 
+		51:40:2e:c0:20:89:cc:1c
+ zone:	arcus_vmware136	
+		10:00:5c:ed:8c:53:12:a8; 20:33:00:02:ac:02:d4:95; 
+		21:34:00:02:ac:02:d4:95
+ zone:	nvmezone1	
+		10:00:5c:ed:8c:53:12:a8; 20:33:01:02:ad:f2:d4:95; 
+		21:34:01:02:ad:f2:d4:95
+ zone:	primera_arcus_rcfc1	
+		20:32:00:02:ac:02:ac:38; 20:34:00:02:ac:02:d4:95
+ zone:	primera_arcus_rcfc2	
+		21:32:00:02:ac:02:ac:38; 21:33:00:02:ac:02:d4:95
+ zone:	primera_windows137_zone1	
+		20:31:00:02:ac:02:ac:38; 21:31:00:02:ac:02:ac:38; 
+		51:40:2e:c0:20:89:cc:1e
+ zone:	primera_windows137_zone2	
+		20:31:00:02:ac:02:ac:38; 21:31:00:02:ac:02:ac:38; 
+		51:40:2e:c0:20:89:cc:1c
+ zone:	train-july29	
+		10:00:5c:ed:8c:53:12:94; 20:33:00:02:ac:02:d4:95; 
+		21:34:00:02:ac:02:d4:95
+ zone:	vmezone1	
+		20:33:00:02:ac:02:d4:95; 21:34:00:02:ac:02:d4:95; 
+		51:40:2e:c0:20:89:cb:da
+ zone:	vmezone2	
+		10:00:00:10:9b:50:7e:49; 20:33:00:02:ac:02:d4:95; 
+		21:34:00:02:ac:02:d4:95
+ zone:	vmezone3	
+		10:00:5c:ba:2c:ff:6b:d0; 20:33:00:02:ac:02:d4:95; 
+		21:34:00:02:ac:02:d4:95
+ zone:	zone1	host1; target1
+ zone:	zone2	host2; target2
+ zone:	zone3	host3; target3
+ alias:	Alletra_T1	
+		20:34:00:02:ac:02:d4:95
+ alias:	Alletra_T2	
+		21:33:00:02:ac:02:d4:95
+ alias:	ESXi_Host	
+		10:00:5c:ed:8c:53:12:a9
+ alias:	host1	20:34:00:02:ac:02:d4:95
+ alias:	host3	21:33:00:02:ac:02:d4:95
+ alias:	target1	21:33:00:02:ac:02:d4:95
+ alias:	target2	10:00:5c:ed:8c:53:12:a9
+ alias:	target3	21:33:00:02:ac:02:d4:95
+
+Effective configuration:
+ cfg:	jul2prabhu	
+ zone:	Vmware_Alletra	
+		10:00:5c:ed:8c:53:12:a8
+		20:33:00:02:ac:02:d4:95
+		21:34:00:02:ac:02:d4:95
+ zone:	Vmware_Primera	
+		10:00:5c:ed:8c:53:12:a8
+		21:31:00:02:ac:02:ac:38
+ zone:	arcus__windows137_zone1	
+		20:33:00:02:ac:02:d4:95
+		21:34:00:02:ac:02:d4:95
+		51:40:2e:c0:20:89:cc:1e
+ zone:	arcus__windows137_zone2	
+		20:33:00:02:ac:02:d4:95
+		21:34:00:02:ac:02:d4:95
+		51:40:2e:c0:20:89:cc:1c
+ zone:	nvmezone1	
+		10:00:5c:ed:8c:53:12:a8
+		20:33:01:02:ad:f2:d4:95
+		21:34:01:02:ad:f2:d4:95
+ zone:	primera_arcus_rcfc1	
+		20:32:00:02:ac:02:ac:38
+		20:34:00:02:ac:02:d4:95
+ zone:	primera_arcus_rcfc2	
+		21:32:00:02:ac:02:ac:38
+		21:33:00:02:ac:02:d4:95
+ zone:	primera_windows137_zone1	
+		20:31:00:02:ac:02:ac:38
+		21:31:00:02:ac:02:ac:38
+		51:40:2e:c0:20:89:cc:1e
+ zone:	primera_windows137_zone2	
+		20:31:00:02:ac:02:ac:38
+		21:31:00:02:ac:02:ac:38
+		51:40:2e:c0:20:89:cc:1c
+ zone:	train-july29	
+		10:00:5c:ed:8c:53:12:94
+		20:33:00:02:ac:02:d4:95
+		21:34:00:02:ac:02:d4:95
+ zone:	vmezone1	
+		20:33:00:02:ac:02:d4:95
+		21:34:00:02:ac:02:d4:95
+		51:40:2e:c0:20:89:cb:da
+ zone:	vmezone2	
+		10:00:00:10:9b:50:7e:49
+		20:33:00:02:ac:02:d4:95
+		21:34:00:02:ac:02:d4:95
+ zone:	vmezone3	
+		10:00:5c:ba:2c:ff:6b:d0
+		20:33:00:02:ac:02:d4:95
+		21:34:00:02:ac:02:d4:95
+
+

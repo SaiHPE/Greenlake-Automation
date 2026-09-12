@@ -1,0 +1,43 @@
+Defined configuration:
+ cfg:	mycfg	kiranzone1; msarep1; msarep2; myzone; primera_vmware_1; 
+		primera_vmware_2; rcfc1; rcfc2
+ zone:	kiranzone1	
+		10:00:5c:ed:8c:53:12:a9; 20:34:00:02:ac:02:d4:95; 
+		21:33:00:02:ac:02:d4:95
+ zone:	msarep1	20:70:00:c0:ff:f9:42:77; 21:70:00:c0:ff:1d:a8:51
+ zone:	msarep2	24:70:00:c0:ff:f9:42:77; 25:70:00:c0:ff:1d:a8:51
+ zone:	myzone	10:00:08:f1:ea:c0:3d:f7; 10:00:8c:7c:ff:65:f3:21; 
+		20:34:00:02:ac:02:d4:95; 20:70:00:c0:ff:1d:a8:51
+ zone:	primera_vmware_1	
+		10:00:5c:ed:8c:53:12:a9; 20:32:00:02:ac:02:ac:38
+ zone:	primera_vmware_2	
+		10:00:5c:ed:8c:53:12:a9; 21:32:00:02:ac:02:ac:38
+ zone:	rcfc1	20:32:00:02:ac:02:ac:38; 20:34:00:02:ac:02:d4:95
+ zone:	rcfc2	21:32:00:02:ac:02:ac:38; 21:33:00:02:ac:02:d4:95
+
+Effective configuration:
+ cfg:	mycfg	
+ zone:	kiranzone1	
+		10:00:5c:ed:8c:53:12:a9
+		20:34:00:02:ac:02:d4:95
+		21:33:00:02:ac:02:d4:95
+ zone:	msarep1	20:70:00:c0:ff:f9:42:77
+		21:70:00:c0:ff:1d:a8:51
+ zone:	msarep2	24:70:00:c0:ff:f9:42:77
+		25:70:00:c0:ff:1d:a8:51
+ zone:	myzone	10:00:08:f1:ea:c0:3d:f7
+		10:00:8c:7c:ff:65:f3:21
+		20:34:00:02:ac:02:d4:95
+		20:70:00:c0:ff:1d:a8:51
+ zone:	primera_vmware_1	
+		10:00:5c:ed:8c:53:12:a9
+		20:32:00:02:ac:02:ac:38
+ zone:	primera_vmware_2	
+		10:00:5c:ed:8c:53:12:a9
+		21:32:00:02:ac:02:ac:38
+ zone:	rcfc1	20:32:00:02:ac:02:ac:38
+		20:34:00:02:ac:02:d4:95
+ zone:	rcfc2	21:32:00:02:ac:02:ac:38
+		21:33:00:02:ac:02:d4:95
+
+
