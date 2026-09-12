@@ -165,7 +165,7 @@ same script targets whichever GitHub you point it at.
 cd Provisioning_Automation\alletra_onboard
 .\scripts\publish_release.ps1                                 # origin: build the zip, refresh `latest`
 .\scripts\publish_release.ps1 -Remote github-com               # same, against github.com (normally Actions does this)
-.\scripts\publish_release.ps1 -Tag v0.16.0-rc.6 -BuildExe       # Windows only: build the 3 .exe zips, upload to the tag
+.\scripts\publish_release.ps1 -Tag vX.Y.Z-rc.N -BuildExe         # Windows only: build the 3 .exe zips, upload to the tag
 ```
 The rolling **`latest`** release is refreshed in place (assets clobbered, never deleted and
 recreated), so `/releases/latest` never points at nothing. A tag containing `-` (an `rc`) is

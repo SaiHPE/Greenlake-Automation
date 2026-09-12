@@ -66,6 +66,7 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
   });
   const rows = Object.values(byHost);
   const outstanding = rows.filter((row) => !row.odd || !row.even).length;
+  const provisionable = report?.zoned_hosts?.length ?? 0;
 
   // Re-check diff: remember the rows of the previous report (keyed by its event) and say what moved.
   const reportEvent = [...events].reverse().find((event) => ['zoning.previewed', 'zoning.proper'].includes(event.event_type));
@@ -102,9 +103,12 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
       gate={
         report && !report.proper
           ? {
-              title: 'At least one host is not zoned on both fabrics',
-              message:
-                'Build the plan, select the pairs, name the aliases and give the command set to your SAN team. After they apply and activate it, Re-check zoning — each host becomes provisionable as soon as the array sees it logged in on both fabrics.',
+              title: provisionable
+                ? `${provisionable} host${provisionable === 1 ? '' : 's'} can proceed; the rest will be skipped`
+                : 'No host is zoned on both fabrics yet',
+              message: provisionable
+                ? `Continue to provision ${report.zoned_hosts.join(', ')} now, or complete the missing zones and Re-check zoning first. Hosts that are not ready are excluded from this run by name.`
+                : 'Build the plan, select the pairs, name the aliases and give the command set to your SAN team. After they apply and activate it, Re-check zoning.',
             }
           : null
       }
@@ -116,7 +120,13 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
             onClick={call(() => zoningPreview(runId))}
           />
           <Button busy={running} label={plan ? 'Rebuild plan' : 'Build zoning plan'} onClick={call(() => zoningPlan(runId))} />
-          {report?.proper && <Button primary label="Continue" onClick={onDone} />}
+          {provisionable > 0 && (
+            <Button
+              primary
+              label={`Continue with ${provisionable} zoned host${provisionable === 1 ? '' : 's'}`}
+              onClick={onDone}
+            />
+          )}
         </>
       }
     >

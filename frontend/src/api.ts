@@ -248,6 +248,7 @@ export interface ZoneRemediation {
 export interface ZoningReport {
   expected: ExpectedZone[]; remediations: ZoneRemediation[];
   proper: boolean;
+  zoned_hosts: string[];     // per-host provisioning gate; other hosts are skipped by name
   unverified_hosts: string[]; // expected hosts seen on neither fabric — not zoned OR offline
   source: string;             // 'array' — verified from showportdev ns, no switch
   notes: string[]; error: string | null;
