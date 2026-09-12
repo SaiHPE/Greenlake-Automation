@@ -5,14 +5,13 @@ name: Release (latest from main)
 # the app + this workflow so doc-only changes elsewhere don't trigger builds; workflow_dispatch lets
 # you run it by hand.
 #
-# RUNNER. This repo lives on GitHub Enterprise Server (github.hpe.com), which has no GitHub-hosted
-# runners: the job needs a SELF-HOSTED Windows runner registered on this repo (Settings > Actions >
-# Runners) with Node 20, Python 3.12 and the GitHub CLI installed. As of 2026-09-12 Actions is
-# disabled by enterprise policy for this user-owned repo (the permissions PUT returns 204 and
-# `enabled` stays false; the runner-downloads list is empty), so this workflow is DORMANT and the
-# same publish step runs by hand from the dev workstation or the jump box:
+# RUNNER. The repo is pushed to two hosts. On github.com (SaiHPE/Greenlake-Automation) this runs on
+# GitHub's hosted `windows-latest`. On GitHub Enterprise Server (github.hpe.com) there are no hosted
+# runners and, as of 2026-09-12, Actions is disabled by enterprise policy for the user-owned repo
+# (the permissions PUT returns 204 and `enabled` stays false), so there the job targets a SELF-HOSTED
+# Windows runner that does not exist yet and the same publish step runs by hand:
 #     .\scripts\publish_release.ps1
-# The workflow is kept current so it activates untouched the day a runner is available.
+# The runner is chosen from github.server_url so one file serves both hosts.
 on:
   push:
     branches: [main]
@@ -32,7 +31,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: [self-hosted, windows, x64]
+    runs-on: ${{ github.server_url == 'https://github.com' && fromJSON('["windows-latest"]') || fromJSON('["self-hosted","windows","x64"]') }}
     defaults:
       run:
         shell: pwsh

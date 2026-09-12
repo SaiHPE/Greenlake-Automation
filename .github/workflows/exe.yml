@@ -5,9 +5,10 @@ name: Build Windows EXE
 # (slim, offline, init-only accelerator), or run it manually from the Actions tab
 # (workflow_dispatch) to get the zips as build artifacts.
 #
-# RUNNER. Needs a SELF-HOSTED Windows x64 runner (github.hpe.com has no hosted runners) with Python
-# 3.12 and the GitHub CLI. Actions is disabled by enterprise policy for this repo as of 2026-09-12,
-# so this workflow is DORMANT; the same build + publish runs by hand on any Windows box:
+# RUNNER. On github.com this runs on GitHub's hosted `windows-latest` — the only place the .exe is
+# built automatically. On github.hpe.com (GHES, no hosted runners, Actions disabled by policy as of
+# 2026-09-12) it targets a self-hosted Windows runner that does not exist yet; there the same build
+# + publish runs by hand on any Windows box:
 #     .\scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe
 # The .exe is a Windows artifact; it is never built on macOS or Linux.
 on:
@@ -25,7 +26,7 @@ concurrency:
 
 jobs:
   build-exe:
-    runs-on: [self-hosted, windows, x64]
+    runs-on: ${{ github.server_url == 'https://github.com' && fromJSON('["windows-latest"]') || fromJSON('["self-hosted","windows","x64"]') }}
     defaults:
       run:
         shell: pwsh
