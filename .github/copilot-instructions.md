@@ -393,4 +393,4 @@ Two remotes, kept identical (push `main`, tags and `jumpbox-package` to both):
 - `main` — full repo. `jumpbox-package` — subtree split of the app dir for the jump box; force-refresh after each `main` push.
 - Auth: `gh auth login --hostname <host>` + `gh auth setup-git --hostname <host>` for each host.
 
-Current: **v0.16.0-rc.6** (2026-09-12) — zoning host-source union + zoning step redesign after the 2026-09-12 live test; both built, pending live run.
+Current: **v0.16.0-rc.7** (2026-09-12) — fixes the missing Continue button when only some hosts pass the per-host zoning gate. The zoning host-source union and redesigned zoning step remain built, pending live run.

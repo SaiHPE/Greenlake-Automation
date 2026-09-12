@@ -21,7 +21,7 @@
 .EXAMPLE
   .\scripts\publish_release.ps1                       # build zip, refresh the rolling latest release
   .\scripts\publish_release.ps1 -NoBuild              # zip already in release/ (e.g. built by CI step)
-  .\scripts\publish_release.ps1 -Tag v0.16.0-rc.6 -BuildExe   # build the three .exe zips, upload to the tag
+  .\scripts\publish_release.ps1 -Tag vX.Y.Z-rc.N -BuildExe   # build the three .exe zips, upload to the tag
 #>
 [CmdletBinding()]
 param(
