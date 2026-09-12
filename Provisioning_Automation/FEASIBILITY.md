@@ -1,5 +1,8 @@
 # HPE Alletra MP B10000 → GreenLake / DSCC Onboarding Automation — Feasibility Report
 
+> **Historical (June 2026).** The onboarding automation this report assessed has since been built
+> and live-proven. Current scope and status: `alletra_onboard/docs/SCOPE.md`.
+
 _Researched 2026-06-05. Updated 2026-06-07 against the full local GreenLake API scrape. Confidence noted per item._
 
 ---

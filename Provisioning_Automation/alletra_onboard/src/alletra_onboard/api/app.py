@@ -87,7 +87,7 @@ from alletra_onboard.domain.provisioning import (
 )
 from alletra_onboard.domain.workflow import STEP_REGISTRY, mode_steps
 from alletra_onboard.domain.zoning import ZoningPlan
-from alletra_onboard.application.provisioning.zoning_plan import render_commands
+from alletra_onboard.application.provisioning.zoning_plan import alias_name_warnings, render_commands
 
 
 from alletra_onboard import __version__
@@ -130,9 +130,12 @@ class ZoningRenderRequest(BaseModel):
 
 class ZoningRenderResponse(BaseModel):
     commands: dict[str, list[str]]
-    # Selected pairs that could NOT be rendered (a member has no alias name), per fabric — surfaced
-    # so a tick that produces no command explains itself instead of silently disappearing.
+    # Selected pairs that could NOT be rendered (a member has no alias name, or a name FOS would
+    # reject), per fabric — surfaced so a tick that produces no command explains itself instead of
+    # silently disappearing.
     skipped: dict[str, list[str]]
+    # Legal-but-non-portable alias names (need FOS 8.1.0+ fabric-wide), per fabric. Advisory only.
+    warnings: dict[str, list[str]] = {}
 
 
 def create_app(service: OnboardingService | None = None) -> FastAPI:
@@ -499,7 +502,10 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # selected pairs. The tool never RUNS these commands (ADR 0004, ADR 0012) — this is the
         # script the SAN team applies by hand, and it is the deliverable, not a rehearsal.
         commands, skipped = render_commands(request.plan, request.aliases, request.selected_pairs)
-        return ZoningRenderResponse(commands=commands, skipped=skipped)
+        return ZoningRenderResponse(
+            commands=commands, skipped=skipped,
+            warnings=alias_name_warnings(request.plan, request.aliases),
+        )
 
     @app.get("/runs/{run_id}/storage/preflight", response_model=PreflightReport)
     async def storage_preflight(run_id: str) -> PreflightReport:

@@ -1,5 +1,9 @@
 # Alletra MP B10000 Onboarding Automation — Implementation Plan (Python)
 
+> **Historical (June 2026).** Pre-build plan for the onboarding slice. Superseded by the shipped app;
+> see `alletra_onboard/docs/SCOPE.md` for current scope/status and `alletra_onboard/README.md` for
+> how to run it.
+
 _Companion to `FEASIBILITY.md`. Stack: **Python**. Scope: end-to-end onboarding of a newly-shipped HPE Alletra Storage MP B10000 into HPE GreenLake + DSCC. Updated against the full local GreenLake scrape on 2026-06-07. The HPE Discovery Tool is **out of scope** (the array's link-local URL is supplied as input). Browser automation may **always attach to an already-logged-in session** (SSO/MFA is solved by session reuse)._
 
 For the full implementation architecture, UI layer, domain model, API surface, persistence model, security model, and delivery milestones, see `IMPLEMENTATION_PLAN.md`. This file remains the operational automation flow companion to the feasibility report.
