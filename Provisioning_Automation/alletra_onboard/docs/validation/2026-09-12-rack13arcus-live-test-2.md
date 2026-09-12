@@ -78,6 +78,14 @@ each row tagged with its source (LESSONS 33). Pinned to the captures by
 `render_commands` skips names FOS rejects (with the character named); `/zoning/render` returns
 portability warnings; the UI validates inline.
 
+**3. A globally incomplete zoning report hid Continue even when one host passed the per-host gate.**
+The backend correctly returned one `zoned_hosts` entry and the activity log said that host could be
+provisioned, but `ZoningStep.tsx` rendered Continue only when `report.proper` (every host) was true.
+This contradicted ADR 0012 and the footer's per-host rule, trapping the operator on this screen.
+**Closed in v0.16.0-rc.7:** the frontend consumes `zoned_hosts`, shows exactly which hosts can
+proceed, and renders **Continue with N zoned hosts** whenever `N > 0`; other hosts remain excluded
+by name. Frontend type-check/build passed; pending live run.
+
 ## UX findings (all closed in the redesign, pending live run)
 
 Z1 nothing labelled (switch read as a host; IP not marked as host; WWPN not marked as HBA port) ·
@@ -104,4 +112,4 @@ Z9 no hint that `.86` sits on a remote switch · Z10 WWPNs without decode. Plan 
   no aliases to collide with), or `cc:1e` for `.137`. Needs the fixed build.
 - **Provisioning, path verify, verify, as-built** on this array (Phases 5–6 of the plan).
 - Confirm the parity notes render somewhere in Discovery.
-- Rebuild `frontend/dist` (no Node on the macOS workstation) before pushing.
+- Re-test the partial-host Continue gate in v0.16.0-rc.7, then complete provisioning.
