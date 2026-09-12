@@ -1,5 +1,5 @@
 import { Button, DataTable, Text } from 'grommet';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   RunEvent, RunRecord, zoningPlan, zoningPreview, ZoningPlan, ZoningReport,
 } from '../api';
@@ -20,6 +20,28 @@ interface HostRow {
   host: string;
   odd: boolean;
   even: boolean;
+}
+
+/** What a re-check changed, in the operator's words: the loop is design → SAN team applies →
+ *  re-check → the array shows the new login. Without this the second check looks like the first. */
+function describeChange(before: HostRow[], after: HostRow[]): string | null {
+  const prev = new Map(before.map((r) => [r.host, r]));
+  const gained: string[] = [];
+  const lost: string[] = [];
+  after.forEach((r) => {
+    const p = prev.get(r.host);
+    if (!p) { if (r.odd || r.even) gained.push(`${r.host} (new)`); return; }
+    const fabrics: string[] = [];
+    if (r.odd && !p.odd) fabrics.push('F1');
+    if (r.even && !p.even) fabrics.push('F2');
+    if (fabrics.length) gained.push(`${r.host} now zoned on ${fabrics.join(' and ')}`);
+    const dropped: string[] = [];
+    if (!r.odd && p.odd) dropped.push('F1');
+    if (!r.even && p.even) dropped.push('F2');
+    if (dropped.length) lost.push(`${r.host} no longer seen on ${dropped.join(' and ')}`);
+  });
+  if (!gained.length && !lost.length) return null;
+  return [...gained, ...lost].join(' · ');
 }
 
 export function ZoningStep({ runId, run, events, onDone }: Props) {
@@ -45,6 +67,20 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
   const rows = Object.values(byHost);
   const outstanding = rows.filter((row) => !row.odd || !row.even).length;
 
+  // Re-check diff: remember the rows of the previous report (keyed by its event) and say what moved.
+  const reportEvent = [...events].reverse().find((event) => ['zoning.previewed', 'zoning.proper'].includes(event.event_type));
+  const lastSeen = useRef<{ id: string | undefined; rows: HostRow[] } | null>(null);
+  const [change, setChange] = useState<string | null>(null);
+  useEffect(() => {
+    if (!report) return;
+    const id = reportEvent?.event_id;
+    if (lastSeen.current && lastSeen.current.id !== id) {
+      setChange(describeChange(lastSeen.current.rows, rows));
+    }
+    if (!lastSeen.current || lastSeen.current.id !== id) lastSeen.current = { id, rows };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportEvent?.event_id]);
+
   const call = (action: () => Promise<unknown>) => async () => {
     setError(null);
     try {
@@ -57,18 +93,18 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
   return (
     <StepShell
       title="SAN zoning"
-      description="Verifies zoning as observed by the array and produces the exact command set for the pairs you select. The tool never writes to a switch: your SAN team reviews and applies the commands, and provisioning unlocks per host as the array sees each one log in."
+      description="Reads the array and both Brocade switches (read-only), shows what every host HBA port can reach today, and builds the command set for the zones you select. This tool never writes to a switch: your SAN team applies the commands, then Re-check zoning here — the array shows each new login, and provisioning unlocks per host."
       stateDetail={report ? (outstanding ? `${outstanding} host${outstanding === 1 ? '' : 's'} outstanding` : undefined) : undefined}
       error={error}
       onDismissError={() => setError(null)}
-      activityEmpty="Verify zoning to see what the array can reach."
-      footerNote="Zoning is a prerequisite, enforced per host: a host is provisioned once this step confirms it logged in on both fabrics. Others are skipped by name and join a later run."
+      activityEmpty="Check zoning to see what the array can reach, or build the plan to read the switches."
+      footerNote="Zoning is a prerequisite, enforced per host: a host is provisioned once this step confirms it logged in on both fabrics. Others are skipped by name and join a later run. Brocade Fabric OS fabrics only."
       gate={
         report && !report.proper
           ? {
-              title: 'Zoning is incomplete on at least one fabric',
+              title: 'At least one host is not zoned on both fabrics',
               message:
-                'Build the plan, select the pairs, and give the command set to your SAN team to apply. Re-verify afterwards — each host becomes provisionable as soon as the array sees it zoned on both fabrics.',
+                'Build the plan, select the pairs, name the aliases and give the command set to your SAN team. After they apply and activate it, Re-check zoning — each host becomes provisionable as soon as the array sees it logged in on both fabrics.',
             }
           : null
       }
@@ -76,7 +112,7 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
         <>
           <Button
             busy={running}
-            label={report ? 'Re-verify' : 'Verify zoning'}
+            label={report ? 'Re-check zoning' : 'Check zoning'}
             onClick={call(() => zoningPreview(runId))}
           />
           <Button busy={running} label={plan ? 'Rebuild plan' : 'Build zoning plan'} onClick={call(() => zoningPlan(runId))} />
@@ -87,10 +123,11 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
       <DiscoveryFreshness events={events} action="drafting commands for the SAN team" />
 
       {!report && (
-        <Surface title="Zoning has not been verified yet">
+        <Surface title="Zoning has not been checked yet">
           <Text size="small" color="text-weak">
-            Verification reads the array only — no switch sign-in. A fabric name server is zoning-filtered, so what
-            each array port can see is its effective zoning. Every host should be zoned on both fabrics.
+            Check zoning reads the array only — no switch sign-in. A host adapter can log into an array port only
+            through an effective zone, so the array's logins are its effective zoning. Build zoning plan additionally
+            reads both switches (read-only) to show unzoned hosts and design new zones.
           </Text>
         </Surface>
       )}
@@ -98,26 +135,33 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
       {report?.proper && (
         <InlineNotification
           tone="ok"
-          title="Zoning is correct on both fabrics"
-          message="Verified from the array; no switch sign-in was required."
+          title="Every expected host is zoned on both fabrics"
+          message="Confirmed from the array's logins; no switch sign-in was required."
         />
       )}
 
+      {change && (
+        <InlineNotification tone="info" title="Since the previous check" message={change} />
+      )}
+
       {rows.length > 0 && (
-        <Surface title="Zoning observed by the array" description="Each host should be zoned on both fabrics.">
+        <Surface
+          title="Provisioning gate — hosts zoned on both fabrics (array view)"
+          description="Read from the array's logins. A host is provisioned in this run only when both columns show Zoned."
+        >
           <DataTable
             columns={[
               { property: 'host', header: 'Host', render: (row: HostRow) => <Text size="small">{row.host}</Text> },
               {
                 property: 'odd',
-                header: 'Odd fabric (F1)',
+                header: 'Fabric F1 (odd)',
                 render: (row: HostRow) => (
                   <StatusIndicator state={row.odd ? 'complete' : 'failed'} label={row.odd ? 'Zoned' : 'Not zoned'} />
                 ),
               },
               {
                 property: 'even',
-                header: 'Even fabric (F2)',
+                header: 'Fabric F2 (even)',
                 render: (row: HostRow) => (
                   <StatusIndicator state={row.even ? 'complete' : 'failed'} label={row.even ? 'Zoned' : 'Not zoned'} />
                 ),
@@ -135,13 +179,13 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
       {report && report.unverified_hosts.length > 0 && (
         <InlineNotification
           tone="warning"
-          title={`${report.unverified_hosts.length} host${report.unverified_hosts.length === 1 ? '' : 's'} could not be confirmed`}
-          message={`The array sees no login for ${report.unverified_hosts.join(', ')}. It cannot distinguish an unzoned host from one that is powered off — confirm the host is online; if it is, this is a genuine zoning gap.`}
+          title={`${report.unverified_hosts.length} host${report.unverified_hosts.length === 1 ? '' : 's'} not seen by the array`}
+          message={`The array has no login from ${report.unverified_hosts.join(', ')}. From the array alone this is either "not zoned" or "powered off" — the zoning plan (which reads the switches) tells them apart.`}
         />
       )}
 
       {report && report.notes.length > 0 && (
-        <InlineNotification tone="info" title="Verification notes" message={report.notes.join(' · ')} />
+        <InlineNotification tone="info" title="Check notes" message={report.notes.join(' · ')} />
       )}
 
       {/* Keyed on the plan event: the alias fields are seeded once from the plan, so rebuilding must

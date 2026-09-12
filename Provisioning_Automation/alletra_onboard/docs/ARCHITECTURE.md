@@ -72,12 +72,15 @@ Four layers, dependencies point inward (`api → application → domain`; `adapt
 - **Cloud (NOT built):** the DSCC/GreenLake multi-array REST plane — the intended *primary*. Onboarding
   Component A touches the GreenLake *global* API (`adapters/greenlake/*`) and DSCC is driven via a
   **browser wizard** (Component C, Playwright/CDP), but there is **no DSCC provisioning cloud client**.
-- **Switch (read-only/deferred):** Brocade FOS (`adapters/fabric/brocade_client.py`) — verify + a
-  read-only zoning *plan*; zone *creation* is deferred (ADR 0004).
+- **Switch (read-only, by decision):** Brocade FOS (`adapters/fabric/brocade_client.py`) — verify +
+  the zoning *plan* → an emitted **command set** the consultant applies. The tool **never writes to
+  the switch** (ADR 0012; the write path that shipped in v0.14–v0.15 was removed in v0.16).
 
-**Lifecycle coverage (block column of SCOPE.md):** Initialize ✅ · Discover ✅(array)/🟡(vCenter) ·
-Connect-zoning 🟡(verify+plan; create deferred) · Provision 🟢(tiered, tier-1 live-proven) ·
-Replicate/DR ⚪ · Report ⚪ · **Document ✅(as-built, v0.12.0)**. File column = ⚪ entirely.
+**Coverage against the nine scope areas** — see the status table in [SCOPE.md](SCOPE.md). In brief
+(v0.16.0-rc.5): Initialization ✅ · Host/array discovery ◐ (ESXi via vCenter + array-side; no agentless
+Win/Linux) · SAN/network ◐ (FC zoning as command set; no VLAN/peer-port) · Block provisioning 🟡
+(built, pending live run) · Snapshots/replication ◻︎ · Unified File ◻︎ · GL4F ◻︎ · Reports ◐ (config,
+inventory, checkhealth; no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 
 ## 5. LLD — module map (by layer)
 

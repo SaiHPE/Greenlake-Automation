@@ -1,12 +1,41 @@
-# Project Context: HPE Alletra MP B10000 Onboarding Automation
+# Project Context: HPE Alletra MP Storage Deployment Automation (`alletra_onboard`)
 
-This workspace automates the end-to-end onboarding of HPE Alletra MP B10000 storage arrays into HPE GreenLake and DSCC (Data Services Cloud Console). It runs from a Windows jump box and combines three automation tracks under one local application.
+This workspace automates the deployment of HPE Alletra MP B10000 storage arrays for HPE field engineers: onboarding into HPE GreenLake + DSCC (Data Services Cloud Console), then host/array discovery, SAN-zoning command sets, block provisioning, verification and as-built documentation. It runs from a Windows jump box as one local web app.
+
+**Documents of record** (read these before anything else; the rest of this file is reference detail for the onboarding track):
+
+| Question | File |
+|---|---|
+| What is in scope and what is built / pending / not started | `Provisioning_Automation/alletra_onboard/docs/SCOPE.md` (nine scope areas, status table, order of work) |
+| How the code is laid out today | `Provisioning_Automation/alletra_onboard/docs/ARCHITECTURE.md` |
+| Domain vocabulary | `Provisioning_Automation/alletra_onboard/CONTEXT.md` |
+| Why decisions were made | `Provisioning_Automation/alletra_onboard/docs/adr/0001–0012` |
+| Incident → rule register (**read before wizard, state/persistence or refactor work**) | `Provisioning_Automation/alletra_onboard/docs/LESSONS.md` |
+| Last hardware run and what is still owed | `Provisioning_Automation/alletra_onboard/docs/validation/` |
+| How to run / sync / release | `Provisioning_Automation/alletra_onboard/README.md` |
+
+`Provisioning_Automation/{IMPLEMENTATION_PLAN,AUTOMATION_PLAN,FEASIBILITY}.md` are **historical** June-2026 planning docs for the onboarding slice only.
+
+---
+
+## Repo working rules
+
+- **The tool never writes to a SAN switch** (ADR 0012). Zoning is delivered as a copy-paste Brocade command set; `cfgenable` is shown separately. Do not add a switch write path.
+- **Validate live.** A feature verified only against captured command output is "built — pending live run", not done. Say so in docs and commit messages.
+- **Read-only by default.** Array SSH goes through the `ArrayCliClient` command allowlist; verification, as-built and discovery must never mutate.
+- **A run is ONE array.** Refuse workbooks naming two.
+- **Line endings.** The repo was authored on Windows; on macOS `git status` shows thousands of CRLF-only changes. Diff with `--ignore-all-space`; never commit those.
+- **Two branches to keep in sync:** `main` (full repo) and `jumpbox-package` (`git subtree split` of `Provisioning_Automation/alletra_onboard`, force-pushed after every `main` push that touches the app). `frontend/dist` is committed — rebuild it (`npm run build`) before pushing UI changes.
+- **Steps and modes** come from the step registry in `domain/workflow.py` (`greenlake`, `cloudinit`, `dscc`, `discover`, `zoning`, `provision`, `verify`, `asbuilt`); the UI renders from it via `/app/profile`. Do not hardcode step lists elsewhere.
+- **Secrets** (GreenLake client creds, array/vCenter/switch passwords) live in `.env` / the initialisation sheet upload, never in git.
 
 ---
 
 ## What We Are Building
 
-A local Python operator application (`alletra_onboard`) that drives a strict 11-phase workflow per array:
+A local Python operator application (`alletra_onboard`): FastAPI backend (127.0.0.1:8765) + React/Vite/Grommet (HPE Design System) SPA + Typer CLI, packaged as a release zip and a PyInstaller `.exe`. The operator uploads one `Initialisation_sheet.xlsx` per array, picks a **mode** (Full onboarding / Provision only / Both / Verify only / Custom), and the app runs the selected steps with live SSE progress. An `init-only` build profile ships just the onboarding steps.
+
+The **onboarding (initialization) step chain** below is Components A → B → C → D; the GreenLake track inside Component A is the strict phase sequence:
 
 ```
 NOT_STARTED → PREFLIGHT → GL_DISCOVER_SERVICE → GL_ADD_SUBSCRIPTION
@@ -15,11 +44,11 @@ NOT_STARTED → PREFLIGHT → GL_DISCOVER_SERVICE → GL_ADD_SUBSCRIPTION
 → STORAGE_FLEET_VERIFY (optional) → COMPLETE
 ```
 
-Every phase is idempotent, resumable, and persisted to SQLite. The application exposes a local FastAPI REST API (127.0.0.1:8765), a Typer/Rich CLI, and a React/Vite dashboard. UI and CLI both call the same API.
+Every phase is idempotent, resumable, and persisted to SQLite. UI and CLI both call the same API. The provisioning track (`STORAGE_DISCOVER → STORAGE_ZONING → STORAGE_PROVISION`) and the documents track (`CONFIG_VERIFY → ASBUILT_DOCUMENT`) follow the same rules.
 
 ---
 
-## The Three Automation Tracks
+## The Three Automation Tracks (Component A, B, C detail)
 
 ### Track 1 — GreenLake REST API
 
@@ -157,15 +186,19 @@ CSV example: `config/arrays.example.csv`
 ## Project File Layout
 
 ```
-storage automation/                          ← workspace root
+greenlake-automation/                        ← workspace root (repo: SaiHPE/Greenlake-Automation)
 ├── .github/
-│   └── copilot-instructions.md             ← THIS FILE
+│   ├── copilot-instructions.md             ← THIS FILE
+│   └── workflows/                          ← release.yml (rolling `latest` zip), exe.yml (tagged .exe builds)
 ├── Provisioning_Automation/
-│   ├── IMPLEMENTATION_PLAN.md              ← full blueprint with all API contracts + Playwright flows
-│   ├── AUTOMATION_PLAN.md                  ← high-level plan, pointers
-│   ├── FEASIBILITY.md                      ← feasibility research
+│   ├── IMPLEMENTATION_PLAN.md              ← HISTORICAL (2026-06) onboarding blueprint; API contracts still useful
+│   ├── AUTOMATION_PLAN.md                  ← HISTORICAL high-level plan
+│   ├── FEASIBILITY.md                      ← HISTORICAL feasibility research
 │   └── alletra_onboard/                    ← Python project (editable install: pip install -e .[dev])
 │       ├── pyproject.toml                  ← hatchling build, entry: onboard = alletra_onboard.cli.main:app
+│       ├── CONTEXT.md                      ← domain glossary
+│       ├── docs/SCOPE.md                   ← CANONICAL scope + status (nine areas) + order of work
+│       ├── docs/ARCHITECTURE.md, docs/adr/, docs/LESSONS.md, docs/validation/, docs/ux/
 │       ├── config/
 │       │   ├── arrays.example.csv
 │       │   └── settings.example.toml
@@ -222,7 +255,7 @@ storage automation/                          ← workspace root
 │       ├── docs/LESSONS.md                 ← READ BEFORE wizard-automation, state/persistence or
 │       │                                      refactor work: incident→rule register from v0.13.0
 │       └── tests/
-│           ├── unit/                       ← workflow, policies, preflight, intake, GL preflight (17 tests)
+│           ├── unit/                       ← workflow, policies, preflight, intake, discovery/zoning/provisioning parsers pinned to real captures
 │           └── contract/                   ← payload shapes, service catalog parser, read filter params
 ├── docs and plans/
 │   └── greenlake_api_docs/                 ← LOCAL COPY of all HPE GreenLake developer docs
@@ -339,22 +372,24 @@ onboard run --array SGHD44LQLS
 
 ```powershell
 Set-Location Provisioning_Automation\alletra_onboard
-python -m pytest -q        # 17 tests, all passing
-python -m ruff check .     # zero lint issues
+.\.venv\Scripts\python.exe -m pytest -q          # ~335 tests across 31 modules, all passing at v0.16.0-rc.5
+.\.venv\Scripts\python.exe -m ruff check src tests
 ```
 
 Test layout:
-- `tests/unit/` — workflow state machine, token-bucket policy, preflight logic, CSV intake, live GL preflight (with fakes)
+- `tests/unit/` — workflow state machine, token-bucket policy, preflight logic, sheet/CSV intake, GreenLake preflight (with fakes), and the discovery / zoning / provisioning / as-built parsers **pinned to real captured command output** from lab arrays and switches
 - `tests/contract/` — payload shape validation, service catalog parser, read-client filter params
 
-All tests use fakes/stubs. No live GreenLake calls in the test suite.
+All tests use fakes/stubs. No live GreenLake, array, vCenter or switch calls in the test suite. Passing tests do **not** substitute for a live run (see `docs/LESSONS.md`).
 
 ---
 
 ## GitHub Repository
 
-`https://github.com/SaiHPE/Greenlake-Automation` — branch `main`
+`https://github.com/SaiHPE/Greenlake-Automation`
 
-Latest commits:
-- `e89cec7` Add live GreenLake preflight checks
-- `b4c4890` Add alletra_onboard implementation + scraped GreenLake API docs
+- `main` — full repo; every push touching the app refreshes the rolling `latest` release zip.
+- `jumpbox-package` — subtree split of the app dir for the jump box; force-refresh after each `main` push.
+- Tags `vX.Y.Z[-rc.N]` — `exe.yml` builds the slim and offline Windows `.exe` zips.
+
+Current: **v0.16.0-rc.6** (2026-09-12) — zoning host-source union + zoning step redesign after the 2026-09-12 live test; both built, pending live run.

@@ -1,0 +1,7 @@
+Switch ID   Worldwide Name          Enet IP Addr    FC IP Addr      Name
+-------------------------------------------------------------------------
+  2: fffc02 10:00:38:ba:b0:99:09:60 10.132.30.112   0.0.0.0        >"SAN6700R13U40"
+ 32: fffc20 10:00:50:eb:1a:1a:5f:e4 10.132.30.62    0.0.0.0         "SAN1624ZR12U40"
+
+The Fabric has 2 switches
+Fabric Name: Training_Lab_Rack11

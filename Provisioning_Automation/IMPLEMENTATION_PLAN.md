@@ -1,5 +1,10 @@
 # Alletra MP B10000 Onboarding Automation - Implementation Blueprint
 
+> **Historical (June 2026).** This was the pre-build blueprint for the *onboarding* slice only. The
+> app has since shipped that slice and grown to discovery, zoning, provisioning, verification and
+> as-built. For what exists and what is open, read `alletra_onboard/docs/SCOPE.md` and
+> `alletra_onboard/docs/ARCHITECTURE.md`; the API contract notes below remain a useful reference.
+
 _Updated 2026-06-07. This is the implementation-ready architecture for the onboarding automation described in `FEASIBILITY.md` and `AUTOMATION_PLAN.md`._
 
 ---

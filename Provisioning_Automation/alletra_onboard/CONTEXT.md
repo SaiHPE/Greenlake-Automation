@@ -80,7 +80,7 @@ correctly zoned to the array (logged in on the expected fabric(s)), pruned of th
 unzoned / half-zoned hosts, storage & peer ports). Not new hardware — a curated *view* of the messy
 lab. Discovery classifies every host's HBAs by fabric + login state; the operator selects the good
 ones (the dropdown builder). Serves as the tier-2 green validation set for provisioning now, and the
-known-good reference / seed for the (deferred, not abandoned) zoning automation.
+known-good reference for the zoning **command set** (the tool never writes to the switch — ADR 0012).
 _Avoid_: treating it as a separate "ideal lab" (it's a subset of the messy one).
 
 **Fabric (odd / even)**:

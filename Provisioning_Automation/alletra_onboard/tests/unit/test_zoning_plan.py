@@ -200,7 +200,10 @@ def test_offline_host_is_flagged_never_guessed():
         brocade_factory=_factory,
     )
     assert any("ghost" in entry for entry in plan.offline_hosts)
-    assert all(not f.pairs for f in plan.fabrics)                  # nothing zoned for an offline host
+    ghost = "10000000000000CC"
+    assert all(ghost not in pair for f in plan.fabrics for pair in f.pairs)   # nothing zoned for an offline host
+    # The initiators the declared switches DO see are still candidates (union rule, 2026-09-12).
+    assert {h.wwpn for f in plan.fabrics for h in f.hosts} == {"10000000000000AA", "10000000000000BB"}
 
 
 def test_suggested_alias_prefers_unique_over_shared_junk():
@@ -486,21 +489,31 @@ def test_delta_on_the_unzoned_bgl_hosts_proposes_everything_as_new():
     )
     f1 = next(f for f in plan.fabrics if f.fabric == "F1")
     f2 = next(f for f in plan.fabrics if f.fabric == "F2")
-    # One HBA per host per fabric; the fabric membership comes from the real name server.
-    assert len(f1.hosts) == 3 and len(f2.hosts) == 3
+    bgl = {h.wwpn for h in _BGL_HOSTS}
+    # One HBA per BGL host per fabric from vCenter, PLUS the three VZ initiators plugged into the
+    # declared switches (local NS) — the union rule of 2026-09-12: a live initiator on the declared
+    # switch is a zoning candidate whether or not vCenter knows it. They carry their source.
+    assert len([h for h in f1.hosts if h.wwpn in bgl]) == 3 and len([h for h in f2.hosts if h.wwpn in bgl]) == 3
+    assert len(f1.hosts) == 6 and len(f2.hosts) == 6
+    assert all(h.host_source == "vcenter" for h in f1.hosts if h.wwpn in bgl)
+    assert all(h.host_source == "switch" for h in f1.hosts if h.wwpn not in bgl)
+    assert any("not known to vCenter" in n for n in plan.notes)
     # 0:3:4 lands on F1 by the NAME SERVER even though its parity says even — placement here is
     # by actual fabric presence, so the miscabled port cannot be planned into the wrong fabric.
     assert {p.wwpn for p in f1.array_ports} == {"20310002AC07EFDC", "20340002AC07EFDC", "21310002AC07EFDC"}
-    assert len(f1.pairs) == 9 and len(f2.pairs) == 9     # 3 HBAs x 3 ports per fabric
+    bgl_pairs_f1 = [pair for pair in f1.pairs if pair[0] in bgl]
+    bgl_pairs_f2 = [pair for pair in f2.pairs if pair[0] in bgl]
+    assert len(bgl_pairs_f1) == 9 and len(bgl_pairs_f2) == 9     # 3 HBAs x 3 ports per fabric
     assert f1.already_zoned == [] and f2.already_zoned == []
 
-    # With operator-chosen aliases, the preview creates every alias + zone and enables once.
+    # With operator-chosen aliases and the BGL pairs selected, the preview creates every alias +
+    # zone, saves, and enables once.
     names = {h.wwpn: f"H{i}" for i, h in enumerate(_BGL_HOSTS)}
     names |= {p.wwpn: f"A{i}" for i, p in enumerate(_BGL_PORTS)}
-    f1_cmds = zp.render_commands(plan, names)[0]["F1"]
+    f1_cmds = zp.render_commands(plan, names, bgl_pairs_f1 + bgl_pairs_f2)[0]["F1"]
     assert sum(1 for c in f1_cmds if c.startswith("zonecreate")) == 9
     assert sum(1 for c in f1_cmds if c.startswith("alicreate")) == 6   # 3 host + 3 array aliases
-    assert f1_cmds[-1] == "cfgenable F1_CFG"
+    assert f1_cmds[-2:] == ["cfgsave", "cfgenable F1_CFG"]
 
 
 def test_a_non_host_type_port_is_flagged_not_excluded():
@@ -545,3 +558,204 @@ def test_a_host_port_whose_operator_label_says_peer_is_never_flagged():
     plan = zp.build_zoning_plan(_intent(), disc, brocade_factory=factory)
     assert not any("not excluded" in note for note in plan.notes), plan.notes
     assert all(p.caution == "" for f in plan.fabrics for p in f.array_ports)
+
+
+# ---------------- real captures (tests/fixtures/rack13_fabric, live training fabric 2026-09-12) --------
+# rack13arcus (CZ2D2K014S), cross-cabled: F1 = SAN6700R13U38 (.111, cfg mycfg) carries 0:3:4 + 1:3:3;
+# F2 = SAN6700R13U40 (.112, cfg jul2prabhu) carries 0:3:3 + 1:3:4. Both fabrics have a SECOND switch
+# over an ISL. The Windows host .137 has one HBA zoned on F2 and one unzoned on F1; ESXi .86's live HBA
+# is plugged into F2's REMOTE switch; two more initiators sit on the declared switches unzoned.
+
+_R13 = Path(__file__).resolve().parents[1] / "fixtures" / "rack13_fabric"
+
+
+class _Rack13Brocade:
+    def __init__(self, label):
+        self._label = label
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def _f(self, name):
+        return (_R13 / f"{self._label}_{name}.txt").read_text(encoding="utf-8")
+
+    def nsshow(self):
+        return self._f("nsshow")
+
+    def nscamshow(self):
+        return self._f("nscamshow")
+
+    def alishow(self):
+        return self._f("cfgshow")     # F1 has no aliases at all; F2's live in the Defined section
+
+    def cfgshow(self):
+        return self._f("cfgshow")
+
+    def fabricshow(self):
+        return self._f("fabricshow")
+
+    def read(self, command):
+        assert command == "switchshow"
+        return self._f("switchshow")
+
+
+def _rack13_factory(creds):
+    return _Rack13Brocade("F1" if creds.host == "sw-f1" else "F2")
+
+
+_R13_VCENTER = [
+    HostHba(host_name="10.132.30.136", wwpn="10005CED8C5312A8", os="VMware ESXi 8.0.2"),
+    HostHba(host_name="10.132.30.136", wwpn="10005CED8C5312A9", os="VMware ESXi 8.0.2"),
+    HostHba(host_name="10.132.30.47", wwpn="100008F1EAC03DE7"),
+    HostHba(host_name="10.132.30.47", wwpn="100008F1EAC03DE8"),
+    HostHba(host_name="10.132.30.86", wwpn="51402EC02089CC38"),
+    HostHba(host_name="10.132.30.86", wwpn="51402EC02089CC3A"),
+]
+_R13_PORTS = [
+    ArrayPort(node=0, slot=3, card_port=3, protocol="fc", wwpn="20330002AC02D495", link_state="ready"),
+    ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC02D495", link_state="ready"),
+    ArrayPort(node=1, slot=3, card_port=3, protocol="fc", wwpn="21330002AC02D495", link_state="ready"),
+    ArrayPort(node=1, slot=3, card_port=4, protocol="fc", wwpn="21340002AC02D495", link_state="ready"),
+]
+
+
+def _rack13_discovery():
+    from alletra_onboard.domain.discovery import ArrayHost
+    return DiscoveryReport(
+        host_hbas=_R13_VCENTER, array_ports=_R13_PORTS,
+        array_hosts=[
+            ArrayHost(name="vmenode", persona="Generic-ALUA", wwpns={"10005CED8C531294": ["0:3:3", "1:3:4"]}),
+            ArrayHost(name="", wwpns={   # the unclaimed bucket, verbatim from showhost -d
+                "10005CBA2CFF6BD0": ["0:3:3", "1:3:4"], "10005CED8C5312A8": ["0:3:3", "1:3:4"],
+                "51402EC02089CC1C": ["0:3:3", "1:3:4"], "51402EC02089CBDA": ["0:3:3", "1:3:4"],
+                "100000109B507E49": ["0:3:3", "1:3:4"], "10005CED8C5312A9": ["0:3:4", "1:3:3"],
+            }),
+        ],
+        notes=["Port 0:3:4 attaches to switch SAN6700R13U38 (odd fabric) but its card-port parity is even — using the switch (non-standard cabling)."],
+    )
+
+
+def _rack13_intent():
+    from alletra_onboard.domain.provisioning import DeclaredHost
+    return _intent().model_copy(update={"declared_hosts": [
+        DeclaredHost(name="arcus-win137", os="windows", address="10.132.30.137",
+                     wwpns=["51402EC02089CC1C", "51402EC02089CC1E"]),
+    ]})
+
+
+def test_rack13_parsers_read_switch_and_fabric_identity():
+    name, domain = zp.parse_switchshow((_R13 / "F1_switchshow.txt").read_text())
+    assert (name, domain) == ("SAN6700R13U38", 1)
+    fabric, switches = zp.parse_fabricshow((_R13 / "F2_fabricshow.txt").read_text())
+    assert fabric == "Training_Lab_Rack11"
+    assert switches == {2: "SAN6700R13U40", 32: "SAN1624ZR12U40"}
+    domains = zp.parse_nscam_domains((_R13 / "F2_nscamshow.txt").read_text())
+    assert domains["51402EC02089CC38"] == 32                 # .86's HBA is on the remote switch
+
+
+def test_rack13_zoning_candidates_are_the_union_of_every_source():
+    # THE 2026-09-12 finding: with vCenter answering, the plan showed only vCenter's ESXi HBAs and
+    # could not zone the Windows host's unzoned HBA. Every live initiator is now a candidate.
+    plan = zp.build_zoning_plan(_rack13_intent(), _rack13_discovery(), brocade_factory=_rack13_factory)
+    f1 = next(f for f in plan.fabrics if f.fabric == "F1")
+    f2 = next(f for f in plan.fabrics if f.fabric == "F2")
+
+    # Fabric identity, for the screen header.
+    assert (f1.switch_name, f1.fabric_name, f1.switch_count, f1.active_cfg) == ("SAN6700R13U38", "Training_Lab_Rack12", 2, "mycfg")
+    assert (f2.switch_name, f2.fabric_name, f2.switch_count, f2.active_cfg) == ("SAN6700R13U40", "Training_Lab_Rack11", 2, "jul2prabhu")
+    assert [p.nsp for p in f1.array_ports] == ["0:3:4", "1:3:3"] and [p.node for p in f1.array_ports] == [0, 1]
+    assert [p.nsp for p in f2.array_ports] == ["0:3:3", "1:3:4"]
+
+    f1_hosts = {h.wwpn: h for h in f1.hosts}
+    f2_hosts = {h.wwpn: h for h in f2.hosts}
+    # vCenter host, both fabrics, zoned by kiranzone1 on F1.
+    assert f1_hosts["10005CED8C5312A9"].host_source == "vcenter"
+    assert f1.zone_names["10005CED8C5312A9|20340002AC02D495"] == ["kiranzone1"]
+    assert f1.zone_names["10005CED8C5312A9|21330002AC02D495"] == ["kiranzone1"]
+    # The Windows host from the SHEET: cc:1c zoned on F2 (named zone), cc:1e on F1 with NOTHING.
+    win_f1, win_f2 = f1_hosts["51402EC02089CC1E"], f2_hosts["51402EC02089CC1C"]
+    assert (win_f1.host_name, win_f1.host_source, win_f1.os) == ("arcus-win137", "sheet", "windows")
+    assert not any(pair[0] == "51402EC02089CC1E" for pair in f1.already_zoned)
+    assert {pair for pair in f1.pairs if pair[0] == "51402EC02089CC1E"} == {
+        ("51402EC02089CC1E", "20340002AC02D495"), ("51402EC02089CC1E", "21330002AC02D495"),
+    }
+    assert "arcus__windows137_zone2" in f2.zone_names["51402EC02089CC1C|20330002AC02D495"]
+    assert win_f2.host_source == "sheet"
+    # .86's live HBA: vCenter-named, placed on F2 via the REMOTE switch — and the screen says which.
+    assert f2_hosts["51402EC02089CC38"].placed_on_switch == "SAN1624ZR12U40"
+    assert f1_hosts["10005CED8C5312A9"].placed_on_switch == ""       # on the declared switch itself
+    # The array's own host object, by its array name; unclaimed logins by WWPN only.
+    assert (f2_hosts["10005CED8C531294"].host_name, f2_hosts["10005CED8C531294"].host_source) == ("vmenode", "array")
+    assert (f2_hosts["51402EC02089CBDA"].host_name, f2_hosts["51402EC02089CBDA"].host_source) == ("", "array")
+    # Initiators nothing but the declared switch sees: the training team's Linux box, one Emulex
+    # HBA per fabric, unzoned on both — named by the NS HN: field, OS from OS:.
+    assert (f1_hosts["10005CED8C5312A3"].host_source, f1_hosts["10005CED8C5312A3"].host_name,
+            f1_hosts["10005CED8C5312A3"].os) == ("switch", "localhost.localdomain", "Linux")
+    assert f2_hosts["10005CED8C5312A2"].host_name == "localhost.localdomain"
+    # Offline: .47 both HBAs and .86's second HBA are in neither fabric.
+    assert sorted(plan.offline_hosts) == sorted([
+        "10.132.30.47 (10:00:08:f1:ea:c0:3d:e7)", "10.132.30.47 (10:00:08:f1:ea:c0:3d:e8)",
+        "10.132.30.86 (51:40:2e:c0:20:89:cc:3a)",
+    ])
+    # The NPIV FC-NVMe shadows of the array ports never become hosts.
+    assert not any(h.wwpn.startswith("20340102") or h.wwpn.startswith("20330102") for h in f1.hosts + f2.hosts)
+    assert any("not known to vCenter" in n for n in plan.notes)
+    assert any("non-standard cabling" in n for n in plan.notes)      # discovery's cabling note surfaces here
+
+
+def test_rack13_proposed_aliases_follow_the_convention_only_where_none_exist():
+    plan = zp.build_zoning_plan(_rack13_intent(), _rack13_discovery(), brocade_factory=_rack13_factory)
+    f1 = next(f for f in plan.fabrics if f.fabric == "F1")
+    win = next(h for h in f1.hosts if h.wwpn == "51402EC02089CC1E")
+    assert win.existing_aliases == [] and win.suggested_alias == ""   # render fallback stays empty
+    assert win.proposed_alias == "arcus_win137_hba2"                  # cc:1c is hba1, cc:1e hba2
+    port = next(p for p in f1.array_ports if p.nsp == "0:3:4")
+    assert port.proposed_alias == "CZ2D2K014S_N0S3P4"                 # serial from the NS PortSymb
+    linux = next(h for h in f1.hosts if h.wwpn == "10005CED8C5312A3")
+    assert linux.proposed_alias == "localhost_localdomain_hba2"       # 12:a2 (F2) is hba1, 12:a3 hba2
+    unclaimed = next(h for f in plan.fabrics for h in f.hosts if h.wwpn == "51402EC02089CBDA")
+    assert unclaimed.proposed_alias == "host_cbda_hba1"               # nameless login: WWPN tail
+    # A proposal is UI pre-fill only: rendering with no operator names still reports, never invents.
+    _cmds, skipped = zp.render_commands(plan, {}, [("51402EC02089CC1E", "20340002AC02D495")])
+    assert len(skipped["F1"]) == 1 and "alias" in skipped["F1"][0]
+
+
+def test_rack13_f1_command_set_for_the_windows_hba_is_the_consultants_script():
+    plan = zp.build_zoning_plan(_rack13_intent(), _rack13_discovery(), brocade_factory=_rack13_factory)
+    names = {"51402EC02089CC1E": "arcus_win137_hba2", "20340002AC02D495": "rack13arcus_N0S3P4",
+             "21330002AC02D495": "rack13arcus_N1S3P3"}
+    chosen = [("51402EC02089CC1E", "20340002AC02D495"), ("51402EC02089CC1E", "21330002AC02D495")]
+    cmds, skipped = zp.render_commands(plan, names, chosen)
+    assert cmds["F1"] == [
+        'alicreate "arcus_win137_hba2","51:40:2e:c0:20:89:cc:1e"',
+        'alicreate "rack13arcus_N0S3P4","20:34:00:02:ac:02:d4:95"',
+        'alicreate "rack13arcus_N1S3P3","21:33:00:02:ac:02:d4:95"',
+        'zonecreate "arcus_win137_hba2_rack13arcus_N0S3P4","arcus_win137_hba2;rack13arcus_N0S3P4"',
+        'zonecreate "arcus_win137_hba2_rack13arcus_N1S3P3","arcus_win137_hba2;rack13arcus_N1S3P3"',
+        'cfgadd "mycfg","arcus_win137_hba2_rack13arcus_N0S3P4;arcus_win137_hba2_rack13arcus_N1S3P3"',
+        "cfgsave",
+        "cfgenable mycfg",
+    ]
+    assert cmds["F2"] == [] and skipped == {"F1": [], "F2": []}     # nothing selected on F2
+
+
+def test_render_rejects_names_fos_would_reject_and_warns_on_enhanced_ones():
+    plan = zp.build_zoning_plan(_rack13_intent(), _rack13_discovery(), brocade_factory=_rack13_factory)
+    chosen = [("51402EC02089CC1E", "20340002AC02D495")]
+    # A dot is illegal in every FOS release: the pair is skipped and the reason names the character.
+    cmds, skipped = zp.render_commands(
+        plan, {"51402EC02089CC1E": "arcus.win137", "20340002AC02D495": "A034"}, chosen,
+    )
+    assert cmds["F1"] == [] and len(skipped["F1"]) == 1 and "'.'" in skipped["F1"][0]
+    # A hyphen is legal on FOS 8.1+ only: it renders, and the warning says so.
+    names = {"51402EC02089CC1E": "arcus_win137-hba2", "20340002AC02D495": "A034"}
+    cmds, skipped = zp.render_commands(plan, names, chosen)
+    assert skipped["F1"] == [] and any(c.startswith('alicreate "arcus_win137-hba2"') for c in cmds["F1"])
+    warnings = zp.alias_name_warnings(plan, names)
+    assert len(warnings["F1"]) == 1 and "8.1.0" in warnings["F1"][0]
+    # 65 characters is rejected outright.
+    assert "65 characters" in zp.fos_name_problem("a" * 65)
+    assert zp.fos_name_problem("Zone_1") == "" and zp.fos_name_warning("Zone_1") == ""
