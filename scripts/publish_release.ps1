@@ -68,6 +68,18 @@ function Test-Release([string]$name) {
   try { & gh release view $name --repo $target *> $null; return ($LASTEXITCODE -eq 0) } finally { $ErrorActionPreference = "Stop" }
 }
 
+function Assert-Assets([string]$name, [string[]]$paths) {
+  # The outcome is the truth, not gh's exit code: on GHES 3.16 `gh release create` uploads every
+  # asset and then exits 1 (measured 2026-09-12 against github.hpe.com), so a caller that trusted the
+  # code would report failure for a release that is complete. Check the release itself.
+  $ErrorActionPreference = "Continue"
+  try { $json = & gh release view $name --repo $target --json assets 2>$null | Out-String } finally { $ErrorActionPreference = "Stop" }
+  if (-not $json) { throw "Release '$name' does not exist on $target after publishing." }
+  $have = @(($json | ConvertFrom-Json).assets | ForEach-Object { $_.name })
+  $missing = @($paths | ForEach-Object { Split-Path $_ -Leaf } | Where-Object { $_ -notin $have })
+  if ($missing) { throw "Release '$name' is missing asset(s): $($missing -join ', ')" }
+}
+
 if (-not $Tag) {
   # ---------------------------------------------------------------- rolling "latest" ----------------
   if (-not $NoBuild) { & (Join-Path $PSScriptRoot 'build_release.ps1'); if ($LASTEXITCODE -ne 0) { throw "build_release.ps1 failed" } }
@@ -84,12 +96,13 @@ if (-not $Tag) {
   # upload can never leave the operators' download link pointing at nothing.
   if (Test-Release 'latest') {
     Write-Host "Refreshing existing 'latest' release" -ForegroundColor Cyan
-    if ((Invoke-Gh release edit latest --repo $target --title $title --notes $notes --latest) -ne 0) { throw "gh release edit failed" }
-    if ((Invoke-Gh release upload latest --repo $target --clobber @assets) -ne 0) { throw "gh release upload failed" }
+    Invoke-Gh release edit latest --repo $target --title $title --notes $notes | Out-Null
+    Invoke-Gh release upload latest --repo $target --clobber @assets | Out-Null
   } else {
     Write-Host "Creating 'latest' release" -ForegroundColor Cyan
-    if ((Invoke-Gh release create latest --repo $target --title $title --notes $notes --latest @assets) -ne 0) { throw "gh release create failed" }
+    Invoke-Gh release create latest --repo $target --title $title --notes $notes @assets | Out-Null
   }
+  Assert-Assets 'latest' $assets
   Write-Host "Published https://$target/releases/latest" -ForegroundColor Green
   exit 0
 }
@@ -111,10 +124,11 @@ if (-not $exeAssets) { throw "No .exe zips in dist/. Build them on Windows: publ
 
 # A semver pre-release tag (v0.13.0-rc.1) is published as a pre-release, so a candidate built for
 # review never presents itself as the current stable download.
-$extra = if ($Tag -like '*-*') { @('--prerelease') } else { @('--latest') }
+$extra = if ($Tag -like '*-*') { @('--prerelease') } else { @() }
 if (Test-Release $Tag) {
-  if ((Invoke-Gh release upload $Tag --repo $target --clobber @exeAssets) -ne 0) { throw "gh release upload failed" }
+  Invoke-Gh release upload $Tag --repo $target --clobber @exeAssets | Out-Null
 } else {
-  if ((Invoke-Gh release create $Tag --repo $target --title "Alletra Onboard $Tag" --generate-notes @extra @exeAssets) -ne 0) { throw "gh release create failed" }
+  Invoke-Gh release create $Tag --repo $target --title "Alletra Onboard $Tag" --generate-notes @extra @exeAssets | Out-Null
 }
+Assert-Assets $Tag $exeAssets
 Write-Host "Published https://$target/releases/tag/$Tag" -ForegroundColor Green
