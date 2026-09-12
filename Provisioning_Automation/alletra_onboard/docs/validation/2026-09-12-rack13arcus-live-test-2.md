@@ -4,10 +4,11 @@ Second run of the storage steps **driven by the operator in the shipped applicat
 (v0.16.0-rc.5, `f404ece`) against real hardware. Purpose: retest discovery, zoning and provisioning
 after the 2026-08-31 fixes, on an array that has since been rebuilt by the training team.
 
-**Outcome so far: discovery and the zoning *read/design* side are correct on every check against
-raw output. One design defect (the zoning host list) and seven UX findings. Provisioning, verify
-and as-built were not reached in this session.** The defect is closed in code (this commit) and the
-UI redesigned — both **pending a live run**.
+**Outcome: discovery and the zoning *read/design* side are correct on every check against raw
+output. Provisioning was driven end to end through the UI (v0.16.0-rc.7) and the array confirms 7
+of the 8 objects; the eighth — the VV-set — was reported "Created" and does not exist (defect 4).
+One zoning design defect (the host list) and seven UX findings, closed in rc.6/rc.7 and pending
+their own live confirmation. Verify and as-built not yet reached.**
 
 ## Environment
 
@@ -63,6 +64,24 @@ card-port parity; `0:3:4` and `0:3:3` mismatches). Not yet confirmed whether the
 The command set was **not applied**: `.86` sits on the training team's remote switch and `cfgenable
 jul2prabhu` touches their zones.
 
+### Provisioning — driven through the UI on v0.16.0-rc.7 (2026-09-13 00:01)
+
+Operator composed: host set `zz_t2_hs` = `10.132.30.136` only; exports `zz_t2_vvs` → `zz_t2_hs`
+and `zz_t2_vol03` → `10.132.30.136`, LUN auto. Plan showed 8 creates (host persona VMware, three
+volumes on `SSD_r6` with `vol03` taking the sheet defaults, no held-back note, no rows for `.47`,
+`.86` or `vmenode`). Apply: 8 × "Created" in 3 s. Path verify: `.136` Live, 2 HBAs on both fabrics;
+nothing said about hosts not exported to. Array afterwards
+(`script-logs/rack13_postprov_20260913_000725.utf8.txt`):
+
+| Object | Array says | Verdict |
+|---|---|---|
+| host `10.132.30.136` | id 11, persona VMware, `…12A8` on `0:3:3`/`1:3:4`, `…12A9` on `0:3:4`/`1:3:3`; both WWPNs **gone from the unclaimed block** | ✅ |
+| `zz_t2_vol01/02/03` | tpvv / **tdvv** (reduce) / tpvv, all `SSD_r6`, normal, 1/1/2 GiB | ✅ |
+| host set `zz_t2_hs` | id 30, member `10.132.30.136` | ✅ |
+| VLUNs | LUN 0 `vol01`, LUN 1 `vol02` (type *host set*), LUN 2 `vol03` (type *host*); each on all four ports, 12 rows, active/nonopt split by owning node | ✅ |
+| **VV-set `zz_t2_vvs`** | `showvvset zz_t2_*` → **No vv set listed**; `showvlun -t` templates are `zz_t2_vol01 → set:zz_t2_hs` and `zz_t2_vol02 → set:zz_t2_hs` — two per-volume templates, not one `set:zz_t2_vvs` template | ❌ defect 4 |
+| `vmenode`, `SSD_r6`, both switches | unchanged; `cfgtransshow` clean, `mycfg` / `jul2prabhu` effective, no `zz_` alias or zone | ✅ |
+
 ## Defects found
 
 **1. Hosts not in vCenter never reach the zoning plan (design).** `build_zoning_plan` used
@@ -86,6 +105,28 @@ This contradicted ADR 0012 and the footer's per-host rule, trapping the operator
 proceed, and renders **Continue with N zoned hosts** whenever `N > 0`; other hosts remain excluded
 by name. Frontend type-check/build passed; pending live run.
 
+**4. The VV-set was reported "Created" and does not exist on the array (open).**
+`ensure_volume_set` calls `createVolumeSet(name, setmembers=[vol01, vol02])`, which returned
+without raising, so the outcome was "created". The array has no `zz_t2_vvs`, and the export that
+named `set:zz_t2_vvs` as its source landed as two per-volume templates to the host set instead of
+one set-to-set template. The SDK source (python-3parclient 4.4, `client.py:2479`) posts
+`{name, setmembers}` to `/volumesets` and does not check the response. The data path is unaffected
+(the volumes are exported and live), but the object the operator was told exists is absent — a
+later volume added to the set would not be presented, and the as-built will not show the set. Every
+unit test fakes `ensure_volume_set`, so nothing could have caught it. **Needs a live WSAPI
+response to fix**: capture the `POST /volumesets` reply on this array, then make
+`ensure_volume_set` verify with `getVolumeSet` after create (as `ensure_host` already does for
+WWNs) and report `verify-failed` rather than trusting the SDK's silence.
+
+**5. Provisioning host list is vCenter-only (design, same shape as defect 1).** `_hosts_by_name`
+and `_persona_by_host` read `discovery.host_hbas`; the Compose dropdown therefore offered `.136`,
+`.47`, `.86` and not `arcus-win137` (sheet) or `localhost.localdomain` (fabric NS), both of which
+the zoning step now lists. The union rule applied to zoning in rc.6 has to reach provisioning too.
+
+**6. Compose card resets to "Load objects" after apply (UX).** The saved membership and export
+rows were used (the Result table proves it) but are no longer displayed; an operator clicking
+Rebuild plan sees an empty card and cannot tell whether the composition survived.
+
 ## UX findings (all closed in the redesign, pending live run)
 
 Z1 nothing labelled (switch read as a host; IP not marked as host; WWPN not marked as HBA port) ·
@@ -105,11 +146,16 @@ Z9 no hint that `.86` sits on a remote switch · Z10 WWPNs without decode. Plan 
 
 ## Owed
 
-- **Post-step switch snapshot** (`cfgshow`, `cfgtransshow` on both) to close the "never writes"
-  check for this run.
+- **Defect 4**: capture the live `POST /volumesets` response on rack13arcus, fix
+  `ensure_volume_set` to verify after create, re-run provisioning, confirm `showvvset zz_t2_vvs`
+  lists both volumes and `showvlun -t` shows one `set:zz_t2_vvs → set:zz_t2_hs` template.
+- **Defect 5**: provisioning host list = the zoning union.
+- **Idempotence click**: Rebuild plan after apply must show every row as *exists* (not yet done).
+- **Verify + As-built** on this array with the `zz_t2_*` objects still in place, then the array
+  cleanup (`removevlun` × 3 → `removevv` × 3 → `removehostset zz_t2_hs` → `removehost 10.132.30.136`).
 - **Apply one tool-generated command set and watch the login appear** — the single most important
   untested link. Candidate: `localhost.localdomain` on F1 (`mycfg`, the training team's own switch,
-  no aliases to collide with), or `cc:1e` for `.137`. Needs the fixed build.
-- **Provisioning, path verify, verify, as-built** on this array (Phases 5–6 of the plan).
+  no aliases to collide with). Needs the training team's nod for `cfgenable mycfg`.
 - Confirm the parity notes render somewhere in Discovery.
-- Re-test the partial-host Continue gate in v0.16.0-rc.7, then complete provisioning.
+- Re-test the partial-host Continue gate in v0.16.0-rc.7 — **done 2026-09-13**: the button appeared
+  after Check zoning and the run continued with `.136`.
