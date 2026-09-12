@@ -8,7 +8,7 @@ written has agreed with the product right up until the moment it didn't (see doc
 Run it ON THE VZ JUMP BOX (10.54.122.137). vCenter lives on the isolated 10.99.1.x vault VLAN and
 is unreachable from anywhere else, and discovery cannot complete without it.
 
-    git clone https://github.com/SaiHPE/Greenlake-Automation
+    git clone https://github.hpe.com/g-sai-roopesh/greenlake-automation
     pip install pydantic paramiko pyvmomi "python-3parclient>=4.2.14"
     cd Greenlake-Automation/Provisioning_Automation/alletra_onboard
     set PYTHONPATH=src

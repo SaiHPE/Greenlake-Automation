@@ -25,7 +25,7 @@ This workspace automates the deployment of HPE Alletra MP B10000 storage arrays 
 - **Read-only by default.** Array SSH goes through the `ArrayCliClient` command allowlist; verification, as-built and discovery must never mutate.
 - **A run is ONE array.** Refuse workbooks naming two.
 - **Line endings.** The repo was authored on Windows; on macOS `git status` shows thousands of CRLF-only changes. Diff with `--ignore-all-space`; never commit those.
-- **Two branches to keep in sync:** `main` (full repo) and `jumpbox-package` (`git subtree split` of `Provisioning_Automation/alletra_onboard`, force-pushed after every `main` push that touches the app). `frontend/dist` is committed — rebuild it (`npm run build`) before pushing UI changes.
+- **Two branches to keep in sync:** `main` (full repo) and `jumpbox-package` (`git subtree split` of `Provisioning_Automation/alletra_onboard`, force-pushed after every `main` push that touches the app). `frontend/dist` is committed — rebuild it (`npm run build`) before pushing UI changes. Releases are published with `scripts/publish_release.ps1` (Actions is disabled on this GHES repo — see README *Releasing*).
 - **Steps and modes** come from the step registry in `domain/workflow.py` (`greenlake`, `cloudinit`, `dscc`, `discover`, `zoning`, `provision`, `verify`, `asbuilt`); the UI renders from it via `/app/profile`. Do not hardcode step lists elsewhere.
 - **Secrets** (GreenLake client creds, array/vCenter/switch passwords) live in `.env` / the initialisation sheet upload, never in git.
 
@@ -186,10 +186,10 @@ CSV example: `config/arrays.example.csv`
 ## Project File Layout
 
 ```
-greenlake-automation/                        ← workspace root (repo: SaiHPE/Greenlake-Automation)
+greenlake-automation/                        ← workspace root (repo: github.hpe.com/g-sai-roopesh/greenlake-automation)
 ├── .github/
 │   ├── copilot-instructions.md             ← THIS FILE
-│   └── workflows/                          ← release.yml (rolling `latest` zip), exe.yml (tagged .exe builds)
+│   └── workflows/                          ← release.yml / exe.yml — DORMANT on GHES (no runner); scripts/publish_release.ps1 does the job by hand
 ├── Provisioning_Automation/
 │   ├── IMPLEMENTATION_PLAN.md              ← HISTORICAL (2026-06) onboarding blueprint; API contracts still useful
 │   ├── AUTOMATION_PLAN.md                  ← HISTORICAL high-level plan
@@ -386,10 +386,12 @@ All tests use fakes/stubs. No live GreenLake, array, vCenter or switch calls in 
 
 ## GitHub Repository
 
-`https://github.com/SaiHPE/Greenlake-Automation`
+`https://github.hpe.com/g-sai-roopesh/greenlake-automation` (GitHub Enterprise Server 3.16; the old `github.com/SaiHPE/Greenlake-Automation` is unreachable and kept only as the `github-com` remote).
 
-- `main` — full repo; every push touching the app refreshes the rolling `latest` release zip.
+- `main` — full repo.
 - `jumpbox-package` — subtree split of the app dir for the jump box; force-refresh after each `main` push.
-- Tags `vX.Y.Z[-rc.N]` — `exe.yml` builds the slim and offline Windows `.exe` zips.
+- Tags `vX.Y.Z[-rc.N]` — a `-rc` tag is a pre-release.
+- **Releases are published by hand** with `Provisioning_Automation/alletra_onboard/scripts/publish_release.ps1` (rolling `latest` zip; `-Tag … -BuildExe` on Windows for the `.exe` zips). GitHub Actions is disabled by enterprise policy for this user-owned GHES repo; the workflows are kept current for a future self-hosted Windows runner.
+- Auth: `gh auth login --hostname github.hpe.com` + `gh auth setup-git --hostname github.hpe.com`.
 
 Current: **v0.16.0-rc.6** (2026-09-12) — zoning host-source union + zoning step redesign after the 2026-09-12 live test; both built, pending live run.

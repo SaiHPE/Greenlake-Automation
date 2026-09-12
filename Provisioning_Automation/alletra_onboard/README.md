@@ -34,7 +34,9 @@ So the **jump box runs the entire flow (A + B + C) from the one web app** — no
 
 ## Repositories & machines
 
-GitHub: `github.com/SaiHPE/Greenlake-Automation`. There are **two branches** that matter:
+GitHub (HPE Enterprise): **`github.hpe.com/g-sai-roopesh/greenlake-automation`** (`origin`). The
+earlier `github.com/SaiHPE/Greenlake-Automation` is no longer reachable and is kept only as the
+`github-com` remote on the dev workstation. There are **two branches** that matter:
 
 | Branch | Contents | Used by |
 |---|---|---|
@@ -52,8 +54,8 @@ needs Node — they just pull and run.
 
 ### Syncing (the important part)
 
-**Dev workstation → GitHub** (after changing the package). Push `main`, then refresh the
-subtree branch so the jump box can pull it:
+**Dev workstation → GitHub** (after changing the package). Push `main`, refresh the subtree branch
+so the jump box can pull it, then publish the release zip (Actions cannot do it — see *Releasing*):
 
 ```powershell
 # from the repo root, after committing to main
@@ -61,10 +63,14 @@ git push origin main
 git branch -D jumpbox-package
 git subtree split --prefix=Provisioning_Automation/alletra_onboard -b jumpbox-package
 git push -f origin jumpbox-package
+cd Provisioning_Automation\alletra_onboard; .\scripts\publish_release.ps1     # refresh /releases/latest
 ```
 Do this **every time** a push to `main` touches the package, or the jump box will lag.
-If a UI source file changed, run `npm run build` in `frontend/` (PowerShell) and commit the
-new `frontend/dist` **before** pushing.
+If a UI source file changed, run `npm run build` in `frontend/` and commit the new `frontend/dist`
+**before** pushing (`publish_release.ps1` rebuilds it for the zip regardless).
+
+Authentication on the workstation is the GitHub CLI: `gh auth login --hostname github.hpe.com`
+once, then `gh auth setup-git --hostname github.hpe.com` so plain `git push` uses the same token.
 
 **Jump box ← GitHub** (flat copy, `jumpbox-package` branch):
 ```powershell
@@ -93,8 +99,8 @@ git log -1 --oneline
 Three ways, easiest first. The full repo is deeply nested; you don't need to navigate it.
 
 **1. Release zip (operators — no git, no Node).** Download **`alletra-onboard-latest.zip`** from
-the [latest release](https://github.com/SaiHPE/Greenlake-Automation/releases/latest) (rebuilt
-automatically on every push to `main` — see *Releasing* below), extract, and **double-click
+the [latest release](https://github.hpe.com/g-sai-roopesh/greenlake-automation/releases/latest)
+(refreshed on every release — see *Releasing* below), extract, and **double-click
 `start.cmd`** (or run it from a terminal). It bypasses the PowerShell execution policy that blocks
 unsigned/downloaded scripts and self-elevates (so the in-app clock-sync works), then runs the
 launcher. The PowerShell-native equivalent:
@@ -109,16 +115,17 @@ may be blocked by the execution policy — use `start.cmd` or the `-ExecutionPol
 **2. Clean flat clone (just the app, no other folders).** The `jumpbox-package` branch is a
 `subtree split` of only this package, with the built UI included:
 ```powershell
-git clone -b jumpbox-package https://github.com/SaiHPE/Greenlake-Automation.git alletra-onboard
+git clone -b jumpbox-package https://github.hpe.com/g-sai-roopesh/greenlake-automation.git alletra-onboard
 cd alletra-onboard; .\start.ps1
 ```
 
 **3. Full repo (developers).** `git clone` `main`; the app is under
 `Provisioning_Automation/alletra_onboard/`.
 
-**4. Packaged `.exe` (customers — no Python, no git, no Node).** Two self-contained Windows builds
-are attached to a **tagged** GitHub Release (push a `vX.Y.Z` tag → `.github/workflows/exe.yml`
-builds both on a Windows runner):
+**4. Packaged `.exe` (customers — no Python, no git, no Node).** Three self-contained Windows builds
+are attached to a **tagged** GitHub Release (built on Windows with
+`scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe`, or by `.github/workflows/exe.yml` once a
+self-hosted Windows runner exists):
 - **`alletra-onboard-win64.zip`** (~60 MB) — the **slim** build. It **drives an already-installed
   Chrome/Edge** (which almost every Windows box has) — no download. Only if *no* branded browser is
   present does it download Chromium (~150 MB) on first launch. Use this by default. (Force a choice
@@ -135,20 +142,36 @@ on an unusually stripped/corrupted Windows you may still need
 SmartScreen may warn (the build is unsigned) — click **More info → Run anyway**. Build locally with
 `scripts\build_exe.ps1` (slim) or `scripts\build_exe.ps1 -Chromium` (offline).
 
-### Releasing (automated)
+### Releasing
 
-Every push/merge to `main` that touches the app runs **`.github/workflows/release.yml`** on a
-Windows runner: it builds the UI, runs `scripts/build_release.ps1`, and refreshes a single
-rolling **`latest`** GitHub Release with `alletra-onboard-latest.zip` (+ a versioned copy and
-SHA256). So `/releases/latest` is always the newest `main` build — nothing manual to do.
+One script does it, from any machine with `git`, Node and the GitHub CLI signed in to
+`github.hpe.com`: **`scripts\publish_release.ps1`**. It reads the host/owner/repo from the `origin`
+remote, so the same script targets whichever GitHub the clone came from.
 
-To build the zip locally (dev workstation, needs Node):
+```powershell
+cd Provisioning_Automation\alletra_onboard
+.\scripts\publish_release.ps1                          # build the zip, refresh the rolling `latest` release
+.\scripts\publish_release.ps1 -Tag v0.16.0-rc.6 -BuildExe   # Windows only: build the 3 .exe zips, upload to the tag
+```
+The rolling **`latest`** release is refreshed in place (assets clobbered, never deleted and
+recreated), so `/releases/latest` never points at nothing. A tag containing `-` (an `rc`) is
+published as a **pre-release**.
+
+**Why not GitHub Actions?** `.github/workflows/release.yml` and `exe.yml` do exactly the above, but
+`github.hpe.com` is GitHub Enterprise Server: there are no GitHub-hosted runners, and as of
+2026-09-12 Actions is disabled by enterprise policy for this user-owned repository (enabling it
+via the API returns 204 and stays `false`; no runner packages are offered). The workflows are kept
+current and target `[self-hosted, windows, x64]`; the day a runner can be registered (Settings →
+Actions → Runners, on a Windows box with Node 20, Python 3.12 and `gh`), they take over untouched.
+
+To build the zip without publishing (needs Node):
 ```powershell
 .\scripts\build_release.ps1     # -> release\alletra-onboard-<version>.zip + .sha256
 ```
 The zip excludes `node_modules`, `.venv`, tests, and captures — just `src/`, the prebuilt
 `frontend/dist/`, `config/arrays.example.csv`, the scripts, and `start.ps1` (~210 KB). Bump the
-version in `pyproject.toml` to change the versioned asset name.
+version in `pyproject.toml` (and `src/alletra_onboard/__init__.py`, `frontend/package.json`) to
+change the versioned asset name.
 
 ---
 

@@ -1,8 +1,15 @@
 name: Build Windows EXE
 
 # The packaged .exe is large (the offline build bundles Chromium) and slow to build, so it is
-# produced on demand: push a version tag (v1.2.3) to publish a GitHub Release with both builds,
-# or run it manually from the Actions tab (workflow_dispatch) to get the zips as build artifacts.
+# produced on demand: push a version tag (v1.2.3) to publish a GitHub Release with all three builds
+# (slim, offline, init-only accelerator), or run it manually from the Actions tab
+# (workflow_dispatch) to get the zips as build artifacts.
+#
+# RUNNER. Needs a SELF-HOSTED Windows x64 runner (github.hpe.com has no hosted runners) with Python
+# 3.12 and the GitHub CLI. Actions is disabled by enterprise policy for this repo as of 2026-09-12,
+# so this workflow is DORMANT; the same build + publish runs by hand on any Windows box:
+#     .\scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe
+# The .exe is a Windows artifact; it is never built on macOS or Linux.
 on:
   push:
     tags:
@@ -18,10 +25,14 @@ concurrency:
 
 jobs:
   build-exe:
-    runs-on: windows-latest
+    runs-on: [self-hosted, windows, x64]
     defaults:
       run:
+        shell: pwsh
         working-directory: Provisioning_Automation/alletra_onboard
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_ENTERPRISE_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,7 +48,7 @@ jobs:
           python -m playwright install chromium
 
       - name: Build slim (Chromium fetched on first run)
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -SkipInstall
+        run: .\scripts\build_exe.ps1 -SkipInstall
 
       - name: Smoke-test slim (Playwright launches Chromium from the user cache)
         run: |
@@ -45,10 +56,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "slim selftest failed" }
 
       - name: Serve smoke-test slim (boot the web app with a proxy set, expect 200)
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke_serve.ps1
+        run: .\scripts\smoke_serve.ps1
 
       - name: Build offline (Chromium bundled)
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -SkipInstall -Chromium
+        run: .\scripts\build_exe.ps1 -SkipInstall -Chromium
 
       - name: Smoke-test offline (the bundled Chromium launches)
         run: |
@@ -56,10 +67,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "offline selftest failed" }
 
       - name: Serve smoke-test offline (boot the web app with a proxy set, expect 200)
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke_serve.ps1
+        run: .\scripts\smoke_serve.ps1
 
       - name: Build init-only accelerator (Alletra MP Initialization, slim)
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -SkipInstall -Profile init-only
+        run: .\scripts\build_exe.ps1 -SkipInstall -Profile init-only
 
       - name: Smoke-test init-only accelerator
         run: |
@@ -67,7 +78,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "init-only selftest failed" }
 
       - name: Serve smoke-test init-only (boot the web app with a proxy set, expect 200)
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke_serve.ps1
+        run: .\scripts\smoke_serve.ps1
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -81,25 +92,15 @@ jobs:
             Provisioning_Automation/alletra_onboard/dist/alletra-mp-initialization-win64.zip
             Provisioning_Automation/alletra_onboard/dist/alletra-mp-initialization-win64.zip.sha256
 
-      - name: Publish to the tag's GitHub Release
+      - name: Ensure GitHub CLI
         if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "${{ github.ref_name }}"
-          $assets = @(
-            'dist\alletra-onboard-win64.zip', 'dist\alletra-onboard-win64.zip.sha256',
-            'dist\alletra-onboard-offline-win64.zip', 'dist\alletra-onboard-offline-win64.zip.sha256',
-            'dist\alletra-mp-initialization-win64.zip', 'dist\alletra-mp-initialization-win64.zip.sha256'
-          )
-          # A semver pre-release tag (v0.13.0-rc.1) is published as a pre-release, so a candidate
-          # built for review never presents itself as the current stable download.
-          $extra = @()
-          if ($tag -like '*-*') { $extra += '--prerelease' } else { $extra += '--latest' }
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag @assets --clobber
-          } else {
-            gh release create $tag @assets --title "Alletra Onboard $tag" --generate-notes @extra
+          if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+            winget install --id GitHub.cli -e --silent --accept-package-agreements --accept-source-agreements
+            $env:PATH = "$env:ProgramFiles\GitHub CLI;$env:PATH"
           }
+          gh --version
+
+      - name: Publish to the tag's GitHub Release (pre-release when the tag has a '-')
+        if: startsWith(github.ref, 'refs/tags/')
+        run: .\scripts\publish_release.ps1 -Tag "${{ github.ref_name }}"
