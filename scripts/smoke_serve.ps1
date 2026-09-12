@@ -51,7 +51,13 @@ try {
     }
     if ($port) {
       try {
-        $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$port/app/profile" -UseBasicParsing -TimeoutSec 3
+        # The APP must cope with the system proxy we just set; the TEST CLIENT must not use it.
+        # Windows PowerShell 5.1 (.NET Framework) bypasses loopback automatically; PowerShell 7
+        # (.NET) sends 127.0.0.1 through the proxy, gets connection-refused, and never sees the
+        # 200 the app is serving (rc.6 CI run 34702213715). -NoProxy exists only on 6+.
+        $req = @{ Uri = "http://127.0.0.1:$port/app/profile"; UseBasicParsing = $true; TimeoutSec = 3 }
+        if ($PSVersionTable.PSVersion.Major -ge 6) { $req.NoProxy = $true }
+        $resp = Invoke-WebRequest @req
         if ($resp.StatusCode -eq 200) { $served = $true; break }
       } catch { }
     }
