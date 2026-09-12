@@ -57,11 +57,33 @@ $ver = $m.Matches[0].Groups[1].Value
 $sha = (& git rev-parse --short HEAD).Trim()
 
 function Invoke-Gh {
-  # gh writes progress to stderr; under ErrorActionPreference=Stop PowerShell would treat that as
-  # failure, so relax it for the call and check the exit code ourselves.
+  # gh writes progress AND errors to stderr; under ErrorActionPreference=Stop PowerShell would treat
+  # that as failure, so relax it for the call, echo everything to the log (the first rc.6 CI run
+  # failed with only our own "does not exist" message because gh's 422 was swallowed here), and
+  # return the exit code for the caller to judge.
   param([Parameter(ValueFromRemainingArguments)][string[]]$Args)
   $ErrorActionPreference = "Continue"
-  try { & gh @Args 2>&1 | ForEach-Object { "$_" } ; return $LASTEXITCODE } finally { $ErrorActionPreference = "Stop" }
+  try {
+    & gh @Args 2>&1 | ForEach-Object { Write-Host "  gh> $_" -ForegroundColor DarkGray }
+    return $LASTEXITCODE
+  } finally { $ErrorActionPreference = "Stop" }
+}
+
+function Publish-Assets {
+  # Create the release if it is missing, else upload into it. Create-then-upload is racy against a
+  # human: on 2026-09-12 the operator published the tag's release from a browser between our
+  # Test-Release and our create, and create returned 422 "tag_name already exists". Any create
+  # failure therefore falls through to upload --clobber; Assert-Assets judges the outcome.
+  param([string]$name, [string[]]$paths, [string[]]$createArgs)
+  if (-not (Test-Release $name)) {
+    Write-Host "Creating release '$name'" -ForegroundColor Cyan
+    $rc = Invoke-Gh release create $name --repo $target @createArgs @paths
+    if ($rc -eq 0) { return }
+    Write-Host "create returned $rc - uploading into the existing release instead" -ForegroundColor Yellow
+  } else {
+    Write-Host "Release '$name' exists - uploading assets" -ForegroundColor Cyan
+  }
+  Invoke-Gh release upload $name --repo $target --clobber @paths | Out-Null
 }
 
 function Test-Release([string]$name) {
@@ -95,14 +117,8 @@ if (-not $Tag) {
 
   # Create the release once; thereafter refresh notes + clobber the assets in place, so a failed
   # upload can never leave the operators' download link pointing at nothing.
-  if (Test-Release 'latest') {
-    Write-Host "Refreshing existing 'latest' release" -ForegroundColor Cyan
-    Invoke-Gh release edit latest --repo $target --title $title --notes $notes --latest | Out-Null
-    Invoke-Gh release upload latest --repo $target --clobber @assets | Out-Null
-  } else {
-    Write-Host "Creating 'latest' release" -ForegroundColor Cyan
-    Invoke-Gh release create latest --repo $target --title $title --notes $notes --latest @assets | Out-Null
-  }
+  Publish-Assets 'latest' $assets @('--title', $title, '--notes', $notes, '--latest')
+  Invoke-Gh release edit latest --repo $target --title $title --notes $notes --latest | Out-Null
   Assert-Assets 'latest' $assets
 
   # The rolling release is ONE download for operators. Versioned zips from earlier builds
@@ -138,10 +154,6 @@ if (-not $exeAssets) { throw "No .exe zips in dist/. Build them on Windows: publ
 # A semver pre-release tag (v0.13.0-rc.1) is published as a pre-release, so a candidate built for
 # review never presents itself as the current stable download.
 $extra = if ($Tag -like '*-*') { @('--prerelease') } else { @() }
-if (Test-Release $Tag) {
-  Invoke-Gh release upload $Tag --repo $target --clobber @exeAssets | Out-Null
-} else {
-  Invoke-Gh release create $Tag --repo $target --title "Alletra Onboard $Tag" --generate-notes @extra @exeAssets | Out-Null
-}
+Publish-Assets $Tag $exeAssets (@('--title', "Alletra Onboard $Tag", '--generate-notes') + $extra)
 Assert-Assets $Tag $exeAssets
 Write-Host "Published https://$target/releases/tag/$Tag" -ForegroundColor Green
