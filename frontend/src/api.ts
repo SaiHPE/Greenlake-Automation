@@ -258,20 +258,33 @@ export interface ZoningReport {
 // so the command grammar has exactly one implementation.
 export interface AliasedWwpn {
   wwpn: string; display: string; role: 'host' | 'array'; fabric: string; nsp: string;
-  host_name: string; host_source: string; existing_aliases: string[]; suggested_alias: string;
+  node?: number | null;                // array controller node from n:s:p (null for a host)
+  host_name: string;
+  host_source: string;                 // vcenter | sheet | array | switch | '' (array port)
+  os?: string;                         // host OS where a source reports one
+  placed_on_switch?: string;           // host reached via nscamshow: the remote switch it sits on
+  existing_aliases: string[]; suggested_alias: string;
+  proposed_alias?: string;             // convention pre-fill when NO alias exists (UI only)
   caution: string;  // non-empty = select knowingly (RCFC/Peer-labelled port)
 }
 export interface FabricZonePlan {
   fabric: string; switch_host: string; active_cfg: string;
+  switch_name?: string; fabric_name?: string; switch_count?: number;
   hosts: AliasedWwpn[]; array_ports: AliasedWwpn[];
   pairs: [string, string][]; already_zoned: [string, string][];
+  zone_names?: Record<string, string[]>;   // "host|array" -> effective zone name(s) covering the pair
 }
 export interface ZoningPlan {
   fabrics: FabricZonePlan[]; offline_hosts: string[]; notes: string[]; error: string | null;
 }
+export interface ZoningRenderResult {
+  commands: Record<string, string[]>;
+  skipped: Record<string, string[]>;
+  warnings?: Record<string, string[]>;   // legal-but-non-portable alias names (FOS 8.1+)
+}
 export const renderZoningCommands = (
   plan: ZoningPlan, aliases: Record<string, string>, selectedPairs: [string, string][],
-) => request<{ commands: Record<string, string[]>; skipped: Record<string, string[]> }>('POST', '/zoning/render', {
+) => request<ZoningRenderResult>('POST', '/zoning/render', {
   plan, aliases, selected_pairs: selectedPairs,
 });
 // stageZoning + the ZoningStageResult models were removed on 2026-09-02 (ADR 0012). They posted to

@@ -253,3 +253,25 @@ Staging writes to the *defined* configuration; only `cfgenable` makes zoning rea
 for it, because that host still had no route to the array. The gate and the verifier disagreed and the
 verifier was right. Gate on the observable end state — the host is logged in — never on the fact that
 somebody asked for it.
+
+**33. A fallback source is not a second source. If the fabric can see it, the plan must list it.**
+The zoning plan took its host list from vCenter and consulted the switches' name servers only when
+vCenter returned nothing. On 2026-09-12, rack13arcus: vCenter answered with three ESXi hosts, so the
+plan showed three ESXi hosts — while the declared switches' own `nsshow` held a Windows server's
+unzoned HBA (`51:40:2e:c0:20:89:cc:1e`, the very host the test existed to zone) and a Linux server's
+two HBAs (`HN:localhost.localdomain OS:Linux`, one per fabric, unzoned on both). The Hosts-tab row the
+operator had typed for the Windows host never reached the plan either. The step could not zone any of
+them, and nothing on the screen said so: the hosts were simply absent. A mixed estate — Windows and
+Linux beside a vCenter — is the customer case, not the exception. Every source that can see an
+initiator contributes to the list (vCenter, the sheet, the array's logins, the declared switches'
+local name servers); the source is shown on each row, and a later source may only fill a name an
+earlier one left empty. `test_rack13_zoning_candidates_are_the_union_of_every_source` pins it to
+the live captures.
+
+**34. The data the operator asks for is usually already in the output you parsed and discarded.**
+"Zoned to which host? By which zone?" — the zone name was in the `cfgshow` the plan had read to decide
+`already_zoned`, and the plan kept only the boolean. "Why is `.86` offered on F2?" — `nscamshow`
+prints `Switch entry for 32` above the entry and `fabricshow` names domain 32; the plan kept only the
+WWPN. Each answer cost the operator a second SSH session and a paste into chat. When a parser reduces
+a rich record to a flag, keep the identifying field beside the flag (`zone_names`, `placed_on_switch`,
+`switch_name`, `fabric_name`): the screen can then show its evidence instead of asking to be trusted.

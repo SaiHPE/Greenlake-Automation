@@ -1,7 +1,9 @@
 # Alletra Onboard
 
-Operator automation for onboarding an **HPE Alletra MP B10000** into **HPE GreenLake + DSCC**.
-It runs as a local web app (`onboard ui`, or the packaged `.exe`) that drives three components:
+Operator automation for deploying an **HPE Alletra MP B10000**: onboarding into **HPE GreenLake +
+DSCC**, then discovery, SAN-zoning command sets, block provisioning, verification and the as-built
+document. **Scope and current status per area: [docs/SCOPE.md](docs/SCOPE.md).** It runs as a
+local web app (`onboard ui`, or the packaged `.exe`). The onboarding slice drives three components:
 
 | Step | Component | What it does | How it runs |
 |---|---|---|---|
@@ -10,9 +12,11 @@ It runs as a local web app (`onboard ui`, or the packaged `.exe`) that drives th
 | **C** | DSCC "Set Up System" wizard | fill Welcome→Network→Time→Attributes→System, stop at the credential | Playwright, **attaches** to a logged-in Chrome (DSCC SSO) |
 | **D** | Post-init verification *(optional)* | SSH into the initialised array: per-field config check vs. what was onboarded, **plus** the `checkhealth` issue summary + inventory | **read-only** SSH (paramiko); never writes |
 
-The web app is a guided 7-step flow (Configure → Array details → GreenLake → Cloud
-Connectivity → DSCC → Verify → Finish) built with **React + the HPE Design System**
-(`grommet-theme-hpe`) and served by the FastAPI backend.
+The web app is a guided step flow built with **React + the HPE Design System** (`grommet-theme-hpe`)
+and served by the FastAPI backend. The operator picks a **mode** (Full onboarding / Provision only /
+Both / Verify only / Custom), which selects the steps: GreenLake → Cloud Connectivity → DSCC →
+Discovery → SAN Zoning → Provision storage → Verify → As-built. The `init-only` build profile ships
+only the onboarding steps as the "Alletra MP Initialization" accelerator.
 
 ---
 
@@ -265,39 +269,33 @@ Gotchas:
 
 ---
 
-## Current issues to solve
+## Status and open items
 
-1. **Subscription key for the target array is unresolved.** The factory activation produced
-   AutoPass on-array licenses (the 28-key `.dat`) + an EON order number — **not** a GreenLake
-   "Storage Central" (SKU `R7N52AAE`) subscription. The only subscription in the workspace was
-   issued against a *different* serial. Until a valid GreenLake subscription for the target
-   array is obtained, the apply-subscription phase warns (non-fatal; register + assign still
-   succeed). **Action:** get/confirm the array's own GreenLake subscription key from HPE.
+The per-area status table and the order of work live in **[docs/SCOPE.md](docs/SCOPE.md)**; the
+incident→rule register is [docs/LESSONS.md](docs/LESSONS.md); the latest hardware run is
+[docs/validation/2026-08-31-rack13arcus-live-test.md](docs/validation/2026-08-31-rack13arcus-live-test.md).
+In short (as of v0.16.0-rc.5):
 
-2. **DSCC on the jump box — resolved (single host).** The "Authenticating…" hang had two
-   causes, both fixed: (a) Chrome ignores `HTTPS_PROXY`, so the launcher passes `--proxy-server`
-   automatically; (b) host **clock drift** failed the login JWT (`iat is in the future`) — fixed
-   by the in-app **"Sync system clock"** button (HTTPS time-sync, since
-   NTP/UDP is blocked). With the proxy flag and a synced clock, the jump box reaches the DSCC
-   console, so **A + B + C all run on the jump box** from the one web app. (The clock button
-   needs the app run as Administrator.)
+1. **Live run owed.** Discovery, zoning and provisioning fixes since 2026-08-31 are verified only
+   against captured command output — the current build has not been driven through the app on
+   hardware. That is the first thing to do. The lab cleanup and SAN-team disclosure from that
+   test are also still owed (see its *Owed* section).
 
-3. **Run state does not cross machines.** Each machine has its own SQLite DB, so a web-app run
-   started on the jump box (A + B) can't be continued for DSCC on the laptop — DSCC is a
-   separate CLI step there. Resolved automatically once #2 lets one host do all three.
+2. **Windows/Linux hosts not in vCenter** are only inferred array-side or typed into the Hosts
+   tab. Agentless log-in discovery (OS / WWPN / multipathing) is the next feature.
 
-4. **The web-app path for steps 3–5 hasn't had a full live pass.** The automations are proven
-   via CLI; the UI buttons (GreenLake Run, Cloud Connectivity Fill & connect) need one
-   end-to-end run on the jump box against the real array.
+3. **Snapshots and replication** are not started; research before build.
+
+4. **Subscription key for the target lab array is unresolved.** The factory activation produced
+   AutoPass on-array licenses + an EON order number — **not** a GreenLake "Storage Central"
+   subscription. Until one is obtained, the apply-subscription phase warns (non-fatal; register +
+   assign still succeed). **Action:** get/confirm the array's own GreenLake subscription key.
 
 5. **DSCC credential entry is manual by design.** The "Create Secret" modal was never reliably
-   captured, and the array admin password is sensitive, so the operator enters it in the
-   wizard. Could be automated later if the modal selectors are captured.
+   captured, and the array admin password is sensitive, so the operator enters it in the wizard.
 
-6. **Packaging — done for v1.** Self-contained **release zip + one-click `start.ps1`**, and a
-   GitHub Actions workflow auto-refreshes the rolling **`latest`** release on every push to
-   `main`. A signed `.exe` (PyInstaller, like the SAP automation framework) is a later option —
-   heavier, bundles Chromium.
+6. **The tool never writes to a SAN switch** (ADR 0012). Zoning is delivered as a copy-paste
+   command set for the consultant; this is scope, not a gap.
 
 ---
 
