@@ -5,10 +5,12 @@ Second run of the storage steps **driven by the operator in the shipped applicat
 after the 2026-08-31 fixes, on an array that has since been rebuilt by the training team.
 
 **Outcome: discovery and the zoning *read/design* side are correct on every check against raw
-output. Provisioning was driven end to end through the UI (v0.16.0-rc.7) and the array confirms 7
-of the 8 objects; the eighth — the VV-set — was reported "Created" and does not exist (defect 4).
-One zoning design defect (the host list) and seven UX findings, closed in rc.6/rc.7 and pending
-their own live confirmation. Verify and as-built not yet reached.**
+output. Provisioning was driven end to end through the UI (v0.16.0-rc.7) twice; the array's own
+event log confirms every object and every command. One zoning design defect (the host list) and
+seven UX findings, closed in rc.6/rc.7 and confirmed live. Open: the plan's export rows carry no
+existence check (defect 4), the provisioning host list is vCenter-only (defect 5), and the UX
+register in `docs/ux/FINDINGS-2026-09-13.md`. Verify and as-built reached; documents not yet
+reviewed.**
 
 ## Environment
 
@@ -79,7 +81,7 @@ nothing said about hosts not exported to. Array afterwards
 | `zz_t2_vol01/02/03` | tpvv / **tdvv** (reduce) / tpvv, all `SSD_r6`, normal, 1/1/2 GiB | ✅ |
 | host set `zz_t2_hs` | id 30, member `10.132.30.136` | ✅ |
 | VLUNs | LUN 0 `vol01`, LUN 1 `vol02` (type *host set*), LUN 2 `vol03` (type *host*); each on all four ports, 12 rows, active/nonopt split by owning node | ✅ |
-| **VV-set `zz_t2_vvs`** | `showvvset zz_t2_*` → **No vv set listed**; `showvlun -t` templates are `zz_t2_vol01 → set:zz_t2_hs` and `zz_t2_vol02 → set:zz_t2_hs` — two per-volume templates, not one `set:zz_t2_vvs` template | ❌ defect 4 |
+| **VV-set `zz_t2_vvs`** | run 1 post-check: absent — **hand-deleted by the operator before the check** (see defect 4). Run 2, polled live: `33 zz_t2_vvs` with `vol01`, `vol02`, present for the whole window; event log shows `createvvset` and `createvlun set:zz_t2_vvs 0 set:zz_t2_hs` | ✅ |
 | `vmenode`, `SSD_r6`, both switches | unchanged; `cfgtransshow` clean, `mycfg` / `jul2prabhu` effective, no `zz_` alias or zone | ✅ |
 
 ## Defects found
@@ -105,18 +107,36 @@ This contradicted ADR 0012 and the footer's per-host rule, trapping the operator
 proceed, and renders **Continue with N zoned hosts** whenever `N > 0`; other hosts remain excluded
 by name. Frontend type-check/build passed; pending live run.
 
-**4. The VV-set was reported "Created" and does not exist on the array (open).**
-`ensure_volume_set` calls `createVolumeSet(name, setmembers=[vol01, vol02])`, which returned
-without raising, so the outcome was "created". The array has no `zz_t2_vvs`, and the export that
-named `set:zz_t2_vvs` as its source landed as two per-volume templates to the host set instead of
-one set-to-set template. The SDK source (python-3parclient 4.4, `client.py:2479`) posts
-`{name, setmembers}` to `/volumesets` and does not check the response. The data path is unaffected
-(the volumes are exported and live), but the object the operator was told exists is absent — a
-later volume added to the set would not be presented, and the as-built will not show the set. Every
-unit test fakes `ensure_volume_set`, so nothing could have caught it. **Needs a live WSAPI
-response to fix**: capture the `POST /volumesets` reply on this array, then make
-`ensure_volume_set` verify with `getVolumeSet` after create (as `ensure_host` already does for
-WWNs) and report `verify-failed` rather than trusting the SDK's silence.
+**4. Export rows in the plan never carry an existence check (open) — and a withdrawn claim.**
+First written here as "the VV-set was reported Created and does not exist". **Withdrawn**: the
+operator had run the manual cleanup (including `removevvset -f zz_t2_vvs`) before the post-check
+script ran, so the script photographed a hand-deleted set. The run was repeated at 00:41 with the
+array polled every 2 s from before the click and its event log read afterwards
+(`script-logs/rack13_applywatch_20260913_004156.utf8.txt`, `rack13_events_20260913_004647.utf8.txt`):
+
+```
+createhost -persona 11 10.132.30.136 10005CED8C5312A8 10005CED8C5312A9
+createhostset zz_t2_hs 10.132.30.136
+createtpvv -usrboundary SSD_r6 zz_t2_vol01 1024
+createtpvv -reduce -usrboundary SSD_r6 zz_t2_vol02 1024
+createtpvv -usrboundary SSD_r6 zz_t2_vol03 2048
+createvvset zz_t2_vvs zz_t2_vol01 zz_t2_vol02          -> Object Set 33 added
+createvlun set:zz_t2_vvs 0 set:zz_t2_hs                 -> VLUNs 574-581 added
+```
+
+Every command is the one a consultant would type. `showvlun -t` lists a set-source export as one
+template per member volume with the host set as target — the training team's own `Vol1.x →
+set:grp3_alletra` rows look identical — so the "two per-volume templates" reading was a
+misreading of the array's display, not evidence of a wrong request. **LESSONS: the array's event
+log (`showeventlog -oneline`) is the authority on what was requested; `show*` tables are the
+authority on what exists now; neither is a substitute for the other.**
+
+What *is* wrong: `build_plan` sets `exists` on host / hostset / volume / vvset rows but never on
+`vlun` rows, and the WSAPI client has no VLUN read. On Rebuild plan after a successful apply the two
+export rows read *Create* while LUNs 0/1/2 existed on the array, and the summary said "to create".
+Apply is safe only because the array answers a duplicate with a conflict that `ensure_vlun` maps to
+"exists". The plan is the operator's approval document and must be true. Fix: a VLUN read, `exists`
+on export rows, and a read-back after create. Full register: `docs/ux/FINDINGS-2026-09-13.md`.
 
 **5. Provisioning host list is vCenter-only (design, same shape as defect 1).** `_hosts_by_name`
 and `_persona_by_host` read `discovery.host_hbas`; the Compose dropdown therefore offered `.136`,
@@ -146,16 +166,15 @@ Z9 no hint that `.86` sits on a remote switch · Z10 WWPNs without decode. Plan 
 
 ## Owed
 
-- **Defect 4**: capture the live `POST /volumesets` response on rack13arcus, fix
-  `ensure_volume_set` to verify after create, re-run provisioning, confirm `showvvset zz_t2_vvs`
-  lists both volumes and `showvlun -t` shows one `set:zz_t2_vvs → set:zz_t2_hs` template.
+- **Defect 4**: VLUN read + `exists` on export rows + read-back after create; re-run Rebuild plan
+  and see every row *Exists*.
 - **Defect 5**: provisioning host list = the zoning union.
-- **Idempotence click**: Rebuild plan after apply must show every row as *exists* (not yet done).
-- **Verify + As-built** on this array with the `zz_t2_*` objects still in place, then the array
-  cleanup (`removevlun` × 3 → `removevv` × 3 → `removehostset zz_t2_hs` → `removehost 10.132.30.136`).
+- **Verify + As-built documents** reviewed (as-built shows the set export?), then the array cleanup
+  (`removevlun` × 3 → `removevvset -f zz_t2_vvs` → `removevv` × 3 → `removehostset zz_t2_hs` →
+  `removehost 10.132.30.136`).
 - **Apply one tool-generated command set and watch the login appear** — the single most important
   untested link. Candidate: `localhost.localdomain` on F1 (`mycfg`, the training team's own switch,
   no aliases to collide with). Needs the training team's nod for `cfgenable mycfg`.
-- Confirm the parity notes render somewhere in Discovery.
-- Re-test the partial-host Continue gate in v0.16.0-rc.7 — **done 2026-09-13**: the button appeared
-  after Check zoning and the run continued with `.136`.
+- Confirm the parity notes render somewhere in Discovery (finding D-1).
+- Optional, for the record: `showeventlog -min 90 -oneline -msg zz_t2` to show run 1's
+  `createvvset` at 00:01 and the manual `removevvset` after it.

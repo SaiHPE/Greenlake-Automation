@@ -275,3 +275,15 @@ prints `Switch entry for 32` above the entry and `fabricshow` names domain 32; t
 WWPN. Each answer cost the operator a second SSH session and a paste into chat. When a parser reduces
 a rich record to a flag, keep the identifying field beside the flag (`zone_names`, `placed_on_switch`,
 `switch_name`, `fabric_name`): the screen can then show its evidence instead of asking to be trusted.
+
+**35. A post-mortem of a shared array must start with "who else touched it, and when".**
+The first provisioning check of 2026-09-13 found the VV-set missing and I named it a create
+defect, with a plausible mechanism (the SDK does not check its POST response). The set had been
+removed by hand minutes earlier — the operator had run the cleanup commands from an earlier message
+before the check. The array's event log (`showeventlog -oneline`) would have shown the
+`removevvset` in one line; instead the conclusion came from `show*` tables, which say what exists
+now and nothing about how it got that way. The repeat run, polled from before the click and
+followed by the event log, showed every command the tool sent was correct. Two rules: read the
+event log before naming a defect on a shared array, and keep `show*` (state) and the event log
+(history) as separate kinds of evidence — a wrong answer built on the first is usually a right
+answer about the wrong moment.
