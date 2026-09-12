@@ -3,9 +3,9 @@
   Publish Alletra Onboard to a GitHub Release on whatever GitHub host `origin` points at.
 
 .DESCRIPTION
-  The ONE implementation of "publish a release". `.github/workflows/*.yml` call this script; you can
-  run it by hand from the dev workstation or the jump box when no Actions runner is available
-  (github.hpe.com has Actions disabled for user-owned repos as of 2026-09-12).
+  The ONE implementation of "publish a release". `.github/workflows/*.yml` call this script on
+  github.com (hosted Windows runners); on github.hpe.com, where Actions is disabled for user-owned
+  repos (2026-09-12), you run it by hand from the dev workstation or the jump box.
 
   Two modes:
     (default)      Rolling "latest": build the release zip (scripts/build_release.ps1) and refresh the
@@ -13,9 +13,10 @@
     -Tag vX.Y.Z    Tagged release: upload the packaged .exe zips from dist/ (build them first with
                    -BuildExe, Windows only) to the tag's release; a pre-release when the tag has a '-'.
 
-  Host, owner and repo are read from `git remote get-url origin`, so the same script works against
-  github.hpe.com and github.com. Authentication is `gh` (gh auth login --hostname <host>); in Actions
-  the workflow passes the job token via GH_TOKEN / GH_ENTERPRISE_TOKEN.
+  Host, owner and repo are read from the git remote (-Remote, default `origin`), so the same script
+  publishes to github.hpe.com (origin) and to github.com (-Remote github-com). Authentication is `gh`
+  (gh auth login --hostname <host>); in Actions the workflow passes the job token via GH_TOKEN /
+  GH_ENTERPRISE_TOKEN.
 
 .EXAMPLE
   .\scripts\publish_release.ps1                       # build zip, refresh the rolling latest release
@@ -96,11 +97,11 @@ if (-not $Tag) {
   # upload can never leave the operators' download link pointing at nothing.
   if (Test-Release 'latest') {
     Write-Host "Refreshing existing 'latest' release" -ForegroundColor Cyan
-    Invoke-Gh release edit latest --repo $target --title $title --notes $notes | Out-Null
+    Invoke-Gh release edit latest --repo $target --title $title --notes $notes --latest | Out-Null
     Invoke-Gh release upload latest --repo $target --clobber @assets | Out-Null
   } else {
     Write-Host "Creating 'latest' release" -ForegroundColor Cyan
-    Invoke-Gh release create latest --repo $target --title $title --notes $notes @assets | Out-Null
+    Invoke-Gh release create latest --repo $target --title $title --notes $notes --latest @assets | Out-Null
   }
   Assert-Assets 'latest' $assets
   Write-Host "Published https://$target/releases/latest" -ForegroundColor Green
