@@ -574,7 +574,9 @@ def _add_volumes_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
         if cpg_cmd:
             warnings.append(f"`{cpg_cmd}` could not be read ({data.read_errors[cpg_cmd]}); the CPG column reads —.")
         else:
-            cpg_by_name = {r.get("Name", ""): r.get("UsrCPG", "") for r in parse_showvv(data.showvv_cpg)}
+            cpg_by_name = {
+                r.get("Name", ""): (r.get("CPG") or r.get("UsrCPG") or "") for r in parse_showvv(data.showvv_cpg)
+            }
         snapshots = [r for r in rows_all if r.get("Type") == "vcopy" or r.get("Prov") == "snp"]
         snap_count: dict[str, int] = {}
         for s in snapshots:

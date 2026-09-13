@@ -136,15 +136,19 @@ Client reads (all GET, one call each):
 Existing tests in `test_storage_services.py` keep passing unchanged except where they asserted the
 old `exists` boolean semantics for exports (P-1 made those assertions wrong).
 
-## 6. Live confirmation owed
+## 6. Live confirmation
 
-The VLUN template shape (`hostname` vs `type == 5`) and the `provisioningType` value for `reduce`
-volumes are taken from the WSAPI reference and one earlier live observation, not from a capture of
-this array. **S-0 (new):** capture `GET /api/v1/vluns` and `GET /api/v1/volumes` from rack13arcus
-with `zz_t2_*` present (`scripts/discovery/capture_wsapi_reads.ps1`, read-only) and pin the parser
-fixture to it before the
-second live session. Then S-1 (rebuild with objects present → all *Exists*, 0 to create) and S-2
-(10 GiB vs 20 GiB → *Conflict*, apply disabled).
+**S-0 done 2026-09-13 12:33** — `tests/fixtures/rack13_wsapi/` (raw `GET /hosts /hostsets /volumes
+/volumesets /vluns`, `zz_t2_*` present). It corrected the first draft in one place: a host-set
+**template** is `active: false` with `hostname: "set:<hostset>"`, while the export's **active paths**
+are `active: true` with `hostname` = the *member host* and the same `type: 5`. The draft's rule
+"type 5 ⇒ prefix `set:`" would therefore have invented `set:10.132.30.136` from every active path.
+Templates are now the inactive records taken as-is (records without an `active` field are kept).
+Also confirmed: `provisioningType` 2 = tpvv, 6 = a `{"reduce": true}` volume, 1 full, 3 snp, 7 dds;
+`FCPaths` repeats a WWN once per array port (hosts de-duplicate). `test_plan_against_the_captured_
+array_says_everything_exists` runs the run-2 intent against the capture: every row *Exists*, no
+blockers — S-1 in miniature. **Still owed on hardware:** S-1 (through the UI) and S-2 (the 10 GiB vs
+20 GiB conflict).
 
 ## 7. Non-goals and risks
 

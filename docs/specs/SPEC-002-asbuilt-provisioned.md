@@ -79,9 +79,10 @@ so in one sentence ("The array reports no host sets."). When a read failed, the 
 so the operator sees it before sending. One failing read never stops the others or the document.
 
 **R7 — CPG per volume.** `showvv` has no CPG column. The tool also reads
-`showvv -showcols Id,Name,Prov,Type,UsrCPG,SnpCPG,VSize_MB` and joins on name. If that read fails
-(column names differ on some OS versions), the CPG column reads "—" and a warning names the command.
-Header-driven parsing: columns are located by their header token, never by position.
+`showvv -showcols Id,Name,Prov,Type,CPG,VSize_MB` and joins on name (the column is `CPG` on OS
+10.5.55 — C-1; `UsrCPG` is accepted too for other releases). If that read fails, the CPG column
+reads "—" and a warning names the command. Header-driven parsing: columns are located by their
+header token, never by position.
 
 **R8 — Read-only, inside the allowlist.** `showhostset` and `showvvset` are added to
 `ALLOWED_COMMANDS`. Nothing else changes in the client. No write is ever issued.
@@ -160,11 +161,13 @@ payload per event type; `_collect_asbuilt` runs each command inside its own try/
 Existing `test_asbuilt.py` / `test_asbuilt_parse.py` unchanged. Plus, in `test_onboarding_service.py`:
 `test_zoning_render_is_recorded_on_the_run_without_touching_its_status` (R4's record).
 
-## 6. Live confirmation owed
+## 6. Live confirmation
 
-- **C-1:** capture `showvv -showcols Id,Name,Prov,Type,UsrCPG,SnpCPG,VSize_MB` from rack13arcus
-  (add to the next SSH-fed script) and pin `parse_showvv` to it. Until then R7's read may fail on
-  this OS and the CPG column will read "—" with a warning — by design, not silently.
+- **C-1 answered 2026-09-13 12:33:** `showvv -listcols` on OS 10.5.55 has `CPG`, not `UsrCPG`/`SnpCPG`
+  (`-showcols …UsrCPG,SnpCPG…` → "Invalid columns specified"). The as-built now reads
+  `showvv -showcols Id,Name,Prov,Type,CPG,VSize_MB`; the renderer accepts either header. Pinned by
+  `tests/fixtures/rack13_array/showvv_listcols.txt`. The corrected command's output is the same
+  header-driven table shape as `showvv`; capture it with S-8 for completeness.
 - **S-8:** generate the as-built after S-4 (the cluster case) and review the five sections against
   `showhost -d` / `showvlun -t` on the array and the zoning command set on screen.
 
