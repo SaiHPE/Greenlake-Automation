@@ -18,14 +18,20 @@ from alletra_onboard.application.provisioning.clients import make_wsapi
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
     ActionOutcome,
+    ArrayHostRecord,
+    ArrayVolumeRecord,
     DiscoveredHostBrief,
     ExportRequest,
     PlannedAction,
+    PlanState,
     ProvisioningIntent,
     ProvisioningPlan,
     ProvisioningResult,
+    VlunTemplate,
+    VolumeRequest,
     persona_for_os,
 )
+from alletra_onboard.domain.shared import normalize_wwpn
 
 def _hosts_by_name(discovery: DiscoveryReport) -> "OrderedDict[str, list[str]]":
     """Group discovered HBA WWPNs by ESXi host name, de-duplicated, preserving order."""
@@ -222,7 +228,11 @@ def build_plan(
     reachable_hosts: set[str],
     wsapi_factory: Callable = make_wsapi,
 ) -> ProvisioningPlan:
-    """Preview what tier-1 will create.
+    """Preview what tier-1 will create, and — SPEC-001 — what it will find already there.
+
+    Every row carries a `state` the operator can approve against: create / exists (and matches) /
+    update (exists, apply will add to it) / conflict (exists and differs in a way apply cannot fix —
+    collected in `plan.blockers`, which refuses apply). Six reads, no writes.
 
     `reachable_hosts` is the gate, and it gates the EXPORT only (ADR 0012 revised 2026-09-02). Hosts,
     host sets, volumes and VV sets are always created: HPE's documented order is register-first, and
@@ -243,11 +253,14 @@ def build_plan(
 
     try:
         with wsapi_factory(intent.array) as array:
-            existing_hosts = set(array.host_names())
-            existing_host_sets = set(array.host_set_names())
-            existing_volumes = set(array.volume_names())
-            existing_vsets = set(array.volume_set_names())
-            cpgs = set(array.cpg_names())
+            state = _ArrayState(
+                hosts=array.hosts(),
+                host_sets=array.host_sets(),
+                volumes=array.volumes(),
+                volume_sets=array.volume_sets(),
+                vluns=array.vlun_templates(),
+                cpgs=set(array.cpg_names()),
+            )
     except Exception as exc:  # noqa: BLE001
         plan.error = f"Could not read the array over WSAPI: {exc}"
         return plan
@@ -255,7 +268,7 @@ def build_plan(
     # HARD gate, not a note (sd00003946: volume create fails with NON_EXISTENT_CPG; SSD_r6 is
     # auto-created at array init, so a missing CPG means the sheet or the array is wrong — verify,
     # never auto-create).
-    missing_cpgs = sorted({v.cpg for v in intent.volumes} - cpgs)
+    missing_cpgs = sorted({v.cpg for v in intent.volumes} - state.cpgs)
     if missing_cpgs:
         plan.error = (
             "CPG(s) not found on the array: " + ", ".join(missing_cpgs)
@@ -264,40 +277,35 @@ def build_plan(
         )
         return plan
 
+    def add(kind: str, name: str, description: str, verdict: tuple[PlanState, str], detail: dict) -> None:
+        st, reason = verdict
+        plan.actions.append(PlannedAction(
+            kind=kind, name=name, description=description, state=st, reason=reason,
+            exists=st != "create", detail=detail,
+        ))
+        if st == "conflict":
+            plan.blockers.append(f"{kind} {name}: {reason}")
+
     personas = _persona_by_host(discovery)
     for host_name, wwns in hosts.items():
         persona = personas.get(host_name, "VMware")
-        plan.actions.append(PlannedAction(
-            kind="host", name=host_name,
-            description=f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona}",
-            exists=host_name in existing_hosts,
-            detail={"wwns": wwns, "persona": persona},
-        ))
+        add("host", host_name, f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona}",
+            _judge_host(host_name, wwns, persona, state.hosts), {"wwns": wwns, "persona": persona})
 
     for hs in intent.host_sets:
         members = _members_for(hs, hosts)
-        plan.actions.append(PlannedAction(
-            kind="hostset", name=hs.name,
-            description=f"Host set {hs.name} — {len(members)} host(s)",
-            exists=hs.name in existing_host_sets,
-            detail={"members": members},
-        ))
+        add("hostset", hs.name, f"Host set {hs.name} — {len(members)} host(s)",
+            _judge_set(hs.name, members, state.host_sets, "host"), {"members": members})
 
     for v in intent.volumes:
-        plan.actions.append(PlannedAction(
-            kind="volume", name=v.name,
-            description=f"Volume {v.name} — {v.size_gib} GiB, {v.provisioning_type}, CPG {v.cpg}",
-            exists=v.name in existing_volumes,
-            detail={"size_mib": v.size_mib, "cpg": v.cpg, "type": v.provisioning_type, "vvset": v.vvset},
-        ))
+        add("volume", v.name, f"Volume {v.name} — {v.size_gib} GiB, {v.provisioning_type}, CPG {v.cpg}",
+            _judge_volume(v, state.volumes),
+            {"size_mib": v.size_mib, "cpg": v.cpg, "type": v.provisioning_type, "vvset": v.vvset})
 
-    for vvset, vols in _vvsets(intent).items():
-        plan.actions.append(PlannedAction(
-            kind="vvset", name=vvset,
-            description=f"Volume set {vvset} — {len(vols)} volume(s)",
-            exists=vvset in existing_vsets,
-            detail={"members": vols},
-        ))
+    vvsets = _vvsets(intent)
+    for vvset, vols in vvsets.items():
+        add("vvset", vvset, f"Volume set {vvset} — {len(vols)} volume(s)",
+            _judge_set(vvset, vols, state.volume_sets, "volume"), {"members": vols})
 
     # Presentation: the operator-composed exports (source volume|vvset x target host|hostset x LUN),
     # or the single-host-set default (each volume -> the set, auto LUN). Multiple host sets with no
@@ -310,14 +318,95 @@ def build_plan(
     exports, skipped = _reachable_targets(exports, intent, hosts, reachable_hosts)
     for ex in exports:
         lun_txt = "auto LUN" if ex.lun is None else f"LUN {ex.lun}"
-        plan.actions.append(PlannedAction(
-            kind="vlun", name=ex.source_name,
-            description=f"Export {ex.source_kind} {ex.source_name} → {ex.target_kind} {ex.target_name} ({lun_txt})",
-            detail={"source": ex.source_ref, "target": ex.target_ref, "lun": ex.lun},
-        ))
+        add("vlun", ex.source_name,
+            f"Export {ex.source_kind} {ex.source_name} → {ex.target_kind} {ex.target_name} ({lun_txt})",
+            _judge_export(ex, vvsets, state.vluns), {"source": ex.source_ref, "target": ex.target_ref, "lun": ex.lun})
     if skipped:
         plan.notes.append("Exports held back until the array can reach the target: " + "; ".join(skipped))
     return plan
+
+
+class _ArrayState:
+    """What the array holds, read once per object type (SPEC-001 R9)."""
+
+    def __init__(self, *, hosts, host_sets, volumes, volume_sets, vluns, cpgs) -> None:
+        self.hosts: list[ArrayHostRecord] = list(hosts)
+        self.host_sets: dict[str, list[str]] = dict(host_sets)
+        self.volumes: list[ArrayVolumeRecord] = list(volumes)
+        self.volume_sets: dict[str, list[str]] = dict(volume_sets)
+        self.vluns: list[VlunTemplate] = list(vluns)
+        self.cpgs: set[str] = set(cpgs)
+
+
+def _gib(mib: int) -> str:
+    return f"{mib / 1024:g} GiB"
+
+
+def _judge_host(name: str, wwns: list[str], persona: str, on_array: list[ArrayHostRecord]) -> tuple[PlanState, str]:
+    """R3: exists (carries every WWN) / update (adds the missing ones) / conflict (a WWN is someone
+    else's — apply would raise). A persona difference is reported, never acted on."""
+    wanted = {normalize_wwpn(w): w for w in wwns}
+    owners = {normalize_wwpn(w): h.name for h in on_array for w in h.wwns}
+    others = sorted({f"{wanted[w]} belongs to host {owners[w]}" for w in wanted if w in owners and owners[w] != name})
+    if others:
+        return "conflict", "; ".join(others) + " — resolve on the array before provisioning"
+    mine = next((h for h in on_array if h.name == name), None)
+    if mine is None:
+        return "create", ""
+    carried = {normalize_wwpn(w) for w in mine.wwns}
+    missing = [wanted[w] for w in wanted if w not in carried]
+    persona_note = (
+        f" · persona on the array: {mine.persona}, intent {persona} — left unchanged"
+        if mine.persona and mine.persona != persona else ""
+    )
+    if missing:
+        return "update", f"adds {len(missing)} WWN: {', '.join(missing)}" + persona_note
+    return "exists", f"carries all {len(wwns)} WWN(s)" + persona_note
+
+
+def _judge_set(name: str, members: list[str], on_array: dict[str, list[str]], noun: str) -> tuple[PlanState, str]:
+    """R4: additive only — exists (every member present) or update (adds the missing ones)."""
+    if name not in on_array:
+        return "create", ""
+    missing = [m for m in members if m not in set(on_array[name])]
+    if missing:
+        return "update", f"adds {len(missing)} {noun}(s): {', '.join(missing)}"
+    return "exists", f"has all {len(members)} {noun}(s)"
+
+
+def _judge_volume(v: VolumeRequest, on_array: list[ArrayVolumeRecord]) -> tuple[PlanState, str]:
+    """R2: a name match is not a match. Size, CPG and provisioning type must all agree, or the row is
+    a conflict apply cannot fix (the array has no 'resize to intent' that is safe to do unasked)."""
+    found = next((r for r in on_array if r.name == v.name), None)
+    if found is None:
+        return "create", ""
+    on = f"{_gib(found.size_mib)} {found.provisioning_type} on {found.cpg}"
+    want = f"{v.size_gib} GiB {v.provisioning_type} on {v.cpg}"
+    if found.size_mib == v.size_mib and found.cpg == v.cpg and found.provisioning_type == v.provisioning_type:
+        return "exists", f"{on} — matches"
+    return "conflict", f"on the array: {on} · intent: {want}"
+
+
+def _judge_export(ex: ExportRequest, vvsets: OrderedDict[str, list[str]], templates: list[VlunTemplate]) -> tuple[PlanState, str]:
+    """R5: judged against the array's VLUN templates, one per member volume for a set export."""
+    volumes = list(vvsets.get(ex.source_name, [])) if ex.source_kind == "vvset" else [ex.source_name]
+    to_target = [t for t in templates if t.target == ex.target_ref]
+    if ex.lun is not None:
+        # a different volume already sits at that LUN on that target
+        taken = sorted({t.volume for t in to_target if t.lun == ex.lun and t.volume not in volumes})
+        if taken:
+            return "conflict", f"LUN {ex.lun} on {ex.target_ref} is taken by volume {', '.join(taken)}"
+        # our volume is already exported there, at a different LUN
+        moved = sorted({f"{t.volume} at LUN {t.lun}" for t in to_target if t.volume in volumes and t.lun != ex.lun})
+        if moved:
+            return "conflict", f"already exported ({'; '.join(moved)}), intent says LUN {ex.lun}"
+    present = {t.volume: t.lun for t in to_target if t.volume in volumes and (ex.lun is None or t.lun == ex.lun)}
+    if not present:
+        return "create", ""
+    luns = ", ".join(f"LUN {present[v]}" for v in volumes if v in present)
+    if len(present) < len(volumes):
+        return "update", f"{len(present)} of {len(volumes)} member volumes already exported ({luns}); apply completes the set"
+    return "exists", f"already exported at {luns}"
 
 
 def apply_plan(
@@ -361,9 +450,33 @@ def apply_plan(
                 status = array.ensure_volume_set(vvset, vols)
                 result.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
 
+            export_outcomes: list[ActionOutcome] = []
             for ex in exports:
                 status = array.ensure_vlun(ex.source_ref, ex.target_ref, lun=ex.lun)
-                result.outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status=status))
+                export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status=status))
+
+            # R8: "created" is the array's word; read the templates back ONCE and hold it to it.
+            if exports:
+                _confirm_exports(exports, export_outcomes, _vvsets(intent), array.vlun_templates())
+            result.outcomes.extend(export_outcomes)
     except Exception as exc:  # noqa: BLE001 - record what we got, surface the failure
         result.error = str(exc)
     return result
+
+
+def _confirm_exports(
+    exports: list[ExportRequest],
+    outcomes: list[ActionOutcome],
+    vvsets: OrderedDict[str, list[str]],
+    templates: list[VlunTemplate],
+) -> None:
+    """Annotate each export outcome with the LUN(s) the array actually recorded. A `created` export
+    with no template on read-back becomes `failed` — the silent-dead-export case R8 exists for."""
+    for ex, out in zip(exports, outcomes):
+        volumes = list(vvsets.get(ex.source_name, [])) if ex.source_kind == "vvset" else [ex.source_name]
+        found = {t.volume: t.lun for t in templates if t.target == ex.target_ref and t.volume in volumes}
+        if found:
+            out.detail = ", ".join(f"LUN {found[v]}" for v in volumes if v in found) + f" → {ex.target_ref}"
+        elif out.status == "created":
+            out.status = "failed"
+            out.detail = f"the array reported created but no export {ex.source_ref} → {ex.target_ref} was found on read-back"

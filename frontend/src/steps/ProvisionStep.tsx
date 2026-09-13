@@ -5,6 +5,7 @@ import {
   HostPathStatus,
   PathVerdict,
   PathVerification,
+  PlanState,
   PlannedAction,
   ProvisioningPlan,
   ProvisioningResult,
@@ -24,6 +25,22 @@ const VERDICT: Record<PathVerdict, { state: StepState; label: string }> = {
   live: { state: 'complete', label: 'Live' },
   partial: { state: 'action_required', label: 'Partial' },
   no_path: { state: 'not_started', label: 'No path' },
+};
+
+// What apply will do to each object (SPEC-001 R10). Grey = not there yet; green = there and matches;
+// amber = there, apply will add to it; red = there and differs in a way apply cannot fix.
+const PLAN_STATE: Record<PlanState, { state: StepState; label: string }> = {
+  create: { state: 'not_started', label: 'Create' },
+  exists: { state: 'complete', label: 'Exists' },
+  update: { state: 'action_required', label: 'Update' },
+  conflict: { state: 'failed', label: 'Conflict' },
+};
+
+const OUTCOME: Record<ActionOutcome['status'], { state: StepState; label: string }> = {
+  created: { state: 'complete', label: 'Created' },
+  updated: { state: 'complete', label: 'Updated' },
+  exists: { state: 'not_started', label: 'Existed' },
+  failed: { state: 'failed', label: 'Failed' },
 };
 
 interface Props {
@@ -58,9 +75,15 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
   const resultIsCurrent = applied > previewed;
   const result = resultIsCurrent ? latest<ProvisioningResult>(events, 'storage.applied', 'result') : null;
 
-  const toCreate = plan ? plan.actions.filter((action) => !action.exists).length : 0;
-  const existing = plan ? plan.actions.length - toCreate : 0;
+  const count = (state: PlanState) => (plan ? plan.actions.filter((action) => action.state === state).length : 0);
+  const toCreate = count('create');
+  const toUpdate = count('update');
+  const existing = count('exists');
+  const conflicts = count('conflict');
+  const blocked = !!plan && plan.blockers.length > 0;
   const created = result ? result.outcomes.filter((outcome) => outcome.status === 'created').length : 0;
+  const updated = result ? result.outcomes.filter((outcome) => outcome.status === 'updated').length : 0;
+  const failed = result ? result.outcomes.filter((outcome) => outcome.status === 'failed').length : 0;
 
   const call = (action: () => Promise<unknown>) => async () => {
     setError(null);
@@ -79,14 +102,20 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
       error={error}
       onDismissError={() => setError(null)}
       activityEmpty="Compose the objects below, then build the plan."
-      footerNote="Re-running skips existing objects."
+      footerNote="Re-running skips objects that already match the plan; an object that exists but differs blocks until it is resolved on the array."
       gate={
         plan && !plan.error && !result
-          ? {
-              title: 'Review the plan, then approve creation',
-              message:
-                'No changes have been made to the array. Creation is idempotent — existing objects are skipped.',
-            }
+          ? blocked
+            ? {
+                title: 'The plan has conflicts',
+                message:
+                  'Something on the array has the same name as an object in this plan but different attributes. Resolve it on the array (or change the plan), then rebuild.',
+              }
+            : {
+                title: 'Review the plan, then approve creation',
+                message:
+                  'No changes have been made to the array. Objects marked Exists are left alone; Update adds to an existing object without removing anything.',
+              }
           : null
       }
       actions={
@@ -100,7 +129,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             <Button
               busy={running}
               label="Create storage objects"
-              disabled={!authorised}
+              disabled={!authorised || blocked}
               onClick={call(() => storageApply(runId))}
             />
           )}
@@ -118,28 +147,39 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
       {plan?.error && <InlineNotification tone="critical" title="The plan could not be built" message={plan.error} />}
 
       {plan && !plan.error && (
-        <Surface title="Plan" description="Objects to be created on the array when you approve.">
+        <Surface title="Plan" description="What approving this plan will do on the array, object by object.">
+          {blocked && (
+            <InlineNotification
+              tone="critical"
+              title={`${conflicts} conflict${conflicts === 1 ? '' : 's'} — the plan cannot be applied`}
+              message={plan.blockers.join(' · ')}
+            />
+          )}
           <DataTable
             columns={[
               { property: 'kind', header: 'Kind', render: (action: PlannedAction) => <Text size="small">{action.kind}</Text> },
               { property: 'name', header: 'Name', render: (action: PlannedAction) => <Text size="small">{action.name}</Text> },
               {
-                property: 'exists',
+                property: 'state',
                 header: 'Action',
                 render: (action: PlannedAction) => (
-                  <StatusIndicator
-                    state={action.exists ? 'not_started' : 'complete'}
-                    label={action.exists ? 'Exists' : 'Create'}
-                  />
+                  <StatusIndicator state={PLAN_STATE[action.state].state} label={PLAN_STATE[action.state].label} />
                 ),
               },
               {
                 property: 'description',
                 header: 'Detail',
                 render: (action: PlannedAction) => (
-                  <Text size="small" color="text-weak">
-                    {action.description}
-                  </Text>
+                  <Box>
+                    <Text size="small" color="text-weak">
+                      {action.description}
+                    </Text>
+                    {action.reason && (
+                      <Text size="xsmall" color={action.state === 'conflict' ? 'status-critical' : 'text-weak'}>
+                        {action.reason}
+                      </Text>
+                    )}
+                  </Box>
                 ),
               },
             ]}
@@ -147,7 +187,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             primaryKey={false}
           />
           <TableSummary>
-            {toCreate} to create · {existing} already exist
+            {toCreate} to create · {toUpdate} to update · {existing} already exist · {conflicts} conflict{conflicts === 1 ? '' : 's'}
           </TableSummary>
           {plan.notes.length > 0 && (
             <InlineNotification tone="info" title="Plan notes" message={plan.notes.join(' · ')} />
@@ -158,7 +198,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             <CheckBox
               label="I have reviewed this plan and authorise creating these objects on the array."
               checked={authorised}
-              disabled={running}
+              disabled={running || blocked}
               onChange={(event) => setAuthorised(event.target.checked)}
             />
           )}
@@ -169,11 +209,17 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
         <Surface title="Result">
           {result.error ? (
             <InlineNotification tone="critical" title="Creation reported an error" message={result.error} />
+          ) : failed > 0 ? (
+            <InlineNotification
+              tone="critical"
+              title={`${failed} export${failed === 1 ? '' : 's'} not found on read-back`}
+              message="The array reported the export created, but it is not in the array's export list. Check `showvlun -t` on the array before continuing."
+            />
           ) : (
             <InlineNotification
               tone="ok"
-              title={`${created} object${created === 1 ? '' : 's'} created`}
-              message={`${result.outcomes.length - created} already existed and were left untouched.`}
+              title={`${created} created${updated ? ` · ${updated} updated` : ''}`}
+              message={`${result.outcomes.length - created - updated} already existed and were left untouched.`}
             />
           )}
           <DataTable
@@ -184,10 +230,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
                 property: 'status',
                 header: 'Result',
                 render: (outcome: ActionOutcome) => (
-                  <StatusIndicator
-                    state={outcome.status === 'created' ? 'complete' : outcome.status === 'failed' ? 'failed' : 'not_started'}
-                    label={outcome.status === 'created' ? 'Created' : outcome.status === 'failed' ? 'Failed' : 'Existed'}
-                  />
+                  <StatusIndicator state={OUTCOME[outcome.status].state} label={OUTCOME[outcome.status].label} />
                 ),
               },
               {
