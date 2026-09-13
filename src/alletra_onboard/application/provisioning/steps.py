@@ -220,7 +220,8 @@ class ProvisioningSteps:
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "step.started", "Building the provisioning plan…")
         zoned = self._discovery_steps.zoned_hosts(run.run_id)
         plan = await asyncio.to_thread(
-            partial(storage_provision.build_plan, intent, discovery, reachable_hosts=zoned)
+            partial(storage_provision.build_plan, intent, discovery, reachable_hosts=zoned,
+                    zoning_plan=self._zoning_plan_payload(run.run_id))
         )
         self._plan[run.run_id] = (plan, discovery)
         status = RunStatus.RETRYABLE_FAILURE if plan.error else RunStatus.WAITING_FOR_OPERATOR
@@ -261,7 +262,8 @@ class ProvisioningSteps:
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.apply.started", "Creating host, volumes and exports…")
         zoned = self._discovery_steps.zoned_hosts(run.run_id)
         result = await asyncio.to_thread(
-            partial(storage_provision.apply_plan, intent, discovery, reachable_hosts=zoned)
+            partial(storage_provision.apply_plan, intent, discovery, reachable_hosts=zoned,
+                    zoning_plan=self._zoning_plan_payload(run.run_id))
         )
         created = sum(1 for o in result.outcomes if o.status == "created")
         updated = sum(1 for o in result.outcomes if o.status == "updated")
@@ -296,6 +298,7 @@ class ProvisioningSteps:
         zoned = self._discovery_steps.zoned_hosts(run.run_id)
         verification = await asyncio.to_thread(partial(
             storage_path_verify.verify_provisioned_paths, intent, discovery, reachable_hosts=zoned,
+            zoning_plan=self._zoning_plan_payload(run.run_id),
         ))
         live = sum(1 for h in verification.hosts if h.verdict == "live")
         status = RunStatus.RETRYABLE_FAILURE if verification.error else RunStatus.WAITING_FOR_OPERATOR
@@ -333,10 +336,21 @@ class ProvisioningSteps:
             new_volumes=[v.name for v in intent.volumes],
             new_host_sets=[hs.name for hs in intent.host_sets],
             new_vvsets=sorted({v.vvset for v in intent.volumes if v.vvset}),
-            discovered_hosts=storage_provision.host_briefs(discovery),
+            discovered_hosts=storage_provision.host_briefs(
+                discovery, intent.declared_hosts, self._zoning_plan_payload(run_id)
+            ),
             host_sets=list(intent.host_sets),
             exports=list(intent.exports),
         )
+
+    def _zoning_plan_payload(self, run_id: str) -> dict | None:
+        """The run's latest `zoning.plan` payload, or None (SPEC-003 R1: the fabric-named hosts
+        reach provisioning through it). Read from the run's events, like the as-built does."""
+        latest = None
+        for event in self._coord.list_events(run_id):
+            if event.event_type == "zoning.plan" and event.data.get("plan"):
+                latest = event.data["plan"]
+        return latest
 
     def set_provisioning_builder(self, run_id: str, builder: ProvisioningBuilder) -> ProvisioningComposition:
         """Save the operator's composed host-set membership + VV-set membership + exports onto the run's

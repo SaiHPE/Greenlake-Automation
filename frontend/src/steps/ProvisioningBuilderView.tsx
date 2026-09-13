@@ -1,6 +1,7 @@
 import { Box, Button, Notification, Select, Spinner, Text, TextInput } from 'grommet';
 import { useState } from 'react';
 import {
+  DiscoveredHostBrief,
   ExportRequest,
   getStorageObjects,
   ProvisioningBuilder,
@@ -45,18 +46,32 @@ const sourceOptions = (o: ProvisioningObjects): Opt[] => [
   ...o.existing_volume_sets.map((n) => ({ label: `${n} — existing VV-set`, value: `vvset:${n}` })),
 ];
 
+// Where a host's identity came from, in the operator's words (SPEC-003 R5).
+const SOURCE: Record<string, string> = {
+  vcenter: 'from vCenter', sheet: 'from the sheet', array: 'on the array', switch: 'seen on the fabric',
+};
+const hostLabel = (h: DiscoveredHostBrief) =>
+  h.fc_capable === false
+    ? `${h.name} — iSCSI only · ${SOURCE[h.source] ?? h.source} · not zoned or path-verified by this tool`
+    : `${h.name} — ${h.status} · ${SOURCE[h.source] ?? h.source}`;
+
 const targetOptions = (o: ProvisioningObjects): Opt[] => [
   ...o.new_host_sets.map((n) => ({ label: `${n} — new host-set`, value: `hostset:${n}` })),
   ...o.existing_host_sets.map((n) => ({ label: `${n} — existing host-set`, value: `hostset:${n}` })),
-  ...o.existing_hosts.map((n) => ({ label: `${n} — existing host`, value: `host:${n}` })),
-  ...o.discovered_hosts.map((h) => ({ label: `${h.name} — discovered host`, value: `host:${h.name}` })),
+  ...o.discovered_hosts.filter((h) => h.fc_capable !== false).map((h) => ({ label: hostLabel(h), value: `host:${h.name}` })),
+  ...o.existing_hosts.filter((n) => !o.discovered_hosts.some((h) => h.name === n)).map((n) => ({ label: `${n} — existing host`, value: `host:${n}` })),
+  ...o.discovered_hosts.filter((h) => h.fc_capable === false).map((h) => ({ label: hostLabel(h), value: `host:${h.name}` })),
 ];
 
+// FC-capable hosts first (the backend orders them so), then any array host the union did not
+// cover, then iSCSI-only hosts — selectable, never a silent peer of the FC hosts (P-3).
 const memberOptions = (o: ProvisioningObjects): Opt[] => {
   const seen = new Set<string>();
   const opts: Opt[] = [];
-  o.discovered_hosts.forEach((h) => { if (!seen.has(h.name)) { seen.add(h.name); opts.push({ label: `${h.name} — ${h.status}`, value: h.name }); } });
-  o.existing_hosts.forEach((n) => { if (!seen.has(n)) { seen.add(n); opts.push({ label: `${n} — existing host`, value: n }); } });
+  const push = (name: string, label: string) => { if (!seen.has(name)) { seen.add(name); opts.push({ label, value: name }); } };
+  o.discovered_hosts.filter((h) => h.fc_capable !== false).forEach((h) => push(h.name, hostLabel(h)));
+  o.existing_hosts.forEach((n) => { if (!o.discovered_hosts.some((h) => h.name === n)) push(n, `${n} — existing host`); });
+  o.discovered_hosts.filter((h) => h.fc_capable === false).forEach((h) => push(h.name, hostLabel(h)));
   return opts;
 };
 

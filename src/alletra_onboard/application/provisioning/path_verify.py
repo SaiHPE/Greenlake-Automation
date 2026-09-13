@@ -161,6 +161,7 @@ def verify_provisioned_paths(
     *,
     reachable_hosts: set[str],
     array_cli_factory=make_array_cli,
+    zoning_plan: dict | None = None,
 ) -> PathVerification:
     """Flow hook: read `showvlun -a` from the array (read-only SSH) and verify the exported LUNs are
     actually LIVE on the hosts they were presented to.
@@ -174,12 +175,15 @@ def verify_provisioned_paths(
             text = cli.run("showvlun -a")
     except Exception as exc:  # noqa: BLE001
         return PathVerification(error=f"Could not read 'showvlun -a' over SSH: {exc}")
-    expected_by_host = storage_provision.exported_volumes_by_host(intent, discovery, reachable_hosts)
-    # The join key between "the hosts vCenter knows" and "the paths the array reports" is the HBA
+    expected_by_host = storage_provision.exported_volumes_by_host(intent, discovery, reachable_hosts, zoning_plan)
+    # The join key between "the hosts the run knows" and "the paths the array reports" is the HBA
     # WWPN, never the name — the two namespaces don't intersect on real arrays (see verify_paths).
-    wwpns_by_host: dict[str, set[str]] = {}
-    for h in discovery.host_hbas:
-        wwpns_by_host.setdefault(h.host_name, set()).add(normalize_wwpn(h.wwpn))
+    # SPEC-003: the hosts come from the same union plan and apply used, so a sheet-declared or
+    # fabric-named host is verified, not reported as pathless because vCenter never heard of it.
+    wwpns_by_host: dict[str, set[str]] = {
+        name: {normalize_wwpn(w) for w in wwpns}
+        for name, wwpns in storage_provision._hosts_by_name(discovery, intent, zoning_plan).items()
+    }
     # Discovery resolved each port's REAL fabric from the switch it attaches to (parity is only its
     # fallback) — hand that to the classifier so non-standard cabling can't fake dual-fabric redundancy.
     fabric_by_port = {
