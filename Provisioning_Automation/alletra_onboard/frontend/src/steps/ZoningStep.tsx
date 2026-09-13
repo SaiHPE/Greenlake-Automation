@@ -202,7 +202,7 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
           mount a fresh view. Otherwise new WWPNs show an empty alias field while the generated
           commands carry the suggested one — the SAN team would receive names shown nowhere. */}
       {plan && (
-        <ZoningPlanView key={planEvent?.event_id} plan={plan} />
+        <ZoningPlanView key={planEvent?.event_id} plan={plan} runId={runId} />
       )}
     </StepShell>
   );

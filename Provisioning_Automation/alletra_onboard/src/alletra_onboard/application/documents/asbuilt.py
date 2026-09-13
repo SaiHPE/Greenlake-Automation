@@ -20,7 +20,8 @@ import os
 import re
 import sys
 import zipfile
-from dataclasses import dataclass
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import docx
@@ -89,6 +90,23 @@ class AsBuiltData:
     dns: str = ""
     inventory: str = ""      # showinventory, verbatim
     checkhealth: str = ""    # checkhealth -svc -detail, verbatim
+    # SPEC-002 array sections — raw `show*` text, parsed by the renderer like inventory/checkhealth.
+    showhost_d: str = ""
+    showhostset: str = ""
+    showvv: str = ""
+    showvv_cpg: str = ""     # showvv -showcols …UsrCPG… (R7); "" when that read failed
+    showvvset: str = ""
+    showvlun_t: str = ""
+    showvlun_a: str = ""
+    read_errors: dict[str, str] = field(default_factory=dict)   # command -> error text (R6)
+    # SPEC-002 run sections — the run's event payloads (JSON-shaped); None when the step did not run.
+    zoning_plan: dict | None = None
+    zoning_report: dict | None = None
+    zoning_rendered: dict | None = None      # {commands: {fabric: [..]}, aliases, selected_pairs}
+    provisioning_plan: dict | None = None
+    provisioning_result: dict | None = None
+    provisioning_applied_at: str = ""
+    path_verification: dict | None = None
 
 
 def _resource_dir() -> Path:
@@ -424,6 +442,8 @@ def generate_asbuilt(
             "this document."
         )
 
+    _add_provisioned_sections(doc, data, warnings)
+    _update_fields_on_open(doc)
     _start_sections_on_new_pages(doc)
 
     left = _remaining_placeholders(doc)
@@ -437,3 +457,306 @@ def generate_asbuilt(
     out_path = Path(out_path)
     doc.save(str(out_path))
     return out_path, warnings
+
+
+# ------------------------------------------------------------------ SPEC-002: the provisioned array
+
+_SYSTEM_VOLUME = re.compile(r"^(\.|admin$)")
+
+
+def _h1(doc, title: str):
+    return doc.add_paragraph(title, style="Heading 1")
+
+
+def _para(doc, text: str, *, bold: bool = False):
+    p = doc.add_paragraph()
+    p.add_run(text).bold = bold
+    return p
+
+
+def _mono(doc, lines: list[str]):
+    p = doc.add_paragraph()
+    for i, line in enumerate(lines):
+        run = p.add_run(line or " ")
+        run.font.name = "Consolas"
+        run.font.size = Pt(7)
+        if i < len(lines) - 1:
+            run.add_break()
+    return p
+
+
+def _table(doc, headers: list[str], rows: list[list[str]], widths=None):
+    hpe_table(doc, headers, rows, widths=widths or _content_widths(headers, rows), font_size=7, header_size=7)
+
+
+def _read_failed(doc, data: AsBuiltData, command: str, warnings: list[str]) -> bool:
+    """R6: a failed read is named in the section AND in the warnings; returns True when it failed."""
+    err = data.read_errors.get(command)
+    if err is None:
+        return False
+    _para(doc, f"`{command}` could not be read: {err}")
+    warnings.append(f"`{command}` could not be read ({err}); its section of the as-built is empty.")
+    return True
+
+
+def _members_of(sets: OrderedDict[str, list[str]]) -> dict[str, list[str]]:
+    """member -> [set names] (a host or volume may sit in several sets)."""
+    inverse: dict[str, list[str]] = {}
+    for name, members in sets.items():
+        for m in members:
+            inverse.setdefault(m, []).append(name)
+    return inverse
+
+
+def _add_hosts_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
+    from alletra_onboard.application.documents.asbuilt_parse import parse_cli_sets
+    from alletra_onboard.application.provisioning.discovery import UNCLAIMED_HOST, parse_showhost
+
+    _h1(doc, "Hosts and host sets")
+    sets = OrderedDict() if data.read_errors.get("showhostset") else parse_cli_sets(data.showhostset)
+    in_sets = _members_of(sets)
+    if not _read_failed(doc, data, "showhost -d", warnings):
+        hosts = parse_showhost(data.showhost_d)
+        named = [h for h in hosts if h.name != UNCLAIMED_HOST]
+        unclaimed = [h for h in hosts if h.name == UNCLAIMED_HOST]
+        _para(doc, "Every host object on the array, with the initiators it carries and the array ports "
+                   "those initiators are logged in on. An initiator with no port is registered but not "
+                   "logged in (not zoned, or the server is off).")
+        if named:
+            rows = []
+            for h in named:
+                initiators = list(h.wwpns) + list(h.iqns)
+                ports = sorted({p for ps in list(h.wwpns.values()) + list(h.iqns.values()) for p in ps})
+                rows.append([h.name, h.persona or "—", "\n".join(initiators) or "—",
+                             ", ".join(ports) or "none", ", ".join(in_sets.get(h.name, [])) or "—"])
+            _table(doc, ["Host", "Persona", "Initiators", "Logged in on", "Host sets"], rows,
+                   widths=[0.20, 0.12, 0.30, 0.20, 0.18])
+        else:
+            _para(doc, "The array reports no host objects.")
+        logins = [(i, ps, "") for u in unclaimed for i, ps in u.wwpns.items()]
+        logins += [(i, ps, u.addresses.get(i, "")) for u in unclaimed for i, ps in u.iqns.items()]
+        _para(doc, "Logged in, no host object", bold=True)
+        if logins:
+            _para(doc, "Initiators the array sees on its ports that belong to no host object — zoned or "
+                       "connected, never provisioned.")
+            _table(doc, ["Initiator", "Logged in on", "Address"],
+                   [[i, ", ".join(sorted(ps)) or "none", a or "—"] for i, ps, a in logins],
+                   widths=[0.50, 0.30, 0.20])
+        else:
+            _para(doc, "Every initiator logged in on the array belongs to a host object.")
+    _para(doc, "Host sets", bold=True)
+    if not _read_failed(doc, data, "showhostset", warnings):
+        if sets:
+            _table(doc, ["Host set", "Members"], [[n, ", ".join(m) or "—"] for n, m in sets.items()],
+                   widths=[0.35, 0.65])
+        else:
+            _para(doc, "The array reports no host sets.")
+
+
+def _gib(mib: str) -> str:
+    try:
+        return f"{int(mib) / 1024:g}"
+    except ValueError:
+        return "—"
+
+
+def _add_volumes_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
+    from alletra_onboard.application.documents.asbuilt_parse import parse_cli_sets, parse_showvv
+
+    _h1(doc, "Volumes and volume sets")
+    sets = OrderedDict() if data.read_errors.get("showvvset") else parse_cli_sets(data.showvvset)
+    in_sets = _members_of(sets)
+    if not _read_failed(doc, data, "showvv", warnings):
+        rows_all = parse_showvv(data.showvv)
+        size_key = next((k for k in rows_all[0] if k.startswith("VSize")), "VSize(MiB)") if rows_all else "VSize(MiB)"
+        cpg_by_name: dict[str, str] = {}
+        cpg_cmd = next((c for c in data.read_errors if c.startswith("showvv -showcols")), None)
+        if cpg_cmd:
+            warnings.append(f"`{cpg_cmd}` could not be read ({data.read_errors[cpg_cmd]}); the CPG column reads —.")
+        else:
+            cpg_by_name = {r.get("Name", ""): r.get("UsrCPG", "") for r in parse_showvv(data.showvv_cpg)}
+        snapshots = [r for r in rows_all if r.get("Type") == "vcopy" or r.get("Prov") == "snp"]
+        snap_count: dict[str, int] = {}
+        for s in snapshots:
+            snap_count[s.get("CopyOf", "")] = snap_count.get(s.get("CopyOf", ""), 0) + 1
+        base = [r for r in rows_all if r not in snapshots]
+        system = [r for r in base if _SYSTEM_VOLUME.match(r.get("Name", ""))]
+        user = [r for r in base if r not in system]
+        _para(doc, "Every user volume on the array. Provisioning is the array's word: tpvv (thin), tdvv "
+                   "(thin with data reduction), full, dds (dedup store).")
+        if user:
+            _table(doc, ["Volume", "Provisioning", "Dedup", "Compression", "Size (GiB)", "CPG", "Snapshots", "VV set"],
+                   [[r.get("Name", ""), r.get("Prov", "—"), r.get("Dedup", "—"), r.get("Compr", "—"),
+                     _gib(r.get(size_key, "")), cpg_by_name.get(r.get("Name", "")) or "—",
+                     str(snap_count.get(r.get("Name", ""), 0)), ", ".join(in_sets.get(r.get("Name", ""), [])) or "—"]
+                    for r in user],
+                   widths=[0.26, 0.10, 0.08, 0.10, 0.10, 0.12, 0.10, 0.14])
+        else:
+            _para(doc, "The array reports no user volumes.")
+        _para(doc, f"Not listed: {len(system)} system volume(s) and {len(snapshots)} snapshot(s).")
+    _para(doc, "Volume sets", bold=True)
+    if not _read_failed(doc, data, "showvvset", warnings):
+        if sets:
+            _table(doc, ["Volume set", "Members"], [[n, ", ".join(m) or "—"] for n, m in sets.items()],
+                   widths=[0.35, 0.65])
+        else:
+            _para(doc, "The array reports no volume sets.")
+
+
+def _add_presentations_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
+    from alletra_onboard.application.documents.asbuilt_parse import parse_showvlun_templates_cli
+    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active
+
+    _h1(doc, "Presentations")
+    if _read_failed(doc, data, "showvlun -t", warnings):
+        return
+    templates = parse_showvlun_templates_cli(data.showvlun_t)
+    active_ok = not _read_failed(doc, data, "showvlun -a", warnings)
+    active = parse_showvlun_active(data.showvlun_a) if active_ok else []
+    _para(doc, "What is presented to whom (the array's VLUN templates), and whether anyone can see it "
+               "right now (active paths).")
+    if not templates:
+        _para(doc, "The array reports no presentations.")
+        return
+    rows = []
+    for t in templates:
+        paths = [p for p in active if p.lun == t.lun and p.volume == t.volume]
+        target = f"host set {t.target[4:]}" if t.target.startswith("set:") else f"host {t.target}"
+        if not active_ok:
+            live = "unknown — showvlun -a could not be read"
+        elif paths:
+            live = f"{len(paths)} on {', '.join(sorted({p.host for p in paths}))}"
+        else:
+            live = "none — nobody can see this presentation"
+        rows.append([str(t.lun), t.volume, target, live])
+    _table(doc, ["LUN", "Volume", "Presented to", "Active paths"], rows, widths=[0.08, 0.30, 0.30, 0.32])
+
+
+def _add_zoning_section(doc, data: AsBuiltData) -> None:
+    _h1(doc, "SAN zoning designed in this run")
+    plan = data.zoning_plan
+    if not plan:
+        _para(doc, "This run did not include the SAN zoning step.")
+        return
+    rendered = data.zoning_rendered or {}
+    aliases: dict[str, str] = rendered.get("aliases") or {}
+    delivered = {tuple(p) for p in rendered.get("selected_pairs") or []}
+    commands: dict[str, list[str]] = rendered.get("commands") or {}
+    _para(doc, "The tool designs zones and hands the SAN team a command set; it never writes to a switch. "
+               "Rows marked 'already zoned' were found in the fabric's effective configuration.")
+    for fab in plan.get("fabrics", []):
+        name = fab.get("fabric", "")
+        bits = [f"{name} — switch {fab.get('switch_host', '')} {fab.get('switch_name', '')}".rstrip()]
+        if fab.get("fabric_name"):
+            bits.append(f"fabric {fab['fabric_name']}")
+        if fab.get("active_cfg"):
+            bits.append(f"active cfg {fab['active_cfg']}")
+        if fab.get("switch_count"):
+            bits.append(f"{fab['switch_count']} switch(es) in fabric")
+        _para(doc, " · ".join(bits), bold=True)
+        by_wwpn = {w["wwpn"]: w for w in fab.get("hosts", []) + fab.get("array_ports", [])}
+        zoned = {tuple(p) for p in fab.get("already_zoned", [])}
+        zone_names = fab.get("zone_names", {})
+
+        def alias(wwpn: str, _by=by_wwpn) -> str:
+            return aliases.get(wwpn) or _by.get(wwpn, {}).get("suggested_alias") or "—"
+
+        rows = []
+        for h, a in (tuple(p) for p in fab.get("pairs", [])):
+            host, port = by_wwpn.get(h, {}), by_wwpn.get(a, {})
+            if (h, a) in zoned:
+                status = "already zoned"
+            elif (h, a) in delivered:
+                status = "command set delivered"
+            else:
+                status = "not selected"
+            rows.append([host.get("host_name") or "—", host.get("display", h), alias(h),
+                         port.get("nsp", "—"), port.get("display", a), alias(a),
+                         ", ".join(zone_names.get(f"{h}|{a}", [])) or "—", status])
+        if rows:
+            _table(doc, ["Host", "HBA WWPN", "Alias", "Array port", "Array WWPN", "Alias", "Zone(s)", "Status"], rows,
+                   widths=[0.14, 0.16, 0.12, 0.08, 0.16, 0.12, 0.12, 0.10])
+        else:
+            _para(doc, "No host HBA on this fabric needed a zone to this array.")
+        if commands.get(name):
+            _para(doc, "Delivered to the SAN team for application; confirm against the fabric before relying on it.")
+            _mono(doc, commands[name])
+    if plan.get("offline_hosts"):
+        _para(doc, "On no fabric (cable and power first): " + ", ".join(plan["offline_hosts"]))
+    if not rendered:
+        _para(doc, "No command set was generated in this run.")
+    report = data.zoning_report
+    if report:
+        zoned_hosts = report.get("zoned_hosts", [])
+        unverified = report.get("unverified_hosts", [])
+        _para(doc, "Zoning check on the array: "
+                   + (f"zoned on both fabrics — {', '.join(zoned_hosts)}. " if zoned_hosts else "no host zoned on both fabrics. ")
+                   + (f"Not verified — {', '.join(unverified)}." if unverified else ""))
+    else:
+        _para(doc, "The zoning check was not run.")
+
+
+_OUTCOME_LABEL = {"created": "Created", "updated": "Updated", "exists": "Already existed", "failed": "Failed"}
+_VERDICT_LABEL = {"live": "Live", "partial": "Partial", "no_path": "No path"}
+
+
+def _when(iso: str) -> str:
+    """'2026-09-13T00:05:12.123+00:00' -> '2026-09-13 00:05 UTC' (anything else passes through)."""
+    m = re.match(r"^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]00:00)?", iso or "")
+    if not m:
+        return iso
+    return f"{m.group(1)} {m.group(2)}" + (" UTC" if m.group(3) else "")
+
+
+def _add_provisioning_section(doc, data: AsBuiltData) -> None:
+    _h1(doc, "Provisioning performed in this run")
+    result = data.provisioning_result
+    if not result:
+        _para(doc, "A plan was built but not applied." if data.provisioning_plan
+              else "This run did not include the provisioning step.")
+        return
+    when = f" at {_when(data.provisioning_applied_at)}" if data.provisioning_applied_at else ""
+    _para(doc, f"Objects the tool created or found on the array{when}. 'Already existed' means the object "
+               "was there and matched; 'Updated' means members or WWNs were added, nothing removed.")
+    outcomes = result.get("outcomes", [])
+    if outcomes:
+        _table(doc, ["Kind", "Name", "Result", "Detail"],
+               [[o.get("kind", ""), o.get("name", ""), _OUTCOME_LABEL.get(o.get("status", ""), o.get("status", "")),
+                 o.get("detail") or "—"] for o in outcomes],
+               widths=[0.10, 0.30, 0.18, 0.42])
+    if result.get("error"):
+        _para(doc, f"Provisioning stopped with an error: {result['error']}")
+    _para(doc, "Path verification", bold=True)
+    paths = data.path_verification
+    if not paths:
+        _para(doc, "Path verification was not run.")
+        return
+    if paths.get("error"):
+        _para(doc, f"Path verification failed: {paths['error']}")
+        return
+    hosts = paths.get("hosts", [])
+    if hosts:
+        _table(doc, ["Host", "Verdict", "Detail"],
+               [[h.get("host", ""), _VERDICT_LABEL.get(h.get("verdict", ""), h.get("verdict", "")), h.get("detail", "")]
+                for h in hosts],
+               widths=[0.25, 0.15, 0.60])
+    else:
+        _para(doc, "No target hosts to verify.")
+
+
+def _add_provisioned_sections(doc, data: AsBuiltData, warnings: list[str]) -> None:
+    """SPEC-002: the five sections appended after the template's last section."""
+    _add_hosts_section(doc, data, warnings)
+    _add_volumes_section(doc, data, warnings)
+    _add_presentations_section(doc, data, warnings)
+    _add_zoning_section(doc, data)
+    _add_provisioning_section(doc, data)
+
+
+def _update_fields_on_open(doc) -> None:
+    """R9: ask Word to refresh fields (the TOC, page numbers) when the document is opened."""
+    settings = doc.settings.element
+    if settings.find(qn("w:updateFields")) is None:
+        el = OxmlElement("w:updateFields")
+        el.set(qn("w:val"), "true")
+        settings.append(el)
