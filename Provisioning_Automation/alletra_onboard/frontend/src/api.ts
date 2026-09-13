@@ -291,11 +291,14 @@ export const renderZoningCommands = (
 // stageZoning + the ZoningStageResult models were removed on 2026-09-02 (ADR 0012). They posted to
 // /runs/{id}/zoning/stage, which wrote zones to the switch. renderZoning above is the whole zoning
 // output now: the command set a consultant applies by hand.
+export type PlanState = 'create' | 'exists' | 'update' | 'conflict';
 export interface PlannedAction {
-  kind: string; name: string; description: string; exists: boolean; detail: Record<string, any>;
+  kind: string; name: string; description: string;
+  state: PlanState; reason: string;           // SPEC-001: what apply will do, and why
+  exists: boolean; detail: Record<string, any>;
 }
-export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; error: string | null; }
-export interface ActionOutcome { kind: string; name: string; status: 'created' | 'exists' | 'failed'; detail: string; }
+export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; blockers: string[]; error: string | null; }
+export interface ActionOutcome { kind: string; name: string; status: 'created' | 'exists' | 'updated' | 'failed'; detail: string; }
 export interface ProvisioningResult { outcomes: ActionOutcome[]; error: string | null; }
 
 // The plural provisioning intent pieces + the operator dropdown-builder (ADR 0010 Stage 2).

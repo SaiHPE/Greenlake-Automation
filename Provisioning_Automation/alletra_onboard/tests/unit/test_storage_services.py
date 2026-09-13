@@ -124,11 +124,15 @@ class FakeVCenter:
 
 
 class FakeWsapi:
+    """Name-level fake: objects exist or not. Record reads (SPEC-001) derive matching records from the
+    names, so an existing volume matches the fake intent (1024 GiB tpvv on SSD_r6) and an existing host
+    carries the discovered WWNs — the plan-truth tests in test_plan_truth.py use a richer fake."""
+
     def __init__(self, *, ports=(), hosts=(), host_sets=(), volumes=(), vsets=(), cpgs=("SSD_r6",),
                  cpg_free=10_000_000):  # MiB free per CPG; default comfortably above the fake intent
         self._ports = list(ports)
-        self.hosts, self.host_sets = set(hosts), set(host_sets)
-        self.volumes, self.vsets, self.cpgs = set(volumes), set(vsets), set(cpgs)
+        self._hosts, self._host_sets = set(hosts), set(host_sets)
+        self._volumes, self._vsets, self.cpgs = set(volumes), set(vsets), set(cpgs)
         self.cpg_free = cpg_free
         self.calls: list[tuple] = []
 
@@ -151,28 +155,47 @@ class FakeWsapi:
         return {name: self.cpg_free for name in self.cpgs}
 
     def host_names(self):
-        return list(self.hosts)
+        return list(self._hosts)
 
     def host_set_names(self):
-        return list(self.host_sets)
+        return list(self._host_sets)
 
     def volume_names(self):
-        return list(self.volumes)
+        return list(self._volumes)
 
     def volume_set_names(self):
-        return list(self.vsets)
+        return list(self._vsets)
+
+    def hosts(self):
+        from alletra_onboard.domain.provisioning import ArrayHostRecord
+        return [ArrayHostRecord(name=n, persona="VMware", wwns=[normalize_wwpn(HOST_A), normalize_wwpn(HOST_B)])
+                for n in self._hosts]
+
+    def host_sets(self):
+        return {n: ["esx1"] for n in self._host_sets}
+
+    def volumes(self):
+        from alletra_onboard.domain.provisioning import ArrayVolumeRecord
+        return [ArrayVolumeRecord(name=n, size_mib=1024 * 1024, cpg="SSD_r6", provisioning_type="tpvv")
+                for n in self._volumes]
+
+    def volume_sets(self):
+        return {n: [] for n in self._vsets}
+
+    def vlun_templates(self):
+        return []
 
     def ensure_host(self, name, wwns, persona="VMware"):
         self.calls.append(("host", name, tuple(wwns), persona))
-        return "exists" if name in self.hosts else "created"
+        return "exists" if name in self._hosts else "created"
 
     def ensure_host_set(self, name, members):
         self.calls.append(("hostset", name))
-        return "exists" if name in self.host_sets else "created"
+        return "exists" if name in self._host_sets else "created"
 
     def ensure_volume(self, name, cpg, size_mib, ptype):
         self.calls.append(("volume", name, size_mib, ptype))
-        return "exists" if name in self.volumes else "created"
+        return "exists" if name in self._volumes else "created"
 
     def ensure_volume_set(self, name, members):
         self.calls.append(("vvset", name))
