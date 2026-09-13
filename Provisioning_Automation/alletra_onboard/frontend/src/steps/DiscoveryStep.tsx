@@ -15,7 +15,7 @@ import {
   startDiscover,
 } from '../api';
 import { DiscoveryFreshness } from '../ui/discoveryAge';
-import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
+import { ContinueButton, InlineNotification, NotesList, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 
@@ -91,7 +91,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             label={report ? 'Re-run discovery' : running ? 'Discovering' : 'Run discovery'}
             onClick={discover}
           />
-          {report && <Button primary label="Continue" onClick={onDone} />}
+          {report && <ContinueButton onClick={onDone} />}
         </>
       }
     >
@@ -447,7 +447,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
       )}
 
       {report && report.notes.length > 0 && (
-        <InlineNotification tone="info" title="Discovery notes" message={report.notes.join(' · ')} />
+        <InlineNotification tone="info" title="Discovery notes" message={<NotesList notes={report.notes} />} />
       )}
     </StepShell>
   );

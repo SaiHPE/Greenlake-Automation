@@ -1,7 +1,7 @@
 import { Box, Button, FormField, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
 import { useState } from 'react';
 import { launchDiscoveryTool, RunEvent, RunRecord, startCloudinit } from '../api';
-import { InlineNotification, Surface } from '../ui/primitives';
+import { ContinueButton, InlineNotification, Surface } from '../ui/primitives';
 import { StatusIndicator } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 import { useStepContext } from '../ui/StepContext';
@@ -103,7 +103,7 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
       }
       actions={
         connected ? (
-          <Button primary label="Continue" onClick={onDone} />
+          <ContinueButton onClick={onDone} />
         ) : (
           <Button
             primary

@@ -4,6 +4,7 @@ import { RunEvent, RunRecord, launchBrowser, markComplete, startDscc } from '../
 import { ClockSync } from '../ClockSync';
 import { InlineNotification, Surface } from '../ui/primitives';
 import { StatusIndicator } from '../ui/status';
+import { useStepContext } from '../ui/StepContext';
 import { StepShell } from '../ui/StepShell';
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
+  const { nextTitle } = useStepContext();
   const [cdpUrl, setCdpUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
           <Button
             primary
             busy={busy === 'complete'}
-            label={completed ? 'Continue' : 'Mark DSCC complete'}
+            label={completed ? `Continue to ${nextTitle ?? 'the next step'}` : 'Mark DSCC complete'}
             onClick={() => (completed ? onDone() : call('complete', () => markComplete(runId).then(onDone)))}
           />
         </>

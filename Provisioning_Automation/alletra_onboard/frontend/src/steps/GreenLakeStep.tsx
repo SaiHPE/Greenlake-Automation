@@ -1,7 +1,7 @@
 import { Box, Button, CheckBox, NameValueList, NameValuePair, Text } from 'grommet';
 import { useState } from 'react';
 import { RunEvent, RunRecord, startProvision } from '../api';
-import { InlineNotification, Surface } from '../ui/primitives';
+import { ContinueButton, InlineNotification, NotesList, Surface } from '../ui/primitives';
 import { StepShell } from '../ui/StepShell';
 import { useStepContext } from '../ui/StepContext';
 import { useStepState } from '../ui/useStepState';
@@ -51,7 +51,7 @@ export function GreenLakeStep({ runId, run, events, onDone }: Props) {
             disabled={running}
           />
           {registered ? (
-            <Button primary label="Continue" onClick={onDone} />
+            <ContinueButton onClick={onDone} />
           ) : (
             <Button primary busy={running} label={running ? 'Registering' : 'Register the array'} onClick={start} />
           )}
@@ -62,7 +62,7 @@ export function GreenLakeStep({ runId, run, events, onDone }: Props) {
         <InlineNotification
           tone="warning"
           title="Registration completed with warnings"
-          message={run.warnings.join(' · ')}
+          message={<NotesList notes={run.warnings} />}
         />
       ) : null}
 

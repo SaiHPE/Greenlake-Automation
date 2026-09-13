@@ -1,7 +1,43 @@
-import { Box, FormField, Heading, Notification, Text, TextInput } from 'grommet';
+import { Box, Button, FormField, Heading, Notification, Text, TextInput } from 'grommet';
 import { ReactNode } from 'react';
 import { RunEvent } from '../api';
 import { StatusIcon, StepState } from './status';
+import { useStepContext } from './StepContext';
+
+/**
+ * The primary "go on" action, naming where it goes (SPEC-004 R1): "Continue to Provision storage",
+ * or "Finish" on the last step. A bare "Continue" on eight steps was the register's X-4.
+ */
+export function ContinueButton({
+  onClick,
+  disabled,
+  prefix = 'Continue to',
+}: {
+  onClick?: () => void;
+  disabled?: boolean;
+  prefix?: string;
+}) {
+  const { nextTitle, onDone } = useStepContext();
+  const label = nextTitle ? `${prefix} ${nextTitle}` : 'Finish';
+  return <Button primary label={label} disabled={disabled} onClick={onClick ?? onDone} />;
+}
+
+/**
+ * Many notes, one per line (SPEC-004 R3). A single note renders as plain text; the " · "-joined
+ * paragraph the register called X-6 is what this replaces.
+ */
+export function NotesList({ notes }: { notes: string[] }) {
+  if (notes.length <= 1) return <>{notes[0] ?? ''}</>;
+  return (
+    <Box as="ul" margin="none" pad={{ left: 'medium' }} gap="xxsmall">
+      {notes.map((note, i) => (
+        <Text as="li" size="small" key={i}>
+          {note}
+        </Text>
+      ))}
+    </Box>
+  );
+}
 
 /**
  * A content surface. The Design System separates sections with background colour and spacing rather

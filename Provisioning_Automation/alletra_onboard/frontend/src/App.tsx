@@ -190,6 +190,7 @@ export default function App() {
     events,
     step: current.served,
     position: { index: stepIndex + 1, total: steps.length },
+    nextTitle: steps[stepIndex + 1]?.label,
     onDone: next,
   };
 

@@ -14,7 +14,7 @@ import {
 } from '../api';
 import { ClockSync } from '../ClockSync';
 import { Instructions } from '../components';
-import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
+import { ContinueButton, InlineNotification, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator, StepState } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 
@@ -113,7 +113,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
             download="Initialisation_sheet.xlsx"
             label="Download the initialisation sheet"
           />
-          <Button primary label="Continue" onClick={onDone} />
+          <ContinueButton onClick={onDone} />
         </>
       }
     >
