@@ -441,7 +441,8 @@ function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[]
   ];
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(additive.join('\n'));
+      // The header travels with the paste: the text alone must say which switch and cfg it is for.
+      await navigator.clipboard.writeText([...header, ...additive].join('\n'));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -500,7 +501,7 @@ function recommendedSelection(plan: ZoningPlan): Record<string, boolean> {
   return out;
 }
 
-export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
+export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: string }) {
   const [aliases, setAliases] = useState<Record<string, string>>(() => {
     const seed: Record<string, string> = {};
     plan.fabrics.forEach((f) => [...f.hosts, ...f.array_ports].forEach((w) => {
@@ -529,7 +530,7 @@ export function ZoningPlanView({ plan }: { plan: ZoningPlan }) {
     setBusy(true);
     setError(null);
     try {
-      setResult(await renderZoningCommands(plan, aliases, selectedPairs));
+      setResult(await renderZoningCommands(plan, aliases, selectedPairs, runId));
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
     } finally {

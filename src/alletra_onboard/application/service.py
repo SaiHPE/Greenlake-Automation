@@ -34,7 +34,7 @@ from alletra_onboard.application.runs.coordinator import (
 from alletra_onboard.application.provisioning.steps import DiscoveryZoningSteps, ProvisioningSteps
 from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.config import Settings
-from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunMode, RunRecord
+from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunMode, RunRecord, WorkflowPhase
 from alletra_onboard.domain.ports import RunStore
 from alletra_onboard.domain.provisioning import (
     ProvisioningBuilder,
@@ -121,6 +121,22 @@ class OnboardingService:
 
     def list_events(self, run_id: str) -> list[RunEvent]:
         return self.coordinator.list_events(run_id)
+
+    def record_zoning_render(
+        self, run_id: str, *, commands: dict[str, list[str]], skipped: dict[str, list[str]],
+        aliases: dict[str, str], selected_pairs: list[tuple[str, str]],
+    ) -> None:
+        """Put the generated zoning command set on the run's record (SPEC-002 R4). Raises
+        RunNotFoundError for an unknown run; never touches the run's status."""
+        self.coordinator.get_run(run_id)
+        total = sum(len(c) for c in commands.values())
+        fabrics = sorted(f for f, c in commands.items() if c)
+        self.coordinator.emit(
+            run_id, WorkflowPhase.STORAGE_ZONING, "zoning.rendered",
+            f"Zoning command set generated — {total} command(s) for {', '.join(fabrics) or 'no fabric'}.",
+            data={"commands": commands, "skipped": skipped, "aliases": aliases,
+                  "selected_pairs": [list(p) for p in selected_pairs]},
+        )
 
     def mark_complete(self, run_id: str) -> RunRecord:
         return self.coordinator.mark_complete(run_id)

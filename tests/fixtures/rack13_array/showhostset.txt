@@ -1,0 +1,17 @@
+Id Name                                        Members                        
+16 vmetraining                                 vmenode                        
+19 HPE_VM_e6eab89d-bebb-459f-913d-93e579090c0c HPE_VM_e75dda57158590905a573743
+                                               HPE_VM_9a0d3749cfdef5178ac99c54
+                                               HPE_VM_cdc7734181bb8edf0ddf469c
+20 HPE_VM_29fc298e-d265-48bb-9011-aac8ded88302 HPE_VM_7487eaf91ff20e3c6fc79b19
+                                               HPE_VM_0fd2ed8d0428b96e33d9953d
+                                               HPE_VM_0c139393fdd14147932b8cad
+24 grp3_alletra                                grp3_vmenode1                  
+                                               grp3_vmenode2                  
+                                               grp3_vmenode3                  
+28 HPE_VM_27020f7d-74dc-421b-8557-c8a9d87fb3b6 grp3_vmenode2                  
+                                               grp3_vmenode1                  
+                                               HPE_VM_11a3dd17a0db11092372b0cb
+30 zz_t2_hs                                    10.132.30.136                  
+------------------------------------------------------------------------------
+ 6 total                                       12
