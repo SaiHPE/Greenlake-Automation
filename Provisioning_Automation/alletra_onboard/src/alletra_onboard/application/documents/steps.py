@@ -8,7 +8,8 @@ to the emitted events instead.
 from __future__ import annotations
 
 import asyncio
-from typing import Callable
+from types import MappingProxyType
+from typing import Callable, Mapping
 
 from alletra_onboard.application.documents.asbuilt import generate_asbuilt
 from alletra_onboard.application.documents.asbuilt_parse import parse_asbuilt
@@ -26,6 +27,28 @@ class DocumentSteps:
         "showpd", "showcpg", "showport", "showport -par",
         "showinventory -csvtable", "checkhealth -svc -detail",
     )
+    # SPEC-002 array sections: AsBuiltData field -> the read that fills it. Each runs in its own
+    # try so one failing listing costs one section, not the document (R6).
+    _ASBUILT_LISTINGS: tuple[tuple[str, str], ...] = (
+        ("showhost_d", "showhost -d"),
+        ("showhostset", "showhostset"),
+        ("showvv", "showvv"),
+        ("showvv_cpg", "showvv -showcols Id,Name,Prov,Type,UsrCPG,SnpCPG,VSize_MB"),
+        ("showvvset", "showvvset"),
+        ("showvlun_t", "showvlun -t"),
+        ("showvlun_a", "showvlun -a"),
+    )
+    # SPEC-002 run sections: event type -> (AsBuiltData field, payload key). The LATEST event of
+    # each type wins; the two zoning-check types share a field so whichever came last wins.
+    _ASBUILT_RECORDS: Mapping[str, tuple[str, str | None]] = MappingProxyType({
+        "zoning.plan": ("zoning_plan", "plan"),
+        "zoning.previewed": ("zoning_report", "report"),
+        "zoning.proper": ("zoning_report", "report"),
+        "zoning.rendered": ("zoning_rendered", None),
+        "storage.previewed": ("provisioning_plan", "plan"),
+        "storage.applied": ("provisioning_result", "result"),
+        "storage.paths.verified": ("path_verification", "verification"),
+    })
 
     def __init__(self, coord: RunCoordinator, *, verify_fn: Callable = verify) -> None:
         self._coord = coord
@@ -92,6 +115,7 @@ class DocumentSteps:
                    f"Reading {host} (read-only) and building the as-built document…")
         try:
             data = await asyncio.to_thread(self._collect_asbuilt, host, username, password)
+            self._run_records(run.run_id, data)
             # The step's own fields win over the workbook's — the operator is looking at the
             # document about to be produced, and the sheet may have been filled weeks earlier.
             data.customer = customer or item.customer_name or ""
@@ -127,7 +151,30 @@ class DocumentSteps:
             for cmd in self._ASBUILT_COMMANDS:
                 lines.append(f"===== $ {cmd} =====")
                 lines.append(cli.run(cmd))
-        return parse_asbuilt("\n".join(lines))
+            data = parse_asbuilt("\n".join(lines))
+            for attr, cmd in self._ASBUILT_LISTINGS:
+                try:
+                    setattr(data, attr, cli.run(cmd))
+                except Exception as exc:  # noqa: BLE001 - R6: name it, keep going
+                    data.read_errors[cmd] = f"{type(exc).__name__}: {exc}"
+        return data
+
+    def _run_records(self, run_id: str, data) -> None:
+        """Fill the run sections from the run's own events: the latest payload per event type."""
+        seen: dict[str, object] = {}
+        for event in self._coord.list_events(run_id):
+            target = self._ASBUILT_RECORDS.get(event.event_type)
+            if target is None:
+                continue
+            attr, key = target
+            payload = event.data if key is None else event.data.get(key)
+            if payload is None:
+                continue
+            setattr(data, attr, payload)
+            seen[attr] = event.created_at
+        if "provisioning_result" in seen:
+            ts = seen["provisioning_result"]
+            data.provisioning_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
 
     def _render_asbuilt(self, data) -> tuple[bytes, list[str]]:
         import os

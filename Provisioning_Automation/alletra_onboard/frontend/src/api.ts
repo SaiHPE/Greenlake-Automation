@@ -284,9 +284,9 @@ export interface ZoningRenderResult {
   warnings?: Record<string, string[]>;   // legal-but-non-portable alias names (FOS 8.1+)
 }
 export const renderZoningCommands = (
-  plan: ZoningPlan, aliases: Record<string, string>, selectedPairs: [string, string][],
+  plan: ZoningPlan, aliases: Record<string, string>, selectedPairs: [string, string][], runId?: string,
 ) => request<ZoningRenderResult>('POST', '/zoning/render', {
-  plan, aliases, selected_pairs: selectedPairs,
+  plan, aliases, selected_pairs: selectedPairs, run_id: runId ?? null,
 });
 // stageZoning + the ZoningStageResult models were removed on 2026-09-02 (ADR 0012). They posted to
 // /runs/{id}/zoning/stage, which wrote zones to the switch. renderZoning above is the whole zoning
