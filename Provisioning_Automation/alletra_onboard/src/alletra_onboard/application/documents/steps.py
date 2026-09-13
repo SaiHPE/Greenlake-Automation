@@ -33,7 +33,9 @@ class DocumentSteps:
         ("showhost_d", "showhost -d"),
         ("showhostset", "showhostset"),
         ("showvv", "showvv"),
-        ("showvv_cpg", "showvv -showcols Id,Name,Prov,Type,UsrCPG,SnpCPG,VSize_MB"),
+        # `showvv -listcols` on OS 10.5.55 (rack13arcus, 2026-09-13) names the column CPG; UsrCPG/SnpCPG
+        # are rejected ("Invalid columns specified"). Header-driven parsing accepts either spelling.
+        ("showvv_cpg", "showvv -showcols Id,Name,Prov,Type,CPG,VSize_MB"),
         ("showvvset", "showvvset"),
         ("showvlun_t", "showvlun -t"),
         ("showvlun_a", "showvlun -a"),
