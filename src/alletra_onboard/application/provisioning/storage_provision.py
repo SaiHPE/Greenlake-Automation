@@ -29,26 +29,55 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningResult,
     VlunTemplate,
     VolumeRequest,
-    persona_for_os,
 )
 from alletra_onboard.domain.shared import normalize_wwpn
-
-def _hosts_by_name(discovery: DiscoveryReport) -> "OrderedDict[str, list[str]]":
-    """Group discovered HBA WWPNs by ESXi host name, de-duplicated, preserving order."""
-    grouped: OrderedDict[str, list[str]] = OrderedDict()
-    for hba in discovery.host_hbas:
-        wwns = grouped.setdefault(hba.host_name, [])
-        if hba.wwpn not in wwns:
-            wwns.append(hba.wwpn)
-    return grouped
+from alletra_onboard.application.provisioning.hosts import union_hosts
 
 
-def _persona_by_host(discovery: DiscoveryReport) -> dict[str, str]:
-    """The host persona NAME for each discovered host, derived from its OS (default VMware)."""
-    personas: dict[str, str] = {}
-    for hba in discovery.host_hbas:
-        personas.setdefault(hba.host_name, persona_for_os(hba.os))
-    return personas
+def _union(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None):
+    """SPEC-003 R4: the one host union plan, apply, verification and the dropdown all derive from."""
+    return union_hosts(discovery, getattr(intent, "declared_hosts", None) or [], zoning_plan)
+
+
+def _hosts_by_name(
+    discovery: DiscoveryReport, intent: ProvisioningIntent | None = None, zoning_plan: dict | None = None,
+) -> "OrderedDict[str, list[str]]":
+    """host name -> FC WWPNs, for every host the run can name (vCenter, sheet, array, fabric).
+
+    An iSCSI-only host is included only when it already exists on the array (it can join a set;
+    nothing has to be created for it). One that does not exist yet is left out: the WSAPI client
+    registers FC WWNs only, and a host object created without its IQN would be a lie of omission."""
+    hosts, _ = _union(intent, discovery, zoning_plan)
+    return OrderedDict(
+        (n, list(h.wwpns)) for n, h in hosts.items() if h.wwpns or (h.iqns and h.source == "array")
+    )
+
+
+def _host_notes(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None,
+                selected: OrderedDict[str, list[str]]) -> list[str]:
+    """SPEC-003 R3/R5/R6 notes: nameless initiators, iSCSI-only members, hosts that cannot be created."""
+    hosts, notes = _union(intent, discovery, zoning_plan)
+    iscsi_members = [n for n in selected if not selected[n] and hosts[n].iqns]
+    if iscsi_members:
+        notes.append(
+            "iSCSI-only member(s) in a host set: " + ", ".join(iscsi_members)
+            + ". This tool's SAN zoning and path verification cover FC only — verify their paths by hand."
+        )
+    uncreatable = [n for n, h in hosts.items() if not h.wwpns and h.iqns and h.source != "array"]
+    if uncreatable:
+        notes.append(
+            "Not planned — iSCSI host creation is not supported by this tool yet: " + ", ".join(uncreatable)
+            + ". Create them on the array first; they can then be set members."
+        )
+    return notes
+
+
+def _persona_by_host(
+    discovery: DiscoveryReport, intent: ProvisioningIntent | None = None, zoning_plan: dict | None = None,
+) -> dict[str, str]:
+    """The host persona NAME for each host in the union (OS-derived, or the array's own)."""
+    hosts, _ = _union(intent, discovery, zoning_plan)
+    return {n: h.persona for n, h in hosts.items()}
 
 
 def _members_for(host_set, all_hosts: "OrderedDict[str, list[str]]") -> list[str]:
@@ -62,12 +91,14 @@ def _members_for(host_set, all_hosts: "OrderedDict[str, list[str]]") -> list[str
     return [m for m in host_set.members if m in all_hosts]
 
 
-def _selected_hosts(intent: ProvisioningIntent, discovery: DiscoveryReport) -> "OrderedDict[str, list[str]]":
+def _selected_hosts(
+    intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None = None,
+) -> "OrderedDict[str, list[str]]":
     """The hosts tier-1 will CREATE: only those the operator composed into a host set (ADR 0010's
-    ideal subset) — never the whole vCenter inventory. On a shared vCenter, creating an array host
-    object for every ESXi server in the inventory is pollution, not provisioning. With no host sets
-    (the from_simple single-cluster shortcut) every discovered host is in scope, as before."""
-    all_hosts = _hosts_by_name(discovery)
+    ideal subset) — never the whole inventory. On a shared vCenter, creating an array host object for
+    every ESXi server in the inventory is pollution, not provisioning. With no host sets (the
+    from_simple single-cluster shortcut) every host in the union is in scope, as before."""
+    all_hosts = _hosts_by_name(discovery, intent, zoning_plan)
     if not intent.host_sets:
         return all_hosts
     wanted = {m for hs in intent.host_sets for m in _members_for(hs, all_hosts)}
@@ -101,27 +132,61 @@ def read_array_objects(intent: ProvisioningIntent, *, wsapi_factory: Callable = 
         return {"cpgs": [], "hosts": [], "host_sets": [], "volumes": [], "volume_sets": [], "error": str(exc)}
 
 
-def host_briefs(discovery: DiscoveryReport) -> list[DiscoveredHostBrief]:
-    """Summarise each discovered ESXi host's fabric-login state for the membership dropdown — the
-    'status text so a half-zoned host isn't picked blind' of ADR 0010."""
-    per_host = _hosts_by_name(discovery)
-    fabrics_by_host: OrderedDict[str, set[str]] = OrderedDict()
+def _fabric_logins(discovery: DiscoveryReport, zoning_plan: dict | None) -> dict[str, list[set[str]]]:
+    """host name -> [fabric labels seen by the array side, fabric labels seen by the switch side].
+    Kept as two sets because the two sides label fabrics differently (odd/even vs F1/F2); the count
+    that matters is the larger of the two, never their union."""
+    array_side: dict[str, set[str]] = {}
     for hba in discovery.host_hbas:
-        by = fabrics_by_host.setdefault(hba.host_name, set())
         if hba.fabric:
-            by.add(hba.fabric)
+            array_side.setdefault(hba.host_name, set()).add(hba.fabric)
+    port_fabric = {p.label: p.fabric for p in discovery.array_ports if getattr(p, "fabric", None)}
+    for ah in discovery.array_hosts:
+        for ports in list(ah.wwpns.values()) + list(ah.iqns.values()):
+            for port in ports:
+                if port in port_fabric:
+                    array_side.setdefault(ah.name, set()).add(port_fabric[port])
+    switch_side: dict[str, set[str]] = {}
+    for fab in (zoning_plan or {}).get("fabrics", []):
+        for h in fab.get("hosts", []):
+            if h.get("host_name") and h.get("fabric"):
+                switch_side.setdefault(h["host_name"], set()).add(h["fabric"])
+    return {n: [array_side.get(n, set()), switch_side.get(n, set())] for n in set(array_side) | set(switch_side)}
 
-    briefs: list[DiscoveredHostBrief] = []
-    for name, wwns in per_host.items():
-        fabrics = fabrics_by_host.get(name, set())
-        if len(fabrics) >= 2:
-            status = f"{len(wwns)} HBAs - both fabrics"
-        elif len(fabrics) == 1:
-            status = f"{len(wwns)} HBAs - one fabric ({next(iter(fabrics))})"
+
+def host_briefs(
+    discovery: DiscoveryReport, declared_hosts: list | None = None, zoning_plan: dict | None = None,
+) -> list[DiscoveredHostBrief]:
+    """Summarise each host in the union for the membership dropdown — the 'status text so a
+    half-zoned host isn't picked blind' of ADR 0010, plus source and transport (SPEC-003 R5).
+    FC-capable hosts first; iSCSI-only hosts last, saying that this tool does not zone or
+    path-verify them."""
+    hosts, _ = union_hosts(discovery, declared_hosts or [], zoning_plan)
+    logins = _fabric_logins(discovery, zoning_plan)
+    fc: list[DiscoveredHostBrief] = []
+    iscsi: list[DiscoveredHostBrief] = []
+    for name, h in hosts.items():
+        if h.transport == "none":
+            continue
+        if not h.wwpns:
+            iscsi.append(DiscoveredHostBrief(
+                name=name, status="iSCSI only · not zoned or path-verified by this tool", wwpns=[],
+                source=h.source, transport=h.transport, persona=h.persona, fc_capable=False,
+            ))
+            continue
+        n_fabrics = max((len(s) for s in logins.get(name, [])), default=0)
+        one = next((next(iter(s)) for s in logins.get(name, []) if len(s) == 1), "")
+        if n_fabrics >= 2:
+            status = f"{len(h.wwpns)} HBAs - both fabrics"
+        elif n_fabrics == 1:
+            status = f"{len(h.wwpns)} HBAs - one fabric ({one})"
         else:
-            status = f"{len(wwns)} HBAs - not logged in (off or unzoned)"
-        briefs.append(DiscoveredHostBrief(name=name, status=status, wwpns=wwns))
-    return briefs
+            status = f"{len(h.wwpns)} HBAs - not logged in (off or unzoned)"
+        fc.append(DiscoveredHostBrief(
+            name=name, status=status, wwpns=list(h.wwpns),
+            source=h.source, transport=h.transport, persona=h.persona, fc_capable=True,
+        ))
+    return fc + iscsi
 
 
 class ExportDefaultError(ValueError):
@@ -195,6 +260,7 @@ def exported_volumes_by_host(
     intent: ProvisioningIntent,
     discovery: DiscoveryReport,
     reachable_hosts: set[str],
+    zoning_plan: dict | None = None,
 ) -> "OrderedDict[str, set[str]]":
     """{host: the volumes actually exported to it} — the tier-2 verification target.
 
@@ -203,7 +269,7 @@ def exported_volumes_by_host(
     volume in the intent. Every provisioned host appears, including those with an empty set: a host
     whose export is held back is a real state worth reporting, not an absence.
     """
-    hosts = _selected_hosts(intent, discovery)
+    hosts = _selected_hosts(intent, discovery, zoning_plan)
     out: "OrderedDict[str, set[str]]" = OrderedDict((name, set()) for name in hosts)
     try:
         exports = _resolve_exports(intent)
@@ -227,6 +293,7 @@ def build_plan(
     *,
     reachable_hosts: set[str],
     wsapi_factory: Callable = make_wsapi,
+    zoning_plan: dict | None = None,
 ) -> ProvisioningPlan:
     """Preview what tier-1 will create, and — SPEC-001 — what it will find already there.
 
@@ -238,18 +305,22 @@ def build_plan(
     host sets, volumes and VV sets are always created: HPE's documented order is register-first, and
     creating a host object for a server that is not cabled yet is harmless and reversible. Required,
     not defaulted — a gate with a default-open value is how the switch write path shipped
-    unauthorised, and every caller should have to state its answer."""
+    unauthorised, and every caller should have to state its answer.
+
+    `zoning_plan` is the run's latest `zoning.plan` payload (SPEC-003): hosts the fabric named that
+    no other source knows join the union through it."""
     plan = ProvisioningPlan()
-    hosts = _selected_hosts(intent, discovery)
+    hosts = _selected_hosts(intent, discovery, zoning_plan)
     unreachable = sorted(n for n in hosts if n not in reachable_hosts)
     if not hosts:
-        plan.notes.append("No ESXi host HBAs discovered — nothing to provision until discovery finds hosts.")
+        plan.notes.append("No host HBAs found by any source — nothing to provision until discovery finds hosts.")
     elif unreachable:
         plan.notes.append(
             "Created but not yet reachable: " + ", ".join(unreachable)
             + ". The host objects are made now; their exports wait until the array sees them logged "
             "in. Nothing here needs redoing once zoning is applied and re-verified."
         )
+    plan.notes.extend(_host_notes(intent, discovery, zoning_plan, hosts))
 
     try:
         with wsapi_factory(intent.array) as array:
@@ -286,11 +357,13 @@ def build_plan(
         if st == "conflict":
             plan.blockers.append(f"{kind} {name}: {reason}")
 
-    personas = _persona_by_host(discovery)
+    personas = _persona_by_host(discovery, intent, zoning_plan)
+    sources = {n: h.source for n, h in _union(intent, discovery, zoning_plan)[0].items()}
     for host_name, wwns in hosts.items():
         persona = personas.get(host_name, "VMware")
         add("host", host_name, f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona}",
-            _judge_host(host_name, wwns, persona, state.hosts), {"wwns": wwns, "persona": persona})
+            _judge_host(host_name, wwns, persona, state.hosts),
+            {"wwns": wwns, "persona": persona, "source": sources.get(host_name, "")})
 
     for hs in intent.host_sets:
         members = _members_for(hs, hosts)
@@ -415,14 +488,15 @@ def apply_plan(
     *,
     reachable_hosts: set[str],
     wsapi_factory: Callable = make_wsapi,
+    zoning_plan: dict | None = None,
 ) -> ProvisioningResult:
-    """Create the objects. `reachable_hosts` must be the SAME gate `build_plan` was given: apply
-    re-derives everything from the intent rather than replaying the plan, so without the filter here
-    the held-back exports would be cosmetic and the array would get them anyway."""
+    """Create the objects. `reachable_hosts` and `zoning_plan` must be the SAME inputs `build_plan`
+    was given: apply re-derives everything from the intent rather than replaying the plan, so
+    without them here the held-back exports would be cosmetic and the host list would differ."""
     result = ProvisioningResult()
-    hosts = _selected_hosts(intent, discovery)
+    hosts = _selected_hosts(intent, discovery, zoning_plan)
     if not hosts:
-        result.error = "No ESXi host HBAs discovered — refusing to provision with no hosts."
+        result.error = "No host HBAs found by any source — refusing to provision with no hosts."
         return result
     try:
         exports = _resolve_exports(intent)
@@ -431,7 +505,7 @@ def apply_plan(
         return result
     exports, held = _reachable_targets(exports, intent, hosts, reachable_hosts)
 
-    personas = _persona_by_host(discovery)
+    personas = _persona_by_host(discovery, intent, zoning_plan)
     try:
         with wsapi_factory(intent.array) as array:
             for host_name, wwns in hosts.items():

@@ -305,7 +305,10 @@ export interface ProvisioningResult { outcomes: ActionOutcome[]; error: string |
 export interface VolumeRequest { name: string; size_gib: number; provisioning_type: 'tpvv' | 'reduce'; cpg: string; vvset: string | null; }
 export interface HostSetRequest { name: string; members: string[]; }
 export interface ExportRequest { source_kind: 'volume' | 'vvset'; source_name: string; target_kind: 'host' | 'hostset'; target_name: string; lun: number | null; }
-export interface DiscoveredHostBrief { name: string; status: string; wwpns: string[]; }
+export interface DiscoveredHostBrief {
+  name: string; status: string; wwpns: string[];
+  source: string; transport: string; persona: string; fc_capable: boolean;   // SPEC-003
+}
 // The dropdown "palette": existing array objects + to-be-created (from the sheet) + discovered hosts.
 export interface ProvisioningObjects {
   existing_cpgs: string[]; existing_hosts: string[]; existing_host_sets: string[];
