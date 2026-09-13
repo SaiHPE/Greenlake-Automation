@@ -67,16 +67,20 @@ def test_parse_showvv_pins_the_capture():
 
 def test_parse_showvv_showcols_is_header_driven():
     text = (
-        "Id Name        Prov Type UsrCPG SnpCPG VSize_MB\n"
-        "92 zz_t2_vol01 tpvv base SSD_r6 SSD_r6     1024\n"
-        "95 odd_one     tpvv base NL_r6  --         2048\n"
+        "Id Name        Prov Type CPG    VSize_MB\n"
+        "92 zz_t2_vol01 tpvv base SSD_r6     1024\n"
+        "95 odd_one     tpvv base NL_r6      2048\n"
         "--------------------------------------------------\n"
-        " 2 total                                  3072\n"
+        " 2 total                              3072\n"
     )
     rows = ap.parse_showvv(text)
     assert [r["Name"] for r in rows] == ["zz_t2_vol01", "odd_one"]
-    assert rows[0]["UsrCPG"] == "SSD_r6" and rows[1]["UsrCPG"] == "NL_r6" and rows[0]["VSize_MB"] == "1024"
+    assert rows[0]["CPG"] == "SSD_r6" and rows[1]["CPG"] == "NL_r6" and rows[0]["VSize_MB"] == "1024"
     assert ap.parse_showvv("") == []
+    # the column list this OS actually offers (showvv -listcols, rack13arcus 2026-09-13): CPG, not UsrCPG
+    listcols = _fx("showvv_listcols.txt")
+    assert ",CPG," in listcols and "UsrCPG" not in listcols.split("Invalid columns")[0]
+    assert "Invalid columns specified: UsrCPG SnpCPG" in listcols
 
 
 # ------------------------------------------------------------------ R1, R2, R10 — sets
@@ -135,9 +139,9 @@ def test_hosts_section_lists_hosts_sets_and_unclaimed_logins(tmp_path):
 
 def test_volumes_section_hides_system_and_snapshot_volumes_but_counts_them(tmp_path):
     cpg = (
-        "Id Name        Prov Type UsrCPG SnpCPG VSize_MB\n"
-        "92 zz_t2_vol01 tpvv base SSD_r6 SSD_r6     1024\n"
-        "93 zz_t2_vol02 tdvv base SSD_r6 SSD_r6     1024\n"
+        "Id Name        Prov Type CPG    VSize_MB\n"
+        "92 zz_t2_vol01 tpvv base SSD_r6     1024\n"
+        "93 zz_t2_vol02 tdvv base SSD_r6     1024\n"
     )
     out, _ = generate_asbuilt(_array_data(showvv_cpg=cpg), tmp_path / "vols.docx")
     doc, text = _read(out)
@@ -323,7 +327,8 @@ def test_collect_continues_past_a_failing_command(monkeypatch):
     data = st.DocumentSteps(coord=None)._collect_asbuilt("10.0.0.1", "u", "p")
     assert "showvvset" in data.read_errors and "failed on purpose" in data.read_errors["showvvset"]
     assert data.showvlun_t.startswith("# showvlun -t")          # the reads after the failure still ran
-    assert data.showvv_cpg.startswith("# showvv -showcols") and "UsrCPG" in data.showvv_cpg
+    assert data.showvv_cpg.startswith("# showvv -showcols") and ",CPG," in data.showvv_cpg
+    assert "UsrCPG" not in data.showvv_cpg                       # rejected by OS 10.5.55 (C-1)
     assert "showhost -d" in cli.ran and "showhostset" in cli.ran and "showvlun -a" in cli.ran
 
 
