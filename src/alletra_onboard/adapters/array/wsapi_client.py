@@ -78,23 +78,30 @@ _PERSONA_NAME: dict[int, str] = {v: k for k, v in _WSAPI_PERSONA.items()}
 # the Alletra MP (observed live, see ensure_volume) — so 6 IS "reduce" in this tool's vocabulary.
 _PROVISIONING_TYPE: dict[object, str] = {1: "full", 2: "tpvv", 3: "snp", 4: "peer", 5: "unknown", 6: "reduce", 7: "dds"}
 
-# WSAPI VLUN `type` enum value for a host-set export.
+# WSAPI VLUN `type` enum value for a host-set export (kept for readers of the records; the parser
+# below does not need it — see parse_vlun_templates).
 _VLUN_TYPE_HOST_SET = 5
 
 
 def parse_hosts(body: object) -> list[ArrayHostRecord]:
-    """getHosts -> records. Persona by name (unknown ids pass through as their number); FC WWNs only."""
+    """getHosts -> records. Persona by name (unknown ids pass through as their number); FC WWNs only,
+    de-duplicated — `FCPaths` carries one entry per (WWN, array port), so a dual-fabric HBA appears
+    twice (rack13arcus capture, 2026-09-13)."""
     out: list[ArrayHostRecord] = []
     for m in _members(body):
         name = m.get("name", "")
         if not name:
             continue
         persona_id = m.get("persona")
-        wwns = [normalize_wwpn(str(p.get("wwn", ""))) for p in (m.get("FCPaths") or [])]
+        wwns: list[str] = []
+        for p in m.get("FCPaths") or []:
+            w = normalize_wwpn(str(p.get("wwn", "")))
+            if len(w) == 16 and w not in wwns:
+                wwns.append(w)
         out.append(ArrayHostRecord(
             name=name,
             persona=_PERSONA_NAME.get(persona_id, str(persona_id) if persona_id is not None else ""),
-            wwns=[w for w in wwns if len(w) == 16],
+            wwns=wwns,
         ))
     return out
 
@@ -120,18 +127,23 @@ def parse_sets(body: object) -> dict[str, list[str]]:
 
 
 def parse_vlun_templates(body: object) -> list[VlunTemplate]:
-    """getVLUNs -> the distinct (volume, target, lun) exports. The array reports a host-set target
-    either as `set:<name>` or as the bare name with type HOST_SET; both normalise to `set:<name>`.
-    Active paths (one record per host WWN x array port) collapse onto their template. Order preserved."""
+    """getVLUNs -> the presentation templates: (volume, target, lun), target exactly as the array
+    names it (`set:<hostset>` for a host-set export, a bare host name otherwise).
+
+    PINNED to the rack13arcus capture (tests/fixtures/rack13_wsapi/vluns.json, 2026-09-13): the
+    array returns two kinds of record. Templates have `active: false` and carry the target as
+    written (`hostname: "set:zz_t2_hs"`, `type: 5`). Active paths have `active: true` and carry the
+    MEMBER host (`hostname: "10.132.30.136"`, still `type: 5`) plus `remoteName` / `portPos`. So a
+    template is an inactive record taken as-is — never "type 5 ⇒ prefix set:", which the first
+    draft did from the documentation and which would have invented `set:10.132.30.136` from every
+    active path. Records with no `active` field (unknown firmware) are kept, de-duplicated."""
     seen: dict[tuple[str, str, int], VlunTemplate] = {}
     for m in _members(body):
-        volume = m.get("volumeName")
-        target = m.get("hostname")
-        lun = m.get("lun")
+        if m.get("active") is True:
+            continue
+        volume, target, lun = m.get("volumeName"), m.get("hostname"), m.get("lun")
         if not volume or not target or lun is None:
             continue
-        if m.get("type") == _VLUN_TYPE_HOST_SET and not str(target).startswith("set:"):
-            target = f"set:{target}"
         key = (str(volume), str(target), int(lun))
         if key not in seen:
             seen[key] = VlunTemplate(volume=key[0], target=key[1], lun=key[2])

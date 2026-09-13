@@ -5,6 +5,9 @@ shapes in `test_wsapi_records_parse_the_documented_shapes` and owed a live captu
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from pydantic import SecretStr
 
@@ -304,45 +307,129 @@ def test_apply_reads_back_created_exports_and_fails_the_missing_one():
     assert honest.reads.count("vluns") == 1                       # one read-back, not one per export
 
 
-# ------------------------------------------------------------------ §4 client parsers
+# ------------------------------------------------------------------ §4 client parsers (pinned to S-0)
 
-def test_wsapi_records_parse_the_documented_shapes():
+WSAPI_FIX = Path(__file__).resolve().parents[1] / "fixtures" / "rack13_wsapi"
+
+
+def _wsapi(name: str) -> dict:
+    return json.loads((WSAPI_FIX / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def test_wsapi_records_parse_the_captured_shapes():
+    """rack13arcus, 2026-09-13 12:33, zz_t2_* present (tests/fixtures/rack13_wsapi/README.md)."""
     from alletra_onboard.adapters.array import wsapi_client as wc
 
-    hosts = wc.parse_hosts({"members": [
-        {"name": "esx1", "persona": 8, "FCPaths": [{"wwn": "10:00:00:00:C9:00:00:01"}, {"wwn": WWN_B}]},
-        {"name": "iscsi1", "persona": 2, "iSCSIPaths": [{"name": "iqn.x"}]},
-    ]})
-    assert hosts[0] == ArrayHostRecord(name="esx1", persona="VMware", wwns=[WWN_A, WWN_B])
-    assert hosts[1].persona == "Generic-ALUA" and hosts[1].wwns == []
+    hosts = {h.name: h for h in wc.parse_hosts(_wsapi("hosts"))}
+    esx = hosts["10.132.30.136"]
+    assert esx.persona == "VMware"
+    assert esx.wwns == ["10005CED8C5312A8", "10005CED8C5312A9"]     # FCPaths repeats each WWN per port
+    assert hosts["vmenode"].persona == "Generic-ALUA" and hosts["vmenode"].wwns == ["10005CED8C531294"]
+    assert hosts["grp3_vmenode1"].wwns == []                           # iSCSI-only host: no FC WWNs
 
-    vols = wc.parse_volumes({"members": [
-        {"name": "vol01", "sizeMiB": 20480, "userCPG": "SSD_r6", "provisioningType": 2},
-        {"name": "red01", "sizeMiB": 1024, "userCPG": "SSD_r6", "provisioningType": 6},
-        {"name": "full01", "sizeMiB": 1024, "userCPG": "SSD_r6", "provisioningType": 1},
-    ]})
-    assert vols[0] == ArrayVolumeRecord(name="vol01", size_mib=20480, cpg="SSD_r6", provisioning_type="tpvv")
-    assert vols[1].provisioning_type == "reduce" and vols[2].provisioning_type == "full"
+    vols = {v.name: v for v in wc.parse_volumes(_wsapi("volumes"))}
+    assert len(vols) == 51
+    assert vols["zz_t2_vol01"] == ArrayVolumeRecord(name="zz_t2_vol01", size_mib=1024, cpg="SSD_r6", provisioning_type="tpvv")
+    assert vols["zz_t2_vol02"].provisioning_type == "reduce"          # created with {"reduce": true} -> 6
+    assert vols["zz_t2_vol03"].size_mib == 2048
+    assert vols["admin"].provisioning_type == "full"
+    assert vols[".shared.SSD_r6_0"].provisioning_type == "dds"
+    assert vols["vol1.0.260910000000"].provisioning_type == "snp"
 
-    sets = wc.parse_sets({"members": [{"name": "hs", "setmembers": ["esx1"]}, {"name": "empty"}]})
-    assert sets == {"hs": ["esx1"], "empty": []}
+    hs = wc.parse_sets(_wsapi("hostsets"))
+    assert len(hs) == 6 and hs["zz_t2_hs"] == ["10.132.30.136"]
+    vs = wc.parse_sets(_wsapi("volumesets"))
+    assert vs["zz_t2_vvs"] == ["zz_t2_vol01", "zz_t2_vol02"] and vs["test.Snapset"] == []   # setmembers absent
 
 
-def test_hostset_target_normalises_both_wsapi_shapes():
+def test_vlun_templates_are_the_inactive_records_taken_as_is():
+    """94 records: 74 active paths (hostname = the MEMBER host, type 5) + 20 templates (hostname as
+    the array names the target). The first draft's 'type 5 => prefix set:' would have produced
+    `set:10.132.30.136` from every active path."""
     from alletra_onboard.adapters.array import wsapi_client as wc
 
-    templates = wc.parse_vlun_templates({"members": [
-        # template to a host set, reported with the set: prefix
-        {"volumeName": "vol01", "hostname": "set:hs", "lun": 0, "type": 5, "active": False},
-        # same export reported as bare name + HOST_SET type
-        {"volumeName": "vol01", "hostname": "hs", "lun": 0, "type": 5, "active": False},
-        # an ACTIVE path of that export collapses onto its template
-        {"volumeName": "vol01", "hostname": "set:hs", "lun": 0, "type": 5, "active": True,
-         "remoteName": WWN_A, "portPos": {"node": 0, "slot": 3, "cardPort": 4}},
-        # a plain host export
-        {"volumeName": "vol02", "hostname": "esx1", "lun": 3, "type": 3, "active": False},
+    templates = wc.parse_vlun_templates(_wsapi("vluns"))
+    assert len(templates) == 20
+    assert VlunTemplate(volume="zz_t2_vol01", target="set:zz_t2_hs", lun=0) in templates
+    assert VlunTemplate(volume="zz_t2_vol02", target="set:zz_t2_hs", lun=1) in templates
+    assert VlunTemplate(volume="zz_t2_vol03", target="10.132.30.136", lun=2) in templates
+    assert not any(t.target.startswith("set:10.") for t in templates)
+    assert [t for t in templates if t.target == "10.132.30.136"] == [VlunTemplate(volume="zz_t2_vol03", target="10.132.30.136", lun=2)]
+    # records without an `active` field (unknown firmware) are kept and de-duplicated
+    legacy = wc.parse_vlun_templates({"members": [
+        {"volumeName": "v", "hostname": "set:hs", "lun": 0, "type": 5},
+        {"volumeName": "v", "hostname": "set:hs", "lun": 0, "type": 5},
     ]})
-    assert templates == [
-        VlunTemplate(volume="vol01", target="set:hs", lun=0),
-        VlunTemplate(volume="vol02", target="esx1", lun=3),
-    ]
+    assert legacy == [VlunTemplate(volume="v", target="set:hs", lun=0)]
+
+
+def test_plan_against_the_captured_array_says_everything_exists():
+    """S-1 in miniature: the run-2 intent against the array as captured right after run 2."""
+    from alletra_onboard.adapters.array import wsapi_client as wc
+
+    intent = _intent(
+        volumes=[VolumeRequest(name="zz_t2_vol01", size_gib=1, cpg="SSD_r6", vvset="zz_t2_vvs"),
+                 VolumeRequest(name="zz_t2_vol02", size_gib=1, cpg="SSD_r6", provisioning_type="reduce", vvset="zz_t2_vvs"),
+                 VolumeRequest(name="zz_t2_vol03", size_gib=2, cpg="SSD_r6")],
+        host_sets=[HostSetRequest(name="zz_t2_hs", members=["10.132.30.136"])],
+        exports=[ExportRequest(source_kind="vvset", source_name="zz_t2_vvs", target_kind="hostset", target_name="zz_t2_hs"),
+                 ExportRequest(source_kind="volume", source_name="zz_t2_vol03", target_kind="host", target_name="10.132.30.136", lun=2)],
+    )
+    discovery = DiscoveryReport(host_hbas=[
+        HostHba(host_name="10.132.30.136", wwpn="10005CED8C5312A8", fabric="odd", os="VMware ESXi"),
+        HostHba(host_name="10.132.30.136", wwpn="10005CED8C5312A9", fabric="even", os="VMware ESXi"),
+    ])
+    fake = TruthfulFakeWsapi(
+        hosts=wc.parse_hosts(_wsapi("hosts")), host_sets=wc.parse_sets(_wsapi("hostsets")),
+        volumes=wc.parse_volumes(_wsapi("volumes")), volume_sets=wc.parse_sets(_wsapi("volumesets")),
+        vluns=wc.parse_vlun_templates(_wsapi("vluns")),
+    )
+    plan = prov.build_plan(intent, discovery, reachable_hosts={"10.132.30.136"}, wsapi_factory=lambda c: fake)
+    assert plan.error is None and plan.blockers == []
+    assert {a.state for a in plan.actions} == {"exists"}, [(a.kind, a.name, a.state, a.reason) for a in plan.actions]
+    assert _row(plan, "vlun", "zz_t2_vvs").reason == "already exported at LUN 0, LUN 1"
+    assert _row(plan, "vlun", "zz_t2_vol03").reason == "already exported at LUN 2"
+
+
+# ------------------------------------------------------------------ §6 live capture (S-0, 2026-09-13 12:33)
+
+_WSAPI = Path(__file__).resolve().parents[1] / "fixtures" / "rack13_wsapi"
+
+
+def _wsapi(name: str) -> dict:
+    import json
+    return json.loads((_WSAPI / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def test_live_wsapi_capture_pins_vlun_templates():
+    """rack13arcus reports a set export's ACTIVE paths with hostname = the member host and type 5.
+    Templates are the inactive records, as-is — the type-5 prefix rule must never invent set:<host>."""
+    from alletra_onboard.adapters.array import wsapi_client as wc
+
+    templates = wc.parse_vlun_templates(_wsapi("vluns"))
+    assert VlunTemplate(volume="zz_t2_vol01", target="set:zz_t2_hs", lun=0) in templates
+    assert VlunTemplate(volume="zz_t2_vol02", target="set:zz_t2_hs", lun=1) in templates
+    assert VlunTemplate(volume="zz_t2_vol03", target="10.132.30.136", lun=2) in templates
+    assert not any(t.target.startswith("set:10.132.") for t in templates)          # no invented set
+    assert not any(t.target == "10.132.30.136" and t.volume != "zz_t2_vol03" for t in templates)
+    assert len(templates) == 20                                                     # the inactive records
+
+
+def test_live_wsapi_capture_pins_volumes_and_hosts():
+    from alletra_onboard.adapters.array import wsapi_client as wc
+
+    vols = {v.name: v for v in wc.parse_volumes(_wsapi("volumes"))}
+    assert len(vols) == 51
+    assert vols["zz_t2_vol01"] == ArrayVolumeRecord(name="zz_t2_vol01", size_mib=1024, cpg="SSD_r6", provisioning_type="tpvv")
+    assert vols["zz_t2_vol02"].provisioning_type == "reduce"                        # created with {"reduce": true}
+    assert vols[".mgmtdata"].provisioning_type == "full" and vols[".shared.SSD_r6_0"].provisioning_type == "dds"
+    assert vols["vol1.0.260910000000"].provisioning_type == "snp"
+
+    hosts = {h.name: h for h in wc.parse_hosts(_wsapi("hosts"))}
+    esx = hosts["10.132.30.136"]
+    assert esx.persona == "VMware"
+    assert esx.wwns == ["10005CED8C5312A8", "10005CED8C5312A9"]                    # 4 FCPaths, 2 WWNs
+    assert hosts["grp3_vmenode1"].persona == "Generic-ALUA" and hosts["grp3_vmenode1"].wwns == []
+
+    assert wc.parse_sets(_wsapi("hostsets"))["zz_t2_hs"] == ["10.132.30.136"]
+    assert "vol1" in wc.parse_sets(_wsapi("volumesets"))
