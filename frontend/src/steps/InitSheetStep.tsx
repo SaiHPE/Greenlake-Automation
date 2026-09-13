@@ -1,7 +1,7 @@
 import { Anchor, Box, Button, FileInput, NameValueList, NameValuePair, Text } from 'grommet';
 import { useState } from 'react';
 import { API, CheckReport, checkConfig, InitSheetUploadResult, uploadInitSheet } from '../api';
-import { InlineNotification, Surface } from '../ui/primitives';
+import { ContinueButton, InlineNotification, Surface } from '../ui/primitives';
 import { StepState } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 import { fromParsedWorkItem, WorkItemForm } from '../workItem';
@@ -67,7 +67,7 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
       actions={
         <>
           <Button busy={busy === 'check'} label="Validate GreenLake credentials" disabled={!item} onClick={validate} />
-          <Button primary label="Continue" disabled={!item} onClick={() => onUploaded(result!.token)} />
+          <ContinueButton disabled={!item} onClick={() => onUploaded(result!.token)} />
         </>
       }
     >

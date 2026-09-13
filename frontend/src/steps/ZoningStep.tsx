@@ -4,7 +4,7 @@ import {
   RunEvent, RunRecord, zoningPlan, zoningPreview, ZoningPlan, ZoningReport,
 } from '../api';
 import { DiscoveryFreshness } from '../ui/discoveryAge';
-import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
+import { InlineNotification, NotesList, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 import { ZoningPlanView } from './ZoningPlanView';
@@ -101,22 +101,28 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
       activityEmpty="Check zoning to see what the array can reach, or build the plan to read the switches."
       footerNote="Zoning is a prerequisite, enforced per host: a host is provisioned once this step confirms it logged in on both fabrics. Others are skipped by name and join a later run. Brocade Fabric OS fabrics only."
       gate={
-        report && !report.proper
+        !report
           ? {
-              title: provisionable
-                ? `${provisionable} host${provisionable === 1 ? '' : 's'} can proceed; the rest will be skipped`
-                : 'No host is zoned on both fabrics yet',
-              message: provisionable
-                ? `Continue to provision ${report.zoned_hosts.join(', ')} now, or complete the missing zones and Re-check zoning first. Hosts that are not ready are excluded from this run by name.`
-                : 'Build the plan, select the pairs, name the aliases and give the command set to your SAN team. After they apply and activate it, Re-check zoning.',
+              title: 'Check zoning to see which hosts can be provisioned',
+              message:
+                'Continue appears once at least one host is confirmed zoned on both fabrics. Build the zoning plan to read the switches and draft the command set for the SAN team.',
             }
-          : null
+          : !report.proper
+            ? {
+                title: provisionable
+                  ? `${provisionable} host${provisionable === 1 ? '' : 's'} can proceed; the rest will be skipped`
+                  : 'No host is zoned on both fabrics yet',
+                message: provisionable
+                  ? `Continue to provision ${report.zoned_hosts.join(', ')} now, or complete the missing zones and Re-check zoning first. Hosts that are not ready are excluded from this run by name.`
+                  : 'Build the plan, select the pairs, name the aliases and give the command set to your SAN team. After they apply and activate it, Re-check zoning.',
+              }
+            : null
       }
       actions={
         <>
           <Button
             busy={running}
-            label={report ? 'Re-check zoning' : 'Check zoning'}
+            label={report ? 'Re-check zoning on the array' : 'Check zoning on the array'}
             onClick={call(() => zoningPreview(runId))}
           />
           <Button busy={running} label={plan ? 'Rebuild plan' : 'Build zoning plan'} onClick={call(() => zoningPlan(runId))} />
@@ -195,7 +201,7 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
       )}
 
       {report && report.notes.length > 0 && (
-        <InlineNotification tone="info" title="Check notes" message={report.notes.join(' · ')} />
+        <InlineNotification tone="info" title="Check notes" message={<NotesList notes={report.notes} />} />
       )}
 
       {/* Keyed on the plan event: the alias fields are seeded once from the plan, so rebuilding must

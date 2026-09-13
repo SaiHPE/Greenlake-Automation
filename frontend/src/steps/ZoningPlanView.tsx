@@ -2,7 +2,7 @@ import { Box, Button, CheckBox, DataTable, Text, TextInput } from 'grommet';
 import { AddCircle, StatusGood, StatusUnknown, StatusWarning } from 'grommet-icons';
 import { useMemo, useState } from 'react';
 import { AliasedWwpn, FabricZonePlan, ZoningPlan, ZoningRenderResult, renderZoningCommands } from '../api';
-import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
+import { InlineNotification, NotesList, Surface, TableSummary } from '../ui/primitives';
 
 // ADR 0004 + ADR 0012: the zoning screen, redesigned after the 2026-09-12 live test
 // (docs/ux/ZONING-REDESIGN.md). Five panels, one step:
@@ -569,10 +569,10 @@ export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: stri
               <Box key={fab.fabric} gap="xsmall">
                 <CommandSet fab={fab} commands={result.commands[fab.fabric] ?? []} />
                 {(result.skipped[fab.fabric] ?? []).length > 0 && (
-                  <InlineNotification tone="warning" title="Not included" message={result.skipped[fab.fabric].join(' · ')} />
+                  <InlineNotification tone="warning" title="Not included" message={<NotesList notes={result.skipped[fab.fabric]} />} />
                 )}
                 {(result.warnings?.[fab.fabric] ?? []).length > 0 && (
-                  <InlineNotification tone="info" title="Portability" message={result.warnings![fab.fabric].join(' · ')} />
+                  <InlineNotification tone="info" title="Portability" message={<NotesList notes={result.warnings![fab.fabric]} />} />
                 )}
               </Box>
             ))}

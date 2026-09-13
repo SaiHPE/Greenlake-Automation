@@ -78,6 +78,7 @@ def verify_paths(
     vlun_paths: list[VolumePath],
     fabric_by_port: dict[str, str] | None = None,
     wwpns_by_host: dict[str, set[str]] | None = None,
+    switch_by_fabric: dict[str, str] | None = None,
 ) -> PathVerification:
     """Per host, classify the live paths to the volumes EXPORTED TO THAT HOST (from `showvlun -a`).
 
@@ -99,11 +100,18 @@ def verify_paths(
     exact-name join would report `no_path` for every pre-existing host, the one wrong answer a path
     verifier must not produce. The name match remains as the secondary key for hosts with no
     discovered HBAs.
+
+    `switch_by_fabric` (odd/even -> switch logical name, from discovery) lets the sentence name the
+    fabrics the way the SAN team does (SPEC-004 R5); without it the slot labels are shown.
     """
     report = PathVerification()
     if not expected_by_host:
         report.notes.append("No exports to verify.")
         return report
+    names = switch_by_fabric or {}
+
+    def label(fabric: str) -> str:
+        return names.get(fabric) or fabric
 
     for host in sorted(expected_by_host):
         expected = expected_by_host[host]
@@ -121,7 +129,15 @@ def verify_paths(
         # .47 and .86 were both told they had a dead export of a volume destined only for .136.
         dead_vols = sorted(expected - set(live_vols))
         fabrics = sorted({_fabric(vp.port, fabric_by_port) for vp in paths} - {"?"})
+        fabric_names = [names[f] for f in fabrics if f in names] if all(f in names for f in fabrics) else []
         hbas = len({vp.host_wwpn for vp in paths})
+        per_lun: dict[int, int] = {}
+        for vp in paths:
+            per_lun[vp.lun] = per_lun.get(vp.lun, 0) + 1
+        lun_count = len(per_lun)
+        ppl_min, ppl_max = (min(per_lun.values()), max(per_lun.values())) if per_lun else (0, 0)
+        ppl_txt = f"{ppl_min}" if ppl_min == ppl_max else f"{ppl_min}–{ppl_max}"
+        counts = f"{lun_count} LUN(s) · {hbas} HBA(s) · {ppl_txt} path(s) per LUN"
 
         if not paths:
             verdict = "no_path"
@@ -135,11 +151,13 @@ def verify_paths(
             )
         elif len(fabrics) >= 2:
             verdict = "live"
-            detail = f"{hbas} HBA(s) live on both fabrics ({', '.join(fabrics)})"
+            detail = f"{counts} · both fabrics ({', '.join(label(f) for f in fabrics)})"
         else:
             verdict = "partial"
             missing = "even" if fabrics == ["odd"] else "odd"
-            detail = f"{hbas} HBA(s) live on {fabrics[0]} fabric only — missing the {missing} fabric (single path)"
+            only = names.get(fabrics[0]) or f"{fabrics[0]} fabric"
+            lacks = names.get(missing) or f"the {missing} fabric"
+            detail = f"{counts} · {only} only — missing {lacks} (single fabric)"
 
         if dead_vols and paths:
             detail += f"; exported but no path yet: {', '.join(dead_vols)}"
@@ -149,7 +167,8 @@ def verify_paths(
         if object_names:
             detail += f" [array host object: {', '.join(object_names)}]"
         report.hosts.append(HostPathStatus(
-            host=host, verdict=verdict, hbas_with_paths=hbas, fabrics=fabrics,
+            host=host, verdict=verdict, hbas_with_paths=hbas, fabrics=fabrics, fabric_names=fabric_names,
+            lun_count=lun_count, paths_per_lun=ppl_min,
             live_volumes=live_vols, dead_volumes=dead_vols, detail=detail,
         ))
     return report
@@ -189,6 +208,13 @@ def verify_provisioned_paths(
     fabric_by_port = {
         p.label: p.fabric for p in discovery.array_ports if p.protocol == "fc" and p.fabric
     }
+    # The switch each fabric slot maps to, when discovery resolved it (showportdev fcfabric) — so the
+    # sentence says SAN6700R13U38, not "odd" (SPEC-004 R5).
+    switch_by_fabric: dict[str, str] = {}
+    for p in discovery.array_ports:
+        if p.protocol == "fc" and p.fabric and getattr(p, "fabric_switch", ""):
+            switch_by_fabric.setdefault(p.fabric, p.fabric_switch)
     return verify_paths(
         dict(expected_by_host), parse_showvlun_active(text), fabric_by_port, wwpns_by_host,
+        switch_by_fabric=switch_by_fabric,
     )
