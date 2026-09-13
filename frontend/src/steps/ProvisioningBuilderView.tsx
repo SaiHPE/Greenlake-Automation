@@ -1,5 +1,5 @@
 import { Box, Button, Notification, Select, Spinner, Text, TextInput } from 'grommet';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   DiscoveredHostBrief,
   ExportRequest,
@@ -101,7 +101,11 @@ function ExportRowView({ row, sourceOpts, targetOpts, disabled, onChange, onRemo
   );
 }
 
-export function ProvisioningBuilderView({ runId, disabled = false }: { runId: string; disabled?: boolean }) {
+export function ProvisioningBuilderView({ runId, disabled = false, readOnly = false }: {
+  runId: string; disabled?: boolean;
+  /** After apply: the composition that was used stays in view, nothing editable (SPEC-004 R4). */
+  readOnly?: boolean;
+}) {
   const [objects, setObjects] = useState<ProvisioningObjects | null>(null);
   const [members, setMembers] = useState<Record<string, string[]>>({});
   const [rows, setRows] = useState<ExportRow[]>([]);
@@ -124,6 +128,9 @@ export function ProvisioningBuilderView({ runId, disabled = false }: { runId: st
       setBusy(false);
     }
   };
+
+  // Load on mount: the saved composition is what the operator expects to see, not a button.
+  useEffect(() => { void load(); }, [runId]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async () => {
     if (!objects) return;
@@ -149,12 +156,13 @@ export function ProvisioningBuilderView({ runId, disabled = false }: { runId: st
       <Surface title="Compose the provisioning (dropdowns)">
         <Text size="small" color="text-weak">
           Pick host-set members and the exports (which volume / VV-set is presented to which host /
-          host-set, at which LUN) from the discovered + to-be-created objects. Leave it untouched to use
-          the default (every volume → every host-set, auto LUN).
+          host-set, at which LUN) from the discovered + to-be-created objects. With no exports composed
+          and exactly one host set, every volume is presented to that set at an auto LUN; with more than
+          one host set, the exports must be composed here.
         </Text>
         <Box direction="row" gap="small" align="center">
-          <Button primary size="small" label={busy ? 'Loading…' : 'Load objects'} disabled={disabled || busy} onClick={load} />
-          {busy && <Spinner />}
+          {busy ? <Spinner /> : <Button size="small" label="Retry loading objects" disabled={disabled} onClick={load} />}
+          <Text size="small" color="text-weak">{busy ? 'Reading the array and the run…' : ''}</Text>
         </Box>
         {error && <Notification status="critical" title="Could not load objects" message={error} onClose={() => setError(null)} />}
       </Surface>
@@ -164,10 +172,13 @@ export function ProvisioningBuilderView({ runId, disabled = false }: { runId: st
   const srcOpts = sourceOptions(objects);
   const tgtOpts = targetOptions(objects);
   const memOpts = memberOptions(objects);
-  const busyOrDisabled = disabled || busy;
+  const busyOrDisabled = disabled || busy || readOnly;
 
   return (
-    <Surface title="Compose the provisioning (dropdowns)">
+    <Surface
+      title={readOnly ? 'Composition applied' : 'Compose the provisioning (dropdowns)'}
+      description={readOnly ? 'The membership and exports below are what was created. Rebuild the plan to compose again.' : undefined}
+    >
       {objects.array_error && (
         <Notification status="warning" title="Array objects unavailable"
           message={`Couldn't read existing objects from the array (${objects.array_error}). You can still compose over the to-be-created + discovered objects.`} />
@@ -190,21 +201,25 @@ export function ProvisioningBuilderView({ runId, disabled = false }: { runId: st
 
       <Box margin={{ top: 'small' }}>
         <Text size="small" weight="bold">Exports (presentation)</Text>
-        <Text size="xsmall" color="text-weak">LUN blank = auto-assign. No rows = the default (every volume → every host-set).</Text>
+        <Text size="xsmall" color="text-weak">LUN blank = auto-assign. No rows and one host set = every volume to that set; with several host sets, rows are required.</Text>
       </Box>
       {rows.map((row, i) => (
         <ExportRowView key={i} row={row} sourceOpts={srcOpts} targetOpts={tgtOpts} disabled={busyOrDisabled}
           onChange={(r) => setRows((rs) => rs.map((x, j) => (j === i ? r : x)))}
           onRemove={() => setRows((rs) => rs.filter((_, j) => j !== i))} />
       ))}
-      <Button size="small" label="+ Add export row" disabled={busyOrDisabled} alignSelf="start"
-        onClick={() => setRows((rs) => [...rs, { source: '', target: '', lun: '' }])} />
+      {!readOnly && (
+        <>
+          <Button size="small" label="+ Add export row" disabled={busyOrDisabled} alignSelf="start"
+            onClick={() => setRows((rs) => [...rs, { source: '', target: '', lun: '' }])} />
 
-      <Box direction="row" gap="small" align="center" margin={{ top: 'small' }}>
-        <Button primary size="small" label={busy ? 'Saving…' : 'Save composition'} disabled={busyOrDisabled} onClick={save} />
-        <Button size="small" label="Reload" disabled={busyOrDisabled} onClick={load} />
-        {busy && <Spinner />}
-      </Box>
+          <Box direction="row" gap="small" align="center" margin={{ top: 'small' }}>
+            <Button primary size="small" label={busy ? 'Saving…' : 'Save composition'} disabled={busyOrDisabled} onClick={save} />
+            <Button size="small" label="Reload" disabled={busyOrDisabled} onClick={load} />
+            {busy && <Spinner />}
+          </Box>
+        </>
+      )}
       {saved && <Notification status="normal" title="Composition saved" message={saved} onClose={() => setSaved(null)} />}
       {error && <Notification status="critical" title="Save failed" message={error} onClose={() => setError(null)} />}
     </Surface>

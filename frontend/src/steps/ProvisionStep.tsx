@@ -16,7 +16,7 @@ import {
   verifyPaths,
 } from '../api';
 import { DiscoveryFreshness } from '../ui/discoveryAge';
-import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
+import { ContinueButton, InlineNotification, NotesList, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator, StepState } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 import { ProvisioningBuilderView } from './ProvisioningBuilderView';
@@ -135,14 +135,14 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
           )}
           {/* Continue is always available: an operator may legitimately pass through this step
               without creating anything. */}
-          <Button primary label="Continue" onClick={onDone} />
+          <ContinueButton onClick={onDone} />
         </>
       }
     >
       {/* The hosts this step creates come from the discovery snapshot, so its age matters here most. */}
       <DiscoveryFreshness events={events} action="creating objects on the array" />
 
-      <ProvisioningBuilderView runId={runId} disabled={running} />
+      <ProvisioningBuilderView runId={runId} disabled={running} readOnly={!!result} />
 
       {plan?.error && <InlineNotification tone="critical" title="The plan could not be built" message={plan.error} />}
 
@@ -152,7 +152,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             <InlineNotification
               tone="critical"
               title={`${conflicts} conflict${conflicts === 1 ? '' : 's'} — the plan cannot be applied`}
-              message={plan.blockers.join(' · ')}
+              message={<NotesList notes={plan.blockers} />}
             />
           )}
           <DataTable
@@ -190,7 +190,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             {toCreate} to create · {toUpdate} to update · {existing} already exist · {conflicts} conflict{conflicts === 1 ? '' : 's'}
           </TableSummary>
           {plan.notes.length > 0 && (
-            <InlineNotification tone="info" title="Plan notes" message={plan.notes.join(' · ')} />
+            <InlineNotification tone="info" title="Plan notes" message={<NotesList notes={plan.notes} />} />
           )}
           {/* The only action in this tool that writes to a customer array, so it takes an explicit
               authorisation rather than a single click. */}
@@ -251,7 +251,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
 
       <Surface
         title="Path verification"
-        description="Reads the array back and reports whether each exported LUN is live, and over how many fabrics. Report only — it never gates the run."
+        description="Reads the array back after provisioning and reports, per host: how many LUNs are live, over how many HBAs, how many paths each LUN has, and on which fabrics. Report only — it never gates the run."
         actions={<Button busy={running} label="Verify paths" onClick={call(() => verifyPaths(runId))} />}
       >
         {paths?.error && <InlineNotification tone="critical" title="Path verification failed" message={paths.error} />}
@@ -288,7 +288,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
         {paths?.notes.length ? (
           <Box flex={false}>
             <Text size="xsmall" color="text-weak">
-              {paths.notes.join(' · ')}
+              <NotesList notes={paths.notes} />
             </Text>
           </Box>
         ) : null}

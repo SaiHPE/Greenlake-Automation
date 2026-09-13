@@ -1,7 +1,7 @@
 import { Box, Button, FormField, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
 import { useState } from 'react';
 import { AsBuiltResult, RunEvent, RunRecord, asbuiltDownloadUrl, startAsbuilt } from '../api';
-import { CredentialsFields, InlineNotification, Surface } from '../ui/primitives';
+import { ContinueButton, CredentialsFields, InlineNotification, NotesList, Surface } from '../ui/primitives';
 import { StepShell } from '../ui/StepShell';
 
 interface Props {
@@ -65,7 +65,7 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
           {/* Download never replaces Continue: this is the last action step, and losing Continue
               here would leave no way to reach the summary. */}
           {result && <Button as="a" href={asbuiltDownloadUrl(runId)} download label="Download document" />}
-          <Button primary label="Continue" onClick={onDone} />
+          <ContinueButton onClick={onDone} />
         </>
       }
     >
@@ -139,7 +139,7 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
             <InlineNotification
               tone="critical"
               title={`Check ${result.warnings.length} item(s) before sending this document`}
-              message={result.warnings.join(' · ')}
+              message={<NotesList notes={result.warnings} />}
             />
           )}
           <InlineNotification
