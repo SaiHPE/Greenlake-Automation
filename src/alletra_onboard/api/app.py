@@ -119,13 +119,16 @@ class CsvParseRequest(BaseModel):
 
 class ZoningRenderRequest(BaseModel):
     """Render the read-only zoning command preview: the plan the UI already holds (from the
-    zoning.plan event), the operator's alias names, and the operator's SELECTED pairs. Pure and
-    stateless — rendering lives in the backend so the frontend never mirrors the command grammar
-    (a hand-synced mirror of render_commands drifted once already)."""
+    zoning.plan event), the operator's alias names, and the operator's SELECTED pairs. Rendering
+    lives in the backend so the frontend never mirrors the command grammar (a hand-synced mirror of
+    render_commands drifted once already). With `run_id` the result is also recorded on the run as
+    a `zoning.rendered` event — the command set handed to the SAN team is a deliverable, and the
+    as-built (SPEC-002) reproduces it from that record."""
 
     plan: ZoningPlan
     aliases: dict[str, str] = {}
     selected_pairs: list[tuple[str, str]] = []
+    run_id: str | None = None
 
 
 class ZoningRenderResponse(BaseModel):
@@ -498,10 +501,18 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.post("/zoning/render", response_model=ZoningRenderResponse)
     async def zoning_render(request: ZoningRenderRequest) -> ZoningRenderResponse:
-        # Pure + stateless: assemble the command set from the plan + the operator's aliases and
-        # selected pairs. The tool never RUNS these commands (ADR 0004, ADR 0012) — this is the
-        # script the SAN team applies by hand, and it is the deliverable, not a rehearsal.
+        # Assemble the command set from the plan + the operator's aliases and selected pairs. The
+        # tool never RUNS these commands (ADR 0004, ADR 0012) — this is the script the SAN team
+        # applies by hand, and it is the deliverable, not a rehearsal.
         commands, skipped = render_commands(request.plan, request.aliases, request.selected_pairs)
+        if request.run_id:
+            try:
+                service.record_zoning_render(
+                    request.run_id, commands=commands, skipped=skipped,
+                    aliases=request.aliases, selected_pairs=request.selected_pairs,
+                )
+            except RunNotFoundError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
         return ZoningRenderResponse(
             commands=commands, skipped=skipped,
             warnings=alias_name_warnings(request.plan, request.aliases),

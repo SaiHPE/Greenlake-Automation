@@ -22,6 +22,7 @@ ALLOWED_COMMANDS = (
     # provisioning / SAN-discovery preflight (read-only — see the WSAPI provisioning plan)
     "showwsapi", "showcpg", "showspace", "showvv", "showvlun",
     "showhost", "showport", "showportdev", "showrcopy", "showtarget",
+    "showhostset", "showvvset",
 )
 # Shell metacharacters that could chain or redirect a second command — never present in a legit
 # show* invocation, so we reject the whole command if any appear (defence in depth on top of the

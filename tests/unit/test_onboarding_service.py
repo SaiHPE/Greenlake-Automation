@@ -686,3 +686,24 @@ async def test_crash_in_step_marks_retryable(tmp_path):
 
     assert service.get_run(run.run_id).status == RunStatus.RETRYABLE_FAILURE
     assert any(e.event_type == "step.crashed" for e in service.list_events(run.run_id))
+
+
+def test_zoning_render_is_recorded_on_the_run_without_touching_its_status(tmp_path):
+    """SPEC-002 R4: the command set handed to the SAN team is a deliverable; the as-built reads it
+    back from the run's own record."""
+    from alletra_onboard.application.service import RunNotFoundError
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), mode=RunMode.PROVISION_ONLY)
+    before = service.get_run(run.run_id).status
+    service.record_zoning_render(
+        run.run_id, commands={"F1": ['cfgadd "mycfg", "z1"', "cfgsave"], "F2": []}, skipped={},
+        aliases={"10005CED8C5312A9": "esx136_hba1"}, selected_pairs=[("10005CED8C5312A9", "20340002AC02F629")],
+    )
+    event = next(e for e in service.list_events(run.run_id) if e.event_type == "zoning.rendered")
+    assert event.data["commands"]["F1"] == ['cfgadd "mycfg", "z1"', "cfgsave"]
+    assert event.data["selected_pairs"] == [["10005CED8C5312A9", "20340002AC02F629"]]
+    assert "2 command(s) for F1" in event.message
+    assert service.get_run(run.run_id).status == before
+    with pytest.raises(RunNotFoundError):
+        service.record_zoning_render("no-such-run", commands={}, skipped={}, aliases={}, selected_pairs=[])
