@@ -240,31 +240,66 @@ class PreflightReport(BaseModel):
 
 ActionKind = Literal["host", "hostset", "volume", "vvset", "vlun"]
 
+# What the plan predicts apply will do to one object (SPEC-001 R1). `conflict` blocks apply.
+PlanState = Literal["create", "exists", "update", "conflict"]
+
 
 class PlannedAction(BaseModel):
     kind: ActionKind
     name: str
     description: str         # human-readable preview line
-    exists: bool = False     # idempotency: already present on the array?
+    state: PlanState = "create"
+    reason: str = ""         # why that state, in the operator's words ("adds 1 WWN: …")
+    exists: bool = False     # == state != "create"; kept for callers that only ask "is it there?"
     detail: dict = Field(default_factory=dict)
 
 
 class ProvisioningPlan(BaseModel):
     actions: list[PlannedAction] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)   # every conflict reason; non-empty refuses apply
     error: str | None = None
 
 
 class ActionOutcome(BaseModel):
     kind: ActionKind
     name: str
-    status: Literal["created", "exists", "failed"]
+    status: Literal["created", "exists", "updated", "failed"]
     detail: str = ""
 
 
 class ProvisioningResult(BaseModel):
     outcomes: list[ActionOutcome] = Field(default_factory=list)
     error: str | None = None
+
+
+# ------------------------------------------------------------------ array state, read-only (SPEC-001 §4)
+
+ArrayProvisioningType = Literal["full", "tpvv", "snp", "peer", "unknown", "reduce", "dds"]
+
+
+class ArrayHostRecord(BaseModel):
+    """One host object as the array holds it: persona by NAME, FC WWNs normalised."""
+
+    name: str
+    persona: str = ""
+    wwns: list[str] = Field(default_factory=list)
+
+
+class ArrayVolumeRecord(BaseModel):
+    name: str
+    size_mib: int
+    cpg: str
+    provisioning_type: ArrayProvisioningType
+
+
+class VlunTemplate(BaseModel):
+    """One export as the array records it: a volume presented to a target (bare host name or
+    `set:<hostset>`) at a LUN. A set export is one template per member volume (`showvlun -t`)."""
+
+    volume: str
+    target: str
+    lun: int
 
 
 # ------------------------------------------------------------------ tier-2 path verification (ADR 0010)

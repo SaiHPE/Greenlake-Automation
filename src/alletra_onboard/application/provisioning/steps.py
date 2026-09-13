@@ -247,6 +247,11 @@ class ProvisioningSteps:
         if plan.error:
             # A previewed-but-failed plan is not an approval (e.g. the CPG hard gate) — fix, re-preview.
             raise StepPreconditionError(f"the provisioning preview reported a blocking problem: {plan.error}")
+        if plan.blockers:
+            # SPEC-001 R6: an object that exists and differs cannot be approved into existence.
+            raise StepPreconditionError(
+                "the plan has conflicts that must be resolved on the array first: " + "; ".join(plan.blockers)
+            )
         coord.spawn(run_id, self._run_storage_apply(run, intent, discovery))
         return run
 
@@ -259,11 +264,17 @@ class ProvisioningSteps:
             partial(storage_provision.apply_plan, intent, discovery, reachable_hosts=zoned)
         )
         created = sum(1 for o in result.outcomes if o.status == "created")
+        updated = sum(1 for o in result.outcomes if o.status == "updated")
+        failed = sum(1 for o in result.outcomes if o.status == "failed")
+        existed = len(result.outcomes) - created - updated - failed
+        summary = f"Provisioning complete — {created} created, {updated} updated, {existed} already existed"
+        if failed:
+            summary += f", {failed} failed read-back"
         coord.set_state(run, RunStatus.RETRYABLE_FAILURE if result.error else RunStatus.READY, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(
             run.run_id, WorkflowPhase.STORAGE_PROVISION,
             "storage.apply.failed" if result.error else "storage.applied",
-            result.error or f"Provisioning complete — {created} created, {len(result.outcomes) - created} already existed.",
+            result.error or summary + ".",
             data={"result": result.model_dump(mode="json")},
         )
 
