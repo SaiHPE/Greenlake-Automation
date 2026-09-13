@@ -40,6 +40,7 @@ except Exception as _exc:  # noqa: BLE001 - import may pull eventlet; keep impor
 
 from alletra_onboard.domain.shared import normalize_wwpn
 from alletra_onboard.domain.discovery import ArrayPort
+from alletra_onboard.domain.provisioning import ArrayHostRecord, ArrayVolumeRecord, VlunTemplate
 
 # WSAPI host-persona ids, resolved by NAME. The values are hpe3parclient's HOST_PERSONA_* constants —
 # the array's WSAPI persona enum: VMware=8, WindowsServer=11, Generic-ALUA=2. Verified 2026-07-22 against
@@ -69,6 +70,72 @@ _WSAPI_PERSONA: dict[str, int] = (
 # filtered out before this mapping applies.
 _PORT_LINK_STATE: dict[object, str] = {4: "ready", 5: "loss_sync", 10: "offline"}
 _PORT_MODE: dict[object, str] = {1: "suspended", 2: "target", 3: "initiator", 4: "peer"}
+
+# WSAPI persona id -> name (the inverse of _WSAPI_PERSONA) for reading hosts back.
+_PERSONA_NAME: dict[int, str] = {v: k for k, v in _WSAPI_PERSONA.items()}
+
+# WSAPI volume `provisioningType` enum. 6 (TDVV) is what a `{"reduce": True}` create reads back as on
+# the Alletra MP (observed live, see ensure_volume) — so 6 IS "reduce" in this tool's vocabulary.
+_PROVISIONING_TYPE: dict[object, str] = {1: "full", 2: "tpvv", 3: "snp", 4: "peer", 5: "unknown", 6: "reduce", 7: "dds"}
+
+# WSAPI VLUN `type` enum value for a host-set export.
+_VLUN_TYPE_HOST_SET = 5
+
+
+def parse_hosts(body: object) -> list[ArrayHostRecord]:
+    """getHosts -> records. Persona by name (unknown ids pass through as their number); FC WWNs only."""
+    out: list[ArrayHostRecord] = []
+    for m in _members(body):
+        name = m.get("name", "")
+        if not name:
+            continue
+        persona_id = m.get("persona")
+        wwns = [normalize_wwpn(str(p.get("wwn", ""))) for p in (m.get("FCPaths") or [])]
+        out.append(ArrayHostRecord(
+            name=name,
+            persona=_PERSONA_NAME.get(persona_id, str(persona_id) if persona_id is not None else ""),
+            wwns=[w for w in wwns if len(w) == 16],
+        ))
+    return out
+
+
+def parse_volumes(body: object) -> list[ArrayVolumeRecord]:
+    out: list[ArrayVolumeRecord] = []
+    for m in _members(body):
+        name = m.get("name", "")
+        if not name:
+            continue
+        out.append(ArrayVolumeRecord(
+            name=name,
+            size_mib=int(m.get("sizeMiB") or 0),
+            cpg=str(m.get("userCPG") or ""),
+            provisioning_type=_PROVISIONING_TYPE.get(m.get("provisioningType"), "unknown"),
+        ))
+    return out
+
+
+def parse_sets(body: object) -> dict[str, list[str]]:
+    """getHostSets / getVolumeSets -> {name: members}. A set with no `setmembers` is present and empty."""
+    return {m["name"]: list(m.get("setmembers") or []) for m in _members(body) if m.get("name")}
+
+
+def parse_vlun_templates(body: object) -> list[VlunTemplate]:
+    """getVLUNs -> the distinct (volume, target, lun) exports. The array reports a host-set target
+    either as `set:<name>` or as the bare name with type HOST_SET; both normalise to `set:<name>`.
+    Active paths (one record per host WWN x array port) collapse onto their template. Order preserved."""
+    seen: dict[tuple[str, str, int], VlunTemplate] = {}
+    for m in _members(body):
+        volume = m.get("volumeName")
+        target = m.get("hostname")
+        lun = m.get("lun")
+        if not volume or not target or lun is None:
+            continue
+        if m.get("type") == _VLUN_TYPE_HOST_SET and not str(target).startswith("set:"):
+            target = f"set:{target}"
+        key = (str(volume), str(target), int(lun))
+        if key not in seen:
+            seen[key] = VlunTemplate(volume=key[0], target=key[1], lun=key[2])
+    return list(seen.values())
 
 
 class WsapiError(Exception):
@@ -194,6 +261,23 @@ class WsapiClient:
             return [m.get("name", "") for m in _members(self._require().getVolumeSets())]
         except Exception:  # noqa: BLE001
             return []
+
+    # Record reads for the plan (SPEC-001 §4): one GET each, parsed by the module-level parsers.
+
+    def hosts(self) -> list[ArrayHostRecord]:
+        return parse_hosts(self._require().getHosts())
+
+    def host_sets(self) -> dict[str, list[str]]:
+        return parse_sets(self._require().getHostSets())
+
+    def volumes(self) -> list[ArrayVolumeRecord]:
+        return parse_volumes(self._require().getVolumes())
+
+    def volume_sets(self) -> dict[str, list[str]]:
+        return parse_sets(self._require().getVolumeSets())
+
+    def vlun_templates(self) -> list[VlunTemplate]:
+        return parse_vlun_templates(self._require().getVLUNs())
 
     def wwn_owners(self) -> dict[str, str]:
         """{normalized FC WWN: owning host name} for EVERY host on the array, from one getHosts()
