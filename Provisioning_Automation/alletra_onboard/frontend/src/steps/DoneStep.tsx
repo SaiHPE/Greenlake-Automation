@@ -1,7 +1,7 @@
 import { Button, NameValueList, NameValuePair, Text } from 'grommet';
 import { useState } from 'react';
 import { markComplete, RunEvent, RunRecord } from '../api';
-import { ActivityTimeline, InlineNotification, Surface } from '../ui/primitives';
+import { ActivityTimeline, InlineNotification, NotesList, Surface } from '../ui/primitives';
 import { StepShell } from '../ui/StepShell';
 
 interface Props {
@@ -61,7 +61,7 @@ export function DoneStep({ runId, run, events, onRestart }: Props) {
       />
 
       {run?.warnings?.length ? (
-        <InlineNotification tone="warning" title="Warnings recorded during this run" message={run.warnings.join(' · ')} />
+        <InlineNotification tone="warning" title="Warnings recorded during this run" message={<NotesList notes={run.warnings} />} />
       ) : null}
 
       <Surface title="Summary">

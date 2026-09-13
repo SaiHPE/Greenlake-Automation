@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActionKey, MODE_PRESETS, RunMode, ServedStep, subtitleFor } from '../modes';
 import { InlineNotification, Surface } from '../ui/primitives';
 import { StepState } from '../ui/status';
+import { useStepContext } from '../ui/StepContext';
 import { StepShell } from '../ui/StepShell';
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, initOnly, catalog, state }: Props) {
+  const { nextTitle } = useStepContext();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +70,7 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
         <Button
           primary
           busy={busy}
-          label={locked ? 'Continue' : 'Create run'}
+          label={locked ? `Continue to ${nextTitle ?? 'the next step'}` : 'Create run'}
           disabled={(mode === 'CUSTOM' && custom.length === 0) || missingDiscovery}
           onClick={confirm}
         />

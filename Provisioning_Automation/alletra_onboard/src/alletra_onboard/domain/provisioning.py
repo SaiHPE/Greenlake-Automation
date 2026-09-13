@@ -357,6 +357,9 @@ class HostPathStatus(BaseModel):
     verdict: PathVerdict
     hbas_with_paths: int                                   # distinct host WWPNs carrying a live path
     fabrics: list[str] = Field(default_factory=list)       # fabrics (odd/even) with live paths
+    fabric_names: list[str] = Field(default_factory=list)  # switch logical names for `fabrics`, when known (SPEC-004)
+    lun_count: int = 0                                     # distinct LUNs with >=1 live path here
+    paths_per_lun: int = 0                                 # the fewest live paths any of those LUNs has
     live_volumes: list[str] = Field(default_factory=list)  # target volumes with >=1 active path here
     dead_volumes: list[str] = Field(default_factory=list)  # target volumes exported but with NO path
     detail: str = ""
