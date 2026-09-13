@@ -161,13 +161,44 @@ class ProvisioningIntent(BaseModel):
 
 # ------------------------------------------------------------------ provisioning builder (ADR 0010 Stage 2)
 
+HostSource = Literal["vcenter", "sheet", "array", "switch"]
+
+
+class ProvisionableHost(BaseModel):
+    """One host provisioning may create or reference, from whichever source named it first
+    (SPEC-003 R1/R2). `persona` is derived from the OS for discovered hosts and taken as-is from the
+    array for hosts that already exist there (the tool never changes a persona)."""
+
+    name: str
+    source: HostSource
+    wwpns: list[str] = Field(default_factory=list)     # normalised
+    iqns: list[str] = Field(default_factory=list)
+    os: str = ""
+    persona: str = "VMware"
+
+    @property
+    def transport(self) -> str:
+        if self.wwpns and self.iqns:
+            return "both"
+        if self.wwpns:
+            return "fc"
+        if self.iqns:
+            return "iscsi"
+        return "none"
+
+
 class DiscoveredHostBrief(BaseModel):
-    """A discovered ESXi host offered in the host-set membership dropdown, with a short fabric-login
-    status so a half-zoned host isn't picked blind (ADR 0010)."""
+    """A host offered in the host-set membership dropdown, with a short fabric-login status so a
+    half-zoned host isn't picked blind (ADR 0010), and — SPEC-003 R5 — where it came from and
+    whether this tool's FC zoning and path verification cover it."""
 
     name: str
     status: str                                       # e.g. "2 HBAs - both fabrics" / "not logged in"
     wwpns: list[str] = Field(default_factory=list)     # normalized
+    source: str = ""                                  # vcenter | sheet | array | switch
+    transport: str = "fc"                             # fc | iscsi | both | none
+    persona: str = ""
+    fc_capable: bool = True
 
 
 class ProvisioningObjects(BaseModel):
