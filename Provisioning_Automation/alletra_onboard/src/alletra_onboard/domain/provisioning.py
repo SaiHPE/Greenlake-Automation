@@ -74,8 +74,10 @@ class DeclaredHost(BaseModel):
 
 
 class HostSetRequest(BaseModel):
-    """A host set to create + its SELECTED members (host names). Empty members => all discovered hosts
-    (the cluster). A run may create one or more host sets (ADR 0010)."""
+    """A host set to create + its SELECTED members (host names). Empty members is a QUESTION, not a
+    default: the plan blocks until the operator picks them (SPEC-005 — on 2026-09-13 "blank = all"
+    planned every host object on a shared array into one set). A run may create one or more host
+    sets (ADR 0010)."""
 
     name: str
     members: list[str] = Field(default_factory=list)
@@ -141,9 +143,11 @@ class ProvisioningIntent(BaseModel):
         provisioning_type: ProvisioningType = "tpvv",
         cpg: str = "SSD_r6",
         vvset: str | None = None,
+        members: list[str] | None = None,
     ) -> "ProvisioningIntent":
-        """Bulk shortcut: expand <prefix>NN + count into N identical volumes in one all-members host set —
-        the current flat-sheet case. The row-table sheet (Stage 2) will build the plural form directly."""
+        """Bulk shortcut: expand <prefix>NN + count into N identical volumes in one host set of the given
+        `members` — the current flat-sheet case. The row-table sheet (Stage 2) will build the plural form
+        directly. With no members the plan blocks (SPEC-005)."""
         if count <= 1:
             names = [name_prefix]
         else:
@@ -155,7 +159,7 @@ class ProvisioningIntent(BaseModel):
                 VolumeRequest(name=n, size_gib=size_gib, provisioning_type=provisioning_type, cpg=cpg, vvset=vvset)
                 for n in names
             ],
-            host_sets=[HostSetRequest(name=host_set_name, members=[])],
+            host_sets=[HostSetRequest(name=host_set_name, members=list(members or []))],
         )
 
 

@@ -287,3 +287,15 @@ followed by the event log, showed every command the tool sent was correct. Two r
 event log before naming a defect on a shared array, and keep `show*` (state) and the event log
 (history) as separate kinds of evidence — a wrong answer built on the first is usually a right
 answer about the wrong moment.
+
+**36. Widening a source list widens every default that says "all".**
+SPEC-003 taught provisioning to see every host the run can name — vCenter, the sheet, the array's
+own host objects, the fabric — so a Windows box declared on the sheet could finally be put in a
+host set. Nobody re-read the one place that said "all": a host set with blank *Members* meant
+"all discovered hosts", which had quietly meant "the vCenter inventory" and now meant "every host
+object on the shared array". The first live plan on rc.9 (S-1, 2026-09-13) proposed adding fifteen
+other teams' hosts to a set that already had this run's volumes exported to it. The plan said so
+in plain words and the operator stopped — SPEC-001 earned its keep — but the default should never
+have existed. Rules: when a set of inputs grows, grep for every consumer that treats "empty" as
+"everything" and make each one either explicit or a blocker; and never let a blank cell on a sheet
+stand for a decision that touches other people's objects.

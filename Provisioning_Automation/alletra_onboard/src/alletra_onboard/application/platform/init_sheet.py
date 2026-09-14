@@ -159,7 +159,7 @@ VOLUME_COLUMNS: list[tuple[str, str, bool]] = [
 ]
 HOSTSET_COLUMNS: list[tuple[str, str, bool]] = [
     ("name", "Host set name", True),
-    ("members", "Members — comma-separated host names; blank = all discovered", False),
+    ("members", "Members — comma-separated host names; blank = choose in the app's Compose step", False),
 ]
 # Only for servers NOTHING can see yet. Everything already cabled is discovered: an FC host from the
 # fabric name server, an iSCSI host from the array's showhost, an ESXi host from vCenter. Leave a

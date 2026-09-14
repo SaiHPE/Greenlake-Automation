@@ -44,7 +44,7 @@ def _intent(**over) -> ProvisioningIntent:
             VolumeRequest(name="vol01", size_gib=20, cpg="SSD_r6", vvset="vvs"),
             VolumeRequest(name="vol02", size_gib=20, cpg="SSD_r6", vvset="vvs"),
         ],
-        host_sets=[HostSetRequest(name="hs", members=[])],
+        host_sets=[HostSetRequest(name="hs", members=["esx1"])],
         exports=[ExportRequest(source_kind="vvset", source_name="vvs", target_kind="hostset", target_name="hs")],
     )
     data.update(over)
@@ -433,3 +433,52 @@ def test_live_wsapi_capture_pins_volumes_and_hosts():
 
     assert wc.parse_sets(_wsapi("hostsets"))["zz_t2_hs"] == ["10.132.30.136"]
     assert "vol1" in wc.parse_sets(_wsapi("volumesets"))
+
+
+# ------------------------------------------------------------------ SPEC-005 — blank members, wording, double presentation
+
+def test_blank_host_set_members_block_the_plan_and_plan_no_hosts():
+    """S-1 live, rc.9: blank Members + the SPEC-003 union planned 15 additions to a shared host set."""
+    fake = TruthfulFakeWsapi(
+        hosts=[ArrayHostRecord(name="grp3_vmenode1", persona="Generic-ALUA", wwns=[])],
+        host_sets={"hs": ["esx1"]},
+    )
+    intent = _intent(host_sets=[HostSetRequest(name="hs", members=[])])
+    plan = _plan(fake, intent)
+    assert any("hs has no members" in b and "Compose" in b for b in plan.blockers)
+    assert [a for a in plan.actions if a.kind == "host"] == []          # nothing pulled in by the blank
+    assert [a for a in plan.actions if a.kind == "vlun"] == []          # and no export to an undefined set
+    hs = _row(plan, "hostset", "hs")
+    assert hs.state == "conflict" and "no members" in hs.reason
+    # apply refuses too — the plan is the approval document
+    result = prov.apply_plan(intent, _discovery(), reachable_hosts=REACHABLE, wsapi_factory=lambda c: fake)
+    assert result.error and "no members" in result.error and fake.writes == []
+
+
+def test_iscsi_only_existing_host_reason_and_reachability_note_wording():
+    from alletra_onboard.domain.discovery import ArrayHost
+
+    iscsi = ArrayHost(name="grp3_vmenode1", persona="Generic-ALUA", iqns={"iqn.x": ["0:4:1"]})
+    discovery = _discovery().model_copy(update={"array_hosts": [iscsi]})
+    fake = TruthfulFakeWsapi(hosts=[ArrayHostRecord(name="grp3_vmenode1", persona="Generic-ALUA", wwns=[])])
+    intent = _intent(host_sets=[HostSetRequest(name="hs", members=["esx1", "grp3_vmenode1"])])
+    plan = prov.build_plan(intent, discovery, reachable_hosts={"esx1"}, wsapi_factory=lambda c: fake)
+    row = _row(plan, "host", "grp3_vmenode1")
+    assert row.state == "exists" and "iSCSI" in row.reason and "0 WWN" not in row.reason
+    note = next(n for n in plan.notes if "reachable" in n.lower())
+    assert note.startswith("Not yet reachable") and "Created" not in note and "grp3_vmenode1" in note
+
+
+def test_set_export_conflicts_when_a_member_already_has_the_volume_directly():
+    """Run 2 presented zz_t2_vol03 to .136 directly at LUN 2; a later default export of the same
+    volume to the set .136 belongs to would present it a second time."""
+    fake = TruthfulFakeWsapi(vluns=[VlunTemplate(volume="vol01", target="esx1", lun=2)])
+    intent = _intent(
+        host_sets=[HostSetRequest(name="hs", members=["esx1"])],
+        exports=[ExportRequest(source_kind="volume", source_name="vol01", target_kind="hostset", target_name="hs")],
+    )
+    plan = _plan(fake, intent)
+    row = _row(plan, "vlun", "vol01")
+    assert row.state == "conflict"
+    assert "already presented directly to member esx1 at LUN 2" in row.reason
+    assert plan.blockers

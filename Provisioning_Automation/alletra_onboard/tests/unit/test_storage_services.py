@@ -34,6 +34,7 @@ def _intent(**over) -> ProvisioningIntent:
         switch_f1=_creds("sw-odd"),
         switch_f2=_creds("sw-even"),
         name_prefix="CRV_Prod", size_gib=1024, count=2,
+        members=["esx1"],   # SPEC-005: blank members block; the default fixture selects its one host
     )
     data.update(over)
     return ProvisioningIntent.from_simple(**data)
@@ -971,7 +972,7 @@ def test_apply_plan_sets_persona_per_host_os():
         HostHba(host_name="winbox", wwpn=_B, os="Microsoft Windows Server 2022"),
     ])
     fake = FakeWsapi()
-    prov.apply_plan(_intent(), d, reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    prov.apply_plan(_intent(members=["esx1", "winbox"]), d, reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
     personas = {c[1]: c[3] for c in fake.calls if c[0] == "host"}  # ("host", name, wwns, persona)
     assert personas == {"esx1": "VMware", "winbox": "WindowsServer"}  # name per host, not hardcoded
 
@@ -1209,7 +1210,7 @@ def test_verify_provisioned_paths_reads_showvlun_and_reports():
             return _VZ_SHOWVLUN_A
 
     fake = _FakeCli()
-    intent = _intent(name_prefix="VZ_ESXi_Profile_bk", size_gib=10, count=1)
+    intent = _intent(name_prefix="VZ_ESXi_Profile_bk", size_gib=10, count=1, members=["CRV_VZ_DL360G11D24U25"])
     d = disc.DiscoveryReport(host_hbas=[HostHba(host_name="CRV_VZ_DL360G11D24U25", wwpn=_A)])
     rep = verify_provisioned_paths(
         intent, d,
@@ -1280,18 +1281,18 @@ def test_unreachable_hosts_are_created_but_their_exports_are_held():
     """ADR 0012 revised: HPE's documented order is register-first, so the host object is made even
     for a server the array cannot see. Only the EXPORT waits."""
     plan = prov.build_plan(
-        _intent(), _two_hosts(), reachable_hosts={"esx1"}, wsapi_factory=lambda c: FakeWsapi(),
+        _intent(members=["esx1", "esx2"]), _two_hosts(), reachable_hosts={"esx1"}, wsapi_factory=lambda c: FakeWsapi(),
     )
     hosts = [a.name for a in plan.actions if a.kind == "host"]
     assert sorted(hosts) == ["esx1", "esx2"]          # esx2 is created despite being unreachable
-    assert any("esx2" in n and "not yet reachable" in n for n in plan.notes), plan.notes
+    assert any("esx2" in n and "Not yet reachable" in n for n in plan.notes), plan.notes
 
 
 def test_a_host_set_export_survives_one_unreachable_member():
     """Exporting to the set is HPE's practice for a cluster: the remaining members pick the LUN up as
     they come online. One reachable member is enough for the export to be worth making."""
     plan = prov.build_plan(
-        _intent(), _two_hosts(), reachable_hosts={"esx1"}, wsapi_factory=lambda c: FakeWsapi(),
+        _intent(members=["esx1", "esx2"]), _two_hosts(), reachable_hosts={"esx1"}, wsapi_factory=lambda c: FakeWsapi(),
     )
     assert [a.kind for a in plan.actions].count("vlun") > 0
     assert not any("held back" in n for n in plan.notes), plan.notes
@@ -1299,7 +1300,7 @@ def test_a_host_set_export_survives_one_unreachable_member():
 
 def test_an_export_is_held_when_no_member_can_reach_the_array():
     plan = prov.build_plan(
-        _intent(), _two_hosts(), reachable_hosts=set(), wsapi_factory=lambda c: FakeWsapi(),
+        _intent(members=["esx1", "esx2"]), _two_hosts(), reachable_hosts=set(), wsapi_factory=lambda c: FakeWsapi(),
     )
     assert not [a for a in plan.actions if a.kind == "vlun"]
     assert any("held back" in n for n in plan.notes), plan.notes
@@ -1311,7 +1312,7 @@ def test_apply_holds_the_same_exports_the_plan_showed():
     """apply re-derives from the intent rather than replaying the plan, so the filter has to be in
     both places or the array gets an export the operator was told was held."""
     fake = FakeWsapi()
-    prov.apply_plan(_intent(), _two_hosts(), reachable_hosts=set(), wsapi_factory=lambda c: fake)
+    prov.apply_plan(_intent(members=["esx1", "esx2"]), _two_hosts(), reachable_hosts=set(), wsapi_factory=lambda c: fake)
     assert not [c for c in fake.calls if c[0] == "vlun"]
     assert [c[1] for c in fake.calls if c[0] == "host"]      # hosts still created
 

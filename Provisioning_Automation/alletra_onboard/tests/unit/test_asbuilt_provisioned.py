@@ -81,6 +81,9 @@ def test_parse_showvv_showcols_is_header_driven():
     listcols = _fx("showvv_listcols.txt")
     assert ",CPG," in listcols and "UsrCPG" not in listcols.split("Invalid columns")[0]
     assert "Invalid columns specified: UsrCPG SnpCPG" in listcols
+    # and the corrected command, run live on 2026-09-13 (S-2 setup): header-driven parse gets the CPG
+    live = ap.parse_showvv(_fx("showvv_showcols_cpg.txt"))
+    assert live == [{"Id": "101", "Name": "zz_t3_vol01", "Prov": "tpvv", "Type": "base", "CPG": "SSD_r6", "VSize_MB": "10240"}]
 
 
 # ------------------------------------------------------------------ R1, R2, R10 — sets

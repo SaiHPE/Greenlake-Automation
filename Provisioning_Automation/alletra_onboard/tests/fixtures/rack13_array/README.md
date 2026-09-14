@@ -14,6 +14,7 @@ Commands were fed on stdin, so the prompt shows no command echo; the file name i
 | showvlun_t.txt | `showvlun -t` (3 templates; `set:zz_t2_hs` is Type `host set`) |
 | showvlun_a.txt | `showvlun -a` (12 active paths) |
 | showcpg.txt | `showcpg` |
+| showvv_showcols_cpg.txt | `showvv -showcols Id,Name,Prov,Type,CPG,VSize_MB zz_t3_vol01` (S-2 setup, 2026-09-13 evening) — the corrected C-1 command works; `CPG` column present |
 | showvv_listcols.txt | `showvv -listcols` + the rejection of `-showcols …UsrCPG,SnpCPG…` (12:33): this OS names the column `CPG` (C-1) |
 
 Pinned by tests/unit/test_asbuilt_provisioned.py (SPEC-002).

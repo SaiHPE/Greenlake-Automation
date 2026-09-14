@@ -81,14 +81,23 @@ def _persona_by_host(
 
 
 def _members_for(host_set, all_hosts: "OrderedDict[str, list[str]]") -> list[str]:
-    """A host set's members: the operator's selection, or ALL provisionable hosts when none is given.
-
-    An explicit selection is still intersected with `all_hosts`, so a member that is not discovered —
-    or that the zoning gate excluded — cannot reach the array as a set member with no host object
-    behind it."""
-    if not host_set.members:
-        return list(all_hosts)
+    """A host set's members: the operator's selection, intersected with the hosts the run can name, so
+    a member that is not known — or that the zoning gate excluded — cannot reach the array as a set
+    member with no host object behind it. An EMPTY selection selects nothing (SPEC-005): until
+    2026-09-13 it meant "every host", and with the SPEC-003 union that planned fifteen other teams'
+    host objects into one set on a shared array."""
     return [m for m in host_set.members if m in all_hosts]
+
+
+def _empty_host_sets(intent: ProvisioningIntent) -> list[str]:
+    return [hs.name for hs in intent.host_sets if not hs.members]
+
+
+def _empty_set_blocker(name: str) -> str:
+    return (
+        f"Host set {name} has no members — choose them in the Compose card (or fill Members on the "
+        "Host sets tab). Blank no longer means every host."
+    )
 
 
 def _selected_hosts(
@@ -96,11 +105,9 @@ def _selected_hosts(
 ) -> "OrderedDict[str, list[str]]":
     """The hosts tier-1 will CREATE: only those the operator composed into a host set (ADR 0010's
     ideal subset) — never the whole inventory. On a shared vCenter, creating an array host object for
-    every ESXi server in the inventory is pollution, not provisioning. With no host sets (the
-    from_simple single-cluster shortcut) every host in the union is in scope, as before."""
+    every ESXi server in the inventory is pollution, not provisioning. No host sets, or host sets with
+    no members, select no hosts (SPEC-005)."""
     all_hosts = _hosts_by_name(discovery, intent, zoning_plan)
-    if not intent.host_sets:
-        return all_hosts
     wanted = {m for hs in intent.host_sets for m in _members_for(hs, all_hosts)}
     return OrderedDict((n, w) for n, w in all_hosts.items() if n in wanted)
 
@@ -312,13 +319,16 @@ def build_plan(
     plan = ProvisioningPlan()
     hosts = _selected_hosts(intent, discovery, zoning_plan)
     unreachable = sorted(n for n in hosts if n not in reachable_hosts)
-    if not hosts:
-        plan.notes.append("No host HBAs found by any source — nothing to provision until discovery finds hosts.")
-    elif unreachable:
+    empty_sets = _empty_host_sets(intent)
+    if empty_sets:
+        plan.blockers.extend(_empty_set_blocker(n) for n in empty_sets)
+    elif not hosts:
+        plan.notes.append("No host is selected for any host set — nothing to provision until members are chosen.")
+    if unreachable:
         plan.notes.append(
-            "Created but not yet reachable: " + ", ".join(unreachable)
-            + ". The host objects are made now; their exports wait until the array sees them logged "
-            "in. Nothing here needs redoing once zoning is applied and re-verified."
+            "Not yet reachable (no login on both fabrics): " + ", ".join(unreachable)
+            + " — host objects are made or kept now; their exports wait until zoning is applied and "
+            "re-checked."
         )
     plan.notes.extend(_host_notes(intent, discovery, zoning_plan, hosts))
 
@@ -367,6 +377,10 @@ def build_plan(
 
     for hs in intent.host_sets:
         members = _members_for(hs, hosts)
+        if not hs.members:
+            add("hostset", hs.name, f"Host set {hs.name} — no members chosen",
+                ("conflict", "no members — choose them in Compose or on the Host sets tab"), {"members": []})
+            continue
         add("hostset", hs.name, f"Host set {hs.name} — {len(members)} host(s)",
             _judge_set(hs.name, members, state.host_sets, "host"), {"members": members})
 
@@ -389,11 +403,15 @@ def build_plan(
         plan.error = str(exc)
         return plan
     exports, skipped = _reachable_targets(exports, intent, hosts, reachable_hosts)
+    members_of = {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}
     for ex in exports:
+        if ex.target_kind == "hostset" and ex.target_name in empty_sets:
+            continue                                 # the set itself is the blocker; nothing to export to
         lun_txt = "auto LUN" if ex.lun is None else f"LUN {ex.lun}"
         add("vlun", ex.source_name,
             f"Export {ex.source_kind} {ex.source_name} → {ex.target_kind} {ex.target_name} ({lun_txt})",
-            _judge_export(ex, vvsets, state.vluns), {"source": ex.source_ref, "target": ex.target_ref, "lun": ex.lun})
+            _judge_export(ex, vvsets, state.vluns, members_of.get(ex.target_name, [])),
+            {"source": ex.source_ref, "target": ex.target_ref, "lun": ex.lun})
     if skipped:
         plan.notes.append("Exports held back until the array can reach the target: " + "; ".join(skipped))
     return plan
@@ -434,6 +452,8 @@ def _judge_host(name: str, wwns: list[str], persona: str, on_array: list[ArrayHo
     )
     if missing:
         return "update", f"adds {len(missing)} WWN: {', '.join(missing)}" + persona_note
+    if not wwns:
+        return "exists", "exists on the array (iSCSI initiators; not changed by this tool)" + persona_note
     return "exists", f"carries all {len(wwns)} WWN(s)" + persona_note
 
 
@@ -460,9 +480,21 @@ def _judge_volume(v: VolumeRequest, on_array: list[ArrayVolumeRecord]) -> tuple[
     return "conflict", f"on the array: {on} · intent: {want}"
 
 
-def _judge_export(ex: ExportRequest, vvsets: OrderedDict[str, list[str]], templates: list[VlunTemplate]) -> tuple[PlanState, str]:
-    """R5: judged against the array's VLUN templates, one per member volume for a set export."""
+def _judge_export(
+    ex: ExportRequest, vvsets: OrderedDict[str, list[str]], templates: list[VlunTemplate],
+    set_members: list[str] | None = None,
+) -> tuple[PlanState, str]:
+    """R5: judged against the array's VLUN templates, one per member volume for a set export.
+    SPEC-005 R4: a set export of a volume a MEMBER host already has directly is a conflict — the same
+    volume would reach that host twice."""
     volumes = list(vvsets.get(ex.source_name, [])) if ex.source_kind == "vvset" else [ex.source_name]
+    if ex.target_kind == "hostset":
+        direct = sorted(
+            f"{t.volume} is already presented directly to member {t.target} at LUN {t.lun}"
+            for t in templates if t.volume in volumes and t.target in (set_members or [])
+        )
+        if direct:
+            return "conflict", "; ".join(direct) + " — a set export would present it a second time; remove one or the other"
     to_target = [t for t in templates if t.target == ex.target_ref]
     if ex.lun is not None:
         # a different volume already sits at that LUN on that target
@@ -494,9 +526,13 @@ def apply_plan(
     was given: apply re-derives everything from the intent rather than replaying the plan, so
     without them here the held-back exports would be cosmetic and the host list would differ."""
     result = ProvisioningResult()
+    empty_sets = _empty_host_sets(intent)
+    if empty_sets:
+        result.error = "; ".join(_empty_set_blocker(n) for n in empty_sets)
+        return result
     hosts = _selected_hosts(intent, discovery, zoning_plan)
     if not hosts:
-        result.error = "No host HBAs found by any source — refusing to provision with no hosts."
+        result.error = "No host is selected for any host set — refusing to provision with no hosts."
         return result
     try:
         exports = _resolve_exports(intent)
