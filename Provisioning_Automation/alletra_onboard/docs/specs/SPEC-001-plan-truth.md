@@ -1,7 +1,7 @@
 # SPEC-001 — The provisioning plan tells the truth
 
-**Status:** implemented 2026-09-13 (rc.8, 18 acceptance tests green) — **pending live confirmation**
-(S-0 capture, then S-1 and S-2 of the second live session)
+**Status:** implemented 2026-09-13 (rc.8); **R1–R6 proven live 2026-09-14** (S-1, S-2). **R11 added rc.12**
+after S-4 found apply re-sending an export the plan had called Exists (P-21).
 **Findings closed:** P-1, P-11, P-12 (new, found while writing this spec), P-7
 **Owner:** provisioning context (`application/provisioning/storage_provision.py`,
 `adapters/array/wsapi_client.py`, `domain/provisioning.py`, `frontend/src/steps/ProvisionStep.tsx`)
@@ -71,6 +71,17 @@ was found on read-back". Found (created or exists) → detail "LUN n" (the LUN(s
 **R9 — the plan reads once per object type and never writes.** Six reads at most (CPGs, hosts, host
 sets, volumes, VV sets, VLUNs); zero `ensure_*` calls.
 
+**R11 — apply honours the export verdict (rc.12, P-21).** Before sending any export, apply reads the
+VLUN templates once and judges each export exactly as the plan does: *exists* → outcome `exists`,
+nothing sent; *conflict* → outcome `failed` with the reason, nothing sent; *update* (a set export
+partly present) → only the missing member volumes are sent, at the next LUN (`ex.lun + index` when
+explicit), never the whole set again; *create* → sent. **Why:** §1 said "apply is protected only by
+the array returning a conflict". For an auto LUN the array returns no conflict — `createVLUN(auto)`
+simply takes the next free number — so on 2026-09-14 the approved plan said *Exists · LUN 0, LUN 1*
+and apply presented both volumes a second time at LUN 3, 4 (array proof:
+`tests/fixtures/rack13_array/showvlun_t_duplicate.txt`, 24 templates). The LUN read-back and the plan
+reason now list every LUN a volume sits at (`LUN 0/3`), so a duplicate can never look tidy.
+
 **R10 — the UI shows it.** Action column: `create` → *Create* (not started, grey), `exists` →
 *Exists* (complete, green), `update` → *Update* (action required, amber), `conflict` → *Conflict*
 (failed, red). Reason renders under the description. Summary: "N to create · N to update · N already
@@ -131,7 +142,8 @@ Client reads (all GET, one call each):
 | `test_apply_accepts_updated_and_continues_past_it` | R7 (P-12 regression) |
 | `test_apply_reads_back_created_exports_and_fails_the_missing_one` | R8 |
 | `test_apply_refuses_a_plan_with_blockers` | R6 (service) |
-| `test_wsapi_records_parse_the_documented_shapes` | §4 (client parsers, fixture-pinned) |
+| `test_wsapi_records_parse_the_captured_shapes`, `test_vlun_templates_are_the_inactive_records_taken_as_is` | §4 (client parsers, pinned to S-0) |
+| `test_apply_skips_an_export_that_already_exists_even_at_auto_lun`, `test_apply_completes_a_partial_set_export_member_by_member`, `test_apply_refuses_an_export_the_templates_say_conflicts`, `test_duplicate_templates_pinned_from_the_live_array` | R11 |
 
 Existing tests in `test_storage_services.py` keep passing unchanged except where they asserted the
 old `exists` boolean semantics for exports (P-1 made those assertions wrong).
