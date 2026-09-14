@@ -1325,8 +1325,9 @@ def test_apply_still_refuses_when_discovery_found_no_hosts_at_all():
 
 
 def test_zoning_report_lists_only_hosts_on_both_fabrics_as_the_gate():
-    """The gate's source of truth. esx1 is logged in on both fabrics, esx2 only on odd."""
-    report = zoning.build_report(_intent(), _disc_for_zoning([]))
+    """The gate's source of truth. esx1 is logged in on both fabrics, esx2 only on odd. Both are in
+    the run's host set; an array host in NO set would not be expected at all (Z-B)."""
+    report = zoning.build_report(_intent(members=["esx1", "esx2"]), _disc_for_zoning([]))
     assert report.zoned_hosts == ["esx1"]
     assert not report.proper          # esx2 is still outstanding...
     assert report.zoned_hosts         # ...but esx1 is provisionable anyway

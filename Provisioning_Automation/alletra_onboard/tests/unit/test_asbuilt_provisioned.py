@@ -371,3 +371,24 @@ def test_showhostset_and_showvvset_are_allowlisted_and_nothing_else_changed():
 
     assert "showhostset" in ALLOWED_COMMANDS and "showvvset" in ALLOWED_COMMANDS
     assert not any(c.startswith(("create", "remove", "set")) for c in ALLOWED_COMMANDS)
+
+
+def test_zoning_section_says_the_check_ran_when_only_the_check_ran(tmp_path):
+    """S-8 2026-09-14: the run checked zoning (gate table on screen) but built no plan; the document
+    said 'This run did not include the SAN zoning step.' — untrue."""
+    report = {"proper": False, "zoned_hosts": ["10.132.30.136"], "unverified_hosts": ["10.132.30.47", "10.132.30.86"],
+              "expected": [], "remediations": [], "notes": []}
+    out, _ = generate_asbuilt(_array_data(zoning_report=report), tmp_path / "checkonly.docx")
+    _, text = _read(out)
+    assert "did not include the SAN zoning step" not in text
+    assert "The zoning check ran" in text and "no zoning plan was built" in text
+    assert "Zoned on both fabrics: 10.132.30.136." in text
+    assert "10.132.30.47, 10.132.30.86" in text
+
+
+def test_compression_column_reads_yes_no_or_dash(tmp_path):
+    out, _ = generate_asbuilt(_array_data(), tmp_path / "compr.docx")
+    doc, _ = _read(out)
+    vols = _tables_by_header(doc)[("Volume", "Provisioning", "Dedup", "Compression", "Size (GiB)", "CPG", "Snapshots", "VV set")]
+    by = {r[0]: r for r in vols}
+    assert by["zz_t2_vol02"][3] == "Yes (v2)" and by["zz_t2_vol01"][3] == "No"

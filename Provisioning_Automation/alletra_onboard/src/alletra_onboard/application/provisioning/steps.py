@@ -100,6 +100,15 @@ class DiscoveryZoningSteps:
             data={"report": report.model_dump(mode="json")},
         )
 
+    def _latest_plan_payload(self, run_id: str) -> dict | None:
+        """The run's latest `zoning.plan` payload, or None — the fabric-named hosts reach the zoning
+        check (and provisioning) through it."""
+        latest = None
+        for event in self._coord.list_events(run_id):
+            if event.event_type == "zoning.plan" and event.data.get("plan"):
+                latest = event.data["plan"]
+        return latest
+
     def zoned_hosts(self, run_id: str) -> set[str]:
         """The hosts the last zoning verify confirmed on BOTH fabrics — the provisioning gate.
 
@@ -132,7 +141,9 @@ class DiscoveryZoningSteps:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
         coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "step.started", "Verifying SAN zoning on both fabrics…")
-        report = await asyncio.to_thread(storage_zoning.build_report, intent, discovery)
+        report = await asyncio.to_thread(
+            storage_zoning.build_report, intent, discovery, self._latest_plan_payload(run.run_id)
+        )
         # Every verify OVERWRITES the gate. The verify is the ONLY thing that can open it, because a
         # host is provisionable exactly when the array can see it logged in on both fabrics.
         self._save_zoned_hosts(run.run_id, report.zoned_hosts)
