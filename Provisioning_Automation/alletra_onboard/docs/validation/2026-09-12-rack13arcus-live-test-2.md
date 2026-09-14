@@ -216,3 +216,13 @@ the LUN and the plan read it as auto — P-18) and rebuilt:
 — host *carries all 2 WWN(s)*, set *has all 1 host(s)*, volumes *matches* (1 GiB tpvv / 1 GiB reduce /
 2 GiB tpvv on SSD_r6), VV-set *has all 2 volume(s)*, exports *already exported at LUN 0, LUN 1* and
 *at LUN 2*. SPEC-001 R1–R5 confirmed on hardware. Both live findings fixed in rc.11.
+
+## S-2 passed — 2026-09-14 12:04, v0.16.0-rc.10
+
+`zz_t3_vol01` exists on the array at 10 GiB (created by hand for this test). Sheet row at **20 GiB**
+→ the row is red *Conflict · on the array: 10 GiB tpvv on SSD_r6 · intent: 20 GiB tpvv on SSD_r6*,
+the banner reads *1 conflict — the plan cannot be applied*, the authorisation checkbox is disabled.
+Sheet row changed to **10 GiB** → *Exists · 10 GiB tpvv on SSD_r6 — matches*, 0 conflicts. Every
+other row unchanged and *Exists*. SPEC-001 R2 (attributes, not names) and R6 (conflicts block
+apply) confirmed on hardware. Also observed: with one export composed, `zz_t2_vol03` has no export
+row at all and nothing says so — P-19 (UX).
