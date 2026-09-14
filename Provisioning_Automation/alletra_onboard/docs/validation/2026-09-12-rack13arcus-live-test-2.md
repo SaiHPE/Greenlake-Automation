@@ -226,3 +226,36 @@ Sheet row changed to **10 GiB** → *Exists · 10 GiB tpvv on SSD_r6 — matches
 other row unchanged and *Exists*. SPEC-001 R2 (attributes, not names) and R6 (conflicts block
 apply) confirmed on hardware. Also observed: with one export composed, `zz_t2_vol03` has no export
 row at all and nothing says so — P-19 (UX).
+
+## S-4 — 2026-09-14 12:35–12:47, v0.16.0-rc.10: passed, and found P-21
+
+Sheet: `zz_t3_vol01` (10 GiB, VV-set `zz_t3_vvs`), `zz_t3_vol02` (2 GiB, same set), host sets `zz_t3_hs`
+(`.136`, `.86`) and `zz_t3_win` (`arcus-win137`), plus the run-2 objects. Members picked in Compose
+(rc.10 dropped the sheet column — P-17). Exports composed: `zz_t2_vvs → zz_t2_hs`, `zz_t3_vvs → zz_t3_hs`.
+
+**Dropdown** listed every host with its source — `.47/.136/.86 … from vCenter`, `arcus-win137 … from
+the sheet`, `vmenode — 1 HBAs - one fabric (even) · on the array`, then the eleven iSCSI-only hosts
+labelled *iSCSI only · on the array · not zoned or path-verified by this tool*. SPEC-003 live.
+
+**Plan**: 7 to create · 0 to update · 8 already exist · 0 conflicts. `.86` and `arcus-win137` *Create*
+(VMware / WindowsServer); the plan also said *Host 'win-10-132-30-137' names only initiators that
+already belong to another host (arcus-win137) — not planned* — a second Hosts-tab row with the same
+WWPNs, dropped with its owner named (SPEC-003 R1).
+
+**Apply**: 8 created · 7 existed. Seven creates exactly as planned; `zz_t3_vvs → zz_t3_hs` at
+LUN 5, 6. **The eighth was wrong**: `zz_t2_vvs → zz_t2_hs`, which the plan had called *Exists · LUN 0,
+LUN 1*, came back *Created · LUN 3, LUN 4*. `showvlun -t` at 12:47 showed 24 templates with
+`zz_t2_vol01` at LUN 0 and 3, `zz_t2_vol02` at LUN 1 and 4; the event log showed two `createvlun`
+commands from the tool at 12:39:57. Cause: apply never read the exports before creating them and
+`createvlun … auto` never conflicts. Removed by hand (`removevlun -f zz_t2_vol01 3 set:zz_t2_hs`,
+`… zz_t2_vol02 4 …`); 22 templates after, each volume once. Fixture `showvlun_t_duplicate.txt`.
+P-21 → SPEC-001 R11, rc.12. LESSONS 37.
+
+**Path verification**: `.136` *Live · 6 LUN(s) · 2 HBA(s) · 4 path(s) per LUN · both fabrics
+(SAN6700R13U40, SAN6700R13U38)* — the 6 (for 4 volumes) is the duplicate showing through; `.86` *No
+path · 0 live paths for 2 exported volume(s) — the host is off or not zoned*; `arcus-win137` *No path ·
+nothing is exported to this host*. SPEC-004 R5 live.
+
+Array state now: run-2 objects; `zz_t3_vol01`, `zz_t3_vol02`, `zz_t3_vvs`, `zz_t3_hs` (`.136`, `.86`),
+`zz_t3_win` (`arcus-win137`), hosts `10.132.30.86` and `arcus-win137`; `zz_t3_vvs → set:zz_t3_hs` at
+LUN 5/6. All to be removed at the end of the session.

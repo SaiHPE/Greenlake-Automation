@@ -299,3 +299,16 @@ in plain words and the operator stopped — SPEC-001 earned its keep — but the
 have existed. Rules: when a set of inputs grows, grep for every consumer that treats "empty" as
 "everything" and make each one either explicit or a blocker; and never let a blank cell on a sheet
 stand for a decision that touches other people's objects.
+
+**37. Idempotency by conflict is only as good as the conflict; an auto-assigned identifier never conflicts.**
+Every `ensure_*` in the WSAPI client was idempotent by letting the array refuse a duplicate —
+EXISTENT_HOST, EXISTENT_SV, EXISTENT_VLUN. It worked for the four kinds whose identity is a name.
+It never worked for an export at an *auto* LUN, because the array does not see a duplicate: it is
+being asked for "the next free LUN", and it gives one. On 2026-09-14 the approved plan said an
+export existed at LUN 0 and 1 (SPEC-001 had read it correctly); apply re-sent it anyway and the
+array presented both volumes again at LUN 3 and 4. Two rules: a write is idempotent only if it
+reads first or its identity is fully specified — "let the array refuse it" is not a strategy when
+the array is choosing part of the identity; and apply must make the same judgement the plan made,
+from the same read, or the plan is a story and not an approval. The defect was visible only because
+path verification had learned to count LUNs the day before (6 LUNs for 4 volumes); a boolean
+"live on both fabrics" would have hidden it.
