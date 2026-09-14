@@ -508,7 +508,7 @@ def _judge_export(
     present = {t.volume: t.lun for t in to_target if t.volume in volumes and (ex.lun is None or t.lun == ex.lun)}
     if not present:
         return "create", ""
-    luns = ", ".join(f"LUN {present[v]}" for v in volumes if v in present)
+    luns = _luns_text(volumes, to_target, ex.target_ref)
     if len(present) < len(volumes):
         return "update", f"{len(present)} of {len(volumes)} member volumes already exported ({luns}); apply completes the set"
     return "exists", f"already exported at {luns}"
@@ -560,18 +560,53 @@ def apply_plan(
                 status = array.ensure_volume_set(vvset, vols)
                 result.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
 
+            # SPEC-001 R11 (P-21, live 2026-09-14 12:39): judge every export against the templates BEFORE
+            # sending it, exactly as the plan did. `createVLUN(auto=True)` never raises EXISTENT_VLUN —
+            # the array just picks the next LUN — so the conflict-swallow that makes the other ensure_*
+            # idempotent never fired here, and an export the approved plan called Exists (LUN 0, 1) was
+            # presented a second time at LUN 3, 4. One read; skip what exists, refuse what conflicts,
+            # complete a partial set member by member (never re-sending the whole set).
+            vvsets = _vvsets(intent)
+            members_of = {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}
+            templates = array.vlun_templates()
             export_outcomes: list[ActionOutcome] = []
             for ex in exports:
-                status = array.ensure_vlun(ex.source_ref, ex.target_ref, lun=ex.lun)
+                verdict, reason = _judge_export(ex, vvsets, templates, members_of.get(ex.target_name, []))
+                if verdict == "exists":
+                    export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status="exists", detail=reason))
+                    continue
+                if verdict == "conflict":
+                    export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status="failed", detail=reason))
+                    continue
+                if verdict == "update":
+                    volumes = list(vvsets.get(ex.source_name, []))
+                    present = {t.volume for t in templates if t.target == ex.target_ref and t.volume in volumes}
+                    statuses = [
+                        array.ensure_vlun(v, ex.target_ref, lun=None if ex.lun is None else ex.lun + volumes.index(v))
+                        for v in volumes if v not in present
+                    ]
+                    status = "created" if "created" in statuses else "exists"
+                else:
+                    status = array.ensure_vlun(ex.source_ref, ex.target_ref, lun=ex.lun)
                 export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status=status))
 
             # R8: "created" is the array's word; read the templates back ONCE and hold it to it.
             if exports:
-                _confirm_exports(exports, export_outcomes, _vvsets(intent), array.vlun_templates())
+                _confirm_exports(exports, export_outcomes, vvsets, array.vlun_templates())
             result.outcomes.extend(export_outcomes)
     except Exception as exc:  # noqa: BLE001 - record what we got, surface the failure
         result.error = str(exc)
     return result
+
+
+def _luns_text(volumes: list[str], templates: list[VlunTemplate], target_ref: str) -> str:
+    """"LUN 0, LUN 1" — or "LUN 0/3" when a volume sits at more than one LUN on that target: the
+    duplicate the P-21 apply produced must be visible, not collapsed to whichever LUN came last."""
+    by_vol: dict[str, list[int]] = {}
+    for t in templates:
+        if t.target == target_ref and t.volume in volumes:
+            by_vol.setdefault(t.volume, []).append(t.lun)
+    return ", ".join("LUN " + "/".join(str(n) for n in sorted(by_vol[v])) for v in volumes if v in by_vol)
 
 
 def _confirm_exports(
@@ -583,10 +618,12 @@ def _confirm_exports(
     """Annotate each export outcome with the LUN(s) the array actually recorded. A `created` export
     with no template on read-back becomes `failed` — the silent-dead-export case R8 exists for."""
     for ex, out in zip(exports, outcomes):
+        if out.status == "failed":
+            continue                                     # refused before it was sent; keep the reason
         volumes = list(vvsets.get(ex.source_name, [])) if ex.source_kind == "vvset" else [ex.source_name]
-        found = {t.volume: t.lun for t in templates if t.target == ex.target_ref and t.volume in volumes}
-        if found:
-            out.detail = ", ".join(f"LUN {found[v]}" for v in volumes if v in found) + f" → {ex.target_ref}"
+        luns = _luns_text(volumes, templates, ex.target_ref)
+        if luns:
+            out.detail = f"{luns} → {ex.target_ref}"
         elif out.status == "created":
             out.status = "failed"
             out.detail = f"the array reported created but no export {ex.source_ref} → {ex.target_ref} was found on read-back"

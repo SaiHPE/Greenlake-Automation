@@ -15,6 +15,7 @@ Commands were fed on stdin, so the prompt shows no command echo; the file name i
 | showvlun_a.txt | `showvlun -a` (12 active paths) |
 | showcpg.txt | `showcpg` |
 | showvv_showcols_cpg.txt | `showvv -showcols Id,Name,Prov,Type,CPG,VSize_MB zz_t3_vol01` (S-2 setup, 2026-09-13 evening) — the corrected C-1 command works; `CPG` column present |
+| showvlun_t_duplicate.txt | `showvlun -t` at 2026-09-14 12:47 after the S-4 apply on rc.10: 24 templates, `zz_t2_vol01` at LUN 0 **and** 3, `zz_t2_vol02` at LUN 1 **and** 4 — the P-21 duplicate, in the array's words |
 | showvv_listcols.txt | `showvv -listcols` + the rejection of `-showcols …UsrCPG,SnpCPG…` (12:33): this OS names the column `CPG` (C-1) |
 
 Pinned by tests/unit/test_asbuilt_provisioned.py (SPEC-002).

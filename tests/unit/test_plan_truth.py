@@ -304,7 +304,7 @@ def test_apply_reads_back_created_exports_and_fails_the_missing_one():
     result = prov.apply_plan(_intent(), _discovery(), reachable_hosts=REACHABLE, wsapi_factory=lambda c: honest)
     vlun = next(o for o in result.outcomes if o.kind == "vlun")
     assert vlun.status == "created" and "LUN 0" in vlun.detail and "LUN 1" in vlun.detail
-    assert honest.reads.count("vluns") == 1                       # one read-back, not one per export
+    assert honest.reads.count("vluns") == 2                       # once before the loop, once to read back — never per export
 
 
 # ------------------------------------------------------------------ §4 client parsers (pinned to S-0)
@@ -482,3 +482,60 @@ def test_set_export_conflicts_when_a_member_already_has_the_volume_directly():
     assert row.state == "conflict"
     assert "already presented directly to member esx1 at LUN 2" in row.reason
     assert plan.blockers
+
+
+# ------------------------------------------------------------------ SPEC-001 R11 — apply honours the export verdict (P-21, live)
+
+def test_apply_skips_an_export_that_already_exists_even_at_auto_lun():
+    """P-21, S-4 live 2026-09-14 12:39: the approved plan said the set export Exists at LUN 0, LUN 1;
+    apply re-sent createVLUN(auto) and the array presented both volumes a SECOND time at LUN 3, LUN 4
+    (fixture showvlun_t_duplicate.txt). EXISTENT_VLUN never fires for an auto LUN — the array just
+    picks the next number — so apply must read the templates and skip what is there."""
+    fake = TruthfulFakeWsapi(vluns=[VlunTemplate(volume="vol01", target="set:hs", lun=0),
+                                    VlunTemplate(volume="vol02", target="set:hs", lun=1)])
+    result = prov.apply_plan(_intent(), _discovery(), reachable_hosts=REACHABLE, wsapi_factory=lambda c: fake)
+    assert result.error is None
+    assert [w for w in fake.writes if w[0] == "vlun"] == []            # nothing re-sent
+    vlun = next(o for o in result.outcomes if o.kind == "vlun")
+    assert vlun.status == "exists" and "LUN 0" in vlun.detail and "LUN 1" in vlun.detail
+
+
+def test_apply_completes_a_partial_set_export_member_by_member():
+    """Half the set is already presented: only the missing member is sent, at the next LUN — never the
+    whole set again (which would duplicate the present member)."""
+    fake = TruthfulFakeWsapi(vluns=[VlunTemplate(volume="vol01", target="set:hs", lun=0)])
+    fake.created_templates[("vol02", "set:hs")] = [VlunTemplate(volume="vol02", target="set:hs", lun=1)]
+    result = prov.apply_plan(_intent(), _discovery(), reachable_hosts=REACHABLE, wsapi_factory=lambda c: fake)
+    assert [w for w in fake.writes if w[0] == "vlun"] == [("vlun", "vol02", "set:hs", None)]
+    vlun = next(o for o in result.outcomes if o.kind == "vlun")
+    assert vlun.status == "created" and "LUN 0" in vlun.detail and "LUN 1" in vlun.detail
+
+
+def test_apply_refuses_an_export_the_templates_say_conflicts():
+    """Apply re-derives from the intent, so it must re-check what the plan checked (the array may have
+    moved between plan and click)."""
+    fake = TruthfulFakeWsapi(vluns=[VlunTemplate(volume="vol01", target="esx1", lun=2)])
+    intent = _intent(exports=[ExportRequest(source_kind="vvset", source_name="vvs", target_kind="hostset", target_name="hs")])
+    result = prov.apply_plan(intent, _discovery(), reachable_hosts=REACHABLE, wsapi_factory=lambda c: fake)
+    assert [w for w in fake.writes if w[0] == "vlun"] == []
+    vlun = next(o for o in result.outcomes if o.kind == "vlun")
+    assert vlun.status == "failed" and "already presented directly to member esx1" in vlun.detail
+
+
+def test_duplicate_templates_pinned_from_the_live_array():
+    """The array's own showvlun -t after the P-21 apply: 24 templates, zz_t2_vol01/02 twice each."""
+    from alletra_onboard.application.documents.asbuilt_parse import parse_showvlun_templates_cli
+
+    text = (Path(__file__).resolve().parents[1] / "fixtures" / "rack13_array" / "showvlun_t_duplicate.txt").read_text(encoding="utf-8")
+    templates = parse_showvlun_templates_cli(text)
+    assert len(templates) == 24
+    assert sorted(t.lun for t in templates if t.volume == "zz_t2_vol01" and t.target == "set:zz_t2_hs") == [0, 3]
+    assert sorted(t.lun for t in templates if t.volume == "zz_t2_vol02" and t.target == "set:zz_t2_hs") == [1, 4]
+    # and the plan, shown this array, calls the run-2 export Exists at BOTH LUNs — the truth, not a tidy story
+    fake = TruthfulFakeWsapi(vluns=[t for t in templates if t.target == "set:zz_t2_hs"])
+    intent = _intent(volumes=[VolumeRequest(name="zz_t2_vol01", size_gib=1, vvset="zz_t2_vvs"),
+                              VolumeRequest(name="zz_t2_vol02", size_gib=1, vvset="zz_t2_vvs")],
+                     host_sets=[HostSetRequest(name="zz_t2_hs", members=["esx1"])],
+                     exports=[ExportRequest(source_kind="vvset", source_name="zz_t2_vvs", target_kind="hostset", target_name="zz_t2_hs")])
+    row = _row(_plan(fake, intent), "vlun", "zz_t2_vvs")
+    assert row.state == "exists" and "LUN 0/3" in row.reason and "LUN 1/4" in row.reason
