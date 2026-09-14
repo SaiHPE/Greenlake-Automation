@@ -79,7 +79,7 @@ if ($PSVersionTable.PSVersion.Major -lt 6) {
   [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
   [System.Net.WebRequest]::DefaultWebProxy = $null
 }
-$Common = @{ TimeoutSec = 120; UseBasicParsing = $true }
+$Common = @{ TimeoutSec = 120; UseBasicParsing = $true; DisableKeepAlive = $true }   # no pooled TLS connection to go stale (S-12)
 if ($PSVersionTable.PSVersion.Major -ge 6) { $Common['SkipCertificateCheck'] = $true; $Common['NoProxy'] = $true }
 
 function Invoke-Json {
@@ -89,12 +89,14 @@ function Invoke-Json {
   if ($null -ne $Body) { $req['ContentType'] = 'application/json'; $req['Body'] = ($Body | ConvertTo-Json -Depth 12 -Compress) }
   try {
     $resp = Invoke-WebRequest @Common @req
-    $status = [int]$resp.StatusCode; $text = $resp.Content
+    $status = [int]$resp.StatusCode
+    # 5.1 decodes a charset-less JSON body as Latin-1; take the bytes and decode UTF-8 ourselves.
+    $text = if ($resp.RawContentStream) { [System.Text.Encoding]::UTF8.GetString($resp.RawContentStream.ToArray()) } else { $resp.Content }
   } catch [System.Net.WebException] {
     $r = $_.Exception.Response
     if ($null -eq $r) { throw }
     $status = [int]$r.StatusCode
-    $reader = New-Object System.IO.StreamReader($r.GetResponseStream()); $text = $reader.ReadToEnd(); $reader.Close()
+    $reader = New-Object System.IO.StreamReader($r.GetResponseStream(), [System.Text.Encoding]::UTF8); $text = $reader.ReadToEnd(); $reader.Close()
   } catch {
     if ($_.Exception.Response) {
       $status = [int]$_.Exception.Response.StatusCode; $text = $_.ErrorDetails.Message
@@ -117,27 +119,28 @@ function ApiOk([string]$Method, [string]$Path, $Body = $null, [string]$Save = ''
 # ------------------------------------------------------------------ R5: wait by state, then read the event
 
 function Wait-Step {
-  # Polls GET /runs/{id} until status leaves 'running', then returns the newest event of one of $Types
-  # that was appended AFTER index $Since. Timeout or a missing event is a FAIL (caller decides).
+  # Polls until the newest event appended AFTER index $Since is one of $Types (or step.crashed), up to
+  # the ceiling. The run STATUS is not the signal: verify and as-built never change it by design
+  # (S-12 gave up after 5 s on a verify that needed 40). Timeout or a crash is a FAIL (caller decides).
   param([string]$RunId, [string[]]$Types, [int]$Since, [string]$Save)
   $deadline = (Get-Date).AddSeconds($CeilingSeconds)
-  $status = 'running'
+  $status = ''
   $found = $null
-  $settled = 0
   $Types = @($Types) + 'step.crashed'
   while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds $PollSeconds
-    $run = (Api 'GET' "/runs/$RunId").Json
-    $status = $run.run.status
     $events = @((Api 'GET' "/runs/$RunId/events").Json.events)
     for ($i = $events.Count - 1; $i -ge $Since; $i--) {
       if ($Types -contains $events[$i].event_type) { $found = $events[$i]; break }
     }
-    if ($found -and $status -ne 'running') { break }
-    if (-not $found -and $status -ne 'running') { $settled++; if ($settled -ge 5) { break } }
+    if ($found) { break }
   }
-  Api 'GET' "/runs/$RunId/events" -Save "$Save-events" | Out-Null
-  if (-not $found) { throw "waited for $($Types -join '|') - run status '$status', no such event" }
+  $status = (Api 'GET' "/runs/$RunId").Json.run.status
+  $all = @((Api 'GET' "/runs/$RunId/events" -Save "$Save-events").Json.events)
+  if (-not $found) {
+    $last = if ($all.Count -gt 0) { $all[$all.Count - 1] } else { $null }
+    throw "waited ${CeilingSeconds}s for $($Types -join '|') - run status '$status', last event $(if ($last) { "$($last.event_type): $($last.message)" } else { 'none' })"
+  }
   Write-Evidence "$Save.json" ($found | ConvertTo-Json -Depth 20) | Out-Null
   if ($found.event_type -eq 'step.crashed') { throw "step crashed: $($found.message)" }
   return $found
@@ -156,28 +159,45 @@ function Run-Step {
 # ------------------------------------------------------------------ WSAPI, read-only
 
 $script:Wsapi = $null
+$script:WsapiCreds = $null
 function Wsapi-Login([string]$ArrayHost, [string]$User, [string]$Password) {
   $base = "https://$ArrayHost/api/v1"
   $login = Invoke-Json -Method 'POST' -Uri "$base/credentials" -Body @{ user = $User; password = $Password }
   if ($login.Status -ne 201 -and $login.Status -ne 200) { throw "WSAPI login failed: HTTP $($login.Status) $($login.Text)" }
   $script:Wsapi = @{ Base = $base; Headers = @{ 'X-HP3PAR-WSAPI-SessionKey' = $login.Json.key } }
+  $script:WsapiCreds = @{ ArrayHost = $ArrayHost; User = $User; Password = $Password }
 }
 function Wsapi-Logout() {
   if ($script:Wsapi) { try { Invoke-Json -Method 'DELETE' -Uri "$($script:Wsapi.Base)/credentials/$($script:Wsapi.Headers['X-HP3PAR-WSAPI-SessionKey'])" -Headers $script:Wsapi.Headers | Out-Null } catch {} }
+}
+function Wsapi-Get([string]$name) {
+  # One retry: a dropped connection is retried as-is; 401/403 (session expired) re-logs in first.
+  for ($attempt = 1; $attempt -le 2; $attempt++) {
+    try {
+      $r = Invoke-Json -Method 'GET' -Uri "$($script:Wsapi.Base)/$name" -Headers $script:Wsapi.Headers
+      if ($r.Status -eq 200) { return $r }
+      if (($r.Status -eq 401 -or $r.Status -eq 403) -and $attempt -eq 1) { Wsapi-Login $script:WsapiCreds.ArrayHost $script:WsapiCreds.User $script:WsapiCreds.Password; continue }
+      throw "WSAPI GET $name -> HTTP $($r.Status)"
+    } catch {
+      if ($attempt -eq 2) { throw }
+      Note "WSAPI GET $name failed once ($($_.Exception.Message)); retrying"
+      Start-Sleep -Seconds 2
+    }
+  }
 }
 function Wsapi-Read([string]$when) {
   # The five lists the plan compares against, each saved verbatim as wsapi-<what>-<when>.json.
   $snap = @{}
   foreach ($name in 'hosts', 'hostsets', 'volumes', 'volumesets', 'vluns') {
-    $r = Invoke-Json -Method 'GET' -Uri "$($script:Wsapi.Base)/$name" -Headers $script:Wsapi.Headers
-    if ($r.Status -ne 200) { throw "WSAPI GET $name -> HTTP $($r.Status)" }
+    $r = Wsapi-Get $name
     Write-Evidence "wsapi-$name-$when.json" $r.Text | Out-Null
     $snap[$name] = @($r.Json.members)
   }
   return $snap
 }
 function Snap-Counts($snap) {
-  return [ordered]@{ hosts = $snap.hosts.Count; hostsets = $snap.hostsets.Count; volumes = $snap.volumes.Count; volumesets = $snap.volumesets.Count; vluns = $snap.vluns.Count }
+  # vluns counted as TEMPLATES: active per-path rows come and go with host logins.
+  return [ordered]@{ hosts = $snap.hosts.Count; hostsets = $snap.hostsets.Count; volumes = $snap.volumes.Count; volumesets = $snap.volumesets.Count; vluns = (Snap-Templates $snap).Count }
 }
 function Snap-Prefixed($snap) {
   $names = @()
@@ -328,7 +348,11 @@ try {
   $mine = @($plan1.actions | Where-Object { $_.name -like "$Prefix*" -or $_.kind -eq 'vlun' })
   $hostRow = @($plan1.actions | Where-Object { $_.kind -eq 'host' -and $_.name -eq $HostName })[0]
   Check "plan: every $Prefix row and the export are 'create'" (($mine.Count -ge 5) -and (@($mine | Where-Object { $_.state -ne 'create' }).Count -eq 0)) (($mine | ForEach-Object { "$($_.kind) $($_.name)=$($_.state)" }) -join '; ') | Out-Null
-  Check "plan: host row $HostName is 'exists'" ($hostRow -and $hostRow.state -eq 'exists') $(if ($hostRow) { $hostRow.reason } else { 'no host row' }) | Out-Null
+  # The host row's state follows the array, not an assumption: after S-10's cleanup .136 did not exist
+  # and the plan rightly said 'create' (S-12 FAIL 1 was the runner's, not the app's).
+  $hostPreexists = @($Baseline.hosts | Where-Object { $_.name -eq $HostName }).Count -gt 0
+  $wantHost = if ($hostPreexists) { 'exists' } else { 'create' }
+  Check "plan: host row $HostName is '$wantHost' (array $(if ($hostPreexists) { 'has' } else { 'lacks' }) it)" ($hostRow -and $hostRow.state -eq $wantHost) $(if ($hostRow) { "$($hostRow.state) $($hostRow.reason)" } else { 'no host row' }) | Out-Null
   Check 'plan: 0 blockers' (@($plan1.blockers).Count -eq 0) (@($plan1.blockers) -join '; ') | Out-Null
 
   $before1 = Snap-Templates (Wsapi-Read 'before-apply-1')
@@ -359,7 +383,10 @@ try {
   $order = @{ vlun = 0; vvset = 1; volume = 2; hostset = 3; host = 4 }
   $kinds = @($Run1Removals | ForEach-Object { $order[$_.kind] })
   $sorted = $true; for ($i = 1; $i -lt $kinds.Count; $i++) { if ($kinds[$i] -lt $kinds[$i - 1]) { $sorted = $false } }
-  Check 'removal set: 6 lines in dependency order' ($Run1Removals.Count -eq 6 -and $sorted) (($Run1Removals | ForEach-Object { $_.command }) -join ' ; ') | Out-Null
+  $wantLines = 6 + $(if ($hostPreexists) { 0 } else { 1 })
+  Check "removal set: $wantLines lines in dependency order" ($Run1Removals.Count -eq $wantLines -and $sorted) (($Run1Removals | ForEach-Object { $_.command }) -join ' ; ') | Out-Null
+  # Pasted in dependency order whatever the API sent (S-12 pasted host-before-set from an unsorted list).
+  $Run1Removals = @($Run1Removals | Sort-Object { $order[$_.kind] })
   Write-Evidence 'run1-removal-set.txt' (($Run1Removals | ForEach-Object { $_.command }) -join "`r`n") | Out-Null
 
   # ---------------------------------------------------------------- 2 Rerun
@@ -453,8 +480,8 @@ if ($SkipCleanup) {
     try { $transcript = & cmd /c "ssh -T -o StrictHostKeyChecking=accept-new $ArrayUser@$ArrayHost < `"$cmdFile`" 2>&1" | Out-String }
     finally { $ErrorActionPreference = $eap }
     Write-Evidence 'cleanup.txt' $transcript | Out-Null
-    $bad = @($transcript -split "`n" | Where-Object { $_ -match 'Error|error:|does not exist|Invalid' })
-    Check 'the removal lines were accepted' ($bad.Count -eq 0) ($bad -join ' | ') | Out-Null
+    $bad = @($transcript -split "`n" | Where-Object { $_ -match 'Error|error|does not exist|Invalid|cannot|Cannot|member of|in use|not allowed|failed|Failed' })
+    Check 'the removal lines were accepted (no CLI error text)' ($bad.Count -eq 0) ($bad -join ' | ') | Out-Null
     if (-not $script:Wsapi) { Wsapi-Login $ArrayHost $ArrayUser $ArrayPw }
     $final = Wsapi-Read 'after-cleanup'
     $left = Snap-Prefixed $final
