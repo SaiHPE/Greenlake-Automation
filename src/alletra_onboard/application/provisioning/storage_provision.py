@@ -626,6 +626,9 @@ def removal_set(
             items.append(RemovalItem(kind=o.kind, name=o.name, command=cmd[o.kind].format(n=o.name)))
     touched = [f"{o.kind} {o.name}" for o in outcomes if o.status == "updated"]
     notes = ["Not reverted — members or WWNs were added to: " + ", ".join(touched) + ". They existed before this run."] if touched else []
+    # S-12 (2026-09-14): the runner pasted the raw list and removed hosts before their set. The LIST
+    # is in paste order, not only the rendering.
+    items.sort(key=lambda i: _REMOVAL_ORDER.get(i.kind, 9))
     return items, notes
 
 

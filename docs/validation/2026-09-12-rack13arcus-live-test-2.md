@@ -294,7 +294,38 @@ any table. Two sessions' worth of objects gone; the training team's objects unto
 | S-8 | passed | SPEC-002 all five sections | Z-B, A-3, A-5 |
 | S-11 | passed | SPEC-004 R1–R3 | — |
 | S-10 | done by hand | — | G-5 stays open |
+| S-12 | 27 PASS / 4 FAIL (rc.14 exe, rc.15 runner) | SPEC-001 R1–R6, R11; SPEC-005; SPEC-004 R4/R5 — by machine | **SPEC-007 R3** (unsorted list); three runner faults → rc.16 |
 
 Not run: S-3 (failure paths), S-5 (reload/resume), S-6 (same sheet twice), S-7 (G-1 zoning apply),
 S-9 (iSCSI). Releases during the session: rc.10 (SPEC-005), rc.11 (P-17/P-18), rc.12 (P-21 / R11),
 rc.13 (Z-B / A-3 / A-5). Every fix carries a test pinned to the evidence the session produced.
+
+## S-12 — 2026-09-14 14:16–14:24, v0.16.0-rc.14 exe + rc.15 `session.ps1`: the runner's first run
+
+`.\session.ps1 -BaseSheet Initialisation_sheet_rack13arcus_2026-09-12-rc10-test.xlsx` — the whole
+provisioning session, no clicks, 8 minutes. **27 PASS, 4 FAIL** (`script-logs/report.md`; the
+evidence folder is owed). Baseline: 11 hosts, 5 host sets, 51 volumes, 9 VV sets, 79 VLUN rows
+(19 templates). Host picked: `10.132.30.136` (vCenter, both fabrics, in `zoned_hosts`).
+
+What passed, and therefore is now **live-proven by machine**: SPEC-001 R1–R6 and R11 (rerun: every
+row `exists`, template count 19 → 19, removal set empty); SPEC-005 (blank members → blocker naming
+the set, no host / VLUN rows); the size conflict → `conflict` + blocker + `POST /storage/apply`
+refused with 409 and the array untouched; apply created 6 == planned 6, read-back `LUN 0, LUN 1 →
+set:zz_s6_hs`, WSAPI showed exactly the two new templates; path verification `live`, 2 LUNs, 4 paths
+per LUN on both switches (SPEC-004 R4/R5).
+
+The four FAILs, sorted by whose they were:
+
+| # | FAIL | Whose | Fix |
+|---|---|---|---|
+| 1 | *plan: host row 10.132.30.136 is 'exists'* — it was `create` | **runner assumption.** S-10's cleanup had removed the host; the plan was right. | rc.16: expectation comes from the WSAPI baseline (`exists` if the host is there, else `create`); removal count 6 or 7 accordingly. |
+| 2 | *removal set: 6 lines in dependency order* — 7 lines, and the order was vlun, vlun, **host, hostset, vv, vv, vvset** | **app defect (SPEC-007 R3).** `removal_set()` returned outcome order; only the UI and the as-built sorted. The runner pasted the raw list — host before its set, volumes before their VV set. | rc.16: the list is sorted at the source (`test_a_created_host_is_removed_after_its_set_in_the_raw_list`); the runner also sorts before pasting. |
+| 3 | *5 Documents: waited for verify.completed … run status 'waiting_for_operator'* after 5 s | **runner bug.** Verify and as-built never change the run status by design; the runner treated "not running and no event" as settled. | rc.16: wait by event only, up to the ceiling; a timeout names the last event. |
+| 4 | *cleanup failed: The underlying connection was closed* on the WSAPI read after SSH | **runner robustness.** A pooled TLS connection went stale over the 8 minutes; 5.1 does not retry. | rc.16: `DisableKeepAlive`, one retry, re-login on 401/403. |
+
+Consequence of #2 and #4: the cleanup's effect on the array is **unverified**. The SSH transcript
+(`cleanup.txt`) is owed; if `removevv` was refused for a VV still in its set (the order pasted), the
+array holds `zz_s6_vol01`/`zz_s6_vol02` (the VV set itself was removed last, so they are now loose)
+and possibly host `10.132.30.136`. The rc.16 runner's preflight names the leftovers and prints the
+lines to paste. Also seen in the report: `→` and `·` rendered as `â` / `Â·` — 5.1 decoded the JSON
+body as Latin-1; rc.16 decodes the bytes as UTF-8.
