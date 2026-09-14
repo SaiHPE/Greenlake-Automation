@@ -303,8 +303,19 @@ class ActionOutcome(BaseModel):
     detail: str = ""
 
 
+class RemovalItem(BaseModel):
+    """One CLI line that undoes one thing THIS apply created (SPEC-007). Text the operator pastes;
+    the tool never runs it. `kind` orders the block so it can be pasted top to bottom."""
+
+    kind: ActionKind
+    name: str                 # the object; for an export "<volume> LUN <n> → <target>"
+    command: str
+
+
 class ProvisioningResult(BaseModel):
     outcomes: list[ActionOutcome] = Field(default_factory=list)
+    removals: list[RemovalItem] = Field(default_factory=list)      # SPEC-007: what this apply created, as undo lines
+    removal_notes: list[str] = Field(default_factory=list)         # objects touched but not reverted
     error: str | None = None
 
 

@@ -12,6 +12,7 @@ column only — the **Field** column is the stable key the parser matches on, so
 from __future__ import annotations
 
 import io
+import zipfile
 from dataclasses import dataclass
 
 from openpyxl import Workbook, load_workbook
@@ -618,3 +619,76 @@ def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
         customer_name=values.get("customer_name", ""),
         site=values.get("site", ""),
     )
+
+
+# ------------------------------------------------------------------ SPEC-006 R3: compose a sheet from JSON
+
+def _fill_kv_tab(ws, label_to_key: dict[str, str], values: dict[str, str]) -> None:
+    """Write `values` into the Value column of a Field | Value | Notes tab, matched by label."""
+    for row in ws.iter_rows(min_row=2):
+        label = row[0].value
+        if label is None:
+            continue
+        key = label_to_key.get(_normalize_label(str(label)))
+        if key is not None and key in values:
+            row[1].value = values[key]
+
+
+def _replace_row_table(ws, columns: list[tuple[str, str, bool]], records: list[dict[str, str]]) -> None:
+    """Replace every data row of a row-table tab with `records`. The header is located the way
+    `_read_table` locates it (leading phrase, name column present); everything below it is cleared
+    first, so a scenario sheet never carries a stale row from the base workbook."""
+    header_to_key = {_column_key(label): key for key, label, _ in columns}
+    name_key = columns[0][0]
+    header_row: int | None = None
+    col_of_key: dict[str, int] = {}
+    for row in ws.iter_rows():
+        found = {header_to_key[_column_key(str(c.value))]: c.column
+                 for c in row if c.value is not None and _column_key(str(c.value)) in header_to_key}
+        if name_key in found:
+            header_row, col_of_key = row[0].row, found
+            break
+    if header_row is None:
+        raise ValueError(f"'{ws.title}' has no header row with a '{columns[0][1]}' column")
+    for r in range(header_row + 1, ws.max_row + 1):
+        for c in range(1, ws.max_column + 1):
+            ws.cell(row=r, column=c).value = None
+    for i, rec in enumerate(records):
+        for key, val in rec.items():
+            if key in col_of_key and val not in (None, ""):
+                ws.cell(row=header_row + 1 + i, column=col_of_key[key], value=val)
+
+
+def compose_workbook_bytes(
+    *,
+    base: bytes | None,
+    init: dict[str, str] | None = None,
+    targets: dict[str, str] | None = None,
+    volumes: list[dict[str, str]] | None = None,
+    hostsets: list[dict[str, str]] | None = None,
+    hosts: list[dict[str, str]] | None = None,
+) -> bytes:
+    """A filled Initialisation_sheet.xlsx from JSON (SPEC-006 R3): start from `base` (the operator's
+    working sheet) or the blank template; fill the key/value tabs given; REPLACE each row table given.
+    A table not given is left as it is. The result parses exactly as an operator-edited sheet would."""
+    try:
+        wb = load_workbook(io.BytesIO(base)) if base else load_workbook(io.BytesIO(build_template_bytes()))
+    except (zipfile.BadZipFile, KeyError, OSError) as exc:
+        raise ValueError("The base is not an .xlsx workbook.") from exc
+    if init:
+        _fill_kv_tab(wb[wb.sheetnames[0]], _LABEL_TO_KEY, init)
+    if targets and PROVISIONING_SHEET_NAME in wb.sheetnames:
+        _fill_kv_tab(wb[PROVISIONING_SHEET_NAME], _PROV_LABEL_TO_KEY, targets)
+    for name, columns, records in (
+        (VOLUMES_SHEET_NAME, VOLUME_COLUMNS, volumes),
+        (HOSTSETS_SHEET_NAME, HOSTSET_COLUMNS, hostsets),
+        (HOSTS_SHEET_NAME, HOSTS_COLUMNS, hosts),
+    ):
+        if records is None:
+            continue
+        if name not in wb.sheetnames:
+            raise ValueError(f"The base workbook has no '{name}' tab.")
+        _replace_row_table(wb[name], columns, records)
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()

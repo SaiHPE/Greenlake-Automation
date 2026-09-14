@@ -50,6 +50,7 @@ Copy-Item config\arrays.example.csv "$stage\config\"
 Copy-Item scripts\setup_jumpbox.ps1 "$stage\scripts\"
 Copy-Item scripts\start.ps1 "$stage\start.ps1"
 Copy-Item scripts\start.cmd "$stage\start.cmd"   # double-click launcher (bypasses exec policy, self-elevates)
+Copy-Item scripts\session.ps1 "$stage\session.ps1"   # SPEC-006: the self-checking live session
 
 # drop compiled caches so the zip is clean
 Get-ChildItem -Recurse -Directory -Filter __pycache__ $stage | Remove-Item -Recurse -Force

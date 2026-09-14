@@ -50,6 +50,8 @@ if ($Chromium) {
 Remove-Item -Recurse -Force build, 'dist\AlletraOnboard' -ErrorAction SilentlyContinue
 & $py -m PyInstaller --noconfirm --clean alletra_onboard.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed (exit $LASTEXITCODE)" }
+# SPEC-006: the session runner ships next to the exe so a live session is `.\session.ps1 -BaseSheet <xlsx>`.
+Copy-Item scripts\session.ps1 'dist\AlletraOnboard\session.ps1'
 
 Remove-Item $zip, "$zip.sha256" -ErrorAction SilentlyContinue
 Compress-Archive -Path 'dist\AlletraOnboard' -DestinationPath $zip -CompressionLevel Optimal
