@@ -259,3 +259,19 @@ nothing is exported to this host*. SPEC-004 R5 live.
 Array state now: run-2 objects; `zz_t3_vol01`, `zz_t3_vol02`, `zz_t3_vvs`, `zz_t3_hs` (`.136`, `.86`),
 `zz_t3_win` (`arcus-win137`), hosts `10.132.30.86` and `arcus-win137`; `zz_t3_vvs → set:zz_t3_hs` at
 LUN 5/6. All to be removed at the end of the session.
+
+## S-8 passed — 2026-09-14 12:59, v0.16.0-rc.10
+
+Verify: configuration matches. As-built generated (782 KB, 28 pages) and checked against `showhost -d`,
+`showhostset`, `showvv`, `showvv -showcols …CPG…`, `showvvset`, `showvlun -t`, `showvlun -a` captured
+at 13:02. Every array section agrees with the array: the three run hosts with personas, initiators,
+ports and set membership; unclaimed logins now 3 WWPNs + 2 IQNs (`51402EC02089CC1C` moved into
+`arcus-win137`); five `zz_*` volumes with CPG `SSD_r6` (the corrected C-1 read works in the document);
+22 templates, the five `zz_*` ones each *4 on 10.132.30.136*. The run sections record the apply as it
+happened — including `zz_t2_vvs Created · LUN 3, LUN 4`, which is P-21 written down by the tool itself.
+
+Three findings from the document: **Z-B** — `arcus-win137` is in the Hosts table, logged in on F2, but
+was absent from the zoning gate table on screen: the check's expected list was vCenter-only, so a
+sheet or fabric host could never pass the gate (fixed rc.13 — the check uses the provisioning union).
+**A-3** — the zoning section said *This run did not include the SAN zoning step* when the check had
+run and only the plan had not (fixed rc.13). **A-5** — compression column showed `v2` (fixed).
