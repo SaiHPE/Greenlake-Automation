@@ -202,3 +202,17 @@ C-1 command works on OS 10.5.55 (fixture `showvv_showcols_cpg.txt`). S-2 plan it
 
 Array state at the end of this sitting: run-2 objects present; **plus `zz_t3_vol01` (10 GiB, id
 101, unexported)**. Cleanup list now includes `removevv -f zz_t3_vol01`.
+
+## S-1 passed — 2026-09-14 11:29, v0.16.0-rc.10
+
+Second attempt. The sheet's *Members* cell had been filled (`10.132.30.136`) but rc.10 dropped the
+column (P-17: header matched on the full hint text, which rc.10 had reworded) — the Compose card
+showed *choose members* and the plan blocked on *zz_t2_hs has no members*, exactly as SPEC-005 R1
+says it must. The operator picked the member in the dropdown, composed the two run-2 exports
+(`zz_t2_vvs → zz_t2_hs` auto; `zz_t2_vol03 → host 10.132.30.136` LUN 2; a first try typed `z` for
+the LUN and the plan read it as auto — P-18) and rebuilt:
+
+**0 to create · 0 to update · 8 already exist · 0 conflicts.** Every row *Exists* with its reason
+— host *carries all 2 WWN(s)*, set *has all 1 host(s)*, volumes *matches* (1 GiB tpvv / 1 GiB reduce /
+2 GiB tpvv on SSD_r6), VV-set *has all 2 volume(s)*, exports *already exported at LUN 0, LUN 1* and
+*at LUN 2*. SPEC-001 R1–R5 confirmed on hardware. Both live findings fixed in rc.11.

@@ -212,6 +212,18 @@ def _normalize_label(text: str) -> str:
     return text.strip().removesuffix("*").strip()
 
 
+def _column_key(text: str) -> str:
+    """A row-table header reduced to its leading phrase: `Members — comma-separated …` -> `members`,
+    `Size (GiB) *` -> `size`. The explanatory tail after " — " or " (" is guidance for the operator
+    and changes between template revisions; matching on it silently dropped a whole column when it
+    did (P-17, 2026-09-14: rc.10 renamed the Members hint and every existing sheet lost its members)."""
+    head = _normalize_label(text)
+    for sep in (" — ", " - ", " ("):
+        if sep in head:
+            head = head.split(sep, 1)[0]
+    return " ".join(head.lower().split())
+
+
 def _write_fillable_tab(ws, sections: list[tuple[str, list[tuple[str, str, bool, str]]]]) -> None:
     """Write a Field | Value | Notes tab grouped by section header (the operator fills Value)."""
     ws.append(["Field", "Value", "Notes / example"])
@@ -437,24 +449,25 @@ def _read_tab(sheet, label_to_key: dict[str, str]) -> dict[str, str]:
 
 
 def _read_table(ws, columns: list[tuple[str, str, bool]]) -> list[dict[str, str]]:
-    """Read a row-table tab into a list of {key: value} dicts. Locates the header row by matching cells
-    to the known column headers (tolerant of the intro line and of the operator's column order), then
-    reads data rows to the end, skipping any row whose first (name) column is blank."""
-    header_to_key = {_normalize_label(label): key for key, label, _ in columns}
+    """Read a row-table tab into a list of {key: value} dicts. Locates the header row as the first row
+    that carries the NAME column (tolerant of the intro line and of the operator's column order);
+    columns match on their leading phrase, never on the hint text after it (P-17). Then reads data
+    rows to the end, skipping any row whose name column is blank."""
+    header_to_key = {_column_key(label): key for key, label, _ in columns}
+    name_key = columns[0][0]
     rows = list(ws.iter_rows(values_only=True))
     header_idx: int | None = None
     col_index: dict[int, str] = {}
     for i, row in enumerate(rows):
-        mapping = {ci: header_to_key[_normalize_label(str(cell))]
+        mapping = {ci: header_to_key[_column_key(str(cell))]
                    for ci, cell in enumerate(row)
-                   if cell is not None and _normalize_label(str(cell)) in header_to_key}
-        if mapping:
+                   if cell is not None and _column_key(str(cell)) in header_to_key}
+        if name_key in mapping.values():
             header_idx, col_index = i, mapping
             break
     if header_idx is None:
         return []
 
-    name_key = columns[0][0]
     records: list[dict[str, str]] = []
     for row in rows[header_idx + 1:]:
         record = {

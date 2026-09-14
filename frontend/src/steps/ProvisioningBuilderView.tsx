@@ -23,15 +23,24 @@ function decode(v: string): [string, string] {
   return [v.slice(0, i), v.slice(i + 1)];
 }
 
+/** A LUN box holds nothing (auto) or a whole number 0–16383. Anything else is a typo, not "auto" (P-18: `z`). */
+function lunProblem(lun: string): string | null {
+  const t = lun.trim();
+  if (t === '') return null;
+  if (!/^\d+$/.test(t)) return `LUN "${t}" is not a number — leave it blank for auto or type a whole number`;
+  if (Number(t) > 16383) return `LUN ${t} is above the platform range (0–16383)`;
+  return null;
+}
+
 function rowToExport(r: ExportRow): ExportRequest | null {
   if (!r.source || !r.target) return null;
   const [sk, sn] = decode(r.source);
   const [tk, tn] = decode(r.target);
-  const n = parseInt(r.lun.trim(), 10);
+  const t = r.lun.trim();
   return {
     source_kind: sk as 'volume' | 'vvset', source_name: sn,
     target_kind: tk as 'host' | 'hostset', target_name: tn,
-    lun: r.lun.trim() === '' || Number.isNaN(n) ? null : n,
+    lun: t === '' ? null : parseInt(t, 10),
   };
 }
 
@@ -134,6 +143,8 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
 
   const save = async () => {
     if (!objects) return;
+    const bad = rows.map((r) => lunProblem(r.lun)).filter((p): p is string => p !== null);
+    if (bad.length) { setSaved(null); setError(bad.join(' · ')); return; }
     setError(null); setSaved(null); setBusy(true);
     try {
       const builder: ProvisioningBuilder = {
