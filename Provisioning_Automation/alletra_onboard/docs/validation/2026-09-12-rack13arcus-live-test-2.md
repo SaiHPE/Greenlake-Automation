@@ -178,3 +178,27 @@ Z9 no hint that `.86` sits on a remote switch · Z10 WWPNs without decode. Plan 
 - Confirm the parity notes render somewhere in Discovery (finding D-1).
 - Optional, for the record: `showeventlog -min 90 -oneline -msg zz_t2` to show run 1's
   `createvvset` at 00:01 and the manual `removevvset` after it.
+
+## Second session — S-1 and S-2 setup (2026-09-13 evening, v0.16.0-rc.9)
+
+Operator ran from the rc.9 `.exe`; same sheet as run 2, unchanged (blank *Members* on `zz_t2_hs`,
+no composed exports). Provision only.
+
+**S-1 — Build plan with `zz_t2_*` present.** Screenshot kept. What SPEC-001 promised held on every
+row it could judge: `zz_t2_vol01/02/03` *Exists · 1 GiB tpvv on SSD_r6 — matches* (and `2 GiB` for
+vol03, `reduce` for vol02); `zz_t2_vvs` *Exists · has all 2 volume(s)*; the two set exports *Exists ·
+already exported at LUN 0 / LUN 1*; host `.136` *Exists · carries all 2 WWN(s)*. Summary line
+*5 to create · 1 to update · 18 already exist · 0 conflicts*.
+
+The five creates and the one update were the blank-members default meeting the SPEC-003 union:
+`.47`, `.86`, `arcus-win137`, `zz_t2_declared` to be created; `zz_t2_hs` to gain **15 members** —
+those four plus `vmenode`, `grp3_vmenode1-3` and seven `HPE_VM_*` (all other teams' iSCSI hosts).
+`zz_t2_vol03 → set:zz_t2_hs` was planned *Create* although run 2 had presented it directly to `.136`
+at LUN 2. Not applied. Findings P-13, P-14, P-16 → SPEC-005, rc.10. LESSONS 36.
+
+**S-2 setup.** `createvv -tpvv SSD_r6 zz_t3_vol01 10g` → id 101; `showvv -showcols
+Id,Name,Prov,Type,CPG,VSize_MB zz_t3_vol01` printed the table with a `CPG` column — the corrected
+C-1 command works on OS 10.5.55 (fixture `showvv_showcols_cpg.txt`). S-2 plan itself: next, on rc.10.
+
+Array state at the end of this sitting: run-2 objects present; **plus `zz_t3_vol01` (10 GiB, id
+101, unexported)**. Cleanup list now includes `removevv -f zz_t3_vol01`.
