@@ -27,6 +27,7 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningIntent,
     ProvisioningPlan,
     ProvisioningResult,
+    RemovalItem,
     VlunTemplate,
     VolumeRequest,
 )
@@ -591,12 +592,50 @@ def apply_plan(
                 export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status=status))
 
             # R8: "created" is the array's word; read the templates back ONCE and hold it to it.
+            after = array.vlun_templates() if exports else templates
             if exports:
-                _confirm_exports(exports, export_outcomes, vvsets, array.vlun_templates())
+                _confirm_exports(exports, export_outcomes, vvsets, after)
             result.outcomes.extend(export_outcomes)
+            # SPEC-007: the undo for exactly what this apply created, from the same reads.
+            result.removals, result.removal_notes = removal_set(result.outcomes, templates, after)
     except Exception as exc:  # noqa: BLE001 - record what we got, surface the failure
         result.error = str(exc)
     return result
+
+
+# The paste order that never trips over a dependency: exports, then sets, then their members.
+_REMOVAL_ORDER = {"vlun": 0, "vvset": 1, "volume": 2, "hostset": 3, "host": 4}
+
+
+def removal_set(
+    outcomes: list[ActionOutcome], before: list[VlunTemplate], after: list[VlunTemplate],
+) -> tuple[list[RemovalItem], list[str]]:
+    """SPEC-007 R1/R2: undo lines for what THIS apply created — objects by `created` status, exports
+    by the template diff (after − before), so a set completed member by member removes only the new
+    member's LUN and a pre-existing LUN is never named. `updated` objects are not reverted (their
+    members or WWNs were someone's before this run) and are named in a note instead."""
+    items: list[RemovalItem] = []
+    seen = {(t.volume, t.target, t.lun) for t in before}
+    for t in after:
+        if (t.volume, t.target, t.lun) not in seen:
+            items.append(RemovalItem(kind="vlun", name=f"{t.volume} LUN {t.lun} → {t.target}",
+                                     command=f"removevlun -f {t.volume} {t.lun} {t.target}"))
+    cmd = {"vvset": "removevvset -f {n}", "volume": "removevv -f {n}", "hostset": "removehostset -f {n}", "host": "removehost {n}"}
+    for o in outcomes:
+        if o.status == "created" and o.kind in cmd:
+            items.append(RemovalItem(kind=o.kind, name=o.name, command=cmd[o.kind].format(n=o.name)))
+    touched = [f"{o.kind} {o.name}" for o in outcomes if o.status == "updated"]
+    notes = ["Not reverted — members or WWNs were added to: " + ", ".join(touched) + ". They existed before this run."] if touched else []
+    return items, notes
+
+
+def render_removal_commands(items: list[RemovalItem]) -> list[str]:
+    """R3: dependency order, one command per object, de-duplicated — usable across several applies."""
+    out: list[str] = []
+    for item in sorted(items, key=lambda i: _REMOVAL_ORDER.get(i.kind, 9)):
+        if item.command not in out:
+            out.append(item.command)
+    return out
 
 
 def _luns_text(volumes: list[str], templates: list[VlunTemplate], target_ref: str) -> str:

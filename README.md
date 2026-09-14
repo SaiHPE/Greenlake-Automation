@@ -285,6 +285,23 @@ The onboarding runs entirely from the web app; the CLI is just the launcher plus
 - `onboard api` — start the API server without opening a browser.
 - `onboard check` — read-only GreenLake readiness (auth + provisioned Data Services regions).
 
+### The self-checking live session (`session.ps1`)
+
+Every zip carries `session.ps1` next to the exe ([SPEC-006](docs/specs/SPEC-006-session-runner.md)).
+With the app running, in PowerShell:
+
+```powershell
+.\session.ps1 -BaseSheet C:\path\to\Initialisation_sheet.xlsx
+```
+
+It asks for the array, vCenter and switch passwords, refuses an array that already has `zz_s6_*`
+objects, then drives six scenarios over the app's own API against a clean array — create, rerun,
+size conflict, blank host-set members, verify + as-built, and cleanup by the tool's own removal
+set ([SPEC-007](docs/specs/SPEC-007-removal-set.md)) pasted over SSH (one more password prompt).
+It writes `session-<stamp>\report.md` (PASS/FAIL per check) and keeps every response, WSAPI read,
+the docx and the SSH transcript in that folder; exit code 1 on any FAIL. Send the folder back.
+It never writes to a switch and never issues a CLI command the tool did not generate.
+
 ---
 
 ## `arrays.csv`

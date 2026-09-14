@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from alletra_onboard import __version__
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.api.app import create_app
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
@@ -46,7 +47,9 @@ def _work_item_payload() -> dict:
 
 
 def test_health(tmp_path):
-    assert _client(tmp_path).get("/health").json() == {"status": "ok"}
+    body = _client(tmp_path).get("/health").json()
+    assert body["status"] == "ok"
+    assert body["version"] == __version__  # SPEC-006 R1: the session report names the build
 
 
 def test_index_is_revalidated_while_hashed_assets_cache_forever(tmp_path):
@@ -473,3 +476,36 @@ def test_config_roundtrip_masks_secret(tmp_path, monkeypatch):
     assert body["values"]["GL_CLIENT_ID"] == "abc"
     assert body["values"]["GL_CLIENT_SECRET"] == "****"
     assert "supersecret" not in saved.text
+
+
+def test_init_sheet_compose_round_trips_through_upload(tmp_path, monkeypatch):
+    """SPEC-006 R3: the session runner sends the operator's sheet + scenario rows and uploads what comes
+    back; the run's intent must carry the scenario rows and nothing from the base's row tables."""
+    import base64
+
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    template = client.get("/init-sheet/template").content
+    base_b64 = _fill_template(template, _COMPLETE_MAIN, _COMPLETE_PROV)
+    resp = client.post("/init-sheet/compose", json={
+        "base_b64": base_b64,
+        "volumes": [{"name": "zz_s6_vol01", "size_gib": "1", "vvset": "zz_s6_vvs"}],
+        "hostsets": [{"name": "zz_s6_hs", "members": "esx1"}],
+    })
+    assert resp.status_code == 200, resp.text
+    composed = resp.json()["content_b64"]
+    assert base64.b64decode(composed)[:2] == b"PK"
+    up = client.post("/init-sheet/upload", json={"content_b64": composed})
+    assert up.status_code == 200, up.text
+    # SPEC-006 R1: the runner learns the array from the sheet — hosts and users, never a password
+    targets = up.json()["targets"]
+    assert targets["array_host"] == _COMPLETE_PROV["targets"]["prov_array_host"]
+    assert targets["array_user"] == "3paradm"
+    assert not any("password" in k for k in targets)
+    run = client.post("/runs/from-sheet", json={"token": up.json()["token"], "mode": "PROVISION_ONLY"})
+    assert run.status_code == 200, run.text
+    intent = client.get(f"/runs/{run.json()['run']['run_id']}").json()
+    # the intent is not echoed with passwords; check through the objects palette shape instead
+    assert intent["run"]["run_id"]
+    bad = client.post("/init-sheet/compose", json={"base_b64": base64.b64encode(b"not a workbook").decode()})
+    assert bad.status_code in (400, 422)

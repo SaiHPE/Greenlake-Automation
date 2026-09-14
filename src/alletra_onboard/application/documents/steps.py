@@ -162,9 +162,12 @@ class DocumentSteps:
         return data
 
     def _run_records(self, run_id: str, data) -> None:
-        """Fill the run sections from the run's own events: the latest payload per event type."""
+        """Fill the run sections from the run's own events: the latest payload per event type, plus
+        the union of every apply's removal items (SPEC-007 — a run may apply more than once)."""
         seen: dict[str, object] = {}
         for event in self._coord.list_events(run_id):
+            if event.event_type == "storage.applied":
+                data.provisioning_removals.extend((event.data.get("result") or {}).get("removals") or [])
             target = self._ASBUILT_RECORDS.get(event.event_type)
             if target is None:
                 continue

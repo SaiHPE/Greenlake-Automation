@@ -392,3 +392,38 @@ def test_compression_column_reads_yes_no_or_dash(tmp_path):
     vols = _tables_by_header(doc)[("Volume", "Provisioning", "Dedup", "Compression", "Size (GiB)", "CPG", "Snapshots", "VV set")]
     by = {r[0]: r for r in vols}
     assert by["zz_t2_vol02"][3] == "Yes (v2)" and by["zz_t2_vol01"][3] == "No"
+
+
+def test_provisioning_record_ends_with_the_removal_set_unioned_across_applies(tmp_path):
+    """SPEC-007 R4: the as-built carries the undo for everything the run created, whichever apply did it."""
+    result = {"outcomes": [{"kind": "host", "name": "h2", "status": "created", "detail": ""}], "error": None,
+              "removals": [{"kind": "host", "name": "h2", "command": "removehost h2"}], "removal_notes": []}
+    earlier = [{"kind": "vlun", "name": "v1 LUN 0 → set:hs", "command": "removevlun -f v1 0 set:hs"},
+               {"kind": "volume", "name": "v1", "command": "removevv -f v1"},
+               {"kind": "host", "name": "h2", "command": "removehost h2"}]          # duplicate across applies
+    out, _ = generate_asbuilt(_array_data(provisioning_result=result, provisioning_removals=earlier + result["removals"]),
+                              tmp_path / "removal.docx")
+    _, text = _read(out)
+    assert "To remove what this run created" in text
+    i = text.index("removevlun -f v1 0 set:hs"); j = text.index("removevv -f v1"); k = text.index("removehost h2")
+    assert i < j < k and text.count("removehost h2") == 1
+    out2, _ = generate_asbuilt(_array_data(provisioning_result={"outcomes": [], "error": None, "removals": []}),
+                               tmp_path / "noremoval.docx")
+    assert "Nothing — this run created no objects." in _read(out2)[1]
+
+
+def test_run_records_union_removals_from_every_apply():
+    from types import SimpleNamespace
+
+    from alletra_onboard.application.documents import steps as st
+
+    def ev(t, data, ts):
+        return SimpleNamespace(event_type=t, data=data, created_at=ts)
+
+    events = [
+        ev("storage.applied", {"result": {"outcomes": [], "removals": [{"kind": "volume", "name": "v1", "command": "removevv -f v1"}]}}, "t1"),
+        ev("storage.applied", {"result": {"outcomes": [], "removals": [{"kind": "host", "name": "h2", "command": "removehost h2"}]}}, "t2"),
+    ]
+    data = AsBuiltData()
+    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events))._run_records("r1", data)
+    assert [r["command"] for r in data.provisioning_removals] == ["removevv -f v1", "removehost h2"]

@@ -106,6 +106,7 @@ class AsBuiltData:
     provisioning_plan: dict | None = None
     provisioning_result: dict | None = None
     provisioning_applied_at: str = ""
+    provisioning_removals: list[dict] = field(default_factory=list)   # RemovalItem dicts from EVERY apply in the run (SPEC-007)
     path_verification: dict | None = None
 
 
@@ -717,6 +718,17 @@ def _add_zoning_section(doc, data: AsBuiltData) -> None:
 
 _OUTCOME_LABEL = {"created": "Created", "updated": "Updated", "exists": "Already existed", "failed": "Failed"}
 _VERDICT_LABEL = {"live": "Live", "partial": "Partial", "no_path": "No path"}
+_REMOVAL_ORDER = {"vlun": 0, "vvset": 1, "volume": 2, "hostset": 3, "host": 4}
+
+
+def _removal_lines(items: list[dict]) -> list[str]:
+    """SPEC-007 R3 over JSON-shaped RemovalItems: dependency order, de-duplicated across applies."""
+    out: list[str] = []
+    for item in sorted(items, key=lambda i: _REMOVAL_ORDER.get(i.get("kind", ""), 9)):
+        cmd = item.get("command", "")
+        if cmd and cmd not in out:
+            out.append(cmd)
+    return out
 
 
 def _when(iso: str) -> str:
@@ -745,6 +757,15 @@ def _add_provisioning_section(doc, data: AsBuiltData) -> None:
                widths=[0.10, 0.30, 0.18, 0.42])
     if result.get("error"):
         _para(doc, f"Provisioning stopped with an error: {result['error']}")
+    _para(doc, "To remove what this run created", bold=True)
+    removal_lines = _removal_lines(data.provisioning_removals or result.get("removals") or [])
+    if removal_lines:
+        _para(doc, "The undo for exactly the objects this run created, in dependency order (exports, VV sets, "
+                   "volumes, host sets, hosts). Objects that existed before the run are not listed. Review "
+                   "before pasting; the tool never runs these.")
+        _mono(doc, removal_lines)
+    else:
+        _para(doc, "Nothing — this run created no objects.")
     _para(doc, "Path verification", bold=True)
     paths = data.path_verification
     if not paths:
