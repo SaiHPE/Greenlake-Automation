@@ -592,7 +592,7 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
         remediations=[ZoneRemediation(fabric="odd", switch_host="sw1", cfg_name="CFG", commands=['cfgenable "CFG"'])],
         proper=False,
     )
-    monkeypatch.setattr(sz, "build_report", lambda intent, discovery: zoning_report)
+    monkeypatch.setattr(sz, "build_report", lambda intent, discovery, zoning_plan=None: zoning_report)
     monkeypatch.setattr(sp, "build_plan", lambda intent, discovery, **kw: ProvisioningPlan(actions=[PlannedAction(kind="host", name="esx1", description="d")]))
     monkeypatch.setattr(sp, "apply_plan", lambda intent, discovery, **kw: ProvisioningResult(outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]))
 

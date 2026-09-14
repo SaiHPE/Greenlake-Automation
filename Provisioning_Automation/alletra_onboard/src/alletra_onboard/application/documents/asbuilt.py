@@ -560,6 +560,14 @@ def _gib(mib: str) -> str:
         return "—"
 
 
+_COMPR = {"no": "No", "na": "—", "": "—"}
+
+
+def _compression(value: str) -> str:
+    """`showvv` Compr: `No`, `NA` (system/dds volumes), or a version tag like `v2` = compressed."""
+    return _COMPR.get(value.strip().lower(), f"Yes ({value})")
+
+
 def _add_volumes_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
     from alletra_onboard.application.documents.asbuilt_parse import parse_cli_sets, parse_showvv
 
@@ -588,7 +596,7 @@ def _add_volumes_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
                    "(thin with data reduction), full, dds (dedup store).")
         if user:
             _table(doc, ["Volume", "Provisioning", "Dedup", "Compression", "Size (GiB)", "CPG", "Snapshots", "VV set"],
-                   [[r.get("Name", ""), r.get("Prov", "—"), r.get("Dedup", "—"), r.get("Compr", "—"),
+                   [[r.get("Name", ""), r.get("Prov", "—"), r.get("Dedup", "—"), _compression(r.get("Compr", "")),
                      _gib(r.get(size_key, "")), cpg_by_name.get(r.get("Name", "")) or "—",
                      str(snap_count.get(r.get("Name", ""), 0)), ", ".join(in_sets.get(r.get("Name", ""), [])) or "—"]
                     for r in user],
@@ -637,8 +645,18 @@ def _add_presentations_section(doc, data: AsBuiltData, warnings: list[str]) -> N
 def _add_zoning_section(doc, data: AsBuiltData) -> None:
     _h1(doc, "SAN zoning designed in this run")
     plan = data.zoning_plan
-    if not plan:
+    report = data.zoning_report
+    if not plan and not report:
         _para(doc, "This run did not include the SAN zoning step.")
+        return
+    if not plan:
+        # The check ran (array-side) but no plan was built: say what the check found, plainly.
+        zoned_hosts = report.get("zoned_hosts", [])
+        unverified = report.get("unverified_hosts", [])
+        _para(doc, "The zoning check ran against the array's logins; no zoning plan was built and no "
+                   "command set was generated in this run.")
+        _para(doc, "Zoned on both fabrics: " + (", ".join(zoned_hosts) or "none") + "."
+                   + (f" Not seen by the array on either fabric: {', '.join(unverified)}." if unverified else ""))
         return
     rendered = data.zoning_rendered or {}
     aliases: dict[str, str] = rendered.get("aliases") or {}
@@ -687,7 +705,6 @@ def _add_zoning_section(doc, data: AsBuiltData) -> None:
         _para(doc, "On no fabric (cable and power first): " + ", ".join(plan["offline_hosts"]))
     if not rendered:
         _para(doc, "No command set was generated in this run.")
-    report = data.zoning_report
     if report:
         zoned_hosts = report.get("zoned_hosts", [])
         unverified = report.get("unverified_hosts", [])

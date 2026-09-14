@@ -111,11 +111,20 @@ def parse_active_zones(cfgshow: str) -> tuple[dict[str, set[str]], str | None]:
     return resolved, (effective_cfg or defined_cfg)
 
 
-def build_report(intent: ProvisioningIntent, discovery: DiscoveryReport) -> ZoningReport:
+def build_report(
+    intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None = None,
+) -> ZoningReport:
     """Verify dual-fabric zoning by COMPUTING over the DiscoveryReport and reconciling against the
     expected hosts. The array-side source is `showhost -d` (discovery.array_hosts) — the array's
     curated host view, so a storage/peer-array port can never be mistaken for a host. No array or
-    switch read here."""
+    switch read here.
+
+    Expected hosts (Z-B, 2026-09-14): the SAME union provisioning plans from — vCenter, the sheet's
+    Hosts tab, the fabric as the zoning plan recorded it, and any array host the intent puts in a
+    host set. Until rc.13 this list was vCenter-only whenever vCenter answered, so a sheet-declared
+    host (`arcus-win137`, logged in on F2, created by the run) never appeared in the gate table and
+    could never pass the gate: its exports were held back for ever with no way to release them.
+    Array hosts NOT in any set are other teams' objects and stay out of the table."""
     report = ZoningReport()
     fc_ports = [p for p in discovery.array_ports if p.protocol == "fc" and p.fabric]
     if not fc_ports:
@@ -142,11 +151,16 @@ def build_report(intent: ProvisioningIntent, discovery: DiscoveryReport) -> Zoni
     for port in fc_ports:
         arr_by_fabric[port.fabric].append(port.wwpn)
 
-    # Expected hosts: prefer the vCenter discovery list; otherwise verify the hosts the array reports
-    # as actually LOGGED IN (not its whole configured roster).
+    # Expected hosts: the provisioning union (see docstring). The array-only fallback below survives
+    # for a run with no vCenter, no sheet hosts and no plan — it verifies whatever is logged in.
+    from alletra_onboard.application.provisioning.hosts import union_hosts  # local: avoid import cycle
+
+    in_a_set = {m for hs in getattr(intent, "host_sets", []) for m in hs.members}
     host_wwpns: dict[str, set[str]] = {}
-    for hba in discovery.host_hbas:
-        host_wwpns.setdefault(hba.host_name, set()).add(normalize_wwpn(hba.wwpn))
+    for name, h in union_hosts(discovery, getattr(intent, "declared_hosts", None) or [], zoning_plan)[0].items():
+        if not h.wwpns or (h.source == "array" and name not in in_a_set):
+            continue
+        host_wwpns[name] = {normalize_wwpn(w) for w in h.wwpns}
     if not host_wwpns:
         for host in discovery.array_hosts:
             if not host.name:      # the array's UNCLAIMED logins — real WWPNs, but not a named host
