@@ -1,6 +1,6 @@
 # SPEC-006 — The session runs itself
 
-**Status:** implemented 2026-09-14 (rc.14) — **pending its own first live run** (S-12)
+**Status:** implemented 2026-09-14 (rc.14; rc.15 fixes the 5.1 encoding failure, LESSONS 38) — **pending its own first live run** (S-12)
 **Findings addressed:** G-4 (breadth and failure evidence), the operator's cost of a live session
 (11 screenshots, 6 pasted scripts, ~3 hours on 2026-09-14)
 **Owner:** `scripts/session.ps1` (ships inside every release zip next to the exe), `api/app.py`

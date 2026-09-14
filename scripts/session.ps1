@@ -23,7 +23,7 @@
 
 .PARAMETER BaseSheet   The operator's working Initialisation_sheet.xlsx (credentials, init fields,
                        switch IPs come from it; its row tables are REPLACED per scenario, in a copy).
-.PARAMETER Api         The app's API (default http://127.0.0.1:8765 — start AlletraOnboard.exe first).
+.PARAMETER Api         The app's API (default http://127.0.0.1:8765 - start AlletraOnboard.exe first).
 .PARAMETER Cpg         CPG for the two volumes (default: the first CPG the array reports; 'SSD' preferred).
 .PARAMETER OutRoot     Where the session-<stamp> folder goes (default: next to this script).
 .PARAMETER SkipCleanup Leave zz_s6_* on the array (to look at it in the UI); the report says so.
@@ -66,7 +66,7 @@ function Check([string]$what, [bool]$ok, [string]$detail = '') {
   $verdict = if ($ok) { 'PASS' } else { 'FAIL' }
   [void]$script:Results.Add([pscustomobject]@{ Section = $script:Section; Verdict = $verdict; What = $what; Detail = $detail })
   $color = if ($ok) { 'Green' } else { 'Red' }
-  Write-Host ("  [{0}] {1}{2}" -f $verdict, $what, $(if ($detail) { " — $detail" } else { '' })) -ForegroundColor $color
+  Write-Host ("  [{0}] {1}{2}" -f $verdict, $what, $(if ($detail) { " - $detail" } else { '' })) -ForegroundColor $color
   return $ok
 }
 function Section([string]$title) { $script:Section = $title; Write-Host ""; Write-Host "== $title" -ForegroundColor Cyan }
@@ -85,10 +85,10 @@ if ($PSVersionTable.PSVersion.Major -ge 6) { $Common['SkipCertificateCheck'] = $
 function Invoke-Json {
   # Returns @{ Status; Text; Json }; never throws on 4xx/5xx (scenario 3 EXPECTS a 409).
   param([string]$Method, [string]$Uri, $Body = $null, [hashtable]$Headers = @{}, [string]$Save = '')
-  $args = @{ Method = $Method; Uri = $Uri; Headers = $Headers }
-  if ($null -ne $Body) { $args['ContentType'] = 'application/json'; $args['Body'] = ($Body | ConvertTo-Json -Depth 12 -Compress) }
+  $req = @{ Method = $Method; Uri = $Uri; Headers = $Headers }
+  if ($null -ne $Body) { $req['ContentType'] = 'application/json'; $req['Body'] = ($Body | ConvertTo-Json -Depth 12 -Compress) }
   try {
-    $resp = Invoke-WebRequest @Common @args
+    $resp = Invoke-WebRequest @Common @req
     $status = [int]$resp.StatusCode; $text = $resp.Content
   } catch [System.Net.WebException] {
     $r = $_.Exception.Response
@@ -137,7 +137,7 @@ function Wait-Step {
     if (-not $found -and $status -ne 'running') { $settled++; if ($settled -ge 5) { break } }
   }
   Api 'GET' "/runs/$RunId/events" -Save "$Save-events" | Out-Null
-  if (-not $found) { throw "waited for $($Types -join '|') — run status '$status', no such event" }
+  if (-not $found) { throw "waited for $($Types -join '|') - run status '$status', no such event" }
   Write-Evidence "$Save.json" ($found | ConvertTo-Json -Depth 20) | Out-Null
   if ($found.event_type -eq 'step.crashed') { throw "step crashed: $($found.message)" }
   return $found
@@ -221,7 +221,7 @@ function New-Run([string]$token, [string]$Save) {
 
 # ------------------------------------------------------------------ prompts (R1)
 
-Write-Host "SPEC-006 session runner — evidence folder: $Out"
+Write-Host "SPEC-006 session runner - evidence folder: $Out"
 $health = Api 'GET' '/health' $null 'health'
 if ($health.Status -ne 200) { Write-Host "The app is not answering at $Api. Start AlletraOnboard.exe first." -ForegroundColor Red; exit 1 }
 $Version = $health.Json.version
@@ -319,7 +319,7 @@ try {
   $bothFabrics = @($f1.Objects.discovered_hosts | Where-Object { $_.status -like '*both fabrics*' })
   Check 'discovery reports >= 1 host on both fabrics' ($bothFabrics.Count -ge 1) (($bothFabrics | ForEach-Object { "$($_.name) [$($_.source)]" }) -join ', ') | Out-Null
   $pick = Pick-Host $f1
-  if (-not $pick) { throw 'no vCenter host is logged in on both fabrics — scenario 1 needs one (as .136 was); nothing was created' }
+  if (-not $pick) { throw 'no vCenter host is logged in on both fabrics - scenario 1 needs one (as .136 was); nothing was created' }
   $HostName = $pick.name
   Note "host for ${HostSet}: $HostName ($($pick.status))"
   Check "zoning check puts $HostName in zoned_hosts" (@($f1.Zoning.data.report.zoned_hosts) -contains $HostName) ("zoned: " + (@($f1.Zoning.data.report.zoned_hosts) -join ', ')) | Out-Null
@@ -339,7 +339,9 @@ try {
   Check "apply: created == planned create ($plannedCreate)" ((Outcomes $res1 'created').Count -eq $plannedCreate) ("created=" + (Outcomes $res1 'created').Count) | Out-Null
   Check "apply: exists == planned exists ($plannedExists)" ((Outcomes $res1 'exists').Count -eq $plannedExists) ("exists=" + (Outcomes $res1 'exists').Count) | Out-Null
   $vlunOut = @($res1.outcomes | Where-Object { $_.kind -eq 'vlun' })[0]
-  Check 'apply: export read-back names two LUNs' ($vlunOut -and $vlunOut.detail -match 'LUN\s+\d+\s*/\s*\d+') $(if ($vlunOut) { $vlunOut.detail } else { 'no vlun outcome' }) | Out-Null
+  # Read-back is "LUN 0, LUN 1 -> set:..." for a clean create; "LUN 0/3" is the P-21 duplicate form.
+  $lunTokens = if ($vlunOut) { @([regex]::Matches($vlunOut.detail, 'LUN \d+') | ForEach-Object { $_.Value }) } else { @() }
+  Check 'apply: export read-back names two LUNs, no duplicate' ($lunTokens.Count -eq 2 -and $vlunOut.detail -notmatch 'LUN \d+/') $(if ($vlunOut) { $vlunOut.detail } else { 'no vlun outcome' }) | Out-Null
 
   $after1Snap = Wsapi-Read 'after-apply-1'
   $after1 = Snap-Templates $after1Snap
@@ -405,7 +407,11 @@ try {
   $creds = @{ username = $ArrayUser; password = $ArrayPw }
   $ev = Run-Step -RunId $Run1 -Path '/verify' -Body $creds -Types @('verify.completed', 'verify.failed') -Save 'run1-verify'
   $rep = $ev.data.report
-  Check 'verify: no mismatch' ($ev.event_type -eq 'verify.completed' -and $rep.mismatches -eq 0) "passed=$($rep.passed) mismatches=$($rep.mismatches) health=$($rep.health_total)" | Out-Null
+  # passed/mismatches/health_total are properties on the server model, not in the JSON: count them here.
+  $passedN = @($rep.checks | Where-Object { $_.status -eq 'pass' }).Count
+  $mismatchN = @($rep.checks | Where-Object { $_.status -eq 'mismatch' }).Count
+  $healthN = 0; foreach ($i in @($rep.health_issues)) { $healthN += [int]$i.qty }
+  Check 'verify: reachable, no mismatch' ($ev.event_type -eq 'verify.completed' -and $rep.reachable -eq $true -and $mismatchN -eq 0) "passed=$passedN mismatches=$mismatchN health=$healthN" | Out-Null
   $ev = Run-Step -RunId $Run1 -Path '/asbuilt' -Body $creds -Types @('asbuilt.generated', 'asbuilt.failed') -Save 'run1-asbuilt'
   Check 'as-built generated' ($ev.event_type -eq 'asbuilt.generated') $ev.message | Out-Null
   $docxPath = Join-Path $Out 'asbuilt.docx'
@@ -442,7 +448,10 @@ if ($SkipCleanup) {
     $cmdFile = Join-Path $Out 'cleanup-commands.txt'
     [System.IO.File]::WriteAllText($cmdFile, ((($Run1Removals | ForEach-Object { $_.command }) + 'exit') -join "`n") + "`n", [System.Text.UTF8Encoding]::new($false))
     Write-Host "  Pasting run 1's removal set over SSH to $ArrayUser@$ArrayHost (ssh will ask for the password once)."
-    $transcript = & cmd /c "ssh -T -o StrictHostKeyChecking=accept-new $ArrayUser@$ArrayHost < `"$cmdFile`"" 2>&1 | Out-String
+    # 5.1 turns native stderr into terminating errors under EAP=Stop (ssh prints its known-hosts note there).
+    $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $transcript = & cmd /c "ssh -T -o StrictHostKeyChecking=accept-new $ArrayUser@$ArrayHost < `"$cmdFile`" 2>&1" | Out-String }
+    finally { $ErrorActionPreference = $eap }
     Write-Evidence 'cleanup.txt' $transcript | Out-Null
     $bad = @($transcript -split "`n" | Where-Object { $_ -match 'Error|error:|does not exist|Invalid' })
     Check 'the removal lines were accepted' ($bad.Count -eq 0) ($bad -join ' | ') | Out-Null
@@ -464,10 +473,10 @@ $ArrayPw = $null; $VcPw = $null; $SwPw = $null; $Targets = $null
 $fails = @($script:Results | Where-Object { $_.Verdict -eq 'FAIL' }).Count
 $passes = @($script:Results | Where-Object { $_.Verdict -eq 'PASS' }).Count
 $lines = @(
-  "# SPEC-006 session — $stamp",
+  "# SPEC-006 session - $stamp",
   "",
   "- App version: $Version",
-  "- Array: $ArrayHost ($ArrayUser)  · CPG: $Cpg  · host: $HostName",
+  "- Array: $ArrayHost ($ArrayUser)  ; CPG: $Cpg  ; host: $HostName",
   "- Run 1: $Run1",
   "- Result: **$passes PASS, $fails FAIL**" + $(if ($SkipCleanup) { ' (cleanup skipped by request)' } else { '' }),
   "",
