@@ -62,6 +62,22 @@ def test_removal_covers_only_what_this_apply_created_in_dependency_order():
     ]
     assert not any(i.kind == "host" for i in result.removals)          # esx1 existed — never removed
     assert result.removal_notes == []
+    # R3: the LIST is in paste order, not only its rendering (S-12 pasted the raw list).
+    assert [i.command for i in result.removals] == render_removal_commands(result.removals)
+
+
+def test_a_created_host_is_removed_after_its_set_in_the_raw_list():
+    """S-12 live (2026-09-14): the host did not pre-exist (S-10 cleanup removed it), apply created it,
+    and the raw list read vlun, vlun, HOST, hostset, vv, vv, vvset — a paste that removes members before
+    their sets. The list must already be exports → vvset → volumes → hostset → host."""
+    fake = TruthfulFakeWsapi(hosts=[])
+    fake.created_templates[("set:vvs", "set:hs")] = [
+        VlunTemplate(volume="vol01", target="set:hs", lun=0), VlunTemplate(volume="vol02", target="set:hs", lun=1),
+    ]
+    result = _apply(fake)
+    assert result.error is None
+    assert [i.kind for i in result.removals] == ["vlun", "vlun", "vvset", "volume", "volume", "hostset", "host"]
+    assert result.removals[-1].command == "removehost esx1"
 
 
 def test_export_removals_come_from_the_template_diff_not_the_status():
