@@ -286,3 +286,32 @@ def test_full_mode_ignores_the_provisioning_tabs():
     # No provisioning step selected -> the Provisioning tabs are not parsed at all.
     parsed = parse_workbook_bytes(_fill_tabs(_COMPLETE))  # default FULL_ONBOARDING, no prov values
     assert parsed.provisioning_intent is None
+
+
+def test_row_table_headers_match_on_their_leading_phrase_not_the_hint():
+    """P-17 (live, 2026-09-14): rc.10 reworded the Members hint and every sheet written by an older
+    template lost its members — the operator's `10.132.30.136` vanished and the plan blocked.
+    Headers match on the phrase before " — " / " (" so hint text may change between templates."""
+    from openpyxl import Workbook
+
+    from alletra_onboard.application.platform.init_sheet import HOSTSET_COLUMNS, VOLUME_COLUMNS, _read_table
+
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["Host sets — one row per set; the intro line the template writes above the header"])
+    ws.append(["Host set name *", "Members — comma-separated host names; blank = all discovered"])   # OLD hint
+    ws.append(["zz_t2_hs", "10.132.30.136"])
+    rows = _read_table(ws, HOSTSET_COLUMNS)
+    assert rows == [{"name": "zz_t2_hs", "members": "10.132.30.136"}]
+
+    ws2 = wb.create_sheet("Volumes")
+    ws2.append(["Volume name *", "Size (GiB) *", "Type (tpvv / reduce)", "CPG", "VV-set (optional)"])
+    ws2.append(["vol01", 20, "tpvv", "SSD_r6", None])
+    assert _read_table(ws2, VOLUME_COLUMNS) == [{"name": "vol01", "size_gib": "20", "provisioning_type": "tpvv", "cpg": "SSD_r6"}]
+
+    # a data row that happens to contain a header word is never mistaken for the header
+    ws3 = wb.create_sheet("Odd")
+    ws3.append(["members"])                     # intro-ish line with a bare header word, no name column
+    ws3.append(["Host set name", "Members"])
+    ws3.append(["hs", "a, b"])
+    assert _read_table(ws3, HOSTSET_COLUMNS) == [{"name": "hs", "members": "a, b"}]
