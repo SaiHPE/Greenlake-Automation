@@ -9,6 +9,7 @@ import {
   PlannedAction,
   ProvisioningPlan,
   ProvisioningResult,
+  RemovalItem,
   RunEvent,
   RunRecord,
   storageApply,
@@ -42,6 +43,59 @@ const OUTCOME: Record<ActionOutcome['status'], { state: StepState; label: string
   exists: { state: 'not_started', label: 'Existed' },
   failed: { state: 'failed', label: 'Failed' },
 };
+
+// SPEC-007 R3: exports, then sets, then their members — the order that pastes top to bottom.
+const REMOVAL_ORDER: Record<string, number> = { vlun: 0, vvset: 1, volume: 2, hostset: 3, host: 4 };
+const removalLines = (items: RemovalItem[]): string[] => {
+  const out: string[] = [];
+  [...items].sort((a, b) => (REMOVAL_ORDER[a.kind] ?? 9) - (REMOVAL_ORDER[b.kind] ?? 9))
+    .forEach((i) => { if (!out.includes(i.command)) out.push(i.command); });
+  return out;
+};
+const mono = { fontFamily: 'Consolas, "Courier New", monospace' } as const;
+
+function download(filename: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** The undo for exactly what this apply created (SPEC-007). Text for the operator; the tool never runs it. */
+function RemovalSet({ result, runId, serial }: { result: ProvisioningResult; runId: string; serial?: string }) {
+  const [copied, setCopied] = useState(false);
+  const lines = removalLines(result.removals ?? []);
+  const header = [
+    `# Removal of what run ${runId.slice(0, 8)} created on ${serial ?? 'the array'} — ${new Date().toISOString()}`,
+    '# Review before pasting. The tool never runs these. Order: exports, VV sets, volumes, host sets, hosts.',
+  ];
+  const text = [...header, ...lines, ''].join('\n');
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { setCopied(false); }
+  };
+  return (
+    <Box gap="xsmall" margin={{ top: 'small' }}>
+      <Text size="small" weight={600}>Removal command set</Text>
+      {lines.length === 0 ? (
+        <Text size="small" color="text-weak">Nothing to remove — this apply created nothing.</Text>
+      ) : (
+        <>
+          <Text size="small" color="text-weak">
+            Undoes exactly what this apply created, in dependency order. Objects that already existed are not touched.
+          </Text>
+          <Box background="background-contrast" round="xsmall" pad="small" tabIndex={0} style={{ overflowX: 'auto' }}>
+            {[...header, ...lines].map((c, i) => <Text key={i} size="small" style={{ ...mono, whiteSpace: 'pre-wrap' }}>{c}</Text>)}
+          </Box>
+          <Box direction="row" gap="small">
+            <Button size="small" label={copied ? 'Copied' : 'Copy removal set'} onClick={copy} />
+            <Button size="small" label="Download .txt" onClick={() => download(`removal_${serial ?? 'array'}_${runId.slice(0, 8)}.txt`, text)} />
+          </Box>
+        </>
+      )}
+      {(result.removal_notes ?? []).length > 0 && <NotesList notes={result.removal_notes} />}
+    </Box>
+  );
+}
 
 interface Props {
   runId: string;
@@ -246,6 +300,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             data={result.outcomes}
             primaryKey={false}
           />
+          <RemovalSet result={result} runId={runId} serial={run?.serial_number} />
         </Surface>
       )}
 

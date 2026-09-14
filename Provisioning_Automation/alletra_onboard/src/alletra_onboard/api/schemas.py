@@ -8,6 +8,7 @@ from alletra_onboard.domain.models import ArrayWorkItem, PreflightReport, RunEve
 
 class HealthResponse(BaseModel):
     status: str = "ok"
+    version: str = ""   # SPEC-006 R1: the session report names the build it tested
 
 
 # ------------------------------------------------------------------ config
@@ -127,12 +128,33 @@ class InitSheetUploadRequest(BaseModel):
     content_b64: str = Field(description="Base64-encoded Initialisation_sheet.xlsx contents.")
 
 
+class InitSheetComposeRequest(BaseModel):
+    """SPEC-006 R3: a filled sheet from JSON, so a script never writes xlsx. `base_b64` is the
+    operator's working sheet (credentials and init fields come from it); a row table given REPLACES
+    that tab's rows; one not given is left alone."""
+
+    base_b64: str | None = None
+    init: dict[str, str] = Field(default_factory=dict)
+    targets: dict[str, str] = Field(default_factory=dict)
+    volumes: list[dict[str, str]] | None = None
+    hostsets: list[dict[str, str]] | None = None
+    hosts: list[dict[str, str]] | None = None
+
+
+class InitSheetComposeResponse(BaseModel):
+    content_b64: str
+    filename: str = "Initialisation_sheet.xlsx"
+
+
 class InitSheetUploadResponse(BaseModel):
     # A single-use token for the held sheet; the run is minted later from this token + the chosen mode.
     token: str
     # The parsed work item for review (subscription_key shown; admin password / device passwords never echoed).
     work_item: dict
     credentials_saved: bool = True
+    # SPEC-006 R1: the Provisioning tab's endpoints WITHOUT passwords (host + username per device), so a
+    # script driving the API learns the array from the sheet rather than from a parameter.
+    targets: dict[str, str] = Field(default_factory=dict)
 
 
 class RunFromSheetRequest(BaseModel):
