@@ -185,13 +185,13 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
       )}
 
       <Text size="small" weight="bold">Host-set membership</Text>
-      <Text size="xsmall" color="text-weak">Empty = all discovered hosts. Status shows fabric-login so a half-zoned host isn't picked blind.</Text>
+      <Text size="xsmall" color="text-weak">Pick the members; an empty set blocks the plan. Status shows fabric-login so a half-zoned host isn't picked blind.</Text>
       {objects.host_sets.length === 0 && <Text size="small" color="text-weak">No host sets in the sheet.</Text>}
       {objects.host_sets.map((hs) => (
         <Box key={hs.name} direction="row" gap="small" align="center" pad={{ vertical: 'xxsmall' }}>
           <Box width="200px" flex={false}><Text size="small">{hs.name}</Text></Box>
           <Box width="540px" flex={false}>
-            <Select size="small" multiple closeOnChange={false} placeholder="all discovered hosts"
+            <Select size="small" multiple closeOnChange={false} placeholder="choose members"
               options={memOpts} labelKey="label" valueKey={{ key: 'value', reduce: true }}
               value={members[hs.name] ?? []} disabled={busyOrDisabled}
               onChange={({ value }) => setMembers((m) => ({ ...m, [hs.name]: value }))} />

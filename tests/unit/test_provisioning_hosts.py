@@ -29,7 +29,7 @@ def _intent(**over) -> ProvisioningIntent:
     data = {
         "array": _creds("10.0.0.5"), "vcenter": _creds("vc"), "switch_f1": _creds("f1"), "switch_f2": _creds("f2"),
         "volumes": [VolumeRequest(name="vol01", size_gib=10)],
-        "host_sets": [HostSetRequest(name="hs", members=[])],
+        "host_sets": [HostSetRequest(name="hs", members=["10.132.30.136"])],
     }
     data.update(over)
     return ProvisioningIntent(**data)
