@@ -27,8 +27,10 @@ that were not present before (`after − before`, both reads apply already makes
 `removevlun -f <volume> <lun> <target>` each. This is exact for a set export completed member by
 member (only the new member's LUN) and can never name a pre-existing LUN.
 
-**R3 — Dependency order, always.** Rendered order is exports → VV sets → volumes → host sets →
-hosts, whatever order the outcomes came in, so the block can be pasted top to bottom. One command
+**R3 — Dependency order, always.** The list itself — `ProvisioningResult.removals`, the `storage.applied`
+event, every render of it — is in the order exports → VV sets → volumes → host sets → hosts, whatever
+order the outcomes came in, so the block can be pasted top to bottom by anything that reads it
+(S-12 found the runner pasting the raw list host-before-set). One command
 per object (`removevv -f` per volume, not one line of five — a failure names the object).
 
 **R4 — Never executed by the tool.** The set is text: `ProvisioningResult.removals` (structured,
