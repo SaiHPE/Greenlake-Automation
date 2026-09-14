@@ -299,7 +299,10 @@ export interface PlannedAction {
 }
 export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; blockers: string[]; error: string | null; }
 export interface ActionOutcome { kind: string; name: string; status: 'created' | 'exists' | 'updated' | 'failed'; detail: string; }
-export interface ProvisioningResult { outcomes: ActionOutcome[]; error: string | null; }
+export interface RemovalItem { kind: string; name: string; command: string; }        // SPEC-007
+export interface ProvisioningResult {
+  outcomes: ActionOutcome[]; removals: RemovalItem[]; removal_notes: string[]; error: string | null;
+}
 
 // The plural provisioning intent pieces + the operator dropdown-builder (ADR 0010 Stage 2).
 export interface VolumeRequest { name: string; size_gib: number; provisioning_type: 'tpvv' | 'reduce'; cpg: string; vvset: string | null; }

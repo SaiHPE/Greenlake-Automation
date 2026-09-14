@@ -47,6 +47,8 @@ from alletra_onboard.api.schemas import (
     DsccStepRequest,
     FirewallRule,
     FirewallRulesResponse,
+    InitSheetComposeRequest,
+    InitSheetComposeResponse,
     InitSheetUploadRequest,
     InitSheetUploadResponse,
     VerifyStepRequest,
@@ -69,7 +71,11 @@ from alletra_onboard.application.platform.configuring import (
 )
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.onboarding.health import greenlake_check
-from alletra_onboard.application.platform.init_sheet import build_template_bytes, parse_workbook_bytes
+from alletra_onboard.application.platform.init_sheet import (
+    build_template_bytes,
+    compose_workbook_bytes,
+    parse_workbook_bytes,
+)
 from alletra_onboard.application.platform.proxy import (
     DIRECT,
     ProxyResolver,
@@ -185,7 +191,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
-        return HealthResponse()
+        return HealthResponse(version=__version__)
 
     @app.get("/app/profile")
     async def app_profile() -> dict:
@@ -339,6 +345,20 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             headers={"Content-Disposition": 'attachment; filename="Initialisation_sheet.xlsx"'},
         )
 
+    @app.post("/init-sheet/compose", response_model=InitSheetComposeResponse)
+    async def init_sheet_compose(request: InitSheetComposeRequest) -> InitSheetComposeResponse:
+        # SPEC-006 R3: the session runner's sheets. Nothing is held server-side; the caller uploads
+        # the result through /init-sheet/upload like any operator sheet.
+        try:
+            base = base64.b64decode(request.base_b64) if request.base_b64 else None
+            content = compose_workbook_bytes(
+                base=base, init=request.init, targets=request.targets,
+                volumes=request.volumes, hostsets=request.hostsets, hosts=request.hosts,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return InitSheetComposeResponse(content_b64=base64.b64encode(content).decode("ascii"))
+
     @app.post("/init-sheet/upload", response_model=InitSheetUploadResponse)
     async def init_sheet_upload(request: InitSheetUploadRequest) -> InitSheetUploadResponse:
         # The sheet is COMPLETE intake, uploaded before a mode is chosen (ADR 0005 revision): validate
@@ -372,7 +392,15 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         data = parsed.work_item.model_dump(mode="json")
         data["subscription_key"] = parsed.work_item.subscription_key.get_secret_value()
         data["dscc_setup"].pop("password", None)  # never echo the admin password to the UI
-        return InitSheetUploadResponse(token=token, work_item=data, credentials_saved=credentials_saved)
+        targets: dict[str, str] = {}
+        if parsed.provisioning_intent is not None:
+            intent = parsed.provisioning_intent
+            for key, ep in (("array", intent.array), ("vcenter", intent.vcenter),
+                            ("switch_f1", intent.switch_f1), ("switch_f2", intent.switch_f2)):
+                targets[f"{key}_host"], targets[f"{key}_user"] = ep.host, ep.username
+        return InitSheetUploadResponse(
+            token=token, work_item=data, credentials_saved=credentials_saved, targets=targets,
+        )
 
     # ------------------------------------------------------------------ runs + steps
 

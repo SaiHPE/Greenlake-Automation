@@ -315,3 +315,50 @@ def test_row_table_headers_match_on_their_leading_phrase_not_the_hint():
     ws3.append(["Host set name", "Members"])
     ws3.append(["hs", "a, b"])
     assert _read_table(ws3, HOSTSET_COLUMNS) == [{"name": "hs", "members": "a, b"}]
+
+
+# ------------------------------------------------------------------ SPEC-006 R3 — compose a sheet from JSON
+
+def test_compose_replaces_row_tables_and_fills_kv_on_a_base_workbook():
+    """The session runner never writes xlsx: it sends the operator's working sheet plus the scenario's
+    rows, and gets back a workbook that parses exactly as if the operator had edited it."""
+    from alletra_onboard.application.platform.init_sheet import compose_workbook_bytes
+
+    base = _fill_tabs({"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.122.140"}, {
+        "targets": _PROV_TARGETS,
+        "volumes": [{"name": "old_vol", "size_gib": "5"}, {"name": "old_vol2", "size_gib": "6"}],
+        "hostsets": [{"name": "old_hs", "members": "a, b"}],
+    })
+    out = compose_workbook_bytes(
+        base=base,
+        volumes=[{"name": "zz_s6_vol01", "size_gib": "1", "provisioning_type": "tpvv", "cpg": "SSD_r6", "vvset": "zz_s6_vvs"},
+                 {"name": "zz_s6_vol02", "size_gib": "1", "provisioning_type": "reduce", "cpg": "SSD_r6", "vvset": "zz_s6_vvs"}],
+        hostsets=[{"name": "zz_s6_hs", "members": "10.132.30.136"}],
+        hosts=[{"name": "winbox", "os": "windows", "wwpns": "51:40:2e:c0:20:89:cc:1c"}],
+        init={"customer_name": "Session runner"},
+    )
+    intent = parse_workbook_bytes(out, mode=RunMode.PROVISION_ONLY).provisioning_intent
+    assert [(v.name, v.size_gib, v.provisioning_type, v.vvset) for v in intent.volumes] == [
+        ("zz_s6_vol01", 1, "tpvv", "zz_s6_vvs"), ("zz_s6_vol02", 1, "reduce", "zz_s6_vvs"),
+    ]                                                                    # old rows GONE, not appended after
+    assert [(hs.name, hs.members) for hs in intent.host_sets] == [("zz_s6_hs", ["10.132.30.136"])]
+    assert [(h.name, h.os) for h in intent.declared_hosts] == [("winbox", "windows")]
+    assert intent.array.host == "10.64.122.140"                          # targets untouched from the base
+    parsed = parse_workbook_bytes(out, mode=RunMode.PROVISION_ONLY)
+    assert parsed.customer_name == "Session runner"
+
+
+def test_compose_from_template_when_no_base():
+    from alletra_onboard.application.platform.init_sheet import compose_workbook_bytes
+
+    out = compose_workbook_bytes(
+        base=None,
+        init={"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.122.140"},
+        targets=_PROV_TARGETS,
+        volumes=[{"name": "v", "size_gib": "2"}],
+        hostsets=[{"name": "hs", "members": "esx1"}],
+    )
+    intent = parse_workbook_bytes(out, mode=RunMode.PROVISION_ONLY).provisioning_intent
+    assert intent.volumes[0].name == "v" and intent.host_sets[0].members == ["esx1"]
+    # a row table NOT given is left as the template wrote it (empty) — never invented
+    assert intent.declared_hosts == []
