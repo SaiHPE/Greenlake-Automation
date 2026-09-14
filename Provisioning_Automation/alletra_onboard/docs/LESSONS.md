@@ -312,3 +312,14 @@ the array is choosing part of the identity; and apply must make the same judgeme
 from the same read, or the plan is a story and not an approval. The defect was visible only because
 path verification had learned to count LUNs the day before (6 LUNs for 4 volumes); a boolean
 "live on both fabrics" would have hidden it.
+
+**38. A script that ships to Windows PowerShell 5.1 is ASCII, or it is not a script.**
+The first `session.ps1` (rc.14, 2026-09-14) died with *Unexpected token* at line 69 before its
+first prompt. It had been parse-checked under pwsh 7, which reads files as UTF-8. Windows
+PowerShell 5.1 reads a BOM-less file as the ANSI code page: the em dash in `" — $detail"` became
+`â€”`, and `0x94` in Windows-1252 is `”`, a quotation mark PowerShell honours as a string
+delimiter — the string closed early and every quote after it was inverted. Rules: anything the
+jump box runs unchanged is pure ASCII (`tests/unit/test_session_runner.py` pins it — a test that
+reads bytes, not text, so an editor cannot hide the character); a parse check is run under the
+interpreter that will run the file, or the closest thing — decode the bytes as cp1252 before
+parsing; and a script's evidence of working is the operator's first run, not the author's parser.
