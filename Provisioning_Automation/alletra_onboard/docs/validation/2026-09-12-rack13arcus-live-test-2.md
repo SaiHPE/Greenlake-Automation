@@ -275,3 +275,26 @@ was absent from the zoning gate table on screen: the check's expected list was v
 sheet or fabric host could never pass the gate (fixed rc.13 — the check uses the provisioning union).
 **A-3** — the zoning section said *This run did not include the SAN zoning step* when the check had
 run and only the plan had not (fixed rc.13). **A-5** — compression column showed `v2` (fixed).
+
+## Cleanup — 2026-09-14 13:11 — array as found
+
+Fourteen removals by pasted script (`removevlun` × 5, `removevvset` × 2, `removevv` × 5 in one line,
+`removehostset` × 3, `removehost` × 3), all accepted, no complaint. Proof lines: `showvlun -t` **17
+total** (the count on 2026-09-12 before anything was created), `showhost -d` 35 rows, `showvv` 51,
+`showvvset` 9, `showhostset` 5 — and no `zz_*`, `arcus-win137`, `10.132.30.86` or `10.132.30.136` in
+any table. Two sessions' worth of objects gone; the training team's objects untouched throughout.
+
+## Second session — summary
+
+| Test | Result | Proved | Found |
+|---|---|---|---|
+| S-1 | passed (rc.10, 2nd attempt) | SPEC-001 R1–R5 | P-13, P-14, P-16 (rc.9); P-17, P-18 (rc.10) |
+| S-2 | passed | SPEC-001 R2, R6 | P-19 |
+| S-4 | passed with one defect | SPEC-003; SPEC-004 R4, R5; SPEC-005 wording | **P-21**, P-20 |
+| S-8 | passed | SPEC-002 all five sections | Z-B, A-3, A-5 |
+| S-11 | passed | SPEC-004 R1–R3 | — |
+| S-10 | done by hand | — | G-5 stays open |
+
+Not run: S-3 (failure paths), S-5 (reload/resume), S-6 (same sheet twice), S-7 (G-1 zoning apply),
+S-9 (iSCSI). Releases during the session: rc.10 (SPEC-005), rc.11 (P-17/P-18), rc.12 (P-21 / R11),
+rc.13 (Z-B / A-3 / A-5). Every fix carries a test pinned to the evidence the session produced.
