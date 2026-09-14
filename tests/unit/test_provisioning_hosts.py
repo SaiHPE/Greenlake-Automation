@@ -226,3 +226,34 @@ def test_vcenter_only_behaviour_is_unchanged():
     plan = prov.build_plan(_intent(), _discovery(), reachable_hosts={"10.132.30.136"}, wsapi_factory=lambda c: fake)
     assert [a.name for a in plan.actions if a.kind == "host"] == ["10.132.30.136"]
     assert plan.notes == []
+
+
+# ------------------------------------------------------------------ Z-B — the gate covers the union (live, S-4/S-8)
+
+def test_zoning_gate_lists_sheet_and_fabric_hosts_not_other_teams_array_hosts():
+    """S-8 2026-09-14: arcus-win137 (sheet) was created and logged in on F2, yet the gate table listed
+    only the three vCenter hosts, so it could never be provisioned with an export. The check now
+    expects the same hosts provisioning plans from; array hosts in no set (vmenode) stay out."""
+    from alletra_onboard.application.provisioning import zoning
+    from alletra_onboard.domain.discovery import ArrayPort
+
+    ports = [
+        ArrayPort(node=0, slot=3, card_port=3, protocol="fc", wwpn="20330002AC025515", link_state="ready", fabric="even"),
+        ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC025515", link_state="ready", fabric="odd"),
+    ]
+    array_hosts = [
+        ArrayHost(name="10.132.30.136", persona="VMware", wwpns={ESX_A: ["0:3:3"], ESX_B: ["0:3:4"]}),
+        ArrayHost(name="arcus-win137", persona="WindowsServer", wwpns={WIN_A: ["0:3:3"], "51402EC02089CC1E": []}),
+        FC_ARRAY_HOST,                                                    # vmenode — another team's
+    ]
+    discovery = _discovery(array_hosts=array_hosts).model_copy(update={"array_ports": ports})
+    intent = _intent(declared_hosts=[DECLARED_WIN], host_sets=[HostSetRequest(name="hs", members=["10.132.30.136"])])
+    report = zoning.build_report(intent, discovery, _zoning_plan())
+    expected = {z.name.rsplit("_", 1)[0] for z in report.expected}
+    assert "arcus_win137" in expected and "localhost_localdomain" in expected       # sheet + fabric hosts
+    assert "vmenode" not in expected                                                 # not in any set
+    assert report.zoned_hosts == ["10.132.30.136"]
+    assert any("arcus-win137: zoned on one fabric only" in n for n in report.notes)
+    # an array host the intent puts in a set IS expected
+    intent2 = _intent(host_sets=[HostSetRequest(name="hs", members=["10.132.30.136", "vmenode"])])
+    assert "vmenode" in {z.name.rsplit("_", 1)[0] for z in zoning.build_report(intent2, discovery).expected}
