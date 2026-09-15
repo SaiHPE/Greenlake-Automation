@@ -323,3 +323,15 @@ jump box runs unchanged is pure ASCII (`tests/unit/test_session_runner.py` pins 
 reads bytes, not text, so an editor cannot hide the character); a parse check is run under the
 interpreter that will run the file, or the closest thing — decode the bytes as cp1252 before
 parsing; and a script's evidence of working is the operator's first run, not the author's parser.
+
+**39. A sort at the render is not a sort of the data, and "no error text" is not acceptance.**
+SPEC-007 R3 said the removal set is in dependency order; the UI sorted it, the as-built sorted it,
+the tests checked the sorted rendering. The list itself, in the `storage.applied` event, was in
+outcome order. The first consumer that was not a renderer — the session runner, 2026-09-14 — pasted
+it as it came, and the array refused `removehost` and `removevv -f` for objects still in their sets.
+Then the runner's check *"the removal lines were accepted"* passed, because it looked for *Error* and
+the 3PAR CLI refuses in prose: *is still a member of set*, *Attempt to delete vv … which is a member
+of vv set*. Two rules: an ordering the spec promises is a property of the data, applied where the
+data is built, so every consumer — including the ones not written yet — gets it; and acceptance of a
+CLI command is judged against the command's own refusal texts, pinned from a real transcript
+(`tests/fixtures/rack13_array/cleanup_refused_s12.txt`), never against the absence of a word.

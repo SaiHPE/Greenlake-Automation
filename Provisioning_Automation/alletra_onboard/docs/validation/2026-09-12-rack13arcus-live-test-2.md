@@ -323,9 +323,27 @@ The four FAILs, sorted by whose they were:
 | 3 | *5 Documents: waited for verify.completed … run status 'waiting_for_operator'* after 5 s | **runner bug.** Verify and as-built never change the run status by design; the runner treated "not running and no event" as settled. | rc.16: wait by event only, up to the ceiling; a timeout names the last event. |
 | 4 | *cleanup failed: The underlying connection was closed* on the WSAPI read after SSH | **runner robustness.** A pooled TLS connection went stale over the 8 minutes; 5.1 does not retry. | rc.16: `DisableKeepAlive`, one retry, re-login on 401/403. |
 
-Consequence of #2 and #4: the cleanup's effect on the array is **unverified**. The SSH transcript
-(`cleanup.txt`) is owed; if `removevv` was refused for a VV still in its set (the order pasted), the
-array holds `zz_s6_vol01`/`zz_s6_vol02` (the VV set itself was removed last, so they are now loose)
-and possibly host `10.132.30.136`. The rc.16 runner's preflight names the leftovers and prints the
-lines to paste. Also seen in the report: `→` and `·` rendered as `â` / `Â·` — 5.1 decoded the JSON
-body as Latin-1; rc.16 decodes the bytes as UTF-8.
+What the cleanup did — `cleanup.txt`, received 2026-09-15, pinned as
+`tests/fixtures/rack13_array/cleanup_refused_s12.txt`:
+
+```
+Issuing removevlun zz_s6_vol01 0 set:zz_s6_hs
+Issuing removevlun zz_s6_vol02 1 set:zz_s6_hs
+Host 10.132.30.136 is still a member of set zz_s6_hs          <- removehost, refused
+                                                              <- removehostset -f zz_s6_hs, accepted
+Attempt to delete vv zz_s6_vol01 which is a member of vv set zz_s6_vvs   <- refused
+Attempt to delete vv zz_s6_vol02 which is a member of vv set zz_s6_vvs   <- refused
+                                                              <- removevvset -f zz_s6_vvs, accepted
+```
+
+So the unsorted list (#2) cost exactly what R3 exists to prevent: the two exports, the host set and
+the VV set are gone; **host `10.132.30.136` and volumes `zz_s6_vol01`, `zz_s6_vol02` remain**, the
+volumes now loose. And the rc.15 check *"the removal lines were accepted"* PASSED on this transcript
+— the 3PAR CLI refuses without the word *Error*. The rc.16 pattern flags all three lines
+(`test_runner_acceptance_pattern_catches_the_polite_refusals_of_s12`). Note `removevv -f` does not
+override set membership: the dependency order is the only way. Remaining by hand:
+`removevv -f zz_s6_vol01`, `removevv -f zz_s6_vol02`, `removehost 10.132.30.136` — the host is NOT
+`zz_s6_`-prefixed, so the rc.16 preflight will not name it; it must go before the next run or the
+baseline drifts (12 hosts, the host row `exists`, and the runner would never remove it).
+Also seen in the report: `→` and `·` rendered as `â` / `Â·` — 5.1 decoded the JSON body as Latin-1;
+rc.16 decodes the bytes as UTF-8.

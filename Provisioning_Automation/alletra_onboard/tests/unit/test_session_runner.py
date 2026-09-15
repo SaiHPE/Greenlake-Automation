@@ -18,3 +18,20 @@ def test_session_runner_never_writes_outside_the_tool():
     text = RUNNER.read_text(encoding="ascii")
     for forbidden in ("zonecreate", "cfgsave", "cfgenable", "createvv", "createvlun", "createhost"):
         assert forbidden not in text
+
+
+def test_runner_acceptance_pattern_catches_the_polite_refusals_of_s12():
+    """S-12 (2026-09-14): the array refused `removehost` and `removevv -f` for objects still in a set,
+    with no 'Error' in the text, and the rc.15 check passed. The pattern in session.ps1 must flag the
+    exact lines the array wrote (tests/fixtures/rack13_array/cleanup_refused_s12.txt)."""
+    import re
+
+    script = RUNNER.read_text(encoding="ascii")
+    m = re.search(r"\$_ -match '([^']+)'", script)
+    assert m, "acceptance pattern not found in session.ps1"
+    pattern = re.compile(m.group(1))
+    transcript = (Path(__file__).resolve().parents[1] / "fixtures" / "rack13_array" / "cleanup_refused_s12.txt").read_text()
+    flagged = [line for line in transcript.splitlines() if pattern.search(line)]
+    assert len(flagged) == 3
+    assert all("member of" in line for line in flagged)
+    assert not any(line.startswith("rack13arcus cli% Issuing removevlun") for line in flagged)
