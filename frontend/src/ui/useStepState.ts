@@ -138,7 +138,10 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       if (report?.error) return 'read failed';
       // Fibre Channel ports only, matching the table the Discovery step shows.
       const fc = list(report?.array_ports).filter((port: { protocol?: string }) => port.protocol === 'fc').length;
-      return `${fc} ports · ${list(report?.host_hbas).length} adapters`;
+      // SPEC-009: the hint counts the hosts this run is about, as the step does (older runs: vCenter/sheet sourced).
+      const hosts = list(report?.hosts) as { in_run?: boolean; sources?: string[] }[];
+      const inRun = hosts.filter((h) => h.in_run ?? (h.sources ?? []).some((s) => s === 'vcenter' || s === 'sheet')).length;
+      return `${fc} ports · ${inRun} host${inRun === 1 ? '' : 's'} in this run`;
     }
     case 'zoning.proper':
       return 'verified on both fabrics';
