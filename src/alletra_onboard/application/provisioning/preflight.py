@@ -56,21 +56,28 @@ def _cpg_check(intent: ProvisioningIntent, free_by_cpg: dict[str, int]) -> Prefl
 
 def _names_check(intent: ProvisioningIntent, existing: set[str]) -> PreflightCheck:
     """Names the run will create that are already on the array. A WARNING, not a failure — apply is
-    idempotent and reports such objects as 'exists' — but the operator should know before previewing."""
-    planned = [v.name for v in intent.volumes]
-    planned += [hs.name for hs in intent.host_sets]
-    planned += sorted({v.vvset for v in intent.volumes if v.vvset})
+    idempotent and reports such objects as 'exists' — but the operator should know before previewing.
 
-    clash = sorted(name for name in planned if name in existing)
+    SPEC-009 R5 (D-4): hosts are counted separately and never warned about — a host that is already on
+    the array is the expected case (the run adds it to a set), not a clash."""
+    volumes = [v.name for v in intent.volumes]
+    vvsets = sorted({v.vvset for v in intent.volumes if v.vvset})
+    host_sets = [hs.name for hs in intent.host_sets]
+    hosts = sorted({*(dh.name for dh in intent.declared_hosts), *(m for hs in intent.host_sets for m in hs.members)})
+
+    clash = sorted(name for name in [*volumes, *vvsets, *host_sets] if name in existing)
     if clash:
         return PreflightCheck(
             key="names", label="Object names", status="warn",
             detail=f"Already on the array, so they will be reused rather than created: {', '.join(clash)}.",
         )
-    return PreflightCheck(
-        key="names", label="Object names", status="pass",
-        detail=f"{len(planned)} name(s) free on this array.",
-    )
+    parts = [f"{len(v)} {label}" for v, label in ((volumes, "volumes"), (vvsets, "VV sets"), (host_sets, "host sets")) if v]
+    parts = [p[:-1] if p.startswith("1 ") else p for p in parts]   # "1 volume", "1 VV set", "1 host set"
+    detail = f"{len(volumes) + len(vvsets) + len(host_sets)} object name(s) free: {', '.join(parts) or 'none'}."
+    if hosts:
+        on_array = sum(1 for h in hosts if h in existing)
+        detail += f" Hosts named in the sheet: {len(hosts)} ({on_array} already on the array)."
+    return PreflightCheck(key="names", label="Object names", status="pass", detail=detail)
 
 
 def _ports_check(ports: list) -> PreflightCheck:
