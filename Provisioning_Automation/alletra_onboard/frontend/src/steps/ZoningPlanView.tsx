@@ -56,6 +56,14 @@ function aliasProblem(name: string): { tone: 'critical' | 'warning' | 'ok'; text
   return { tone: 'ok', text: 'Valid' };
 }
 
+// SPEC-010 R3: mirrors zoning_plan.fos_name_suggestion — the closest name FOS accepts.
+function aliasSuggestion(name: string): string {
+  if (name && aliasProblem(name).tone !== 'critical') return name;
+  let folded = (name || '').replace(/[^A-Za-z0-9_\-$^]+/g, '_').replace(/^[_\-$^]+|[_\-$^]+$/g, '');
+  if (!folded || !/^[A-Za-z0-9]/.test(folded)) folded = `a${folded}`;
+  return folded.slice(0, 64);
+}
+
 function download(filename: string, text: string) {
   const blob = new Blob([text], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
@@ -283,6 +291,13 @@ function ZoneDesigner({
       description="Only HBA ports with an unzoned array port are listed. HPE's redundancy rule — one port on each controller node per fabric — is pre-selected; untick anything your SAN design does not want. Already-zoned pairs are shown, never recreated."
     >
       <Box gap="medium">
+        {/* SPEC-010 R4 (Z-1): the glyphs the rows use, said once. */}
+        <Box direction="row" gap="medium" wrap align="center">
+          <Box direction="row" gap="xsmall" align="center"><StatusGood size="small" color="status-ok" a11yTitle="Zoned" /><Text size="xsmall" color="text-weak">already zoned (read from the array; never recreated)</Text></Box>
+          <Box direction="row" gap="xsmall" align="center"><CheckBox checked readOnly tabIndex={-1} a11yTitle="selected" /><Text size="xsmall" color="text-weak">selected — a new zone will be created</Text></Box>
+          <Box direction="row" gap="xsmall" align="center"><CheckBox checked={false} readOnly tabIndex={-1} a11yTitle="not selected" /><Text size="xsmall" color="text-weak">available, not selected</Text></Box>
+          <Text size="xsmall" color="status-warning">⚠ caution — see the port's note</Text>
+        </Box>
         {fabricsWithWork.map((fab) => {
           const zoned = new Set(fab.already_zoned.map(([h, a]) => pairKey(h, a)));
           const nodes = [...new Set(fab.array_ports.map((p) => p.node ?? -1))].sort((a, b) => a - b);
@@ -389,6 +404,8 @@ function AliasReview({
                 const reused = value !== '' && w.existing_aliases.includes(value);
                 const check = reused ? { tone: 'ok' as const, text: 'Existing alias — reused' } : aliasProblem(value);
                 const colour = check.tone === 'critical' ? 'status-critical' : check.tone === 'warning' ? 'status-warning' : 'status-ok';
+                const suggestion = check.tone === 'critical' ? aliasSuggestion(value) : '';
+                const offer = suggestion && suggestion !== value && aliasProblem(suggestion).tone !== 'critical';
                 return (
                   <Box key={w.wwpn} direction="row" gap="small" align="center" wrap pad={{ vertical: 'xxsmall' }}>
                     <Box width="110px" flex={false}><Text size="xsmall" color="text-weak">{w.role === 'array' ? `Array port ${w.nsp}` : 'HBA port'}</Text></Box>
@@ -398,6 +415,8 @@ function AliasReview({
                       <TextInput size="small" value={value} placeholder="alias name" onChange={(e) => setAlias(w.wwpn, e.target.value)} />
                     </Box>
                     <Text size="xsmall" color={colour}>{check.text}</Text>
+                    {/* SPEC-010 R3 (Z-3): the validator offers the fix, not only the verdict. */}
+                    {offer && <Button size="small" label={`Use ${suggestion}`} onClick={() => setAlias(w.wwpn, suggestion)} />}
                     {w.existing_aliases.filter((a) => a !== value).length > 0 && (
                       <Text size="xsmall" color="text-weak">also on switch: {w.existing_aliases.filter((a) => a !== value).join(', ')}</Text>
                     )}
@@ -419,39 +438,47 @@ function AliasReview({
 
 const ACTIVATION = ['cfgsave', 'cfgenable'];
 const isActivation = (c: string) => ACTIVATION.some((verb) => c.startsWith(verb));
+const isPrecheck = (c: string) => c.startsWith('cfgtransshow');
+const PRECHECK_EXPECT = 'There is no outstanding zoning transaction';
 
-/** The command set for one fabric.
+/** The command set for one fabric, in FOS order (SPEC-010): 1. check, 2. paste block, 3. activate.
  *
  * Activation is separated from the additive commands on purpose. Until 2026-09-02 it was rendered
  * in the same block as commands the tool had just executed, so the screen drew no boundary between
  * "done" and "yours to do" — and an operator could reasonably select the whole block and paste it.
  * `cfgsave` commits the transaction; `cfgenable` replaces the effective config fabric-wide. Both
- * belong to the SAN team, in a window, deliberately. */
+ * belong to the SAN team, in a window, deliberately. The check is its own block for the same reason:
+ * pasted with the rest it would be a line of output nobody reads before the alicreates land. */
 function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[] }) {
-  const additive = commands.filter((c) => !isActivation(c));
+  const precheck = commands.filter(isPrecheck);
+  const additive = commands.filter((c) => !isActivation(c) && !isPrecheck(c));
   const activation = commands.filter(isActivation);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'' | 'check' | 'paste'>('');
   if (commands.length === 0) {
     return <Text size="small" color="text-weak">{fabricTitle(fab)}: no commands — nothing selected here that does not already exist.</Text>;
   }
   const header = [
     `# ${fabricTitle(fab)} — switch ${fab.switch_host} ${fab.switch_name ?? ''} — active cfg ${fab.active_cfg}`,
     `# Generated ${new Date().toISOString()} by Alletra Onboard. Additive only: creates nothing that exists, removes nothing.`,
-    '# Run cfgtransshow first — it must report no outstanding zoning transaction.',
+    `# Paste only after cfgtransshow reported "${PRECHECK_EXPECT}".`,
   ];
-  const copy = async () => {
+  const copyText = async (text: string, which: 'check' | 'paste') => {
     try {
-      // The header travels with the paste: the text alone must say which switch and cfg it is for.
-      await navigator.clipboard.writeText([...header, ...additive].join('\n'));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
+      setTimeout(() => setCopied(''), 2000);
     } catch {
-      setCopied(false);   // clipboard blocked; the text is on screen to select by hand
+      setCopied('');   // clipboard blocked; the text is on screen to select by hand
     }
   };
   const save = () => download(
     `zoning_${fab.fabric}_${fab.switch_host.replace(/[^0-9a-zA-Z]+/g, '-')}.txt`,
-    [...header, '', '# --- paste block (additive) ---', ...additive, '', '# --- activation: SAN team, in a window ---', ...activation, ''].join('\n'),
+    [
+      ...header, '',
+      `# --- 1. check: must reply "${PRECHECK_EXPECT}" — stop if it does not ---`, ...precheck, '',
+      '# --- 2. paste block (additive) ---', ...additive, '',
+      '# --- 3. save and activate: SAN team, in a window ---', ...activation, '',
+    ].join('\n'),
   );
   return (
     <Box gap="xsmall">
@@ -459,17 +486,29 @@ function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[]
         <Text size="small" weight={600}>{fabricTitle(fab)}</Text>
         <Text size="small" color="text-weak">switch {fab.switch_host} {fab.switch_name ?? ''} · cfg <Text size="small" style={mono}>{fab.active_cfg}</Text></Text>
       </Box>
+      {precheck.length > 0 && (
+        <Box gap="xxsmall">
+          <Text size="small" weight={600}>1. Check — run alone first</Text>
+          <Box direction="row" gap="small" align="center" wrap>
+            <Box background="background-contrast" round="xsmall" pad={{ horizontal: 'small', vertical: 'xsmall' }}>
+              {precheck.map((c, i) => <Text key={i} size="small" style={mono}>{c}</Text>)}
+            </Box>
+            <Button size="small" label={copied === 'check' ? 'Copied' : 'Copy'} onClick={() => copyText(precheck.join('\n'), 'check')} />
+            <Text size="small" color="text-weak">Expected reply: <i>{PRECHECK_EXPECT}</i>. Anything else: stop and ask the SAN team.</Text>
+          </Box>
+        </Box>
+      )}
+      <Text size="small" weight={600}>2. Paste block — additive only</Text>
       <Box background="background-contrast" round="xsmall" pad="small" tabIndex={0} style={{ overflowX: 'auto' }}>
         {additive.map((c, i) => <Text key={i} size="small" style={{ ...mono, whiteSpace: 'pre-wrap' }}>{c}</Text>)}
       </Box>
       <Box direction="row" gap="small" align="center" wrap>
-        <Button size="small" label={copied ? 'Copied' : 'Copy paste block'} onClick={copy} />
-        <Button size="small" label="Download .txt" onClick={save} />
-        <Text size="small" color="text-weak">Run <Text size="small" style={mono}>cfgtransshow</Text> first: it must report no outstanding transaction.</Text>
+        <Button size="small" label={copied === 'paste' ? 'Copied' : 'Copy paste block'} onClick={() => copyText([...header, ...additive].join('\n'), 'paste')} />
+        <Button size="small" label="Download .txt (all three steps)" onClick={save} />
       </Box>
       {activation.length > 0 && (
         <Box border={{ color: 'status-warning', side: 'left', size: '3px' }} pad={{ left: 'small', vertical: 'xsmall' }} gap="xxsmall">
-          <Text size="small" weight={600}>Then, separately — save and activate (SAN team)</Text>
+          <Text size="small" weight={600}>3. Save and activate — SAN team, in a window</Text>
           <Text size="small" color="text-weak">
             Not part of the paste above. <Text size="small" style={mono}>cfgsave</Text> commits the defined
             configuration and closes the zoning transaction; <Text size="small" style={mono}>cfgenable</Text> replaces
