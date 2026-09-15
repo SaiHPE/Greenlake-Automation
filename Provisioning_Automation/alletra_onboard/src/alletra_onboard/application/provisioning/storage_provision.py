@@ -403,6 +403,21 @@ def build_plan(
     except ExportDefaultError as exc:
         plan.error = str(exc)
         return plan
+    # SPEC-008 R5 (P-19): a sheet volume no export presents is a fact about the composition, said here
+    # (S-1, 2026-09-14: zz_t2_vol03 was simply absent from an approved plan). Judged before the
+    # reachability filter — a held-back export still presents its volume.
+    presented: set[str] = set()
+    for ex in exports:
+        if ex.source_kind == "volume":
+            presented.add(ex.source_name)
+        else:
+            presented.update(vvsets.get(ex.source_name, []))
+    unpresented = [v.name for v in intent.volumes if v.name not in presented]
+    if unpresented:
+        n = len(unpresented)
+        plan.notes.append(
+            f"{n} volume{'s are' if n > 1 else ' is'} not presented by this plan: " + ", ".join(unpresented)
+        )
     exports, skipped = _reachable_targets(exports, intent, hosts, reachable_hosts)
     members_of = {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}
     for ex in exports:

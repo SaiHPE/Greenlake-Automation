@@ -34,7 +34,14 @@ from alletra_onboard.application.runs.coordinator import (
 from alletra_onboard.application.provisioning.steps import DiscoveryZoningSteps, ProvisioningSteps
 from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.config import Settings
-from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunMode, RunRecord, WorkflowPhase
+from alletra_onboard.domain.models import (
+    ArrayCredentialInfo,
+    ArrayWorkItem,
+    RunEvent,
+    RunMode,
+    RunRecord,
+    WorkflowPhase,
+)
 from alletra_onboard.domain.ports import RunStore
 from alletra_onboard.domain.provisioning import (
     ProvisioningBuilder,
@@ -188,17 +195,21 @@ class OnboardingService:
 
     # ------------------------------------------------------------------ documents (verify + as-built)
 
-    def start_verify(self, run_id: str, *, username: str, password: str) -> RunRecord:
+    def start_verify(self, run_id: str, *, username: str | None = None, password: str | None = None) -> RunRecord:
         return self.documents.start_verify(run_id, username=username, password=password)
 
     def start_asbuilt(
-        self, run_id: str, *, username: str, password: str, customer: str = "", site: str = "",
-        application_workload: str = "", purpose: str = "",
+        self, run_id: str, *, username: str | None = None, password: str | None = None, customer: str = "",
+        site: str = "", application_workload: str = "", purpose: str = "",
     ) -> RunRecord:
         return self.documents.start_asbuilt(
             run_id, username=username, password=password, customer=customer, site=site,
             application_workload=application_workload, purpose=purpose,
         )
+
+    def array_credential_info(self, run_id: str) -> ArrayCredentialInfo:
+        """ADR 0013 / SPEC-008 R3: what the UI may know about the run's array credential."""
+        return self.coordinator.array_credential(run_id).public()
 
     def get_asbuilt(self, run_id: str) -> bytes | None:
         return self.documents.get_asbuilt(run_id)

@@ -170,8 +170,14 @@ def test_verify_endpoint_accepts_credentials_and_validates(tmp_path):
     ok = client.post(f"/runs/{run_id}/verify", json={"username": "3paradm", "password": "pw"})
     assert ok.status_code == 200
 
-    # the password is required — a read-only check still has to authenticate
-    assert client.post(f"/runs/{run_id}/verify", json={"username": "3paradm"}).status_code == 422
+    # SPEC-008 R2 (ADR 0013): this run came from a bare work item — no sheet credential — so a request
+    # without a full pair is refused with the operator sentence, not a schema error
+    refused = client.post(f"/runs/{run_id}/verify", json={"username": "3paradm"})
+    assert refused.status_code == 409 and "holds no array credential" in refused.json()["detail"]
+    assert client.post(f"/runs/{run_id}/verify", json={}).status_code == 409
+    # R3: the run detail says so, and never carries a password
+    detail = client.get(f"/runs/{run_id}").json()
+    assert detail["array_credential"] == {"available": False, "source": "none", "username": "", "host": "10.64.154.225"}
     # unknown run -> 404
     assert client.post("/runs/nope/verify", json={"username": "u", "password": "p"}).status_code == 404
 
@@ -509,3 +515,36 @@ def test_init_sheet_compose_round_trips_through_upload(tmp_path, monkeypatch):
     assert intent["run"]["run_id"]
     bad = client.post("/init-sheet/compose", json={"base_b64": base64.b64encode(b"not a workbook").decode()})
     assert bad.status_code in (400, 422)
+
+
+def test_verify_and_asbuilt_use_the_sheets_array_credential(tmp_path, monkeypatch):
+    """SPEC-008 R2/R3 through the API: a run minted from a complete sheet holds the Provisioning tab's
+    array admin; Verify with `{}` uses it (the fake verify_fn sees the sheet's user/password) and
+    GET /runs/{id} names the account without the password."""
+    monkeypatch.chdir(tmp_path)
+    seen: list[tuple[str, str]] = []
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(
+        Settings(), store, InMemoryEventBus(),
+        verify_fn=lambda item, u, p: (seen.append((u, p)), VerificationReport(reachable=True))[1],
+    )
+    client = TestClient(create_app(service))
+    token = _upload_complete(client)
+    run_id = client.post("/runs/from-sheet", json={"token": token, "mode": "PROVISION_ONLY"}).json()["run"]["run_id"]
+
+    detail = client.get(f"/runs/{run_id}").json()
+    assert detail["array_credential"]["available"] is True
+    assert detail["array_credential"]["source"] == "provisioning"
+    assert detail["array_credential"]["username"] == "3paradm"
+    assert detail["array_credential"]["host"] == "10.64.154.225"
+    assert "arraypw" not in client.get(f"/runs/{run_id}").text
+
+    assert client.post(f"/runs/{run_id}/verify", json={}).status_code == 200
+    assert seen == [("3paradm", "arraypw")]
+    # an explicit pair overrides
+    client.post(f"/runs/{run_id}/verify", json={"username": "other", "password": "rotated"})
+    assert seen[-1] == ("other", "rotated")
+    # the credential is in no event
+    events = client.get(f"/runs/{run_id}/events").text
+    assert "arraypw" not in events and "rotated" not in events

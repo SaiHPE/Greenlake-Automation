@@ -9,7 +9,7 @@ This workspace automates the deployment of HPE Alletra MP B10000 storage arrays 
 | What is in scope and what is built / pending / not started | `Provisioning_Automation/alletra_onboard/docs/SCOPE.md` (nine scope areas, status table, order of work) |
 | How the code is laid out today | `Provisioning_Automation/alletra_onboard/docs/ARCHITECTURE.md` |
 | Domain vocabulary | `Provisioning_Automation/alletra_onboard/CONTEXT.md` |
-| Why decisions were made | `Provisioning_Automation/alletra_onboard/docs/adr/0001–0012` |
+| Why decisions were made | `Provisioning_Automation/alletra_onboard/docs/adr/0001–0013` |
 | Incident → rule register (**read before wizard, state/persistence or refactor work**) | `Provisioning_Automation/alletra_onboard/docs/LESSONS.md` |
 | Last hardware run and what is still owed | `Provisioning_Automation/alletra_onboard/docs/validation/` |
 | How to run / sync / release | `Provisioning_Automation/alletra_onboard/README.md` |

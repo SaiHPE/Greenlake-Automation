@@ -437,7 +437,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             item = service.get_work_item(run_id)
         except RunNotFoundError:
             item = None
-        return RunDetailResponse(run=run, work_item=item)
+        try:
+            credential = service.array_credential_info(run_id)
+        except RunNotFoundError:
+            credential = None
+        return RunDetailResponse(run=run, work_item=item, array_credential=credential)
 
     def _start_step(run_id: str, start) -> RunResponse:
         _get_run_or_404(run_id)
