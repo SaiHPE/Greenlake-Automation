@@ -1,0 +1,11 @@
+rack13arcus cli% Issuing removevlun zz_s6_vol01 0 set:zz_s6_hs
+rack13arcus cli% Issuing removevlun zz_s6_vol02 1 set:zz_s6_hs
+rack13arcus cli% rack13arcus cli% Host 10.132.30.136 is still a member of set zz_s6_hs
+
+rack13arcus cli% Removing vv zz_s6_vol01
+Attempt to delete vv zz_s6_vol01 which is a member of vv set zz_s6_vvs
+
+rack13arcus cli% Removing vv zz_s6_vol02
+Attempt to delete vv zz_s6_vol02 which is a member of vv set zz_s6_vvs
+
+rack13arcus cli% rack13arcus cli% 
