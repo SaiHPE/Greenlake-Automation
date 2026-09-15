@@ -514,6 +514,7 @@ def test_delta_on_the_unzoned_bgl_hosts_proposes_everything_as_new():
     assert sum(1 for c in f1_cmds if c.startswith("zonecreate")) == 9
     assert sum(1 for c in f1_cmds if c.startswith("alicreate")) == 6   # 3 host + 3 array aliases
     assert f1_cmds[-2:] == ["cfgsave", "cfgenable F1_CFG"]
+    assert f1_cmds[0] == "cfgtransshow"                                 # SPEC-010 R1
 
 
 def test_a_non_host_type_port_is_flagged_not_excluded():
@@ -730,6 +731,7 @@ def test_rack13_f1_command_set_for_the_windows_hba_is_the_consultants_script():
     chosen = [("51402EC02089CC1E", "20340002AC02D495"), ("51402EC02089CC1E", "21330002AC02D495")]
     cmds, skipped = zp.render_commands(plan, names, chosen)
     assert cmds["F1"] == [
+        "cfgtransshow",                                  # SPEC-010 R1: the FOS order starts here
         'alicreate "arcus_win137_hba2","51:40:2e:c0:20:89:cc:1e"',
         'alicreate "rack13arcus_N0S3P4","20:34:00:02:ac:02:d4:95"',
         'alicreate "rack13arcus_N1S3P3","21:33:00:02:ac:02:d4:95"',
@@ -750,6 +752,7 @@ def test_render_rejects_names_fos_would_reject_and_warns_on_enhanced_ones():
         plan, {"51402EC02089CC1E": "arcus.win137", "20340002AC02D495": "A034"}, chosen,
     )
     assert cmds["F1"] == [] and len(skipped["F1"]) == 1 and "'.'" in skipped["F1"][0]
+    assert "try 'arcus_win137'" in skipped["F1"][0]                     # SPEC-010 R3: a corrected name is offered
     # A hyphen is legal on FOS 8.1+ only: it renders, and the warning says so.
     names = {"51402EC02089CC1E": "arcus_win137-hba2", "20340002AC02D495": "A034"}
     cmds, skipped = zp.render_commands(plan, names, chosen)
@@ -759,3 +762,25 @@ def test_render_rejects_names_fos_would_reject_and_warns_on_enhanced_ones():
     # 65 characters is rejected outright.
     assert "65 characters" in zp.fos_name_problem("a" * 65)
     assert zp.fos_name_problem("Zone_1") == "" and zp.fos_name_warning("Zone_1") == ""
+
+
+# ------------------------------------------------------------------ SPEC-010 (Z-3, Z-4)
+
+def test_fos_name_suggestion_offers_a_name_fos_accepts():
+    """Z-3: the validator said 'Letters, digits and _ only' and left the fix to the operator."""
+    assert zp.fos_name_suggestion("win host 1") == "win_host_1"
+    assert zp.fos_name_suggestion("arcus.win137") == "arcus_win137"
+    assert zp.fos_name_suggestion("-lead") == "lead"                 # a stripped separator, not a prefix
+    assert zp.fos_name_suggestion("$$") == "a"                       # nothing left: a legal placeholder
+    assert zp.fos_name_suggestion("") == "a"
+    assert zp.fos_name_suggestion("a" * 70) == "a" * 64
+    assert zp.fos_name_suggestion("Valid_Name_1") == "Valid_Name_1"  # unchanged when already acceptable
+    for raw in ("win host 1", "arcus.win137", "-lead", "$$", "", "a" * 70, "é.host"):
+        assert zp.fos_name_problem(zp.fos_name_suggestion(raw)) == ""
+
+
+def test_an_empty_selection_renders_no_cfgtransshow():
+    """Z-4: cfgtransshow leads a procedure; with nothing to paste there is no procedure."""
+    plan = zp.build_zoning_plan(_rack13_intent(), _rack13_discovery(), brocade_factory=_rack13_factory)
+    cmds, _ = zp.render_commands(plan, {}, [])
+    assert cmds == {"F1": [], "F2": []}

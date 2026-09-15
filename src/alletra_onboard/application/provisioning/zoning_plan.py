@@ -184,6 +184,17 @@ def fos_name_warning(name: str) -> str:
     return ""
 
 
+def fos_name_suggestion(name: str) -> str:
+    """SPEC-010 R3: the closest name FOS accepts — every run of rejected characters folded to `_`, edges
+    trimmed, a leading `a` when nothing legal starts it, cut to FOS_NAME_MAX. Idempotent on a valid name."""
+    if name and not fos_name_problem(name):
+        return name
+    folded = re.sub(r"[^A-Za-z0-9_\-$^]+", "_", name or "").strip("_-$^")
+    if not folded or not re.match(r"[A-Za-z0-9]", folded):
+        folded = "a" + folded
+    return folded[:FOS_NAME_MAX]
+
+
 def _fos_safe(text: str) -> str:
     """Fold arbitrary text (an IP, a DNS name, a serial) into a plain FOS name fragment."""
     return re.sub(r"[^A-Za-z0-9]+", "_", text or "").strip("_")
@@ -589,7 +600,7 @@ def render_commands(
                 )
                 continue
             illegal = [
-                f"alias '{alias_for(w)}' for {describe(w)} {fos_name_problem(alias_for(w))}"
+                f"alias '{alias_for(w)}' for {describe(w)} {fos_name_problem(alias_for(w))} — try '{fos_name_suggestion(alias_for(w))}'"
                 for w in (host_wwpn, array_wwpn)
                 if alias_for(w) not in by_wwpn[w].existing_aliases and fos_name_problem(alias_for(w))
             ]
@@ -627,6 +638,10 @@ def render_commands(
             # replaces the effective config fabric-wide — the SAN team's act, in a window.
             cmds.append("cfgsave")
             cmds.append(f"cfgenable {fabric.active_cfg}")
+        if cmds:
+            # SPEC-010 R1: the FOS procedure starts by proving no zoning transaction is open. A line,
+            # not a sentence beside a button — the .txt the SAN team receives must begin with it.
+            cmds.insert(0, "cfgtransshow")
         out[fabric.fabric] = cmds
         skipped_out[fabric.fabric] = skipped
     return out, skipped_out
