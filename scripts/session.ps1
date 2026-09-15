@@ -465,7 +465,12 @@ try {
 
   # ---------------------------------------------------------------- 5 Documents (on run 1)
   Section '5 Documents'
-  $creds = @{ username = $ArrayUser; password = $ArrayPw }
+  # SPEC-008 R2 (ADR 0013): no credential in the request - the run holds the sheet's; this run proves it.
+  $detail = Api 'GET' "/runs/$Run1" $null 'run1-detail'
+  $ac = $detail.Json.array_credential
+  Check "run holds the sheet's array credential ($ArrayUser)" ($ac -and $ac.available -eq $true -and $ac.source -eq 'provisioning' -and $ac.username -eq $ArrayUser) $(if ($ac) { "source=$($ac.source) user=$($ac.username) host=$($ac.host)" } else { 'no array_credential in GET /runs/{id}' }) | Out-Null
+  Check 'GET /runs/{id} carries no password' ($detail.Text -notmatch 'password') '' | Out-Null
+  $creds = @{}
   $ev = Run-Step -RunId $Run1 -Path '/verify' -Body $creds -Types @('verify.completed', 'verify.failed') -Save 'run1-verify'
   $rep = $ev.data.report
   # passed/mismatches/health_total are properties on the server model, not in the JSON: count them here.

@@ -174,6 +174,25 @@ class RunEvent(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class ArrayCredentialInfo(BaseModel):
+    """What a client may know about the run's array credential (ADR 0013 / SPEC-008 R3): whether the
+    run holds one, where the sheet supplied it, the account and the array. Never the password."""
+
+    available: bool = False
+    source: str = "none"        # provisioning | dscc_setup | none
+    username: str = ""
+    host: str = ""
+
+
+class ArrayCredential(ArrayCredentialInfo):
+    """Server-side only: the info plus the secret. `public()` is the only shape that leaves the process."""
+
+    secret: SecretStr | None = None
+
+    def public(self) -> ArrayCredentialInfo:
+        return ArrayCredentialInfo.model_validate(self.model_dump(exclude={"secret"}))
+
+
 class RunRecord(BaseModel):
     run_id: str = Field(default_factory=lambda: str(uuid4()))
     serial_number: str

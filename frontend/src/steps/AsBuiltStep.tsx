@@ -1,7 +1,8 @@
 import { Box, Button, FormField, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
 import { useState } from 'react';
-import { AsBuiltResult, RunEvent, RunRecord, asbuiltDownloadUrl, startAsbuilt } from '../api';
-import { ContinueButton, CredentialsFields, InlineNotification, NotesList, Surface } from '../ui/primitives';
+import { AsBuiltResult, CredentialOverride, RunEvent, RunRecord, asbuiltDownloadUrl, startAsbuilt } from '../api';
+import { ArrayCredentialCard, credentialReady, useArrayCredential } from '../ui/ArrayCredentialCard';
+import { ContinueButton, InlineNotification, NotesList, Surface } from '../ui/primitives';
 import { StepShell } from '../ui/StepShell';
 
 interface Props {
@@ -12,8 +13,8 @@ interface Props {
 }
 
 export function AsBuiltStep({ runId, run, events, onDone }: Props) {
-  const [username, setUsername] = useState('3paradm');
-  const [password, setPassword] = useState('');
+  const credential = useArrayCredential(runId);
+  const [override, setOverride] = useState<CredentialOverride>(null);
   const [customer, setCustomer] = useState('');
   const [site, setSite] = useState('');
   const [workload, setWorkload] = useState('');
@@ -35,7 +36,7 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
     setError(null);
     try {
       await startAsbuilt(
-        runId, username.trim(), password, customer.trim(), site.trim(),
+        runId, override, customer.trim(), site.trim(),
         workload.trim(), purpose.trim(),
       );
     } catch (exc: any) {
@@ -52,14 +53,14 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
       stateDetail={result ? 'document ready' : undefined}
       error={error}
       onDismissError={() => setError(null)}
-      activityEmpty="Enter the array credentials and generate the document."
+      activityEmpty={credential?.available ? 'Generate the document.' : 'Enter the array credentials and generate the document.'}
       footerNote="Read-only — generation makes no changes to the array."
       actions={
         <>
           <Button
             busy={running}
             label={result ? 'Regenerate' : running ? 'Generating' : 'Generate document'}
-            disabled={!username.trim() || !password}
+            disabled={!credentialReady(credential, override)}
             onClick={generate}
           />
           {/* Download never replaces Continue: this is the last action step, and losing Continue
@@ -69,18 +70,7 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
         </>
       }
     >
-      <Surface
-        title="Array credentials"
-        description={`Read-only access to ${run?.serial_number ?? 'the array'} to collect its configuration, inventory and status.`}
-      >
-        <CredentialsFields
-          username={username}
-          password={password}
-          onUsername={setUsername}
-          onPassword={setPassword}
-          help="Used for this read-only session only; never stored."
-        />
-      </Surface>
+      <ArrayCredentialCard info={credential} serial={run?.serial_number} override={override} onOverride={setOverride} />
 
       <Surface title="Cover details" description="Operator-supplied fields; not stored on the array.">
         <Box direction="row" gap="medium" wrap>
