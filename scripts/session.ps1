@@ -13,6 +13,12 @@
     5 Documents   verify + as-built on run 1                                  -> no mismatch, docx names the run
     6 Cleanup     run 1's own removal set (SPEC-007) pasted over SSH          -> array back to baseline
 
+  From rc.24 the scenarios also assert the rc.19-rc.23 changes that the API exposes: one array
+  credential per run (SPEC-008), Discovery identity/in-run flags and the names check (SPEC-009), the
+  FOS-ordered command set and alias suggestion (SPEC-010, one read-only login per switch), verify match
+  rules and status detail rows (SPEC-011), result identifiers and the as-built page flow (SPEC-012).
+  UI-only changes cannot be asserted here; the report ends with the screenshots still needed.
+
   Everything it touches is named zz_s6_*. It refuses to start if the array already has such objects.
   Writes session-<stamp>\report.md and keeps every response, every WSAPI read, the docx and the SSH
   transcript in that folder. Exit code 1 on any FAIL. Send the folder back.
@@ -48,7 +54,7 @@ if (-not $OutRoot) {
 }
 
 $Prefix = 'zz_s6_'
-$Vol1 = "${Prefix}vol01"; $Vol2 = "${Prefix}vol02"; $VvSet = "${Prefix}vvs"; $HostSet = "${Prefix}hs"
+$Vol1 = "${Prefix}vol01"; $Vol2 = "${Prefix}vol02"; $Vol3 = "${Prefix}vol03"; $VvSet = "${Prefix}vvs"; $HostSet = "${Prefix}hs"
 $PollSeconds = 1; $CeilingSeconds = 300
 
 # ------------------------------------------------------------------ evidence folder + report
@@ -378,6 +384,62 @@ try {
   Note "host for ${HostSet}: $HostName ($($pick.status))"
   Check "zoning check puts $HostName in zoned_hosts" (@($f1.Zoning.data.report.zoned_hosts) -contains $HostName) ("zoned: " + (@($f1.Zoning.data.report.zoned_hosts) -join ', ')) | Out-Null
 
+  # ---- rc.20 SPEC-009: Discovery says whose hosts these are (R1 identity, R2 in_run, R3 ports, R5 names check)
+  $dhosts = @($f1.Discovery.data.report.hosts)
+  $noFlags = @($dhosts | Where-Object { -not $_.PSObject.Properties['identified'] -or -not $_.PSObject.Properties['in_run'] })
+  Check 'discovery: every host carries identified + in_run (SPEC-009)' ($dhosts.Count -gt 0 -and $noFlags.Count -eq 0) "hosts=$($dhosts.Count)" | Out-Null
+  $me = @($dhosts | Where-Object { $_.name -eq $HostName })[0]
+  Check "discovery: $HostName is in this run and identified" ($me -and $me.in_run -eq $true -and $me.identified -eq $true) $(if ($me) { "in_run=$($me.in_run) identified=$($me.identified) sources=$(@($me.sources) -join ',')" } else { 'not in report.hosts' }) | Out-Null
+  $portKeys = @(); if ($me -and $me.ports) { $portKeys = @($me.ports.PSObject.Properties | Where-Object { @($_.Value).Count -gt 0 }) }
+  Check "discovery: $HostName initiators carry their array ports" ($portKeys.Count -ge 1) (($portKeys | ForEach-Object { "$($_.Name) -> $(@($_.Value) -join ',')" }) -join '; ') | Out-Null
+  $unid = @($dhosts | Where-Object { $_.identified -eq $false })
+  $unidWrong = @($unid | Where-Object { -not ((@($_.wwpns) + @($_.iqns)) -contains $_.name) })
+  Check 'discovery: unidentified only when the name is the initiator id itself (D-2)' ($unidWrong.Count -eq 0) (($unid | ForEach-Object { $_.name }) -join ', ') | Out-Null
+  Note "hosts in this run: $(@($dhosts | Where-Object { $_.in_run -eq $true }).Count); other hosts on this array: $(@($dhosts | Where-Object { $_.in_run -ne $true }).Count)"
+  $pre = Api 'GET' "/runs/$Run1/storage/preflight" $null 'run1-preflight'
+  $namesCheck = $null; if ($pre.Status -eq 200) { $namesCheck = @($pre.Json.checks | Where-Object { $_.key -eq 'names' })[0] }
+  Check 'preflight: names check counts objects by kind (D-4)' ($namesCheck -and $namesCheck.detail -match '^4 object name\(s\) free: 2 volumes, 1 VV set, 1 host set\.') $(if ($namesCheck) { "$($namesCheck.status): $($namesCheck.detail)" } else { "HTTP $($pre.Status)" }) | Out-Null
+
+  # ---- rc.21 SPEC-010: the command set reads in FOS order (R1) and a bad alias gets a suggestion (R3).
+  # The plan step logs into both switches READ-ONLY (as the Zoning step does); render is pure computation
+  # and is not recorded on the run (no run_id), so the as-built below is what the scenarios produce.
+  $zplan = $null
+  try {
+    $zev = Run-Step -RunId $Run1 -Path '/zoning/plan' -Types @('zoning.plan') -Save 'run1-zoning-plan'
+    $zplan = $zev.data.plan
+    if ($zplan.error) { Check 'zoning plan built from both switches' $false $zplan.error | Out-Null; $zplan = $null }
+  } catch { Check 'zoning plan built from both switches' $false $_.Exception.Message | Out-Null }
+  if ($zplan) {
+    $chosen = @(); $aliases = @{}
+    foreach ($fab in @($zplan.fabrics)) {
+      $zonedKeys = @($fab.already_zoned | ForEach-Object { "$($_[0])|$($_[1])" })
+      $pair = @($fab.pairs | Where-Object { $zonedKeys -notcontains "$($_[0])|$($_[1])" })[0]
+      if (-not $pair) { continue }
+      $chosen += , @($pair[0], $pair[1])
+      foreach ($w in (@($fab.hosts) + @($fab.array_ports))) {
+        if ($w.wwpn -eq $pair[0] -or $w.wwpn -eq $pair[1]) {
+          if (@($w.existing_aliases).Count -gt 0) { $aliases[$w.wwpn] = @($w.existing_aliases)[0] }
+          elseif ($w.proposed_alias) { $aliases[$w.wwpn] = $w.proposed_alias }
+          else { $aliases[$w.wwpn] = "zz_s6_$($w.wwpn)" }
+        }
+      }
+    }
+    if ($chosen.Count -eq 0) {
+      Note 'zoning render: every host-array pair on both fabrics is already zoned - nothing to render here (SPEC-010 R1/R3 need a screenshot instead)'
+    } else {
+      $render = Api 'POST' '/zoning/render' @{ plan = $zplan; aliases = $aliases; selected_pairs = $chosen } 'run1-zoning-render'
+      $cmdSets = @()
+      if ($render.Status -eq 200) { foreach ($p in $render.Json.commands.PSObject.Properties) { if (@($p.Value).Count -gt 0) { $cmdSets += , @($p.Value) } } }
+      $orderOk = $cmdSets.Count -gt 0
+      foreach ($c in $cmdSets) { if ($c[0] -ne 'cfgtransshow' -or $c[-2] -ne 'cfgsave' -or $c[-1] -notlike 'cfgenable *') { $orderOk = $false } }
+      Check 'zoning render: cfgtransshow first, cfgsave + cfgenable last (Z-4)' $orderOk $(if ($render.Status -ne 200) { "HTTP $($render.Status): $($render.Text)" } else { ($cmdSets | ForEach-Object { "$($_[0]) ... $($_[-2]); $($_[-1])" }) -join ' | ' }) | Out-Null
+      $badAliases = $aliases.Clone(); $badAliases[$chosen[0][0]] = 'bad name.1'
+      $render2 = Api 'POST' '/zoning/render' @{ plan = $zplan; aliases = $badAliases; selected_pairs = $chosen } 'run1-zoning-render-badalias'
+      $skippedAll = @(); if ($render2.Status -eq 200) { foreach ($p in $render2.Json.skipped.PSObject.Properties) { $skippedAll += @($p.Value) } }
+      Check "zoning render: a rejected alias offers a corrected one (Z-3)" (@($skippedAll | Where-Object { $_ -like "*try 'bad_name_1'*" }).Count -ge 1) ($skippedAll -join ' | ') | Out-Null
+    }
+  }
+
   $plan1 = Compose-And-Preview $f1 $HostName 'run1'
   $mine = @($plan1.actions | Where-Object { $_.name -like "$Prefix*" -or $_.kind -eq 'vlun' })
   $hostRow = @($plan1.actions | Where-Object { $_.kind -eq 'host' -and $_.name -eq $HostName })[0]
@@ -400,6 +462,15 @@ try {
   # Read-back is "LUN 0, LUN 1 -> set:..." for a clean create; "LUN 0/3" is the P-21 duplicate form.
   $lunTokens = if ($vlunOut) { @([regex]::Matches($vlunOut.detail, 'LUN \d+') | ForEach-Object { $_.Value }) } else { @() }
   Check 'apply: export read-back names two LUNs, no duplicate' ($lunTokens.Count -eq 2 -and $vlunOut.detail -notmatch 'LUN \d+/') $(if ($vlunOut) { $vlunOut.detail } else { 'no vlun outcome' }) | Out-Null
+  # ---- rc.23 SPEC-012 R1 (P-8): result rows carry the array's identifiers (\u00b7 is the middle dot the server joins with)
+  $oh = @($res1.outcomes | Where-Object { $_.kind -eq 'host' -and $_.name -eq $HostName })[0]
+  Check 'result: host row names id, persona, WWN count (P-8)' ($oh -and $oh.detail -match '^id \d+ \u00b7 persona \S+ \u00b7 \d+ WWNs?$') $(if ($oh) { $oh.detail } else { 'no host outcome' }) | Out-Null
+  $ov = @($res1.outcomes | Where-Object { $_.kind -eq 'volume' -and $_.name -eq $Vol1 })[0]
+  Check "result: $Vol1 row names id, WWN, size, type, CPG" ($ov -and $ov.detail -match ('^id \d+ \u00b7 WWN [0-9A-F]{32} \u00b7 1024 MiB tpvv on ' + [regex]::Escape($Cpg) + '$')) $(if ($ov) { $ov.detail } else { 'no volume outcome' }) | Out-Null
+  $ohs = @($res1.outcomes | Where-Object { $_.kind -eq 'hostset' })[0]
+  Check 'result: host set row lists its member' ($ohs -and $ohs.detail -eq "1 member: $HostName") $(if ($ohs) { $ohs.detail } else { '' }) | Out-Null
+  $ovs = @($res1.outcomes | Where-Object { $_.kind -eq 'vvset' })[0]
+  Check 'result: VV set row lists its volumes' ($ovs -and $ovs.detail -eq "2 volumes: $Vol1, $Vol2") $(if ($ovs) { $ovs.detail } else { '' }) | Out-Null
 
   $after1Snap = Wsapi-Read 'after-apply-1'
   $after1 = Snap-Templates $after1Snap
@@ -440,7 +511,8 @@ try {
   Section '3 Conflict'
   $VolumesC = @(
     @{ name = $Vol1; size_gib = '2'; provisioning_type = 'tpvv'; cpg = $Cpg; vvset = $VvSet },
-    @{ name = $Vol2; size_gib = '1'; provisioning_type = 'reduce'; cpg = $Cpg; vvset = $VvSet }
+    @{ name = $Vol2; size_gib = '1'; provisioning_type = 'reduce'; cpg = $Cpg; vvset = $VvSet },
+    @{ name = $Vol3; size_gib = '1'; provisioning_type = 'tpvv'; cpg = $Cpg }   # in no VV set, in no export: SPEC-008 R5 must say so
   )
   $SheetC = Compose $Targets $VolumesC $HostSets 'compose-C'
   $f3 = Start-Provisioning 'run3' $SheetC
@@ -448,6 +520,7 @@ try {
   $row = @($plan3.actions | Where-Object { $_.kind -eq 'volume' -and $_.name -eq $Vol1 })[0]
   Check "plan: $Vol1 is 'conflict'" ($row -and $row.state -eq 'conflict') $(if ($row) { $row.reason } else { 'no row' }) | Out-Null
   Check 'plan: blockers non-empty' (@($plan3.blockers).Count -gt 0) (@($plan3.blockers) -join '; ') | Out-Null
+  Check "plan: names the volume no export presents, $Vol3 (P-19)" (@($plan3.notes | Where-Object { $_ -eq "1 volume is not presented by this plan: $Vol3" }).Count -eq 1) (@($plan3.notes) -join ' | ') | Out-Null
   $refused = Api 'POST' "/runs/$($f3.RunId)/storage/apply" $null 'run3-apply-refused'
   Check 'POST /storage/apply refused (HTTP 4xx)' ($refused.Status -ge 400 -and $refused.Status -lt 500) "HTTP $($refused.Status): $($refused.Text)" | Out-Null
   $after3Snap = Wsapi-Read 'after-conflict'
@@ -478,6 +551,15 @@ try {
   $mismatchN = @($rep.checks | Where-Object { $_.status -eq 'mismatch' }).Count
   $healthN = 0; foreach ($i in @($rep.health_issues)) { $healthN += [int]$i.qty }
   Check 'verify: reachable, no mismatch' ($ev.event_type -eq 'verify.completed' -and $rep.reachable -eq $true -and $mismatchN -eq 0) "passed=$passedN mismatches=$mismatchN health=$healthN" | Out-Null
+  # ---- rc.22 SPEC-011: verify says what to look at (R1 detail rows on every status row, R3 match rule on every check)
+  $noMatch = @($rep.checks | Where-Object { -not $_.PSObject.Properties['match'] -or (@('exact', 'contains', 'includes') -notcontains $_.match) })
+  Check 'verify: every check states its match rule (V-4)' ($noMatch.Count -eq 0) (($noMatch | ForEach-Object { $_.field }) -join ', ') | Out-Null
+  $dns = @($rep.checks | Where-Object { $_.field -eq 'DNS servers' })[0]
+  $contact = @($rep.checks | Where-Object { $_.field -eq 'Support contact' })[0]
+  Check "verify: DNS servers is 'includes', Support contact is 'contains' (V-4)" (($dns -and $dns.match -eq 'includes') -and ((-not $contact) -or $contact.match -eq 'contains')) "dns=$(if ($dns) { $dns.match } else { 'no row' }) contact=$(if ($contact) { $contact.match } else { 'no row' })" | Out-Null
+  $noDetails = @($rep.health_issues | Where-Object { -not $_.PSObject.Properties['details'] })
+  $detailN = 0; foreach ($i in @($rep.health_issues)) { $detailN += @($i.details).Count }
+  Check 'verify: every status row carries its detail rows (V-1)' ($noDetails.Count -eq 0) "status rows=$(@($rep.health_issues).Count) detail rows=$detailN" | Out-Null
   $ev = Run-Step -RunId $Run1 -Path '/asbuilt' -Body $creds -Types @('asbuilt.generated', 'asbuilt.failed') -Save 'run1-asbuilt'
   Check 'as-built generated' ($ev.event_type -eq 'asbuilt.generated') $ev.message | Out-Null
   $docxPath = Join-Path $Out 'asbuilt.docx'
@@ -496,6 +578,11 @@ try {
     Check "docx carries '$line'" ($text -like "*$line*") '' | Out-Null
   }
   Check "docx does NOT say 'did not include the SAN zoning step' (A-3)" ($text -notlike '*did not include the SAN zoning step*') '' | Out-Null
+  # ---- rc.23 SPEC-012 R3 (A-4): the two run sections share a page - the first breaks, the second flows on
+  $pZon = [regex]::Match($xml, '<w:p\b(?:(?!</w:p>).)*?SAN zoning designed in this run(?:(?!</w:p>).)*?</w:p>', 'Singleline')
+  $pProv = [regex]::Match($xml, '<w:p\b(?:(?!</w:p>).)*?Provisioning performed in this run(?:(?!</w:p>).)*?</w:p>', 'Singleline')
+  $zBreak = $pZon.Success -and ($pZon.Value -match 'pageBreakBefore'); $pBreak = $pProv.Success -and ($pProv.Value -match 'pageBreakBefore')
+  Check 'docx: the provisioning run section flows on from the zoning one (A-4)' ($pZon.Success -and $pProv.Success -and $zBreak -and -not $pBreak) "zoning heading breaks=$zBreak provisioning heading breaks=$pBreak" | Out-Null
 }
 catch {
   $script:Fail = $true
@@ -553,6 +640,14 @@ $lines = @(
 foreach ($r in $script:Results) { $lines += "| $($r.Section) | $($r.Verdict) | $($r.What) | $(($r.Detail -replace '\|', '/') -replace "`r?`n", ' ') |" }
 $lines += ""
 $lines += "Evidence: every API response as NN-<step>.json, WSAPI reads as NN-wsapi-<what>-<when>.json, asbuilt.docx, cleanup.txt."
+$lines += ""
+$lines += "## Still needs eyes - UI-only changes, one screenshot each (open run 1 in the browser)"
+$lines += "1. Verify step: the line 'Using the array credential from the sheet: ...' and the 'Use a different credential' button (SPEC-008 R4)."
+$lines += "2. Provision step, Compose card: pick two members - the box shows the names, not 'multiple' (SPEC-008 R6)."
+$lines += "3. Discovery step: 'Hosts in this run' above 'Other hosts on this array', one legend line, RCIP state column (SPEC-009)."
+$lines += "4. Zoning step after Build plan: designer legend, an alias with a space typed -> 'Use ...' button, blocks 1/2/3 (SPEC-010)."
+$lines += "5. Verify step: one Array status row expanded to its detail rows; a Match row with 'contains the expected value' (SPEC-011)."
+$lines += "6. Provision step: Result card Detail column with ids/WWNs; Continue label; 'To remove what this run created' (SPEC-012, SPEC-007)."
 [System.IO.File]::WriteAllText((Join-Path $Out 'report.md'), ($lines -join "`r`n") + "`r`n", [System.Text.UTF8Encoding]::new($false))
 Write-Host ""
 Write-Host ("Session complete: {0} PASS, {1} FAIL  ->  {2}\report.md" -f $passes, $fails, $Out) -ForegroundColor $(if ($fails -eq 0) { 'Green' } else { 'Red' })
