@@ -36,11 +36,16 @@ param(
   [Parameter(Mandatory = $true)][string]$BaseSheet,
   [string]$Api = 'http://127.0.0.1:8765',
   [string]$Cpg = '',
-  [string]$OutRoot = $PSScriptRoot,
+  [string]$OutRoot = '',
   [switch]$SkipCleanup
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+if (-not $OutRoot) {
+  # $PSScriptRoot is empty in a param() default under `powershell -File` on 5.1 (session.cmd, 2026-09-15).
+  $OutRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+  if (-not $OutRoot) { $OutRoot = (Get-Location).Path }
+}
 
 $Prefix = 'zz_s6_'
 $Vol1 = "${Prefix}vol01"; $Vol2 = "${Prefix}vol02"; $VvSet = "${Prefix}vvs"; $HostSet = "${Prefix}hs"
