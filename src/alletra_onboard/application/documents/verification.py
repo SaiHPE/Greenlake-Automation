@@ -28,6 +28,7 @@ from alletra_onboard.domain.models import (
     ArrayWorkItem,
     FieldCheck,
     FieldCheckStatus,
+    HealthDetail,
     HealthIssue,
     VerificationReport,
 )
@@ -100,7 +101,7 @@ def _contains(field: str, expected: str, actual: str | None, *, critical: bool =
         status = FieldCheckStatus.PASS
     else:
         status = FieldCheckStatus.MISMATCH
-    return FieldCheck(field=field, expected=str(expected), actual=actual, status=status, critical=critical)
+    return FieldCheck(field=field, expected=str(expected), actual=actual, status=status, critical=critical, match="contains")
 
 
 def _set(field: str, expected: list[str], found: list[str], *, critical: bool = False) -> FieldCheck:
@@ -113,7 +114,7 @@ def _set(field: str, expected: list[str], found: list[str], *, critical: bool = 
         status = FieldCheckStatus.PASS
     else:
         status = FieldCheckStatus.MISMATCH
-    return FieldCheck(field=field, expected=", ".join(sorted(want)), actual=actual, status=status, critical=critical)
+    return FieldCheck(field=field, expected=", ".join(sorted(want)), actual=actual, status=status, critical=critical, match="includes")
 
 
 def _build_checks(item: ArrayWorkItem, outputs: dict[str, str]) -> list[FieldCheck]:
@@ -138,27 +139,44 @@ def _build_checks(item: ArrayWorkItem, outputs: dict[str, str]) -> list[FieldChe
 
 
 def _health_issues(checkhealth: str) -> list[HealthIssue]:
-    """Parse the SUMMARY table of `checkhealth -svc -detail` into per-component issue rows.
+    """Parse `checkhealth -svc -detail` into per-component issue rows.
 
-    The table sits between the 'Component ... Summary Description ... Qty' header and the dashed
-    separator. Each data row is '<Component> <free-text summary...> <Qty>': the first token is the
-    component, the trailing token is the integer count, the middle is the description. An array with
-    no issues yields an empty list. (The verbose detail stays in the raw output for the operator.)
+    The SUMMARY table sits between the 'Component ... Summary Description ... Qty' header and the dashed
+    separator; each data row is '<Component> <free-text summary...> <Qty>'. The DETAIL table follows
+    ('Component ... Identifier ... Resolution'); each row is '<Component> <Identifier> <description...>
+    <Resolution>'. SPEC-011 R1: detail rows are attached to the summary row of their component - they
+    are what makes 'vlun - Hosts not connected to a port - 4' actionable - and never counted as issues
+    of their own. An array with no issues yields an empty list.
     """
     issues: list[HealthIssue] = []
-    in_summary = False
+    details: dict[str, list[HealthDetail]] = {}
+    mode: str | None = None
     for line in checkhealth.splitlines():
         if "Summary Description" in line:
-            in_summary = True
+            mode = "summary"
             continue
-        if not in_summary:
+        if "Identifier" in line and "Resolution" in line:
+            mode = "detail"
+            continue
+        if mode is None:
             continue
         stripped = line.strip()
-        if stripped and set(stripped) <= {"-"}:  # dashed separator ends the summary table
-            break
+        if not stripped:
+            continue
+        if set(stripped) <= {"-"}:  # dashed separator ends a table
+            mode = None if mode == "detail" else "between"
+            continue
         tokens = line.split()
-        if len(tokens) >= 3 and tokens[0].isalpha() and tokens[0] != "Checking" and tokens[-1].isdigit():
+        if tokens[0].isdigit():     # the 'N total M' footer
+            continue
+        if mode == "summary" and len(tokens) >= 3 and tokens[0].isalpha() and tokens[0] != "Checking" and tokens[-1].isdigit():
             issues.append(HealthIssue(component=tokens[0], summary=" ".join(tokens[1:-1]), qty=int(tokens[-1])))
+        elif mode == "detail" and len(tokens) >= 4:
+            details.setdefault(tokens[0], []).append(
+                HealthDetail(identifier=tokens[1], description=" ".join(tokens[2:-1]), resolution=tokens[-1])
+            )
+    for issue in issues:
+        issue.details = details.get(issue.component, [])
     return issues
 
 

@@ -1,6 +1,6 @@
 import { Box, Button, Table, TableBody, TableCell, TableHeader, TableRow, Text } from 'grommet';
 import { useState } from 'react';
-import { CredentialOverride, FieldCheck, RunEvent, RunRecord, VerificationReport, startVerify } from '../api';
+import { CredentialOverride, FieldCheck, HealthIssue, RunEvent, RunRecord, VerificationReport, startVerify } from '../api';
 import { ArrayCredentialCard, credentialReady, useArrayCredential } from '../ui/ArrayCredentialCard';
 import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator, StepState } from '../ui/status';
@@ -19,6 +19,58 @@ const CHECK_STATE: Record<FieldCheck['status'], { state: StepState; label: strin
   not_readable: { state: 'not_started', label: 'Not readable' },
 };
 
+// SPEC-011 R3 (V-4): a Match between two visibly different strings says why.
+const MATCH_NOTE: Record<NonNullable<FieldCheck['match']>, string> = {
+  exact: '',
+  contains: 'contains the expected value',
+  includes: 'every expected value present',
+};
+
+const issueKey = (i: HealthIssue) => `${i.component}|${i.summary}`;
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+/** One array-status row with the array's own Detail rows behind an expander (SPEC-011 R1). */
+function StatusRow({ issue, change }: { issue: HealthIssue; change: 'new' | '' }) {
+  const [open, setOpen] = useState(false);
+  const details = issue.details ?? [];
+  return (
+    <>
+      <TableRow>
+        <TableCell><Text size="small">{issue.component}</Text></TableCell>
+        <TableCell>
+          <Box direction="row" gap="small" align="center" wrap>
+            <Text size="small">{issue.summary}</Text>
+            {change === 'new' && <StatusIndicator state="action_required" label="new since the last check" />}
+          </Box>
+        </TableCell>
+        <TableCell><Text size="small">{issue.qty}</Text></TableCell>
+        <TableCell>
+          <Button size="small" label={open ? 'Hide' : details.length ? `Show ${details.length}` : 'Show'} onClick={() => setOpen((v) => !v)} />
+        </TableCell>
+      </TableRow>
+      {open && (
+        <TableRow>
+          <TableCell colSpan={4}>
+            {details.length === 0 ? (
+              <Text size="small" color="text-weak">The array gave no detail row for this component.</Text>
+            ) : (
+              <Box gap="xxsmall" pad={{ left: 'small' }}>
+                {details.map((d, i) => (
+                  <Box key={`${d.identifier}-${i}`} direction="row" gap="small" wrap>
+                    <Text size="small" style={{ fontFamily: 'ui-monospace, Consolas, monospace' }}>{d.identifier}</Text>
+                    <Text size="small">{d.description}</Text>
+                    <Text size="small" color="text-weak">resolution: {d.resolution}</Text>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  );
+}
+
 export function VerifyStep({ runId, run, events, onDone }: Props) {
   const credential = useArrayCredential(runId);
   const [override, setOverride] = useState<CredentialOverride>(null);
@@ -36,6 +88,14 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
 
   const mismatches = report ? report.checks.filter((check) => check.status !== 'pass').length : 0;
   const matches = report ? report.checks.filter((check) => check.status === 'pass').length : 0;
+  const notReadable = report ? report.checks.filter((check) => check.status === 'not_readable').length : 0;
+  // SPEC-011 R5 (X-7): the check before this one, within the run, for "new since" / "cleared".
+  const completed = mine.filter((event) => event.event_type === 'verify.completed');
+  const previousEvent = completed.length >= 2 ? completed[completed.length - 2] : null;
+  const previous = (previousEvent?.data?.report as VerificationReport | undefined) ?? null;
+  const previousKeys = new Set((previous?.health_issues ?? []).map(issueKey));
+  const currentKeys = new Set((report?.health_issues ?? []).map(issueKey));
+  const cleared = (previous?.health_issues ?? []).filter((i) => !currentKeys.has(issueKey(i)));
 
   const verify = async () => {
     setSubmitting(true);
@@ -126,7 +186,12 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
                         <Text size="small">{check.actual ?? '—'}</Text>
                       </TableCell>
                       <TableCell>
-                        <StatusIndicator state={meta.state} label={meta.label} />
+                        <Box gap="xxsmall">
+                          <StatusIndicator state={meta.state} label={meta.label} />
+                          {check.status === 'pass' && check.match && MATCH_NOTE[check.match] && (
+                            <Text size="xsmall" color="text-weak">{MATCH_NOTE[check.match]}</Text>
+                          )}
+                        </Box>
                       </TableCell>
                     </TableRow>
                   );
@@ -136,12 +201,21 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
             <TableSummary>
               {matches} match · {mismatches} to review
             </TableSummary>
-            <Text size="xsmall" color="text-weak">
-              “Not readable” means the array did not report that value; check it by hand if it matters.
-            </Text>
+            {notReadable > 0 && (
+              <Text size="xsmall" color="text-weak">
+                “Not readable” means the array did not report that value; check it by hand if it matters.
+              </Text>
+            )}
           </Surface>
 
-          <Surface title="Array status" description="As reported by the array's own status check.">
+          <Surface
+            title="Array status"
+            description={
+              previousEvent
+                ? `As reported by the array's own status check — compared with the check at ${hhmm(previousEvent.created_at)}.`
+                : "As reported by the array's own status check."
+            }
+          >
             {report.health_issues.length === 0 ? (
               <InlineNotification tone="ok" title="No issues reported" />
             ) : (
@@ -163,30 +237,38 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
                         COUNT
                       </Text>
                     </TableCell>
+                    <TableCell scope="col">
+                      <Text size="xsmall" weight={600} color="text-weak">
+                        DETAIL
+                      </Text>
+                    </TableCell>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {report.health_issues.map((issue, index) => (
-                    <TableRow key={`${issue.component}-${index}`}>
-                      <TableCell>
-                        <Text size="small">{issue.component}</Text>
-                      </TableCell>
-                      <TableCell>
-                        <Text size="small">{issue.summary}</Text>
-                      </TableCell>
-                      <TableCell>
-                        <Text size="small">{issue.qty}</Text>
-                      </TableCell>
-                    </TableRow>
+                    <StatusRow
+                      key={`${issue.component}-${index}`}
+                      issue={issue}
+                      change={previousEvent && !previousKeys.has(issueKey(issue)) ? 'new' : ''}
+                    />
                   ))}
                 </TableBody>
               </Table>
             )}
-            <Box flex={false}>
+            {cleared.length > 0 && (
               <Text size="xsmall" color="text-weak">
-                Each component listed requires manual attention — for example replication links, iLO, cage or security.
+                Cleared since the last check: {cleared.map((i) => `${i.component} — ${i.summary}`).join(' · ')}
               </Text>
-            </Box>
+            )}
+            {report.health_issues.length > 0 && (
+              <Box flex={false}>
+                {/* SPEC-011 R2 (V-2): the guidance is the array's own detail rows, not our examples. */}
+                <Text size="xsmall" color="text-weak">
+                  Each component here needs attention outside this tool. Expand a row for the identifiers the array names
+                  and the resolution it states.
+                </Text>
+              </Box>
+            )}
           </Surface>
         </>
       )}
