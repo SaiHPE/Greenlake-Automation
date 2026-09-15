@@ -149,7 +149,15 @@ export const uploadInitSheet = (contentB64: string) =>
 // Mint the run from a held sheet once the operator picks a mode.
 export const createRunFromSheet = (token: string, mode = 'FULL_ONBOARDING', selectedSteps: string[] = []) =>
   request<{ run: RunRecord }>('POST', '/runs/from-sheet', { token, mode, selected_steps: selectedSteps });
-export const getRun = (runId: string) => request<{ run: RunRecord; work_item: any }>('GET', `/runs/${runId}`);
+// ADR 0013 / SPEC-008 R3: whether the run holds an array credential (from the sheet) and whose — never the password.
+export interface ArrayCredentialInfo {
+  available: boolean;
+  source: 'provisioning' | 'dscc_setup' | 'none';
+  username: string;
+  host: string;
+}
+export const getRun = (runId: string) =>
+  request<{ run: RunRecord; work_item: any; array_credential: ArrayCredentialInfo | null }>('GET', `/runs/${runId}`);
 export const getEvents = (runId: string) => request<{ events: RunEvent[] }>('GET', `/runs/${runId}/events`);
 
 export const startProvision = (runId: string, dryRun: boolean) =>
@@ -161,9 +169,10 @@ export const startCloudinit = (runId: string, cloudinitUrl: string, autoSubmit =
   });
 export const startDscc = (runId: string, cdpUrl: string) =>
   request<{ run: RunRecord }>('POST', `/runs/${runId}/dscc`, { cdp_url: cdpUrl });
-// Post-init SSH verification — password is used for the SSH session only, never stored.
-export const startVerify = (runId: string, username: string, password: string) =>
-  request<{ run: RunRecord }>('POST', `/runs/${runId}/verify`, { username, password });
+// Post-init SSH verification. SPEC-008 R2: the run's own array credential is used unless a pair is given.
+export type CredentialOverride = { username: string; password: string } | null;
+export const startVerify = (runId: string, override: CredentialOverride = null) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/verify`, override ?? {});
 export const markComplete = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/complete`);
 
 // As-built document (the last step): read the array read-only and build the HPE .docx. The password is
@@ -176,11 +185,11 @@ export interface AsBuiltResult {
   warnings: string[];
 }
 export const startAsbuilt = (
-  runId: string, username: string, password: string, customer = '', site = '',
+  runId: string, override: CredentialOverride, customer = '', site = '',
   applicationWorkload = '', purpose = '',
 ) =>
   request<{ run: RunRecord }>('POST', `/runs/${runId}/asbuilt`, {
-    username, password, customer, site, application_workload: applicationWorkload, purpose,
+    ...(override ?? {}), customer, site, application_workload: applicationWorkload, purpose,
   });
 export const asbuiltDownloadUrl = (runId: string) => `${API}/runs/${runId}/asbuilt/download`;
 

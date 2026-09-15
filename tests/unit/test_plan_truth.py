@@ -539,3 +539,67 @@ def test_duplicate_templates_pinned_from_the_live_array():
                      exports=[ExportRequest(source_kind="vvset", source_name="zz_t2_vvs", target_kind="hostset", target_name="zz_t2_hs")])
     row = _row(_plan(fake, intent), "vlun", "zz_t2_vvs")
     assert row.state == "exists" and "LUN 0/3" in row.reason and "LUN 1/4" in row.reason
+
+
+# ------------------------------------------------------------------ SPEC-008 R5 (P-19): unpresented volumes are named
+
+def _unpresented_notes(plan):
+    return [n for n in plan.notes if "not presented by this plan" in n]
+
+
+def test_a_sheet_volume_no_export_presents_is_named_in_the_notes():
+    """S-1 second plan, 2026-09-14: zz_t2_vol03 was on the sheet, in no VV set, in no export — and simply
+    absent from the plan the operator approved."""
+    intent = _intent(volumes=[
+        VolumeRequest(name="vol01", size_gib=20, cpg="SSD_r6", vvset="vvs"),
+        VolumeRequest(name="vol02", size_gib=20, cpg="SSD_r6", vvset="vvs"),
+        VolumeRequest(name="vol03", size_gib=20, cpg="SSD_r6"),
+    ])
+    plan = _plan(TruthfulFakeWsapi(), intent)
+    assert _unpresented_notes(plan) == ["1 volume is not presented by this plan: vol03"]
+    # the volume row itself is still there — it WILL be created, just not presented
+    assert any(a.kind == "volume" and a.name == "vol03" for a in plan.actions)
+
+
+def test_every_volume_presented_means_no_note():
+    plan = _plan(TruthfulFakeWsapi())
+    assert _unpresented_notes(plan) == []
+
+
+def test_a_volume_presented_only_through_its_vv_set_counts_as_presented_and_plural_reads_right():
+    intent = _intent(
+        volumes=[
+            VolumeRequest(name="vol01", size_gib=20, cpg="SSD_r6", vvset="vvs"),
+            VolumeRequest(name="vol02", size_gib=20, cpg="SSD_r6"),
+            VolumeRequest(name="vol03", size_gib=20, cpg="SSD_r6"),
+            VolumeRequest(name="vol04", size_gib=20, cpg="SSD_r6"),
+        ],
+        exports=[
+            ExportRequest(source_kind="vvset", source_name="vvs", target_kind="hostset", target_name="hs"),
+            ExportRequest(source_kind="volume", source_name="vol02", target_kind="host", target_name="esx1"),
+        ],
+    )
+    plan = _plan(TruthfulFakeWsapi(), intent)
+    assert _unpresented_notes(plan) == ["2 volumes are not presented by this plan: vol03, vol04"]
+
+
+def test_an_export_held_back_for_reachability_still_presents_its_volume():
+    # esx2 is not reachable: the export is held back (zoning), but the volume IS composed into a presentation
+    intent = _intent(
+        host_sets=[HostSetRequest(name="hs", members=["esx1"]), HostSetRequest(name="hs2", members=["esx2"])],
+        exports=[
+            ExportRequest(source_kind="vvset", source_name="vvs", target_kind="hostset", target_name="hs"),
+            ExportRequest(source_kind="volume", source_name="vol03", target_kind="hostset", target_name="hs2"),
+        ],
+        volumes=[
+            VolumeRequest(name="vol01", size_gib=20, cpg="SSD_r6", vvset="vvs"),
+            VolumeRequest(name="vol02", size_gib=20, cpg="SSD_r6", vvset="vvs"),
+            VolumeRequest(name="vol03", size_gib=20, cpg="SSD_r6"),
+        ],
+    )
+    disc = DiscoveryReport(host_hbas=_discovery().host_hbas + [
+        HostHba(host_name="esx2", wwpn="10000000C9000003", fabric="odd", os="VMware ESXi"),
+    ])
+    plan = _plan(TruthfulFakeWsapi(), intent, disc)
+    assert _unpresented_notes(plan) == []
+    assert any("held back" in n for n in plan.notes)

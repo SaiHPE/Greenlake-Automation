@@ -84,6 +84,13 @@ const memberOptions = (o: ProvisioningObjects): Opt[] => {
   return opts;
 };
 
+// SPEC-008 R6 (P-20): what the closed multi-select shows — the names, "4 hosts: a, b, c, …" past three.
+export const memberLabel = (names: string[]): string | undefined => {
+  if (names.length === 0) return undefined;              // let the placeholder show
+  if (names.length <= 3) return names.join(', ');
+  return `${names.length} hosts: ${names.slice(0, 3).join(', ')}, …`;
+};
+
 function ExportRowView({ row, sourceOpts, targetOpts, disabled, onChange, onRemove }: {
   row: ExportRow; sourceOpts: Opt[]; targetOpts: Opt[]; disabled: boolean;
   onChange: (r: ExportRow) => void; onRemove: () => void;
@@ -205,6 +212,8 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
             <Select size="small" multiple closeOnChange={false} placeholder="choose members"
               options={memOpts} labelKey="label" valueKey={{ key: 'value', reduce: true }}
               value={members[hs.name] ?? []} disabled={busyOrDisabled}
+              // SPEC-008 R6 (P-20): the names, not Grommet's "multiple"
+              valueLabel={memberLabel(members[hs.name] ?? [])}
               onChange={({ value }) => setMembers((m) => ({ ...m, [hs.name]: value }))} />
           </Box>
         </Box>

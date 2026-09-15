@@ -14,6 +14,7 @@ from uuid import uuid4
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.config import Settings, load_settings
 from alletra_onboard.domain.models import (
+    ArrayCredential,
     ArrayWorkItem,
     RunEvent,
     RunMode,
@@ -157,6 +158,23 @@ class RunCoordinator:
             return mgmt
         intent = self.store.get_provisioning_intent(run_id)
         return (intent.array.host or "").strip() if intent else ""
+
+    def array_credential(self, run_id: str) -> ArrayCredential:
+        """THE array credential of this run (ADR 0013 / SPEC-008 R1), from the sheet: the Provisioning
+        tab's array admin when a provisioning intent is held, else the DSCC system credential when its
+        password was supplied, else none. Every step that needs the array takes it from here; the
+        secret never leaves the process except through the clients that log in with it."""
+        host = self.array_host(run_id)
+        intent = self.store.get_provisioning_intent(run_id)
+        if intent is not None and intent.array.password.get_secret_value():
+            return ArrayCredential(available=True, source="provisioning", username=intent.array.username,
+                                   host=host, secret=intent.array.password)
+        item = self.get_work_item(run_id)
+        setup = item.dscc_setup
+        if setup.password is not None and setup.password.get_secret_value():
+            return ArrayCredential(available=True, source="dscc_setup", username=setup.username,
+                                   host=host, secret=setup.password)
+        return ArrayCredential(host=host)
 
     def list_runs(self) -> list[RunRecord]:
         return self.store.list_runs()

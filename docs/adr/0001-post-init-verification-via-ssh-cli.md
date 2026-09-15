@@ -1,5 +1,9 @@
 # Post-init verification reads the array's running config via SSH CLI
 
+> **Amended by [ADR 0013](0013-one-array-credential-per-run.md) (2026-09-15):** the credential rule below
+> ("supplied per-run and never stored") is superseded. The run holds one array credential from the
+> sheet and every step uses it; the prompt remains only for runs whose sheet supplied none.
+
 After the operator confirms the array is initialized, the tool verifies the **on-array config**
 against the Initialisation-sheet values by logging into the array directly over **SSH** (port 22,
 the array admin account) and parsing the read-only `show*` commands. It never writes — it's a

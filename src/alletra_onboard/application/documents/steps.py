@@ -13,7 +13,7 @@ from typing import Callable, Mapping
 
 from alletra_onboard.application.documents.asbuilt import generate_asbuilt
 from alletra_onboard.application.documents.asbuilt_parse import parse_asbuilt
-from alletra_onboard.application.runs.coordinator import RunCoordinator
+from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.domain.models import ArrayWorkItem, RunRecord, WorkflowPhase
@@ -59,9 +59,22 @@ class DocumentSteps:
 
     # ------------------------------------------------------------------ post-init verification
 
-    def start_verify(self, run_id: str, *, username: str, password: str) -> RunRecord:
+    def resolve_credential(self, run_id: str, username: str | None, password: str | None) -> tuple[str, str]:
+        """SPEC-008 R2: an explicit pair overrides; otherwise the run's own credential (ADR 0013); with
+        neither the step refuses with the sentence the UI shows. A username alone is not a credential."""
+        if username and password:
+            return username, password
+        cred = self._coord.array_credential(run_id)
+        if cred.available and cred.secret is not None:
+            return cred.username, cred.secret.get_secret_value()
+        raise StepPreconditionError(
+            "This run holds no array credential — enter the array admin username and password."
+        )
+
+    def start_verify(self, run_id: str, *, username: str | None = None, password: str | None = None) -> RunRecord:
         coord = self._coord
         run, item = coord.get_run(run_id), coord.get_work_item(run_id)
+        username, password = self.resolve_credential(run_id, username, password)
         coord.spawn(run_id, self._run_verify(run, item, username, password))
         return run
 
@@ -95,13 +108,14 @@ class DocumentSteps:
     # ------------------------------------------------------------------ as-built document (last step)
 
     def start_asbuilt(
-        self, run_id: str, *, username: str, password: str, customer: str = "", site: str = "",
-        application_workload: str = "", purpose: str = "",
+        self, run_id: str, *, username: str | None = None, password: str | None = None, customer: str = "",
+        site: str = "", application_workload: str = "", purpose: str = "",
     ) -> RunRecord:
         coord = self._coord
         run, item = coord.get_run(run_id), coord.get_work_item(run_id)
         # The run's array — the same one verify checks. Not chosen here; see RunCoordinator.array_host.
         host = coord.array_host(run_id)
+        username, password = self.resolve_credential(run_id, username, password)
         coord.spawn(run_id, self._run_asbuilt(
             run, item, host, username, password, customer, site, application_workload, purpose,
         ))
