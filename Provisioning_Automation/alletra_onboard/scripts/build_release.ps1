@@ -27,10 +27,15 @@ Write-Host "== Building alletra-onboard v$Version ==" -ForegroundColor Cyan
 Push-Location frontend
 try {
   $ErrorActionPreference = "Continue"
-  & npm install
-  if ($LASTEXITCODE -ne 0) { throw "npm install failed (exit $LASTEXITCODE)" }
-  & npm run build
-  if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE)" }
+  if (-not (Get-Command npm -ErrorAction SilentlyContinue) -and (Test-Path dist\index.html)) {
+    # dist is committed and does not embed the version; a shell without npm can still package it.
+    Write-Warning "npm not on PATH - packaging the committed frontend\dist as-is"
+  } else {
+    & npm install
+    if ($LASTEXITCODE -ne 0) { throw "npm install failed (exit $LASTEXITCODE)" }
+    & npm run build
+    if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE)" }
+  }
 } finally {
   $ErrorActionPreference = "Stop"
   Pop-Location
