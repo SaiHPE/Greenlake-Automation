@@ -247,6 +247,17 @@ class FieldCheck(BaseModel):
     actual: str | None = None
     status: FieldCheckStatus
     critical: bool = False  # network + system name — a mismatch here is prominent
+    # SPEC-011 R3 (V-4): how the comparison was made, so a Match between two visibly different strings
+    # can say why. exact | contains (expected within actual) | includes (every expected value present).
+    match: str = "exact"
+
+
+class HealthDetail(BaseModel):
+    """One row of the Detail table of `checkhealth -svc -detail`: what the array itself names."""
+
+    identifier: str   # e.g. hw_cage:1, Task:7092, SSH
+    description: str
+    resolution: str   # the array's word, usually "Manual"
 
 
 class HealthIssue(BaseModel):
@@ -255,6 +266,7 @@ class HealthIssue(BaseModel):
     component: str  # e.g. Alert, Cage, CDM, iLO, RC, Security
     summary: str    # the Summary Description text
     qty: int        # how many of this issue
+    details: list[HealthDetail] = Field(default_factory=list)  # SPEC-011 R1: the Detail rows for this component
 
 
 class VerificationReport(BaseModel):
