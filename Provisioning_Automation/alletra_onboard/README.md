@@ -291,8 +291,12 @@ Every zip carries `session.ps1` next to the exe ([SPEC-006](docs/specs/SPEC-006-
 With the app running, in PowerShell:
 
 ```powershell
-.\session.ps1 -BaseSheet C:\path\to\Initialisation_sheet.xlsx
+.\session.cmd -BaseSheet C:\path\to\Initialisation_sheet.xlsx
 ```
+
+(`session.cmd` runs `session.ps1` with the execution policy bypassed — the zip's files carry the
+"downloaded from the internet" mark, which RemoteSigned blocks; `Unblock-File .\session.ps1` is the
+alternative. The sheet may stay open in Excel.)
 
 It asks for the array, vCenter and switch passwords, refuses an array that already has `zz_s6_*`
 objects, then drives six scenarios over the app's own API against a clean array — create, rerun,
