@@ -294,7 +294,7 @@ any table. Two sessions' worth of objects gone; the training team's objects unto
 | S-8 | passed | SPEC-002 all five sections | Z-B, A-3, A-5 |
 | S-11 | passed | SPEC-004 R1–R3 | — |
 | S-10 | done by hand | — | G-5 stays open |
-| S-12 | 27 PASS / 4 FAIL (rc.14 exe, rc.15 runner) | SPEC-001 R1–R6, R11; SPEC-005; SPEC-004 R4/R5 — by machine | **SPEC-007 R3** (unsorted list); three runner faults → rc.16 |
+| S-12 | 27/4 (rc.15 runner) → **38/1** (rc.18 runner, 2026-09-15); array clean | SPEC-001 R1–R6, R11; SPEC-005; SPEC-004 R4/R5; SPEC-002 + SPEC-007 in the docx — by machine | **SPEC-007 R3** (unsorted list, rc.16); runner: 5.1 encoding, exec policy, sheet lock, wait-by-status, TLS callback (`Add-Type` pragma) |
 
 Not run: S-3 (failure paths), S-5 (reload/resume), S-6 (same sheet twice), S-7 (G-1 zoning apply),
 S-9 (iSCSI). Releases during the session: rc.10 (SPEC-005), rc.11 (P-17/P-18), rc.12 (P-21 / R11),
@@ -352,3 +352,27 @@ rc.16 decodes the bytes as UTF-8.
 `session.ps1` refused by RemoteSigned (internet mark → `session.cmd` launcher, `Unblock-File`); the sheet locked
 (open in Excel → shared-mode read); WSAPI dropped on the first read after login (the callback bug above →
 rc.17). None touched the array.
+
+### S-12, second run — 2026-09-15 14:21, rc.16 exe + rc.18 runner: **38 PASS / 1 FAIL**
+
+`script-logs/report 2.md`. Baseline `hosts=11 hostsets=5 volumes=54 volumesets=9 vluns=17` (three
+volumes more than yesterday — other teams' work on the shared array; none `zz_s6_`). Every scenario
+passed: create (host row `create`, the array lacked `.136`; 7-line removal set in order), rerun
+(19 → 19), conflict (409), blank members, **documents** (verify 10 OK / 0 mismatch / 19 health issues;
+docx names the volumes, the set, the host set, the removal block, both `removevlun` lines, no A-3
+sentence), and the cleanup lines were accepted. The one FAIL is the post-cleanup WSAPI read, same
+text as before.
+
+**Probe, 14:40** (read-only paste, not in the repo): `Add-Type` *with* `#pragma warning disable
+SYSLIB0014` **fails on 5.1** — *Warning as Error: Invalid number* — so rc.17 and rc.18 silently fell
+back to the `{ $true }` callback and the compiled callback was never in effect on the jump box.
+`Add-Type -IgnoreWarnings` without the pragma compiled; the five object reads that followed it
+succeeded. The array is **clean**: counts equal the baseline, no `zz_s6_*`, no host `10.132.30.136` —
+the second run's cleanup worked in full; only its verification read failed. The probe's own
+`Out-Null` swallowed the Phase 1/2 GET lines, so the thread theory is *supported* (compiled callback
+carried new connections; script-block runs failed only on non-first connections in three sessions)
+but not yet seen failing in isolation. Runner fixed on `main` (no release): `-IgnoreWarnings`, no
+pragma, and the report header now states which callback was in effect.
+
+S-12 stands **passed on every assertion the spec makes**; the runner's post-cleanup read is a runner
+fault with a fix awaiting its next run.

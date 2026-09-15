@@ -79,22 +79,26 @@ function Note([string]$text) { Write-Host "  $text" -ForegroundColor DarkGray }
 
 # ------------------------------------------------------------------ HTTP (the API and WSAPI are both on-site: no proxy)
 
+$script:TlsCallback = 'not needed (PowerShell 6+)'
 if ($PSVersionTable.PSVersion.Major -lt 6) {
   [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
   # A script-block callback ({ $true }) runs only on the FIRST handshake; later handshakes happen on
   # a .NET thread with no runspace and fail with "An unexpected error occurred on a send" (S-12 FAIL 4,
   # and every read on 2026-09-15 once keep-alive was off). The callback must be compiled code.
+  # -IgnoreWarnings, no pragma: 5.1's csc treats warnings as errors and rejects non-numeric warning ids
+  # (probe 2026-09-15: "Warning as Error: Invalid number" - rc.17/rc.18 silently fell back).
   try {
-    Add-Type -TypeDefinition @'
-#pragma warning disable SYSLIB0014
+    Add-Type -IgnoreWarnings -TypeDefinition @'
 using System.Net;
 public static class SessionTrustArrayCert {
   public static void Enable() { ServicePointManager.ServerCertificateValidationCallback = delegate { return true; }; }
 }
 '@ -ErrorAction Stop
     [SessionTrustArrayCert]::Enable()
+    $script:TlsCallback = 'compiled'
   } catch {
-    Write-Warning "Add-Type failed ($($_.Exception.Message)); falling back to a script-block callback (WSAPI may drop after the first request)"
+    $script:TlsCallback = "SCRIPT-BLOCK FALLBACK - Add-Type failed: $($_.Exception.Message)"
+    Write-Warning "Add-Type failed ($($_.Exception.Message)); falling back to a script-block callback (WSAPI may drop on any new TLS connection)"
     [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
   }
   [System.Net.WebRequest]::DefaultWebProxy = $null
@@ -533,6 +537,7 @@ $lines = @(
   "# SPEC-006 session - $stamp",
   "",
   "- App version: $Version",
+  "- Runner: PowerShell $($PSVersionTable.PSVersion); TLS callback: $($script:TlsCallback)",
   "- Array: $ArrayHost ($ArrayUser)  ; CPG: $Cpg  ; host: $HostName",
   "- Run 1: $Run1",
   "- Result: **$passes PASS, $fails FAIL**" + $(if ($SkipCleanup) { ' (cleanup skipped by request)' } else { '' }),
