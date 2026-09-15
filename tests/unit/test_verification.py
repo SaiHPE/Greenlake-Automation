@@ -251,3 +251,47 @@ def test_cli_client_allows_show_commands_with_args():
     assert client.run("showsys -d") == "ok\n"
     assert client.run("showportdev ns 0:3:1") == "ok\n"
     assert fake.commands == ["showsys -d", "showportdev ns 0:3:1"]
+
+
+# ------------------------------------------------------------------ SPEC-011 (V-1, V-4)
+
+def test_detail_rows_attach_to_their_summary_component():
+    """V-1: 'vlun - Hosts not connected to a port - 4' is not actionable; the array's Detail table names
+    the identifiers and the resolution, and the tool parsed them for the as-built but never for the UI."""
+    report = verify(_item(), "3paradm", "pw", client_factory=_factory(_FakeClient(_outputs())))
+    by_component = {i.component: i for i in report.health_issues}
+    alert = by_component["Alert"]
+    assert [(d.identifier, d.description, d.resolution) for d in alert.details] == [
+        ("hw_cage:1", "Cage cage1 over temperature", "Manual"),
+    ]
+    assert [(d.identifier, d.resolution) for d in by_component["Security"].details] == [("SSH", "Manual")]
+    assert by_component["RC"].details == []          # the array gave no detail row for it
+    # the detail rows are attached, not counted as issues of their own
+    assert len(report.health_issues) == 6 and report.health_total == 15
+
+
+def test_a_detail_row_without_a_summary_row_does_not_invent_an_issue():
+    outputs = _outputs()
+    outputs["checkhealth -svc -detail"] = (
+        "Component ----------------Summary Description---------------- Qty\n"
+        "Alert     New alerts                                            1\n"
+        "-----------------------------------------------------------------\n"
+        "       1 total                                                 1\n"
+        "\n"
+        "Component --Identifier-- ---Detailed Description--- Resolution\n"
+        "Alert     hw_cage:1       Cage cage1 over temperature Manual\n"
+        "Task      Task:7092       Failed Task                 Manual\n"
+    )
+    report = verify(_item(), "3paradm", "pw", client_factory=_factory(_FakeClient(outputs)))
+    assert [i.component for i in report.health_issues] == ["Alert"]
+    assert len(report.health_issues[0].details) == 1
+
+
+def test_each_check_says_how_it_matched():
+    """V-4: `prabhu.barrow@hpe.com` vs `Prabhu Barrow Selvaraj, 9632988119, prabhu.barrow@hpe.com` was
+    called Match with no hint why."""
+    report = verify(_item(), "3paradm", "pw", client_factory=_factory(_FakeClient(_outputs())))
+    rule = {c.field: c.match for c in report.checks}
+    assert rule["System name"] == "exact"
+    assert rule["DNS servers"] == "includes"
+    assert rule["Support contact"] == "contains"

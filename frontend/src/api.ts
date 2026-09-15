@@ -29,11 +29,14 @@ export interface FieldCheck {
   actual: string | null;
   status: 'pass' | 'mismatch' | 'not_readable';
   critical: boolean;
+  match?: 'exact' | 'contains' | 'includes';   // SPEC-011 R3: how the comparison was made
 }
+export interface HealthDetail { identifier: string; description: string; resolution: string; }
 export interface HealthIssue {
   component: string;
   summary: string;
   qty: number;
+  details?: HealthDetail[];                     // SPEC-011 R1: the array's Detail rows for this component
 }
 export interface VerificationReport {
   reachable: boolean;
