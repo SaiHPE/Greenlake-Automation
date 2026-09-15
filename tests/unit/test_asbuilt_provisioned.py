@@ -427,3 +427,15 @@ def test_run_records_union_removals_from_every_apply():
     data = AsBuiltData()
     st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events))._run_records("r1", data)
     assert [r["command"] for r in data.provisioning_removals] == ["removevv -f v1", "removehost h2"]
+
+
+def test_the_two_run_sections_share_a_page(tmp_path):
+    """A-4: a one-sentence zoning section owned a whole page because every Heading 1 starts one. The
+    first run section starts a page; the second flows on. Every other Heading 1 still breaks."""
+    out, _ = generate_asbuilt(_array_data(), tmp_path / "pages.docx")
+    doc, _ = _read(out)
+    h1 = {p.text.strip(): p for p in doc.paragraphs if p.style.name == "Heading 1"}
+    assert h1["SAN zoning designed in this run"].paragraph_format.page_break_before is True
+    assert h1["Provisioning performed in this run"].paragraph_format.page_break_before is not True
+    assert h1["Hosts and host sets"].paragraph_format.page_break_before is True
+    assert h1["Presentations"].paragraph_format.page_break_before is True

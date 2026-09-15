@@ -213,6 +213,7 @@ function CurrentZoningTable({ plan }: { plan: ZoningPlan }) {
           <DataTable
             primaryKey="key"
             data={shown}
+            a11yTitle="Current zoning: one row per host HBA port with the array ports it is zoned to"
             columns={[
               {
                 property: 'host', header: 'Host', pin: true,
@@ -408,10 +409,10 @@ function AliasReview({
                 const offer = suggestion && suggestion !== value && aliasProblem(suggestion).tone !== 'critical';
                 return (
                   <Box key={w.wwpn} direction="row" gap="small" align="center" wrap pad={{ vertical: 'xxsmall' }}>
-                    <Box width="110px" flex={false}><Text size="xsmall" color="text-weak">{w.role === 'array' ? `Array port ${w.nsp}` : 'HBA port'}</Text></Box>
-                    <Box width="170px" flex={false}><Text size="small" truncate>{w.role === 'array' ? (w.node != null ? `node ${w.node}` : '') : hostName(w)}</Text></Box>
-                    <Box width="215px" flex={false}><Text size="small" style={mono} title={wwpnTitle(w)}>{w.display}</Text></Box>
-                    <Box width="300px" flex={false}>
+                    <Box basis="xsmall" flex={false}><Text size="xsmall" color="text-weak">{w.role === 'array' ? `Array port ${w.nsp}` : 'HBA port'}</Text></Box>
+                    <Box basis="small" flex={false}><Text size="small" truncate>{w.role === 'array' ? (w.node != null ? `node ${w.node}` : '') : hostName(w)}</Text></Box>
+                    <Box basis="small" flex={false}><Text size="small" style={mono} title={wwpnTitle(w)}>{w.display}</Text></Box>
+                    <Box basis="medium" flex="shrink">
                       <TextInput size="small" value={value} placeholder="alias name" onChange={(e) => setAlias(w.wwpn, e.target.value)} />
                     </Box>
                     <Text size="xsmall" color={colour}>{check.text}</Text>
