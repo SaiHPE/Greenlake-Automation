@@ -247,8 +247,13 @@ function New-Run([string]$token, [string]$Save) {
 # ------------------------------------------------------------------ prompts (R1)
 
 Write-Host "SPEC-006 session runner - evidence folder: $Out"
-$health = Api 'GET' '/health' $null 'health'
-if ($health.Status -ne 200) { Write-Host "The app is not answering at $Api. Start AlletraOnboard.exe first." -ForegroundColor Red; exit 1 }
+try { $health = Api 'GET' '/health' $null 'health' }
+catch { $health = @{ Status = 0; Text = $_.Exception.Message } }   # connection refused: no HTTP response to catch inside Invoke-Json
+if ($health.Status -ne 200) {
+  Write-Host "The app is not answering at $Api ($($health.Text))." -ForegroundColor Red
+  Write-Host "Start AlletraOnboard.exe (or start.cmd) in this folder, wait for the browser to open, then run this again." -ForegroundColor Red
+  exit 1
+}
 $Version = $health.Json.version
 Write-Host "App version: $Version"
 
