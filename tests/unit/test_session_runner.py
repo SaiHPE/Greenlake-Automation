@@ -35,3 +35,13 @@ def test_runner_acceptance_pattern_catches_the_polite_refusals_of_s12():
     assert len(flagged) == 3
     assert all("member of" in line for line in flagged)
     assert not any(line.startswith("rack13arcus cli% Issuing removevlun") for line in flagged)
+
+
+def test_runner_compiles_its_tls_callback_the_way_5_1_accepts():
+    """Probe on the jump box, 2026-09-15: `#pragma warning disable SYSLIB0014` makes 5.1's compiler fail
+    ("Warning as Error: Invalid number") and the runner silently fell back to the script-block callback
+    (rc.17, rc.18). `-IgnoreWarnings` without the pragma compiled. Pin the working form."""
+    text = RUNNER.read_text(encoding="ascii")
+    assert "#pragma" not in text
+    assert "Add-Type -IgnoreWarnings -TypeDefinition" in text
+    assert "TLS callback: $($script:TlsCallback)" in text  # the fallback is visible in the report, not only on the console
