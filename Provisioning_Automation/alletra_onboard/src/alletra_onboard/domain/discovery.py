@@ -186,6 +186,16 @@ class DiscoveredHost(BaseModel):
     logged_in: bool = False            # the array can currently see at least one of its initiators
     array_host_name: str = ""          # what the array's own host object calls it ("" = unclaimed)
     sources: list[str] = Field(default_factory=list)    # vcenter | array | switch | sheet
+    # SPEC-009. Identity is not OS: a server some source NAMED (vCenter, an array host object, the
+    # sheet, an IQN node name) is identified even when no source reports its OS; only a server known
+    # by its initiator id alone is not (D-2: `vmenode`, Generic-ALUA, was filed as unidentified).
+    identified: bool = True
+    # Whether THIS run is about it: the sheet's vCenter reports it, the sheet declares it, or it is a
+    # member of one of the sheet's host sets. Everything else is another tenant's (D-5).
+    in_run: bool = False
+    persona: str = ""                  # the array host object's persona, when one exists
+    os_text: str = ""                  # the OS string a source reported verbatim (vCenter's version)
+    ports: dict[str, list[str]] = Field(default_factory=dict)  # initiator -> array ports (n:s:p) logged into
 
     @property
     def transports(self) -> list[str]:

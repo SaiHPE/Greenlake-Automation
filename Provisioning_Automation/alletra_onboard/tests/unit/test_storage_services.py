@@ -1808,3 +1808,81 @@ def test_a_declared_host_joins_its_discovered_record_when_it_comes_online():
     assert hosts[0].name == "newesx01" and hosts[0].os == "esxi"
     assert sorted(hosts[0].sources) == ["array", "sheet"]
     assert hosts[0].logged_in is True                   # the array's view of it survives the merge
+
+
+# ---------------- SPEC-009: Discovery says whose hosts these are (D-2, D-4, D-5, D-6) ----------------
+
+_ARCUS_WITH_VMENODE = _ARCUS_MIXED + """ 0 vmenode                         Generic-ALUA 10005CED8C531294         0:3:3 n/a
+ 0 vmenode                         Generic-ALUA 10005CED8C531294         1:3:4 n/a
+"""
+
+
+def _spec9_report():
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    return DiscoveryReport(
+        array_ports=[
+            ArrayPort(node=0, slot=3, card_port=3, protocol="fc", wwpn="20330002AC02D495", link_state="ready", fabric="odd"),
+            ArrayPort(node=1, slot=3, card_port=4, protocol="fc", wwpn="21340002AC02D495", link_state="ready", fabric="even"),
+        ],
+        array_hosts=disc.parse_showhost(_ARCUS_WITH_VMENODE),
+        host_hbas=[HostHba(host_name="esx-prod-01", wwpn="10005CED8C5312A8", fabric="odd", os="VMware ESXi 8.0.3")],
+    )
+
+
+def test_a_named_array_host_with_no_os_is_identified_not_unidentified():
+    """D-2 (live 2026-09-13): `vmenode` is a named array host object whose Generic-ALUA persona reports no
+    OS; the OS-grouped page filed it under 'Unidentified hosts — add them to the sheet if you need them
+    named'. Identity is not OS."""
+    hosts = {h.name: h for h in disc.assemble_hosts(_spec9_report())}
+    vme = hosts["vmenode"]
+    assert vme.identified is True and vme.os == "unknown" and vme.array_host_name == "vmenode"
+    assert vme.persona == "Generic-ALUA"
+    # the only unidentified server is the unclaimed FC login named by its own WWPN
+    unidentified = [h for h in hosts.values() if not h.identified]
+    assert [h.name for h in unidentified] == ["51402EC02089CC1C"]
+    # an IQN node name IS a name
+    assert hosts["win-tn3n7rujk3v"].identified and hosts["hvm3"].identified
+
+
+def test_in_run_comes_from_vcenter_the_sheet_or_a_host_set_member():
+    """D-5: the three hosts the run is about must not sit at the same weight as eleven other tenants."""
+    from alletra_onboard.domain.provisioning import DeclaredHost, HostSetRequest
+
+    declared = [DeclaredHost(name="win-new", os="windows", wwpns=["10000000C9AAAAAA"])]
+    members = [HostSetRequest(name="hs", members=["vmenode"])]
+    hosts = {h.name: h for h in disc.assemble_hosts(_spec9_report(), declared=declared, host_sets=members)}
+    assert hosts["esx-prod-01"].in_run is True        # vCenter
+    assert hosts["win-new"].in_run is True            # sheet Hosts tab
+    assert hosts["vmenode"].in_run is True            # named as a host-set member
+    assert hosts["hvm3"].in_run is False              # another tenant's VME node
+    assert hosts["win-tn3n7rujk3v"].in_run is False
+    assert hosts["51402EC02089CC1C"].in_run is False
+
+
+def test_the_unified_host_carries_what_the_per_source_tables_showed():
+    """D-6: the 'ESXi hosts' adapter table and 'Hosts known to the array' table are replaced by one shape,
+    so the per-initiator array ports, the persona and vCenter's version string must ride on the host."""
+    hosts = {h.name: h for h in disc.assemble_hosts(_spec9_report())}
+    esxi = hosts["esx-prod-01"]
+    assert esxi.ports["10005CED8C5312A8"] == ["0:3:3"] and esxi.ports["10005CED8C5312A9"] == ["1:3:3"]
+    assert esxi.persona == "VMware" and esxi.os_text == "VMware ESXi 8.0.3"
+    assert hosts["vmenode"].ports == {"10005CED8C531294": ["0:3:3", "1:3:4"]}
+    assert hosts["hvm3"].ports["iqn.2024-12.com.hpe:hvm3:50796"] == ["1:4:1", "0:4:1"]
+
+
+def test_names_check_counts_hosts_separately_and_never_warns_on_an_existing_host():
+    """D-4: '5 name(s) free' counted volumes and sets but not the hosts the run creates; and a host already
+    on the array is the expected case, not a clash."""
+    from alletra_onboard.application.provisioning.preflight import _names_check
+    from alletra_onboard.domain.provisioning import DeclaredHost, HostSetRequest
+
+    intent = _intent(members=["esx1", "vmenode"])
+    intent.declared_hosts.append(DeclaredHost(name="win-new", os="windows", wwpns=["10000000C9AAAAAA"]))
+    intent.host_sets = [HostSetRequest(name="CRVLZ_Hostset", members=["esx1", "vmenode"])]
+    check = _names_check(intent, existing={"vmenode", "esx1"})
+    assert check.status == "pass"
+    assert check.detail == "3 object name(s) free: 2 volumes, 1 host set. Hosts named in the sheet: 3 (2 already on the array)."
+
+    clash = _names_check(_intent(), existing={"CRV_Prod01"})
+    assert clash.status == "warn" and "CRV_Prod01" in clash.detail

@@ -1,12 +1,10 @@
 import { Box, Button, DataTable, Text } from 'grommet';
 import { useState } from 'react';
 import {
-  ArrayHost,
   ArrayPort,
   DiscoveredHost,
   DiscoveryReport,
   EthernetPort,
-  HostHba,
   PreflightCheck,
   PreflightReport,
   RunEvent,
@@ -28,16 +26,108 @@ interface Props {
 
 const mono = { fontFamily: 'ui-monospace, Consolas, monospace' };
 
-// Hosts are grouped by OS because what an operator must do next differs per platform. "unknown" is
-// listed last and is a real answer: an FC initiator that is not in vCenter registers no OS the tool
-// can read, and an unrecognised IQN authority is not guessed into a bucket.
-const OS_SECTIONS = [
-  { os: 'esxi', title: 'ESXi hosts', description: 'From vCenter, joined to what the array sees logged in.' },
-  { os: 'windows', title: 'Windows hosts', description: 'Identified from the iSCSI IQN authority (com.microsoft), which is the only OS signal an iSCSI initiator carries.' },
-  { os: 'linux', title: 'Linux hosts', description: 'Identified from the iSCSI IQN authority (open-iscsi, redhat and similar).' },
-  { os: 'vme', title: 'HPE VM Essentials hosts', description: 'Named from the IQN node rather than the array’s generated HPE_VM_ identifier.' },
-  { os: 'unknown', title: 'Unidentified hosts', description: 'Logged in, but nothing available reports an operating system. Add them to the sheet if you need them named.' },
-] as const;
+// SPEC-009: hosts are grouped by whose they are, not by OS. OS is a column; a host some source NAMED is
+// identified even when nothing reports its OS (D-2: `vmenode`, Generic-ALUA, was filed as unidentified).
+const OS_LABEL: Record<DiscoveredHost['os'], string> = {
+  esxi: 'ESXi', windows: 'Windows', linux: 'Linux', vme: 'HPE VM Essentials', unknown: 'not reported',
+};
+const OTHER_HOSTS_FOLD = 10;
+
+function osLabel(h: DiscoveredHost): string {
+  if (h.os_text) return h.os_text;
+  return OS_LABEL[h.os] ?? h.os;
+}
+
+// The RCIP state must agree with the row's own link (D-3): an unconfigured port with no link is not
+// "available", it is not cabled.
+function rcipState(p: EthernetPort): { state: 'complete' | 'not_started' | 'action_required'; label: string } {
+  if (p.role === 'rcip') return { state: 'complete', label: 'Configured' };
+  if (p.link_state === 'ready') return { state: 'not_started', label: 'Available' };
+  return { state: 'action_required', label: 'Not cabled' };
+}
+
+const HOST_COLUMNS = [
+  {
+    property: 'name',
+    header: 'Host',
+    render: (h: DiscoveredHost) => (
+      <Box gap="xxsmall">
+        <Text size="small" weight={h.identified === false ? undefined : 500}>{h.name}</Text>
+        {h.identified === false && <Text size="xsmall" color="text-weak">no source names this server</Text>}
+        {/* The array's own name for the same server, when it differs — an operator cross-checking
+            showhost needs to recognise the row. */}
+        {h.array_host_name && h.array_host_name !== h.name && (
+          <Text size="xsmall" color="text-weak">on the array: {h.array_host_name}</Text>
+        )}
+        {h.address && <Text size="xsmall" color="text-weak" style={mono}>{h.address}</Text>}
+      </Box>
+    ),
+  },
+  {
+    property: 'os',
+    header: 'OS',
+    render: (h: DiscoveredHost) => (
+      <Box gap="xxsmall">
+        <Text size="small" color={h.os === 'unknown' && !h.os_text ? 'text-weak' : undefined}>{osLabel(h)}</Text>
+        {h.persona && <Text size="xsmall" color="text-weak">persona {h.persona}</Text>}
+      </Box>
+    ),
+  },
+  {
+    property: 'initiators',
+    header: 'Initiators → array ports',
+    render: (h: DiscoveredHost) => (
+      <Box gap="xxsmall">
+        {[...h.wwpns, ...h.iqns].length === 0 && <Text size="small" color="text-weak">none configured</Text>}
+        {[...h.wwpns, ...h.iqns].map((id) => {
+          const ports = h.ports?.[id] ?? [];
+          return (
+            <Box key={id} direction="row" gap="small" align="center" wrap>
+              <Text size="small" style={mono}>{id}</Text>
+              <Text size="xsmall" color="text-weak" style={mono}>{ports.length ? `→ ${ports.join(', ')}` : '→ not logged in'}</Text>
+            </Box>
+          );
+        })}
+      </Box>
+    ),
+  },
+  {
+    property: 'logged_in',
+    header: 'Seen by the array',
+    render: (h: DiscoveredHost) => (
+      <StatusIndicator
+        state={h.logged_in ? 'complete' : 'not_started'}
+        label={h.logged_in ? (h.fabrics.length ? `Logged in (${h.fabrics.join(', ')})` : 'Logged in') : 'Not logged in'}
+      />
+    ),
+  },
+  {
+    property: 'array_host_name',
+    header: 'Array host object',
+    render: (h: DiscoveredHost) =>
+      h.array_host_name ? (
+        <Text size="small" style={mono}>{h.array_host_name}</Text>
+      ) : (
+        <Text size="small" color="text-weak">none yet — provisioning creates one</Text>
+      ),
+  },
+];
+
+function HostsTable({ title, description, rows, fold }: { title: string; description: string; rows: DiscoveredHost[]; fold?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const folded = !!fold && !open && rows.length > OTHER_HOSTS_FOLD;
+  return (
+    <Surface title={`${title} (${rows.length})`} description={description}>
+      <DataTable columns={HOST_COLUMNS} data={folded ? rows.slice(0, OTHER_HOSTS_FOLD) : rows} primaryKey={false} />
+      {folded && (
+        <Box direction="row" align="center" gap="small">
+          <Text size="small" color="text-weak">{rows.length - OTHER_HOSTS_FOLD} more not shown.</Text>
+          <Button size="small" label={`Show all ${rows.length}`} onClick={() => setOpen(true)} />
+        </Box>
+      )}
+    </Surface>
+  );
+}
 
 export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +142,10 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   const fcPorts = (report?.array_ports ?? []).filter((port) => port.protocol === 'fc');
   const iscsiPorts = (report?.array_ports ?? []).filter((port) => port.protocol === 'iscsi');
   const readyPorts = fcPorts.filter((port) => port.link_state === 'ready').length;
+  const hosts = report?.hosts ?? [];
+  // Older runs (before SPEC-009) have no in_run flag; a vCenter/sheet source is the same rule.
+  const inRun = hosts.filter((h) => h.in_run ?? (h.sources.includes('vcenter') || h.sources.includes('sheet')));
+  const others = hosts.filter((h) => !inRun.includes(h));
 
   const discover = async () => {
     setError(null);
@@ -78,7 +172,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
     <StepShell
       title="Discovery"
       description="Reads the array target ports, the ESXi host adapters from vCenter, and their fabric logins. Read-only."
-      stateDetail={report ? `${fcPorts.length} ports · ${report.host_hbas.length} adapters` : undefined}
+      stateDetail={report ? `${fcPorts.length} ports · ${inRun.length} host${inRun.length === 1 ? '' : 's'} in this run` : undefined}
       error={error}
       onDismissError={() => setError(null)}
       activityEmpty="Run discovery to read the environment."
@@ -141,8 +235,11 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
       {!report && !running && (
         <Surface title="Nothing discovered yet">
           <Text size="small" color="text-weak">
-            Discovery reads every array target port, the array's own host view, and each ESXi host's adapters from
-            vCenter, then matches each adapter to the fabric it logs into. Nothing is modified.
+            {/* X-5: what's missing, why, the way forward. */}
+            No array ports, hosts or fabric logins are known for this run yet. Zoning and provisioning need them
+            to decide which hosts can be presented to. Run discovery (read-only: the array's ports and host view,
+            plus each ESXi host's adapters from vCenter) — or run <i>Check readiness</i> first if you are unsure the
+            array and vCenter are reachable.
           </Text>
         </Surface>
       )}
@@ -253,7 +350,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
       {report && report.replication_ports.length > 0 && (
         <Surface
           title="Replication ports (RCIP)"
-          description="IP replication ports. A port reported as available is cabled and capable but has no replication configuration yet. The array's node interconnect looks identical apart from its port type and is deliberately excluded."
+          description="IP replication ports. Configured = carries a replication address; Available = link up, no replication configuration yet; Not cabled = no link. The array's node interconnect looks identical apart from its port type and is deliberately excluded."
         >
           <DataTable
             columns={[
@@ -261,12 +358,10 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
               {
                 property: 'role',
                 header: 'State',
-                render: (p: EthernetPort) => (
-                  <StatusIndicator
-                    state={p.role === 'rcip' ? 'complete' : 'not_started'}
-                    label={p.role === 'rcip' ? 'Configured' : 'Available'}
-                  />
-                ),
+                render: (p: EthernetPort) => {
+                  const s = rcipState(p);
+                  return <StatusIndicator state={s.state} label={s.label} />;
+                },
               },
               { property: 'address', header: 'IP address', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.address || '—'}</Text> },
               { property: 'netmask', header: 'Netmask', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.netmask || '—'}</Text> },
@@ -292,158 +387,25 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
         </Surface>
       )}
 
-      {report && (report.hosts ?? []).length > 0 && (
+      {report && hosts.length > 0 && (
         <>
-          {OS_SECTIONS.map(({ os, title, description }) => {
-            const rows = (report.hosts ?? []).filter((h) => h.os === os);
-            if (rows.length === 0) return null;
-            return (
-              <Surface key={os} title={`${title} (${rows.length})`} description={description}>
-                <DataTable
-                  columns={[
-                    {
-                      property: 'name',
-                      header: 'Host',
-                      render: (h: DiscoveredHost) => (
-                        <Box gap="xxsmall">
-                          <Text size="small">{h.name}</Text>
-                          {/* The array's own name for the same server, when it differs — an operator
-                              cross-checking showhost needs to recognise the row. */}
-                          {h.array_host_name && h.array_host_name !== h.name && (
-                            <Text size="xsmall" color="text-weak">on the array: {h.array_host_name}</Text>
-                          )}
-                        </Box>
-                      ),
-                    },
-                    {
-                      property: 'address',
-                      header: 'IP address',
-                      render: (h: DiscoveredHost) => <Text size="small" style={mono}>{h.address || '—'}</Text>,
-                    },
-                    {
-                      property: 'wwpns',
-                      header: 'WWPN (FC)',
-                      render: (h: DiscoveredHost) => (
-                        <Box gap="xxsmall">
-                          {h.wwpns.length === 0
-                            ? <Text size="small" color="text-weak">—</Text>
-                            : h.wwpns.map((w) => <Text key={w} size="small" style={mono}>{w}</Text>)}
-                        </Box>
-                      ),
-                    },
-                    {
-                      property: 'iqns',
-                      header: 'IQN (iSCSI)',
-                      render: (h: DiscoveredHost) => (
-                        <Box gap="xxsmall">
-                          {h.iqns.length === 0
-                            ? <Text size="small" color="text-weak">—</Text>
-                            : h.iqns.map((q) => <Text key={q} size="small" style={mono}>{q}</Text>)}
-                        </Box>
-                      ),
-                    },
-                    {
-                      property: 'logged_in',
-                      header: 'Seen by the array',
-                      render: (h: DiscoveredHost) => (
-                        <StatusIndicator
-                          state={h.logged_in ? 'complete' : 'not_started'}
-                          label={
-                            h.logged_in
-                              ? (h.fabrics.length ? `Logged in (${h.fabrics.join(', ')})` : 'Logged in')
-                              : 'Not logged in'
-                          }
-                        />
-                      ),
-                    },
-                  ]}
-                  data={rows}
-                  primaryKey={false}
-                />
-              </Surface>
-            );
-          })}
+          <HostsTable
+            title="Hosts in this run"
+            description="Servers the sheet's vCenter reports, the sheet declares, or a sheet host set names. These are the hosts provisioning may create or present to."
+            rows={inRun}
+          />
+          <HostsTable
+            title="Other hosts on this array"
+            description="Every other server the array can see — other tenants of a shared array. Listed so you know what not to touch; this run never changes them."
+            rows={others}
+            fold
+          />
+          <Text size="xsmall" color="text-weak">
+            Legend — <b>Logged in (odd, even)</b>: the array sees the initiator on those fabrics · <b>Not logged in</b>: configured
+            or expected but no login (not zoned, or the server is off) · <b>none yet</b>: no host object on the array; provisioning
+            creates one · <b>OS not reported</b>: no source states an operating system (the array's persona is shown when it has one).
+          </Text>
         </>
-      )}
-
-      {report && report.host_hbas.length > 0 && (
-        <Surface
-          title="ESXi hosts"
-          description="Fabric logins indicate which hosts can be provisioned safely."
-        >
-          <DataTable
-            columns={[
-              { property: 'host_name', header: 'Host', render: (hba: HostHba) => <Text size="small">{hba.host_name}</Text> },
-              { property: 'wwpn', header: 'Adapter WWPN', render: (hba: HostHba) => <Text size="small" style={mono}>{hba.wwpn}</Text> },
-              {
-                property: 'fabric',
-                header: 'Fabric login',
-                render: (hba: HostHba) =>
-                  hba.fabric ? (
-                    <StatusIndicator state="complete" label={`${hba.fabric} fabric`} />
-                  ) : (
-                    <StatusIndicator state="not_started" label="Not logged in" />
-                  ),
-              },
-              { property: 'os', header: 'Operating system', render: (hba: HostHba) => <Text size="small">{hba.os ?? '—'}</Text> },
-            ]}
-            data={report.host_hbas}
-            primaryKey={false}
-          />
-          <TableSummary>
-            {new Set(report.host_hbas.map((hba) => hba.host_name)).size} hosts · {report.host_hbas.length} adapters ·{' '}
-            {report.host_hbas.filter((hba) => hba.fabric).length} logged in
-          </TableSummary>
-        </Surface>
-      )}
-
-      {report && report.array_hosts.length > 0 && (
-        <Surface
-          title="Hosts known to the array"
-          description="An adapter with no ports listed is configured on the array but not logged in — it is not zoned, or the host is offline. An unclaimed login is the reverse: zoned and logged in, but no host object has been created for it yet. Provisioning creates one."
-        >
-          <DataTable
-            columns={[
-              {
-                property: 'name',
-                header: 'Host',
-                render: (host: ArrayHost) =>
-                  host.name ? (
-                    <Text size="small">{host.name}</Text>
-                  ) : (
-                    <Text size="small" color="text-weak">
-                      Unclaimed logins
-                    </Text>
-                  ),
-              },
-              { property: 'persona', header: 'Persona', render: (host: ArrayHost) => <Text size="small">{host.persona || '—'}</Text> },
-              {
-                property: 'wwpns',
-                header: 'Logged-in ports',
-                render: (host: ArrayHost) => (
-                  <Box gap="xxsmall">
-                    {Object.entries(host.wwpns).map(([wwpn, ports]) => (
-                      <Box key={wwpn} direction="row" gap="small" align="center" wrap>
-                        <Text size="small" style={mono}>
-                          {wwpn}
-                        </Text>
-                        {ports.length ? (
-                          <Text size="small" color="text-weak" style={mono}>
-                            {ports.join(', ')}
-                          </Text>
-                        ) : (
-                          <StatusIndicator state="not_started" label="Not logged in" />
-                        )}
-                      </Box>
-                    ))}
-                  </Box>
-                ),
-              },
-            ]}
-            data={report.array_hosts}
-            primaryKey={false}
-          />
-        </Surface>
       )}
 
       {report && report.notes.length > 0 && (

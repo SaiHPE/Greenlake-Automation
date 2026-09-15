@@ -260,6 +260,7 @@ def assemble_hosts(
     report: DiscoveryReport,
     ns_os: dict[str, str] | None = None,
     declared: list | None = None,
+    host_sets: list | None = None,
 ) -> list[DiscoveredHost]:
     """Join every source into one host per physical server, grouped by OS for display.
 
@@ -299,6 +300,8 @@ def assemble_hosts(
         host = host_for([normalize_wwpn(hba.wwpn)], hba.host_name, "vcenter")
         host.name = hba.host_name
         host.os = "esxi"                      # only ESXi hosts are in a vCenter inventory
+        if hba.os and not host.os_text:
+            host.os_text = hba.os
         wwpn = normalize_wwpn(hba.wwpn)
         if wwpn not in host.wwpns:
             host.wwpns.append(wwpn)
@@ -346,6 +349,8 @@ def assemble_hosts(
         host = host_for(ids, name, "array")
         if ah.name and not host.array_host_name:
             host.array_host_name = ah.name
+        if ah.persona and not host.persona:
+            host.persona = ah.persona
         for iqn, addr in ah.addresses.items():
             if addr and not host.address:
                 host.address = addr
@@ -353,6 +358,8 @@ def assemble_hosts(
             if wwpn not in host.wwpns:
                 host.wwpns.append(wwpn)
             by_initiator[wwpn] = host
+            if ports:
+                host.ports[wwpn] = list(ports)
             for nsp in ports:
                 host.logged_in = True
                 fabric = port_fabric.get(nsp)
@@ -364,6 +371,7 @@ def assemble_hosts(
             by_initiator[iqn] = host
             if ports:
                 host.logged_in = True
+                host.ports[iqn] = list(ports)
             if host.os == "unknown":
                 host.os = os_from_iqn(iqn)
         # The array's own persona, after the IQN authority: an IQN is more specific (a VME host is
@@ -417,6 +425,17 @@ def assemble_hosts(
             suffix = (host.iqns[0].rsplit(":", 1) + [""])[1]
             if suffix:
                 host.name = f"{host.name}:{suffix}"
+
+    # SPEC-009 R1/R2. Identified = some source gave it a name (the fallback name is the initiator id
+    # itself). In this run = vCenter or the sheet knows it, or a sheet host set names it.
+    members = {m for hs in (host_sets or []) for m in getattr(hs, "members", [])}
+    for host in hosts:
+        initiator_ids = set(host.wwpns) | set(host.iqns)
+        host.identified = host.name not in initiator_ids
+        host.in_run = (
+            "vcenter" in host.sources or "sheet" in host.sources
+            or host.name in members or (bool(host.array_host_name) and host.array_host_name in members)
+        )
 
     return sorted(hosts, key=lambda h: (h.os, h.name.lower()))
 
@@ -646,10 +665,13 @@ def discover(
     #    makes switch credentials optional. So an FC host that is not in vCenter is reported with an
     #    unknown OS rather than guessed at. Wiring nsshow in here would make switch credentials a
     #    discovery prerequisite, which is a bigger change than this one.
-    report.hosts = assemble_hosts(report, declared=intent.declared_hosts)
+    report.hosts = assemble_hosts(report, declared=intent.declared_hosts, host_sets=intent.host_sets)
     by_os: dict[str, int] = {}
     for host in report.hosts:
         by_os[host.os] = by_os.get(host.os, 0) + 1
     if by_os:
         _p("Hosts: " + ", ".join(f"{n} {os_}" for os_, n in sorted(by_os.items())))
+    in_run = sum(1 for h in report.hosts if h.in_run)
+    if report.hosts:
+        _p(f"{in_run} host(s) this run is about; {len(report.hosts) - in_run} other host(s) on this array.")
     return report

@@ -155,7 +155,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
       stateDetail={result ? 'objects created' : plan ? 'awaiting approval' : undefined}
       error={error}
       onDismissError={() => setError(null)}
-      activityEmpty="Compose the objects below, then build the plan."
+      activityEmpty="No plan yet. Nothing is created until a plan is built and confirmed. Pick the host-set members and the exports in the Compose card below, then build the plan to see what will be created, what already exists and what conflicts."
       footerNote="Re-running skips objects that already match the plan; an object that exists but differs blocks until it is resolved on the array."
       gate={
         plan && !plan.error && !result
