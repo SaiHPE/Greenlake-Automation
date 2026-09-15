@@ -3,7 +3,14 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from alletra_onboard.application.onboarding.health import GreenLakeCheckReport
-from alletra_onboard.domain.models import ArrayWorkItem, PreflightReport, RunEvent, RunMode, RunRecord
+from alletra_onboard.domain.models import (
+    ArrayCredentialInfo,
+    ArrayWorkItem,
+    PreflightReport,
+    RunEvent,
+    RunMode,
+    RunRecord,
+)
 
 
 class HealthResponse(BaseModel):
@@ -46,6 +53,8 @@ class RunDetailResponse(BaseModel):
     run: RunRecord
     # SecretStr fields serialize masked ('**********') — safe to return to the UI.
     work_item: ArrayWorkItem | None = None
+    # ADR 0013 / SPEC-008 R3: whether the run holds an array credential, and whose — never the password.
+    array_credential: ArrayCredentialInfo | None = None
 
 
 class RunListResponse(BaseModel):
@@ -84,13 +93,14 @@ class DsccStepRequest(BaseModel):
 
 
 class VerifyStepRequest(BaseModel):
-    username: str = Field(description="Array admin username (the DSCC System Credential, e.g. 3paradm).")
-    password: str = Field(description="Array admin password — used for the SSH session only, never stored.")
+    # SPEC-008 R2 (ADR 0013): both optional — given together they override the run's own array credential.
+    username: str | None = Field(default=None, description="Array admin username override (e.g. 3paradm).")
+    password: str | None = Field(default=None, description="Array admin password override — used for this SSH session only.")
 
 
 class AsBuiltStepRequest(BaseModel):
-    username: str = Field(description="Array admin username (e.g. 3paradm) — read-only SSH for the as-built.")
-    password: str = Field(description="Array admin password — used for the SSH session only, never stored.")
+    username: str | None = Field(default=None, description="Array admin username override (e.g. 3paradm).")
+    password: str | None = Field(default=None, description="Array admin password override — used for this SSH session only.")
     customer: str = Field(default="", description="Customer name for the as-built cover page (overrides the sheet value).")
     site: str = Field(default="", description="Deployment site/location (optional; the array doesn't store it).")
     application_workload: str = Field(default="", description="Application/workload the array serves, e.g. 'VMware vSphere cluster' (overrides the sheet value).")

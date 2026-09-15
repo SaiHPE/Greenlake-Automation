@@ -1,7 +1,8 @@
 import { Box, Button, Table, TableBody, TableCell, TableHeader, TableRow, Text } from 'grommet';
 import { useState } from 'react';
-import { FieldCheck, RunEvent, RunRecord, VerificationReport, startVerify } from '../api';
-import { CredentialsFields, InlineNotification, Surface, TableSummary } from '../ui/primitives';
+import { CredentialOverride, FieldCheck, RunEvent, RunRecord, VerificationReport, startVerify } from '../api';
+import { ArrayCredentialCard, credentialReady, useArrayCredential } from '../ui/ArrayCredentialCard';
+import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator, StepState } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 
@@ -19,8 +20,8 @@ const CHECK_STATE: Record<FieldCheck['status'], { state: StepState; label: strin
 };
 
 export function VerifyStep({ runId, run, events, onDone }: Props) {
-  const [username, setUsername] = useState('3paradm');
-  const [password, setPassword] = useState('');
+  const credential = useArrayCredential(runId);
+  const [override, setOverride] = useState<CredentialOverride>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -40,7 +41,7 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await startVerify(runId, username.trim(), password);
+      await startVerify(runId, override);
     } catch (exc: any) {
       setError(String(exc.message ?? exc));
     } finally {
@@ -55,32 +56,21 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
       stateDetail={report ? (mismatches ? `${mismatches} discrepancy` : 'configuration matches') : undefined}
       error={error}
       onDismissError={() => setError(null)}
-      activityEmpty="Enter the array credentials and run the verification."
+      activityEmpty={credential?.available ? 'Run the verification.' : 'Enter the array credentials and run the verification.'}
       footerNote="A discrepancy never fails the run — disposition remains with the operator."
       actions={
         <>
           <Button
             busy={running}
             label={report ? 'Re-verify' : running ? 'Verifying' : 'Verify configuration'}
-            disabled={!username.trim() || !password}
+            disabled={!credentialReady(credential, override)}
             onClick={verify}
           />
           <Button primary label="Continue" onClick={onDone} />
         </>
       }
     >
-      <Surface
-        title="Array credentials"
-        description={`The array admin account registered in DSCC as the system credential for ${run?.serial_number ?? 'this array'}.`}
-      >
-        <CredentialsFields
-          username={username}
-          password={password}
-          onUsername={setUsername}
-          onPassword={setPassword}
-          help="Used for this verification only; never stored."
-        />
-      </Surface>
+      <ArrayCredentialCard info={credential} serial={run?.serial_number} override={override} onOverride={setOverride} />
 
       {unreachable && (
         <InlineNotification
