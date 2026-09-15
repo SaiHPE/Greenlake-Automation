@@ -76,10 +76,25 @@ function Note([string]$text) { Write-Host "  $text" -ForegroundColor DarkGray }
 
 if ($PSVersionTable.PSVersion.Major -lt 6) {
   [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-  [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+  # A script-block callback ({ $true }) runs only on the FIRST handshake; later handshakes happen on
+  # a .NET thread with no runspace and fail with "An unexpected error occurred on a send" (S-12 FAIL 4,
+  # and every read on 2026-09-15 once keep-alive was off). The callback must be compiled code.
+  try {
+    Add-Type -TypeDefinition @'
+#pragma warning disable SYSLIB0014
+using System.Net;
+public static class SessionTrustArrayCert {
+  public static void Enable() { ServicePointManager.ServerCertificateValidationCallback = delegate { return true; }; }
+}
+'@ -ErrorAction Stop
+    [SessionTrustArrayCert]::Enable()
+  } catch {
+    Write-Warning "Add-Type failed ($($_.Exception.Message)); falling back to a script-block callback (WSAPI may drop after the first request)"
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+  }
   [System.Net.WebRequest]::DefaultWebProxy = $null
 }
-$Common = @{ TimeoutSec = 120; UseBasicParsing = $true; DisableKeepAlive = $true }   # no pooled TLS connection to go stale (S-12)
+$Common = @{ TimeoutSec = 120; UseBasicParsing = $true }
 if ($PSVersionTable.PSVersion.Major -ge 6) { $Common['SkipCertificateCheck'] = $true; $Common['NoProxy'] = $true }
 
 function Invoke-Json {
