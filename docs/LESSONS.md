@@ -340,11 +340,14 @@ CLI command is judged against the command's own refusal texts, pinned from a rea
 S-12's last FAIL was *The underlying connection was closed: An unexpected error occurred on a send*
 on a WSAPI read eight minutes after login. I called it a stale pooled connection and shipped
 `DisableKeepAlive` + a retry in rc.16. The next day the same text came back on the *first* read
-after login — the "fix" had made it worse, because the real cause was a Windows PowerShell 5.1
+after login — the "fix" had made it worse. The cause that fits every observation is a Windows PowerShell 5.1
 trait: a script-block certificate callback (`{ $true }`) runs on the first TLS handshake and cannot
 run on the .NET thread that performs any later one, so a new handshake fails. Keep-alive had been
 hiding it; removing keep-alive exposed it on every request. The capture script and rc.15 "worked"
-only because one connection carried the session. Rules: a diagnosis of a failure seen once, on a
+only because one connection carried the session. And the rc.17 fix itself never ran: its `#pragma` made
+5.1's compiler fail, the script fell back to the old callback with a console warning nobody saw, and the
+next run "confirmed" a fix that was not in effect — a probe on the jump box (2026-09-15) found it. Rules: a diagnosis of a failure seen once, on a
 machine I cannot reproduce on, is recorded as a hypothesis with the fix that tests it, not as the
 cause; and PowerShell that must run on 5.1 compiles its callbacks (`Add-Type`) — a script block is a
-callback only on the thread that created it.
+callback only on the thread that created it; and a fallback path that changes behaviour writes its
+choice into the evidence (the report header), never only to the console.
