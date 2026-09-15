@@ -576,6 +576,11 @@ def apply_plan(
                 status = array.ensure_volume_set(vvset, vols)
                 result.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
 
+            # SPEC-012 R1 (P-8): the Result row names the object the array holds, not only the verb.
+            # One read-back of hosts and volumes; sets are described from what was sent.
+            _describe_outcomes(result.outcomes, array.hosts(), array.volumes(),
+                               {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}, _vvsets(intent))
+
             # SPEC-001 R11 (P-21, live 2026-09-14 12:39): judge every export against the templates BEFORE
             # sending it, exactly as the plan did. `createVLUN(auto=True)` never raises EXISTENT_VLUN —
             # the array just picks the next LUN — so the conflict-swallow that makes the other ensure_*
@@ -620,6 +625,39 @@ def apply_plan(
 
 # The paste order that never trips over a dependency: exports, then sets, then their members.
 _REMOVAL_ORDER = {"vlun": 0, "vvset": 1, "volume": 2, "hostset": 3, "host": 4}
+
+
+def _describe_outcomes(
+    outcomes: list[ActionOutcome], hosts: list[ArrayHostRecord], volumes: list[ArrayVolumeRecord],
+    set_members: dict[str, list[str]], vvsets: dict[str, list[str]],
+) -> None:
+    """SPEC-012 R1: fill each object outcome's `detail` with the array's own identifiers from ONE
+    read-back (host id / persona / WWN count; volume id / WWN / size / type / CPG) and, for sets, the
+    members this run sent. Rows the read-back does not hold keep whatever detail they had."""
+    host_by = {h.name: h for h in hosts}
+    vol_by = {v.name: v for v in volumes}
+
+    def plural(n: int, word: str) -> str:
+        return f"{n} {word}{'' if n == 1 else 's'}"
+
+    for o in outcomes:
+        if o.detail:
+            continue
+        if o.kind == "host" and o.name in host_by:
+            h = host_by[o.name]
+            parts = [f"id {h.id}" if h.id is not None else "", f"persona {h.persona}" if h.persona else "", plural(len(h.wwns), "WWN")]
+            o.detail = " · ".join(p for p in parts if p)
+        elif o.kind == "volume" and o.name in vol_by:
+            v = vol_by[o.name]
+            parts = [f"id {v.id}" if v.id is not None else "", f"WWN {v.wwn}" if v.wwn else "",
+                     f"{v.size_mib} MiB {v.provisioning_type} on {v.cpg}".strip()]
+            o.detail = " · ".join(p for p in parts if p)
+        elif o.kind == "hostset" and o.name in set_members:
+            members = set_members[o.name]
+            o.detail = f"{plural(len(members), 'member')}: {', '.join(members)}" if members else "no members"
+        elif o.kind == "vvset" and o.name in vvsets:
+            vols = vvsets[o.name]
+            o.detail = f"{plural(len(vols), 'volume')}: {', '.join(vols)}" if vols else "no volumes"
 
 
 def removal_set(

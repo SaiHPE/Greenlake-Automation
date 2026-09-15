@@ -1,4 +1,5 @@
 import { Box, Button, CheckBox, Text } from 'grommet';
+import { Radial, RadialSelected } from 'grommet-icons';
 import { useState } from 'react';
 import { ActionKey, MODE_PRESETS, RunMode, ServedStep, subtitleFor } from '../modes';
 import { InlineNotification, Surface } from '../ui/primitives';
@@ -95,17 +96,9 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
                 flex={false}
                 style={{ cursor: locked ? 'default' : 'pointer', opacity: locked && !selected ? 0.5 : 1 }}
               >
-                <Box
-                  width="18px"
-                  height="18px"
-                  round="full"
-                  flex={false}
-                  margin={{ top: 'xxsmall' }}
-                  border={{ color: selected ? 'brand' : 'border', size: '2px' }}
-                  align="center"
-                  justify="center"
-                >
-                  {selected && <Box width="8px" height="8px" round="full" background="brand" />}
+                {/* X-1: the DS glyph, not a hand-drawn 18px/8px radio. */}
+                <Box flex={false} margin={{ top: 'xxsmall' }}>
+                  {selected ? <RadialSelected color="brand" a11yTitle="selected" /> : <Radial color="border" a11yTitle="not selected" />}
                 </Box>
                 <Box>
                   <Text weight={selected ? 'bold' : undefined} color={selected ? 'text-strong' : undefined}>

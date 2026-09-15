@@ -240,6 +240,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
               ]}
               data={connectivity}
               primaryKey="host"
+              a11yTitle="Connectivity checks: one row per endpoint the jump box must reach"
             />
             <TableSummary>
               {reachable} reachable · {connectivity.length - reachable} blocked
@@ -282,6 +283,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
               ]}
               data={rules}
               primaryKey="fqdn"
+              a11yTitle="Firewall and proxy rules: one row per destination"
             />
             <TableSummary>{rules.length} endpoints required</TableSummary>
           </>

@@ -118,7 +118,7 @@ function HostsTable({ title, description, rows, fold }: { title: string; descrip
   const folded = !!fold && !open && rows.length > OTHER_HOSTS_FOLD;
   return (
     <Surface title={`${title} (${rows.length})`} description={description}>
-      <DataTable columns={HOST_COLUMNS} data={folded ? rows.slice(0, OTHER_HOSTS_FOLD) : rows} primaryKey={false} />
+      <DataTable columns={HOST_COLUMNS} data={folded ? rows.slice(0, OTHER_HOSTS_FOLD) : rows} primaryKey={false} a11yTitle={`${title}: one row per server`} />
       {folded && (
         <Box direction="row" align="center" gap="small">
           <Text size="small" color="text-weak">{rows.length - OTHER_HOSTS_FOLD} more not shown.</Text>
@@ -143,6 +143,25 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   const iscsiPorts = (report?.array_ports ?? []).filter((port) => port.protocol === 'iscsi');
   const readyPorts = fcPorts.filter((port) => port.link_state === 'ready').length;
   const hosts = report?.hosts ?? [];
+  // SPEC-012 R7 (X-7): the discovery before this one, within the run.
+  const completedDiscoveries = events.filter((event) => event.event_type === 'discover.completed');
+  const previousDiscovery = completedDiscoveries.length >= 2 ? completedDiscoveries[completedDiscoveries.length - 2] : null;
+  const previousReport = (previousDiscovery?.data?.report as DiscoveryReport | undefined) ?? null;
+  const changes: string[] = [];
+  if (report && previousReport) {
+    const before = new Set((previousReport.hosts ?? []).map((h) => h.name));
+    const after = new Set(hosts.map((h) => h.name));
+    const appeared = [...after].filter((n) => !before.has(n));
+    const gone = [...before].filter((n) => !after.has(n));
+    if (appeared.length) changes.push(`${appeared.length} host${appeared.length === 1 ? '' : 's'} appeared: ${appeared.join(', ')}`);
+    if (gone.length) changes.push(`${gone.length} host${gone.length === 1 ? '' : 's'} no longer seen: ${gone.join(', ')}`);
+    const linkBefore = new Map(previousReport.array_ports.map((p) => [`${p.node}:${p.slot}:${p.card_port}`, p.link_state]));
+    (report.array_ports ?? []).forEach((p) => {
+      const key = `${p.node}:${p.slot}:${p.card_port}`;
+      const was = linkBefore.get(key);
+      if (was && was !== p.link_state) changes.push(`port ${key}: ${was} → ${p.link_state}`);
+    });
+  }
   // Older runs (before SPEC-009) have no in_run flag; a vCenter/sheet source is the same rule.
   const inRun = hosts.filter((h) => h.in_run ?? (h.sources.includes('vcenter') || h.sources.includes('sheet')));
   const others = hosts.filter((h) => !inRun.includes(h));
@@ -223,6 +242,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             ]}
             data={preflight.checks}
             primaryKey={false}
+            a11yTitle="Environment readiness: one row per prerequisite check"
           />
           <TableSummary>
             {preflight.ready
@@ -247,6 +267,14 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
       <DiscoveryFreshness events={events} action="continuing" />
 
       {report?.error && <InlineNotification tone="critical" title="Discovery reported a problem" message={report.error} />}
+
+      {report && previousDiscovery && (
+        <InlineNotification
+          tone="info"
+          title={`Since the discovery at ${new Date(previousDiscovery.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+          message={changes.length ? <NotesList notes={changes} /> : 'No change: the same hosts, and every array port in the same link state.'}
+        />
+      )}
 
       {report && (
         <Surface title="Array target ports" description="Fibre Channel ports the array presents to hosts.">
@@ -274,6 +302,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             ]}
             data={fcPorts}
             primaryKey={false}
+            a11yTitle="Array Fibre Channel target ports with fabric and link state"
           />
           <TableSummary>
             {readyPorts} ready · {fcPorts.length - readyPorts} require a cable or switch-port check
@@ -297,6 +326,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             ]}
             data={iscsiPorts}
             primaryKey={false}
+            a11yTitle="Array iSCSI ports with address and link state"
           />
         </Surface>
       )}
@@ -343,6 +373,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             ]}
             data={report.file_ports}
             primaryKey={false}
+            a11yTitle="File service ports with address, VLAN, MTU and link"
           />
         </Surface>
       )}
@@ -379,6 +410,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             ]}
             data={report.replication_ports}
             primaryKey={false}
+            a11yTitle="Replication (RCIP) ports with configuration state and link"
           />
           <TableSummary>
             {report.replication_ports.filter((p) => p.role === 'rcip').length} of{' '}

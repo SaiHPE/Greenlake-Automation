@@ -174,7 +174,10 @@ def test_remaining_placeholders_sees_headers_and_split_runs(tmp_path):
 
 def test_every_top_level_section_starts_on_a_new_page(tmp_path):
     """The template has exactly ONE explicit page break; every other Heading 1 flowed inline, so
-    the generated tables pushed later headings into the middle of a page."""
+    the generated tables pushed later headings into the middle of a page. SPEC-012 R3 (A-4): the
+    second RUN section flows on from the first — the one exception, stated in `_FLOWS_ON`."""
+    from alletra_onboard.application.documents.asbuilt import _FLOWS_ON
+
     out, _warnings = generate_asbuilt(_SAMPLE, tmp_path / "breaks.docx")
     doc = docx.Document(str(out))
 
@@ -182,7 +185,10 @@ def test_every_top_level_section_starts_on_a_new_page(tmp_path):
     assert len(h1) >= 6
     for para in h1:
         explicit = any(b.get(qn("w:type")) == "page" for b in para._p.iter(qn("w:br")))
-        assert para.paragraph_format.page_break_before or explicit, f"no break before {para.text!r}"
+        if para.text.strip() in _FLOWS_ON:
+            assert not para.paragraph_format.page_break_before, f"{para.text!r} should share a page"
+        else:
+            assert para.paragraph_format.page_break_before or explicit, f"no break before {para.text!r}"
         assert para.paragraph_format.keep_with_next, f"heading can be stranded: {para.text!r}"
 
 

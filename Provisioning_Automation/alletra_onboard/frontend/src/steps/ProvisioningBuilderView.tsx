@@ -1,4 +1,4 @@
-import { Box, Button, Notification, Select, Spinner, Text, TextInput } from 'grommet';
+import { Box, Button, Notification, Select, Text, TextInput } from 'grommet';
 import { useEffect, useState } from 'react';
 import {
   DiscoveredHostBrief,
@@ -97,18 +97,18 @@ function ExportRowView({ row, sourceOpts, targetOpts, disabled, onChange, onRemo
 }) {
   return (
     <Box direction="row" gap="small" align="center" pad={{ vertical: 'xxsmall' }}>
-      <Box width="280px" flex={false}>
+      <Box basis="medium" flex="shrink">
         <Select size="small" placeholder="source — volume / VV-set" options={sourceOpts} labelKey="label"
           valueKey={{ key: 'value', reduce: true }} value={row.source} disabled={disabled}
           onChange={({ value }) => onChange({ ...row, source: value })} />
       </Box>
       <Text size="small">→</Text>
-      <Box width="280px" flex={false}>
+      <Box basis="medium" flex="shrink">
         <Select size="small" placeholder="target — host / host-set" options={targetOpts} labelKey="label"
           valueKey={{ key: 'value', reduce: true }} value={row.target} disabled={disabled}
           onChange={({ value }) => onChange({ ...row, target: value })} />
       </Box>
-      <Box width="95px" flex={false}>
+      <Box basis="xsmall" flex={false}>
         <TextInput size="small" placeholder="LUN auto" value={row.lun} disabled={disabled}
           onChange={(e) => onChange({ ...row, lun: e.target.value })} />
       </Box>
@@ -125,12 +125,12 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
   const [objects, setObjects] = useState<ProvisioningObjects | null>(null);
   const [members, setMembers] = useState<Record<string, string[]>>({});
   const [rows, setRows] = useState<ExportRow[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'' | 'load' | 'save'>('');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
 
   const load = async () => {
-    setError(null); setSaved(null); setBusy(true);
+    setError(null); setSaved(null); setBusy('load');
     try {
       const o = await getStorageObjects(runId);
       setObjects(o);
@@ -141,7 +141,7 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
     } catch (e: any) {
       setError(String(e.message ?? e));
     } finally {
-      setBusy(false);
+      setBusy('');
     }
   };
 
@@ -152,7 +152,7 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
     if (!objects) return;
     const bad = rows.map((r) => lunProblem(r.lun)).filter((p): p is string => p !== null);
     if (bad.length) { setSaved(null); setError(bad.join(' · ')); return; }
-    setError(null); setSaved(null); setBusy(true);
+    setError(null); setSaved(null); setBusy('save');
     try {
       const builder: ProvisioningBuilder = {
         host_sets: objects.host_sets.map((hs) => ({ name: hs.name, members: members[hs.name] ?? [] })),
@@ -165,7 +165,7 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
     } catch (e: any) {
       setError(String(e.message ?? e));
     } finally {
-      setBusy(false);
+      setBusy('');
     }
   };
 
@@ -179,8 +179,7 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
           one host set, the exports must be composed here.
         </Text>
         <Box direction="row" gap="small" align="center">
-          {busy ? <Spinner /> : <Button size="small" label="Retry loading objects" disabled={disabled} onClick={load} />}
-          <Text size="small" color="text-weak">{busy ? 'Reading the array and the run…' : ''}</Text>
+          <Button size="small" busy={busy === 'load'} label={busy === 'load' ? 'Reading the array and the run' : 'Retry loading objects'} disabled={disabled} onClick={load} />
         </Box>
         {error && <Notification status="critical" title="Could not load objects" message={error} onClose={() => setError(null)} />}
       </Surface>
@@ -190,7 +189,7 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
   const srcOpts = sourceOptions(objects);
   const tgtOpts = targetOptions(objects);
   const memOpts = memberOptions(objects);
-  const busyOrDisabled = disabled || busy || readOnly;
+  const busyOrDisabled = disabled || busy !== '' || readOnly;
 
   return (
     <Surface
@@ -207,8 +206,8 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
       {objects.host_sets.length === 0 && <Text size="small" color="text-weak">No host sets in the sheet.</Text>}
       {objects.host_sets.map((hs) => (
         <Box key={hs.name} direction="row" gap="small" align="center" pad={{ vertical: 'xxsmall' }}>
-          <Box width="200px" flex={false}><Text size="small">{hs.name}</Text></Box>
-          <Box width="540px" flex={false}>
+          <Box basis="small" flex={false}><Text size="small">{hs.name}</Text></Box>
+          <Box basis="medium" flex="grow">
             <Select size="small" multiple closeOnChange={false} placeholder="choose members"
               options={memOpts} labelKey="label" valueKey={{ key: 'value', reduce: true }}
               value={members[hs.name] ?? []} disabled={busyOrDisabled}
@@ -234,9 +233,8 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
             onClick={() => setRows((rs) => [...rs, { source: '', target: '', lun: '' }])} />
 
           <Box direction="row" gap="small" align="center" margin={{ top: 'small' }}>
-            <Button primary size="small" label={busy ? 'Saving…' : 'Save composition'} disabled={busyOrDisabled} onClick={save} />
-            <Button size="small" label="Reload" disabled={busyOrDisabled} onClick={load} />
-            {busy && <Spinner />}
+            <Button primary size="small" busy={busy === 'save'} label={busy === 'save' ? 'Saving' : 'Save composition'} disabled={busyOrDisabled} onClick={save} />
+            <Button size="small" busy={busy === 'load'} label="Reload" disabled={busyOrDisabled} onClick={load} />
           </Box>
         </>
       )}
