@@ -185,6 +185,7 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
             ]}
             data={rows}
             primaryKey="host"
+            a11yTitle="Zoning check: one row per host with its state on each fabric"
           />
           <TableSummary>
             {rows.length - outstanding} of {rows.length} hosts zoned on both fabrics

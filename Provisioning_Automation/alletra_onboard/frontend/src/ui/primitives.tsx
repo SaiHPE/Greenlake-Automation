@@ -12,13 +12,16 @@ export function ContinueButton({
   onClick,
   disabled,
   prefix = 'Continue to',
+  suffix = '',
 }: {
   onClick?: () => void;
   disabled?: boolean;
   prefix?: string;
+  suffix?: string;   // e.g. "without provisioning" (SPEC-012 R2) - what continuing means here
 }) {
   const { nextTitle, onDone } = useStepContext();
-  const label = nextTitle ? `${prefix} ${nextTitle}` : 'Finish';
+  const base = nextTitle ? `${prefix} ${nextTitle}` : 'Finish';
+  const label = suffix ? `${base} ${suffix}` : base;
   return <Button primary label={label} disabled={disabled} onClick={onClick ?? onDone} />;
 }
 
@@ -152,8 +155,9 @@ export function ActivityTimeline({ events, empty }: { events: RunEvent[]; empty?
 
 /** The summary line under a table — the Design System puts aggregate counts in a table footer. */
 export function TableSummary({ children }: { children: ReactNode }) {
+  // role="status": a screen reader hears the count when it changes (SPEC-012 R6, X-3).
   return (
-    <Box pad={{ top: 'xsmall' }} border={{ side: 'top', color: 'border-weak' }} flex={false}>
+    <Box pad={{ top: 'xsmall' }} border={{ side: 'top', color: 'border-weak' }} flex={false} role="status">
       <Text size="small" color="text-weak">
         {children}
       </Text>

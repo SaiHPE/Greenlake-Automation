@@ -329,7 +329,9 @@ def test_wsapi_records_parse_the_captured_shapes():
 
     vols = {v.name: v for v in wc.parse_volumes(_wsapi("volumes"))}
     assert len(vols) == 51
-    assert vols["zz_t2_vol01"] == ArrayVolumeRecord(name="zz_t2_vol01", size_mib=1024, cpg="SSD_r6", provisioning_type="tpvv")
+    assert vols["zz_t2_vol01"] == ArrayVolumeRecord(name="zz_t2_vol01", size_mib=1024, cpg="SSD_r6", provisioning_type="tpvv",
+                                                    id=95, wwn="60002AC0000000000000005F0002D495")   # SPEC-012 R1
+    assert esx.id == 11
     assert vols["zz_t2_vol02"].provisioning_type == "reduce"          # created with {"reduce": true} -> 6
     assert vols["zz_t2_vol03"].size_mib == 2048
     assert vols["admin"].provisioning_type == "full"
@@ -420,7 +422,8 @@ def test_live_wsapi_capture_pins_volumes_and_hosts():
 
     vols = {v.name: v for v in wc.parse_volumes(_wsapi("volumes"))}
     assert len(vols) == 51
-    assert vols["zz_t2_vol01"] == ArrayVolumeRecord(name="zz_t2_vol01", size_mib=1024, cpg="SSD_r6", provisioning_type="tpvv")
+    assert vols["zz_t2_vol01"] == ArrayVolumeRecord(name="zz_t2_vol01", size_mib=1024, cpg="SSD_r6", provisioning_type="tpvv",
+                                                    id=95, wwn="60002AC0000000000000005F0002D495")   # SPEC-012 R1
     assert vols["zz_t2_vol02"].provisioning_type == "reduce"                        # created with {"reduce": true}
     assert vols[".mgmtdata"].provisioning_type == "full" and vols[".shared.SSD_r6_0"].provisioning_type == "dds"
     assert vols["vol1.0.260910000000"].provisioning_type == "snp"
@@ -603,3 +606,42 @@ def test_an_export_held_back_for_reachability_still_presents_its_volume():
     plan = _plan(TruthfulFakeWsapi(), intent, disc)
     assert _unpresented_notes(plan) == []
     assert any("held back" in n for n in plan.notes)
+
+
+# ------------------------------------------------------------------ SPEC-012 R1 (P-8): the Result says which object
+
+class _RecordingFake(TruthfulFakeWsapi):
+    """The truthful fake plus what a real array does on create: the object appears in the next read,
+    with the identifiers the array assigned."""
+
+    def ensure_host(self, name, wwns, persona="VMware"):
+        status = super().ensure_host(name, wwns, persona)
+        if status == "created":
+            self._hosts.append(ArrayHostRecord(name=name, persona=persona, wwns=list(wwns), id=16))
+        return status
+
+    def ensure_volume(self, name, cpg, size_mib, ptype):
+        status = super().ensure_volume(name, cpg, size_mib, ptype)
+        if status == "created":
+            self._volumes.append(ArrayVolumeRecord(name=name, size_mib=size_mib, cpg=cpg, provisioning_type=ptype,
+                                                   id=100 + len(self._volumes), wwn=f"60002AC00000000000000{len(self._volumes):03d}0002D495"))
+        return status
+
+
+def test_result_rows_carry_the_arrays_identifiers():
+    """P-8 (live 2026-09-13): the Result table read "Created" seven times and "—" seven times where the
+    VV id / WWN / host id belong. One read-back of hosts and volumes after the object loop fills them."""
+    fake = _RecordingFake()
+    fake.created_templates[("set:vvs", "set:hs")] = [
+        VlunTemplate(volume="vol01", target="set:hs", lun=0), VlunTemplate(volume="vol02", target="set:hs", lun=1),
+    ]
+    result = prov.apply_plan(_intent(), _discovery(), reachable_hosts=REACHABLE, wsapi_factory=lambda c: fake)
+    by = {(o.kind, o.name): o for o in result.outcomes}
+    assert by[("host", "esx1")].detail == "id 16 · persona VMware · 2 WWNs"
+    assert by[("volume", "vol01")].detail == "id 100 · WWN 60002AC000000000000000000002D495 · 20480 MiB tpvv on SSD_r6"
+    assert by[("hostset", "hs")].detail == "1 member: esx1"
+    assert by[("vvset", "vvs")].detail == "2 volumes: vol01, vol02"
+    # the export row keeps its LUN read-back (SPEC-001 R8)
+    assert "LUN 0" in by[("vlun", "vvs")].detail
+    # one read-back each, never per object
+    assert fake.reads.count("hosts") == 1 and fake.reads.count("volumes") == 1
