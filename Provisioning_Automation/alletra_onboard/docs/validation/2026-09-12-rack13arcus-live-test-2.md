@@ -321,7 +321,7 @@ The four FAILs, sorted by whose they were:
 | 1 | *plan: host row 10.132.30.136 is 'exists'* — it was `create` | **runner assumption.** S-10's cleanup had removed the host; the plan was right. | rc.16: expectation comes from the WSAPI baseline (`exists` if the host is there, else `create`); removal count 6 or 7 accordingly. |
 | 2 | *removal set: 6 lines in dependency order* — 7 lines, and the order was vlun, vlun, **host, hostset, vv, vv, vvset** | **app defect (SPEC-007 R3).** `removal_set()` returned outcome order; only the UI and the as-built sorted. The runner pasted the raw list — host before its set, volumes before their VV set. | rc.16: the list is sorted at the source (`test_a_created_host_is_removed_after_its_set_in_the_raw_list`); the runner also sorts before pasting. |
 | 3 | *5 Documents: waited for verify.completed … run status 'waiting_for_operator'* after 5 s | **runner bug.** Verify and as-built never change the run status by design; the runner treated "not running and no event" as settled. | rc.16: wait by event only, up to the ceiling; a timeout names the last event. |
-| 4 | *cleanup failed: The underlying connection was closed* on the WSAPI read after SSH | **runner robustness.** A pooled TLS connection went stale over the 8 minutes; 5.1 does not retry. | rc.16: `DisableKeepAlive`, one retry, re-login on 401/403. |
+| 4 | *cleanup failed: The underlying connection was closed* on the WSAPI read after SSH | **runner bug — misdiagnosed in rc.16.** Not a stale connection: in 5.1 the `{ $true }` certificate callback is a script block and runs only on the *first* TLS handshake; every later handshake happens on a .NET thread without a runspace and fails with exactly this text. The pooled connection hid it for 8 minutes; rc.16's `DisableKeepAlive` made it fail on the first read (2026-09-15 12:12). | rc.17: compiled callback via `Add-Type` (LESSONS 40); the retry / re-login stay. |
 
 What the cleanup did — `cleanup.txt`, received 2026-09-15, pinned as
 `tests/fixtures/rack13_array/cleanup_refused_s12.txt`:
@@ -347,3 +347,8 @@ override set membership: the dependency order is the only way. Remaining by hand
 baseline drifts (12 hosts, the host row `exists`, and the runner would never remove it).
 Also seen in the report: `→` and `·` rendered as `â` / `Â·` — 5.1 decoded the JSON body as Latin-1;
 rc.16 decodes the bytes as UTF-8.
+
+2026-09-15, rc.16 exe + rc.16 runner, three attempts before a scenario ran, each a runner fault: the zip's
+`session.ps1` refused by RemoteSigned (internet mark → `session.cmd` launcher, `Unblock-File`); the sheet locked
+(open in Excel → shared-mode read); WSAPI dropped on the first read after login (the callback bug above →
+rc.17). None touched the array.
