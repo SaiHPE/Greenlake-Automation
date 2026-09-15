@@ -236,6 +236,12 @@ export interface DiscoveredHost {
   logged_in: boolean;
   array_host_name: string;
   sources: string[];
+  // SPEC-009: identity is not OS; whose host it is; what the per-source tables used to show.
+  identified?: boolean;
+  in_run?: boolean;
+  persona?: string;
+  os_text?: string;
+  ports?: Record<string, string[]>;
 }
 export interface DiscoveryReport {
   array_ports: ArrayPort[];
