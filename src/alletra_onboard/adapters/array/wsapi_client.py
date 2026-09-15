@@ -102,6 +102,7 @@ def parse_hosts(body: object) -> list[ArrayHostRecord]:
             name=name,
             persona=_PERSONA_NAME.get(persona_id, str(persona_id) if persona_id is not None else ""),
             wwns=wwns,
+            id=int(m["id"]) if str(m.get("id", "")).isdigit() else None,
         ))
     return out
 
@@ -117,6 +118,8 @@ def parse_volumes(body: object) -> list[ArrayVolumeRecord]:
             size_mib=int(m.get("sizeMiB") or 0),
             cpg=str(m.get("userCPG") or ""),
             provisioning_type=_PROVISIONING_TYPE.get(m.get("provisioningType"), "unknown"),
+            id=int(m["id"]) if str(m.get("id", "")).isdigit() else None,
+            wwn=str(m.get("wwn") or "").upper(),
         ))
     return out
 

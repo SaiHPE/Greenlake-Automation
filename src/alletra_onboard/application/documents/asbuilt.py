@@ -283,6 +283,8 @@ def _start_sections_on_new_pages(doc) -> int:
             continue                                          # the template already breaks here
         if para.paragraph_format.page_break_before:
             continue
+        if para.text.strip() in _FLOWS_ON:
+            continue                                          # SPEC-012 R3: flows on from the section above
         para.paragraph_format.page_break_before = True
         added += 1
     return added
@@ -791,6 +793,11 @@ def _add_provisioned_sections(doc, data: AsBuiltData, warnings: list[str]) -> No
     _add_presentations_section(doc, data, warnings)
     _add_zoning_section(doc, data)
     _add_provisioning_section(doc, data)
+
+
+# SPEC-012 R3 (A-4): the two run sections share a page — a one-sentence zoning record owned a whole
+# page when every Heading 1 broke. The second run section flows on from the first.
+_FLOWS_ON = {"Provisioning performed in this run"}
 
 
 def _update_fields_on_open(doc) -> None:

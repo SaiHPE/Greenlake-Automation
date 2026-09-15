@@ -330,6 +330,7 @@ class ArrayHostRecord(BaseModel):
     name: str
     persona: str = ""
     wwns: list[str] = Field(default_factory=list)
+    id: int | None = None          # SPEC-012 R1: the array's host id, for the Result row
 
 
 class ArrayVolumeRecord(BaseModel):
@@ -337,6 +338,8 @@ class ArrayVolumeRecord(BaseModel):
     size_mib: int
     cpg: str
     provisioning_type: ArrayProvisioningType
+    id: int | None = None          # SPEC-012 R1
+    wwn: str = ""
 
 
 class VlunTemplate(BaseModel):

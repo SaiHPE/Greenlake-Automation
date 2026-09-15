@@ -129,6 +129,13 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
   const resultIsCurrent = applied > previewed;
   const result = resultIsCurrent ? latest<ProvisioningResult>(events, 'storage.applied', 'result') : null;
 
+  // SPEC-012 R7 (X-7): the plan before this one, within the run, so a re-plan says what moved.
+  const previews = events.filter((event) => event.event_type === 'storage.previewed');
+  const previousPlan = previews.length >= 2 ? ((previews[previews.length - 2].data?.plan as ProvisioningPlan | undefined) ?? null) : null;
+  const previousState = new Map((previousPlan?.actions ?? []).map((a) => [`${a.kind}|${a.name}`, a.state]));
+  // SPEC-012 R2 (P-10): has anything been created in this run at all?
+  const everApplied = events.some((event) => event.event_type === 'storage.applied');
+
   const count = (state: PlanState) => (plan ? plan.actions.filter((action) => action.state === state).length : 0);
   const toCreate = count('create');
   const toUpdate = count('update');
@@ -188,8 +195,8 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             />
           )}
           {/* Continue is always available: an operator may legitimately pass through this step
-              without creating anything. */}
-          <ContinueButton onClick={onDone} />
+              without creating anything - and the label says so (SPEC-012 R2, P-10). */}
+          <ContinueButton onClick={onDone} suffix={everApplied ? '' : 'without provisioning'} />
         </>
       }
     >
@@ -216,9 +223,17 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
               {
                 property: 'state',
                 header: 'Action',
-                render: (action: PlannedAction) => (
-                  <StatusIndicator state={PLAN_STATE[action.state].state} label={PLAN_STATE[action.state].label} />
-                ),
+                render: (action: PlannedAction) => {
+                  const was = previousState.get(`${action.kind}|${action.name}`);
+                  return (
+                    <Box gap="xxsmall">
+                      <StatusIndicator state={PLAN_STATE[action.state].state} label={PLAN_STATE[action.state].label} />
+                      {was && was !== action.state && (
+                        <Text size="xsmall" color="text-weak">was {PLAN_STATE[was].label.toLowerCase()}</Text>
+                      )}
+                    </Box>
+                  );
+                },
               },
               {
                 property: 'description',
@@ -239,6 +254,8 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             ]}
             data={plan.actions}
             primaryKey={false}
+            a11yTitle="Provisioning plan: one row per object, with the action apply will take"
+
           />
           <TableSummary>
             {toCreate} to create · {toUpdate} to update · {existing} already exist · {conflicts} conflict{conflicts === 1 ? '' : 's'}
@@ -299,6 +316,8 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             ]}
             data={result.outcomes}
             primaryKey={false}
+            a11yTitle="Provisioning result: one row per object, with what the array reported"
+
           />
           <RemovalSet result={result} runId={runId} serial={run?.serial_number} />
         </Surface>
@@ -338,6 +357,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             ]}
             data={paths.hosts}
             primaryKey="host"
+            a11yTitle="Path verification: one row per host, with live paths per LUN and fabric"
           />
         )}
         {paths?.notes.length ? (
