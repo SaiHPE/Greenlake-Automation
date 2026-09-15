@@ -217,7 +217,12 @@ function Snap-Templates($snap) {
 
 # ------------------------------------------------------------------ sheets from JSON (R3)
 
-$BaseB64 = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes((Resolve-Path $BaseSheet).Path))
+function Read-SheetBytes([string]$path) {
+  # FileShare ReadWrite: the operator usually has the sheet open in Excel (2026-09-15, first rc.16 attempt).
+  $fs = [System.IO.File]::Open((Resolve-Path $path).Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+  try { $ms = New-Object System.IO.MemoryStream; $fs.CopyTo($ms); return $ms.ToArray() } finally { $fs.Dispose() }
+}
+$BaseB64 = [Convert]::ToBase64String((Read-SheetBytes $BaseSheet))
 function Compose($targets, $volumes, $hostsets, [string]$Save) {
   $body = @{ base_b64 = $BaseB64; targets = $targets }
   if ($null -ne $volumes) { $body['volumes'] = $volumes }
