@@ -1,6 +1,6 @@
 # SPEC-006 — The session runs itself
 
-**Status:** implemented 2026-09-14 (rc.14; rc.15 ASCII fix, LESSONS 38); **first live run S-12 on 2026-09-14: 27 PASS / 4 FAIL**, all four fixed in rc.16 (see validation record) — **pending its own first live run** (S-12)
+**Status:** implemented 2026-09-14 (rc.14; rc.15 ASCII fix, LESSONS 38); **S-12 2026-09-14: 27/4 → 2026-09-15: 38/1** (see validation record); **rc.24 asserts rc.19–rc.23** (§4a) — pending its run (S-13) — **pending its own first live run** (S-12)
 **Findings addressed:** G-4 (breadth and failure evidence), the operator's cost of a live session
 (11 screenshots, 6 pasted scripts, ~3 hours on 2026-09-14)
 **Owner:** `scripts/session.ps1` (ships inside every release zip next to the exe), `api/app.py`
@@ -74,6 +74,22 @@ Python (`tests/unit/test_init_sheet.py`): `test_compose_replaces_row_tables_and_
 `POST /init-sheet/compose` round-trips through `parse_workbook_bytes`.
 PowerShell: `session.ps1` parses under `[Parser]::ParseFile`; **S-12** is its first live run — the
 operator runs it once against rack13arcus and sends the folder.
+
+## 4a. Amendment — rc.24 (2026-09-15): the closed register becomes assertions
+
+The scenarios now also assert what rc.19–rc.23 exposed over the API, at the point where the evidence
+already exists; no new array writes, one additional read-only login per switch (the zoning *plan*
+step) and one read-only preflight (WSAPI + vCenter):
+
+| Where | Asserts | Proves |
+|---|---|---|
+| 1 after discovery | every `report.hosts` row carries `identified` + `in_run`; the picked host is in-run and identified, its initiators carry array ports; unidentified only when the name is the initiator id; `GET /storage/preflight` names check reads *4 object name(s) free: 2 volumes, 1 VV set, 1 host set.* | SPEC-009 R1/R2/R3/R5 |
+| 1 after the zoning check | `POST /zoning/plan` (read-only), first unzoned pair per fabric → `POST /zoning/render` (not recorded on the run): `cfgtransshow` first, `cfgsave` + `cfgenable` last; a second render with alias `bad name.1` is refused with *try 'bad_name_1'*. Nothing to render → a note, not a FAIL. | SPEC-010 R1/R3 |
+| 1 after apply | host outcome *id N · persona X · N WWNs*; volume *id N · WWN <32 hex> · 1024 MiB tpvv on <CPG>*; host set *1 member: <host>*; VV set *2 volumes: …* | SPEC-012 R1 |
+| 3 | the sheet carries `zz_s6_vol03` in no set and no export; the plan note reads *1 volume is not presented by this plan: zz_s6_vol03* | SPEC-008 R5 |
+| 5 | run detail `array_credential` (already); every check has `match` ∈ exact/contains/includes, DNS *includes*, Support contact *contains*; every status row has `details`; in the docx the zoning heading breaks the page and the provisioning heading does not | SPEC-008 R1–R3, SPEC-011 R1/R3, SPEC-012 R3 |
+
+The report ends with **Still needs eyes** — the six UI-only changes and the one screenshot each needs.
 
 ## 5. Limits, stated
 
