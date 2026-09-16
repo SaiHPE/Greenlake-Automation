@@ -1,6 +1,6 @@
 # SPEC-009 — Discovery says whose hosts these are
 
-**Status:** implemented 2026-09-15 (rc.20) — pending live screenshot (one Discovery page on rack13arcus)
+**Status:** implemented 2026-09-15 (rc.20); **seen live 2026-09-16** — the screenshot confirmed R1–R4 and found D-7/D-8/D-9, fixed rc.25 (§5)
 **Findings addressed:** D-2 (`vmenode` filed as unidentified), D-3 (RCIP *Available* with link offline),
 D-4 (names-free count omits hosts), D-5 (other teams' hosts at the same weight as this run's), D-6 (array
 vocabulary + explanatory paragraphs instead of a legend and a status column)
@@ -56,6 +56,13 @@ a clash warning; volume/set clashes stay a warning as today.
 - Frontend: `tsc` clean. Live: one screenshot of Discovery on rack13arcus showing the two tables
   (`.136`, `.47`, `.86` in the first; `vmenode` in the second with *OS: not reported* and its array
   name) and the RCIP table.
+
+## 5. Amendment — rc.25 (2026-09-16), from the first screenshot
+
+- **R1a** Within the vCenter source the host name is the identity: a second HBA of the same host joins
+  the first row even when no array host object carries both WWPNs (D-7: `.136`, `.47`, `.86` listed twice).
+- **R1b** A persona comes only from a named array host object; the nameless bucket's `--` is not one (D-8).
+- **R3a** *none yet — provisioning creates one* only on in-run rows; other tenants' rows read *none yet* (D-9).
 
 ## 4. Out of scope
 
