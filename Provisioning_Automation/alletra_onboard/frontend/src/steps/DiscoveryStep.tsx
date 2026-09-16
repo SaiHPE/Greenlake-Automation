@@ -108,7 +108,7 @@ const HOST_COLUMNS = [
       h.array_host_name ? (
         <Text size="small" style={mono}>{h.array_host_name}</Text>
       ) : (
-        <Text size="small" color="text-weak">none yet — provisioning creates one</Text>
+        <Text size="small" color="text-weak">{h.in_run ? 'none yet — provisioning creates one' : 'none yet'}</Text>
       ),
   },
 ];
