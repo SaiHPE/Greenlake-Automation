@@ -47,7 +47,10 @@ const SIGNALS: Record<string, Signals> = {
   cloudinit: { complete: ['step.completed'], gate: ['operator.review_ready'] },
   dscc: { complete: [], gate: ['operator.credentials_ready'] },
   discover: { complete: ['discover.completed'], gate: [] },
-  zoning: { complete: ['zoning.proper'], gate: ['zoning.previewed'], ignore: ['zoning.plan'] },
+  // The plan and the rendered command set are artifacts of a step whose outcome the check decided;
+  // Z-6 (2026-09-16): after "Generate command set" the header read Running because the newest event
+  // matched nothing and the run was mid-phase.
+  zoning: { complete: ['zoning.proper'], gate: ['zoning.previewed'], ignore: ['zoning.plan', 'zoning.rendered'] },
   provision: {
     complete: ['storage.applied'],
     gate: ['storage.previewed'],
