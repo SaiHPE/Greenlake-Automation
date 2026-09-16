@@ -542,7 +542,12 @@ try {
   $detail = Api 'GET' "/runs/$Run1" $null 'run1-detail'
   $ac = $detail.Json.array_credential
   Check "run holds the sheet's array credential ($ArrayUser)" ($ac -and $ac.available -eq $true -and $ac.source -eq 'provisioning' -and $ac.username -eq $ArrayUser) $(if ($ac) { "source=$($ac.source) user=$($ac.username) host=$($ac.host)" } else { 'no array_credential in GET /runs/{id}' }) | Out-Null
-  Check 'GET /runs/{id} carries no password' ($detail.Text -notmatch 'password') '' | Out-Null
+  # S-13 (2026-09-16): `-notmatch 'password'` matched the JSON KEY names of masked fields. The test is
+  # that no password-named field carries a real value and the array password itself is nowhere in the body.
+  $pwValues = @([regex]::Matches($detail.Text, '"[^"]*password[^"]*"\s*:\s*"([^"]*)"') | ForEach-Object { $_.Groups[1].Value })
+  $unmasked = @($pwValues | Where-Object { $_ -ne '' -and $_ -notmatch '^\*+$' })
+  $leaks = if ($ArrayPw) { $detail.Text.Contains($ArrayPw) } else { $false }
+  Check 'GET /runs/{id} carries no password value (keys are masked)' ($unmasked.Count -eq 0 -and -not $leaks) "password-named fields: $($pwValues.Count), unmasked: $($unmasked.Count), array password present: $leaks" | Out-Null
   $creds = @{}
   $ev = Run-Step -RunId $Run1 -Path '/verify' -Body $creds -Types @('verify.completed', 'verify.failed') -Save 'run1-verify'
   $rep = $ev.data.report
