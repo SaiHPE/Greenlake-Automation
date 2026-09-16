@@ -1886,3 +1886,42 @@ def test_names_check_counts_hosts_separately_and_never_warns_on_an_existing_host
 
     clash = _names_check(_intent(), existing={"CRV_Prod01"})
     assert clash.status == "warn" and "CRV_Prod01" in clash.detail
+
+
+# ---------------- SPEC-009 amendment rc.25 (screenshots 2026-09-16): D-7, D-8 ----------------
+
+def test_a_vcenter_host_with_two_hbas_and_no_array_object_is_one_row():
+    """D-7 (Discovery screenshot 2026-09-16): `.136`, `.47`, `.86` each appeared TWICE in 'Hosts in this
+    run' - once per HBA - because the join key is the initiator id and, with no array host object to
+    carry both WWPNs, nothing joined the two vCenter rows of the same server. Within vCenter the host
+    name IS the identity."""
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    report = DiscoveryReport(
+        array_ports=[
+            ArrayPort(node=0, slot=3, card_port=3, protocol="fc", wwpn="20330002AC02D495", link_state="ready", fabric="even"),
+            ArrayPort(node=1, slot=3, card_port=3, protocol="fc", wwpn="21330002AC02D495", link_state="ready", fabric="odd"),
+        ],
+        host_hbas=[
+            HostHba(host_name="10.132.30.136", wwpn="10005CED8C5312A8", fabric="even", os="VMware ESXi 8.0.2"),
+            HostHba(host_name="10.132.30.136", wwpn="10005CED8C5312A9", fabric="odd", os="VMware ESXi 8.0.2"),
+            HostHba(host_name="10.132.30.47", wwpn="100008F1EAC03DE7", os="VMware ESXi 8.0.3"),
+            HostHba(host_name="10.132.30.47", wwpn="100008F1EAC03DE8", os="VMware ESXi 8.0.3"),
+        ],
+    )
+    hosts = disc.assemble_hosts(report)
+    assert [h.name for h in hosts] == ["10.132.30.136", "10.132.30.47"]
+    esx = hosts[0]
+    assert set(esx.wwpns) == {"10005CED8C5312A8", "10005CED8C5312A9"}
+    assert sorted(esx.fabrics) == ["even", "odd"]
+    assert esx.sources == ["vcenter"] and esx.array_host_name == ""
+
+
+def test_the_unclaimed_buckets_dash_persona_never_reaches_a_host():
+    """D-8 (same screenshot): 'persona --' under `.136`, `win-10-132-30-137`, `dl385g10pr13u27` - the
+    `--` the array prints for the nameless bucket was carried as if it were a persona. A persona
+    belongs to a host OBJECT; unclaimed initiators have none."""
+    hosts = {h.name: h for h in disc.assemble_hosts(_spec9_report())}
+    assert hosts["win-tn3n7rujk3v"].persona == ""       # unclaimed IQN
+    assert hosts["51402EC02089CC1C"].persona == ""      # unclaimed WWPN
+    assert hosts["vmenode"].persona == "Generic-ALUA"   # a real host object keeps its persona

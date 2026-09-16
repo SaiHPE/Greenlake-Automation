@@ -295,9 +295,19 @@ def assemble_hosts(
         hosts.append(fresh)
         return fresh
 
-    # 1) vCenter first: it gives the best names, so it should win the naming race.
+    # 1) vCenter first: it gives the best names, so it should win the naming race. Within vCenter the
+    #    host NAME is the identity (an inventory holds each host once), so a second HBA of the same host
+    #    joins the first row - without this, a host with no array object yet appeared once per HBA
+    #    (D-7, Discovery screenshot 2026-09-16: `.136`, `.47`, `.86` each listed twice).
+    by_vcenter_name: dict[str, DiscoveredHost] = {}
     for hba in report.host_hbas:
-        host = host_for([normalize_wwpn(hba.wwpn)], hba.host_name, "vcenter")
+        wwpn = normalize_wwpn(hba.wwpn)
+        host = by_initiator.get(wwpn) or by_vcenter_name.get(hba.host_name)
+        if host is None:
+            host = host_for([wwpn], hba.host_name, "vcenter")
+        elif "vcenter" not in host.sources:
+            host.sources.append("vcenter")
+        by_vcenter_name[hba.host_name] = host
         host.name = hba.host_name
         host.os = "esxi"                      # only ESXi hosts are in a vCenter inventory
         if hba.os and not host.os_text:
@@ -349,7 +359,8 @@ def assemble_hosts(
         host = host_for(ids, name, "array")
         if ah.name and not host.array_host_name:
             host.array_host_name = ah.name
-        if ah.persona and not host.persona:
+        # A persona belongs to a host OBJECT. The nameless bucket prints `--` in that column (D-8).
+        if ah.name and ah.persona and ah.persona != "--" and not host.persona:
             host.persona = ah.persona
         for iqn, addr in ah.addresses.items():
             if addr and not host.address:
