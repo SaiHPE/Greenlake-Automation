@@ -161,6 +161,7 @@ export interface ArrayCredentialInfo {
 }
 export const getRun = (runId: string) =>
   request<{ run: RunRecord; work_item: any; array_credential: ArrayCredentialInfo | null }>('GET', `/runs/${runId}`);
+export const listRuns = () => request<{ runs: RunRecord[] }>('GET', '/runs');
 export const getEvents = (runId: string) => request<{ events: RunEvent[] }>('GET', `/runs/${runId}/events`);
 
 export const startProvision = (runId: string, dryRun: boolean) =>

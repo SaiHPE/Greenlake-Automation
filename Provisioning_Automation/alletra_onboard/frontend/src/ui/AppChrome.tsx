@@ -85,11 +85,13 @@ export function WizardBar({
   canGoPrevious,
   onCancel,
   canCancel,
+  onOpenRun,
 }: {
   onPrevious: () => void;
   canGoPrevious: boolean;
   onCancel: () => void;
   canCancel: boolean;
+  onOpenRun?: () => void;
 }) {
   return (
     <Box
@@ -101,7 +103,11 @@ export function WizardBar({
       flex={false}
     >
       <Button icon={<FormPrevious />} label="Previous step" onClick={onPrevious} disabled={!canGoPrevious} />
-      <Button label="Cancel run" onClick={onCancel} disabled={!canCancel} />
+      <Box direction="row" gap="small">
+        {/* X-9 (2026-09-16): the browser remembers one run; every other run needed the console. */}
+        {onOpenRun && <Button label="Open another run" onClick={onOpenRun} />}
+        <Button label="Cancel run" onClick={onCancel} disabled={!canCancel} />
+      </Box>
     </Box>
   );
 }

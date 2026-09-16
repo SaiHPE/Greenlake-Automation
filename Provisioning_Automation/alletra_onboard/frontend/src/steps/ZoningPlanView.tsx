@@ -122,7 +122,7 @@ function FabricOverview({ plan }: { plan: ZoningPlan }) {
           </Box>
         ))}
         {plan.notes.length > 0 && (
-          <InlineNotification tone="info" title="Cabling and fabric notes" message={plan.notes.join(' ')} />
+          <InlineNotification tone="info" title="Cabling and fabric notes" message={<NotesList notes={plan.notes} />} />
         )}
       </Box>
     </Surface>

@@ -131,7 +131,8 @@ export function ActivityTimeline({ events, empty }: { events: RunEvent[]; empty?
   const toneOf = (type: string): StepState => {
     if (/(failed|crashed|stalled)/.test(type)) return 'failed';
     if (type.startsWith('operator.')) return 'action_required';
-    if (/(completed|applied|generated|proper)/.test(type)) return 'complete';
+    if (/(completed|applied|generated|proper|\.plan$|rendered|verified)/.test(type)) return 'complete';
+    if (/previewed/.test(type)) return 'action_required';
     return 'running';
   };
   return (
