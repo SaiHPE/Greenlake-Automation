@@ -351,3 +351,5 @@ machine I cannot reproduce on, is recorded as a hypothesis with the fix that tes
 cause; and PowerShell that must run on 5.1 compiles its callbacks (`Add-Type`) — a script block is a
 callback only on the thread that created it; and a fallback path that changes behaviour writes its
 choice into the evidence (the report header), never only to the console.
+*Confirmed 2026-09-16 (S-13): with the report header reading `TLS callback: compiled`, the read that had
+failed in three sessions passed.*

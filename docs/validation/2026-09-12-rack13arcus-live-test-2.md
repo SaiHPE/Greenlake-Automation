@@ -294,7 +294,8 @@ any table. Two sessions' worth of objects gone; the training team's objects unto
 | S-8 | passed | SPEC-002 all five sections | Z-B, A-3, A-5 |
 | S-11 | passed | SPEC-004 R1–R3 | — |
 | S-10 | done by hand | — | G-5 stays open |
-| S-12 | 27/4 (rc.15 runner) → **38/1** (rc.18 runner, 2026-09-15); array clean | SPEC-001 R1–R6, R11; SPEC-005; SPEC-004 R4/R5; SPEC-002 + SPEC-007 in the docx — by machine | **SPEC-007 R3** (unsorted list, rc.16); runner: 5.1 encoding, exec policy, sheet lock, wait-by-status, TLS callback (`Add-Type` pragma) |
+| S-12 | 27/4 (rc.15 runner) → **38/1** (rc.18 runner, 2026-09-15); array clean |
+| S-13 | **57/1** (rc.24, 2026-09-16); cleanup verified by the runner; TLS fix confirmed in effect | SPEC-008 R1–R3/R5, SPEC-009 R1–R3/R5, SPEC-010 R1/R3, SPEC-011 R1/R3, SPEC-012 R1/R3 — by machine | runner: `password` key-name match (fixed on main) | SPEC-001 R1–R6, R11; SPEC-005; SPEC-004 R4/R5; SPEC-002 + SPEC-007 in the docx — by machine | **SPEC-007 R3** (unsorted list, rc.16); runner: 5.1 encoding, exec policy, sheet lock, wait-by-status, TLS callback (`Add-Type` pragma) |
 
 Not run: S-3 (failure paths), S-5 (reload/resume), S-6 (same sheet twice), S-7 (G-1 zoning apply),
 S-9 (iSCSI). Releases during the session: rc.10 (SPEC-005), rc.11 (P-17/P-18), rc.12 (P-21 / R11),
@@ -376,3 +377,24 @@ pragma, and the report header now states which callback was in effect.
 
 S-12 stands **passed on every assertion the spec makes**; the runner's post-cleanup read is a runner
 fault with a fix awaiting its next run.
+
+### S-13 — 2026-09-16 11:26, rc.24 (exe rc.23 code + rc.24 runner): **57 PASS / 1 FAIL**
+
+`evidence-2026-09-16-s13-report.md`. Header: *TLS callback: compiled* — the LESSONS 40 fix was in effect for
+the first time, and the post-cleanup WSAPI read that had failed three sessions running passed; the thread
+theory is now **confirmed**, not only supported. **Cleanup verified end to end by the runner**: the seven
+lines accepted, `no zz_s6_ object left`, `counts equal the baseline 11/5/57/9/17`.
+
+Proved by machine this run, beyond S-12: SPEC-009 R1/R2/R3/R5 (20 hosts all flagged; `.136` in-run,
+identified, ports `0:3:3, 1:3:4`; names check *4 object name(s) free: 2 volumes, 1 VV set, 1 host set*);
+SPEC-010 R1/R3 (both fabrics render `cfgtransshow … cfgsave; cfgenable mycfg|jul2prabhu`; `bad name.1`
+refused with *try 'bad_name_1'*); SPEC-012 R1 (host *id 11 · persona VMware · 2 WWNs*, volume *id 121 · WWN
+60002AC0…790002D495 · 1024 MiB tpvv on SSD_r6*) and R3 (zoning heading breaks, provisioning heading flows);
+SPEC-008 R1–R3 (credential from the sheet, verify with `{}`) and R5 (*1 volume is not presented by this
+plan: zz_s6_vol03*); SPEC-011 R1/R3 (8 status rows carrying 39 detail rows; every check with a match rule,
+DNS *includes*, Support contact *contains*).
+
+The one FAIL — *GET /runs/{id} carries no password* — is the runner's: `-notmatch 'password'` matched the
+JSON key names of masked `SecretStr` fields (`"password": "**********"`). No value was exposed; the check
+now tests that every password-named field is masked and that the array password itself is absent (fixed
+on `main`, no release). Remaining for the eye: the six UI-only screenshots the report lists.
