@@ -1,6 +1,6 @@
 import { Box, Button, Layer, Main, Text } from 'grommet';
 import { useEffect, useRef, useState } from 'react';
-import { createRunFromSheet, getAppProfile, getRun, InitSheetUploadResult } from './api';
+import { createRunFromSheet, getAppProfile, getRun, InitSheetUploadResult, listRuns, RunRecord } from './api';
 import { actionKeysFor, ActionKey, phaseToActionKey, RunMode, ServedStep, StepRegistry } from './modes';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
@@ -67,6 +67,22 @@ export default function App() {
   const [appTitle, setAppTitle] = useState('Alletra MP B10000 Onboarding');
   const [registry, setRegistry] = useState<StepRegistry | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  // X-9: the run picker. `undefined` = closed; `null` = loading; a list = open.
+  const [runList, setRunList] = useState<RunRecord[] | null | undefined>(undefined);
+  const openRunPicker = async () => {
+    setRunList(null);
+    try {
+      const { runs } = await listRuns();
+      setRunList([...runs].sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1)));
+    } catch {
+      setRunList([]);
+    }
+  };
+  const switchRun = (id: string) => {
+    // The restore-on-load path already rebuilds mode, steps and position from the stored id; reuse it.
+    localStorage.setItem(RUN_ID_KEY, id);
+    window.location.reload();
+  };
   const { run, events } = useRunEvents(runId);
 
   const steps = buildSteps(registry, mode, customSteps);
@@ -219,6 +235,7 @@ export default function App() {
             canGoPrevious={stepIndex > 0}
             onCancel={() => setConfirmCancel(true)}
             canCancel={Boolean(runId)}
+            onOpenRun={openRunPicker}
           />
           <Box pad="medium" width={{ max: 'xlarge' }} flex={false}>
             <StepProvider value={stepValue}>
@@ -268,6 +285,52 @@ export default function App() {
           </Box>
         </Main>
       </Box>
+
+      {/* X-9: open an earlier run - the runner's runs, or a run from another day - without the console. */}
+      {runList !== undefined && (
+        <Layer position="center" onEsc={() => setRunList(undefined)} onClickOutside={() => setRunList(undefined)} modal>
+          <Box pad="medium" gap="medium" width="large">
+            <Box gap="xsmall">
+              <Text size="xlarge" weight="bold" color="text-strong">Open another run</Text>
+              <Text size="small" color="text-weak">
+                Every run this tool holds, newest first. Opening one reloads the page on it; nothing on the array changes.
+              </Text>
+            </Box>
+            {runList === null && <Text size="small" color="text-weak">Reading runs…</Text>}
+            {runList !== null && runList.length === 0 && <Text size="small" color="text-weak">No runs yet.</Text>}
+            {runList !== null && runList.length > 0 && (
+              <Box gap="xsmall" overflow="auto" height={{ max: 'medium' }}>
+                {runList.map((r) => (
+                  <Box
+                    key={r.run_id}
+                    direction="row"
+                    justify="between"
+                    align="center"
+                    gap="small"
+                    pad={{ vertical: 'xsmall' }}
+                    border={{ side: 'bottom', color: 'border-weak' }}
+                    flex={false}
+                  >
+                    <Box gap="xxsmall">
+                      <Text size="small" weight={r.run_id === runId ? 'bold' : undefined}>
+                        {r.serial_number} · {modeLabel(r.mode as RunMode, initOnly)}{r.run_id === runId ? ' · open now' : ''}
+                      </Text>
+                      <Text size="xsmall" color="text-weak">
+                        {r.run_id.slice(0, 8)} · {r.current_phase.replaceAll('_', ' ').toLowerCase()} · last activity{' '}
+                        {new Date(r.updated_at).toLocaleString()}
+                      </Text>
+                    </Box>
+                    <Button size="small" label="Open" disabled={r.run_id === runId} onClick={() => switchRun(r.run_id)} />
+                  </Box>
+                ))}
+              </Box>
+            )}
+            <Box direction="row" justify="end">
+              <Button label="Close" onClick={() => setRunList(undefined)} />
+            </Box>
+          </Box>
+        </Layer>
+      )}
 
       {/* Discarding a run cannot be undone, so it is confirmed twice. */}
       {confirmCancel && (
