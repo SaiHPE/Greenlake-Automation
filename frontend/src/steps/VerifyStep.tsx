@@ -2,7 +2,7 @@ import { Box, Button, Table, TableBody, TableCell, TableHeader, TableRow, Text }
 import { useState } from 'react';
 import { CredentialOverride, FieldCheck, HealthIssue, RunEvent, RunRecord, VerificationReport, startVerify } from '../api';
 import { ArrayCredentialCard, credentialReady, useArrayCredential } from '../ui/ArrayCredentialCard';
-import { InlineNotification, Surface, TableSummary } from '../ui/primitives';
+import { ContinueButton, InlineNotification, Surface, TableSummary } from '../ui/primitives';
 import { StatusIndicator, StepState } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 
@@ -126,7 +126,7 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
             disabled={!credentialReady(credential, override)}
             onClick={verify}
           />
-          <Button primary label="Continue" onClick={onDone} />
+          <ContinueButton onClick={onDone} />
         </>
       }
     >
