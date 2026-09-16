@@ -306,6 +306,11 @@ It writes `session-<stamp>\report.md` (PASS/FAIL per check) and keeps every resp
 the docx and the SSH transcript in that folder; exit code 1 on any FAIL. Send the folder back.
 It never writes to a switch and never issues a CLI command the tool did not generate.
 
+**Run history lives next to the exe** (`.alletra_onboard\state.db` in the folder you start it from).
+A new zip extracted to a new folder starts with no runs; to keep them, extract the new zip over the
+old folder or copy `.alletra_onboard\` across. *Open another run* in the wizard bar lists every run
+the folder holds.
+
 ---
 
 ## `arrays.csv`
