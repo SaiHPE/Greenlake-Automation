@@ -128,8 +128,9 @@ def build_report(
     report = ZoningReport()
     fc_ports = [p for p in discovery.array_ports if p.protocol == "fc" and p.fabric]
     if not fc_ports:
-        report.notes.append(
-            "No array FC target ports in the discovery — run Discovery first (and check it reached the array)."
+        report.error = (
+            "The discovery has no array FC target ports, so zoning cannot be checked — re-run Discovery "
+            "and make sure it reached the array."
         )
         return report
 
