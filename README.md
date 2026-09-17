@@ -338,15 +338,16 @@ Gotchas:
 The per-area status table and the order of work live in **[docs/SCOPE.md](docs/SCOPE.md)**; the
 incident→rule register is [docs/LESSONS.md](docs/LESSONS.md); the latest hardware run is
 [docs/validation/2026-09-12-rack13arcus-live-test-2.md](docs/validation/2026-09-12-rack13arcus-live-test-2.md).
-In short (as of v0.16.0-rc.23, 2026-09-15):
+In short (as of v0.16.0-rc.27, 2026-09-17):
 
 1. **The provisioning track is live-verified** (FC, one array, rack13arcus): twice by hand across
    2026-09-13/14 (S-1, S-2, S-4, S-8, S-11) and twice by the self-checking session runner
    (`session.ps1`, SPEC-006 — 38 of 39 assertions on 2026-09-15, the one FAIL a runner fault). Every
    defect and UX finding in [docs/ux/FINDINGS-2026-09-13.md](docs/ux/FINDINGS-2026-09-13.md) is closed
-   (SPEC-001…012). Still owed live: failure paths (S-3), reload/resume (S-5), the same sheet twice
-   (S-6), iSCSI (S-9), zoning apply with the training team (G-1), the init track on a factory-fresh
-   array, and one screenshot pass for the rc.19–rc.23 UI changes.
+   (SPEC-001…012). **Zoning apply proven 2026-09-17 (G-1)**: the tool's F1 command set, pasted as
+   generated, logged `localhost.localdomain` into array port 0:3:4. Failure paths (S-3) seen 2026-09-17
+   (found D-10/D-11/Z-7 → rc.27). Still owed live: reload/resume (S-5), iSCSI (S-9), the init track on a
+   factory-fresh array.
 
 2. **Windows/Linux hosts not in vCenter** are only inferred array-side or typed into the Hosts
    tab. Agentless log-in discovery (OS / WWPN / multipathing) is the next feature.
