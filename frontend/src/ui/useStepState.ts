@@ -94,13 +94,13 @@ export function deriveStepState(step: ServedStep, run: RunRecord | null, events:
     const type = event.event_type;
     if (signals.ignore?.includes(type)) continue;
     if (FAILURE.test(type)) return 'failed';
+    // Discovery and zoning report completion (or a gate) even when the read itself failed; the error
+    // is in the payload, and the step component surfaces it. Z-7: a zoning check with no array ports.
+    if ((signals.complete.includes(type) || signals.gate.includes(type)) && event.data?.report?.error) return 'failed';
     if (signals.complete.includes(type)) {
       // A GreenLake dry run reports step.completed too, but nothing was written, so the step is not
       // done. The live run emits from GL_VERIFY_DEVICE; the dry run stays on PREFLIGHT.
       if (step.key === 'greenlake' && event.phase === 'PREFLIGHT') return 'not_started';
-      // Discovery and zoning report completion even when the read itself failed; the error is in the
-      // payload, and the step component already surfaces it.
-      if (event.data?.report?.error) return 'failed';
       return 'complete';
     }
     if (signals.gate.includes(type)) return 'action_required';
@@ -149,6 +149,7 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
     case 'zoning.proper':
       return 'verified on both fabrics';
     case 'zoning.previewed': {
+      if (report?.error) return 'not checked';
       // Counted per HOST, as the zoning step presents it — the report carries a row per host and
       // fabric, and quoting zones here would contradict the number on the step itself.
       const hosts = new Set<string>();

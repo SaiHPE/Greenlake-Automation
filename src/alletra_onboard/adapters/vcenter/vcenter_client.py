@@ -51,9 +51,14 @@ class VCenterClient:
                 port=self.port, sslContext=ctx, connectionPoolTimeout=int(self.timeout),
             )
         except Exception as exc:  # noqa: BLE001 - auth / socket / TLS
-            raise VCenterError(
-                f"Could not connect to vCenter {self.host}: {type(exc).__name__}: {str(exc)[:200]}"
-            ) from exc
+            # D-11 (S-3, 2026-09-17): str() of a vim fault is its whole property dump; `.msg` is the sentence.
+            detail = str(getattr(exc, "msg", "") or exc).strip()[:200]
+            if type(exc).__name__ == "InvalidLogin":
+                raise VCenterError(
+                    f"Login failed for {self.username}@{self.host} — check the vCenter username/password "
+                    f"on the sheet ({detail})."
+                ) from exc
+            raise VCenterError(f"Could not connect to vCenter {self.host}: {type(exc).__name__}: {detail}") from exc
 
     def close(self) -> None:
         if self._si is not None:

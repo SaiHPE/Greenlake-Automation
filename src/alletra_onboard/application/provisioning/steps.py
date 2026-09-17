@@ -92,10 +92,23 @@ class DiscoveryZoningSteps:
             coord.store.save_artifact(run.run_id, "discovery", report.model_dump_json().encode("utf-8"))
         except Exception:  # noqa: BLE001 - discovery succeeded; failing to cache it must not fail the step.
             pass
+        if report.error:
+            # D-10: the event's own message says what failed and what to do; the UI marks the step failed
+            # from report.error. A run keeps its sheet's credential (ADR 0013), so the fix is a new run.
+            coord.set_state(run, RunStatus.RETRYABLE_FAILURE, WorkflowPhase.STORAGE_DISCOVER)
+            coord.emit(
+                run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.completed",
+                f"{report.error} Nothing downstream can run without the array: fix the address or "
+                "credential on the sheet and start a new run.",
+                data={"report": report.model_dump(mode="json")},
+            )
+            return
         coord.set_state(run, RunStatus.READY, WorkflowPhase.STORAGE_DISCOVER)
+        vcenter_down = any(n.startswith("vCenter discovery failed") for n in report.notes)
         coord.emit(
             run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.completed",
             f"Discovery complete — {len(report.array_ports)} array port(s), {len(report.host_hbas)} host HBA(s)"
+            + ("; vCenter was NOT reached — hosts come from the array and the sheet only" if vcenter_down else "")
             + (f"; {len(report.notes)} note(s)" if report.notes else ""),
             data={"report": report.model_dump(mode="json")},
         )
@@ -147,6 +160,13 @@ class DiscoveryZoningSteps:
         # Every verify OVERWRITES the gate. The verify is the ONLY thing that can open it, because a
         # host is provisionable exactly when the array can see it logged in on both fabrics.
         self._save_zoned_hosts(run.run_id, report.zoned_hosts)
+        if report.error:
+            # Z-7 (S-3, 2026-09-17): with no array ports the check said "Zoning needs 0 zone(s)" and
+            # "nothing can be provisioned" in one breath. The error is the whole message.
+            coord.set_state(run, RunStatus.RETRYABLE_FAILURE, WorkflowPhase.STORAGE_ZONING)
+            coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.previewed", report.error,
+                       data={"report": report.model_dump(mode="json")})
+            return
         coord.set_state(run, RunStatus.READY if report.proper else RunStatus.WAITING_FOR_OPERATOR, WorkflowPhase.STORAGE_ZONING)
         missing = sum(1 for z in report.expected if not z.present)
         ready = len(report.zoned_hosts)
