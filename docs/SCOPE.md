@@ -14,7 +14,10 @@
 > (`docs/ux/FINDINGS-2026-09-13.md`) has no open defect or UX row. **G-1 closed 2026-09-17**: a
 > tool-generated zone, pasted as rendered, logged a host into the array. S-3 (failure paths) done
 > 2026-09-17; S-2/S-6 covered by the runner. Still owed live: S-5 (resume), S-9 (iSCSI, feasible
-> here), and the init track (needs a factory-fresh array).
+> here; scripted as `pending.ps1 -Iscsi`), and the init track — **blocked on hardware**: it needs an
+> array that has never been initialised, which rack13arcus is not. It cannot be closed by any script or
+> release; it closes on the first factory-fresh unit. G-3 is proposed as SPEC-013; G-2 is deferred
+> pending a field case (SPEC-014 §4).
 
 ## Objective
 
