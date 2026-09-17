@@ -160,8 +160,11 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
     }
     case 'storage.applied':
       return 'objects created';
-    case 'storage.previewed':
-      return 'awaiting approval';
+    case 'storage.previewed': {
+      // P-22: a plan with blockers is not awaiting anyone's approval.
+      const blockers = list(deciding.data?.plan?.blockers).length;
+      return blockers ? `${blockers} blocker${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
+    }
     case 'verify.completed': {
       const mismatches = list(report?.checks).filter((check: { status: string }) => check.status !== 'pass').length;
       return mismatches ? `${mismatches} to review` : 'configuration matches';
