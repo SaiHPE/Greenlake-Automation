@@ -11,9 +11,10 @@
 > `docs/validation/2026-09-12-rack13arcus-live-test-2.md`) and twice by the session runner
 > (SPEC-006; 38/39 on 2026-09-15, the one FAIL a runner fault). Areas 2, 4 and the block half of 8–9
 > are therefore **live-verified for FC on one array**; the findings register
-> (`docs/ux/FINDINGS-2026-09-13.md`) has no open defect or UX row. Still owed live: S-3 (failure
-> paths), S-5 (resume), S-6 (same sheet twice), S-9 (iSCSI), G-1 (zoning apply, training team), and
-> the init track (needs a factory-fresh array).
+> (`docs/ux/FINDINGS-2026-09-13.md`) has no open defect or UX row. **G-1 closed 2026-09-17**: a
+> tool-generated zone, pasted as rendered, logged a host into the array. S-3 (failure paths) done
+> 2026-09-17; S-2/S-6 covered by the runner. Still owed live: S-5 (resume), S-9 (iSCSI, feasible
+> here), and the init track (needs a factory-fresh array).
 
 ## Objective
 
