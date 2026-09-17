@@ -148,6 +148,10 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
         </Surface>
       )}
 
+      {report?.error && (
+        <InlineNotification tone="critical" title="Zoning could not be checked" message={report.error} />
+      )}
+
       {report?.proper && (
         <InlineNotification
           tone="ok"
