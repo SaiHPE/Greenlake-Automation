@@ -645,7 +645,9 @@ def discover(
                "Resolving fabrics…")
             report.notes.extend(_refine_fabrics_from_switches(cli, report.array_ports, progress=_p))
     except Exception as exc:  # noqa: BLE001
-        report.notes.append(f"Array discovery (SSH) failed: {exc}")
+        # D-10 (S-3, 2026-09-17): the array is THE subject of discovery. Without it the zoning check has
+        # no ports and the plan cannot read WSAPI, so this is the step's error, not note 1 of 7.
+        report.error = f"Array discovery (SSH) failed: {exc}"
 
     # 2) vCenter: each ESXi host's FC HBA WWPNs + OS.
     try:

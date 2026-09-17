@@ -126,7 +126,10 @@ function Invoke-Json {
     $r = $_.Exception.Response
     if ($null -eq $r) { throw }
     $status = [int]$r.StatusCode
-    $reader = New-Object System.IO.StreamReader($r.GetResponseStream(), [System.Text.Encoding]::UTF8); $text = $reader.ReadToEnd(); $reader.Close()
+    # 5.1 puts the body of a 4xx in ErrorDetails; the response stream is already at its end by the
+    # time the catch runs (S-13 and S-14 both recorded the conflict refusal as 'HTTP 409:  ').
+    $text = $_.ErrorDetails.Message
+    if (-not $text) { try { $s = $r.GetResponseStream(); if ($s.CanSeek) { $s.Position = 0 }; $reader = New-Object System.IO.StreamReader($s, [System.Text.Encoding]::UTF8); $text = $reader.ReadToEnd(); $reader.Close() } catch { $text = '' } }
   } catch {
     if ($_.Exception.Response) {
       $status = [int]$_.Exception.Response.StatusCode; $text = $_.ErrorDetails.Message
