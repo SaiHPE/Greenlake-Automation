@@ -142,6 +142,9 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
   const existing = count('exists');
   const conflicts = count('conflict');
   const blocked = !!plan && plan.blockers.length > 0;
+  // P-22 (2026-09-17): an empty host set is a blocker but not a conflict; the banner used to say
+  // "same name, different attributes" for it. Conflicts are the rows the plan marked so.
+  const conflictRows = plan ? plan.actions.filter((a) => a.state === 'conflict').length : 0;
   const created = result ? result.outcomes.filter((outcome) => outcome.status === 'created').length : 0;
   const updated = result ? result.outcomes.filter((outcome) => outcome.status === 'updated').length : 0;
   const failed = result ? result.outcomes.filter((outcome) => outcome.status === 'failed').length : 0;
@@ -159,7 +162,15 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
     <StepShell
       title="Provision storage"
       description="Creates the hosts, host sets, volumes and exports on the array. No writes occur until the plan is approved."
-      stateDetail={result ? 'objects created' : plan ? 'awaiting approval' : undefined}
+      stateDetail={
+        result
+          ? 'objects created'
+          : blocked
+            ? `${plan!.blockers.length} blocker${plan!.blockers.length === 1 ? '' : 's'} to resolve`
+            : plan
+              ? 'awaiting approval'
+              : undefined
+      }
       error={error}
       onDismissError={() => setError(null)}
       activityEmpty="No plan yet. Nothing is created until a plan is built and confirmed. Pick the host-set members and the exports in the Compose card below, then build the plan to see what will be created, what already exists and what conflicts."
@@ -167,11 +178,16 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
       gate={
         plan && !plan.error && !result
           ? blocked
-            ? {
-                title: 'The plan has conflicts',
-                message:
-                  'Something on the array has the same name as an object in this plan but different attributes. Resolve it on the array (or change the plan), then rebuild.',
-              }
+            ? conflictRows > 0
+              ? {
+                  title: 'The plan has conflicts',
+                  message:
+                    'Something on the array has the same name as an object in this plan but different attributes. Resolve it on the array (or change the plan), then rebuild.',
+                }
+              : {
+                  title: 'The plan cannot be applied yet',
+                  message: plan.blockers.join(' '),
+                }
             : {
                 title: 'Review the plan, then approve creation',
                 message:
