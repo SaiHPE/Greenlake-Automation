@@ -306,10 +306,9 @@ It writes `session-<stamp>\report.md` (PASS/FAIL per check) and keeps every resp
 the docx and the SSH transcript in that folder; exit code 1 on any FAIL. Send the folder back.
 It never writes to a switch and never issues a CLI command the tool did not generate.
 
-**Run history lives next to the exe** (`.alletra_onboard\state.db` in the folder you start it from).
-A new zip extracted to a new folder starts with no runs; to keep them, extract the new zip over the
-old folder or copy `.alletra_onboard\` across. *Open another run* in the wizard bar lists every run
-the folder holds.
+**Run history** lives in `%LOCALAPPDATA%\AlletraOnboard\` (from rc.28), so a new zip in a new folder
+keeps every earlier run; the console banner prints the folder. An older `.alletra_onboard\state.db`
+beside the exe is still used when present. *Open another run* in the wizard bar lists every run.
 
 ---
 
@@ -338,7 +337,7 @@ Gotchas:
 The per-area status table and the order of work live in **[docs/SCOPE.md](docs/SCOPE.md)**; the
 incident→rule register is [docs/LESSONS.md](docs/LESSONS.md); the latest hardware run is
 [docs/validation/2026-09-12-rack13arcus-live-test-2.md](docs/validation/2026-09-12-rack13arcus-live-test-2.md).
-In short (as of v0.16.0-rc.27, 2026-09-17):
+In short (as of v0.16.0-rc.28, 2026-09-18):
 
 1. **The provisioning track is live-verified** (FC, one array, rack13arcus): twice by hand across
    2026-09-13/14 (S-1, S-2, S-4, S-8, S-11) and twice by the self-checking session runner
@@ -346,8 +345,8 @@ In short (as of v0.16.0-rc.27, 2026-09-17):
    defect and UX finding in [docs/ux/FINDINGS-2026-09-13.md](docs/ux/FINDINGS-2026-09-13.md) is closed
    (SPEC-001…012). **Zoning apply proven 2026-09-17 (G-1)**: the tool's F1 command set, pasted as
    generated, logged `localhost.localdomain` into array port 0:3:4. Failure paths (S-3) seen 2026-09-17
-   (found D-10/D-11/Z-7 → rc.27). Still owed live: reload/resume (S-5), iSCSI (S-9), the init track on a
-   factory-fresh array.
+   (found D-10/D-11/Z-7 → rc.27). Resume (S-5) seen live 2026-09-17. Still owed live: iSCSI (S-9, scripted), the ESXi
+   view's *ok* state (SPEC-013, rc.28), the init track on a factory-fresh array.
 
 2. **Windows/Linux hosts not in vCenter** are only inferred array-side or typed into the Hosts
    tab. Agentless log-in discovery (OS / WWPN / multipathing) is the next feature.

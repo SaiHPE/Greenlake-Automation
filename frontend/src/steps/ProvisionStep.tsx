@@ -341,7 +341,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
 
       <Surface
         title="Path verification"
-        description="Reads the array back after provisioning and reports, per host: how many LUNs are live, over how many HBAs, how many paths each LUN has, and on which fabrics. Report only — it never gates the run."
+        description="Reads the array back after provisioning and reports, per host: how many LUNs are live, over how many HBAs, how many paths each LUN has, and on which fabrics. For ESXi hosts it also reads the host's own multipath view through vCenter (a new LUN needs a storage rescan before ESXi sees it). Report only — it never gates the run."
         actions={<Button busy={running} label="Verify paths" onClick={call(() => verifyPaths(runId))} />}
       >
         {paths?.error && <InlineNotification tone="critical" title="Path verification failed" message={paths.error} />}
@@ -363,17 +363,39 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
               },
               {
                 property: 'detail',
-                header: 'Detail',
+                header: 'Array view',
                 render: (host: HostPathStatus) => (
                   <Text size="small" color="text-weak">
                     {host.detail}
                   </Text>
                 ),
               },
+              {
+                property: 'esxi_note',
+                header: 'ESXi view',
+                render: (host: HostPathStatus) => {
+                  // SPEC-013: the host's own multipath view; a second opinion, never the verdict.
+                  const s = host.esxi_state ?? 'not_checked';
+                  const state: StepState =
+                    s === 'ok' ? 'complete' : s === 'degraded' || s === 'absent' ? 'action_required' : s === 'not_read' ? 'failed' : 'not_started';
+                  const label =
+                    s === 'ok' ? 'Visible' : s === 'degraded' ? 'Degraded' : s === 'absent' ? 'Rescan needed' : s === 'not_read' ? 'Not read' : s === 'not_in_vcenter' ? 'n/a' : '—';
+                  return (
+                    <Box gap="xxsmall">
+                      <StatusIndicator state={state} label={label} />
+                      {host.esxi_note && (
+                        <Text size="xsmall" color="text-weak">
+                          {host.esxi_note}
+                        </Text>
+                      )}
+                    </Box>
+                  );
+                },
+              },
             ]}
             data={paths.hosts}
             primaryKey="host"
-            a11yTitle="Path verification: one row per host, with live paths per LUN and fabric"
+            a11yTitle="Path verification: one row per host, the array's view and the ESXi host's view"
           />
         )}
         {paths?.notes.length ? (

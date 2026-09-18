@@ -19,10 +19,12 @@ from __future__ import annotations
 import re
 
 from alletra_onboard.application.provisioning import storage_provision
-from alletra_onboard.application.provisioning.clients import make_array_cli
+from alletra_onboard.application.provisioning.clients import make_array_cli, make_vcenter, make_wsapi
 from alletra_onboard.domain.shared import normalize_wwpn
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
+    EsxiLun,
+    EsxiLunPaths,
     HostPathStatus,
     PathVerification,
     ProvisioningIntent,
@@ -174,12 +176,90 @@ def verify_paths(
     return report
 
 
+def attach_esxi_view(
+    report: PathVerification,
+    expected_by_host: dict[str, set[str]],
+    esxi_luns: list[EsxiLun] | None,
+    wwn_by_volume: dict[str, str] | None,
+    esxi_hosts: set[str],
+    *,
+    read_error: str = "",
+) -> PathVerification:
+    """SPEC-013: add the HOST's view to each row. Joined on the volume WWN (R2) — the ESXi canonical
+    name is `naa.<wwn lower-case>`; names are never compared. The array-side `verdict` is untouched
+    (see HostPathStatus): a LUN exported a minute ago is absent from ESXi until a rescan, and the one
+    actionable sentence for that is R4's, not a downgrade."""
+    if read_error:
+        for row in report.hosts:
+            row.esxi_state = "not_read"
+            row.esxi_note = f"ESXi view: not read ({read_error})"
+        return report
+    wwns = {name: w.lower() for name, w in (wwn_by_volume or {}).items() if w}
+    by_host_naa: dict[str, dict[str, EsxiLun]] = {}
+    for lun in esxi_luns or []:
+        by_host_naa.setdefault(lun.host_name, {})[lun.naa] = lun
+    for row in report.hosts:
+        expected = sorted(expected_by_host.get(row.host, set()))
+        if row.host not in esxi_hosts:
+            row.esxi_state = "not_in_vcenter"
+            row.esxi_note = "ESXi view: n/a — not an ESXi host in this vCenter"
+            continue
+        if not expected:
+            row.esxi_state = "not_checked"
+            row.esxi_note = "ESXi view: nothing exported to this host"
+            continue
+        devices = by_host_naa.get(row.host, {})
+        luns: list[EsxiLunPaths] = []
+        for vol in expected:
+            wwn = wwns.get(vol, "")
+            naa = f"naa.{wwn}" if wwn else ""
+            dev = devices.get(naa) if naa else None
+            luns.append(EsxiLunPaths(
+                volume=vol, naa=naa, present=dev is not None,
+                paths_total=dev.paths_total if dev else 0, paths_active=dev.paths_active if dev else 0,
+                paths_dead=dev.paths_dead if dev else 0, adapters=list(dev.adapters) if dev else [],
+            ))
+        row.esxi_luns = luns
+        absent = [lp.volume for lp in luns if not lp.present]
+        no_wwn = [lp.volume for lp in luns if not lp.naa]
+        if absent:
+            row.esxi_state = "absent"
+            seen = len(luns) - len(absent)
+            row.esxi_note = (
+                f"ESXi sees {seen} of {len(luns)} exported volume(s); no device yet for {', '.join(absent)} — "
+                "rescan the host's storage adapters in vCenter, then Verify paths again"
+            )
+            if no_wwn:
+                row.esxi_note += f" (no WWN read for {', '.join(no_wwn)})"
+            continue
+        active_min = min(lp.paths_active for lp in luns)
+        total_min = min(lp.paths_total for lp in luns)
+        dead = sum(lp.paths_dead for lp in luns)
+        adapters = sorted({a for lp in luns for a in lp.adapters})
+        summary = (
+            f"ESXi sees {len(luns)} volume(s) · {active_min}"
+            + (f"–{max(lp.paths_active for lp in luns)}" if any(lp.paths_active != active_min for lp in luns) else "")
+            + f" active of {total_min} path(s) per LUN"
+            + (f" · {', '.join(adapters)}" if adapters else "")
+        )
+        if active_min >= 2 and dead == 0:
+            row.esxi_state = "ok"
+            row.esxi_note = summary
+        else:
+            row.esxi_state = "degraded"
+            why = f"{dead} dead path(s)" if dead else "one active path"
+            row.esxi_note = f"{summary} — {why}"
+    return report
+
+
 def verify_provisioned_paths(
     intent: ProvisioningIntent,
     discovery: DiscoveryReport,
     *,
     reachable_hosts: set[str],
     array_cli_factory=make_array_cli,
+    vcenter_factory=make_vcenter,
+    wsapi_factory=make_wsapi,
     zoning_plan: dict | None = None,
 ) -> PathVerification:
     """Flow hook: read `showvlun -a` from the array (read-only SSH) and verify the exported LUNs are
@@ -214,7 +294,26 @@ def verify_provisioned_paths(
     for p in discovery.array_ports:
         if p.protocol == "fc" and p.fabric and getattr(p, "fabric_switch", ""):
             switch_by_fabric.setdefault(p.fabric, p.fabric_switch)
-    return verify_paths(
+    report = verify_paths(
         dict(expected_by_host), parse_showvlun_active(text), fabric_by_port, wwpns_by_host,
         switch_by_fabric=switch_by_fabric,
     )
+    if not report.hosts:
+        return report
+    # SPEC-013: the host's own view. Two more reads, both read-only, both degrading to a note (R6).
+    esxi_hosts = {h.host_name for h in discovery.host_hbas}
+    read_error = ""
+    wwn_by_volume: dict[str, str] = {}
+    esxi_luns: list[EsxiLun] = []
+    try:
+        with wsapi_factory(intent.array) as wsapi:
+            wwn_by_volume = {v.name: v.wwn for v in wsapi.volumes() if v.wwn}
+    except Exception as exc:  # noqa: BLE001
+        read_error = f"volume WWNs over WSAPI: {str(exc)[:160]}"
+    if not read_error and esxi_hosts & set(expected_by_host):
+        try:
+            with vcenter_factory(intent.vcenter) as vcenter:
+                esxi_luns = vcenter.host_luns()
+        except Exception as exc:  # noqa: BLE001
+            read_error = str(exc)[:200]
+    return attach_esxi_view(report, dict(expected_by_host), esxi_luns, wwn_by_volume, esxi_hosts, read_error=read_error)

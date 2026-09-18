@@ -253,8 +253,9 @@ def test_provisioning_record_renders_outcomes_timestamp_and_paths(tmp_path):
     rec = _tables_by_header(doc)[("Kind", "Name", "Result", "Detail")]
     assert ["host", "10.132.30.136", "Updated", "adds 1 WWN"] in rec
     assert ["vlun", "zz_t2_vvs", "Already existed", "LUN 0, LUN 1 → set:zz_t2_hs"] in rec
-    verify = _tables_by_header(doc)[("Host", "Verdict", "Detail")]
+    verify = _tables_by_header(doc)[("Host", "Verdict", "Array view", "ESXi view")]   # SPEC-013 R5
     assert verify[0][0] == "10.132.30.136" and verify[0][1] == "Live"
+    assert verify[0][3] == "not read"   # an older report with no esxi_note says so, never blank
 
 
 def test_provisioning_record_states_plan_without_apply(tmp_path):

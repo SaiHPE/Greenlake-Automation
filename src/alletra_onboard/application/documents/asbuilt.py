@@ -778,10 +778,12 @@ def _add_provisioning_section(doc, data: AsBuiltData) -> None:
         return
     hosts = paths.get("hosts", [])
     if hosts:
-        _table(doc, ["Host", "Verdict", "Detail"],
-               [[h.get("host", ""), _VERDICT_LABEL.get(h.get("verdict", ""), h.get("verdict", "")), h.get("detail", "")]
+        # SPEC-013 R5: the array's view and the ESXi host's view side by side.
+        _table(doc, ["Host", "Verdict", "Array view", "ESXi view"],
+               [[h.get("host", ""), _VERDICT_LABEL.get(h.get("verdict", ""), h.get("verdict", "")), h.get("detail", ""),
+                 h.get("esxi_note") or "not read"]
                 for h in hosts],
-               widths=[0.25, 0.15, 0.60])
+               widths=[0.20, 0.12, 0.38, 0.30])
     else:
         _para(doc, "No target hosts to verify.")
 

@@ -355,6 +355,37 @@ class VlunTemplate(BaseModel):
 
 PathVerdict = Literal["live", "partial", "no_path"]
 
+# SPEC-013: ok = every exported volume visible with >=2 active paths; degraded = visible but one
+# active path or a dead path somewhere; absent = at least one exported volume ESXi has no device for
+# (rescan); not_in_vcenter = the host is not an ESXi host this vCenter knows; not_read = vCenter or
+# the volume WWNs could not be read; not_checked = nothing exported / older report.
+EsxiViewState = Literal["ok", "degraded", "absent", "not_in_vcenter", "not_read", "not_checked"]
+
+
+class EsxiLun(BaseModel):
+    """One SCSI device on one ESXi host, from vCenter's storageDevice (read-only): the `naa.` canonical
+    name (the array volume's WWN, lower-case) and its multipath state."""
+
+    host_name: str
+    naa: str                                    # canonical name, e.g. naa.60002ac0...02d495 (lower-case)
+    paths_total: int = 0
+    paths_active: int = 0                       # pathState == active
+    paths_dead: int = 0                         # pathState == dead
+    adapters: list[str] = Field(default_factory=list)  # vmhba names carrying a path
+    operational_state: str = ""                 # e.g. ok | error | off | degraded (first state string)
+
+
+class EsxiLunPaths(BaseModel):
+    """An exported volume as ONE ESXi host sees it (SPEC-013 R3)."""
+
+    volume: str
+    naa: str = ""                               # "" when the array reported no WWN for the volume
+    present: bool = False                       # ESXi has a device for it
+    paths_total: int = 0
+    paths_active: int = 0
+    paths_dead: int = 0
+    adapters: list[str] = Field(default_factory=list)
+
 
 class VolumePath(BaseModel):
     """One ACTIVE VLUN path from `showvlun -a`: a volume live to a host over one HBA WWPN + array port."""
@@ -381,6 +412,12 @@ class HostPathStatus(BaseModel):
     live_volumes: list[str] = Field(default_factory=list)  # target volumes with >=1 active path here
     dead_volumes: list[str] = Field(default_factory=list)  # target volumes exported but with NO path
     detail: str = ""
+    # SPEC-013 (G-3): the HOST's own view, read through vCenter. Never changes `verdict` — a LUN
+    # exported a minute ago is invisible to ESXi until the operator rescans, so downgrading on it
+    # would make every fresh export read no_path. It is a second column with its own state.
+    esxi_state: EsxiViewState = "not_checked"
+    esxi_luns: list[EsxiLunPaths] = Field(default_factory=list)
+    esxi_note: str = ""
 
 
 class PathVerification(BaseModel):
