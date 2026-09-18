@@ -132,6 +132,23 @@ def _force_utf8() -> None:
             pass
 
 
+def _place_state() -> None:
+    """X-10 (2026-09-17): an upgrade that replaces the exe folder silently started from zero, because
+    run history lived beside the exe. Frozen builds now keep it under %LOCALAPPDATA%\\AlletraOnboard,
+    which survives any number of zips. A store that ALREADY exists beside the exe is honoured (nobody
+    loses today's history on the move); .env stays beside the exe. Explicit env vars win."""
+    if "STATE_DATABASE_PATH" in os.environ or Path(".alletra_onboard/state.db").is_file():
+        return
+    base = os.environ.get("LOCALAPPDATA") or os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    root = Path(base) / "AlletraOnboard"
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+    os.environ.setdefault("STATE_DATABASE_PATH", str(root / "state.db"))
+    os.environ.setdefault("ARTIFACT_DIR", str(root / "artifacts"))
+
+
 def _apply_build_profile() -> None:
     """The Initialization-accelerator build bundles ``build_profile.txt`` (see alletra_onboard.spec);
     read it and export ALLETRA_PROFILE before any settings load, so the app restricts itself. No-op
@@ -155,8 +172,10 @@ def main() -> None:
         sys.exit(selftest())
 
     if getattr(sys, "frozen", False):
-        # Keep .env / state / artifacts beside the .exe, not in System32 (double-click cwd).
+        # Keep .env beside the .exe, not in System32 (double-click cwd); run history goes to
+        # %LOCALAPPDATA% unless a store is already here (X-10).
         os.chdir(Path(sys.executable).resolve().parent)
+        _place_state()
         ensure_chromium()
 
     import uvicorn
@@ -167,6 +186,7 @@ def main() -> None:
     settings = load_settings()
     address = f"http://{settings.api_host}:{settings.api_port}"
     print(f"{settings.app_title} — serving the web app at {address}")
+    print(f"Run history: {Path(settings.state_database_path).resolve().parent}")
     print("Leave this window open. Close it (or press Ctrl+C) to stop.")
 
     import threading
