@@ -360,10 +360,17 @@ export const storageApply = (runId: string) => request<{ run: RunRecord }>('POST
 // Tier-2 path verification (ADR 0010): read `showvlun -a` back and report, per host, whether the
 // exported LUN is actually live and over how many fabrics. Read-only; report-only (never gates).
 export type PathVerdict = 'live' | 'partial' | 'no_path';
+// SPEC-013: the ESXi host's own view, read through vCenter. Never changes the verdict.
+export type EsxiViewState = 'ok' | 'degraded' | 'absent' | 'not_in_vcenter' | 'not_read' | 'not_checked';
+export interface EsxiLunPaths {
+  volume: string; naa: string; present: boolean;
+  paths_total: number; paths_active: number; paths_dead: number; adapters: string[];
+}
 export interface HostPathStatus {
   host: string; verdict: PathVerdict;
   hbas_with_paths: number; fabrics: string[];
   live_volumes: string[]; dead_volumes: string[]; detail: string;
+  esxi_state?: EsxiViewState; esxi_luns?: EsxiLunPaths[]; esxi_note?: string;
 }
 export interface PathVerification { hosts: HostPathStatus[]; notes: string[]; error: string | null; }
 export const verifyPaths = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/verify-paths`);
