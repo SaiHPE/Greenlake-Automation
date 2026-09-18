@@ -486,6 +486,11 @@ try {
   Check "paths: $HostName is 'live'" ($ph -and $ph.verdict -eq 'live') $(if ($ph) { $ph.detail } else { 'host not in report' }) | Out-Null
   Check 'paths: lun_count == 2' ($ph -and $ph.lun_count -eq 2) $(if ($ph) { "lun_count=$($ph.lun_count)" } else { '' }) | Out-Null
   Check 'paths: paths_per_lun >= 2' ($ph -and $ph.paths_per_lun -ge 2) $(if ($ph) { "paths_per_lun=$($ph.paths_per_lun)" } else { '' }) | Out-Null
+  # ---- rc.28 SPEC-013 (G-3): the ESXi host's own view was READ through vCenter. A LUN exported seconds
+  # ago is normally 'absent' until the host rescans - that is the expected honest answer, not a FAIL.
+  $esxiRead = $ph -and $ph.esxi_state -and (@('ok', 'degraded', 'absent') -contains $ph.esxi_state)
+  Check "paths: ESXi view read for $HostName (ok/degraded/absent, never not_read)" $esxiRead $(if ($ph) { "esxi_state=$($ph.esxi_state): $($ph.esxi_note)" } else { '' }) | Out-Null
+  Check 'paths: ESXi view lists both exported volumes by WWN' ($ph -and @($ph.esxi_luns).Count -eq 2 -and @($ph.esxi_luns | Where-Object { $_.naa -like 'naa.60002ac0*' }).Count -eq 2) $(if ($ph) { (@($ph.esxi_luns) | ForEach-Object { "$($_.volume)=$($_.naa) present=$($_.present) active=$($_.paths_active)/$($_.paths_total)" }) -join '; ' } else { '' }) | Out-Null
 
   $Run1Removals = @($res1.removals)
   $order = @{ vlun = 0; vvset = 1; volume = 2; hostset = 3; host = 4 }

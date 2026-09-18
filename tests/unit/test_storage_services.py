@@ -1216,11 +1216,21 @@ def test_verify_provisioned_paths_reads_showvlun_and_reports():
         intent, d,
         reachable_hosts={"CRV_VZ_DL360G11D24U25"},
         array_cli_factory=lambda creds: fake,
+        wsapi_factory=lambda creds: _Unreachable(),      # SPEC-013 reads degrade to a note (R6)
     )
 
     assert "showvlun -a" in fake.cmds                        # it read the array, read-only
     h = next(x for x in rep.hosts if x.host == "CRV_VZ_DL360G11D24U25")
     assert h.verdict == "live" and "VZ_ESXi_Profile_bk" in h.live_volumes
+    assert h.esxi_state == "not_read" and h.esxi_note.startswith("ESXi view: not read")
+
+
+class _Unreachable:
+    def __enter__(self):
+        raise RuntimeError("off")
+
+    def __exit__(self, *a):
+        return False
 
 
 def test_verify_targets_only_the_hosts_something_was_exported_to():
@@ -1245,6 +1255,7 @@ def test_verify_targets_only_the_hosts_something_was_exported_to():
         intent, _two_hosts(),
         reachable_hosts={"esx1"},
         array_cli_factory=lambda creds: _NoVluns(),
+        wsapi_factory=lambda creds: _Unreachable(),
     )
     assert [h.host for h in rep.hosts] == ["esx1"]       # esx2 was never presented anything
     assert rep.hosts[0].verdict == "no_path"
