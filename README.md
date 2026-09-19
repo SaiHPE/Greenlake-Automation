@@ -337,7 +337,7 @@ Gotchas:
 The per-area status table and the order of work live in **[docs/SCOPE.md](docs/SCOPE.md)**; the
 incident→rule register is [docs/LESSONS.md](docs/LESSONS.md); the latest hardware run is
 [docs/validation/2026-09-12-rack13arcus-live-test-2.md](docs/validation/2026-09-12-rack13arcus-live-test-2.md).
-In short (as of v0.16.0-rc.28, 2026-09-18):
+In short (as of **v0.16.0**, 2026-09-19 — the first non-pre-release):
 
 1. **The provisioning track is live-verified** (FC, one array, rack13arcus): twice by hand across
    2026-09-13/14 (S-1, S-2, S-4, S-8, S-11) and twice by the self-checking session runner
@@ -345,8 +345,13 @@ In short (as of v0.16.0-rc.28, 2026-09-18):
    defect and UX finding in [docs/ux/FINDINGS-2026-09-13.md](docs/ux/FINDINGS-2026-09-13.md) is closed
    (SPEC-001…012). **Zoning apply proven 2026-09-17 (G-1)**: the tool's F1 command set, pasted as
    generated, logged `localhost.localdomain` into array port 0:3:4. Failure paths (S-3) seen 2026-09-17
-   (found D-10/D-11/Z-7 → rc.27). Resume (S-5) seen live 2026-09-17. Still owed live: iSCSI (S-9, scripted), the ESXi
-   view's *ok* state (SPEC-013, rc.28), the init track on a factory-fresh array.
+   (found D-10/D-11/Z-7 → rc.27). Resume (S-5) seen live 2026-09-17. The session runner passed 58/58 app assertions on rc.28 (2026-09-19; SPEC-013's ESXi view read
+   live). Still owed live: iSCSI (S-9, scripted), the ESXi view's *Visible* state after a rescan.
+
+   **The initialization track (GreenLake → Cloud Connectivity → DSCC Set Up System) is built and
+   unit-tested but has NOT been run end to end on a factory-fresh array.** Its GreenLake REST
+   half was proven live in June 2026; the two browser wizards are built against captured UI and
+   need a real unit. Treat it as *built — pending live run* until `docs/validation/` says otherwise.
 
 2. **Windows/Linux hosts not in vCenter** are only inferred array-side or typed into the Hosts
    tab. Agentless log-in discovery (OS / WWPN / multipathing) is the next feature.
