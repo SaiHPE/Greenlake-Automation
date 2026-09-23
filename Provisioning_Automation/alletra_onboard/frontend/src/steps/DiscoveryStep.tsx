@@ -60,8 +60,21 @@ const HOST_COLUMNS = [
           <Text size="xsmall" color="text-weak">on the array: {h.array_host_name}</Text>
         )}
         {h.address && <Text size="xsmall" color="text-weak" style={mono}>{h.address}</Text>}
+        {h.lookup && (
+          <Text size="xsmall" color={h.lookup.startsWith('not found') ? 'status-warning' : 'text-weak'}>sheet host {h.lookup}</Text>
+        )}
       </Box>
     ),
+  },
+  {
+    property: 'serial_number',
+    header: 'Serial number',
+    render: (h: DiscoveredHost) =>
+      h.serial_number ? (
+        <Text size="small" style={mono}>{h.serial_number}</Text>
+      ) : (
+        <Text size="small" color="text-weak">not reported</Text>
+      ),
   },
   {
     property: 'os',
@@ -421,11 +434,17 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
 
       {report && hosts.length > 0 && (
         <>
-          <HostsTable
-            title="Hosts in this run"
-            description="Servers the sheet's vCenter reports, the sheet declares, or a sheet host set names. These are the hosts provisioning may create or present to."
-            rows={inRun}
-          />
+          {/* SPEC-014: the run's hosts, one table per OS. */}
+          {(Object.keys(OS_LABEL) as DiscoveredHost['os'][])
+            .filter((os) => inRun.some((h) => h.os === os))
+            .map((os) => (
+              <HostsTable
+                key={os}
+                title={`Hosts in this run — ${os === 'unknown' ? 'OS not reported' : OS_LABEL[os]}`}
+                description="Servers the sheet's vCenter reports, the sheet declares, or a sheet host set names. A sheet host typed without a WWPN/IQN is looked up in vCenter and on the array; its serial number, WWPNs and IQN are filled in from what was found."
+                rows={inRun.filter((h) => h.os === os)}
+              />
+            ))}
           <HostsTable
             title="Other hosts on this array"
             description="Every other server the array can see — other tenants of a shared array. Listed so you know what not to touch; this run never changes them."

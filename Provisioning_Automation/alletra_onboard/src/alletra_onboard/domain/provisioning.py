@@ -62,8 +62,8 @@ class DeclaredHost(BaseModel):
     HPE's documented order supports this: `createhost -iscsi <name> <iqn>` takes an IQN the array has
     never seen, and the VME guidance says to register a host before it establishes a session.
 
-    Either transport may be blank. A host with neither is rejected at parse time — it identifies
-    nothing and could not be created.
+    Either transport may be blank. A host with neither is a lookup request: discovery resolves it by
+    name/IP from vCenter or the array (SPEC-014 R1), and reports it as not found otherwise.
     """
 
     name: str

@@ -17,6 +17,7 @@ from collections import OrderedDict
 from typing import Callable
 
 from alletra_onboard.application.provisioning.clients import make_array_cli, make_vcenter
+from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
 from alletra_onboard.domain.shared import Fabric, normalize_wwpn
 from alletra_onboard.domain.discovery import (
     ArrayHost,
@@ -319,6 +320,25 @@ def assemble_hosts(
         if hba.fabric and hba.fabric not in host.fabrics:
             host.fabrics.append(hba.fabric)
 
+    # 1b) vCenter host-level facts: serial number, and iSCSI IQNs (joined like any other initiator).
+    for ident in report.host_identities:
+        host = by_vcenter_name.get(ident.host_name)
+        if host is None:
+            if not ident.iqns:
+                continue          # no FC and no iSCSI adapter: nothing to provision to
+            host = host_for(ident.iqns, ident.host_name, "vcenter")
+            host.name = ident.host_name
+            host.os = "esxi"
+            by_vcenter_name[ident.host_name] = host
+        if ident.os and not host.os_text:
+            host.os_text = ident.os
+        if ident.serial_number and not host.serial_number:
+            host.serial_number = ident.serial_number
+        for iqn in ident.iqns:
+            if iqn not in host.iqns:
+                host.iqns.append(iqn)
+            by_initiator[iqn] = host
+
     # 2) The array: what is actually logged in, plus every iSCSI initiator.
     port_fabric = {p.label: p.fabric for p in report.array_ports if p.protocol == "fc" and p.fabric}
     # UNCLAIMED logins are not one host. They are the array's bucket for every initiator no host
@@ -391,15 +411,22 @@ def assemble_hosts(
         if host.os == "unknown":
             host.os = os_from_persona(ah.persona)
 
-    # 3) Hosts the operator DECLARED in the sheet, for servers nothing can see yet. Merged on the
-    #    initiator id like every other source, so a declared host that later comes online joins its
-    #    own discovered record instead of appearing twice. Its OS and name are authoritative: a human
-    #    typed them, and they are the only source for a machine no wire is carrying.
-    for dh in declared or []:
+    # 3) Hosts the operator DECLARED in the sheet. Merged on the initiator id like every other
+    #    source, so a declared host that later comes online joins its own discovered record instead
+    #    of appearing twice. A row typed without ids is looked up first (SPEC-014 R1) and, if nothing
+    #    finds it, still listed so the operator sees it was not found rather than silently dropped.
+    declared, lookup = resolve_declared_hosts(declared, report)
+    for dh in declared:
         ids = [normalize_wwpn(w) for w in dh.wwpns] + ([dh.iqn] if dh.iqn else [])
         if not ids:
+            hosts.append(DiscoveredHost(
+                name=dh.name, os=dh.os or "unknown", address=dh.address, sources=["sheet"],
+                lookup=lookup.get(dh.name, ""),
+            ))
             continue
         host = host_for(ids, dh.name, "sheet")
+        if dh.name in lookup:
+            host.lookup = lookup[dh.name]
         host.name = dh.name
         if dh.os:
             host.os = dh.os
@@ -654,6 +681,10 @@ def discover(
         _p(f"Connecting to vCenter {intent.vcenter.host} (read-only)…")
         with vcenter_factory(intent.vcenter) as vcenter:
             report.host_hbas = vcenter.host_fc_hbas()
+            try:
+                report.host_identities = vcenter.host_identities()
+            except Exception as exc:  # noqa: BLE001 - serial/IQN are enrichment; the HBAs stand alone
+                report.notes.append(f"vCenter host serial/IQN read failed: {exc}")
         _p(f"vCenter: {len(report.host_hbas)} ESXi host HBA(s).")
     except Exception as exc:  # noqa: BLE001
         report.notes.append(f"vCenter discovery failed: {exc}")
@@ -675,6 +706,9 @@ def discover(
     #
     #    No `ns_os` yet: the fabric name server's OS string is read by the ZONING step, which logs
     #    into the switches; discovery deliberately needs only the array and vCenter, and the sheet
+    for host in report.hosts:
+        if host.lookup.startswith("not found"):
+            report.notes.append(f"Sheet host {host.name}: {host.lookup}.")
     #    makes switch credentials optional. So an FC host that is not in vCenter is reported with an
     #    unknown OS rather than guessed at. Wiring nsshow in here would make switch credentials a
     #    discovery prerequisite, which is a bigger change than this one.

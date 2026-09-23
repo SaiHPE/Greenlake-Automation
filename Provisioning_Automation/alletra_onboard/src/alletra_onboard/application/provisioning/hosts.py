@@ -11,12 +11,72 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
-from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.discovery import DiscoveryReport, node_name_from_iqn
 from alletra_onboard.domain.provisioning import DeclaredHost, ProvisionableHost, persona_for_os
 from alletra_onboard.domain.shared import normalize_wwpn
 
 # The array files every login with no host object under one nameless row (discovery.UNCLAIMED_HOST).
 _NAMELESS = ""
+
+
+def _short(name: str) -> str:
+    return (name or "").strip().lower().split(".")[0]
+
+
+def resolve_declared_hosts(
+    declared_hosts: list[DeclaredHost] | None, discovery: DiscoveryReport,
+) -> tuple[list[DeclaredHost], dict[str, str]]:
+    """SPEC-014 R1: fill in the initiators of a sheet host typed with a name (and IP) but no WWPN/IQN.
+
+    Looked up, in order: the vCenter host of that name or IP; the array host object of that name; an
+    array iSCSI login from that IP; an IQN whose node name is the host's short name. Returns (hosts
+    with ids filled where found, name -> how it was found or why not). Rows that carried ids are
+    returned unchanged and have no entry."""
+    by_vcenter: dict[str, list[str]] = {}
+    for hba in discovery.host_hbas:
+        by_vcenter.setdefault(hba.host_name, []).append(normalize_wwpn(hba.wwpn))
+    vcenter_iqns = {i.host_name: i.iqns for i in discovery.host_identities}
+    out: list[DeclaredHost] = []
+    how: dict[str, str] = {}
+    for d in declared_hosts or []:
+        if d.wwpns or d.iqn:
+            out.append(d)
+            continue
+        keys = {k for k in (d.name.strip().lower(), d.address.strip().lower()) if k}
+        found = next((n for n in {*by_vcenter, *vcenter_iqns} if n.lower() in keys), None)
+        if found:
+            iqns = vcenter_iqns.get(found, [])
+            out.append(d.model_copy(update={"wwpns": by_vcenter.get(found, []), "iqn": iqns[0] if iqns else ""}))
+            how[d.name] = f"found in vCenter as {found}"
+            continue
+        ah = next((a for a in discovery.array_hosts if a.name and a.name.lower() == d.name.strip().lower()), None)
+        if ah and (ah.wwpns or ah.iqns):
+            out.append(d.model_copy(update={"wwpns": list(ah.wwpns), "iqn": next(iter(ah.iqns), "")}))
+            how[d.name] = f"found on the array as host {ah.name}"
+            continue
+        by_ip = next(
+            (iqn for a in discovery.array_hosts for iqn, ip in a.addresses.items() if d.address and ip == d.address.strip()),
+            None,
+        )
+        if by_ip:
+            out.append(d.model_copy(update={"iqn": by_ip}))
+            how[d.name] = f"found on the array: iSCSI login from {d.address}"
+            continue
+        by_node = next(
+            (iqn for a in discovery.array_hosts for iqn in a.iqns if _short(node_name_from_iqn(iqn)) == _short(d.name)),
+            None,
+        )
+        if by_node:
+            out.append(d.model_copy(update={"iqn": by_node}))
+            how[d.name] = f"found on the array: IQN names node {node_name_from_iqn(by_node)}"
+            continue
+        out.append(d)
+        how[d.name] = (
+            "not found — not in vCenter, no array host of that name"
+            + (f", no iSCSI login from {d.address}" if d.address else "")
+            + "; add its WWPN/IQN on the Hosts tab"
+        )
+    return out, how
 
 
 def union_hosts(
@@ -64,8 +124,9 @@ def union_hosts(
     for name, hbas in by_host.items():
         claim(name, "vcenter", wwpns=[h.wwpn for h in hbas], os_=next((h.os for h in hbas if h.os), "") or "")
 
-    # 2) The sheet's Hosts tab — servers nothing can see yet, typed by a human.
-    for d in declared_hosts or []:
+    # 2) The sheet's Hosts tab — typed by a human; rows without ids resolved from discovery.
+    declared_hosts, lookup = resolve_declared_hosts(declared_hosts, discovery)
+    for d in declared_hosts:
         claim(d.name, "sheet", wwpns=d.wwpns, iqns=[d.iqn] if d.iqn else [], os_=d.os)
 
     # 3) The array's own host objects — they exist; persona is whatever the array already has.
@@ -89,6 +150,9 @@ def union_hosts(
     for name in [n for n, h in hosts.items() if h.transport == "none"]:
         owners = sorted({owner[i] for i in attempted.get(name, set()) if i in owner})
         del hosts[name]
+        if not attempted.get(name):
+            notes.append(f"Host '{name}' is on the sheet with no WWPN/IQN and was {lookup.get(name, 'not found')} — not planned.")
+            continue
         notes.append(
             f"Host '{name}' names only initiators that already belong to another host"
             + (f" ({', '.join(owners)})" if owners else "") + " — not planned."

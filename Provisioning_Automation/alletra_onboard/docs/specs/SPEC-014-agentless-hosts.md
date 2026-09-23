@@ -1,11 +1,51 @@
-# SPEC-014 — Agentless discovery of hosts not in vCenter (G-2)
+# SPEC-014 — Discovery of the sheet's hosts: serial, WWPN, IQN, per OS (G-2)
 
-**Status:** proposed 2026-09-17 — needs a DECISION before it is specified further (see §3)
+**Status:** APPROVED 2026-09-21 (field request at the zoning/provisioning demo). Slice 1 built —
+pending live run. Slices 2–3 not started.
 **Findings addressed:** G-2 (Windows/Linux hosts are only sheet-declared — WWPNs typed by hand — or
 named from the fabric name server; no OS, no multipathing, no confirmation the WWPN typed is the one
 in the server)
 **Owner:** new `adapters/hosts/` (WinRM, SSH), `domain/discovery.py` (`DiscoveredHost` fields),
 `application/platform/init_sheet.py` (Hosts tab columns), `application/provisioning/discovery.py`
+
+## 0. The request (2026-09-21)
+
+For every host on the sheet's Hosts tab — **even when its WWPN/IQN is not typed** — discovery fetches
+its **serial number**, **FC WWPNs** and (if not FC) **iSCSI IQN**, and displays them **per OS**.
+Decisions taken: per-host *Login username / password* columns on the Hosts tab (blank = do not log
+in); no Linux host on rack13, so the Linux read ships *built — pending live run*.
+
+### Requirements
+
+- **R1 — no sheet host is dropped.** A Hosts-tab row with a name (and optionally IP) but no WWPN/IQN is
+  a lookup request, not a parse error. Discovery resolves it, in order: vCenter host of that name or
+  IP → array host object of that name → array iSCSI login from that IP → an IQN whose node name is the
+  host's short name. Found: its initiators are filled in and it joins/provisions like a typed row.
+  Not found: it is still listed (source `sheet`, warning *"not found — … add its WWPN/IQN"*), a
+  discovery note names it, and the provisioning plan notes it as not planned.
+- **R2 — ESXi via vCenter:** serial number (`hardware.systemInfo.serialNumber`, fallback
+  `otherIdentifyingInfo` SerialNumberTag/ServiceTag) and iSCSI IQNs (`InternetScsiHba.iScsiName`)
+  per host, joined on the IQN like any initiator. Enrichment only: its failure is a note.
+- **R3 — display per OS:** *Hosts in this run* is one table per OS (ESXi / Windows / Linux / HPE VME /
+  OS not reported) with a Serial number column; the Host cell says how a sheet host was found.
+- **R4 — Linux (slice 2):** SSH with the row's login, read-only: `/sys/class/dmi/id/product_serial`,
+  `/sys/class/fc_host/host*/port_name`, `/etc/iscsi/initiatorname.iscsi`, `/etc/os-release`,
+  `multipath -ll`.
+- **R5 — Windows (slice 3):** WinRM with the row's login, read-only: `Win32_BIOS.SerialNumber`,
+  `Get-InitiatorPort` (FC + iSCSI), OS caption, MPIO feature.
+- **R6 — typed vs read:** a WWPN typed on the sheet that the server's own read does not report is a
+  plan **blocker** (slices 2–3).
+- **R7 — secrets:** host passwords are held per run like array/switch passwords (ADR 0013), never in
+  events or `GET /runs/{id}`.
+
+### Slices
+
+1. R1–R3 (no new adapter, no sheet column) — **built 2026-09-21, pending live run** (rack13: `.136`
+   serial + IQN; `arcus-win137` with WWPNs blanked on the sheet → found on the array).
+2. Sheet login columns + Linux SSH (R4, R6, R7) — not started; will ship *pending live run* (no Linux host on rack13).
+3. Windows WinRM (R5) — live target `arcus-win137` (10.132.30.137); jump box → 5985/5986 must be open.
+
+The sections below are the original deferral analysis, kept for the record.
 
 ## 1. Problem
 

@@ -17,6 +17,7 @@ from collections import OrderedDict, defaultdict
 from typing import Callable
 
 from alletra_onboard.application.provisioning.clients import make_brocade
+from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
 from alletra_onboard.application.provisioning.zoning import parse_active_zones
 from alletra_onboard.domain.shared import normalize_wwpn, wwpn_colons
 from alletra_onboard.domain.discovery import DiscoveryReport
@@ -395,7 +396,7 @@ def build_zoning_plan(
     for hba in discovery.host_hbas:
         _claim(normalize_wwpn(hba.wwpn), hba.host_name, "vcenter", hba.os or "")
     vcenter_count = len(host_by_wwpn)
-    for declared in getattr(intent, "declared_hosts", None) or []:
+    for declared in resolve_declared_hosts(getattr(intent, "declared_hosts", None) or [], discovery)[0]:
         for wwpn in declared.wwpns:
             _claim(normalize_wwpn(wwpn), declared.name, "sheet", declared.os or "")
     for array_host in discovery.array_hosts:

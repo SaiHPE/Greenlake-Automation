@@ -123,6 +123,9 @@ class FakeVCenter:
     def host_fc_hbas(self):
         return list(self._hbas)
 
+    def host_identities(self):
+        return []
+
 
 class FakeWsapi:
     """Name-level fake: objects exist or not. Record reads (SPEC-001) derive matching records from the
@@ -1785,11 +1788,100 @@ def test_the_hosts_tab_is_optional_so_older_workbooks_still_parse():
     assert parsed.provisioning_intent.declared_hosts == []
 
 
-def test_a_declared_host_that_identifies_nothing_is_refused():
-    """A row with neither transport could not be created on the array, so it is caught while a human
-    is still looking at the workbook."""
-    with pytest.raises(ValueError, match="neither an FC WWPN nor an iSCSI IQN"):
-        _parse_hosts([{"name": "ghost", "os": "linux"}])
+def test_a_declared_host_without_ids_is_a_lookup_request_not_an_error():
+    """SPEC-014 R1: name + OS + IP is enough on the sheet; discovery finds the initiators."""
+    declared = _parse_hosts([{"name": "arcus-win137", "os": "windows", "address": "10.132.30.137"}])
+    assert declared[0].wwpns == [] and declared[0].iqn == "" and declared[0].address == "10.132.30.137"
+
+
+def _spec14_report():
+    from alletra_onboard.domain.discovery import DiscoveryReport, HostHba, HostIdentity
+
+    showhost = (
+        "Id Name Persona ---WWN/iSCSI_Name--- Port IP_addr\n"
+        " 3 arcus-win137 WindowsServer 51402EC02089CC1E 1:3:2 n/a\n"
+        " -- -- -- iqn.1991-05.com.microsoft:win-tn3n7rujk3v 0:4:1 10.132.30.87\n"
+    )
+    return DiscoveryReport(
+        array_ports=[ArrayPort(node=1, slot=3, card_port=2, protocol="fc",
+                               wwpn="21320002AC02D495", link_state="ready", fabric="even")],
+        host_hbas=[HostHba(host_name="10.132.30.136", wwpn="10005CED8C5312A8", os="VMware ESXi 8.0.3"),
+                   HostHba(host_name="10.132.30.136", wwpn="10005CED8C5312A9", os="VMware ESXi 8.0.3")],
+        host_identities=[HostIdentity(host_name="10.132.30.136", serial_number="CZ2D2K00AB",
+                                      iqns=["iqn.1998-01.com.vmware:esx136-1a2b"])],
+        array_hosts=disc.parse_showhost(showhost),
+    )
+
+
+def test_sheet_hosts_without_ids_are_resolved_from_every_source():
+    from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    resolved, how = resolve_declared_hosts([
+        DeclaredHost(name="esx136", os="esxi", address="10.132.30.136"),       # vCenter by IP
+        DeclaredHost(name="arcus-win137", os="windows"),                          # array host object
+        DeclaredHost(name="winbox", os="windows", address="10.132.30.87"),       # iSCSI login IP
+        DeclaredHost(name="WIN-TN3N7RUJK3V.lab.local", os="windows"),           # IQN node name
+        DeclaredHost(name="ghost", os="linux", address="10.9.9.9"),
+        DeclaredHost(name="typed", wwpns=["10000000C9112233"]),
+    ], _spec14_report())
+    by = {d.name: d for d in resolved}
+    assert by["esx136"].wwpns == ["10005CED8C5312A8", "10005CED8C5312A9"]
+    assert by["esx136"].iqn == "iqn.1998-01.com.vmware:esx136-1a2b"
+    assert by["arcus-win137"].wwpns == ["51402EC02089CC1E"]
+    assert by["winbox"].iqn == "iqn.1991-05.com.microsoft:win-tn3n7rujk3v"
+    assert by["WIN-TN3N7RUJK3V.lab.local"].iqn == "iqn.1991-05.com.microsoft:win-tn3n7rujk3v"
+    assert by["ghost"].wwpns == [] and how["ghost"].startswith("not found")
+    assert "typed" not in how                                           # carried its own ids
+    assert how["esx136"] == "found in vCenter as 10.132.30.136"
+
+
+def test_discovery_shows_serial_and_iqn_and_never_drops_a_sheet_host():
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    hosts = {h.name: h for h in disc.assemble_hosts(_spec14_report(), declared=[
+        DeclaredHost(name="arcus-win137", os="windows", address="10.132.30.137"),
+        DeclaredHost(name="ghost", os="linux", address="10.9.9.9"),
+    ])}
+    esx = hosts["10.132.30.136"]
+    assert esx.serial_number == "CZ2D2K00AB"
+    assert esx.iqns == ["iqn.1998-01.com.vmware:esx136-1a2b"]
+    win = hosts["arcus-win137"]
+    assert win.wwpns == ["51402EC02089CC1E"] and win.logged_in and win.os == "windows"
+    assert win.lookup == "found on the array as host arcus-win137" and win.in_run
+    ghost = hosts["ghost"]                                               # listed, not silently dropped
+    assert ghost.sources == ["sheet"] and ghost.lookup.startswith("not found") and ghost.in_run
+
+
+def test_an_unresolved_sheet_host_is_named_in_the_plan_notes():
+    from alletra_onboard.application.provisioning.hosts import union_hosts
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    hosts, notes = union_hosts(_spec14_report(), [DeclaredHost(name="ghost", os="linux", address="10.9.9.9")])
+    assert "ghost" not in hosts
+    assert any("'ghost' is on the sheet with no WWPN/IQN and was not found" in n for n in notes)
+
+
+def test_vcenter_identity_reads_serial_and_iqn_from_host_objects():
+    from types import SimpleNamespace as NS
+
+    from alletra_onboard.adapters.vcenter.vcenter_client import identity_from_host
+
+    esxi = NS(
+        name="10.132.30.136",
+        hardware=NS(systemInfo=NS(serialNumber="")),
+        summary=NS(hardware=NS(otherIdentifyingInfo=[
+            NS(identifierType=NS(key="AssetTag"), identifierValue="x"),
+            NS(identifierType=NS(key="SerialNumberTag"), identifierValue="CZ2D2K00AB"),
+        ])),
+        config=NS(storageDevice=NS(hostBusAdapter=[
+            NS(device="vmhba1", portWorldWideName=1),
+            NS(device="vmhba64", iScsiName="iqn.1998-01.com.vmware:esx136-1a2b"),
+        ])),
+    )
+    ident = identity_from_host(esxi)
+    assert ident.serial_number == "CZ2D2K00AB"
+    assert ident.iqns == ["iqn.1998-01.com.vmware:esx136-1a2b"]
 
 
 def test_a_mistyped_wwpn_is_refused_rather_than_zoned_against_nothing():

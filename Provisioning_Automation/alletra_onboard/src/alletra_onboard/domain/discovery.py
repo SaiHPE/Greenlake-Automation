@@ -196,6 +196,9 @@ class DiscoveredHost(BaseModel):
     persona: str = ""                  # the array host object's persona, when one exists
     os_text: str = ""                  # the OS string a source reported verbatim (vCenter's version)
     ports: dict[str, list[str]] = Field(default_factory=dict)  # initiator -> array ports (n:s:p) logged into
+    serial_number: str = ""            # the server's hardware serial, where a source reports one
+    # SPEC-014 R1: how a sheet host typed WITHOUT a WWPN/IQN was found ("" = it carried its own ids).
+    lookup: str = ""
 
     @property
     def transports(self) -> list[str]:
@@ -208,6 +211,15 @@ class HostHba(BaseModel):
     model: str | None = None
     os: str | None = None
     fabric: Fabric | None = None  # set from which array fabric the WWPN logs into (via showhost)
+
+
+class HostIdentity(BaseModel):
+    """Host-level facts vCenter reports alongside the HBAs: serial number and iSCSI initiator names."""
+
+    host_name: str
+    serial_number: str = ""
+    iqns: list[str] = Field(default_factory=list)
+    os: str | None = None
 
 
 class ArrayHost(BaseModel):
@@ -236,6 +248,7 @@ class DiscoveryReport(BaseModel):
     replication_ports: list[EthernetPort] = Field(default_factory=list)  # RCIP (showport / -rcip)
     file_ports: list[EthernetPort] = Field(default_factory=list)         # file services (showport -file)
     host_hbas: list[HostHba] = Field(default_factory=list)
+    host_identities: list[HostIdentity] = Field(default_factory=list)  # vCenter: serial + IQNs per host
     array_hosts: list[ArrayHost] = Field(default_factory=list)  # from showhost -d (zoning source)
     # Every server any source can see, joined on initiator id and grouped by OS for display.
     hosts: list[DiscoveredHost] = Field(default_factory=list)
