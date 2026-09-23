@@ -28,19 +28,25 @@ def resolve_declared_hosts(
 ) -> tuple[list[DeclaredHost], dict[str, str]]:
     """SPEC-014 R1: fill in the initiators of a sheet host typed with a name (and IP) but no WWPN/IQN.
 
-    Looked up, in order: the vCenter host of that name or IP; the array host object of that name; an
-    array iSCSI login from that IP; an IQN whose node name is the host's short name. Returns (hosts
-    with ids filled where found, name -> how it was found or why not). Rows that carried ids are
-    returned unchanged and have no entry."""
+    Looked up, in order: the server's own read over its sheet login (SPEC-014 R4); the vCenter host
+    of that name or IP; the array host object of that name; an array iSCSI login from that IP; an IQN
+    whose node name is the host's short name. Returns (hosts with ids filled where found, name -> how
+    it was found or why not). Rows that carried ids are returned unchanged and have no entry."""
     by_vcenter: dict[str, list[str]] = {}
     for hba in discovery.host_hbas:
         by_vcenter.setdefault(hba.host_name, []).append(normalize_wwpn(hba.wwpn))
     vcenter_iqns = {i.host_name: i.iqns for i in discovery.host_identities}
+    reads = {r.host_name: r for r in discovery.host_reads if not r.error}
     out: list[DeclaredHost] = []
     how: dict[str, str] = {}
     for d in declared_hosts or []:
         if d.wwpns or d.iqn:
             out.append(d)
+            continue
+        read = reads.get(d.name)
+        if read and (read.wwpns or read.iqns):
+            out.append(d.model_copy(update={"wwpns": list(read.wwpns), "iqn": read.iqns[0] if read.iqns else ""}))
+            how[d.name] = f"read from the server over {read.method.upper()} ({read.address})"
             continue
         keys = {k for k in (d.name.strip().lower(), d.address.strip().lower()) if k}
         found = next((n for n in {*by_vcenter, *vcenter_iqns} if n.lower() in keys), None)
@@ -77,6 +83,30 @@ def resolve_declared_hosts(
             + "; add its WWPN/IQN on the Hosts tab"
         )
     return out, how
+
+
+def declared_mismatches(declared_hosts: list[DeclaredHost] | None, discovery: DiscoveryReport) -> list[str]:
+    """SPEC-014 R6: a WWPN/IQN typed on the sheet that the server's own read does not report — a
+    plan blocker, because a mistyped initiator zones and presents to nothing."""
+    reads = {r.host_name: r for r in discovery.host_reads if not r.error}
+    out: list[str] = []
+    for d in declared_hosts or []:
+        read = reads.get(d.name)
+        if read is None:
+            continue
+        missing = [w for w in (normalize_wwpn(x) for x in d.wwpns) if w not in read.wwpns]
+        if missing:
+            out.append(
+                f"Host '{d.name}': sheet WWPN(s) {', '.join(missing)} not on the server — {read.address} reports "
+                + (", ".join(read.wwpns) if read.wwpns else "no FC HBA")
+                + ". Fix the Hosts tab."
+            )
+        if d.iqn and read.iqns and d.iqn not in read.iqns:
+            out.append(
+                f"Host '{d.name}': sheet IQN {d.iqn} is not the server's — {read.address} reports "
+                f"{', '.join(read.iqns)}. Fix the Hosts tab."
+            )
+    return out
 
 
 def union_hosts(

@@ -6,6 +6,7 @@ from __future__ import annotations
 from alletra_onboard.adapters.array.cli_client import ArrayCliClient
 from alletra_onboard.adapters.array.wsapi_client import WsapiClient
 from alletra_onboard.adapters.fabric.brocade_client import BrocadeClient
+from alletra_onboard.adapters.hosts.linux_ssh import LinuxHostClient
 from alletra_onboard.adapters.vcenter.vcenter_client import VCenterClient
 from alletra_onboard.domain.shared import EndpointCreds
 
@@ -25,3 +26,7 @@ def make_vcenter(creds: EndpointCreds) -> VCenterClient:
 
 def make_brocade(creds: EndpointCreds) -> BrocadeClient:
     return BrocadeClient(creds.host, creds.username, creds.password.get_secret_value())
+
+
+def make_linux_host(creds: EndpointCreds) -> LinuxHostClient:
+    return LinuxHostClient(creds.host, creds.username, creds.password.get_secret_value())

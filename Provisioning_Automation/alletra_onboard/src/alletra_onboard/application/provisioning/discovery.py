@@ -16,15 +16,17 @@ import re
 from collections import OrderedDict
 from typing import Callable
 
-from alletra_onboard.application.provisioning.clients import make_array_cli, make_vcenter
+from alletra_onboard.adapters.hosts.linux_ssh import read_linux_host
+from alletra_onboard.application.provisioning.clients import make_array_cli, make_linux_host, make_vcenter
 from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
-from alletra_onboard.domain.shared import Fabric, normalize_wwpn
+from alletra_onboard.domain.shared import EndpointCreds, Fabric, normalize_wwpn
 from alletra_onboard.domain.discovery import (
     ArrayHost,
     ArrayPort,
     DiscoveredHost,
     DiscoveryReport,
     EthernetPort,
+    HostRead,
     node_name_from_iqn,
     os_from_iqn,
     os_from_persona,
@@ -416,13 +418,16 @@ def assemble_hosts(
     #    of appearing twice. A row typed without ids is looked up first (SPEC-014 R1) and, if nothing
     #    finds it, still listed so the operator sees it was not found rather than silently dropped.
     declared, lookup = resolve_declared_hosts(declared, report)
+    reads = {r.host_name: r for r in report.host_reads}
     for dh in declared:
         ids = [normalize_wwpn(w) for w in dh.wwpns] + ([dh.iqn] if dh.iqn else [])
         if not ids:
-            hosts.append(DiscoveredHost(
+            host = DiscoveredHost(
                 name=dh.name, os=dh.os or "unknown", address=dh.address, sources=["sheet"],
                 lookup=lookup.get(dh.name, ""),
-            ))
+            )
+            hosts.append(host)
+            _apply_read(host, reads.get(dh.name))
             continue
         host = host_for(ids, dh.name, "sheet")
         if dh.name in lookup:
@@ -442,6 +447,9 @@ def assemble_hosts(
             by_initiator[dh.iqn] = host
             if host.os == "unknown":
                 host.os = os_from_iqn(dh.iqn)
+        _apply_read(host, reads.get(dh.name))
+        for i in host.wwpns + host.iqns:
+            by_initiator.setdefault(i, host)
 
     # 4) The fabric name server: the only OS signal for an FC host nothing else identified.
     for wwpn, os_text in ns_os.items():
@@ -476,6 +484,36 @@ def assemble_hosts(
         )
 
     return sorted(hosts, key=lambda h: (h.os, h.name.lower()))
+
+
+def _read_failure(read: HostRead) -> str:
+    return read.error if read.method == "login" else f"{read.method.upper()} read failed — {read.error}"
+
+
+def _apply_read(host: DiscoveredHost, read: HostRead | None) -> None:
+    """What the server reported about itself (SPEC-014 R4). Its initiators are shown even when they
+    differ from the sheet's — the plan blocks on the difference (R6), the screen shows the truth."""
+    if read is None:
+        return
+    if read.error:
+        host.host_read = _read_failure(read)
+        return
+    host.host_read = f"read over {read.method.upper()} from {read.address}" + (
+        f" ({read.hostname})" if read.hostname and read.hostname != host.name else ""
+    )
+    if "host" not in host.sources:
+        host.sources.append("host")
+    if read.os and host.os == "unknown":
+        host.os = read.os  # type: ignore[assignment]
+    host.os_text = read.os_text or host.os_text
+    host.serial_number = read.serial_number or host.serial_number
+    host.multipath = read.multipath
+    for w in read.wwpns:
+        if w not in host.wwpns:
+            host.wwpns.append(w)
+    for i in read.iqns:
+        if i not in host.iqns:
+            host.iqns.append(i)
 
 
 def fabric_by_wwpn(array_hosts: list[ArrayHost], array_ports: list[ArrayPort]) -> dict[str, set[Fabric]]:
@@ -603,11 +641,35 @@ def _refine_fabrics_from_switches(cli, array_ports: list[ArrayPort], *, progress
     return resolve_port_fabrics(fc_ports, switch_by_label)
 
 
+def _read_sheet_hosts(declared: list, linux_host_factory: Callable, progress: Callable[[str], None]) -> list[HostRead]:
+    """One read-only login per sheet host with a username + address. Linux over SSH (and an OS left
+    blank is tried as Linux); Windows is SPEC-014 slice 3 and ESXi is read through vCenter."""
+    out: list[HostRead] = []
+    for d in declared or []:
+        if not (d.username and d.address):
+            continue
+        if d.os not in ("linux", ""):
+            reason = ("ESXi hosts are read through vCenter" if d.os == "esxi"
+                      else "Windows login (WinRM) is not built yet — SPEC-014 slice 3")
+            out.append(HostRead(host_name=d.name, address=d.address, method="login", error=f"not logged in: {reason}"))
+            continue
+        progress(f"Reading host {d.name} over SSH ({d.address}, read-only)…")
+        creds = EndpointCreds(host=d.address, username=d.username,
+                              password=d.password.get_secret_value() if d.password else "")
+        try:
+            with linux_host_factory(creds) as client:
+                out.append(read_linux_host(client, d.name, d.address))
+        except Exception as exc:  # noqa: BLE001 - one host's login must not sink discovery
+            out.append(HostRead(host_name=d.name, address=d.address, method="ssh", error=str(exc)))
+    return out
+
+
 def discover(
     intent: ProvisioningIntent,
     *,
     array_cli_factory: Callable = make_array_cli,
     vcenter_factory: Callable = make_vcenter,
+    linux_host_factory: Callable = make_linux_host,
     progress: Callable[[str], None] | None = None,
 ) -> DiscoveryReport:
     """Read the environment (array-side + vCenter), read-only. `progress(msg)`, if given, is called at
@@ -688,6 +750,12 @@ def discover(
         _p(f"vCenter: {len(report.host_hbas)} ESXi host HBA(s).")
     except Exception as exc:  # noqa: BLE001
         report.notes.append(f"vCenter discovery failed: {exc}")
+
+    # 2b) SPEC-014 R4: sheet hosts that carry a login report their own serial, WWPNs, IQN, multipath.
+    report.host_reads = _read_sheet_hosts(intent.declared_hosts, linux_host_factory, _p)
+    for read in report.host_reads:
+        if read.error:
+            report.notes.append(f"Host {read.host_name}: {_read_failure(read)}.")
 
     # 3) Assign each vCenter HBA to the fabric its WWPN logs into ON THE ARRAY (from showhost).
     _p("Matching host HBAs to the array fabrics…")

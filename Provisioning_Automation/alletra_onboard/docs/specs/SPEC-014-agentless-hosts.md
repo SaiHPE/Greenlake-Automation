@@ -1,7 +1,7 @@
 # SPEC-014 — Discovery of the sheet's hosts: serial, WWPN, IQN, per OS (G-2)
 
-**Status:** APPROVED 2026-09-21 (field request at the zoning/provisioning demo). Slice 1 built —
-pending live run. Slices 2–3 not started.
+**Status:** APPROVED 2026-09-21 (field request at the zoning/provisioning demo). Slices 1–2 built —
+pending live run. Slice 3 not started.
 **Findings addressed:** G-2 (Windows/Linux hosts are only sheet-declared — WWPNs typed by hand — or
 named from the fabric name server; no OS, no multipathing, no confirmation the WWPN typed is the one
 in the server)
@@ -42,7 +42,11 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
 
 1. R1–R3 (no new adapter, no sheet column) — **built 2026-09-21, pending live run** (rack13: `.136`
    serial + IQN; `arcus-win137` with WWPNs blanked on the sheet → found on the array).
-2. Sheet login columns + Linux SSH (R4, R6, R7) — not started; will ship *pending live run* (no Linux host on rack13).
+2. Sheet login columns + Linux SSH (R4, R6, R7) — **built 2026-09-23, pending live run** (no Linux
+   host on rack13; parsers pinned to RHEL 9-shaped output). `adapters/hosts/linux_ssh.py` runs a fixed
+   keyed command set (`cat` of sysfs/`/etc` files, `hostname`, `multipath -ll`; `sudo -n` only for
+   serial and multipath). An OS left blank with a login is tried as Linux; a Windows or ESXi row with
+   a login is not logged in (note says why). A failed login is a note, never the step's error.
 3. Windows WinRM (R5) — live target `arcus-win137` (10.132.30.137); jump box → 5985/5986 must be open.
 
 The sections below are the original deferral analysis, kept for the record.

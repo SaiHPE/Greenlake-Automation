@@ -1794,6 +1794,22 @@ def test_a_declared_host_without_ids_is_a_lookup_request_not_an_error():
     assert declared[0].wwpns == [] and declared[0].iqn == "" and declared[0].address == "10.132.30.137"
 
 
+def test_a_hosts_tab_login_is_parsed_and_its_password_is_a_secret():
+    declared = _parse_hosts([{"name": "rhel01", "os": "linux", "address": "10.132.30.140",
+                              "username": "root", "password": "host-pw"}])
+    assert declared[0].username == "root" and declared[0].password.get_secret_value() == "host-pw"
+    assert "host-pw" not in declared[0].model_dump_json()
+
+
+@pytest.mark.parametrize("row, message", [
+    ({"name": "rhel01", "address": "10.1.1.1", "password": "pw"}, "password but no login username"),
+    ({"name": "rhel01", "username": "root", "password": "pw"}, "no IP address to log in to"),
+])
+def test_an_incomplete_hosts_tab_login_is_refused(row, message):
+    with pytest.raises(ValueError, match=message):
+        _parse_hosts([row])
+
+
 def _spec14_report():
     from alletra_onboard.domain.discovery import DiscoveryReport, HostHba, HostIdentity
 

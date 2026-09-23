@@ -170,6 +170,8 @@ HOSTS_COLUMNS: list[tuple[str, str, bool]] = [
     ("address", "IP address (optional)", False),
     ("wwpns", "FC WWPN(s) — comma-separated; blank if none", False),
     ("iqn", "iSCSI IQN — blank if none", False),
+    ("username", "Login username (optional) — Linux SSH, read-only", False),
+    ("password", "Login password (optional)", False),
 ]
 
 _PROV_LABEL_TO_KEY = {label: key for _, fields in PROVISIONING_SECTIONS for key, label, _, _ in fields}
@@ -308,7 +310,9 @@ def _add_provisioning_sheet(wb: Workbook) -> None:
         intro=(
             "The hosts this run is for. Name + OS + IP is enough: discovery looks each one up (vCenter "
             "by name/IP, the array by host name, iSCSI login IP or IQN) and fills in its serial, WWPNs "
-            "and IQN. Type the WWPN/IQN only for a server nothing can see yet: "
+            "and IQN. For a Linux host, add a login and discovery reads them from the server itself "
+            "over SSH (read-only; serial and multipath need root or passwordless sudo). "
+            "Type the WWPN/IQN only for a server nothing can see yet: "
             "Windows 'Get-InitiatorPort'; Linux 'cat /etc/iscsi/initiatorname.iscsi' for the IQN and "
             "'cat /sys/class/fc_host/host*/port_name' for the WWPN; ESXi 'esxcli storage san fc list'."
         ),
@@ -543,8 +547,15 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
             os_ = (r.get("os") or "").strip().lower()
             if os_ and os_ not in ("esxi", "windows", "linux", "vme"):
                 raise ValueError(f"Hosts tab — host '{r['name']}' has an unrecognised OS '{os_}' (esxi / windows / linux / vme).")
+            username, password = (r.get("username") or "").strip(), r.get("password") or ""
+            address = (r.get("address") or "").strip()
+            if password and not username:
+                raise ValueError(f"Hosts tab — host '{r['name']}' has a login password but no login username.")
+            if username and not address:
+                raise ValueError(f"Hosts tab — host '{r['name']}' has a login but no IP address to log in to.")
             declared.append(DeclaredHost(
-                name=r["name"], os=os_, address=(r.get("address") or "").strip(), wwpns=wwpns, iqn=iqn,
+                name=r["name"], os=os_, address=address, wwpns=wwpns, iqn=iqn,
+                username=username, password=password or None,
             ))
 
     return ProvisioningIntent(

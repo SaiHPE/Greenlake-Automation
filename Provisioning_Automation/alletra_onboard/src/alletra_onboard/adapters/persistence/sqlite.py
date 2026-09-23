@@ -272,4 +272,6 @@ def _provisioning_intent_json(intent: ProvisioningIntent) -> str:
     data = intent.model_dump(mode="json")
     for endpoint in ("array", "vcenter", "switch_f1", "switch_f2"):
         data[endpoint]["password"] = getattr(intent, endpoint).password.get_secret_value()
+    for row, host in zip(data.get("declared_hosts", []), intent.declared_hosts):
+        row["password"] = host.password.get_secret_value() if host.password is not None else None
     return json.dumps(data)
