@@ -246,6 +246,9 @@ export interface DiscoveredHost {
   persona?: string;
   os_text?: string;
   ports?: Record<string, string[]>;
+  // SPEC-014 R1/R2.
+  serial_number?: string;
+  lookup?: string;
 }
 export interface DiscoveryReport {
   array_ports: ArrayPort[];

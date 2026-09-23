@@ -18,7 +18,7 @@ except Exception:  # noqa: BLE001 - bundled in the .exe; optional otherwise
     vim = None
 
 from alletra_onboard.domain.shared import normalize_wwpn
-from alletra_onboard.domain.discovery import HostHba
+from alletra_onboard.domain.discovery import HostHba, HostIdentity
 from alletra_onboard.domain.provisioning import EsxiLun
 
 
@@ -65,6 +65,35 @@ def parse_storage_device(host_name: str, storage_device) -> list[EsxiLun]:
             if vmhba and vmhba not in rec.adapters:
                 rec.adapters.append(vmhba)
     return list(luns.values())
+
+
+def _serial_number(esxi) -> str:
+    """`hardware.systemInfo.serialNumber` (vSphere 6.7+), else the SerialNumberTag / ServiceTag entry
+    of `otherIdentifyingInfo` that older builds carry instead. Duck-typed for tests."""
+    info = getattr(getattr(esxi, "hardware", None), "systemInfo", None)
+    serial = str(getattr(info, "serialNumber", "") or "").strip()
+    if serial:
+        return serial
+    other = getattr(getattr(getattr(esxi, "summary", None), "hardware", None), "otherIdentifyingInfo", None) or []
+    for tag in ("SerialNumberTag", "ServiceTag"):
+        for entry in other:
+            key = getattr(getattr(entry, "identifierType", None), "key", "")
+            value = str(getattr(entry, "identifierValue", "") or "").strip()
+            if key == tag and value:
+                return value
+    return ""
+
+
+def identity_from_host(esxi, *, is_iscsi=lambda hba: hasattr(hba, "iScsiName")) -> HostIdentity:
+    """One ESXi HostSystem -> its serial number and iSCSI initiator names."""
+    adapters = getattr(getattr(getattr(esxi, "config", None), "storageDevice", None), "hostBusAdapter", None) or []
+    iqns: list[str] = []
+    for hba in adapters:
+        if is_iscsi(hba):
+            name = str(getattr(hba, "iScsiName", "") or "").strip()
+            if name.lower().startswith("iqn.") and name not in iqns:
+                iqns.append(name)
+    return HostIdentity(host_name=esxi.name, serial_number=_serial_number(esxi), iqns=iqns)
 
 
 class VCenterClient:
@@ -149,6 +178,25 @@ class VCenterClient:
             except Exception:  # noqa: BLE001
                 pass
         return hbas
+
+    def host_identities(self) -> list[HostIdentity]:
+        """SPEC-014 R2: serial number + iSCSI IQNs per ESXi host. Read-only."""
+        if self._si is None:
+            raise VCenterError("not connected")
+        content = self._si.RetrieveContent()
+        view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
+        out: list[HostIdentity] = []
+        try:
+            for esxi in view.view:
+                ident = identity_from_host(esxi, is_iscsi=lambda hba: isinstance(hba, vim.host.InternetScsiHba))
+                ident.os = self._os_string(esxi)
+                out.append(ident)
+        finally:
+            try:
+                view.Destroy()
+            except Exception:  # noqa: BLE001
+                pass
+        return out
 
     def host_luns(self) -> list[EsxiLun]:
         """SPEC-013 R1: every SCSI device each ESXi host sees, with its multipath state — what

@@ -162,9 +162,8 @@ HOSTSET_COLUMNS: list[tuple[str, str, bool]] = [
     ("name", "Host set name", True),
     ("members", "Members — comma-separated host names; blank = choose in the app's Compose step", False),
 ]
-# Only for servers NOTHING can see yet. Everything already cabled is discovered: an FC host from the
-# fabric name server, an iSCSI host from the array's showhost, an ESXi host from vCenter. Leave a
-# transport blank if the host does not have it.
+# The hosts the run is for. A row with only a name (and IP) is looked up by discovery (SPEC-014 R1);
+# WWPN/IQN are typed only for a server no source can see yet.
 HOSTS_COLUMNS: list[tuple[str, str, bool]] = [
     ("name", "Host name", True),
     ("os", "OS (esxi / windows / linux / vme)", False),
@@ -307,8 +306,9 @@ def _add_provisioning_sheet(wb: Workbook) -> None:
     _write_table_tab(
         wb.create_sheet(HOSTS_SHEET_NAME), HOSTS_COLUMNS, blank_rows=10,
         intro=(
-            "OPTIONAL — only for hosts that are not cabled/configured yet, so nothing can discover "
-            "them. Anything already connected is found automatically. Read the values off the host: "
+            "The hosts this run is for. Name + OS + IP is enough: discovery looks each one up (vCenter "
+            "by name/IP, the array by host name, iSCSI login IP or IQN) and fills in its serial, WWPNs "
+            "and IQN. Type the WWPN/IQN only for a server nothing can see yet: "
             "Windows 'Get-InitiatorPort'; Linux 'cat /etc/iscsi/initiatorname.iscsi' for the IQN and "
             "'cat /sys/class/fc_host/host*/port_name' for the WWPN; ESXi 'esxcli storage san fc list'."
         ),
@@ -539,11 +539,7 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
                 )
             if iqn and not iqn.lower().startswith("iqn."):
                 raise ValueError(f"Hosts tab — host '{r['name']}' has an iSCSI IQN that does not start with 'iqn.': {iqn}")
-            if not wwpns and not iqn:
-                raise ValueError(
-                    f"Hosts tab — host '{r['name']}' has neither an FC WWPN nor an iSCSI IQN. It "
-                    "identifies nothing, so it could not be created on the array. Add one, or remove the row."
-                )
+            # SPEC-014 R1: a row with neither id is a lookup request — discovery finds it by name/IP.
             os_ = (r.get("os") or "").strip().lower()
             if os_ and os_ not in ("esxi", "windows", "linux", "vme"):
                 raise ValueError(f"Hosts tab — host '{r['name']}' has an unrecognised OS '{os_}' (esxi / windows / linux / vme).")
