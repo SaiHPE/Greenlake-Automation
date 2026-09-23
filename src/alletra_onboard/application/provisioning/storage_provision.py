@@ -32,7 +32,7 @@ from alletra_onboard.domain.provisioning import (
     VolumeRequest,
 )
 from alletra_onboard.domain.shared import normalize_wwpn
-from alletra_onboard.application.provisioning.hosts import union_hosts
+from alletra_onboard.application.provisioning.hosts import declared_mismatches, union_hosts
 
 
 def _union(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None):
@@ -325,6 +325,7 @@ def build_plan(
         plan.blockers.extend(_empty_set_blocker(n) for n in empty_sets)
     elif not hosts:
         plan.notes.append("No host is selected for any host set — nothing to provision until members are chosen.")
+    plan.blockers.extend(declared_mismatches(intent.declared_hosts, discovery))
     if unreachable:
         plan.notes.append(
             "Not yet reachable (no login on both fabrics): " + ", ".join(unreachable)

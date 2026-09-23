@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from alletra_onboard.domain.shared import EndpointCreds
 
@@ -71,6 +71,9 @@ class DeclaredHost(BaseModel):
     address: str = ""
     wwpns: list[str] = Field(default_factory=list)
     iqn: str = ""
+    # SPEC-014 R4/R7: optional read-only login to the server itself; held with the run like the array's.
+    username: str = ""
+    password: SecretStr | None = None
 
 
 class HostSetRequest(BaseModel):

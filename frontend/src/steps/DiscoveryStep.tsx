@@ -63,6 +63,9 @@ const HOST_COLUMNS = [
         {h.lookup && (
           <Text size="xsmall" color={h.lookup.startsWith('not found') ? 'status-warning' : 'text-weak'}>sheet host {h.lookup}</Text>
         )}
+        {h.host_read && (
+          <Text size="xsmall" color={h.host_read.startsWith('read over') ? 'text-weak' : 'status-warning'}>{h.host_read}</Text>
+        )}
       </Box>
     ),
   },
@@ -83,6 +86,7 @@ const HOST_COLUMNS = [
       <Box gap="xxsmall">
         <Text size="small" color={h.os === 'unknown' && !h.os_text ? 'text-weak' : undefined}>{osLabel(h)}</Text>
         {h.persona && <Text size="xsmall" color="text-weak">persona {h.persona}</Text>}
+        {h.multipath && <Text size="xsmall" color="text-weak">multipath: {h.multipath}</Text>}
       </Box>
     ),
   },

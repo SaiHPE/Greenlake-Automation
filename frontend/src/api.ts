@@ -249,6 +249,8 @@ export interface DiscoveredHost {
   // SPEC-014 R1/R2.
   serial_number?: string;
   lookup?: string;
+  host_read?: string;
+  multipath?: string;
 }
 export interface DiscoveryReport {
   array_ports: ArrayPort[];

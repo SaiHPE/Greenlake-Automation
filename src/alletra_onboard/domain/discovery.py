@@ -199,6 +199,9 @@ class DiscoveredHost(BaseModel):
     serial_number: str = ""            # the server's hardware serial, where a source reports one
     # SPEC-014 R1: how a sheet host typed WITHOUT a WWPN/IQN was found ("" = it carried its own ids).
     lookup: str = ""
+    # SPEC-014 R4: the outcome of logging in to the server itself ("" = no login on the sheet).
+    host_read: str = ""
+    multipath: str = ""                # the server's own multipath summary, when it was read
 
     @property
     def transports(self) -> list[str]:
@@ -220,6 +223,23 @@ class HostIdentity(BaseModel):
     serial_number: str = ""
     iqns: list[str] = Field(default_factory=list)
     os: str | None = None
+
+
+class HostRead(BaseModel):
+    """SPEC-014 R4/R5: what a sheet host reported about itself over a read-only login."""
+
+    host_name: str                     # the sheet's name for it
+    address: str
+    method: str = "ssh"                # ssh | winrm
+    os: str = ""                       # linux | windows
+    os_text: str = ""
+    hostname: str = ""
+    serial_number: str = ""
+    wwpns: list[str] = Field(default_factory=list)
+    iqns: list[str] = Field(default_factory=list)
+    multipath: str = ""
+    notes: list[str] = Field(default_factory=list)
+    error: str = ""
 
 
 class ArrayHost(BaseModel):
@@ -249,6 +269,7 @@ class DiscoveryReport(BaseModel):
     file_ports: list[EthernetPort] = Field(default_factory=list)         # file services (showport -file)
     host_hbas: list[HostHba] = Field(default_factory=list)
     host_identities: list[HostIdentity] = Field(default_factory=list)  # vCenter: serial + IQNs per host
+    host_reads: list[HostRead] = Field(default_factory=list)           # sheet hosts read over SSH/WinRM
     array_hosts: list[ArrayHost] = Field(default_factory=list)  # from showhost -d (zoning source)
     # Every server any source can see, joined on initiator id and grouped by OS for display.
     hosts: list[DiscoveredHost] = Field(default_factory=list)
