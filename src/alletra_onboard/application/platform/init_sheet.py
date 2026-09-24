@@ -658,6 +658,12 @@ def _replace_row_table(ws, columns: list[tuple[str, str, bool]], records: list[d
             break
     if header_row is None:
         raise ValueError(f"'{ws.title}' has no header row with a '{columns[0][1]}' column")
+    requested = {key for rec in records for key, value in rec.items() if value not in (None, "")}
+    for key, label, _ in columns:
+        if key in requested and key not in col_of_key:
+            column = ws.max_column + 1
+            ws.cell(row=header_row, column=column, value=label)
+            col_of_key[key] = column
     for r in range(header_row + 1, ws.max_row + 1):
         for c in range(1, ws.max_column + 1):
             ws.cell(row=r, column=c).value = None
