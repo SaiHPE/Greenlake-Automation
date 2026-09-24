@@ -179,6 +179,15 @@ def test_a_failed_login_is_a_note_and_the_host_is_still_listed():
     assert report.error is None                                   # a host is never the step's error
 
 
+def test_a_sheet_host_nothing_finds_is_named_in_the_discovery_notes():
+    # 2026-09-24 review: the note loop ran before assemble_hosts filled report.hosts, so it never fired.
+    report = _discover(_intent(DeclaredHost(name="ghost", os="linux", address="10.9.9.9")),
+                       lambda creds: pytest.fail("no login without a username"))
+    ghost = next(h for h in report.hosts if h.name == "ghost")
+    assert ghost.lookup.startswith("not found")
+    assert any(n.startswith("Sheet host ghost: not found") for n in report.notes)
+
+
 def test_esxi_and_vme_logins_are_not_attempted():
     report = _discover(_intent(
         DeclaredHost(name="esx01", os="esxi", address="10.132.30.136", username="root"),

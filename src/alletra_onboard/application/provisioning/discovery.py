@@ -787,13 +787,13 @@ def discover(
     #
     #    No `ns_os` yet: the fabric name server's OS string is read by the ZONING step, which logs
     #    into the switches; discovery deliberately needs only the array and vCenter, and the sheet
-    for host in report.hosts:
-        if host.lookup.startswith("not found"):
-            report.notes.append(f"Sheet host {host.name}: {host.lookup}.")
     #    makes switch credentials optional. So an FC host that is not in vCenter is reported with an
     #    unknown OS rather than guessed at. Wiring nsshow in here would make switch credentials a
     #    discovery prerequisite, which is a bigger change than this one.
     report.hosts = assemble_hosts(report, declared=intent.declared_hosts, host_sets=intent.host_sets)
+    for host in report.hosts:
+        if host.lookup.startswith("not found"):
+            report.notes.append(f"Sheet host {host.name}: {host.lookup}.")
     by_os: dict[str, int] = {}
     for host in report.hosts:
         by_os[host.os] = by_os.get(host.os, 0) + 1
