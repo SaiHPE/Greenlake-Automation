@@ -17,7 +17,13 @@ from collections import OrderedDict
 from typing import Callable
 
 from alletra_onboard.adapters.hosts.linux_ssh import read_linux_host
-from alletra_onboard.application.provisioning.clients import make_array_cli, make_linux_host, make_vcenter
+from alletra_onboard.adapters.hosts.windows_winrm import read_windows_host
+from alletra_onboard.application.provisioning.clients import (
+    make_array_cli,
+    make_linux_host,
+    make_vcenter,
+    make_windows_host,
+)
 from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
 from alletra_onboard.domain.shared import EndpointCreds, Fabric, normalize_wwpn
 from alletra_onboard.domain.discovery import (
@@ -498,8 +504,9 @@ def _apply_read(host: DiscoveredHost, read: HostRead | None) -> None:
     if read.error:
         host.host_read = _read_failure(read)
         return
+    same_name = read.hostname.lower().split(".")[0] == host.name.lower().split(".")[0]
     host.host_read = f"read over {read.method.upper()} from {read.address}" + (
-        f" ({read.hostname})" if read.hostname and read.hostname != host.name else ""
+        f" ({read.hostname})" if read.hostname and not same_name else ""
     )
     if "host" not in host.sources:
         host.sources.append("host")
@@ -641,26 +648,31 @@ def _refine_fabrics_from_switches(cli, array_ports: list[ArrayPort], *, progress
     return resolve_port_fabrics(fc_ports, switch_by_label)
 
 
-def _read_sheet_hosts(declared: list, linux_host_factory: Callable, progress: Callable[[str], None]) -> list[HostRead]:
-    """One read-only login per sheet host with a username + address. Linux over SSH (and an OS left
-    blank is tried as Linux); Windows is SPEC-014 slice 3 and ESXi is read through vCenter."""
+def _read_sheet_hosts(
+    declared: list, linux_host_factory: Callable, windows_host_factory: Callable, progress: Callable[[str], None],
+) -> list[HostRead]:
+    """One read-only login per sheet host with a username + address: Windows over WinRM, Linux over
+    SSH (an OS left blank is tried as Linux). ESXi is read through vCenter, VME is not logged in."""
     out: list[HostRead] = []
     for d in declared or []:
         if not (d.username and d.address):
             continue
-        if d.os not in ("linux", ""):
-            reason = ("ESXi hosts are read through vCenter" if d.os == "esxi"
-                      else "Windows login (WinRM) is not built yet — SPEC-014 slice 3")
+        if d.os == "windows":
+            method, factory, reader = "winrm", windows_host_factory, read_windows_host
+        elif d.os in ("linux", ""):
+            method, factory, reader = "ssh", linux_host_factory, read_linux_host
+        else:
+            reason = "ESXi hosts are read through vCenter" if d.os == "esxi" else f"no login is built for OS '{d.os}'"
             out.append(HostRead(host_name=d.name, address=d.address, method="login", error=f"not logged in: {reason}"))
             continue
-        progress(f"Reading host {d.name} over SSH ({d.address}, read-only)…")
+        progress(f"Reading host {d.name} over {method.upper()} ({d.address}, read-only)…")
         creds = EndpointCreds(host=d.address, username=d.username,
                               password=d.password.get_secret_value() if d.password else "")
         try:
-            with linux_host_factory(creds) as client:
-                out.append(read_linux_host(client, d.name, d.address))
+            with factory(creds) as client:
+                out.append(reader(client, d.name, d.address))
         except Exception as exc:  # noqa: BLE001 - one host's login must not sink discovery
-            out.append(HostRead(host_name=d.name, address=d.address, method="ssh", error=str(exc)))
+            out.append(HostRead(host_name=d.name, address=d.address, method=method, error=str(exc)))
     return out
 
 
@@ -670,6 +682,7 @@ def discover(
     array_cli_factory: Callable = make_array_cli,
     vcenter_factory: Callable = make_vcenter,
     linux_host_factory: Callable = make_linux_host,
+    windows_host_factory: Callable = make_windows_host,
     progress: Callable[[str], None] | None = None,
 ) -> DiscoveryReport:
     """Read the environment (array-side + vCenter), read-only. `progress(msg)`, if given, is called at
@@ -752,7 +765,7 @@ def discover(
         report.notes.append(f"vCenter discovery failed: {exc}")
 
     # 2b) SPEC-014 R4: sheet hosts that carry a login report their own serial, WWPNs, IQN, multipath.
-    report.host_reads = _read_sheet_hosts(intent.declared_hosts, linux_host_factory, _p)
+    report.host_reads = _read_sheet_hosts(intent.declared_hosts, linux_host_factory, windows_host_factory, _p)
     for read in report.host_reads:
         if read.error:
             report.notes.append(f"Host {read.host_name}: {_read_failure(read)}.")

@@ -34,6 +34,7 @@ for _dll in _VC_DLLS:
 
 hiddenimports = collect_submodules("uvicorn") + collect_submodules("alletra_onboard")
 hiddenimports += collect_submodules("paramiko")  # SSH client for post-init verification
+hiddenimports += collect_submodules("winrm") + collect_submodules("requests_ntlm") + collect_submodules("spnego")
 hiddenimports += ["anyio", "httptools", "websockets", "watchfiles", "h11"]
 # The WSAPI SDK chain. wsapi_client imports hpe3parclient in a guarded try/except, so if the
 # bundle misses any link (hpe3parclient -> requests, and its ssh module -> eventlet, whose hub

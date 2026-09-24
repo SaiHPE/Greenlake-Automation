@@ -1,7 +1,7 @@
 # SPEC-014 — Discovery of the sheet's hosts: serial, WWPN, IQN, per OS (G-2)
 
-**Status:** APPROVED 2026-09-21 (field request at the zoning/provisioning demo). Slices 1–2 built —
-pending live run. Slice 3 not started.
+**Status:** APPROVED 2026-09-21 (field request at the zoning/provisioning demo). Slices 1–3 built —
+pending live run.
 **Findings addressed:** G-2 (Windows/Linux hosts are only sheet-declared — WWPNs typed by hand — or
 named from the fabric name server; no OS, no multipathing, no confirmation the WWPN typed is the one
 in the server)
@@ -47,7 +47,13 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
    keyed command set (`cat` of sysfs/`/etc` files, `hostname`, `multipath -ll`; `sudo -n` only for
    serial and multipath). An OS left blank with a login is tried as Linux; a Windows or ESXi row with
    a login is not logged in (note says why). A failed login is a note, never the step's error.
-3. Windows WinRM (R5) — live target `arcus-win137` (10.132.30.137); jump box → 5985/5986 must be open.
+3. Windows WinRM (R5) — **built 2026-09-24, pending live run**. `adapters/hosts/windows_winrm.py`
+   (new dependency `pywinrm`): NTLM on HTTP 5985 (message-encrypted), HTTPS 5986 if 5985 is closed,
+   `proxy=None` so an on-prem host never goes through the lab proxy (ADR 0008). Fixed keyed
+   PowerShell reads emitting JSON: `Win32_BIOS.SerialNumber`, `Win32_OperatingSystem`,
+   `Get-InitiatorPort` (FC vs iSCSI told apart by address shape, not ConnectionType), MPIO feature
+   state + `Get-MSDSMSupportedHW` 3PARdata claim + `Get-Disk` 3PARdata count. Live target
+   `arcus-win137` (10.132.30.137); needs a local administrator login and 5985/5986 open from the jump box.
 
 The sections below are the original deferral analysis, kept for the record.
 

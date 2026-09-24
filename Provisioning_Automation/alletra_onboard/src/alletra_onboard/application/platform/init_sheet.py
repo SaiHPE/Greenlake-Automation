@@ -170,7 +170,7 @@ HOSTS_COLUMNS: list[tuple[str, str, bool]] = [
     ("address", "IP address (optional)", False),
     ("wwpns", "FC WWPN(s) — comma-separated; blank if none", False),
     ("iqn", "iSCSI IQN — blank if none", False),
-    ("username", "Login username (optional) — Linux SSH, read-only", False),
+    ("username", "Login username (optional) — Linux SSH / Windows WinRM, read-only", False),
     ("password", "Login password (optional)", False),
 ]
 
@@ -310,8 +310,9 @@ def _add_provisioning_sheet(wb: Workbook) -> None:
         intro=(
             "The hosts this run is for. Name + OS + IP is enough: discovery looks each one up (vCenter "
             "by name/IP, the array by host name, iSCSI login IP or IQN) and fills in its serial, WWPNs "
-            "and IQN. For a Linux host, add a login and discovery reads them from the server itself "
-            "over SSH (read-only; serial and multipath need root or passwordless sudo). "
+            "and IQN. For a Linux or Windows host, add a login and discovery reads them from the server "
+            "itself (read-only): Linux over SSH (serial and multipath need root or passwordless sudo), "
+            "Windows over WinRM 5985/5986 with a local administrator login. "
             "Type the WWPN/IQN only for a server nothing can see yet: "
             "Windows 'Get-InitiatorPort'; Linux 'cat /etc/iscsi/initiatorname.iscsi' for the IQN and "
             "'cat /sys/class/fc_host/host*/port_name' for the WWPN; ESXi 'esxcli storage san fc list'."
