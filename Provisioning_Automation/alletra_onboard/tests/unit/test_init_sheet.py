@@ -348,6 +348,29 @@ def test_compose_replaces_row_tables_and_fills_kv_on_a_base_workbook():
     assert parsed.customer_name == "Session runner"
 
 
+def test_compose_host_login_from_an_older_workbook_without_login_columns():
+    from alletra_onboard.application.platform.init_sheet import HOSTS_SHEET_NAME, compose_workbook_bytes
+
+    base = _fill_tabs({"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.122.140"}, _PROV_COMPLETE)
+    workbook = load_workbook(io.BytesIO(base))
+    hosts = workbook[HOSTS_SHEET_NAME]
+    for row in hosts.iter_rows():
+        for cell in row:
+            if cell.value and str(cell.value).startswith("Login "):
+                cell.value = None
+    older = io.BytesIO()
+    workbook.save(older)
+
+    out = compose_workbook_bytes(base=older.getvalue(), hosts=[{
+        "name": "arcus-win137", "os": "windows", "address": "10.132.30.137",
+        "username": "admin", "password": "host-secret",
+    }])
+    host = parse_workbook_bytes(out, mode=RunMode.PROVISION_ONLY).provisioning_intent.declared_hosts[0]
+    assert host.username == "admin"
+    assert host.password.get_secret_value() == "host-secret"
+    assert b"host-secret" not in older.getvalue()
+
+
 def test_compose_from_template_when_no_base():
     from alletra_onboard.application.platform.init_sheet import compose_workbook_bytes
 
