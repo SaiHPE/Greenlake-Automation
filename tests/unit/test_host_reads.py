@@ -179,13 +179,93 @@ def test_a_failed_login_is_a_note_and_the_host_is_still_listed():
     assert report.error is None                                   # a host is never the step's error
 
 
-def test_windows_and_esxi_logins_are_not_attempted_yet():
+def test_esxi_and_vme_logins_are_not_attempted():
     report = _discover(_intent(
-        DeclaredHost(name="arcus-win137", os="windows", address="10.132.30.137", username="administrator"),
         DeclaredHost(name="esx01", os="esxi", address="10.132.30.136", username="root"),
-    ), lambda creds: pytest.fail("no SSH login for Windows or ESXi"))
+        DeclaredHost(name="hvm3", os="vme", address="10.132.30.90", username="root"),
+    ), lambda creds: pytest.fail("no SSH login for ESXi or VME"))
     notes = " ".join(report.notes)
-    assert "Windows login (WinRM) is not built yet" in notes and "read through vCenter" in notes
+    assert "read through vCenter" in notes and "no login is built for OS 'vme'" in notes
+
+
+# ------------------------------------------------------------------ R5: Windows over WinRM
+
+WIN_OS = '{"Caption":"Microsoft Windows Server 2022 Standard","Version":"10.0.20348"}'
+# Get-InitiatorPort on a host with two FC ports and the iSCSI initiator enabled.
+WIN_INITIATORS = (
+    '[{"NodeAddress":"50402ec02089cc1c","PortAddress":"51402ec02089cc1c"},'
+    '{"NodeAddress":"50402ec02089cc1e","PortAddress":"51402ec02089cc1e"},'
+    '{"NodeAddress":"iqn.1991-05.com.microsoft:arcus-win137","PortAddress":"ISCSI ANY PORT"}]'
+)
+WIN_FULL = {"hostname": "ARCUS-WIN137\r\n", "os": "\ufeff" + WIN_OS, "serial": "CZ2D2K01WN\r\n",
+            "initiators": WIN_INITIATORS, "mpio": '{"feature":"Installed","claimed":1,"disks":2}'}
+
+
+class FakeWindows(FakeLinux):
+    def read(self, key):
+        from alletra_onboard.adapters.hosts import windows_winrm
+
+        assert key in windows_winrm.SCRIPTS
+        self.keys.append(key)
+        return self.outputs.get(key, "")
+
+
+def test_windows_scripts_are_fixed_reads():
+    from alletra_onboard.adapters.hosts import windows_winrm
+
+    verbs = ("$env:", "Get-", "(Get-", "ConvertTo-Json", "$f =")
+    for script in windows_winrm.SCRIPTS.values():
+        assert script.startswith(verbs)
+        for forbidden in ("Set-", "New-", "Remove-", "Enable-", "Disable-", "Invoke-", "Start-", "Stop-", "mpclaim"):
+            assert forbidden not in script
+
+
+def test_windows_parsers():
+    from alletra_onboard.adapters.hosts import windows_winrm as w
+
+    assert w.parse_os("\ufeff" + WIN_OS) == "Microsoft Windows Server 2022 Standard"
+    assert w.parse_initiators(WIN_INITIATORS) == (
+        ["51402EC02089CC1C", "51402EC02089CC1E"], ["iqn.1991-05.com.microsoft:arcus-win137"],
+    )
+    # One port, no -InputObject array wrapper (older PowerShell) -> a bare object still parses.
+    assert w.parse_initiators('{"NodeAddress":"x","PortAddress":"51402ec02089cc1c"}') == (["51402EC02089CC1C"], [])
+    assert w.parse_initiators("") == ([], [])
+    assert w.parse_serial("System Serial Number") == ""
+    assert w.parse_mpio('{"feature":"Available","claimed":0,"disks":0}') == (
+        "MPIO Available; 3PARdata VV NOT claimed by MSDSM; 0 Alletra/3PAR disk(s)"
+    )
+
+
+def test_a_sheet_windows_host_with_a_login_is_read_over_winrm():
+    report = disc.discover(
+        _intent(DeclaredHost(name="arcus-win137", os="windows", address="10.132.30.137",
+                             username="administrator", password=SecretStr("win-pw"))),
+        array_cli_factory=lambda c: _Cli(), vcenter_factory=lambda c: _VCenter(),
+        linux_host_factory=lambda c: pytest.fail("Windows is not read over SSH"),
+        windows_host_factory=lambda c: FakeWindows(WIN_FULL),
+    )
+    host = next(h for h in report.hosts if h.name == "arcus-win137")
+    assert host.serial_number == "CZ2D2K01WN" and host.os == "windows"
+    assert host.wwpns == ["51402EC02089CC1C", "51402EC02089CC1E"]
+    assert host.iqns == ["iqn.1991-05.com.microsoft:arcus-win137"]
+    assert host.lookup == "read from the server over WINRM (10.132.30.137)"
+    assert host.host_read == "read over WINRM from 10.132.30.137"      # ARCUS-WIN137 is the same name
+    assert host.multipath == "MPIO Installed; 3PARdata VV claimed by MSDSM; 2 Alletra/3PAR disk(s)"
+    assert "win-pw" not in json.dumps(report.model_dump(mode="json"))
+
+
+def test_a_winrm_session_never_uses_the_environment_proxy(monkeypatch):
+    from alletra_onboard.adapters.hosts import windows_winrm
+
+    captured: dict = {}
+
+    class FakeSession:
+        def __init__(self, url, auth, **kwargs):
+            captured.update(kwargs, url=url)
+
+    monkeypatch.setattr(windows_winrm, "winrm", type("W", (), {"Session": FakeSession}))
+    windows_winrm.WindowsHostClient("10.132.30.137", "administrator", "pw")._session_for("http://10.132.30.137:5985/wsman")
+    assert captured["proxy"] is None and captured["transport"] == "ntlm"
 
 
 # ------------------------------------------------------------------ R6: typed vs read
