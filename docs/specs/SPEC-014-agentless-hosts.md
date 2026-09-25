@@ -48,9 +48,14 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
    on the CRV VZ array (10.64.122.140, offline bundle + `ui-smoke/spec014.ps1`, 14 PASS / 1 FAIL): a
    no-ID row `CRV_VZ_DL360G11D24U25` → *found on the array as host …* with both WWPNs; a row nothing
    finds stays listed with its warning **and** the discovery note (fix 3407a33); discovery reads 12
-   ports while vCenter times out. **Still owed live:** R2 (vCenter serial + IQN) — no vCenter is
+   ports while vCenter times out. Re-run 2026-09-25 (21 PASS / 1 FAIL / 3 SKIP, runs `883be91e`,
+   `081f3385`): an unresolved row reads *"vCenter was not reached, so it could not be checked"* when
+   vCenter timed out (5673327), and a sheet FQDN `CRV_VZ_DL360G11D24U25.spec014.local` → *found on the
+   array as host CRV_VZ_DL360G11D24U25 (short-name match)* with both WWPNs (e47c3e0). Planning under
+   the array's name and the ambiguous-short-name refusal are unit-tested only. **Still owed live:**
+   R2 (vCenter serial + IQN) — no vCenter is
    reachable from the VZ jump server (vault cards; only LABDATA → VZ array, via a temporary route);
-   rack13 `.136` is the candidate. R3 (per-OS tables) needs a screenshot.
+   rack13 `.136` is the candidate. R3 (per-OS tables) seen in a screenshot on the same box.
 2. Sheet login columns + Linux SSH (R4, R6, R7) — **built 2026-09-23, pending live run** (no Linux
    host on rack13; parsers pinned to RHEL 9-shaped output). `adapters/hosts/linux_ssh.py` runs a fixed
    keyed command set (`cat` of sysfs/`/etc` files, `hostname`, `multipath -ll`; `sudo -n` only for
