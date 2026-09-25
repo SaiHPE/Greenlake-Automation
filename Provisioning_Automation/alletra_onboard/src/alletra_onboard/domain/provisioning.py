@@ -182,6 +182,7 @@ class ProvisionableHost(BaseModel):
     iqns: list[str] = Field(default_factory=list)
     os: str = ""
     persona: str = "VMware"
+    aliases: list[str] = Field(default_factory=list)   # other names the sheet used for this host
 
     @property
     def transport(self) -> str:

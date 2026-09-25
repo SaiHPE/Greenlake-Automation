@@ -159,7 +159,7 @@ def build_report(
     in_a_set = {m for hs in getattr(intent, "host_sets", []) for m in hs.members}
     host_wwpns: dict[str, set[str]] = {}
     for name, h in union_hosts(discovery, getattr(intent, "declared_hosts", None) or [], zoning_plan)[0].items():
-        if not h.wwpns or (h.source == "array" and name not in in_a_set):
+        if not h.wwpns or (h.source == "array" and name not in in_a_set and not in_a_set.intersection(h.aliases)):
             continue
         host_wwpns[name] = {normalize_wwpn(w) for w in h.wwpns}
     if not host_wwpns:

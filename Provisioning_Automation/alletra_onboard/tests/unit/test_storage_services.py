@@ -1976,6 +1976,54 @@ def test_ip_addresses_never_short_name_match():
     assert how["10"].startswith("not found — not in vCenter")
 
 
+def _aliased_intent(members, declared, exports=()):
+    from alletra_onboard.domain.provisioning import HostSetRequest
+
+    return _intent().model_copy(update={
+        "declared_hosts": declared,
+        "host_sets": [HostSetRequest(name="CRVLZ_Hostset", members=members)],
+        "exports": list(exports),
+    })
+
+
+def test_a_host_set_member_typed_with_the_sheet_name_is_planned_under_the_found_name():
+    # vCenter calls it esx1; the sheet's Hosts and Host sets tabs call it esx1.lab.local.
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    intent = _aliased_intent(["esx1.lab.local"], [DeclaredHost(name="esx1.lab.local", os="esxi")])
+    plan = prov.build_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
+    hs = next(a for a in plan.actions if a.kind == "hostset")
+    assert hs.detail["members"] == ["esx1"]
+    assert "Host set CRVLZ_Hostset: sheet host 'esx1.lab.local' is the same server as 'esx1' and is planned under that name." in plan.notes
+    fake = FakeWsapi()
+    result = prov.apply_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    assert result.error is None
+    assert ("host", "esx1", (normalize_wwpn(HOST_A), normalize_wwpn(HOST_B)), "VMware") in fake.calls
+    assert next(o for o in result.outcomes if o.kind == "hostset").detail == "1 member: esx1"
+
+
+def test_a_sheet_row_retyping_vcenters_wwpns_is_another_name_for_that_host():
+    from alletra_onboard.application.provisioning.hosts import union_hosts
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    row = DeclaredHost(name="esx1-sheet", wwpns=[normalize_wwpn(HOST_A)])
+    hosts, notes = union_hosts(_discovered(), [row])
+    assert hosts["esx1"].aliases == ["esx1-sheet"]
+    assert "Host 'esx1-sheet' has only initiators that belong to 'esx1' — treated as another name for it." in notes
+    exports = [ExportRequest(source_kind="volume", source_name="CRV_Prod01", target_kind="host", target_name="esx1-sheet")]
+    fake = FakeWsapi()
+    prov.apply_plan(_aliased_intent(["esx1-sheet"], [row], exports), _discovered(),
+                    reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    assert ("vlun", "CRV_Prod01", "esx1") in fake.calls
+
+
+def test_a_host_set_member_nothing_can_name_is_said_not_silently_dropped():
+    intent = _aliased_intent(["esx1", "ghost01"], [])
+    plan = prov.build_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
+    assert next(a for a in plan.actions if a.kind == "hostset").detail["members"] == ["esx1"]
+    assert "Host set CRVLZ_Hostset: member 'ghost01' is not a host this run can name — left out of the set." in plan.notes
+
+
 def test_vcenter_identity_reads_serial_and_iqn_from_host_objects():
     from types import SimpleNamespace as NS
 

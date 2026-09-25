@@ -81,6 +81,34 @@ def _persona_by_host(
     return {n: h.persona for n, h in hosts.items()}
 
 
+def planned_host_names(
+    intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None = None,
+) -> tuple[ProvisioningIntent, list[str]]:
+    """SPEC-014: the intent with host-set members and host exports that use a sheet name renamed to
+    the name the host is planned under, plus notes for each rename and each member nothing names."""
+    hosts, _ = _union(intent, discovery, zoning_plan)
+    alias = {a: n for n, h in hosts.items() for a in h.aliases}
+    notes: list[str] = []
+    host_sets = []
+    for hs in intent.host_sets:
+        members: list[str] = []
+        for m in hs.members:
+            to = alias.get(m, m)
+            if to != m:
+                notes.append(f"Host set {hs.name}: sheet host '{m}' is the same server as '{to}' and is planned under that name.")
+            elif m not in hosts:
+                notes.append(f"Host set {hs.name}: member '{m}' is not a host this run can name — left out of the set.")
+            if to not in members:
+                members.append(to)
+        host_sets.append(hs.model_copy(update={"members": members}))
+    exports = [
+        ex.model_copy(update={"target_name": alias[ex.target_name]})
+        if ex.target_kind == "host" and ex.target_name in alias else ex
+        for ex in intent.exports
+    ]
+    return intent.model_copy(update={"host_sets": host_sets, "exports": exports}), notes
+
+
 def _members_for(host_set, all_hosts: "OrderedDict[str, list[str]]") -> list[str]:
     """A host set's members: the operator's selection, intersected with the hosts the run can name, so
     a member that is not known — or that the zoning gate excluded — cannot reach the array as a set
@@ -277,6 +305,7 @@ def exported_volumes_by_host(
     volume in the intent. Every provisioned host appears, including those with an empty set: a host
     whose export is held back is a real state worth reporting, not an absence.
     """
+    intent, _ = planned_host_names(intent, discovery, zoning_plan)
     hosts = _selected_hosts(intent, discovery, zoning_plan)
     out: "OrderedDict[str, set[str]]" = OrderedDict((name, set()) for name in hosts)
     try:
@@ -318,6 +347,7 @@ def build_plan(
     `zoning_plan` is the run's latest `zoning.plan` payload (SPEC-003): hosts the fabric named that
     no other source knows join the union through it."""
     plan = ProvisioningPlan()
+    intent, name_notes = planned_host_names(intent, discovery, zoning_plan)
     hosts = _selected_hosts(intent, discovery, zoning_plan)
     unreachable = sorted(n for n in hosts if n not in reachable_hosts)
     empty_sets = _empty_host_sets(intent)
@@ -333,6 +363,7 @@ def build_plan(
             "re-checked."
         )
     plan.notes.extend(_host_notes(intent, discovery, zoning_plan, hosts))
+    plan.notes.extend(name_notes)
 
     try:
         with wsapi_factory(intent.array) as array:
@@ -543,6 +574,7 @@ def apply_plan(
     was given: apply re-derives everything from the intent rather than replaying the plan, so
     without them here the held-back exports would be cosmetic and the host list would differ."""
     result = ProvisioningResult()
+    intent, _ = planned_host_names(intent, discovery, zoning_plan)
     empty_sets = _empty_host_sets(intent)
     if empty_sets:
         result.error = "; ".join(_empty_set_blocker(n) for n in empty_sets)
