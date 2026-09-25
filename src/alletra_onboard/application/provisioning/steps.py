@@ -357,6 +357,8 @@ class ProvisioningSteps:
         intent = coord.get_provisioning_intent(run_id)
         discovery = self._discovery_steps.require_discovery(run_id)
         existing = storage_provision.read_array_objects(intent)
+        zoning = self._zoning_plan_payload(run_id)
+        shown, _ = storage_provision.planned_host_names(intent, discovery, zoning)
         return ProvisioningObjects(
             existing_cpgs=existing["cpgs"],
             existing_hosts=existing["hosts"],
@@ -367,11 +369,9 @@ class ProvisioningSteps:
             new_volumes=[v.name for v in intent.volumes],
             new_host_sets=[hs.name for hs in intent.host_sets],
             new_vvsets=sorted({v.vvset for v in intent.volumes if v.vvset}),
-            discovered_hosts=storage_provision.host_briefs(
-                discovery, intent.declared_hosts, self._zoning_plan_payload(run_id)
-            ),
-            host_sets=list(intent.host_sets),
-            exports=list(intent.exports),
+            discovered_hosts=storage_provision.host_briefs(discovery, intent.declared_hosts, zoning),
+            host_sets=list(shown.host_sets),
+            exports=list(shown.exports),
         )
 
     def _zoning_plan_payload(self, run_id: str) -> dict | None:

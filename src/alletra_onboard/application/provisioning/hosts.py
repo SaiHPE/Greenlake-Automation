@@ -208,7 +208,10 @@ def union_hosts(
         claim(name, "vcenter", wwpns=[h.wwpn for h in hbas], os_=next((h.os for h in hbas if h.os), "") or "")
 
     # 2) The sheet's Hosts tab — typed by a human; rows without ids resolved from discovery.
-    declared_hosts, lookup = resolve_declared_hosts(declared_hosts, discovery, canonical_names=True)
+    typed = list(declared_hosts or [])
+    declared_hosts, lookup = resolve_declared_hosts(typed, discovery, canonical_names=True)
+    alias_of = {t.name: d.name for t, d in zip(typed, declared_hosts) if t.name != d.name}
+    sheet_names = {t.name for t in typed} | {d.name for d in declared_hosts}
     for d in declared_hosts:
         claim(d.name, "sheet", wwpns=d.wwpns, iqns=[d.iqn] if d.iqn else [], os_=d.os)
 
@@ -236,10 +239,22 @@ def union_hosts(
         if not attempted.get(name):
             notes.append(f"Host '{name}' is on the sheet with no WWPN/IQN and was {lookup.get(name, 'not found')} — not planned.")
             continue
+        if name in sheet_names and len(owners) == 1:
+            alias_of[name] = owners[0]
+            notes.append(f"Host '{name}' has only initiators that belong to '{owners[0]}' — treated as another name for it.")
+            continue
         notes.append(
             f"Host '{name}' names only initiators that already belong to another host"
             + (f" ({', '.join(owners)})" if owners else "") + " — not planned."
         )
+    # The sheet's own name for a host planned under another, so Host-sets members typed with it still land.
+    for alias, target in alias_of.items():
+        seen = {alias}
+        while target not in hosts and target in alias_of and target not in seen:
+            seen.add(target)
+            target = alias_of[target]
+        if alias not in hosts and target in hosts and alias not in hosts[target].aliases:
+            hosts[target].aliases.append(alias)
     if nameless:
         notes.append(
             f"{nameless} initiator(s) logged in with no host name — name them on the sheet's Hosts "
