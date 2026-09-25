@@ -19,9 +19,13 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
 
 - **R1 — no sheet host is dropped.** A Hosts-tab row with a name (and optionally IP) but no WWPN/IQN is
   a lookup request, not a parse error. Discovery resolves it, in order: vCenter host of that name or
-  IP → array host object of that name → array iSCSI login from that IP → an IQN whose node name is the
-  host's short name. Found: its initiators are filled in and it joins/provisions like a typed row.
-  Not found: it is still listed (source `sheet`, warning *"not found — … add its WWPN/IQN"*), a
+  IP → array host object of that name → array iSCSI login from that IP → then by short name
+  (`esx01` = `esx01.lab.local`, either way round; never an IP) the vCenter host, the array host
+  object, an IQN's node name. A short name that fits two or more hosts is refused (*"not found
+  uniquely — … fits 2 vCenter hosts (…)"*), never guessed. Found: its initiators are filled in and
+  it provisions under the name vCenter/the array already use (the array refuses a second host
+  object for a WWN it holds). Not found (vCenter unreachable says so rather than "not in vCenter"):
+  it is still listed (source `sheet`, warning *"not found — … add its WWPN/IQN"*), a
   discovery note names it, and the provisioning plan notes it as not planned.
 - **R2 — ESXi via vCenter:** serial number (`hardware.systemInfo.serialNumber`, fallback
   `otherIdentifyingInfo` SerialNumberTag/ServiceTag) and iSCSI IQNs (`InternetScsiHba.iScsiName`)
