@@ -9,6 +9,7 @@ a Linux host seen only on the fabric could be zoned but never put in a host set 
 
 from __future__ import annotations
 
+import ipaddress
 from collections import OrderedDict
 
 from alletra_onboard.domain.discovery import DiscoveryReport, node_name_from_iqn
@@ -23,58 +24,107 @@ def _short(name: str) -> str:
     return (name or "").strip().lower().split(".")[0]
 
 
+def _short_key(name: str) -> str:
+    """The short name to compare, or "" for an IP address ("10.9.9.9" is not host "10")."""
+    try:
+        ipaddress.ip_address((name or "").strip())
+        return ""
+    except ValueError:
+        return _short(name)
+
+
+def _ambiguous(short: str, where: str, names: list[str]) -> str:
+    return (
+        f"not found uniquely — short name '{short}' fits {len(names)} {where} ({', '.join(names)}); "
+        "type the full name or its WWPN/IQN on the Hosts tab"
+    )
+
+
 def resolve_declared_hosts(
-    declared_hosts: list[DeclaredHost] | None, discovery: DiscoveryReport,
+    declared_hosts: list[DeclaredHost] | None, discovery: DiscoveryReport, *, canonical_names: bool = False,
 ) -> tuple[list[DeclaredHost], dict[str, str]]:
     """SPEC-014 R1: fill in the initiators of a sheet host typed with a name (and IP) but no WWPN/IQN.
 
     Looked up, in order: the server's own read over its sheet login (SPEC-014 R4); the vCenter host
-    of that name or IP; the array host object of that name; an array iSCSI login from that IP; an IQN
-    whose node name is the host's short name. Returns (hosts with ids filled where found, name -> how
-    it was found or why not). Rows that carried ids are returned unchanged and have no entry."""
+    of that name or IP; the array host object of that name; an array iSCSI login from that IP; then
+    by short name (esx01 = esx01.lab.local) the vCenter host, the array host object, an IQN's node
+    name. A short name that fits more than one host is refused, not guessed. Returns (hosts with
+    ids filled where found, sheet name -> how it was found or why not). Rows that carried ids are
+    returned unchanged and have no entry.
+
+    `canonical_names` renames a found row to the name its source already uses, for the planners:
+    the array refuses a second host object for a WWN it has (`ensure_host`), and vCenter's name
+    already owns those initiators in the union."""
     by_vcenter: dict[str, list[str]] = {}
     for hba in discovery.host_hbas:
         by_vcenter.setdefault(hba.host_name, []).append(normalize_wwpn(hba.wwpn))
     vcenter_iqns = {i.host_name: i.iqns for i in discovery.host_identities}
     reads = {r.host_name: r for r in discovery.host_reads if not r.error}
+    iqn_owner = {iqn: a.name for a in discovery.array_hosts for iqn in a.iqns}
     out: list[DeclaredHost] = []
     how: dict[str, str] = {}
     for d in declared_hosts or []:
         if d.wwpns or d.iqn:
             out.append(d)
             continue
+
+        def take(source_name: str, text: str, wwpns=(), iqn: str = "", d: DeclaredHost = d) -> None:
+            update = {"wwpns": list(wwpns), "iqn": iqn}
+            if canonical_names and source_name:  # an unclaimed login has no name of its own
+                update["name"] = source_name
+            out.append(d.model_copy(update=update))
+            how[d.name] = text
+
         read = reads.get(d.name)
         if read and (read.wwpns or read.iqns):
-            out.append(d.model_copy(update={"wwpns": list(read.wwpns), "iqn": read.iqns[0] if read.iqns else ""}))
-            how[d.name] = f"read from the server over {read.method.upper()} ({read.address})"
+            take("", f"read from the server over {read.method.upper()} ({read.address})",
+                 read.wwpns, read.iqns[0] if read.iqns else "")
             continue
         keys = {k for k in (d.name.strip().lower(), d.address.strip().lower()) if k}
         found = next((n for n in {*by_vcenter, *vcenter_iqns} if n.lower() in keys), None)
         if found:
             iqns = vcenter_iqns.get(found, [])
-            out.append(d.model_copy(update={"wwpns": by_vcenter.get(found, []), "iqn": iqns[0] if iqns else ""}))
-            how[d.name] = f"found in vCenter as {found}"
+            take(found, f"found in vCenter as {found}", by_vcenter.get(found, []), iqns[0] if iqns else "")
             continue
         ah = next((a for a in discovery.array_hosts if a.name and a.name.lower() == d.name.strip().lower()), None)
         if ah and (ah.wwpns or ah.iqns):
-            out.append(d.model_copy(update={"wwpns": list(ah.wwpns), "iqn": next(iter(ah.iqns), "")}))
-            how[d.name] = f"found on the array as host {ah.name}"
+            take(ah.name, f"found on the array as host {ah.name}", ah.wwpns, next(iter(ah.iqns), ""))
             continue
         by_ip = next(
             (iqn for a in discovery.array_hosts for iqn, ip in a.addresses.items() if d.address and ip == d.address.strip()),
             None,
         )
         if by_ip:
-            out.append(d.model_copy(update={"iqn": by_ip}))
-            how[d.name] = f"found on the array: iSCSI login from {d.address}"
+            take(iqn_owner.get(by_ip, ""), f"found on the array: iSCSI login from {d.address}", iqn=by_ip)
             continue
-        by_node = next(
-            (iqn for a in discovery.array_hosts for iqn in a.iqns if _short(node_name_from_iqn(iqn)) == _short(d.name)),
-            None,
-        )
+        short = _short_key(d.name)
+        vc_short = sorted(n for n in {*by_vcenter, *vcenter_iqns} if short and _short_key(n) == short)
+        if len(vc_short) > 1:
+            out.append(d)
+            how[d.name] = _ambiguous(short, "vCenter hosts", vc_short)
+            continue
+        if vc_short:
+            iqns = vcenter_iqns.get(vc_short[0], [])
+            take(vc_short[0], f"found in vCenter as {vc_short[0]} (short-name match)",
+                 by_vcenter.get(vc_short[0], []), iqns[0] if iqns else "")
+            continue
+        ah_short = [a for a in discovery.array_hosts
+                    if a.name and short and _short_key(a.name) == short and (a.wwpns or a.iqns)]
+        if len(ah_short) > 1:
+            out.append(d)
+            how[d.name] = _ambiguous(short, "array hosts", sorted(a.name for a in ah_short))
+            continue
+        if ah_short:
+            ah = ah_short[0]
+            take(ah.name, f"found on the array as host {ah.name} (short-name match)", ah.wwpns, next(iter(ah.iqns), ""))
+            continue
+        by_node = sorted(i for i in iqn_owner if short and _short(node_name_from_iqn(i)) == short)
+        if len(by_node) > 1:
+            out.append(d)
+            how[d.name] = _ambiguous(short, "array IQNs", by_node)
+            continue
         if by_node:
-            out.append(d.model_copy(update={"iqn": by_node}))
-            how[d.name] = f"found on the array: IQN names node {node_name_from_iqn(by_node)}"
+            take(iqn_owner[by_node[0]], f"found on the array: IQN names node {node_name_from_iqn(by_node[0])}", iqn=by_node[0])
             continue
         out.append(d)
         # A vCenter that timed out was never asked, so "not in vCenter" would be a false statement.
@@ -158,7 +208,7 @@ def union_hosts(
         claim(name, "vcenter", wwpns=[h.wwpn for h in hbas], os_=next((h.os for h in hbas if h.os), "") or "")
 
     # 2) The sheet's Hosts tab — typed by a human; rows without ids resolved from discovery.
-    declared_hosts, lookup = resolve_declared_hosts(declared_hosts, discovery)
+    declared_hosts, lookup = resolve_declared_hosts(declared_hosts, discovery, canonical_names=True)
     for d in declared_hosts:
         claim(d.name, "sheet", wwpns=d.wwpns, iqns=[d.iqn] if d.iqn else [], os_=d.os)
 

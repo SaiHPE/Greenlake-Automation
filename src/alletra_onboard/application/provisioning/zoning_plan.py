@@ -396,7 +396,7 @@ def build_zoning_plan(
     for hba in discovery.host_hbas:
         _claim(normalize_wwpn(hba.wwpn), hba.host_name, "vcenter", hba.os or "")
     vcenter_count = len(host_by_wwpn)
-    for declared in resolve_declared_hosts(getattr(intent, "declared_hosts", None) or [], discovery)[0]:
+    for declared in resolve_declared_hosts(getattr(intent, "declared_hosts", None) or [], discovery, canonical_names=True)[0]:
         for wwpn in declared.wwpns:
             _claim(normalize_wwpn(wwpn), declared.name, "sheet", declared.os or "")
     for array_host in discovery.array_hosts:

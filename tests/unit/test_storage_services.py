@@ -1893,6 +1893,89 @@ def test_not_found_says_vcenter_was_not_reached_rather_than_not_in_vcenter():
     assert how["ghost"].startswith("not found — not in vCenter")
 
 
+def _short_name_report(vcenter_names=(), showhost_rows=()):
+    from alletra_onboard.domain.discovery import DiscoveryReport, HostHba
+
+    showhost = "Id Name Persona ---WWN/iSCSI_Name--- Port IP_addr\n" + "".join(showhost_rows)
+    return DiscoveryReport(
+        host_hbas=[HostHba(host_name=n, wwpn=f"10005CED8C5312{i:02X}", os="VMware ESXi 8.0.3")
+                   for i, n in enumerate(vcenter_names)],
+        array_hosts=disc.parse_showhost(showhost),
+    )
+
+
+def test_a_sheet_fqdn_matches_a_short_vcenter_or_array_name_and_the_reverse():
+    from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    report = _short_name_report(
+        vcenter_names=["esx01.lab.local", "esx02"],
+        showhost_rows=[" 4 dbsrv01 WindowsServer 51402EC02089CC1F 1:3:2 n/a\n"],
+    )
+    resolved, how = resolve_declared_hosts([
+        DeclaredHost(name="ESX01", os="esxi"),                    # sheet short, vCenter FQDN
+        DeclaredHost(name="esx02.lab.local", os="esxi"),          # sheet FQDN, vCenter short
+        DeclaredHost(name="dbsrv01.corp.example", os="windows"),  # sheet FQDN, array host short
+    ], report)
+    by = {d.name: d for d in resolved}
+    assert by["ESX01"].wwpns == ["10005CED8C531200"]
+    assert how["ESX01"] == "found in vCenter as esx01.lab.local (short-name match)"
+    assert by["esx02.lab.local"].wwpns == ["10005CED8C531201"]
+    assert by["dbsrv01.corp.example"].wwpns == ["51402EC02089CC1F"]
+    assert how["dbsrv01.corp.example"] == "found on the array as host dbsrv01 (short-name match)"
+
+
+def test_a_short_name_match_is_planned_once_under_the_name_the_array_or_vcenter_uses():
+    # ensure_host refuses a second host object for a WWN the array already has, so the sheet's FQDN
+    # must not become a new host name for dbsrv01's HBA.
+    from alletra_onboard.application.provisioning.hosts import union_hosts
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    report = _short_name_report(
+        vcenter_names=["esx01.lab.local"],
+        showhost_rows=[" 4 dbsrv01 WindowsServer 51402EC02089CC1F 1:3:2 n/a\n"],
+    )
+    hosts, notes = union_hosts(report, [
+        DeclaredHost(name="dbsrv01.corp.example", os="windows"),
+        DeclaredHost(name="ESX01", os="esxi"),
+    ])
+    assert set(hosts) == {"esx01.lab.local", "dbsrv01"}
+    assert hosts["dbsrv01"].wwpns == ["51402EC02089CC1F"]
+    assert not any("already belong to another host" in n for n in notes)
+
+
+def test_an_ambiguous_short_name_is_refused_not_guessed():
+    from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts, union_hosts
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    report = _short_name_report(vcenter_names=["esx01.site-a.local", "esx01.site-b.local"])
+    resolved, how = resolve_declared_hosts([DeclaredHost(name="esx01", os="esxi")], report)
+    assert resolved[0].wwpns == [] and resolved[0].iqn == ""
+    assert how["esx01"] == (
+        "not found uniquely — short name 'esx01' fits 2 vCenter hosts (esx01.site-a.local, "
+        "esx01.site-b.local); type the full name or its WWPN/IQN on the Hosts tab"
+    )
+    _, notes = union_hosts(report, [DeclaredHost(name="esx01", os="esxi")])
+    assert any("'esx01' is on the sheet with no WWPN/IQN and was not found uniquely" in n for n in notes)
+    # Exact still wins over a short-name tie.
+    resolved, how = resolve_declared_hosts([DeclaredHost(name="esx01.site-b.local", os="esxi")], report)
+    assert resolved[0].wwpns == ["10005CED8C531201"] and how["esx01.site-b.local"] == "found in vCenter as esx01.site-b.local"
+
+
+def test_ip_addresses_never_short_name_match():
+    from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    report = _short_name_report(vcenter_names=["10.132.30.136"])
+    resolved, how = resolve_declared_hosts([
+        DeclaredHost(name="10.9.9.9", os="esxi"),    # "10" would otherwise fit "10.132.30.136"
+        DeclaredHost(name="10", os="esxi"),
+    ], report)
+    assert all(d.wwpns == [] for d in resolved)
+    assert how["10.9.9.9"].startswith("not found — not in vCenter")
+    assert how["10"].startswith("not found — not in vCenter")
+
+
 def test_vcenter_identity_reads_serial_and_iqn_from_host_objects():
     from types import SimpleNamespace as NS
 
