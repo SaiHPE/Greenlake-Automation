@@ -26,7 +26,10 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
   it provisions under the name vCenter/the array already use (the array refuses a second host
   object for a WWN it holds). Not found (vCenter unreachable says so rather than "not in vCenter"):
   it is still listed (source `sheet`, warning *"not found — … add its WWPN/IQN"*), a
-  discovery note names it, and the provisioning plan notes it as not planned.
+  discovery note names it, and the provisioning plan notes it as not planned. A Host sets member
+  or host export typed with the sheet's name follows the host to its planned name (plan note
+  *"sheet host 'X' is the same server as 'Y' …"*); a member nothing names is noted, not dropped
+  silently (4a53429).
 - **R2 — ESXi via vCenter:** serial number (`hardware.systemInfo.serialNumber`, fallback
   `otherIdentifyingInfo` SerialNumberTag/ServiceTag) and iSCSI IQNs (`InternetScsiHba.iScsiName`)
   per host, joined on the IQN like any initiator. Enrichment only: its failure is a note.
