@@ -77,8 +77,11 @@ def resolve_declared_hosts(
             how[d.name] = f"found on the array: IQN names node {node_name_from_iqn(by_node)}"
             continue
         out.append(d)
+        # A vCenter that timed out was never asked, so "not in vCenter" would be a false statement.
+        vcenter_read = not any(n.startswith("vCenter discovery failed") for n in discovery.notes)
         how[d.name] = (
-            "not found — not in vCenter, no array host of that name"
+            ("not found — not in vCenter" if vcenter_read else "not found — vCenter was not reached, so it could not be checked")
+            + ", no array host of that name"
             + (f", no iSCSI login from {d.address}" if d.address else "")
             + "; add its WWPN/IQN on the Hosts tab"
         )

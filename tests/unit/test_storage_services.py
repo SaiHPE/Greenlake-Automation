@@ -1878,6 +1878,21 @@ def test_an_unresolved_sheet_host_is_named_in_the_plan_notes():
     assert any("'ghost' is on the sheet with no WWPN/IQN and was not found" in n for n in notes)
 
 
+def test_not_found_says_vcenter_was_not_reached_rather_than_not_in_vcenter():
+    # 2026-09-25 CRV VZ: vCenter timed out, yet every unresolved row read "not in vCenter".
+    from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
+    from alletra_onboard.domain.provisioning import DeclaredHost
+
+    report = _spec14_report().model_copy(update={
+        "host_hbas": [], "host_identities": [],
+        "notes": ["vCenter discovery failed: Could not connect to vCenter 10.99.1.100: TimeoutError"],
+    })
+    _, how = resolve_declared_hosts([DeclaredHost(name="10.132.30.136", os="esxi")], report)
+    assert how["10.132.30.136"].startswith("not found — vCenter was not reached, so it could not be checked")
+    _, how = resolve_declared_hosts([DeclaredHost(name="ghost", os="linux")], _spec14_report())
+    assert how["ghost"].startswith("not found — not in vCenter")
+
+
 def test_vcenter_identity_reads_serial_and_iqn_from_host_objects():
     from types import SimpleNamespace as NS
 
