@@ -40,8 +40,13 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
 
 ### Slices
 
-1. R1–R3 (no new adapter, no sheet column) — **built 2026-09-21, pending live run** (rack13: `.136`
-   serial + IQN; `arcus-win137` with WWPNs blanked on the sheet → found on the array).
+1. R1–R3 (no new adapter, no sheet column) — **built 2026-09-21; R1 array half seen live 2026-09-25**
+   on the CRV VZ array (10.64.122.140, offline bundle + `ui-smoke/spec014.ps1`, 14 PASS / 1 FAIL): a
+   no-ID row `CRV_VZ_DL360G11D24U25` → *found on the array as host …* with both WWPNs; a row nothing
+   finds stays listed with its warning **and** the discovery note (fix 3407a33); discovery reads 12
+   ports while vCenter times out. **Still owed live:** R2 (vCenter serial + IQN) — no vCenter is
+   reachable from the VZ jump server (vault cards; only LABDATA → VZ array, via a temporary route);
+   rack13 `.136` is the candidate. R3 (per-OS tables) needs a screenshot.
 2. Sheet login columns + Linux SSH (R4, R6, R7) — **built 2026-09-23, pending live run** (no Linux
    host on rack13; parsers pinned to RHEL 9-shaped output). `adapters/hosts/linux_ssh.py` runs a fixed
    keyed command set (`cat` of sysfs/`/etc` files, `hostname`, `multipath -ll`; `sudo -n` only for
