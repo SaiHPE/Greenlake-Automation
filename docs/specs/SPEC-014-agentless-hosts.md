@@ -1,7 +1,7 @@
 # SPEC-014 — Discovery of the sheet's hosts: serial, WWPN, IQN, per OS (G-2)
 
-**Status:** APPROVED 2026-09-21 (field request at the zoning/provisioning demo). Slices 1–3 built —
-pending live run.
+**Status:** APPROVED 2026-09-21 (field request at the zoning/provisioning demo). Slice 1 (R1–R3) and R7
+live-verified (CRV VZ 2026-09-25, rack13 2026-09-28); slices 2–3 built — pending live run.
 **Findings addressed:** G-2 (Windows/Linux hosts are only sheet-declared — WWPNs typed by hand — or
 named from the fabric name server; no OS, no multipathing, no confirmation the WWPN typed is the one
 in the server)
@@ -55,10 +55,12 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
    `081f3385`): an unresolved row reads *"vCenter was not reached, so it could not be checked"* when
    vCenter timed out (5673327), and a sheet FQDN `CRV_VZ_DL360G11D24U25.spec014.local` → *found on the
    array as host CRV_VZ_DL360G11D24U25 (short-name match)* with both WWPNs (e47c3e0). Planning under
-   the array's name and the ambiguous-short-name refusal are unit-tested only. **Still owed live:**
-   R2 (vCenter serial + IQN) — no vCenter is
-   reachable from the VZ jump server (vault cards; only LABDATA → VZ array, via a temporary route);
-   rack13 `.136` is the candidate. R3 (per-OS tables) seen in a screenshot on the same box.
+   the array's name and the ambiguous-short-name refusal are unit-tested only. **R2 seen live on
+   rack13 2026-09-28** (`spec014.ps1`, 36 PASS / 1 FAIL / 3 SKIP, run `540ce636`): vCenter returned an
+   identity for all 3 ESXi hosts; a no-ID row resolved *found in vCenter as 10.132.30.47* with serial
+   `CN763604C4`, both WWPNs and its iSCSI IQN; a Host sets member typed with the sheet name was planned
+   under the vCenter name (4a53429); the array / short-name / not-found paths repeated VZ's result;
+   no password in any run detail or event (R7). R3 (per-OS tables) seen in a screenshot on VZ.
 2. Sheet login columns + Linux SSH (R4, R6, R7) — **built 2026-09-23, pending live run** (no Linux
    host on rack13; parsers pinned to RHEL 9-shaped output). `adapters/hosts/linux_ssh.py` runs a fixed
    keyed command set (`cat` of sysfs/`/etc` files, `hostname`, `multipath -ll`; `sudo -n` only for
@@ -71,6 +73,9 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
    `Get-InitiatorPort` (FC vs iSCSI told apart by address shape, not ConnectionType), MPIO feature
    state + `Get-MSDSMSupportedHW` 3PARdata claim + `Get-Disk` 3PARdata count. Live target
    `arcus-win137` (10.132.30.137); needs a local administrator login and 5985/5986 open from the jump box.
+   2026-09-28 rack13 (run `11a1d15f`): WinRM answered but refused `administrator` (*login failed …
+   check the Hosts tab login*) — the failure path is live (a note, the host stays listed, no password
+   echoed); the read itself and R6 are still owed.
 
 The sections below are the original deferral analysis, kept for the record.
 
