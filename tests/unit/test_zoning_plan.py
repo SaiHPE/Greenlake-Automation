@@ -254,14 +254,19 @@ def test_a_fabric_without_an_effective_config_renders_no_activation():
 
 
 def test_the_plan_notes_a_switch_whose_effective_config_was_not_read():
+    # Live rack13 F1, 2026-09-28: zoning cleared, default zone No Access (fixtures/rack13_fabric).
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures" / "rack13_fabric"
+    no_effective = (fixtures / "F1_cfgactvshow_no_effective_2026-09-28.txt").read_text()
+    assert "No Access" in (fixtures / "F1_defzone_show_2026-09-28.txt").read_text()
+
     def factory(creds):
         if creds.host == "sw-f1":
-            return FakeBrocade(_F1_NS, _F1_ALIS, "Defined configuration:\n cfg:\tOTHER\tz0\n")
+            return FakeBrocade(_F1_NS, _F1_ALIS, " zone:\tz0\t10:00:00:00:00:00:00:01\n" + no_effective)
         return FakeBrocade(_F2_NS, _F2_ALIS, _F2_CFG)
 
     plan = zp.build_zoning_plan(_intent(), _discovery(), brocade_factory=factory)
     f1 = next(f for f in plan.fabrics if f.fabric == "F1")
-    assert f1.active_cfg == ""                                   # never the defined decoy
+    assert f1.active_cfg == "" and f1.already_zoned == []
     notes = [n for n in plan.notes if "No effective zoning configuration" in n]
     assert len(notes) == 1 and "F1 switch sw-f1" in notes[0]
 
