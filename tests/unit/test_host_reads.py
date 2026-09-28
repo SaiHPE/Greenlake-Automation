@@ -223,6 +223,20 @@ def test_a_host_found_by_its_own_read_plans_under_the_array_name_with_a_linux_pe
     assert persona_for_os("vme") == "Generic-ALUA"                # was VMware by fall-through
 
 
+def test_a_blank_sheet_os_takes_the_os_the_server_reported_for_the_persona():
+    from alletra_onboard.application.provisioning.hosts import union_hosts
+
+    report = DiscoveryReport(host_reads=[HostRead(host_name="rhel01", address="10.1.1.1", os="linux",
+                                                  wwpns=["10000090FA8B1234"])])
+    hosts, _ = union_hosts(report, [DeclaredHost(name="rhel01", address="10.1.1.1", username="root")])
+    assert hosts["rhel01"].os == "linux" and hosts["rhel01"].persona == "Generic-ALUA"   # was VMware
+
+
+def test_a_typed_iqn_in_another_case_is_not_a_mismatch():
+    report = DiscoveryReport(host_reads=[HostRead(host_name="w", address="x", iqns=["iqn.1991-05.com.microsoft:win01"])])
+    assert declared_mismatches([DeclaredHost(name="w", iqn="IQN.1991-05.COM.MICROSOFT:WIN01")], report) == []
+
+
 # ------------------------------------------------------------------ R5: Windows over WinRM
 
 WIN_OS = '{"Caption":"Microsoft Windows Server 2022 Standard","Version":"10.0.20348"}'
