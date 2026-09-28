@@ -277,6 +277,26 @@ def test_a_winrm_session_never_uses_the_environment_proxy(monkeypatch):
     assert captured["proxy"] is None and captured["transport"] == "ntlm"
 
 
+@pytest.mark.parametrize("user, hinted", [
+    ("administrator", True), ("ELJR0NB1UV\\Administrator", False), ("svc@asiapacific.hpqcorp.net", False),
+])
+def test_a_refused_bare_windows_user_gets_the_qualified_form_hint(monkeypatch, user, hinted):
+    """rack13 2026-09-28: a domain-joined server refused bare 'administrator'; ELJR0NB1UV\\Administrator worked."""
+    from alletra_onboard.adapters.hosts import windows_winrm
+
+    class Refusing:
+        def __init__(self, *a, **k):
+            pass
+
+        def run_ps(self, script):
+            raise windows_winrm.InvalidCredentialsError("401")
+
+    monkeypatch.setattr(windows_winrm, "winrm", type("W", (), {"Session": Refusing}))
+    with pytest.raises(windows_winrm.WindowsHostError) as exc:
+        windows_winrm.WindowsHostClient("10.132.30.137", user, "pw").connect()
+    assert ("COMPUTERNAME\\user" in str(exc.value)) is hinted
+
+
 # ------------------------------------------------------------------ R6: typed vs read
 
 def test_a_typed_wwpn_the_server_does_not_have_is_a_blocker():

@@ -75,7 +75,12 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
    `arcus-win137` (10.132.30.137); needs a local administrator login and 5985/5986 open from the jump box.
    2026-09-28 rack13 (run `11a1d15f`): WinRM answered but refused `administrator` (*login failed …
    check the Hosts tab login*) — the failure path is live (a note, the host stays listed, no password
-   echoed); the read itself and R6 are still owed.
+   echoed). **R5 read seen live the same day** with the tool's own client: `arcus-win137` is the rack13
+   jump box itself (10.132.30.137 = `ELJR0NB1UV`, domain-joined); `ELJR0NB1UV\Administrator` returned
+   Windows Server 2022 Datacenter, serial `SGH640WFT7`, FC WWPNs `51402EC02089CC1C`/`…CC1E` (the two
+   typed by hand in S-4), iSCSI IQN `iqn.1991-05.com.microsoft:eljr0nb1uv…`, *MPIO Installed; 3PARdata
+   VV claimed by MSDSM*. The bare name failed because a domain-joined server does not map it to the
+   local account; the login error now says so. R6 (typed-vs-read blocker) still owed via `spec014.ps1`.
 
 The sections below are the original deferral analysis, kept for the record.
 

@@ -109,7 +109,12 @@ class WindowsHostClient:
             try:
                 session.run_ps(SCRIPTS["hostname"])
             except InvalidCredentialsError as exc:
-                raise WindowsHostError(f"login failed for {self.username}@{self.host} — check the Hosts tab login") from exc
+                hint = "" if ("\\" in self.username or "@" in self.username) else (
+                    " (a domain-joined server needs COMPUTERNAME\\user for a local account, or DOMAIN\\user)"
+                )
+                raise WindowsHostError(
+                    f"login failed for {self.username}@{self.host} — check the Hosts tab login{hint}"
+                ) from exc
             except Exception as exc:  # noqa: BLE001 - refused / timeout / TLS: try the next listener
                 last = exc
                 continue
