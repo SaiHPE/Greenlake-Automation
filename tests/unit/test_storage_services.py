@@ -1810,6 +1810,25 @@ def test_an_incomplete_hosts_tab_login_is_refused(row, message):
         _parse_hosts([row])
 
 
+@pytest.mark.parametrize("password", ["=Hp1nvent", " lead", "trail ", "plain"])
+def test_passwords_survive_a_composed_sheet_exactly(password):
+    """rack13 2026-09-28: WinRM refused a login through the app that worked typed directly - a composed
+    '=...' value became an Excel formula (read back empty) and passwords were stripped of spaces."""
+    from alletra_onboard.application.platform.init_sheet import compose_workbook_bytes, parse_workbook_bytes
+    from alletra_onboard.domain.models import RunMode
+
+    raw = compose_workbook_bytes(
+        base=_sheet_with_hosts([]),
+        targets={"prov_array_password": password},
+        hosts=[{"name": "win01", "os": "windows", "address": "10.1.1.1", "username": "HOST\\Administrator",
+                "password": password}],
+    )
+    intent = parse_workbook_bytes(raw, mode=RunMode.PROVISION_ONLY).provisioning_intent
+    assert intent.declared_hosts[0].password.get_secret_value() == password
+    assert intent.array.password.get_secret_value() == password
+    assert intent.declared_hosts[0].name == "win01"               # other fields are still trimmed as before
+
+
 def _spec14_report():
     from alletra_onboard.domain.discovery import DiscoveryReport, HostHba, HostIdentity
 
