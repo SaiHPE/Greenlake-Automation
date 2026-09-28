@@ -651,15 +651,15 @@ def _refine_fabrics_from_switches(cli, array_ports: list[ArrayPort], *, progress
 def _read_sheet_hosts(
     declared: list, linux_host_factory: Callable, windows_host_factory: Callable, progress: Callable[[str], None],
 ) -> list[HostRead]:
-    """One read-only login per sheet host with a username + address: Windows over WinRM, Linux over
-    SSH (an OS left blank is tried as Linux). ESXi is read through vCenter, VME is not logged in."""
+    """One read-only login per sheet host with a username + address: Windows over WinRM, Linux and HPE
+    VME nodes over SSH (an OS left blank is tried as Linux). ESXi is read through vCenter."""
     out: list[HostRead] = []
     for d in declared or []:
         if not (d.username and d.address):
             continue
         if d.os == "windows":
             method, factory, reader = "winrm", windows_host_factory, read_windows_host
-        elif d.os in ("linux", ""):
+        elif d.os in ("linux", "vme", ""):   # an HPE VME node is Ubuntu
             method, factory, reader = "ssh", linux_host_factory, read_linux_host
         else:
             reason = "ESXi hosts are read through vCenter" if d.os == "esxi" else f"no login is built for OS '{d.os}'"
