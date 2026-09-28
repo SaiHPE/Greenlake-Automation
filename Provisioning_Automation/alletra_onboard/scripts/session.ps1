@@ -623,7 +623,8 @@ if ($SkipCleanup) {
     # 2026-09-19: an EMPTY transcript (password prompt not answered, connection refused) matched no
     # error text and PASSED while every object stayed on the array. No output is a failure.
     if (-not ($transcript -match '\S')) { throw 'ssh returned no output at all - the password prompt was not answered or the connection failed' }
-    $bad = @($transcript -split "`n" | Where-Object { $_ -match 'Error|error|does not exist|Invalid|cannot|Cannot|member of|in use|not allowed|failed|Failed|denied|Denied' })
+    # ssh's own re-prompt after a mistyped password is not CLI error text; the WSAPI reads below decide.
+    $bad = @($transcript -split "`n" | Where-Object { $_ -notmatch 'please try again' -and $_ -match 'Error|error|does not exist|Invalid|cannot|Cannot|member of|in use|not allowed|failed|Failed|denied|Denied' })
     Check 'the removal lines were accepted (no CLI error text)' ($bad.Count -eq 0) ($bad -join ' | ') | Out-Null
     if (-not $script:Wsapi) { Wsapi-Login $ArrayHost $ArrayUser $ArrayPw }
     $final = Wsapi-Read 'after-cleanup'
