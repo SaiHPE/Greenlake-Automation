@@ -57,9 +57,6 @@ Copy-Item scripts\start.ps1 "$stage\start.ps1"
 Copy-Item scripts\start.cmd "$stage\start.cmd"   # double-click launcher (bypasses exec policy, self-elevates)
 Copy-Item scripts\session.ps1 "$stage\session.ps1"   # SPEC-006: the self-checking live session
 Copy-Item scripts\session.cmd "$stage\session.cmd"
-Copy-Item scripts\hosts_session.ps1 "$stage\hosts_session.ps1"   # SPEC-014: read-only host discovery check
-Copy-Item scripts\hosts_session.cmd "$stage\hosts_session.cmd"
-Copy-Item scripts\hosts_session.example.csv "$stage\hosts_session.example.csv"
 
 # drop compiled caches so the zip is clean
 Get-ChildItem -Recurse -Directory -Filter __pycache__ $stage | Remove-Item -Recurse -Force

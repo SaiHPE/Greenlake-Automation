@@ -306,13 +306,6 @@ It writes `session-<stamp>\report.md` (PASS/FAIL per check) and keeps every resp
 the docx and the SSH transcript in that folder; exit code 1 on any FAIL. Send the folder back.
 It never writes to a switch and never issues a CLI command the tool did not generate.
 
-**`hosts_session.ps1`** (SPEC-014) is its read-only sibling for host discovery, safe on a production
-array: `.\hosts_session.cmd -BaseSheet <sheet.xlsx> -HostsFile <hosts.csv>`. Each CSV row is a Hosts-tab
-host plus what you expect (`found` / `not_found` / `read_ok` / `read_fail` / `blocked`; see
-`hosts_session.example.csv`). It asserts the lookup, serial / WWPN / IQN, the server logins, the
-typed-vs-read blocker and that no password leaks, then proves the array's WSAPI counts are unchanged.
-No apply, no SSH or WinRM of its own, no switch writes.
-
 **Run history** lives in `%LOCALAPPDATA%\AlletraOnboard\` (from rc.28), so a new zip in a new folder
 keeps every earlier run; the console banner prints the folder. An older `.alletra_onboard\state.db`
 beside the exe is still used when present. *Open another run* in the wizard bar lists every run.
