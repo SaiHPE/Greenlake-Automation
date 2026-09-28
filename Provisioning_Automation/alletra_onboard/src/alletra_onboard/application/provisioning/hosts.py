@@ -71,10 +71,12 @@ def resolve_declared_hosts(
             out.append(d)
             continue
 
-        def take(source_name: str, text: str, wwpns=(), iqn: str = "", d: DeclaredHost = d) -> None:
+        def take(source_name: str, text: str, wwpns=(), iqn: str = "", d: DeclaredHost = d, os_: str = "") -> None:
             update = {"wwpns": list(wwpns), "iqn": iqn}
             if canonical_names and source_name:  # an unclaimed login has no name of its own
                 update["name"] = source_name
+            if os_ and not d.os:
+                update["os"] = os_
             out.append(d.model_copy(update=update))
             how[d.name] = text
 
@@ -82,7 +84,7 @@ def resolve_declared_hosts(
         if read and (read.wwpns or read.iqns):
             owner = next((known_owner[i] for i in (*read.wwpns, *read.iqns) if i in known_owner), "")
             take(owner, f"read from the server over {read.method.upper()} ({read.address})",
-                 read.wwpns, read.iqns[0] if read.iqns else "")
+                 read.wwpns, read.iqns[0] if read.iqns else "", os_=read.os)
             continue
         keys = {k for k in (d.name.strip().lower(), d.address.strip().lower()) if k}
         found = next((n for n in {*by_vcenter, *vcenter_iqns} if n.lower() in keys), None)
@@ -158,7 +160,7 @@ def declared_mismatches(declared_hosts: list[DeclaredHost] | None, discovery: Di
                 + (", ".join(read.wwpns) if read.wwpns else "no FC HBA")
                 + ". Fix the Hosts tab."
             )
-        if d.iqn and read.iqns and d.iqn not in read.iqns:
+        if d.iqn and read.iqns and d.iqn.lower() not in {i.lower() for i in read.iqns}:   # IQNs are case-insensitive
             out.append(
                 f"Host '{d.name}': sheet IQN {d.iqn} is not the server's — {read.address} reports "
                 f"{', '.join(read.iqns)}. Fix the Hosts tab."
