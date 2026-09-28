@@ -1,7 +1,7 @@
 # SPEC-014 — Discovery of the sheet's hosts: serial, WWPN, IQN, per OS (G-2)
 
-**Status:** APPROVED 2026-09-21 (field request at the zoning/provisioning demo). Slice 1 (R1–R3) and R7
-live-verified (CRV VZ 2026-09-25, rack13 2026-09-28); slices 2–3 built — pending live run.
+**Status:** APPROVED 2026-09-21 (field request at the zoning/provisioning demo). R1–R3, R5, R6, R7
+live-verified (CRV VZ 2026-09-25, rack13 2026-09-28). R4 (Linux) built — pending live run (no Linux host).
 **Findings addressed:** G-2 (Windows/Linux hosts are only sheet-declared — WWPNs typed by hand — or
 named from the fabric name server; no OS, no multipathing, no confirmation the WWPN typed is the one
 in the server)
@@ -80,7 +80,14 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
    Windows Server 2022 Datacenter, serial `SGH640WFT7`, FC WWPNs `51402EC02089CC1C`/`…CC1E` (the two
    typed by hand in S-4), iSCSI IQN `iqn.1991-05.com.microsoft:eljr0nb1uv…`, *MPIO Installed; 3PARdata
    VV claimed by MSDSM*. The bare name failed because a domain-joined server does not map it to the
-   local account; the login error now says so. R6 (typed-vs-read blocker) still owed via `spec014.ps1`.
+   local account; the login error now says so. **R5 + R6 live through the app 2026-09-28**
+   (`spec014.ps1` 40 PASS / 0 FAIL / 2 SKIP, runs `211592b2`, `1b0cab96`; evidence
+   `docs/validation/evidence-2026-09-28-spec014-rack13-run2-report.md`): a no-ID Windows row with
+   `ELJR0NB1UV\Administrator` → *read from the server over WINRM* with the serial, both WWPNs, IQN and
+   MPIO above; the same row with a typed WWPN `1000000000000001` → plan blocker *"sheet WWPN(s)
+   1000000000000001 not on the server — 10.132.30.137 reports 51402EC02089CC1C, 51402EC02089CC1E"*. The
+   run before it failed the login because the composed sheet had turned the password into an Excel
+   formula / stripped its spaces — fixed for every credential field (1cfa22e).
 
 The sections below are the original deferral analysis, kept for the record.
 
