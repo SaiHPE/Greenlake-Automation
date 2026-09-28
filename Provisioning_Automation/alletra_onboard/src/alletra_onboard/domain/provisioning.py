@@ -28,8 +28,8 @@ def persona_for_os(os: str | None) -> PersonaName:
         return "VMware"
     if "windows" in s:
         return "WindowsServer"
-    if any(k in s for k in ("linux", "rhel", "red hat", "ubuntu", "suse", "centos", "oracle", "debian")):
-        return "Generic-ALUA"
+    if any(k in s for k in ("linux", "rhel", "red hat", "ubuntu", "suse", "centos", "oracle", "debian", "vme")):
+        return "Generic-ALUA"   # HPE VME nodes are Ubuntu and register Generic-ALUA on the array
     return "VMware"  # default: the tool discovers ESXi hosts today
 
 

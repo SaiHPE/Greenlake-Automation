@@ -61,6 +61,9 @@ def resolve_declared_hosts(
     vcenter_iqns = {i.host_name: i.iqns for i in discovery.host_identities}
     reads = {r.host_name: r for r in discovery.host_reads if not r.error}
     iqn_owner = {iqn: a.name for a in discovery.array_hosts for iqn in a.iqns}
+    # Who already names an initiator: vCenter first, then an array host object (never the nameless bucket).
+    known_owner = {i: a.name for a in discovery.array_hosts if a.name for i in (*a.wwpns, *a.iqns)}
+    known_owner.update({w: name for name, ws in by_vcenter.items() for w in ws})
     out: list[DeclaredHost] = []
     how: dict[str, str] = {}
     for d in declared_hosts or []:
@@ -77,7 +80,8 @@ def resolve_declared_hosts(
 
         read = reads.get(d.name)
         if read and (read.wwpns or read.iqns):
-            take("", f"read from the server over {read.method.upper()} ({read.address})",
+            owner = next((known_owner[i] for i in (*read.wwpns, *read.iqns) if i in known_owner), "")
+            take(owner, f"read from the server over {read.method.upper()} ({read.address})",
                  read.wwpns, read.iqns[0] if read.iqns else "")
             continue
         keys = {k for k in (d.name.strip().lower(), d.address.strip().lower()) if k}

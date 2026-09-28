@@ -188,13 +188,39 @@ def test_a_sheet_host_nothing_finds_is_named_in_the_discovery_notes():
     assert any(n.startswith("Sheet host ghost: not found") for n in report.notes)
 
 
-def test_esxi_and_vme_logins_are_not_attempted():
+VME_IQN = "iqn.2024-12.com.hpe:vmenode3:42802"
+VME_READ = {"hostname": "vmenode3\n", "os": 'PRETTY_NAME="Ubuntu 24.04.1 LTS"\n',
+            "iqn": f"InitiatorName={VME_IQN}\n"}
+
+
+def test_esxi_is_not_logged_in_and_a_vme_node_is_read_over_ssh():
+    """An HPE VME node is Ubuntu: a `vme` row with a login is read like any Linux host and keeps its
+    VME label (rack13 has eight HPE_VM_* nodes on iSCSI)."""
     report = _discover(_intent(
         DeclaredHost(name="esx01", os="esxi", address="10.132.30.136", username="root"),
-        DeclaredHost(name="hvm3", os="vme", address="10.132.30.90", username="root"),
-    ), lambda creds: pytest.fail("no SSH login for ESXi or VME"))
-    notes = " ".join(report.notes)
-    assert "read through vCenter" in notes and "no login is built for OS 'vme'" in notes
+        DeclaredHost(name="vmenode3", os="vme", address="10.132.30.90", username="root"),
+    ), lambda creds: FakeLinux(VME_READ))
+    assert "read through vCenter" in " ".join(report.notes)
+    vme = next(h for h in report.hosts if h.name == "vmenode3")
+    assert vme.host_read.startswith("read over SSH") and vme.os == "vme" and vme.iqns == [VME_IQN]
+
+
+def test_a_host_found_by_its_own_read_plans_under_the_array_name_with_a_linux_persona():
+    """The array already has this IQN as HPE_VM_7f21...: planning a second host object for it would be
+    refused, so the read-found row plans under the array's name (as vCenter/array lookups already do)."""
+    from alletra_onboard.application.provisioning.hosts import union_hosts
+    from alletra_onboard.domain.discovery import ArrayHost
+    from alletra_onboard.domain.provisioning import persona_for_os
+
+    report = DiscoveryReport(
+        array_hosts=[ArrayHost(name="HPE_VM_7f21bf6bf27da180152ea344", persona="Generic-ALUA",
+                               iqns={VME_IQN: ["0:4:1"]})],
+        host_reads=[HostRead(host_name="vmenode3", address="10.132.30.90", os="linux", iqns=[VME_IQN])],
+    )
+    hosts, notes = union_hosts(report, [DeclaredHost(name="vmenode3", os="vme", address="10.132.30.90", username="root")])
+    assert list(hosts) == ["HPE_VM_7f21bf6bf27da180152ea344"] and hosts["HPE_VM_7f21bf6bf27da180152ea344"].iqns == [VME_IQN]
+    assert hosts["HPE_VM_7f21bf6bf27da180152ea344"].persona == "Generic-ALUA"
+    assert persona_for_os("vme") == "Generic-ALUA"                # was VMware by fall-through
 
 
 # ------------------------------------------------------------------ R5: Windows over WinRM
