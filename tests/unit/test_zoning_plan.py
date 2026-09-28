@@ -239,6 +239,26 @@ def test_render_commands_dedupes_colliding_zones():
     assert len(zones) == 1   # both pairs collide on zone "H_A" -> deduped
 
 
+def test_no_effective_config_is_said_not_silently_omitted():
+    """rack13 F1, 2026-09-28: zoning disabled on the fabric -> the set ended after zonecreate, the
+    operator guessed `cfgenable mycfg` ('not found') and the host stayed unzoned with no explanation."""
+    from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, ZoningPlan
+
+    no_eff = "Defined configuration:\n zone:\tz1\t10:00:00:00:00:00:00:01\n\nEffective configuration:\n No Effective configuration: (No Access)\n"
+    assert zp.parse_active_cfg(no_eff) == ""
+    assert "NO effective zoning configuration" in zp.active_cfg_note("F1", "10.132.30.111", no_eff)
+    assert "could not be read" in zp.active_cfg_note("F1", "10.132.30.111", "garbage")
+    assert zp.active_cfg_note("F1", "s", "Effective configuration:\n cfg:\tmycfg\n") is None
+
+    h = AliasedWwpn(wwpn="AA", display="aa", role="host", fabric="F1", suggested_alias="H")
+    arr = AliasedWwpn(wwpn="CC", display="cc", role="array", fabric="F1", nsp="0:3:1", suggested_alias="A")
+    plan = ZoningPlan(fabrics=[FabricZonePlan(fabric="F1", switch_host="s", active_cfg="",
+                                              hosts=[h], array_ports=[arr], pairs=[("AA", "CC")])])
+    cmds = zp.render_commands(plan, {})[0]["F1"]
+    assert not any(c.startswith(("cfgadd", "cfgsave", "cfgenable")) for c in cmds)
+    assert any(c.startswith("# NOT ACTIVE") for c in cmds)
+
+
 # ---------------- real captures (tests/fixtures/vz_fabric, live VZ fabric 2026-08-14) ----------------
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "vz_fabric"

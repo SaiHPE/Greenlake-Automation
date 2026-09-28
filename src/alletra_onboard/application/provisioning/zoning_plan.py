@@ -114,6 +114,24 @@ def parse_active_cfg(cfgshow: str) -> str:
     return ""
 
 
+def active_cfg_note(label: str, host: str, cfgshow: str) -> str | None:
+    """Why a fabric has no active cfg name, in words the operator can act on ("" name = no cfgadd)."""
+    if parse_active_cfg(cfgshow):
+        return None
+    if "no effective configuration" in (cfgshow or "").lower():
+        return (
+            f"The {label} switch {host} has NO effective zoning configuration (cfgshow: 'No Effective "
+            "configuration') - zoning is not enabled on that fabric, so nothing on it can be zoned yet. The "
+            "command set creates the aliases and zones but cannot activate them: creating and enabling a "
+            "configuration on this fabric (cfgcreate + cfgenable) is the SAN owner's decision."
+        )
+    return (
+        f"The {label} switch {host}: the effective zoning configuration name could not be read from "
+        "cfgshow, so the command set has no cfgadd / cfgenable. Run cfgactvshow on the switch before "
+        "pasting anything."
+    )
+
+
 def parse_switchshow(text: str) -> tuple[str, int | None]:
     """`switchshow` -> (switchName, switchDomain). Either may be missing on a partial read."""
     name, domain = "", None
@@ -300,6 +318,8 @@ def build_zoning_plan(
                 cfg_text = switch.cfgshow()
                 active_cfg[label] = parse_active_cfg(cfg_text)
                 active_zones[label], _ = parse_active_zones(cfg_text)
+                if (why := active_cfg_note(label, creds.host, cfg_text)):
+                    plan.notes.append(why)
                 # Identity reads are best-effort: a fake or an older FOS without them must not sink
                 # the plan, which is complete without names.
                 try:
@@ -639,6 +659,10 @@ def render_commands(
             # replaces the effective config fabric-wide — the SAN team's act, in a window.
             cmds.append("cfgsave")
             cmds.append(f"cfgenable {fabric.active_cfg}")
+        elif zone_names:
+            # 2026-09-28 (rack13 F1): the set ended after zonecreate and the operator had no way to know why.
+            cmds.append("# NOT ACTIVE: no effective zoning configuration was read on this switch, so there is no cfgadd / cfgenable.")
+            cmds.append("# The zones above are created but zone nothing until they are in an ENABLED configuration - ask the SAN owner.")
         if cmds:
             # SPEC-010 R1: the FOS procedure starts by proving no zoning transaction is open. A line,
             # not a sentence beside a button — the .txt the SAN team receives must begin with it.
