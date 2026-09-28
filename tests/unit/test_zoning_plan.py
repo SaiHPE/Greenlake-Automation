@@ -239,24 +239,31 @@ def test_render_commands_dedupes_colliding_zones():
     assert len(zones) == 1   # both pairs collide on zone "H_A" -> deduped
 
 
-def test_no_effective_config_is_said_not_silently_omitted():
-    """rack13 F1, 2026-09-28: zoning disabled on the fabric -> the set ended after zonecreate, the
-    operator guessed `cfgenable mycfg` ('not found') and the host stayed unzoned with no explanation."""
+def test_a_fabric_without_an_effective_config_renders_no_activation():
+    """Without an effective cfg name there is nothing to cfgadd to: the set stops at the zones (the plan
+    note and the UI say why - the command list carries commands only)."""
     from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, ZoningPlan
-
-    no_eff = "Defined configuration:\n zone:\tz1\t10:00:00:00:00:00:00:01\n\nEffective configuration:\n No Effective configuration: (No Access)\n"
-    assert zp.parse_active_cfg(no_eff) == ""
-    assert "NO effective zoning configuration" in zp.active_cfg_note("F1", "10.132.30.111", no_eff)
-    assert "could not be read" in zp.active_cfg_note("F1", "10.132.30.111", "garbage")
-    assert zp.active_cfg_note("F1", "s", "Effective configuration:\n cfg:\tmycfg\n") is None
 
     h = AliasedWwpn(wwpn="AA", display="aa", role="host", fabric="F1", suggested_alias="H")
     arr = AliasedWwpn(wwpn="CC", display="cc", role="array", fabric="F1", nsp="0:3:1", suggested_alias="A")
     plan = ZoningPlan(fabrics=[FabricZonePlan(fabric="F1", switch_host="s", active_cfg="",
                                               hosts=[h], array_ports=[arr], pairs=[("AA", "CC")])])
     cmds = zp.render_commands(plan, {})[0]["F1"]
-    assert not any(c.startswith(("cfgadd", "cfgsave", "cfgenable")) for c in cmds)
-    assert any(c.startswith("# NOT ACTIVE") for c in cmds)
+    assert cmds[0] == "cfgtransshow" and any(c.startswith("zonecreate") for c in cmds)
+    assert not any(c.startswith(("cfgadd", "cfgsave", "cfgenable", "#")) for c in cmds)
+
+
+def test_the_plan_notes_a_switch_whose_effective_config_was_not_read():
+    def factory(creds):
+        if creds.host == "sw-f1":
+            return FakeBrocade(_F1_NS, _F1_ALIS, "Defined configuration:\n cfg:\tOTHER\tz0\n")
+        return FakeBrocade(_F2_NS, _F2_ALIS, _F2_CFG)
+
+    plan = zp.build_zoning_plan(_intent(), _discovery(), brocade_factory=factory)
+    f1 = next(f for f in plan.fabrics if f.fabric == "F1")
+    assert f1.active_cfg == ""                                   # never the defined decoy
+    notes = [n for n in plan.notes if "No effective zoning configuration" in n]
+    assert len(notes) == 1 and "F1 switch sw-f1" in notes[0]
 
 
 # ---------------- real captures (tests/fixtures/vz_fabric, live VZ fabric 2026-08-14) ----------------
