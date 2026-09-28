@@ -99,6 +99,19 @@ def parse_aliases(text: str) -> dict[str, list[str]]:
     return dict(out)
 
 
+def parse_defined_names(text: str) -> set[str]:
+    """Every alias, zone and cfg name in the DEFINED zone database (`cfgshow` / `alishow`). FOS will
+    not create a second object of a name it already has, so an `alicreate` of one fails and the
+    following `zonecreate` silently uses the EXISTING object's members."""
+    names: set[str] = set()
+    for line in (text or "").splitlines():
+        if "effective configuration" in line.lower():
+            break
+        if m := re.match(r"\s*(?:alias|zone|cfg):\s+(\S+)", line):
+            names.add(m.group(1))
+    return names
+
+
 def parse_active_cfg(cfgshow: str) -> str:
     """The EFFECTIVE (active) config name from `cfgshow` — never the first *defined* cfg (there are
     decoys like `F2_CFG1` / `F2_CFGclone`)."""
@@ -277,6 +290,7 @@ def build_zoning_plan(
     aliases: dict[str, dict[str, list[str]]] = {"F1": {}, "F2": {}}
     active_cfg: dict[str, str] = {}
     active_zones: dict[str, dict[str, set[str]]] = {}   # fabric -> {zone name: member WWPNs}
+    defined: dict[str, set[str]] = {"F1": set(), "F2": set()}
     switch_host: dict[str, str] = {}
     local_ns: dict[str, dict[str, "NsDevice"]] = {}   # nsshow ONLY: devices on the declared switch itself
     switch_name: dict[str, str] = {}
@@ -292,12 +306,14 @@ def build_zoning_plan(
                 local_ns[label] = parse_nameserver(nsshow_text)
                 ns[label] = parse_nameserver(nsshow_text + "\n" + nscam_text)
                 remote_domain[label] = parse_nscam_domains(nscam_text)
-                for wwpn, found in parse_aliases(switch.alishow()).items():
+                alishow_text = switch.alishow()
+                for wwpn, found in parse_aliases(alishow_text).items():
                     for alias in found:
                         per = aliases[label].setdefault(wwpn, [])
                         if alias not in per:
                             per.append(alias)
                 cfg_text = switch.cfgshow()
+                defined[label] = parse_defined_names(alishow_text) | parse_defined_names(cfg_text)
                 active_cfg[label] = parse_active_cfg(cfg_text)
                 active_zones[label], _ = parse_active_zones(cfg_text)
                 if not active_cfg[label]:
@@ -512,6 +528,7 @@ def build_zoning_plan(
             switch_name=switch_name.get(label, ""), fabric_name=fabric_name.get(label, ""),
             switch_count=len(names_by_domain),
             hosts=hosts, array_ports=ports, pairs=pairs, already_zoned=already, zone_names=zone_names,
+            defined_names=sorted(defined[label]),
         ))
 
     # 5) Host WWPNs on NO fabric -> offline; can't be placed (cable + power, then re-run).
@@ -601,6 +618,8 @@ def render_commands(
         # useless as no name — the paste would fail half-way and leave an open transaction.
         renderable: list[tuple[str, str]] = []
         skipped: list[str] = []
+        defined = set(fabric.defined_names)
+        new_alias: dict[str, str] = {}   # alias name this set will alicreate -> the WWPN it is for
         for host_wwpn, array_wwpn in new_pairs:
             nameless = [describe(w) for w in (host_wwpn, array_wwpn) if not alias_for(w)]
             if nameless:
@@ -616,8 +635,30 @@ def render_commands(
             ]
             if illegal:
                 skipped.append(f"{describe(host_wwpn)} × {describe(array_wwpn)} — " + "; ".join(illegal))
-            else:
-                renderable.append((host_wwpn, array_wwpn))
+                continue
+            # One name, one object: a name the switch already defines (or another port here takes)
+            # would make alicreate fail and the zone pick up someone else's WWPN.
+            clash: list[str] = []
+            for w in (host_wwpn, array_wwpn):
+                name = alias_for(w)
+                if name in by_wwpn[w].existing_aliases:
+                    continue
+                if name in defined:
+                    clash.append(f"alias '{name}' for {describe(w)} already exists on the switch for another device")
+                elif new_alias.get(name, w) != w:
+                    clash.append(f"alias '{name}' for {describe(w)} is also the name chosen for {describe(new_alias[name])}")
+            zone = f"{alias_for(host_wwpn)}_{alias_for(array_wwpn)}"
+            if zone in defined:
+                clash.append(f"zone '{zone}' already exists on the switch")
+            elif why := fos_name_problem(zone):
+                clash.append(f"zone name '{zone}' {why} — shorten an alias")
+            if clash:
+                skipped.append(f"{describe(host_wwpn)} × {describe(array_wwpn)} — " + "; ".join(clash))
+                continue
+            for w in (host_wwpn, array_wwpn):
+                if alias_for(w) not in by_wwpn[w].existing_aliases:
+                    new_alias.setdefault(alias_for(w), w)
+            renderable.append((host_wwpn, array_wwpn))
 
         # alicreate only for WWPNs that participate in at least one RENDERED zone (not merely a
         # selected one — a skipped pair must not leave an orphan alicreate behind), and only for
