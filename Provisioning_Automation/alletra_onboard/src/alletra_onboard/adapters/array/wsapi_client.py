@@ -328,9 +328,6 @@ class WsapiClient:
         Raises WsapiError if any WWN already belongs to a *different* host (EXISTENT_PATH) — that is a
         real conflict the operator must resolve, not something to silently adopt.
         """
-        persona_id = _WSAPI_PERSONA.get(persona)
-        if persona_id is None:
-            raise WsapiError(f"unknown host persona '{persona}' (expected one of {sorted(_WSAPI_PERSONA)})")
         # ONE getHosts read answers both questions: who owns each WWN, and does the host exist.
         owners_map = self.wwn_owners()
         host_exists = name in set(self.host_names())
@@ -345,6 +342,10 @@ class WsapiClient:
         if host_exists and not missing:
             return "exists"
         if not host_exists:
+            # Checked here only: an existing host keeps whatever persona the array gave it (e.g. Generic).
+            persona_id = _WSAPI_PERSONA.get(persona)
+            if persona_id is None:
+                raise WsapiError(f"unknown host persona '{persona}' (expected one of {sorted(_WSAPI_PERSONA)})")
             try:
                 self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": persona_id})
                 return "created"

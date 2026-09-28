@@ -192,6 +192,8 @@ def union_hosts(
         if host is None:
             host = ProvisionableHost(name=name, source=source, os=os_, persona=persona or persona_for_os(os_))
             hosts[name] = host
+        if source == "array":
+            host.on_array = True
         elif os_ and not host.os:
             host.os = os_
             if persona is None and host.source != "array":

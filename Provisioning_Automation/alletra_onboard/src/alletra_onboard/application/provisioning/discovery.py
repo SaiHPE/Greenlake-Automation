@@ -672,7 +672,8 @@ def _read_sheet_hosts(
             with factory(creds) as client:
                 out.append(reader(client, d.name, d.address))
         except Exception as exc:  # noqa: BLE001 - one host's login must not sink discovery
-            out.append(HostRead(host_name=d.name, address=d.address, method=method, error=str(exc)))
+            hint = " (OS is blank on the Hosts tab, so it was tried as Linux; set it to windows for a WinRM read)" if not d.os else ""
+            out.append(HostRead(host_name=d.name, address=d.address, method=method, error=f"{exc}{hint}"))
     return out
 
 
