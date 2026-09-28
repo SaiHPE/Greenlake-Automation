@@ -1,7 +1,0 @@
-name,os,address,wwpns,iqn,username,expect,expect_serial,expect_wwpns
-esx01.example.local,esxi,192.0.2.10,,,,found,,
-win01,windows,192.0.2.20,,,administrator,read_ok,,
-linux01,linux,192.0.2.30,,,root,read_ok,,
-zz-ghost,linux,192.0.2.250,,,,not_found,,
-zz-badlogin,windows,192.0.2.20,,,zz_nobody,read_fail,,
-zz-typo,windows,192.0.2.20,10000000C9FFFF99,,administrator,blocked,,
