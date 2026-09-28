@@ -439,6 +439,18 @@ def _reject_two_arrays(parsed: ParsedInitSheet) -> None:
     )
 
 
+#: Credential fields are used exactly as typed; every other field is trimmed.
+_VERBATIM_KEYS = frozenset({
+    "gl_client_secret", "prov_array_password", "prov_vcenter_password",
+    "prov_sw1_password", "prov_sw2_password", "password",
+})
+
+
+def _cell_text(key: str | None, value) -> str:
+    text = str(value)
+    return text if key in _VERBATIM_KEYS else text.strip()
+
+
 def _read_tab(sheet, label_to_key: dict[str, str]) -> dict[str, str]:
     """Collect Field->Value pairs from a fillable tab, matching labels to stable keys."""
     values: dict[str, str] = {}
@@ -448,8 +460,8 @@ def _read_tab(sheet, label_to_key: dict[str, str]) -> dict[str, str]:
         if label is None or value is None:
             continue
         key = label_to_key.get(_normalize_label(str(label)))
-        text = str(value).strip()
-        if key and text:
+        text = _cell_text(key, value)
+        if key and text.strip():
             values[key] = text
     return values
 
@@ -477,7 +489,7 @@ def _read_table(ws, columns: list[tuple[str, str, bool]]) -> list[dict[str, str]
     records: list[dict[str, str]] = []
     for row in rows[header_idx + 1:]:
         record = {
-            key: str(row[ci]).strip()
+            key: _cell_text(key, row[ci])
             for ci, key in col_index.items()
             if ci < len(row) and row[ci] is not None and str(row[ci]).strip()
         }
@@ -639,7 +651,14 @@ def _fill_kv_tab(ws, label_to_key: dict[str, str], values: dict[str, str]) -> No
             continue
         key = label_to_key.get(_normalize_label(str(label)))
         if key is not None and key in values:
-            row[1].value = values[key]
+            _write_text(row[1], values[key])
+
+
+def _write_text(cell, value) -> None:
+    """Write a composed value as-is: a string starting with '=' is text (a password), never a formula."""
+    cell.value = value
+    if isinstance(value, str) and value.startswith("="):
+        cell.data_type = "s"
 
 
 def _replace_row_table(ws, columns: list[tuple[str, str, bool]], records: list[dict[str, str]]) -> None:
@@ -670,7 +689,7 @@ def _replace_row_table(ws, columns: list[tuple[str, str, bool]], records: list[d
     for i, rec in enumerate(records):
         for key, val in rec.items():
             if key in col_of_key and val not in (None, ""):
-                ws.cell(row=header_row + 1 + i, column=col_of_key[key], value=val)
+                _write_text(ws.cell(row=header_row + 1 + i, column=col_of_key[key]), val)
 
 
 def compose_workbook_bytes(
