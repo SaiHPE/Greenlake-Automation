@@ -557,6 +557,18 @@ def test_ensure_host_creates_with_wsapi_persona():
     assert stub.calls == [("create", "esx1", [_WA], {"persona": 8})]
 
 
+def test_ensure_host_accepts_an_existing_host_whose_persona_this_tool_cannot_create():
+    # The union carries the array's own persona for a host it already has (e.g. 'Generic'); apply
+    # must not refuse a host it is not going to create or change.
+    import pytest
+    from alletra_onboard.adapters.array.wsapi_client import WsapiError
+
+    stub = _StubSdk(hosts={"legacy": {_WA}})
+    assert _client_with(stub).ensure_host("legacy", [_WA], persona="Generic") == "exists"
+    with pytest.raises(WsapiError, match="unknown host persona"):
+        _client_with(_StubSdk()).ensure_host("new", [_WB], persona="Generic")
+
+
 def test_ensure_host_refuses_wwn_owned_by_another_host():
     import pytest
     from alletra_onboard.adapters.array.wsapi_client import WsapiError

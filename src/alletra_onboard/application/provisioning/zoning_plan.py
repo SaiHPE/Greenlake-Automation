@@ -17,7 +17,7 @@ from collections import OrderedDict, defaultdict
 from typing import Callable
 
 from alletra_onboard.application.provisioning.clients import make_brocade
-from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
+from alletra_onboard.application.provisioning.hosts import declared_mismatches, resolve_declared_hosts
 from alletra_onboard.application.provisioning.zoning import parse_active_zones
 from alletra_onboard.domain.shared import normalize_wwpn, wwpn_colons
 from alletra_onboard.domain.discovery import DiscoveryReport
@@ -413,6 +413,8 @@ def build_zoning_plan(
         for wwpn, device in local_ns.get(label, {}).items():
             if device.is_physical_initiator:
                 _claim(wwpn, device.host_name, "switch", device.os)
+    # SPEC-014 R6: a typed WWPN the server does not report would be zoned to nothing.
+    plan.notes.extend(declared_mismatches(getattr(intent, "declared_hosts", None) or [], discovery))
     added = len(host_by_wwpn) - vcenter_count
     if not vcenter_count and host_by_wwpn:
         plan.notes.append(

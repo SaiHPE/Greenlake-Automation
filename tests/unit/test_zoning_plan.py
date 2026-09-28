@@ -816,3 +816,14 @@ def test_an_empty_selection_renders_no_cfgtransshow():
     plan = zp.build_zoning_plan(_rack13_intent(), _rack13_discovery(), brocade_factory=_rack13_factory)
     cmds, _ = zp.render_commands(plan, {}, [])
     assert cmds == {"F1": [], "F2": []}
+
+
+def test_a_typed_wwpn_the_server_does_not_report_is_flagged_on_the_zoning_plan_too():
+    """SPEC-014 R6 blocked only the provisioning plan — by then the wrong WWPN was already zoned."""
+    from alletra_onboard.domain.discovery import HostRead
+
+    disc = _rack13_discovery().model_copy(update={"host_reads": [HostRead(
+        host_name="arcus-win137", address="10.132.30.137", method="winrm",
+        wwpns=["51402EC02089CC1C", "51402EC02089CC1D"])]})
+    plan = zp.build_zoning_plan(_rack13_intent(), disc, brocade_factory=_rack13_factory)
+    assert any("51402EC02089CC1E not on the server" in n for n in plan.notes)

@@ -217,7 +217,7 @@ def test_a_host_found_by_its_own_read_plans_under_the_array_name_with_a_linux_pe
                                iqns={VME_IQN: ["0:4:1"]})],
         host_reads=[HostRead(host_name="vmenode3", address="10.132.30.90", os="linux", iqns=[VME_IQN])],
     )
-    hosts, notes = union_hosts(report, [DeclaredHost(name="vmenode3", os="vme", address="10.132.30.90", username="root")])
+    hosts, _ = union_hosts(report, [DeclaredHost(name="vmenode3", os="vme", address="10.132.30.90", username="root")])
     assert list(hosts) == ["HPE_VM_7f21bf6bf27da180152ea344"] and hosts["HPE_VM_7f21bf6bf27da180152ea344"].iqns == [VME_IQN]
     assert hosts["HPE_VM_7f21bf6bf27da180152ea344"].persona == "Generic-ALUA"
     assert persona_for_os("vme") == "Generic-ALUA"                # was VMware by fall-through
@@ -235,6 +235,39 @@ def test_a_blank_sheet_os_takes_the_os_the_server_reported_for_the_persona():
 def test_a_typed_iqn_in_another_case_is_not_a_mismatch():
     report = DiscoveryReport(host_reads=[HostRead(host_name="w", address="x", iqns=["iqn.1991-05.com.microsoft:win01"])])
     assert declared_mismatches([DeclaredHost(name="w", iqn="IQN.1991-05.COM.MICROSOFT:WIN01")], report) == []
+
+
+def test_a_read_found_iscsi_host_the_array_already_has_is_planned_not_refused():
+    """The sheet claims the array's name before the array does, so 'source' is sheet; the host object
+    still exists and can be a set member. It was told 'create it on the array first'."""
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.domain.discovery import ArrayHost
+
+    name = "HPE_VM_7f21bf6bf27da180152ea344"
+    report = DiscoveryReport(
+        array_hosts=[ArrayHost(name=name, persona="Generic-ALUA", iqns={VME_IQN: ["0:4:1"]})],
+        host_reads=[HostRead(host_name="vmenode3", address="10.132.30.90", os="linux", iqns=[VME_IQN])],
+    )
+    intent = _intent(DeclaredHost(name="vmenode3", os="vme", address="10.132.30.90", username="root"))
+    assert sp._hosts_by_name(report, intent) == {name: []}
+    assert not any("not supported" in n for n in sp._host_notes(intent, report, None, sp._hosts_by_name(report, intent)))
+
+
+def test_a_planned_host_with_no_os_from_any_source_is_flagged_not_blocked():
+    from alletra_onboard.application.provisioning import storage_provision as sp
+
+    intent = _intent(DeclaredHost(name="mystery", wwpns=["10000090FA8B9999"]))
+    report = DiscoveryReport()
+    notes = sp._host_notes(intent, report, None, sp._hosts_by_name(report, intent))
+    assert any(n.startswith("No OS known for mystery") and "VMware persona" in n for n in notes)
+
+
+def test_a_blank_os_login_that_fails_says_it_was_tried_as_linux():
+    def refuse(creds):
+        raise ConnectionError("port 22 refused")
+
+    report = _discover(_intent(DeclaredHost(name="srv", address="10.1.1.9", username="administrator")), refuse)
+    assert "tried as Linux" in next(n for n in report.notes if n.startswith("Host srv"))
 
 
 # ------------------------------------------------------------------ R5: Windows over WinRM

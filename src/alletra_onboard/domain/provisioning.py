@@ -183,6 +183,7 @@ class ProvisionableHost(BaseModel):
     os: str = ""
     persona: str = "VMware"
     aliases: list[str] = Field(default_factory=list)   # other names the sheet used for this host
+    on_array: bool = False                             # the array has a host object of this name
 
     @property
     def transport(self) -> str:

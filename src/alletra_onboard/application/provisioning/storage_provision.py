@@ -50,7 +50,7 @@ def _hosts_by_name(
     registers FC WWNs only, and a host object created without its IQN would be a lie of omission."""
     hosts, _ = _union(intent, discovery, zoning_plan)
     return OrderedDict(
-        (n, list(h.wwpns)) for n, h in hosts.items() if h.wwpns or (h.iqns and h.source == "array")
+        (n, list(h.wwpns)) for n, h in hosts.items() if h.wwpns or (h.iqns and h.on_array)
     )
 
 
@@ -64,11 +64,18 @@ def _host_notes(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_p
             "iSCSI-only member(s) in a host set: " + ", ".join(iscsi_members)
             + ". This tool's SAN zoning and path verification cover FC only — verify their paths by hand."
         )
-    uncreatable = [n for n, h in hosts.items() if not h.wwpns and h.iqns and h.source != "array"]
+    uncreatable = [n for n, h in hosts.items() if not h.wwpns and h.iqns and not h.on_array]
     if uncreatable:
         notes.append(
             "Not planned — iSCSI host creation is not supported by this tool yet: " + ", ".join(uncreatable)
             + ". Create them on the array first; they can then be set members."
+        )
+    guessed = [n for n in selected if n in hosts and not hosts[n].os and not hosts[n].on_array
+               and hosts[n].source != "vcenter"]
+    if guessed:
+        notes.append(
+            "No OS known for " + ", ".join(guessed) + " — created with the VMware persona. Set the OS on "
+            "the sheet's Hosts tab if any of them is not an ESXi host."
         )
     return notes
 
