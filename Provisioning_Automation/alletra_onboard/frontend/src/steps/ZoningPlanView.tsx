@@ -459,7 +459,7 @@ function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[]
     return <Text size="small" color="text-weak">{fabricTitle(fab)}: no commands — nothing selected here that does not already exist.</Text>;
   }
   const header = [
-    `# ${fabricTitle(fab)} — switch ${fab.switch_host} ${fab.switch_name ?? ''} — active cfg ${fab.active_cfg}`,
+    `# ${fabricTitle(fab)} — switch ${fab.switch_host} ${fab.switch_name ?? ''} — active cfg ${fab.active_cfg || 'NOT READ'}`,
     `# Generated ${new Date().toISOString()} by Alletra Onboard. Additive only: creates nothing that exists, removes nothing.`,
     `# Paste only after cfgtransshow reported "${PRECHECK_EXPECT}".`,
   ];
@@ -478,14 +478,15 @@ function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[]
       ...header, '',
       `# --- 1. check: must reply "${PRECHECK_EXPECT}" — stop if it does not ---`, ...precheck, '',
       '# --- 2. paste block (additive) ---', ...additive, '',
-      '# --- 3. save and activate: SAN team, in a window ---', ...activation, '',
+      '# --- 3. save and activate: SAN team, in a window ---',
+      ...(activation.length ? activation : ['# none: no effective zoning configuration was read on this switch - see the plan notes']), '',
     ].join('\n'),
   );
   return (
     <Box gap="xsmall">
       <Box direction="row" gap="small" align="baseline" wrap>
         <Text size="small" weight={600}>{fabricTitle(fab)}</Text>
-        <Text size="small" color="text-weak">switch {fab.switch_host} {fab.switch_name ?? ''} · cfg <Text size="small" style={mono}>{fab.active_cfg}</Text></Text>
+        <Text size="small" color="text-weak">switch {fab.switch_host} {fab.switch_name ?? ''} · cfg <Text size="small" style={mono}>{fab.active_cfg || 'not read'}</Text></Text>
       </Box>
       {precheck.length > 0 && (
         <Box gap="xxsmall">
@@ -516,6 +517,16 @@ function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[]
             the effective configuration across the whole fabric, so the SAN team runs it in a maintenance window.
           </Text>
           {activation.map((c, i) => <Text key={i} size="small" style={mono}>{c}</Text>)}
+        </Box>
+      )}
+      {activation.length === 0 && additive.length > 0 && (
+        <Box border={{ color: 'status-critical', side: 'left', size: '3px' }} pad={{ left: 'small', vertical: 'xsmall' }} gap="xxsmall">
+          <Text size="small" weight={600}>3. Save and activate — cannot be generated for this switch</Text>
+          <Text size="small">
+            No effective zoning configuration was read on {fab.switch_host}, so there is no <Text size="small" style={mono}>cfgadd</Text> or{' '}
+            <Text size="small" style={mono}>cfgenable</Text>. The zones in the paste block take no effect until they are in an enabled
+            configuration. Run <Text size="small" style={mono}>cfgactvshow</Text> on the switch and ask the SAN owner before pasting.
+          </Text>
         </Box>
       )}
     </Box>
