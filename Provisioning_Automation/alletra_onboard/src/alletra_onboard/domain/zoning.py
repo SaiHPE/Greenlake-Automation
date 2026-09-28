@@ -137,6 +137,7 @@ class FabricZonePlan(BaseModel):
     # first question on the live screen was "zoned by which zone?" — the answer was in the cfgshow we
     # had already read and thrown away.
     zone_names: dict[str, list[str]] = Field(default_factory=dict)
+    defined_names: list[str] = Field(default_factory=list)  # every alias/zone/cfg name the switch defines
 
 
 class ZoningPlan(BaseModel):

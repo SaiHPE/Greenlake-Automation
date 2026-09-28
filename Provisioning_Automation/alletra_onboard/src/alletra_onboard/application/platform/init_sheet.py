@@ -524,9 +524,12 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
         if ptype not in ("tpvv", "reduce"):
             raise ValueError(f"Volume '{r['name']}' — Type must be 'tpvv' or 'reduce'.")
         try:
-            size_gib = int(float(r["size_gib"]))
+            size = float(r["size_gib"])
         except (KeyError, ValueError) as exc:
             raise ValueError(f"Volume '{r.get('name', '?')}' — Size (GiB) must be a number.") from exc
+        if size <= 0 or not size.is_integer():
+            raise ValueError(f"Volume '{r['name']}' — Size (GiB) must be a whole number above 0 (got {r['size_gib']}).")
+        size_gib = int(size)
         volumes.append(VolumeRequest(
             name=r["name"], size_gib=size_gib,
             provisioning_type=ptype,  # type: ignore[arg-type]

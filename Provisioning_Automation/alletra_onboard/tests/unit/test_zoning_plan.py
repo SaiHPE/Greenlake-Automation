@@ -224,19 +224,56 @@ def test_suggested_alias_prefers_unique_over_shared_junk():
     assert host.suggested_alias == "CRVProd_hostA_P1"   # unique, not the shared SHARED_JUNK
 
 
-def test_render_commands_dedupes_colliding_zones():
-    # If two hosts end up with the same alias, their SIST zone names collide -> emit each zone ONCE.
+def test_one_new_alias_name_for_two_ports_zones_the_first_and_reports_the_second():
+    # Was "dedupe": BB's pair vanished and alias H (alicreated for AA only) was all the switch knew.
     from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, ZoningPlan
 
     h1 = AliasedWwpn(wwpn="AA", display="aa", role="host", fabric="F1", suggested_alias="H")
-    h2 = AliasedWwpn(wwpn="BB", display="bb", role="host", fabric="F1", suggested_alias="H")  # same alias
+    h2 = AliasedWwpn(wwpn="BB", display="bb", role="host", fabric="F1", host_name="hostB", suggested_alias="H")
     arr = AliasedWwpn(wwpn="CC", display="cc", role="array", fabric="F1", nsp="0:3:1", suggested_alias="A")
+    arr2 = AliasedWwpn(wwpn="DD", display="dd", role="array", fabric="F1", nsp="1:3:1", suggested_alias="A2")
     plan = ZoningPlan(fabrics=[FabricZonePlan(
         fabric="F1", switch_host="s", active_cfg="F1_CFG",
-        hosts=[h1, h2], array_ports=[arr], pairs=[("AA", "CC"), ("BB", "CC")],
+        hosts=[h1, h2], array_ports=[arr, arr2], pairs=[("AA", "CC"), ("BB", "DD")],
     )])
-    zones = [c for c in zp.render_commands(plan, {})[0]["F1"] if c.startswith("zonecreate")]
-    assert len(zones) == 1   # both pairs collide on zone "H_A" -> deduped
+    cmds, skipped = zp.render_commands(plan, {})
+    assert [c for c in cmds["F1"] if c.startswith("zonecreate")] == ['zonecreate "H_A","H;A"']
+    assert 'alicreate "A2","dd"' not in cmds["F1"]
+    assert "also the name chosen for" in skipped["F1"][0] and "hostB" in skipped["F1"][0]
+
+
+def test_a_new_alias_or_zone_name_the_switch_already_defines_is_not_rendered():
+    """alicreate of an existing name fails on the switch and the zonecreate after it uses that
+    alias's members - someone else's WWPN in a zone this tool proposed."""
+    from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, ZoningPlan
+
+    h = AliasedWwpn(wwpn="AA", display="aa", role="host", fabric="F1", suggested_alias="taken")
+    arr = AliasedWwpn(wwpn="CC", display="cc", role="array", fabric="F1", nsp="0:3:1",
+                      existing_aliases=["A"], suggested_alias="A")
+    plan = ZoningPlan(fabrics=[FabricZonePlan(fabric="F1", switch_host="s", active_cfg="F1_CFG",
+                                              hosts=[h], array_ports=[arr], pairs=[("AA", "CC")],
+                                              defined_names=["A", "taken", "H_A"])])
+    cmds, skipped = zp.render_commands(plan, {})
+    assert cmds["F1"] == [] and "'taken'" in skipped["F1"][0] and "already exists" in skipped["F1"][0]
+    cmds, skipped = zp.render_commands(plan, {"AA": "H"})
+    assert cmds["F1"] == [] and "zone 'H_A' already exists" in skipped["F1"][0]
+
+
+def test_a_zone_name_over_64_characters_is_reported_not_rendered():
+    from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, ZoningPlan
+
+    h = AliasedWwpn(wwpn="AA", display="aa", role="host", fabric="F1", suggested_alias="h" * 40)
+    arr = AliasedWwpn(wwpn="CC", display="cc", role="array", fabric="F1", nsp="0:3:1", suggested_alias="a" * 30)
+    plan = ZoningPlan(fabrics=[FabricZonePlan(fabric="F1", switch_host="s", active_cfg="F1_CFG",
+                                              hosts=[h], array_ports=[arr], pairs=[("AA", "CC")])])
+    cmds, skipped = zp.render_commands(plan, {})
+    assert cmds["F1"] == [] and "71 characters" in skipped["F1"][0]
+
+
+def test_defined_names_cover_aliases_zones_and_cfgs_but_not_the_effective_section():
+    text = ("Defined configuration:\n cfg:\tF1_CFG\tz1\n zone:\tz1\tA; B\n alias:\tA\t10:00:00:00:00:00:00:01\n"
+            "Effective configuration:\n cfg:\tF1_CFG\n zone:\tz_effective_only\n")
+    assert zp.parse_defined_names(text) == {"F1_CFG", "z1", "A"}
 
 
 def test_a_fabric_without_an_effective_config_renders_no_activation():

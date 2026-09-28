@@ -218,6 +218,15 @@ def test_provisioning_row_tables_are_plural_and_heterogeneous():
     assert intent.host_sets[1].members == []
 
 
+@pytest.mark.parametrize("size", ["1024.5", "0", "-5"])
+def test_a_volume_size_that_is_not_a_whole_number_of_gib_is_refused(size):
+    # int(float("1024.5")) used to create a 1024 GiB volume without a word.
+    prov = {"targets": _PROV_TARGETS, "volumes": [{"name": "v", "size_gib": size}], "hostsets": [{"name": "hs"}]}
+    with pytest.raises(ValueError, match="whole number"):
+        parse_workbook_bytes(_fill_tabs({"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.122.140"}, prov),
+                             mode=RunMode.PROVISION_ONLY)
+
+
 def test_a_workbook_naming_two_different_arrays_is_refused():
     """A run covers ONE array. The management IP is stated on the Initialisation tab and again on
     the Provisioning tab (the second exists so a PROVISION_ONLY run has an address at all), and
