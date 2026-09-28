@@ -70,3 +70,35 @@ def test_runner_asserts_the_rc19_to_rc23_changes_the_api_exposes():
         "Still needs eyes",                                                        # the screenshot list
     ):
         assert needle in text, needle
+
+
+# ---------------------------------------------------------------- SPEC-014: hosts_session.ps1 (read-only)
+
+HOSTS_RUNNER = RUNNER.parent / "hosts_session.ps1"
+
+
+def test_hosts_runner_is_pure_ascii():
+    bad = sorted({b for b in HOSTS_RUNNER.read_bytes() if b > 127})
+    assert not bad, f"non-ASCII bytes in hosts_session.ps1: {[hex(b) for b in bad]}"
+
+
+def test_hosts_runner_is_read_only_by_construction():
+    """It runs on production arrays (Landing Zone / Vault Zone): no apply, no SSH, no remoting, no switch."""
+    text = HOSTS_RUNNER.read_text(encoding="ascii")
+    body = __import__("re").sub(r"<#.*?#>", "", text, flags=__import__("re").S)   # the help block says what it never does
+    code = "\n".join(line for line in body.splitlines() if not line.lstrip().startswith("#"))
+    for forbidden in ("/storage/apply", "ssh ", "ssh.exe", "Invoke-Command", "New-PSSession", "Enter-PSSession",
+                      "New-CimSession", "removevlun", "removevv", "removehost", "createvv", "createvlun"):
+        assert forbidden not in code, forbidden
+    methods = {m for m in __import__("re").findall(r"Invoke-Json -Method '(\w+)'", code)}
+    assert methods <= {"GET", "POST", "DELETE"}                          # WSAPI: login POST, GETs, logout DELETE
+    assert "Invoke-Json -Method 'POST' -Uri \"$base/credentials\"" in code  # the only WSAPI POST is the login
+    assert "Add-Type -IgnoreWarnings -TypeDefinition" in code and "#pragma" not in text
+
+
+def test_hosts_runner_example_rows_use_known_expectations():
+    import csv
+
+    rows = list(csv.DictReader((RUNNER.parent / "hosts_session.example.csv").open()))
+    assert rows and {r["expect"] for r in rows} <= {"found", "not_found", "read_ok", "read_fail", "blocked"}
+    assert all("password" not in k for k in rows[0])                    # passwords are prompted, never in the file
