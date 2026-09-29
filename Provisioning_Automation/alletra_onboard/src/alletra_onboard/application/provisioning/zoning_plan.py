@@ -30,6 +30,14 @@ _WWPN_COLON = re.compile(r"(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}")
 # An array port's PortSymb self-describes it: "SGHD44LQLS - 0:3:1 - HPE64004-B" (serial, n:s:p).
 _ARRAY_PORT_SYMB = re.compile(r"^(\S+) - (\d+:\d+:\d+) - ")
 
+# Installer / OS default host names: many servers advertise them at once (the captured fabrics carry
+# 29 WWPNs under localhost.bgl1…), so as a name they would merge strangers into one array host.
+_PLACEHOLDER_HOSTNAMES = {"localhost", "smartstart", "ubuntu", "ubuntu-server"}
+
+
+def _host_identity(advertised: str) -> str:
+    return "" if advertised.rstrip(".").split(".")[0].lower() in _PLACEHOLDER_HOSTNAMES else advertised
+
 
 def parse_nameserver(text: str) -> dict[str, NsDevice]:
     """`nsshow`/`nscamshow` -> {normalized WWPN: NsDevice} for every ONLINE device. A device is here
@@ -56,7 +64,7 @@ def parse_nameserver(text: str) -> dict[str, NsDevice]:
         elif node := re.search(r'NodeSymb:\s*\[\d+\]\s*"(.*)"', line):
             current.node_symb = node.group(1).strip()
             if hn := re.search(r"\bHN:(\S+)", current.node_symb):
-                current.host_name = hn.group(1)
+                current.host_name = _host_identity(hn.group(1))
             if os_ := re.search(r"\bOS:(.+)$", current.node_symb):
                 current.os = os_.group(1).strip()
         elif dev := re.search(r"Device type:\s*(.+)", line):

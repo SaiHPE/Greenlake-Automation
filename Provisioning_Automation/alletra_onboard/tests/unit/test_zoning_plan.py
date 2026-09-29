@@ -761,10 +761,10 @@ def test_rack13_zoning_candidates_are_the_union_of_every_source():
     assert (f2_hosts["10005CED8C531294"].host_name, f2_hosts["10005CED8C531294"].host_source) == ("vmenode", "array")
     assert (f2_hosts["51402EC02089CBDA"].host_name, f2_hosts["51402EC02089CBDA"].host_source) == ("", "array")
     # Initiators nothing but the declared switch sees: the training team's Linux box, one Emulex
-    # HBA per fabric, unzoned on both — named by the NS HN: field, OS from OS:.
+    # HBA per fabric, unzoned on both — HN: is the installer default, so no name; OS from OS:.
     assert (f1_hosts["10005CED8C5312A3"].host_source, f1_hosts["10005CED8C5312A3"].host_name,
-            f1_hosts["10005CED8C5312A3"].os) == ("switch", "localhost.localdomain", "Linux")
-    assert f2_hosts["10005CED8C5312A2"].host_name == "localhost.localdomain"
+            f1_hosts["10005CED8C5312A3"].os) == ("switch", "", "Linux")
+    assert f2_hosts["10005CED8C5312A2"].host_name == ""
     # Offline: .47 both HBAs and .86's second HBA are in neither fabric.
     assert sorted(plan.offline_hosts) == sorted([
         "10.132.30.47 (10:00:08:f1:ea:c0:3d:e7)", "10.132.30.47 (10:00:08:f1:ea:c0:3d:e8)",
@@ -776,6 +776,24 @@ def test_rack13_zoning_candidates_are_the_union_of_every_source():
     assert any("non-standard cabling" in n for n in plan.notes)      # discovery's cabling note surfaces here
 
 
+def test_an_installer_default_host_name_is_not_an_identity():
+    """Many servers advertise HN:localhost… (29 WWPNs on the captured fabrics). As a name it merged
+    them into one provisioning host - one array host object carrying strangers' HBAs."""
+    from alletra_onboard.application.provisioning.hosts import union_hosts
+
+    ns = "".join(
+        f" N    010{i}00;    3;10:00:00:00:00:00:00:0{i};20:00:00:00:00:00:00:0{i}; na\n"
+        f'    NodeSymb: [40] "Emulex HBA FV1 DV1 HN:{hn} OS:Linux"\n'
+        for i, hn in enumerate(["localhost.localdomain", "localhost.bgl1.example.net", "LOCALHOST.", "rhel01"], 1)
+    )
+    devices = zp.parse_nameserver(ns)
+    assert [d.host_name for d in devices.values()] == ["", "", "", "rhel01"]
+    plan = {"fabrics": [{"hosts": [{"wwpn": w, "host_name": d.host_name, "host_source": "switch"}
+                                   for w, d in devices.items()]}]}
+    hosts, notes = union_hosts(DiscoveryReport(), [], plan)
+    assert list(hosts) == ["rhel01"] and any("3 initiator(s) logged in with no host name" in n for n in notes)
+
+
 def test_rack13_proposed_aliases_follow_the_convention_only_where_none_exist():
     plan = zp.build_zoning_plan(_rack13_intent(), _rack13_discovery(), brocade_factory=_rack13_factory)
     f1 = next(f for f in plan.fabrics if f.fabric == "F1")
@@ -785,7 +803,7 @@ def test_rack13_proposed_aliases_follow_the_convention_only_where_none_exist():
     port = next(p for p in f1.array_ports if p.nsp == "0:3:4")
     assert port.proposed_alias == "CZ2D2K014S_N0S3P4"                 # serial from the NS PortSymb
     linux = next(h for h in f1.hosts if h.wwpn == "10005CED8C5312A3")
-    assert linux.proposed_alias == "localhost_localdomain_hba2"       # 12:a2 (F2) is hba1, 12:a3 hba2
+    assert linux.proposed_alias == "host_12a3_hba1"                   # HN:localhost.localdomain is no name
     unclaimed = next(h for f in plan.fabrics for h in f.hosts if h.wwpn == "51402EC02089CBDA")
     assert unclaimed.proposed_alias == "host_cbda_hba1"               # nameless login: WWPN tail
     # A proposal is UI pre-fill only: rendering with no operator names still reports, never invents.
