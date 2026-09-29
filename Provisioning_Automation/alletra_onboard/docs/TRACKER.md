@@ -18,10 +18,9 @@ Status: `todo` · `doing` · `blocked` · `done`
 |---|---|---|---|---|---|
 | BL-02 | Docs catch-up: SCOPE.md (init, zoning, as-built are live-verified), SPEC-014 (09-28 zoning name rules), validation record for 2026-09-28, copilot-instructions | dev | todo | B.10 | After BL-01. |
 | BL-03 | Record the live initialization run | Sai → dev | blocked | B.10 | Needs date, array serial, GreenLake region of the from-scratch run. |
-| BL-05 | Demo recording | Sai | todo | B.9 | BL-01 and BL-04 done; record after BL-09 if the pre-click warning should be in it. |
+| BL-05 | Demo recording | Sai | todo | B.9 | Ready: BL-01, BL-04, BL-08, BL-09 done. |
 | BL-06 | Status workbook refresh | dev | todo | — | After each closed item. |
 | BL-07 | Dependabot: 4 alerts on github.com/SaiHPE/Greenlake-Automation | dev | todo | — | Bump, full test run, push both remotes. |
-| BL-09 | Names panel warns before *Generate* about a duplicate new alias, an alias the switch already has, a zone name > 64 or already defined | Sai | doing | B.5 | Built: the names turn red with the reason and Generate stays disabled until fixed (mirrors `render_commands`). rack13: repeat the BL-04 A/B names — red before the click. |
 
 ## Test live (built, not yet run on hardware)
 
@@ -52,6 +51,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 
 | ID | Item | Closed | Evidence |
 |---|---|---|---|
+| BL-09 | Names panel flags clashing alias/zone names before *Generate* | 2026-09-29 | 11ff0e1; rack13 screenshots: `CZ2D2K014S_N1S3P3` on a host port → red "Already on the switch for another device", Generate disabled; `host_cc1e_hba1` on two ports → both red "Same name as …", Generate disabled; corrected name → Valid, enabled. (Zone-name cases: logic check only.) |
 | BL-08 | Installer-default host names (`localhost…`, `smartstart`, `ubuntu[-server]`) are not identities | 2026-09-29 | c199a29; rack13 rebuilt plan: `10:00:5c:ed:8c:53:12:a3/a2` shown by WWPN, alias `host_12a3_hba1`. |
 | BL-04 | Zoning name checks live: alias already on the switch for another device; same new alias for two ports | 2026-09-29 | a0cbb04; rack13 screenshots: `CZ2D2K014S_N1S3P3` on a host port → Not included, no zonecreate; `host_cc1e_hba1` twice → first pair rendered, second Not included. (Zone > 64 covered by tests only.) |
 | BL-01 | Zoning starts with nothing ticked; the operator ticks every pair (decision 2026-09-29) | 2026-09-29 | 0a71a96; rack13 screenshots 12:50 — new panel text, operator's own two ticks, "Generate command set (2 new zones)". |
