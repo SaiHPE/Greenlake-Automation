@@ -16,13 +16,14 @@ Status: `todo` · `doing` · `blocked` · `done`
 
 | ID | Item | Owner | Status | Sheet | Next step / notes |
 |---|---|---|---|---|---|
-| BL-01 | **Zoning: nothing pre-ticked; the operator ticks every pair** (decided 2026-09-29 over "pre-tick every fabric port") | Sai | doing | B.5 | Built (`ZoningPlanView.tsx`, dist rebuilt). Close after the rack13 check: open Zoning, no pair is ticked, Generate stays disabled until one is. |
 | BL-02 | Docs catch-up: SCOPE.md (init, zoning, as-built are live-verified), SPEC-014 (09-28 zoning name rules), validation record for 2026-09-28, copilot-instructions | dev | todo | B.10 | After BL-01. |
 | BL-03 | Record the live initialization run | Sai → dev | blocked | B.10 | Needs date, array serial, GreenLake region of the from-scratch run. |
 | BL-04 | Zoning name checks, live spot-check (duplicate new alias; alias already on switch; zone name > 64) | Sai | todo | B.6 | rack13, read-only, ~5 min: type the names in step 2, see the pair under *skipped*. Paste nothing. |
 | BL-05 | Demo recording | Sai | todo | B.9 | After BL-01 and BL-04. |
 | BL-06 | Status workbook refresh | dev | todo | — | After each closed item. |
 | BL-07 | Dependabot: 4 alerts on github.com/SaiHPE/Greenlake-Automation | dev | todo | — | Bump, full test run, push both remotes. |
+| BL-08 | Installer-default host names (`localhost…`, `smartstart`, `ubuntu[-server]`) are not identities | Sai | doing | B.5 | Built: such an HN: leaves the port unnamed (shown by WWPN, alias `host_<wwpn tail>_hba1`), so strangers never merge into one array host. rack13: rebuild the zoning plan; the `localhost.localdomain` ports show by WWPN. |
+| BL-09 | Names panel warns before *Generate* about a duplicate new alias, an alias the switch already has, a zone name > 64 (today reported only after the click, under *Not included*) | dev | todo | B.5 | Frontend only; the plan already carries `defined_names`. |
 
 ## Test live (built, not yet run on hardware)
 
@@ -53,6 +54,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 
 | ID | Item | Closed | Evidence |
 |---|---|---|---|
+| BL-01 | Zoning starts with nothing ticked; the operator ticks every pair (decision 2026-09-29) | 2026-09-29 | 0a71a96; rack13 screenshots 12:50 — new panel text, operator's own two ticks, "Generate command set (2 new zones)". |
 | — | Initialization end to end (GreenLake → Cloud Connectivity → DSCC) on a fresh array | before 2026-09-29 | Operator-confirmed; record owed under BL-03. |
 | — | Discovery (ESXi via vCenter, array, Windows over WinRM, sheet lookups), provisioning FC, verify, as-built | 2026-09-28 | rack13: session.ps1 60/60 (09-19), 59/1 with the 1 an ssh typo (09-28, fixed dde5ed5); spec014.ps1 40/0/2. |
 | — | Tool-designed zone logs a host in (G-1) | 2026-09-17 | rack13. |
