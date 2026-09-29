@@ -5,6 +5,7 @@
 > it is [ADR 0006 — hybrid control plane](adr/0006-hybrid-control-plane.md); the language is fixed in
 > [CONTEXT.md](../CONTEXT.md); the current-state module map is [ARCHITECTURE.md](ARCHITECTURE.md).
 > Status here is checked against the code, not against plans. Last checked: **v0.16.0-rc.23** (2026-09-15).
+> **Open items, owners and blockers live in [TRACKER.md](TRACKER.md)** — this file is the per-area summary.
 >
 > **Live-proven since rc.5:** the provisioning track (discover → zoning check → plan → apply → path
 > verification → verify → as-built) ran end to end on rack13arcus twice by hand (2026-09-13/14,
