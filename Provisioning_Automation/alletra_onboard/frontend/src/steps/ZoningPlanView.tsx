@@ -289,7 +289,7 @@ function ZoneDesigner({
   return (
     <Surface
       title="Design new zones"
-      description="Only HBA ports with an unzoned array port are listed. HPE's redundancy rule — one port on each controller node per fabric — is pre-selected; untick anything your SAN design does not want. Already-zoned pairs are shown, never recreated."
+      description="Only HBA ports with an unzoned array port are listed. Nothing is ticked for you: tick each pair your SAN design wants. HPE's redundancy rule is at least one port on each controller node per fabric. Already-zoned pairs are shown, never recreated."
     >
       <Box gap="medium">
         {/* SPEC-010 R4 (Z-1): the glyphs the rows use, said once. */}
@@ -535,23 +535,6 @@ function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[]
 
 // ---------------------------------------------------------------- the step body
 
-/** Pre-select HPE's redundancy rule for every HBA port that needs zones: the first unzoned,
- *  non-caution array port on each controller node of that fabric. */
-function recommendedSelection(plan: ZoningPlan): Record<string, boolean> {
-  const out: Record<string, boolean> = {};
-  plan.fabrics.forEach((fab) => {
-    const zoned = new Set(fab.already_zoned.map(([h, a]) => pairKey(h, a)));
-    fab.hosts.forEach((h) => {
-      const unzoned = fab.array_ports.filter((p) => !zoned.has(pairKey(h.wwpn, p.wwpn)) && !p.caution);
-      if (unzoned.length === 0) return;
-      const byNode = new Map<number, AliasedWwpn>();
-      unzoned.forEach((p) => { const n = p.node ?? -1; if (!byNode.has(n)) byNode.set(n, p); });
-      byNode.forEach((p) => { out[pairKey(h.wwpn, p.wwpn)] = true; });
-    });
-  });
-  return out;
-}
-
 export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: string }) {
   const [aliases, setAliases] = useState<Record<string, string>>(() => {
     const seed: Record<string, string> = {};
@@ -560,7 +543,8 @@ export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: stri
     }));
     return seed;
   });
-  const [selected, setSelected] = useState<Record<string, boolean>>(() => recommendedSelection(plan));
+  // Field decision 2026-09-29 (BL-01): the operator ticks every pair; nothing is chosen for them.
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [result, setResult] = useState<ZoningRenderResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

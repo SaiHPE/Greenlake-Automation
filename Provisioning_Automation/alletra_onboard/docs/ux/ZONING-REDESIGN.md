@@ -144,7 +144,8 @@ exist.
 
 **C. Design new zones** — only HBA ports with at least one unzoned pair on a fabric. Array ports
 are grouped **by node** so "one port per node" (the redundancy rule) is visible, and that pattern is
-**pre-selected** as the recommendation (operator can untick). Already-zoned pairs render as a status
+**pre-selected** as the recommendation (operator can untick). *Superseded 2026-09-29 (TRACKER BL-01):
+nothing is pre-selected; the operator ticks every pair, and the panel states the rule.* Already-zoned pairs render as a status
 line, not as disabled checkboxes. An unnamed initiator (array login / NS only) gets a "Name this
 host" affordance that writes the name into the plan (not the sheet) so the alias suggestion and zone
 names are readable. Method toggle: SIST (today's grammar) or per-HBA 1:N (HPE's stated preference

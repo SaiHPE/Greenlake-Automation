@@ -16,7 +16,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 
 | ID | Item | Owner | Status | Sheet | Next step / notes |
 |---|---|---|---|---|---|
-| BL-01 | **Zoning pre-selects every array port on the host's fabric** (field request: odd host port → every odd-fabric array port) | Sai + dev | todo | B.5 | Confirm the rule, then change `recommendedSelection` in `frontend/src/steps/ZoningPlanView.tsx` (today: one port per controller node). |
+| BL-01 | **Zoning: nothing pre-ticked; the operator ticks every pair** (decided 2026-09-29 over "pre-tick every fabric port") | Sai | doing | B.5 | Built (`ZoningPlanView.tsx`, dist rebuilt). Close after the rack13 check: open Zoning, no pair is ticked, Generate stays disabled until one is. |
 | BL-02 | Docs catch-up: SCOPE.md (init, zoning, as-built are live-verified), SPEC-014 (09-28 zoning name rules), validation record for 2026-09-28, copilot-instructions | dev | todo | B.10 | After BL-01. |
 | BL-03 | Record the live initialization run | Sai → dev | blocked | B.10 | Needs date, array serial, GreenLake region of the from-scratch run. |
 | BL-04 | Zoning name checks, live spot-check (duplicate new alias; alias already on switch; zone name > 64) | Sai | todo | B.6 | rack13, read-only, ~5 min: type the names in step 2, see the pair under *skipped*. Paste nothing. |
