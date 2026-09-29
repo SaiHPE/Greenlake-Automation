@@ -27,7 +27,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 | BL-10 | Linux / HPE VME host read over SSH (SPEC-014 R4) | Sai | blocked | A.4, B.4 | A Linux login (root or passwordless sudo). Then `spec014.cmd … -LinuxHost -LinuxAddress -LinuxUser -LinuxOs`. |
 | BL-11 | iSCSI export (S-9) | Sai | blocked | B.6 | An iSCSI host on rack13 (`pending.ps1 -Iscsi`). |
 | BL-12 | ESXi shows the volume *Visible* after a rescan (SPEC-013) | Sai | todo | B.6 | ~10 min on rack13. |
-| BL-13 | Vault / Landing Zone end to end (T-0006) | Sai | blocked | B.6 | Network path from a CRV jump box to LZ array + vCenter and VZ vCenter + switches. Substitute evidence: rack13 60/60. Optional read-only extras: VZ verify + as-built; an LZ capture replayed offline. |
+| BL-13 | Vault / Landing Zone end to end (T-0006) | Sai | blocked | B.6 | Reachability check from the CRV jump server (DL380G9D24U29) 2026-09-29 20:26: **nothing reachable** — VZ/LZ arrays, vCenters, VZ switches, ESXi, the Windows VM all TIMEOUT. Every destination routes out the isolated "VZ REC" card (gw 10.54.159.254); the earlier temporary route via LABDATA (gw 10.54.127.254) is gone; "VZ Pre_Rec" (10.99.1.252, same subnet as the VZ vCenter) is not used — link likely down. Next: check 2 (admin PowerShell, temporary /32 routes via LABDATA) to split "this server's routing" from "network blocked"; then ask for permanent routes / access. LZ switch IPs unknown. Substitute evidence: rack13 60/60. |
 
 ## Build (not started or partial)
 
