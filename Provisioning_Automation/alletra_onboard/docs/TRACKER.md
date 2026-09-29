@@ -21,7 +21,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 | BL-05 | Demo recording | Sai | todo | B.9 | BL-01 and BL-04 done; record after BL-09 if the pre-click warning should be in it. |
 | BL-06 | Status workbook refresh | dev | todo | — | After each closed item. |
 | BL-07 | Dependabot: 4 alerts on github.com/SaiHPE/Greenlake-Automation | dev | todo | — | Bump, full test run, push both remotes. |
-| BL-09 | Names panel warns before *Generate* about a duplicate new alias, an alias the switch already has, a zone name > 64 (today reported only after the click, under *Not included*) | dev | todo | B.5 | Frontend only; the plan already carries `defined_names`. Seen live 2026-09-29: both clashing names read "Valid" until Generate. |
+| BL-09 | Names panel warns before *Generate* about a duplicate new alias, an alias the switch already has, a zone name > 64 or already defined | Sai | doing | B.5 | Built: the names turn red with the reason and Generate stays disabled until fixed (mirrors `render_commands`). rack13: repeat the BL-04 A/B names — red before the click. |
 
 ## Test live (built, not yet run on hardware)
 

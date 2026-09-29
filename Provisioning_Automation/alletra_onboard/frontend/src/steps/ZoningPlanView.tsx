@@ -64,6 +64,35 @@ function aliasSuggestion(name: string): string {
   return folded.slice(0, 64);
 }
 
+// BL-09: the name clashes zoning_plan.render_commands skips a pair for, said before Generate.
+function nameClashes(plan: ZoningPlan, selectedPairs: [string, string][], aliases: Record<string, string>) {
+  const port: Record<string, string> = {};   // wwpn -> why its new alias cannot be created
+  const zone: Record<string, string> = {};   // pairKey -> why its zone cannot be created
+  const chosen = new Set(selectedPairs.map(([h, a]) => pairKey(h, a)));
+  plan.fabrics.forEach((fab) => {
+    const defined = new Set(fab.defined_names ?? []);
+    const entry = new Map([...fab.hosts, ...fab.array_ports].map((w) => [w.wwpn, w]));
+    const label = (wwpn: string) => { const w = entry.get(wwpn); return w?.role === 'array' ? `array port ${w.nsp}` : (w ? hostName(w) : wwpn); };
+    const pairs = fab.pairs.filter(([h, a]) => chosen.has(pairKey(h, a)));
+    const typedFor = new Map<string, string[]>();
+    new Set(pairs.flat()).forEach((wwpn) => {
+      const name = aliases[wwpn] ?? '';
+      if (!name || entry.get(wwpn)?.existing_aliases.includes(name)) return;
+      if (defined.has(name)) port[wwpn] = 'Already on the switch for another device';
+      else typedFor.set(name, [...(typedFor.get(name) ?? []), wwpn]);
+    });
+    typedFor.forEach((wwpns) => {
+      if (wwpns.length > 1) wwpns.forEach((w) => { port[w] = `Same name as ${wwpns.filter((o) => o !== w).map(label).join(', ')}`; });
+    });
+    pairs.forEach(([h, a]) => {
+      const name = `${aliases[h] ?? ''}_${aliases[a] ?? ''}`;
+      if (defined.has(name)) zone[pairKey(h, a)] = `zone ${name} already exists on the switch`;
+      else if (name.length > 64) zone[pairKey(h, a)] = `zone ${name} is ${name.length} characters — FOS allows 64; shorten an alias`;
+    });
+  });
+  return { port, zone };
+}
+
 function download(filename: string, text: string) {
   const blob = new Blob([text], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
@@ -370,12 +399,13 @@ function ZoneDesigner({
 // ---------------------------------------------------------------- D. Names
 
 function AliasReview({
-  plan, selectedPairs, aliases, setAlias,
+  plan, selectedPairs, aliases, setAlias, clashes,
 }: {
   plan: ZoningPlan;
   selectedPairs: [string, string][];
   aliases: Record<string, string>;
   setAlias: (wwpn: string, v: string) => void;
+  clashes: ReturnType<typeof nameClashes>;
 }) {
   if (selectedPairs.length === 0) {
     return (
@@ -403,7 +433,8 @@ function AliasReview({
               {entries.map((w) => {
                 const value = nameOf(w.wwpn);
                 const reused = value !== '' && w.existing_aliases.includes(value);
-                const check = reused ? { tone: 'ok' as const, text: 'Existing alias — reused' } : aliasProblem(value);
+                const check = reused ? { tone: 'ok' as const, text: 'Existing alias — reused' }
+                  : clashes.port[w.wwpn] ? { tone: 'critical' as const, text: clashes.port[w.wwpn] } : aliasProblem(value);
                 const colour = check.tone === 'critical' ? 'status-critical' : check.tone === 'warning' ? 'status-warning' : 'status-ok';
                 const suggestion = check.tone === 'critical' ? aliasSuggestion(value) : '';
                 const offer = suggestion && suggestion !== value && aliasProblem(suggestion).tone !== 'critical';
@@ -427,6 +458,9 @@ function AliasReview({
               <Text size="xsmall" color="text-weak">
                 Zones to be created: {pairs.map(([h, a]) => `${nameOf(h) || '?'}_${nameOf(a) || '?'}`).join(' · ')}
               </Text>
+              {pairs.filter(([h, a]) => clashes.zone[pairKey(h, a)]).map(([h, a]) => (
+                <Text key={pairKey(h, a)} size="xsmall" color="status-critical">{clashes.zone[pairKey(h, a)]}</Text>
+              ))}
             </Box>
           );
         })}
@@ -558,8 +592,10 @@ export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: stri
   const totalZoned = plan.fabrics.reduce((n, f) => n + f.already_zoned.length, 0);
   // Say it BEFORE the click: a selected pair whose member has no acceptable name cannot be zoned
   // (the rc.1 live test ticked an alias-less port and got an unchanged preview with no explanation).
+  const clashes = nameClashes(plan, selectedPairs, aliases);
   const blocked = selectedPairs.filter(([h, a]) =>
-    aliasProblem(aliases[h] ?? '').tone === 'critical' || aliasProblem(aliases[a] ?? '').tone === 'critical').length;
+    aliasProblem(aliases[h] ?? '').tone === 'critical' || aliasProblem(aliases[a] ?? '').tone === 'critical'
+    || clashes.port[h] || clashes.port[a] || clashes.zone[pairKey(h, a)]).length;
 
   const generate = async () => {
     setBusy(true);
@@ -580,7 +616,7 @@ export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: stri
       <FabricOverview plan={plan} />
       <CurrentZoningTable plan={plan} />
       <ZoneDesigner plan={plan} selected={selected} toggle={toggle} />
-      <AliasReview plan={plan} selectedPairs={selectedPairs} aliases={aliases} setAlias={setAlias} />
+      <AliasReview plan={plan} selectedPairs={selectedPairs} aliases={aliases} setAlias={setAlias} clashes={clashes} />
 
       <Box direction="row" gap="small" align="center" wrap>
         <Button
@@ -591,7 +627,7 @@ export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: stri
           onClick={generate}
         />
         {totalZoned > 0 && <Text size="small" color="text-weak">{totalZoned} pair(s) already zoned — excluded automatically.</Text>}
-        {blocked > 0 && <Text size="small" color="status-critical">{blocked} selected pair(s) have a missing or invalid alias name.</Text>}
+        {blocked > 0 && <Text size="small" color="status-critical">{blocked} selected pair(s) have a missing, invalid or clashing name.</Text>}
       </Box>
 
       {result && (

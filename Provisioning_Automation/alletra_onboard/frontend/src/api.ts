@@ -298,6 +298,7 @@ export interface FabricZonePlan {
   hosts: AliasedWwpn[]; array_ports: AliasedWwpn[];
   pairs: [string, string][]; already_zoned: [string, string][];
   zone_names?: Record<string, string[]>;   // "host|array" -> effective zone name(s) covering the pair
+  defined_names?: string[];                // every alias/zone/cfg name the switch already defines
 }
 export interface ZoningPlan {
   fabrics: FabricZonePlan[]; offline_hosts: string[]; notes: string[]; error: string | null;
