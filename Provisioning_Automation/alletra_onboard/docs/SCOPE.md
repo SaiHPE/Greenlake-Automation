@@ -4,21 +4,21 @@
 > (2026-09-12). It replaces the earlier seven-stage lifecycle matrix. The architecture that carries
 > it is [ADR 0006 — hybrid control plane](adr/0006-hybrid-control-plane.md); the language is fixed in
 > [CONTEXT.md](../CONTEXT.md); the current-state module map is [ARCHITECTURE.md](ARCHITECTURE.md).
-> Status here is checked against the code, not against plans. Last checked: **v0.16.0-rc.23** (2026-09-15).
+> Status here is checked against the code, not against plans. Last checked: **v0.16.0 + main** (2026-09-29).
 > **Open items, owners and blockers live in [TRACKER.md](TRACKER.md)** — this file is the per-area summary.
 >
-> **Live-proven since rc.5:** the provisioning track (discover → zoning check → plan → apply → path
-> verification → verify → as-built) ran end to end on rack13arcus twice by hand (2026-09-13/14,
-> `docs/validation/2026-09-12-rack13arcus-live-test-2.md`) and twice by the session runner
-> (SPEC-006; 38/39 on 2026-09-15, the one FAIL a runner fault). Areas 2, 4 and the block half of 8–9
-> are therefore **live-verified for FC on one array**; the findings register
-> (`docs/ux/FINDINGS-2026-09-13.md`) has no open defect or UX row. **G-1 closed 2026-09-17**: a
-> tool-generated zone, pasted as rendered, logged a host into the array. S-3 (failure paths) done
-> 2026-09-17; S-2/S-6 covered by the runner. S-5 (resume) seen live 2026-09-17. Still owed live: S-9 (iSCSI, feasible
-> here; scripted as `pending.ps1 -Iscsi`), the ESXi view's *ok* state after a rescan (SPEC-013; the read itself seen live 2026-09-19), and the init track — **blocked on hardware**: it needs an
-> array that has never been initialised, which rack13arcus is not. It cannot be closed by any script or
-> release; it closes on the first factory-fresh unit. G-3 is built (SPEC-013, rc.28); G-2 (SPEC-014) is
-> built 2026-09-24 on a field request — pending live run (Windows on arcus-win137; no Linux host on rack13).
+> **Live-proven:** the **init track** was run from scratch on a factory-fresh array (operator-confirmed
+> 2026-09-29; canned demo in progress). The **provisioning track** (discover → zoning check → plan →
+> apply → path verification → verify → as-built) runs end to end on rack13arcus under the session
+> runner (SPEC-006): 60/60 on 2026-09-19 and again on 2026-09-28 (one FAIL that day was the runner
+> misreading an ssh password retry, fixed dde5ed5). **G-1 closed 2026-09-17**: a tool-generated zone,
+> pasted as rendered, logged a host into the array. S-3 (failure paths) and S-5 (resume) seen live
+> 2026-09-17. SPEC-014 (sheet hosts without typed IDs; ESXi serial/IQN; Windows over WinRM) live on
+> rack13 2026-09-28 (40/0/2). The zoning designer's 2026-09-29 changes (nothing pre-ticked, name
+> clashes flagged before and after *Generate*, installer-default host names ignored) seen live the same
+> day. Record: [validation/2026-09-29-rack13arcus-live-test-3.md](validation/2026-09-29-rack13arcus-live-test-3.md).
+> **Still owed live:** Linux host read over SSH (no login), S-9 iSCSI export, SPEC-013 *Visible* after
+> a rescan, CRV Vault / Landing Zone end to end (no network path) — see TRACKER *Test live*.
 
 ## Objective
 
@@ -57,15 +57,15 @@ runs an engagement **hands-off** and gets the **as-built / HLD / LLD** for free.
 
 | # | Area | Scope (as defined) | Status | Detail |
 |---|---|---|---|---|
-| 1 | **Alletra MP initialization** | Guided prerequisites; customer input template; GreenLake workspace and DSCC guidance; network/firewall requirements; time-synchronization assistance; automatic registration of array serial numbers and subscription keys; GreenLake connectivity checks; bundled discovery; initialization; instructions for remaining manual steps. | ✅ **Built** | Every sub-item exists: Prerequisites tab + downloadable firewall list (`platform/prereqs.py`); `Initialisation_sheet.xlsx` template (`platform/init_sheet.py`); Configure step with **Test connection**; **Sync system clock**; Component **A** GreenLake REST; preflight; bundled HPE Discovery Tool (SHA256-verified); Component **B** cloudinit; Component **C** DSCC Set Up System; Finish step. Ships alone as the `init-only` build profile (ADR 0007). |
+| 1 | **Alletra MP initialization** | Guided prerequisites; customer input template; GreenLake workspace and DSCC guidance; network/firewall requirements; time-synchronization assistance; automatic registration of array serial numbers and subscription keys; GreenLake connectivity checks; bundled discovery; initialization; instructions for remaining manual steps. | ✅ **Built — live-verified** | Every sub-item exists: Prerequisites tab + downloadable firewall list (`platform/prereqs.py`); `Initialisation_sheet.xlsx` template (`platform/init_sheet.py`); Configure step with **Test connection**; **Sync system clock**; Component **A** GreenLake REST; preflight; bundled HPE Discovery Tool (SHA256-verified); Component **B** cloudinit; Component **C** DSCC Set Up System; Finish step. Ships alone as the `init-only` build profile (ADR 0007). Run from scratch on a factory-fresh array (operator-confirmed 2026-09-29). |
 | 2 | **Host and array discovery** | Discover ESXi, Windows and Linux hosts; collect OS, WWPN and multipathing information; discover source/Alletra array information; use host discovery as input to target configuration. | ◐ **Partial** | ✅ ESXi hosts via vCenter (HBA WWPNs, OS, serial, iSCSI IQN — live rack13 2026-09-28). ✅ Target Alletra array (ports, WWPNs, CPGs, hosts, volumes, unclaimed logins, `showport -rcip`). ✅ **Sheet hosts looked up without typed IDs** ([SPEC-014](specs/SPEC-014-agentless-hosts.md)): name + OS + IP resolved from vCenter / the array (live CRV VZ 2026-09-25, rack13 2026-09-28). ✅ **Windows host read over WinRM** — serial, FC WWPN, iSCSI IQN, OS, MPIO/MSDSM; a typed WWPN the server lacks blocks the plan (live rack13 2026-09-28). 🟡 **Linux host read over SSH** (serial, WWPN, IQN, OS, `multipath -ll`) — built, pending live run (no Linux host in the lab). ◻︎ *Source* array discovery (migration). Discovery output feeds zoning + provisioning ✅. |
-| 3 | **SAN and network configuration** | FC switch zoning based on discovered hosts and user inputs; VLAN configuration; peer-port configuration; migration peer setup and zoning. | ◐ **Partial** | 🟡 **FC zoning** — current-connection map + operator-selected builder → emitted Brocade **command set** (`cfgsave`/`cfgenable` shown separately). **Brocade FOS only**; Cisco MDS out of scope (ADR 0004). Delivered as command set by design — see Principles. Live 2026-09-12: read/design correct, but hosts outside vCenter never reached the plan; fixed (union of vCenter + sheet + array logins + fabric name servers) and the step redesigned (`docs/ux/ZONING-REDESIGN.md`) — pending live run; a tool-designed zone has not yet been applied and seen to log in. ◻︎ VLAN configuration (VLAN is only *read* from `showport -rcip`). ◻︎ Peer-port configuration (read only). ◻︎ Migration peer setup / zoning. |
-| 4 | **Block provisioning** | Host creation; volume/LUN creation; volume sets; presentation, mapping and assignments to hosts. | ✅ **Live-verified (FC, one array)** | Hosts, volumes (thin/reduce, per-volume CPG), VV-sets, host-sets, exports (VLUNs) over WSAPI; read-only tier-2 **path verification**; export gated per host on verified zoning (ADR 0012). Live-proven end to end on rack13arcus 2026-09-13/14 by hand and 2026-09-15 by the session runner (SPEC-006, 38/39); plan truth (SPEC-001), removal set (SPEC-007), one credential per run (ADR 0013). iSCSI export (S-9) and failure paths (S-3) still owed. |
+| 3 | **SAN and network configuration** | FC switch zoning based on discovered hosts and user inputs; VLAN configuration; peer-port configuration; migration peer setup and zoning. | ◐ **Partial** | ✅ **FC zoning** — current-connection map + operator-selected builder → emitted Brocade **command set** (`cfgsave`/`cfgenable` shown separately). **Brocade FOS only**; Cisco MDS out of scope (ADR 0004). Delivered as command set by design — see Principles. Candidates are the union of vCenter + sheet + array logins + fabric name servers; **G-1 closed 2026-09-17** (a tool-designed zone, pasted as rendered, logged a host in). 2026-09-28/29, live on rack13: nothing is pre-ticked (the operator ticks every pair); an alias name the switch already defines, one new name typed for two ports, and a zone name already defined or over 64 are refused — flagged before *Generate* and listed under *Not included* after it; an installer-default name a host advertises (`HN:localhost…`, `smartstart`, `ubuntu`) is not taken as its identity. ◻︎ VLAN configuration (VLAN is only *read* from `showport -rcip`). ◻︎ Peer-port configuration (read only). ◻︎ Migration peer setup / zoning. |
+| 4 | **Block provisioning** | Host creation; volume/LUN creation; volume sets; presentation, mapping and assignments to hosts. | ✅ **Live-verified (FC, one array)** | Hosts, volumes (thin/reduce, per-volume CPG), VV-sets, host-sets, exports (VLUNs) over WSAPI; read-only tier-2 **path verification**; export gated per host on verified zoning (ADR 0012). Live-proven end to end on rack13arcus 2026-09-13/14 by hand and 2026-09-15 by the session runner (SPEC-006, 38/39); plan truth (SPEC-001), removal set (SPEC-007), one credential per run (ADR 0013). Session runner 60/60 on 2026-09-19 and 2026-09-28; failure paths (S-3) seen live 2026-09-17. iSCSI export (S-9) still owed. |
 | 5 | **Snapshots and replication** | Snapshot configuration; replication configuration; scheduling jobs. | ◻︎ **Not started** | Zero code. Research (2026-07-02) says buildable as **DSCC protection policies** (snapshot + Remote Copy with schedule/retention); direct-array fallback is `createsv`/`createsched`. Needs a proper research pass before build. |
 | 6 | **Alletra MP Unified File** | Unified File enablement/initialization; share creation; presentation; snapshot configuration. Intended extension to the initialization tool. | ◻︎ **Not started** | Needs a research pass on the file control plane. |
 | 7 | **GreenLake for File — GL4F** | Initialization; provisioning views; ACL configuration; policy configuration; share migration. | ◻︎ **Not started** | Needs a research pass (views, SMB ACL + AD, policies, migration). Gatekeeper: file API access / workspace entitlements. |
 | 8 | **Reports** | Configuration reports; hardware inventory; health-check output; health and performance reporting. | ◐ **Partial** | ✅ Configuration check vs. the sheet (Component **D**, read-only SSH). ✅ Hardware inventory (`showinventory`). ✅ `checkhealth -svc -detail` parsed into an issue table. ◻︎ Health/**performance** reporting (DSCC / Data Ops Manager telemetry, InfoSight). |
-| 9 | **Documentation generation** | As-built documentation; high-level design (HLD); low-level design (LLD). | ◐ **Partial** | 🟡 **As-built** — read-only `show*` + `checkhealth` → the HPE Block Storage Word template (intent-matched headings, narrative fields, warnings); registered as the `asbuilt` step in every mode; the initialization sections live-proven 2026-09-13. **rc.8 adds the provisioned array** (`docs/specs/SPEC-002-asbuilt-provisioned.md`): hosts and host sets, volumes and volume sets, presentations with active paths, the SAN zoning designed in the run with its delivered command set, and the provisioning record with path verification — parsers pinned to a live capture, document pending live run (S-8). ◻︎ HLD. ◻︎ LLD. |
+| 9 | **Documentation generation** | As-built documentation; high-level design (HLD); low-level design (LLD). | ◐ **Partial** | ✅ **As-built** — read-only `show*` + `checkhealth` → the HPE Block Storage Word template (intent-matched headings, narrative fields, warnings); registered as the `asbuilt` step in every mode; the initialization sections live-proven 2026-09-13. **rc.8 adds the provisioned array** (`docs/specs/SPEC-002-asbuilt-provisioned.md`): hosts and host sets, volumes and volume sets, presentations with active paths, the SAN zoning designed in the run with its delivered command set, and the provisioning record with path verification. Generated live on every session-runner run (SPEC-006 scenario 5: verify finds no mismatch, the docx names the run); a page-by-page review of the provisioned sections (S-8) is still owed. ◻︎ HLD. ◻︎ LLD. |
 
 ## Where the tool is today
 
@@ -77,16 +77,14 @@ and the **entire file column**.
 
 ## Open items and order of work
 
-In the order the scope owner set (2026-09-12):
+In the order the scope owner set (2026-09-12); item-level status is in [TRACKER.md](TRACKER.md).
 
-1. **Live-test discovery, zoning and provisioning through the application.** Everything since the
-   [2026-08-31 live test](validation/2026-08-31-rack13arcus-live-test.md) is verified only against
-   captured output. That test showed a correct parser can still leave a wrong step. Also owed from
-   that test: the manual lab cleanup and the disclosure to the SAN team (see its *Owed* section).
-2. **Agentless Windows/Linux host discovery** (area 2). Hosts that vCenter knows are read from
-   vCenter; hosts the customer lists in the sheet that vCenter does *not* know must be logged into by
-   the tool (SSH / WinRM) to read OS, WWPN/IQN and multipathing. Closes the biggest gap in area 2.
-3. **Snapshots and replication** (area 5) — research first, then build, once 1 and 2 are satisfactory.
+1. **Live-test discovery, zoning and provisioning through the application** — done: session runner
+   60/60 (2026-09-19, 2026-09-28), G-1 closed, zoning designer changes seen live 2026-09-29.
+2. **Agentless Windows/Linux host discovery** (area 2, SPEC-014) — Windows over WinRM live
+   2026-09-28; the Linux read over SSH is built and waits on a Linux login (TRACKER BL-10).
+3. **Snapshots and replication** (area 5) — next. Replication research done
+   (`research/2026-09-19-replication-two-arrays.md`); its decisions are needed before a spec.
 4. Then: performance reporting (8), HLD/LLD (9), VLAN / peer-port / migration (3), file column (6, 7).
 
 ## Known gaps from the deep research

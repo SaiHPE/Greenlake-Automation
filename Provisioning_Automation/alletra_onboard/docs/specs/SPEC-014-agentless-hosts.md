@@ -89,6 +89,23 @@ in); no Linux host on rack13, so the Linux read ships *built — pending live ru
    run before it failed the login because the composed sheet had turned the password into an Excel
    formula / stripped its spaces — fixed for every credential field (1cfa22e).
 
+### Addendum 2026-09-28 — how a found host reaches the plan
+
+A review for one layer deciding a host fact and the next assuming another (LESSONS 41) found five
+cases; all fixed with tests, none seen to misfire live:
+
+- A read-found row plans under the name the array or vCenter already uses for its WWPN/IQN, as the
+  other lookups already did (e083406).
+- A sheet OS left blank takes the OS the server reported, so a Linux host is not created with the
+  VMware persona (486dfa8). A typed IQN is compared without case (486dfa8).
+- `os = vme` is read over SSH and maps to Generic-ALUA (e083406).
+- An iSCSI-only host the array already has is planned even when the sheet named it first
+  (`ProvisionableHost.on_array`); an existing host with a persona this tool cannot create (e.g.
+  Generic) is no longer refused at apply — the persona is checked on create only (ffdf900).
+- R6 is also a zoning-plan note, not only a provisioning blocker: a typed WWPN the server lacks would
+  otherwise be zoned (ffdf900). A planned host with no OS from any source is noted (VMware persona
+  assumed), not blocked — field decision.
+
 The sections below are the original deferral analysis, kept for the record.
 
 ## 1. Problem

@@ -353,3 +353,23 @@ callback only on the thread that created it; and a fallback path that changes be
 choice into the evidence (the report header), never only to the console.
 *Confirmed 2026-09-16 (S-13): with the report header reading `TLS callback: compiled`, the read that had
 failed in three sessions passed.*
+
+**41. A fact decided in one layer is decided again, differently, in the next.**
+On 2026-09-28 one question — "what else is like that bug?" — found eight defects of a single shape in a
+day. Discovery knew a host was Linux; the plan never asked and gave it the VMware persona. The union
+renamed a found host to the array's name, but the planner still decided "exists on the array" by who
+named it first, and told the operator to create a host the array already had. `ensure_host` checked
+the persona before checking whether it would create anything. The zoning plan zoned a WWPN the
+provisioning plan would have blocked. Each layer was tested; the seams were not. Rule: when a bug is
+fixed, grep for every other place the same fact (name, OS, persona, transport, existence, a
+normalised ID) is derived, and make each derive it from the same source — a flag on the object
+(`on_array`) beats a rule re-inferred from provenance (`source == "array"`).
+
+**42. What a device says about itself is a claim, not an identity; and a test can pin the bug.**
+The fabric name server's `HN:` looked like a host name, and on rack13 it was — until the zoning screen
+showed two HBAs called `localhost.localdomain`. The captured fabrics already held 29 WWPNs under
+`localhost.bgl1…`; grouping by that name would have made one array host out of many servers. Two tests
+had pinned the placeholder as a name, and another pinned the silent dedupe of two ports given one
+alias — both passing, both wrong. Rules: a self-reported name joins nothing until something
+independent agrees with it (and defaults are refused outright); before pinning observed behaviour in a
+test, ask whether the behaviour is correct or merely current.

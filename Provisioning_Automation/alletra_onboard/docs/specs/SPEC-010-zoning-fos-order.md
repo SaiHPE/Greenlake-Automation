@@ -54,3 +54,22 @@ valid and differs from what was typed.
 
 Applying anything to a switch (ADR 0012; G-1 stays with the training team). Per-host `#` comment lines
 inside the paste block (Z-2 remainder, P).
+
+## 5. Addendum 2026-09-28/29 — names and selection (live on rack13 2026-09-29)
+
+**R5 — one name, one object.** FOS will not create a second alias/zone/cfg of a name it has; the
+`alicreate` fails and the next `zonecreate` uses the existing object's members. The plan keeps every
+name the switch defines (`FabricZonePlan.defined_names`, from `alishow` + `cfgshow`), and
+`render_commands` skips, under *Not included*, a pair whose new alias the switch already defines,
+whose new alias is typed for another port on the fabric (the first keeps it), or whose zone name is
+already defined or over 64 characters (a0cbb04). The names panel flags the same cases before
+*Generate* and keeps it disabled (BL-09, 11ff0e1). A name a WWPN already carries is reused, never a clash.
+
+**R6 — nothing is pre-selected.** The designer starts with no pair ticked; its description states
+HPE's rule (at least one port on each controller node per fabric) and the operator ticks every pair
+(field decision, BL-01, 0a71a96). Supersedes the one-port-per-node pre-selection of the redesign.
+
+**R7 — an installer default is not a host name.** A name server `HN:` whose short name is
+`localhost`, `smartstart`, `ubuntu` or `ubuntu-server` leaves the port unnamed (shown by WWPN, alias
+`host_<wwpn tail>_hba1`): the captured fabrics carry 29 WWPNs under `localhost.bgl1…`, and the host
+union groups by name (BL-08, c199a29).
