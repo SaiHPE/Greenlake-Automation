@@ -63,5 +63,8 @@ pinned the placeholder as a name (LESSONS 42).
 
 - Linux / HPE VME read over SSH (SPEC-014 R4) — needs a login (TRACKER BL-10).
 - S-9 iSCSI export (BL-11); SPEC-013 *Visible* after a rescan (BL-12).
-- Zone-name clash and > 64 checks — unit/logic checked only; not provoked live.
+- Zone-name clash and > 64 checks — **seen live 2026-10-05** (fresh install from `jumpbox-test`): host
+  alias `rack13` + array alias `F1_cfg` → *zone rack13_F1_cfg already exists on the switch* (FOS shares
+  one namespace for alias/zone/cfg); a 50-character host alias → *… is 68 characters — FOS allows 64*;
+  Generate disabled in both. Nothing pasted.
 - As-built provisioned sections, page-by-page review (S-8).
