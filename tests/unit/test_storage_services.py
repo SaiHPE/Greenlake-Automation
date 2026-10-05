@@ -1248,6 +1248,38 @@ class _Unreachable:
         return False
 
 
+def test_the_esxi_view_says_not_read_when_discovery_never_reached_vcenter():
+    """CRV VZ from labrat, 2026-10-05: vCenter unreachable, so no ESXi inventory - the row read
+    'n/a - not an ESXi host in this vCenter' for an ESXi host. Unknown is not 'not ESXi'."""
+    from alletra_onboard.application.provisioning.path_verify import verify_provisioned_paths
+
+    class _Cli:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def run(self, cmd, **k):
+            return _VZ_SHOWVLUN_A
+
+    class _Wsapi(_Cli):
+        def volumes(self):
+            return []
+
+    d = disc.DiscoveryReport(
+        array_hosts=[ArrayHost(name="CRV_VZ_DL360G11D24U25", persona="VMware", wwpns={_A: ["0:3:1"]})],
+        notes=["vCenter discovery failed: Could not connect to vCenter 10.99.1.100: TimeoutError"],
+    )
+    rep = verify_provisioned_paths(
+        _intent(name_prefix="VZ_ESXi_Profile_bk", size_gib=10, count=1, members=["CRV_VZ_DL360G11D24U25"]), d,
+        reachable_hosts={"CRV_VZ_DL360G11D24U25"},
+        array_cli_factory=lambda c: _Cli(), wsapi_factory=lambda c: _Wsapi(),
+    )
+    h = next(x for x in rep.hosts if x.host == "CRV_VZ_DL360G11D24U25")
+    assert h.esxi_state == "not_read" and h.esxi_note == "ESXi view: not read (vCenter was not reached during Discovery)"
+
+
 def test_verify_targets_only_the_hosts_something_was_exported_to():
     """The 2026-08-31 defect: the verifier walked the whole vCenter inventory, so `.47` and `.86` —
     in no export row at all — were each reported as having a dead export of `.136`'s volume."""

@@ -310,6 +310,9 @@ def verify_provisioned_paths(
             wwn_by_volume = {v.name: v.wwn for v in wsapi.volumes() if v.wwn}
     except Exception as exc:  # noqa: BLE001
         read_error = f"volume WWNs over WSAPI: {str(exc)[:160]}"
+    # With no vCenter inventory, "not an ESXi host in this vCenter" would be a guess about every host.
+    if not read_error and any(n.startswith("vCenter discovery failed") for n in discovery.notes):
+        read_error = "vCenter was not reached during Discovery"
     if not read_error and esxi_hosts & set(expected_by_host):
         try:
             with vcenter_factory(intent.vcenter) as vcenter:
