@@ -1,7 +1,8 @@
 # SPEC-014 — Discovery of the sheet's hosts: serial, WWPN, IQN, per OS (G-2)
 
 **Status:** APPROVED 2026-09-21 (field request at the zoning/provisioning demo). R1–R3, R5, R6, R7
-live-verified (CRV VZ 2026-09-25, rack13 2026-09-28). R4 (Linux) built — pending live run (no Linux host).
+live-verified (CRV VZ 2026-09-25, rack13 2026-09-28). R4 (Linux): the reader ran live 2026-10-05 against a
+RHEL 8.9 host as a non-root user (OS, IQN; serial/multipath noted as needing root) — the in-app Discovery run is pending.
 **Findings addressed:** G-2 (Windows/Linux hosts are only sheet-declared — WWPNs typed by hand — or
 named from the fabric name server; no OS, no multipathing, no confirmation the WWPN typed is the one
 in the server)
