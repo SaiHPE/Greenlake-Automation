@@ -17,8 +17,8 @@
 > rack13 2026-09-28 (40/0/2). The zoning designer's 2026-09-29 changes (nothing pre-ticked, name
 > clashes flagged before and after *Generate*, installer-default host names ignored) seen live the same
 > day. Record: [validation/2026-09-29-rack13arcus-live-test-3.md](validation/2026-09-29-rack13arcus-live-test-3.md).
-> **Still owed live:** S-9 iSCSI export, CRV Vault / Landing Zone
-> end to end (no network path) — see TRACKER *Test live*. SPEC-013 *Visible* after a rescan seen live 2026-10-05.
+> **Still owed live:** S-9 iSCSI export, CRV Landing Zone (array unreachable) and Vault Zone writes —
+> see TRACKER *Test live*. VZ read-only (discovery, zoning, verify, as-built) seen live 2026-10-05. SPEC-013 *Visible* after a rescan seen live 2026-10-05.
 
 ## Objective
 
