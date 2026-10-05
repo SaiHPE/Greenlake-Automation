@@ -158,10 +158,14 @@ def build_report(
 
     in_a_set = {m for hs in getattr(intent, "host_sets", []) for m in hs.members}
     host_wwpns: dict[str, set[str]] = {}
+    iscsi_only: dict[str, list[str]] = {}
     for name, h in union_hosts(discovery, getattr(intent, "declared_hosts", None) or [], zoning_plan)[0].items():
-        if not h.wwpns or (h.source == "array" and name not in in_a_set and not in_a_set.intersection(h.aliases)):
+        if h.source == "array" and name not in in_a_set and not in_a_set.intersection(h.aliases):
             continue
-        host_wwpns[name] = {normalize_wwpn(w) for w in h.wwpns}
+        if h.wwpns:
+            host_wwpns[name] = {normalize_wwpn(w) for w in h.wwpns}
+        elif h.iqns:
+            iscsi_only[name] = h.iqns
     if not host_wwpns:
         for host in discovery.array_hosts:
             if not host.name:      # the array's UNCLAIMED logins — real WWPNs, but not a named host
@@ -198,6 +202,15 @@ def build_report(
             report.notes.append(f"{host}: zoned on one fabric only — missing {'even/F2' if on['odd'] else 'odd/F1'}.")
 
     report.proper = bool(report.expected) and all(z.present for z in report.expected) and not report.unverified_hosts
+    # An iSCSI host needs no zone: it can take an export once the array sees its IQN logged in.
+    iqn_ports = {iqn.lower(): ports for ah in discovery.array_hosts for iqn, ports in ah.iqns.items()}
+    for host in sorted(iscsi_only):
+        ports = sorted({p for iqn in iscsi_only[host] for p in iqn_ports.get(iqn.lower(), [])})
+        if ports:
+            report.zoned_hosts.append(host)
+            report.notes.append(f"{host}: iSCSI, logged in on {', '.join(ports)} — no zoning needed; exports allowed.")
+        else:
+            report.notes.append(f"{host}: iSCSI, IQN not logged in on the array — exports to it are held back.")
     report.remediations = _remediations(host_wwpns, union, arr_by_fabric, switch_by_fabric)
     return report
 

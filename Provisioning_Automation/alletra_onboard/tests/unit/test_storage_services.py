@@ -1359,6 +1359,22 @@ def test_zoning_report_lists_only_hosts_on_both_fabrics_as_the_gate():
     assert report.zoned_hosts         # ...but esx1 is provisionable anyway
 
 
+def test_an_iscsi_host_logged_in_on_the_array_passes_the_export_gate():
+    """S-9 (found before the live run, 2026-10-05): the gate counted FC logins only, so an export to
+    an iSCSI-only set member was always held back. An IQN the array sees logged in is reachable."""
+    d = _disc_for_zoning([])
+    iqn, idle = "iqn.1998-01.com.vmware:esx1-iscsi", "iqn.1998-01.com.vmware:esx9-iscsi"
+    d.array_hosts += [ArrayHost(name="ESX1-iscsi", persona="VMware", iqns={iqn: ["0:4:1", "1:4:1"]}),
+                      ArrayHost(name="ESX9-iscsi", persona="VMware", iqns={idle: []})]
+    report = zoning.build_report(_intent(members=["esx1", "ESX1-iscsi", "ESX9-iscsi"]), d)
+    assert report.zoned_hosts == ["esx1", "ESX1-iscsi"]
+    assert any("ESX1-iscsi: iSCSI, logged in on 0:4:1, 1:4:1" in n for n in report.notes)
+    assert any("ESX9-iscsi: iSCSI, IQN not logged in" in n for n in report.notes)
+    plan = prov.build_plan(_intent(members=["ESX1-iscsi"]), d, reachable_hosts=set(report.zoned_hosts),
+                           wsapi_factory=lambda c: FakeWsapi())
+    assert [a for a in plan.actions if a.kind == "vlun"] and not any("held back" in n for n in plan.notes)
+
+
 # ---------------- port roles: file + replication (real captures, 2026-09-02) ----------------
 
 # Verbatim `showport` from AlletraMP_D22U27 (10.64.122.99) — the first array seen with file ports.
