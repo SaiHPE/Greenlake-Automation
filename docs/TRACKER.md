@@ -24,7 +24,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 
 | ID | Item | Owner | Status | Sheet | Blocked by |
 |---|---|---|---|---|---|
-| BL-10 | Linux / HPE VME host read over SSH (SPEC-014 R4) | Sai | blocked | A.4, B.4 | A Linux login (root or passwordless sudo). Then `spec014.cmd … -LinuxHost -LinuxAddress -LinuxUser -LinuxOs`. |
+| BL-10 | Linux / HPE VME host read over SSH (SPEC-014 R4) | Sai | doing | A.4, B.4 | **Reader live 2026-10-05** from the labrat RDP (GBGSAIROOP, app installed from `jumpbox-test`), host 10.54.159.49 as `sai` (root password login refused): RHEL 8.9, IQN `iqn.1994-05.com.redhat:6e35c4a016a0`, no FC HBA; serial and multipath not read with the designed notes (*needs root, or sudo without a password*); no error. Left: the same read inside the app's Discovery (needs an array reachable from labrat), and a root / passwordless-sudo login for serial + multipath. |
 | BL-11 | iSCSI export (S-9) | Sai | blocked | B.6 | An iSCSI host on rack13 (`pending.ps1 -Iscsi`). |
 | BL-13 | Vault / Landing Zone end to end (T-0006) | Sai | blocked | B.6 | Reachability check from the CRV jump server (DL380G9D24U29) 2026-09-29 20:26: **nothing reachable** — VZ/LZ arrays, vCenters, VZ switches, ESXi, the Windows VM all TIMEOUT. Every destination routes out the isolated "VZ REC" card (gw 10.54.159.254); the earlier temporary route via LABDATA (gw 10.54.127.254) is gone; "VZ Pre_Rec" (10.99.1.252, same subnet as the VZ vCenter) is not used — link likely down. Next: check 2 (admin PowerShell, temporary /32 routes via LABDATA) to split "this server's routing" from "network blocked"; then ask for permanent routes / access. LZ switch IPs unknown. Substitute evidence: rack13 60/60. |
 

@@ -61,7 +61,10 @@ pinned the placeholder as a name (LESSONS 42).
 
 ## Owed
 
-- Linux / HPE VME read over SSH (SPEC-014 R4) — needs a login (TRACKER BL-10).
+- Linux / HPE VME read over SSH (SPEC-014 R4) — **reader live 2026-10-05** from the labrat RDP against
+  10.54.159.49 (RHEL 8.9) as `sai`: OS and IQN `iqn.1994-05.com.redhat:6e35c4a016a0` read, no FC HBA, serial and
+  multipath reported as needing root, no error. `root` refused (password login for root likely disabled; the
+  server offers `password` for both users). Still owed: the same read through Discovery (TRACKER BL-10).
 - S-9 iSCSI export (BL-11).
 - SPEC-013 *Visible* after a rescan — **seen live 2026-10-05** (run `0443e340`): *Rescan needed — ESXi sees
   0 of 2* right after the export; after vSphere *Rescan Storage* on .136, *Visible — 2 volume(s) · 2 active of
