@@ -398,9 +398,10 @@ class VolumePath(BaseModel):
     lun: int
     volume: str
     host: str
-    host_wwpn: str          # normalized
+    host_wwpn: str          # normalized FC WWPN, or the lower-cased iSCSI IQN/EUI
     port: str               # array port n:s:p
     status: str             # active | nonopt (ALUA active-optimized / non-optimized) | ...
+    protocol: str = "fc"    # fc | iscsi
 
 
 class HostPathStatus(BaseModel):
