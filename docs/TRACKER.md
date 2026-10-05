@@ -25,14 +25,14 @@ Status: `todo` · `doing` · `blocked` · `done`
 
 | ID | Item | Owner | Status | Sheet | Blocked by |
 |---|---|---|---|---|---|
-| BL-11 | iSCSI export (S-9) | Sai | blocked | B.6 | An iSCSI host on rack13 (`pending.ps1 -Iscsi`). |
-| BL-13 | Vault / Landing Zone end to end (T-0006) | Sai | doing | B.6 | **VZ read-only done 2026-10-05 from the labrat RDP** (it reaches the VZ array 22/443 and both VZ switches; not the VZ vCenter): Discovery (8 FC ports, 4 ready on SW3700B_D24U32_F1 / SW3700B_D24U31_F2, 4 loss sync; iSCSI ports offline; 4 RCIP configured, links down; 3 ESXi hosts logged in on both fabrics), zoning check *3 of 3 zoned on both fabrics*, zoning plan (F1_CFG / F2_CFG, fabrics of 28 and 27 switches, 12 pairs already zoned → *Nothing to design*, Generate disabled), Verify (5 match; 5 mismatches are the test sheet's placeholder values), as-built `as-built-SGHD44LQLS.docx` (no secrets). **Left:** LZ (array 10.64.154.225 unreachable from labrat; LZ vCenter and ESXi are reachable) and VZ writes (provisioning needs the lab owner's OK). The CRV jump server itself still routes nothing (2026-09-29). |
+| BL-11 | iSCSI export (S-9) | Sai | todo | B.6 | **Unblocked 2026-10-05:** AlletraMP_E18U31 (10.64.154.190, CZ2D3209YV) has 4 iSCSI ports ready (10.30.14.1–4) and existing iSCSI hosts logged in (e.g. `ESX1-iscsi` on all four). The export gate counted FC only — fixed before the run (89696afb). Sheet `E18U31_iscsi_test.xlsx`: `zz_is_vol01` → host set `zz_is_hs` [ESX1-iscsi]. |
+| BL-13 | Vault / Landing Zone end to end (T-0006) | Sai | doing | B.6 | **VZ read-only done 2026-10-05 from the labrat RDP** (it reaches the VZ array 22/443 and both VZ switches; not the VZ vCenter): Discovery (8 FC ports, 4 ready on SW3700B_D24U32_F1 / SW3700B_D24U31_F2, 4 loss sync; iSCSI ports offline; 4 RCIP configured, links down; 3 ESXi hosts logged in on both fabrics), zoning check *3 of 3 zoned on both fabrics*, zoning plan (F1_CFG / F2_CFG, fabrics of 28 and 27 switches, 12 pairs already zoned → *Nothing to design*, Generate disabled), Verify (5 match; 5 mismatches are the test sheet's placeholder values), as-built `as-built-SGHD44LQLS.docx` (no secrets). **Left:** VZ writes (approved 2026-10-05; sheet `VZ_write_test.xlsx`). LZ dropped 2026-10-05 — its array is unreachable and the operator considers that environment dead. The CRV jump server itself still routes nothing (2026-09-29). |
 
 ## Build (not started or partial)
 
 | ID | Item | Area | Status | Sheet | Notes |
 |---|---|---|---|---|---|
-| BL-20 | Replication (Remote Copy) | 5 | todo | Replication B.1 | Research done: `docs/research/2026-09-19-replication-two-arrays.md` — decisions listed there are needed before a spec. |
+| BL-20 | Replication (Remote Copy) | 5 | todo | Replication B.1 | Research done: `docs/research/2026-09-19-replication-two-arrays.md` — decisions listed there are needed before a spec. Lab pair offered 2026-10-05: AlletraMP_D22U27 (10.64.122.99; RCIP 0:4:3/1:4:3 on 10.54.122.92/.93) and AlletraMP_E18U31 (10.64.154.190, CZ2D3209YV, OS 10.5.0; RCIP 10.54.154.192/.193; existing group `rcopy_async_test` with failed reverse tasks, no quorum witness). Both reachable from labrat; ESX1/ESX2 are zoned to both. |
 | BL-21 | Snapshots + schedules | 5 | todo | — | DSCC protection policies, or `createsv` / `createsched`. |
 | BL-22 | HLD document | 9 | todo | — | |
 | BL-23 | LLD document | 9 | todo | — | |
