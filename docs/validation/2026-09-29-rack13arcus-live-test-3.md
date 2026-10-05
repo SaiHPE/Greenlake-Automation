@@ -61,6 +61,20 @@ pinned the placeholder as a name (LESSONS 42).
 
 ## Owed
 
+**CRV Vault Zone, read-only, 2026-10-05** (labrat RDP, sheet `Initialisation_sheet_CRV_VZ_spec014.xlsx`, mode
+*Provision storage only*, host set left empty so nothing could be provisioned): Discovery read the VZ array
+`MPB10K-D24U21-VZ` (SGHD44LQLS) — 8 FC ports (0:3:1/1:3:1 on SW3700B_D24U32_F1, 0:3:2/1:3:2 on
+SW3700B_D24U31_F2, the other four loss sync), iSCSI ports offline, RCIP 10.222.1.5–8 configured with links
+down, three ESXi hosts `CRV_VZ_DL360G11D24U25–27` logged in on both fabrics; vCenter 10.99.1.100 not
+reachable from labrat (note). Zoning check *3 of 3 hosts zoned on both fabrics*; zoning plan read both
+switches (fabric *FC_Fabric_B*, 28 switches, cfg F1_CFG; *BGL Storage Reference SAN Fabric-2*, 27 switches,
+cfg F2_CFG), every host port already zoned to every array port (12 pairs, zone names
+`CRV_VZ_DL360G11D24U2x_MPB10K_D24U21_VZ_0xx/1xx`) → *Nothing to design*. Matches what the captured VZ fabric
+predicted (`tests/fixtures/vz_fabric`). Verify: 5 match, 5 mismatches all from the test sheet's placeholders
+(product number, netmask, gateway, NTP, contact). Array status lists 28 new alerts, a degraded cage, RC
+ports/links down — for the lab owner. As-built generated: names the array, hosts, F1_CFG/F2_CFG, 12
+presentations; no secrets, no test objects.
+
 - Linux / HPE VME read over SSH (SPEC-014 R4) — **reader live 2026-10-05** from the labrat RDP against
   10.54.159.49 (RHEL 8.9) as `sai`: OS and IQN `iqn.1994-05.com.redhat:6e35c4a016a0` read, no FC HBA, serial and
   multipath reported as needing root, no error. `root` refused (password login for root likely disabled; the
