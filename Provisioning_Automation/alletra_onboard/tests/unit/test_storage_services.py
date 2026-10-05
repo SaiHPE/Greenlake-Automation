@@ -1127,6 +1127,36 @@ def test_parse_showvlun_active_real_sample():
     assert p.host_wwpn == "10009440C9D01212" and p.port == "0:3:1" and p.status == "active"
 
 
+# AlletraMP_E18U31, 2026-10-05, after run 68149459 exported zz_is_vol01 to set zz_is_hs [ESX1-iscsi]
+# (from the operator's `showvlun -a -host ESX1-iscsi`; the terminal clipped the last port digit).
+_E18_ISCSI_IQN = "iqn.1998-01.com.vmware:localhost.bgl1.global.tslabs.hpecorp.net:1996704961:64"
+_E18_SHOWVLUN_A = f"""\
+Lun VVName              HostName   -Host_WWN/iSCSI_Name/Host_NQN- Port  Type Status ID
+  0 zz_is_vol01         ESX1-iscsi {_E18_ISCSI_IQN} 0:4:1 host set active 10
+ 11 devvm-ds-dl580g8d12u21 ESX1-iscsi {_E18_ISCSI_IQN} 0:4:1 host set nonopt 10
+  0 zz_is_vol01         ESX1-iscsi {_E18_ISCSI_IQN} 0:4:2 host set nonopt 10
+  0 zz_is_vol01         ESX1-iscsi {_E18_ISCSI_IQN} 1:4:1 host set nonopt 11
+  0 zz_is_vol01         ESX1-iscsi {_E18_ISCSI_IQN} 1:4:2 host set active 11
+"""
+
+
+def test_an_iscsi_export_is_verified_live_through_both_nodes():
+    """E18U31 2026-10-05: the export was active on four iSCSI ports, but Verify paths said
+    '0 live paths — the host is off or not zoned' because the parser dropped IQN rows."""
+    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
+
+    paths = parse_showvlun_active(_E18_SHOWVLUN_A)
+    assert {p.protocol for p in paths} == {"iscsi"} and paths[0].host_wwpn == _E18_ISCSI_IQN
+    h = verify_paths({"ESX1-iscsi": {"zz_is_vol01"}}, paths).hosts[0]
+    assert h.verdict == "live" and h.live_volumes == ["zz_is_vol01"] and h.fabrics == []
+    assert h.detail == ("1 LUN(s) · 1 initiator(s) · 4 path(s) per LUN · "
+                        "iSCSI on 0:4:1, 0:4:2, 1:4:1, 1:4:2 · both nodes")
+
+    one_node = [p for p in paths if p.port.startswith("0:")]
+    h = verify_paths({"ESX1-iscsi": {"zz_is_vol01"}}, one_node).hosts[0]
+    assert h.verdict == "partial" and "node 0 only" in h.detail
+
+
 def test_verify_paths_live_both_fabrics():
     from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
 

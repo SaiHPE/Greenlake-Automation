@@ -62,7 +62,7 @@ def _host_notes(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_p
     if iscsi_members:
         notes.append(
             "iSCSI-only member(s) in a host set: " + ", ".join(iscsi_members)
-            + ". This tool's SAN zoning and path verification cover FC only — verify their paths by hand."
+            + ". iSCSI needs no SAN zoning; Verify paths reads their iSCSI paths per controller node."
         )
     uncreatable = [n for n, h in hosts.items() if not h.wwpns and h.iqns and not h.on_array]
     if uncreatable:

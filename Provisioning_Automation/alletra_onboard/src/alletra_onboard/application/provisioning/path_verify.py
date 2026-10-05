@@ -62,8 +62,11 @@ def parse_showvlun_active(text: str) -> list[VolumePath]:
         if port_idx is None or port_idx < 3:
             continue  # header / not a data row
         host_wwn = normalize_wwpn(p[port_idx - 1])
-        if len(host_wwn) != 16:  # iSCSI IQN / NQN — not an FC path we verify here
-            continue
+        protocol = "fc"
+        if len(host_wwn) != 16:
+            if not p[port_idx - 1].lower().startswith(("iqn.", "eui.")):
+                continue  # NVMe NQN — not verified here
+            host_wwn, protocol = p[port_idx - 1].lower(), "iscsi"
         out.append(VolumePath(
             lun=int(p[0]),
             volume=" ".join(p[1 : port_idx - 2]),  # VVName may be multi-token; HostName is p[port_idx-2]
@@ -71,6 +74,7 @@ def parse_showvlun_active(text: str) -> list[VolumePath]:
             host_wwpn=host_wwn,
             port=p[port_idx],
             status=p[-2].lower(),
+            protocol=protocol,
         ))
     return out
 
@@ -130,7 +134,9 @@ def verify_paths(
         # row at all was reported as having an export with no path — measured on 2026-08-31, where
         # .47 and .86 were both told they had a dead export of a volume destined only for .136.
         dead_vols = sorted(expected - set(live_vols))
-        fabrics = sorted({_fabric(vp.port, fabric_by_port) for vp in paths} - {"?"})
+        fc_paths = [vp for vp in paths if vp.protocol == "fc"]
+        iscsi_ports = sorted({vp.port for vp in paths if vp.protocol == "iscsi"})
+        fabrics = sorted({_fabric(vp.port, fabric_by_port) for vp in fc_paths} - {"?"})
         fabric_names = [names[f] for f in fabrics if f in names] if all(f in names for f in fabrics) else []
         hbas = len({vp.host_wwpn for vp in paths})
         per_lun: dict[int, int] = {}
@@ -139,7 +145,8 @@ def verify_paths(
         lun_count = len(per_lun)
         ppl_min, ppl_max = (min(per_lun.values()), max(per_lun.values())) if per_lun else (0, 0)
         ppl_txt = f"{ppl_min}" if ppl_min == ppl_max else f"{ppl_min}–{ppl_max}"
-        counts = f"{lun_count} LUN(s) · {hbas} HBA(s) · {ppl_txt} path(s) per LUN"
+        initiators = "HBA(s)" if fc_paths else "initiator(s)"
+        counts = f"{lun_count} LUN(s) · {hbas} {initiators} · {ppl_txt} path(s) per LUN"
 
         if not paths:
             verdict = "no_path"
@@ -151,6 +158,13 @@ def verify_paths(
                 if expected else
                 "0 live paths, and nothing is exported to this host"
             )
+        elif not fc_paths:
+            # iSCSI has no fabrics; redundancy is paths through both controller nodes.
+            nodes = sorted({port.split(":")[0] for port in iscsi_ports})
+            verdict = "live" if len(nodes) >= 2 else "partial"
+            detail = f"{counts} · iSCSI on {', '.join(iscsi_ports)}" + (
+                " · both nodes" if len(nodes) >= 2 else f" · node {nodes[0]} only — no path through the other node"
+            )
         elif len(fabrics) >= 2:
             verdict = "live"
             detail = f"{counts} · both fabrics ({', '.join(label(f) for f in fabrics)})"
@@ -160,6 +174,8 @@ def verify_paths(
             only = names.get(fabrics[0]) or f"{fabrics[0]} fabric"
             lacks = names.get(missing) or f"the {missing} fabric"
             detail = f"{counts} · {only} only — missing {lacks} (single fabric)"
+        if fc_paths and iscsi_ports:
+            detail += f"; also iSCSI on {', '.join(iscsi_ports)}"
 
         if dead_vols and paths:
             detail += f"; exported but no path yet: {', '.join(dead_vols)}"
