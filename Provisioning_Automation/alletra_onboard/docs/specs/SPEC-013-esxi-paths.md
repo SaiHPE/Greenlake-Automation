@@ -1,7 +1,7 @@
 # SPEC-013 — ESXi-side path verification (G-3)
 
-**Status:** implemented 2026-09-18 (rc.28) — pending live (runner scenario 1 asserts the read; a
-rescanned host for the *ok* state)
+**Status:** implemented 2026-09-18 (rc.28) — live: the read in runner scenario 1; *absent → rescan
+→ ok (Visible)* on rack13 2026-10-05, run `0443e340` (2 volumes, 2 active of 4 paths per LUN)
 **Findings addressed:** G-3 (verification stops at the array; the 12 paths the customer cares about are
 the ones ESXi sees)
 **Owner:** `adapters/vcenter/vcenter_client.py` (one new read), `application/provisioning/path_verify.py`,
