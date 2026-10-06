@@ -617,16 +617,23 @@ if ($SkipCleanup) {
     if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) { throw 'ssh.exe is not on PATH (Windows OpenSSH client feature) - paste run1-removal-set.txt by hand' }
     # 5.1 turns native stderr into terminating errors under EAP=Stop (ssh prints its known-hosts note there).
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    # ssh writes to a file, not a PowerShell pipe: piped, it died with ssh_dispatch_run_fatal (2026-09-28, 10-06).
     $sshOut = Join-Path $Out 'cleanup-ssh-output.txt'
-    try { & cmd /c "ssh -T -o StrictHostKeyChecking=accept-new $ArrayUser@$ArrayHost < `"$cmdFile`" > `"$sshOut`" 2>&1" }
-    finally { $ErrorActionPreference = $eap }
-    $transcript = if (Test-Path $sshOut) { [System.IO.File]::ReadAllText($sshOut) } else { '' }
-    Write-Evidence 'cleanup.txt' $transcript | Out-Null
+    # rack13 2026-09-28 and 10-06: the array reset the connection after the password, before the CLI
+    # prompt (ssh_dispatch_run_fatal ... Unknown error). Nothing has run then, so one retry is safe.
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+      & cmd /c "ssh -T -o StrictHostKeyChecking=accept-new $ArrayUser@$ArrayHost < `"$cmdFile`" > `"$sshOut`" 2>&1"
+      $transcript = if (Test-Path $sshOut) { [System.IO.File]::ReadAllText($sshOut) } else { '' }
+      Write-Evidence "cleanup-attempt$attempt.txt" $transcript | Out-Null
+      $dropped = $transcript -match 'ssh_dispatch_run_fatal|client_loop:'
+      if (-not ($dropped -and $transcript -notmatch 'cli%') -or $attempt -eq 2) { break }
+      Write-Host "  ssh dropped before the array CLI started (nothing ran) - retrying once; type the password again." -ForegroundColor Yellow
+      Start-Sleep -Seconds 5
+    }
+    $ErrorActionPreference = $eap
     # 2026-09-19: an EMPTY transcript (password prompt not answered, connection refused) matched no
     # error text and PASSED while every object stayed on the array. No output is a failure.
     if (-not ($transcript -match '\S')) { throw 'ssh returned no output at all - the password prompt was not answered or the connection failed' }
-    if ($transcript -match 'ssh_dispatch_run_fatal|client_loop:') { throw "ssh dropped the connection: $(($transcript -split "`n" | Select-String 'ssh_dispatch_run_fatal|client_loop:' | Select-Object -First 1).ToString().Trim())" }
+    if ($dropped) { throw "ssh dropped the connection: $(($transcript -split "`n" | Select-String 'ssh_dispatch_run_fatal|client_loop:' | Select-Object -First 1).ToString().Trim())" }
     # ssh's own re-prompt after a mistyped password is not CLI error text; the WSAPI reads below decide.
     $bad = @($transcript -split "`n" | Where-Object { $_ -notmatch 'please try again' -and $_ -match 'Error|error|does not exist|Invalid|cannot|Cannot|member of|in use|not allowed|failed|Failed|denied|Denied' })
     Check 'the removal lines were accepted (no CLI error text)' ($bad.Count -eq 0) ($bad -join ' | ') | Out-Null
@@ -661,7 +668,7 @@ $lines = @(
 )
 foreach ($r in $script:Results) { $lines += "| $($r.Section) | $($r.Verdict) | $($r.What) | $(($r.Detail -replace '\|', '/') -replace "`r?`n", ' ') |" }
 $lines += ""
-$lines += "Evidence: every API response as NN-<step>.json, WSAPI reads as NN-wsapi-<what>-<when>.json, asbuilt.docx, cleanup.txt."
+$lines += "Evidence: every API response as NN-<step>.json, WSAPI reads as NN-wsapi-<what>-<when>.json, asbuilt.docx, NN-cleanup-attemptN.txt."
 $lines += ""
 $lines += "## Still needs eyes - UI-only changes, one screenshot each (open run 1 in the browser)"
 $lines += "1. Verify step: the line 'Using the array credential from the sheet: ...' and the 'Use a different credential' button (SPEC-008 R4)."

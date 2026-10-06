@@ -60,7 +60,7 @@ it needs from `GET /runs/{id}/events`. A timeout is a FAIL with the last status.
 
 **R6 — Evidence is kept whole.** Every response body is written as `NN-<step>.json`; every WSAPI
 read as `wsapi-<what>-<when>.json`; the docx as `asbuilt.docx`; the SSH transcript as
-`cleanup.txt`. The report links them. This folder is what the operator sends back — the same
+`NN-cleanup-attemptN.txt` (one per ssh attempt; one retry when the array drops the connection before its CLI prompt). The report links them. This folder is what the operator sends back — the same
 material fixtures were pinned from on 2026-09-13/14, gathered without a human.
 
 **R7 — Nothing the runner does is new capability.** It uses only endpoints the UI uses, WSAPI GETs,
