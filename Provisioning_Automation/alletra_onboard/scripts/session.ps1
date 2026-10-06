@@ -617,12 +617,16 @@ if ($SkipCleanup) {
     if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) { throw 'ssh.exe is not on PATH (Windows OpenSSH client feature) - paste run1-removal-set.txt by hand' }
     # 5.1 turns native stderr into terminating errors under EAP=Stop (ssh prints its known-hosts note there).
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    try { $transcript = & cmd /c "ssh -T -o StrictHostKeyChecking=accept-new $ArrayUser@$ArrayHost < `"$cmdFile`" 2>&1" | Out-String }
+    # ssh writes to a file, not a PowerShell pipe: piped, it died with ssh_dispatch_run_fatal (2026-09-28, 10-06).
+    $sshOut = Join-Path $Out 'cleanup-ssh-output.txt'
+    try { & cmd /c "ssh -T -o StrictHostKeyChecking=accept-new $ArrayUser@$ArrayHost < `"$cmdFile`" > `"$sshOut`" 2>&1" }
     finally { $ErrorActionPreference = $eap }
+    $transcript = if (Test-Path $sshOut) { [System.IO.File]::ReadAllText($sshOut) } else { '' }
     Write-Evidence 'cleanup.txt' $transcript | Out-Null
     # 2026-09-19: an EMPTY transcript (password prompt not answered, connection refused) matched no
     # error text and PASSED while every object stayed on the array. No output is a failure.
     if (-not ($transcript -match '\S')) { throw 'ssh returned no output at all - the password prompt was not answered or the connection failed' }
+    if ($transcript -match 'ssh_dispatch_run_fatal|client_loop:') { throw "ssh dropped the connection: $(($transcript -split "`n" | Select-String 'ssh_dispatch_run_fatal|client_loop:' | Select-Object -First 1).ToString().Trim())" }
     # ssh's own re-prompt after a mistyped password is not CLI error text; the WSAPI reads below decide.
     $bad = @($transcript -split "`n" | Where-Object { $_ -notmatch 'please try again' -and $_ -match 'Error|error|does not exist|Invalid|cannot|Cannot|member of|in use|not allowed|failed|Failed|denied|Denied' })
     Check 'the removal lines were accepted (no CLI error text)' ($bad.Count -eq 0) ($bad -join ' | ') | Out-Null
