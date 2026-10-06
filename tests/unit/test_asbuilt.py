@@ -65,6 +65,9 @@ def test_generate_fills_cover_table01_and_renders_checkhealth_tables(tmp_path):
     assert t01["Serial No"] == "SGHD45FF0Y"
     assert t01["InServ IP Address"] == "10.64.154.225"
     assert t01["Cache(GB)"].startswith("503 GiB")
+    # rack13 2026-10-06: the label said '(15.36 TB)' over '12 x 1.92 TB NVMe SSD'
+    assert t01["NVMe SSD Disks"] == "10 x 3.84 TB NVMe SSD"
+    assert not any("15.36" in label for label in t01)
 
     # checkhealth + inventory rendered as HPE Word tables (found by their headers, any order)
     all_headers = [tuple(c.text.strip() for c in t.rows[0].cells) for t in doc.tables]
