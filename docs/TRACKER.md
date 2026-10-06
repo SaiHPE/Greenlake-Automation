@@ -21,7 +21,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 | BL-07 | Dependabot: 4 alerts on github.com/SaiHPE/Greenlake-Automation | dev | todo | — | Bump, full test run, push both remotes. |
 | BL-31 | Discovery's fabric probe is slow on a large fabric: D22U27 (CRV) took ~42 s per ready FC port (`showportdev fcfabric`), 4½ min for 6 ports, although `_FCFABRIC_TIMEOUT` is 30 s | dev | todo | B.5 | Seen 2026-10-05. Check why the per-probe timeout is not honoured; consider probing once per switch, or in parallel. |
 | BL-32 | Provisioning gate table lists FC hosts only: an iSCSI host that passes (ESX1-iscsi, 2026-10-05) appears only in Check notes | dev | todo | B.6 | Add a row *iSCSI — no zoning needed* per logged-in iSCSI host. |
-| BL-35 | `session.ps1` cleanup: Windows ssh dies after the password (`ssh_dispatch_run_fatal … Unknown error`) when the removal set is fed from a file (`ssh -T … < file`) — 2026-10-06 and very likely 09-28, which left `zz_s6_*` behind | dev | todo | B.9 | Read-only test sent to the operator: `< file` vs `type file |` with `showversion`. Fix the runner by the result. |
+| BL-35 | `session.ps1` cleanup: Windows ssh dies after the password (`ssh_dispatch_run_fatal … Unknown error`) — 2026-10-06 and very likely 09-28, which left `zz_s6_*` behind | dev | doing | B.9 | Operator test 10-06: `ssh -T … < file` and `type file \| ssh -T …` both work at the console, so the file is not the cause; the runner differs only in capturing ssh through a PowerShell pipe (`\| Out-String`). Runner now has ssh write to `cleanup-ssh-output.txt` and fails loudly on `ssh_dispatch_run_fatal`. Built — pending a read-only check (`showversion`) of the old vs new form. |
 
 ## Test live (built, not yet run on hardware)
 
