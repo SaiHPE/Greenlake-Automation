@@ -417,6 +417,9 @@ def generate_asbuilt(
             key = _norm(row.cells[0].text).lower()
             if key in values and len(row.cells) > 1:
                 _set_cell_text(row.cells[1], values[key])
+                if key.startswith("nvme ssd disks ("):
+                    # the template's label carries a sample drive size; the value states the real one
+                    _set_cell_text(row.cells[0], "NVMe SSD Disks")
 
     inv_heading = ch_heading = None
     for para in doc.paragraphs:
