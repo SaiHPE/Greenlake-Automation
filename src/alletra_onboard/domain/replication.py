@@ -80,3 +80,181 @@ class ReplicationIntent(BaseModel):
     @property
     def failover_group_name(self) -> str:
         return self.failover_group or TEST_GROUP
+
+
+# ------------------------------------------------------------------ what the arrays say (SPEC-016 R1)
+
+class RcipPort(BaseModel):
+    """One row of `showport -rcip` — a configured Remote Copy IP port."""
+
+    nsp: str
+    state: str = ""
+    ip: str = ""
+    netmask: str = ""
+    gateway: str = ""
+    mtu: str = ""
+    rate: str = ""
+
+
+class RcTransport(BaseModel):
+    """One row of `showrctransport -rcip` — a port and the peer address it talks to."""
+
+    nsp: str
+    state: str = ""
+    ip: str = ""
+    peer_ip: str = ""
+    netmask: str = ""
+    gateway: str = ""
+
+
+class RcTarget(BaseModel):
+    """`showrcopy targets`: Name ID Type Status Options Policy."""
+
+    name: str
+    id: int | None = None
+    type: str = ""
+    status: str = ""
+    options: str = ""
+    policy: str = ""            # mirror_config | no_mirror_config
+
+    @property
+    def mirror_config(self) -> bool:
+        return "mirror_config" in self.policy and not self.policy.startswith("no_")
+
+
+class RcLink(BaseModel):
+    """`showrcopy links`: Target Node Address Status. `receive` rows are this array's own inbound ports."""
+
+    target: str
+    nsp: str
+    address: str
+    status: str = ""
+
+    @property
+    def up(self) -> bool:
+        return self.status.lower() == "up"
+
+    @property
+    def inbound(self) -> bool:
+        return self.target == "receive"
+
+
+class RcGroupVolume(BaseModel):
+    local_name: str
+    local_id: int | None = None
+    remote_name: str = ""
+    remote_id: int | None = None
+    sync_status: str = ""       # Synced | Syncing | Stopped | Stale | NotSynced | …
+    last_sync: str = ""         # NA on sync groups; a timestamp on periodic ones
+
+
+class RcGroup(BaseModel):
+    """One group block of `showrcopy groups`."""
+
+    name: str
+    target: str
+    status: str = ""            # Started | Stopped | Failsafe
+    role: str = ""              # Primary | Secondary | Primary-Rev | Secondary-Rev
+    mode: str = ""              # Sync | Periodic | Async
+    options: list[str] = Field(default_factory=list)
+    volumes: list[RcGroupVolume] = Field(default_factory=list)
+
+    @property
+    def mode_key(self) -> str:
+        """The sheet's word for the array's mode: Periodic -> async."""
+        return "sync" if self.mode.lower() == "sync" else "async"
+
+    @property
+    def volume_names(self) -> list[str]:
+        return [v.local_name for v in self.volumes]
+
+
+class ReplicationArrayView(BaseModel):
+    """Everything the Replication step read from ONE array, read-only."""
+
+    host: str = ""
+    name: str = ""
+    serial: str = ""
+    system_id: int | None = None        # `showsys` ID, decimal — the peer names our groups `<g>.r<id>`
+    os_version: str = ""
+    rc_status: str = ""                 # Started | Stopped | ""
+    rc_health: str = ""                 # Normal | …
+    rcip_ports: list[RcipPort] = Field(default_factory=list)
+    transports: list[RcTransport] = Field(default_factory=list)
+    targets: list[RcTarget] = Field(default_factory=list)
+    links: list[RcLink] = Field(default_factory=list)
+    groups: list[RcGroup] = Field(default_factory=list)
+    cpg_free_mib: dict[str, int] = Field(default_factory=dict)
+    vvsets: dict[str, list[str]] = Field(default_factory=dict)
+    volume_size_mib: dict[str, int] = Field(default_factory=dict)
+    read_error: str | None = None
+
+    @property
+    def rc_started(self) -> bool:
+        return self.rc_status.lower() == "started"
+
+    @property
+    def rcip_addresses(self) -> set[str]:
+        return {p.ip for p in self.rcip_ports if p.ip}
+
+    def group(self, name: str) -> RcGroup | None:
+        return next((g for g in self.groups if g.name == name), None)
+
+    def volume_group(self, volume: str) -> str | None:
+        """The group a volume already belongs to, if any (a volume is in at most one)."""
+        for g in self.groups:
+            if volume in g.volume_names:
+                return g.name
+        return None
+
+
+class Partnership(BaseModel):
+    """The two targets that point at each other, found by LINK ADDRESS (never by name — on the lab
+    pair the peer's target for us carries the peer's own name)."""
+
+    target_on_primary: str
+    target_on_peer: str
+    links_primary_up: int = 0
+    links_peer_up: int = 0
+    links_primary_total: int = 0
+    links_peer_total: int = 0
+    mirror_config: bool = True
+
+
+class ReplicationReport(BaseModel):
+    """R1 + R2: both arrays read, the partnership resolved, the blocking findings."""
+
+    primary: ReplicationArrayView
+    peer: ReplicationArrayView
+    partnership: Partnership | None = None
+    findings: list[str] = Field(default_factory=list)      # blocking, one sentence each
+    notes: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+# ------------------------------------------------------------------ the plan (SPEC-016 R3)
+
+class PlannedCall(BaseModel):
+    """One write the apply will make, as the WSAPI call and the CLI it is equivalent to."""
+
+    where: Literal["A", "B"]
+    wsapi: str
+    cli: str
+
+
+class ReplicationAction(BaseModel):
+    kind: Literal["group", "peer_vvset", "test_volume", "test_vvset"]
+    name: str
+    where: Literal["A", "B"] = "A"
+    state: Literal["create", "exists", "conflict"] = "create"
+    reason: str = ""
+    calls: list[PlannedCall] = Field(default_factory=list)
+    detail: dict = Field(default_factory=dict)
+
+
+class ReplicationPlan(BaseModel):
+    actions: list[ReplicationAction] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)      # findings + conflicts; non-empty refuses apply
+    notes: list[str] = Field(default_factory=list)
+    existing_groups: list[str] = Field(default_factory=list)   # R9: present, never touched
+    error: str | None = None

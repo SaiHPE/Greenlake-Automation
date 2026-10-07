@@ -118,6 +118,62 @@ async def test_replication_steps_are_refused_without_the_replication_tab(tmp_pat
     assert service.get_provisioning_intent(run.run_id).replication.peer.host == "10.64.154.190"
 
 
+async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path, monkeypatch):
+    # SPEC-016 R1-R3 through the step service: two faked reads, the stored report, the SSE payload.
+    from alletra_onboard.application.replication import read as replication_read
+    from alletra_onboard.application.replication.steps import REPORT_ARTIFACT
+    from alletra_onboard.domain.replication import (
+        ProtectionRequest, RcGroup, RcGroupVolume, RcLink, RcTarget, RcipPort, ReplicationArrayView,
+        ReplicationIntent, ReplicationReport,
+    )
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    a = ReplicationArrayView(
+        host="a", name="ArrayA", serial="SA", system_id=100, os_version="10.5.0", rc_status="Started",
+        rcip_ports=[RcipPort(nsp="0:4:3", ip="10.1.0.1"), RcipPort(nsp="1:4:3", ip="10.1.0.2")],
+        targets=[RcTarget(name="ArrayB", status="ready", policy="mirror_config")],
+        links=[RcLink(target="ArrayB", nsp="0:4:3", address="10.2.0.1", status="Up"),
+               RcLink(target="ArrayB", nsp="1:4:3", address="10.2.0.2", status="Up")],
+        groups=[RcGroup(name="old_rcg", target="ArrayB", status="Started", role="Primary", mode="Sync",
+                        volumes=[RcGroupVolume(local_name="old")])],
+        cpg_free_mib={"SSD_r6": 10 ** 7}, vvsets={"HS": ["V01"]}, volume_size_mib={"V01": 10240},
+    )
+    b = ReplicationArrayView(
+        host="b", name="ArrayB", serial="SB", system_id=200, rc_status="Started",
+        rcip_ports=[RcipPort(nsp="0:4:3", ip="10.2.0.1"), RcipPort(nsp="1:4:3", ip="10.2.0.2")],
+        targets=[RcTarget(name="ArrayA", status="ready", policy="mirror_config")],
+        links=[RcLink(target="ArrayA", nsp="0:4:3", address="10.1.0.1", status="Up"),
+               RcLink(target="ArrayA", nsp="1:4:3", address="10.1.0.2", status="Up")],
+        cpg_free_mib={"SSD_r6": 10 ** 7},
+    )
+    reads = iter([a, b])
+    monkeypatch.setattr(replication_read, "read_array", lambda creds, progress=None: next(reads))
+
+    intent = _prov_intent()
+    intent.volumes[0].vvset = "HS"
+    intent.replication = ReplicationIntent(
+        peer=EndpointCreds(host="b", username="u", password=SecretStr("p")), failover_test=False,
+        protections=[ProtectionRequest(vvset="HS", peer_cpg="SSD_r6")],
+    )
+    service = _service(tmp_path)
+    run = service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=intent)
+    service.start_replication_preview(run.run_id)
+    await service.wait(run.run_id)
+
+    assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR
+    assert service.get_run(run.run_id).current_phase == WorkflowPhase.STORAGE_REPLICATE
+    event = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.previewed")
+    assert event.message == "Read ArrayA and ArrayB — plan ready: 2 to create, 0 already there. Review, then confirm to configure replication."
+    plan = event.data["plan"]
+    assert [(x["kind"], x["name"], x["state"]) for x in plan["actions"]] == [("group", "HS_rcg", "create"), ("peer_vvset", "HS_rc", "create")]
+    assert plan["existing_groups"] == ["old_rcg"] and plan["blockers"] == []
+    assert event.data["report"]["partnership"]["target_on_primary"] == "ArrayB"
+    stored = ReplicationReport.model_validate_json(service.store.load_artifact(run.run_id, REPORT_ARTIFACT))
+    assert stored.primary.name == "ArrayA" and stored.peer.name == "ArrayB"
+    assert service.replication.previewed_plan(run.run_id).actions[0].name == "HS_rcg"
+    assert "password" not in str(event.data)          # the report carries addresses and names, never a credential
+
+
 async def test_provision_advance_is_selection_aware(tmp_path):
     # A custom run that drops cloudinit: GreenLake should advance straight to DSCC.
     result = ProvisionResult(serial="SGHD45FF0Y", succeeded=True)

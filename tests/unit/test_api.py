@@ -471,6 +471,14 @@ def test_storage_builder_saves_composition_and_objects_needs_discovery(tmp_path)
     # tier-2 path verify is registered and also needs discovery first -> 409
     assert client.post(f"/runs/{rid}/storage/verify-paths").status_code == 409
 
+    # SPEC-016: the replication preview is registered; a workbook without the Replication tab -> 409
+    refused = client.post(f"/runs/{rid}/replication/preview")
+    assert refused.status_code == 409 and "no Replication tab" in refused.json()["detail"]
+    # and REPLICATE mode cannot even be minted from such a workbook -> 422 with the sentence
+    token = _upload_complete(client)
+    minted = client.post("/runs/from-sheet", json={"token": token, "mode": "REPLICATE"})
+    assert minted.status_code == 422 and "'Replication' tab" in minted.json()["detail"]
+
 
 def test_config_roundtrip_masks_secret(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
