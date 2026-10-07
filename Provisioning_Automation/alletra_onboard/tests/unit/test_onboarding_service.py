@@ -163,7 +163,7 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR
     assert service.get_run(run.run_id).current_phase == WorkflowPhase.STORAGE_REPLICATE
     event = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.previewed")
-    assert event.message == "Read ArrayA and ArrayB — plan ready: 2 to create, 0 already there. Review, then confirm to configure replication."
+    assert event.message == "Read ArrayA and ArrayB — plan ready: 2 to create, 0 already there. Review the plan."
     plan = event.data["plan"]
     assert [(x["kind"], x["name"], x["state"]) for x in plan["actions"]] == [("group", "HS_rcg", "create"), ("peer_vvset", "HS_rc", "create")]
     assert plan["existing_groups"] == ["old_rcg"] and plan["blockers"] == []

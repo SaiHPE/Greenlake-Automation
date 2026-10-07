@@ -235,11 +235,14 @@ class ReplicationReport(BaseModel):
 # ------------------------------------------------------------------ the plan (SPEC-016 R3)
 
 class PlannedCall(BaseModel):
-    """One write the apply will make, as the WSAPI call and the CLI it is equivalent to."""
+    """One write the apply will make, as the WSAPI call and the CLI it is equivalent to. `seq` is
+    its position in the apply order across the whole plan (R4): a group's start comes after the
+    peer volume set that groups its secondaries."""
 
     where: Literal["A", "B"]
     wsapi: str
     cli: str
+    seq: int = 0
 
 
 class ReplicationAction(BaseModel):

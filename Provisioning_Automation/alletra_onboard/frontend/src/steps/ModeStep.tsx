@@ -17,9 +17,11 @@ interface Props {
   initOnly?: boolean;
   catalog: ServedStep[];
   state: StepState;
+  /** The uploaded workbook carries a filled Replication tab (SPEC-015 R4); the Replicate mode needs it. */
+  hasReplicationTab?: boolean;
 }
 
-export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, initOnly, catalog, state }: Props) {
+export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, initOnly, catalog, state, hasReplicationTab }: Props) {
   const { nextTitle } = useStepContext();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,8 +36,12 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
     mode === 'CUSTOM' &&
     (custom.includes('zoning') || custom.includes('provision')) &&
     !custom.includes('discover');
+  // The replication steps read the Replication tab; a workbook without one refuses them (422).
+  const replicationPicked = custom.includes('replicate') || custom.includes('failover_test');
+  const missingReplicationTab = !locked && !hasReplicationTab && (mode === 'REPLICATE' || (mode === 'CUSTOM' && replicationPicked));
 
   const presets = initOnly ? MODE_PRESETS.filter((preset) => preset.mode === 'FULL_ONBOARDING') : MODE_PRESETS;
+  const unavailable = (preset: (typeof MODE_PRESETS)[number]) => !locked && preset.needs === 'replication' && !hasReplicationTab;
   const labelFor = (preset: (typeof MODE_PRESETS)[number]) =>
     initOnly && preset.mode === 'FULL_ONBOARDING' ? 'Initialization' : preset.label;
   const blurbFor = (preset: (typeof MODE_PRESETS)[number]) =>
@@ -72,7 +78,7 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
           primary
           busy={busy}
           label={locked ? `Continue to ${nextTitle ?? 'the next step'}` : 'Create run'}
-          disabled={(mode === 'CUSTOM' && custom.length === 0) || missingDiscovery}
+          disabled={(mode === 'CUSTOM' && custom.length === 0) || missingDiscovery || missingReplicationTab}
           onClick={confirm}
         />
       }
@@ -81,6 +87,7 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
         <Box gap="xsmall" flex={false}>
           {presets.map((preset) => {
             const selected = mode === preset.mode;
+            const off = unavailable(preset);
             return (
               <Box
                 key={preset.mode}
@@ -91,10 +98,11 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
                 round="small"
                 background={selected ? 'background-contrast' : undefined}
                 border={{ color: selected ? 'brand' : 'transparent', size: '2px' }}
-                onClick={locked ? undefined : () => setMode(preset.mode)}
-                focusIndicator={!locked}
+                onClick={locked || off ? undefined : () => setMode(preset.mode)}
+                focusIndicator={!locked && !off}
                 flex={false}
-                style={{ cursor: locked ? 'default' : 'pointer', opacity: locked && !selected ? 0.5 : 1 }}
+                style={{ cursor: locked || off ? 'default' : 'pointer', opacity: (locked && !selected) || off ? 0.5 : 1 }}
+                a11yTitle={off ? `${preset.label} — needs the workbook's Replication tab` : undefined}
               >
                 {/* X-1: the DS glyph, not a hand-drawn 18px/8px radio. */}
                 <Box flex={false} margin={{ top: 'xxsmall' }}>
@@ -107,6 +115,11 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
                   <Text size="small" color="text-weak">
                     {blurbFor(preset)}
                   </Text>
+                  {off && (
+                    <Text size="xsmall" color="text-weak">
+                      Not available: the uploaded workbook has no filled Replication tab.
+                    </Text>
+                  )}
                 </Box>
               </Box>
             );
@@ -135,6 +148,14 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
           tone="warning"
           title="Discovery is required"
           message="SAN zoning and Provision storage both work from the discovery results — include Discovery in the selection."
+        />
+      )}
+
+      {missingReplicationTab && (
+        <InlineNotification
+          tone="warning"
+          title="The Replication tab is required"
+          message="Replication and Failover test read the peer array and the volume sets to protect from the workbook's Replication tab. Fill it in (download the template for the layout) and upload the workbook again."
         />
       )}
 

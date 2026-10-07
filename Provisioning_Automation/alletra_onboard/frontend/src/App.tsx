@@ -18,6 +18,8 @@ import { InitSheetStep } from './steps/InitSheetStep';
 import { ModeStep } from './steps/ModeStep';
 import { PrereqStep } from './steps/PrereqStep';
 import { ProvisionStep } from './steps/ProvisionStep';
+import { ReplicationStep } from './steps/ReplicationStep';
+import { FailoverTestStep } from './steps/FailoverTestStep';
 import { VerifyStep } from './steps/VerifyStep';
 import { ZoningStep } from './steps/ZoningStep';
 
@@ -37,7 +39,7 @@ const DONE_STEP: WizardStep = { key: 'done', label: 'Finish', group: 'Document' 
 const RUN_ID_KEY = 'alletra.runId';
 
 // Registry step kinds, mapped to the deployment stages the rail groups by.
-const STAGE: Record<string, string> = { init: 'Initialize', provision: 'Provision', verify: 'Document' };
+const STAGE: Record<string, string> = { init: 'Initialize', provision: 'Provision', replicate: 'Replicate', verify: 'Document' };
 
 // Prerequisites -> sheet -> mode -> the steps the mode selected -> finish. The middle comes from the
 // served registry (GET /app/profile); the UI keeps no copy of the step list.
@@ -263,6 +265,7 @@ export default function App() {
                   initOnly={initOnly}
                   catalog={registry?.steps ?? []}
                   state={scaffoldState('mode')}
+                  hasReplicationTab={Boolean(sheetResult?.targets?.peer_host) || Boolean(runId)}
                 />
               )}
               {current.key === 'greenlake' && runId && <GreenLakeStep runId={runId} run={run} events={events} onDone={next} />}
@@ -275,6 +278,8 @@ export default function App() {
               {current.key === 'discover' && runId && <DiscoveryStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'zoning' && runId && <ZoningStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'provision' && runId && <ProvisionStep runId={runId} run={run} events={events} onDone={next} />}
+              {current.key === 'replicate' && runId && <ReplicationStep runId={runId} run={run} events={events} onDone={next} />}
+              {current.key === 'failover_test' && runId && <FailoverTestStep onDone={next} />}
               {current.key === 'verify' && runId && <VerifyStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'asbuilt' && runId && <AsBuiltStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'done' && (
@@ -366,6 +371,7 @@ function modeLabel(mode: RunMode, initOnly: boolean): string {
     FULL_ONBOARDING: 'Full onboarding',
     PROVISION_ONLY: 'Provision storage only',
     BOTH: 'Onboard, then provision',
+    REPLICATE: 'Provision, then replicate',
     VERIFY_ONLY: 'Verify only',
     CUSTOM: 'Custom',
   }[mode];

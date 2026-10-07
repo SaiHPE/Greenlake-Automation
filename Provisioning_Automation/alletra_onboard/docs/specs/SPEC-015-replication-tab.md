@@ -2,8 +2,10 @@
 
 **Status:** APPROVED 2026-10-07; **re-cut the same day** — the two-array workbook and paired runs
 (ADR 0014) are deferred; replication is a step on the existing one-array run. **R1–R4, R6 built
-2026-10-07** (parser, model, template, compose, registry, run-creation gate; 24 unit tests); **R5 (the
-two step pages, the mode card) ships with SPEC-016's page** — pending live run
+2026-10-07** (parser, model, template, compose, registry, run-creation gate; 24 unit tests); **R5 built
+the same day** (Replication step page, Failover test placeholder page, the *Provision, then replicate*
+mode card — unavailable with the reason when the uploaded workbook has no Replication tab) — pending
+live run
 **ADRs:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) (sequenced: groups
 first over WSAPI; links and targets later) · [0014](../adr/0014-paired-runs-from-one-workbook.md)
 deferred · [0013](../adr/0013-one-array-credential-per-run.md) unchanged

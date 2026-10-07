@@ -142,7 +142,8 @@ def _group_matches(group: RcGroup, row: ProtectionRequest, members: list[str], t
     return ""
 
 
-def _group_calls(row: ProtectionRequest, members: list[str], target: str, local_cpg: str, mirror_config: bool) -> list[PlannedCall]:
+def _group_calls(row: ProtectionRequest, members: list[str], target: str, local_cpg: str, mirror_config: bool) -> tuple[list[PlannedCall], PlannedCall]:
+    """(the calls that build the group, the start) — the start is sequenced after the peer set."""
     g, mode = row.group_name, WSAPI_MODE[row.mode]
     cli_mode = "sync" if row.mode == "sync" else "periodic"
     calls = [PlannedCall(
@@ -168,12 +169,12 @@ def _group_calls(row: ProtectionRequest, members: list[str], target: str, local_
             cli=f"admitrcopyvv -createvv {volume} {g} {target}:{volume}",
         ))
     start_where = "A" if mirror_config else "B"
-    calls.append(PlannedCall(
+    start = PlannedCall(
         where=start_where,
         wsapi=f"PUT /remotecopygroups/{g} {{action: start}}" + ("" if mirror_config else "  (on the peer first: target policy is no_mirror_config)"),
         cli=f"startrcopygroup {g}",
-    ))
-    return calls
+    )
+    return calls, start
 
 
 def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisioning: ProvisioningIntent) -> ReplicationPlan:
@@ -191,24 +192,34 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
         members = primary.vvsets.get(row.vvset) or [v.name for v in provisioning.volumes if v.vvset == row.vvset]
         local_cpg = next((v.cpg for v in provisioning.volumes if v.vvset == row.vvset), "")
         rows.append((row, members, local_cpg))
+    seq = 0
+
+    def number(*calls: PlannedCall) -> None:
+        nonlocal seq
+        for c in calls:
+            seq += 1
+            c.seq = seq
+
     if intent.failover_test and not intent.failover_group:
         test_row = ProtectionRequest(vvset=TEST_VVSET, mode="async", peer_cpg=(intent.protections[0].peer_cpg if intent.protections else ""),
                                      peer_vvset=TEST_PEER_VVSET)
         test_cpg = next((v.cpg for v in provisioning.volumes), "")
         if TEST_VOLUME not in primary.volume_size_mib:
+            create_vv = PlannedCall(where="A", wsapi=f"POST /volumes {{name: {TEST_VOLUME}, cpg: {test_cpg}, sizeMiB: {TEST_VOLUME_GIB * 1024}, tpvv: true}}",
+                                    cli=f"createvv -tpvv {test_cpg} {TEST_VOLUME} {TEST_VOLUME_GIB}g")
+            number(create_vv)
             plan.actions.append(ReplicationAction(
                 kind="test_volume", name=TEST_VOLUME, where="A", state="create",
-                reason=f"{TEST_VOLUME_GIB} GiB tpvv for the failover test",
-                calls=[PlannedCall(where="A", wsapi=f"POST /volumes {{name: {TEST_VOLUME}, cpg: {test_cpg}, sizeMiB: {TEST_VOLUME_GIB * 1024}, tpvv: true}}",
-                                   cli=f"createvv -tpvv {test_cpg} {TEST_VOLUME} {TEST_VOLUME_GIB}g")],
+                reason=f"{TEST_VOLUME_GIB} GiB tpvv for the failover test", calls=[create_vv],
             ))
         else:
             plan.actions.append(ReplicationAction(kind="test_volume", name=TEST_VOLUME, state="exists", reason="already on the array"))
         if TEST_VVSET not in primary.vvsets:
+            create_set = PlannedCall(where="A", wsapi=f"POST /volumesets {{name: {TEST_VVSET}, setmembers: [{TEST_VOLUME}]}}",
+                                     cli=f"createvvset {TEST_VVSET} {TEST_VOLUME}")
+            number(create_set)
             plan.actions.append(ReplicationAction(
-                kind="test_vvset", name=TEST_VVSET, where="A", state="create", reason=f"holds {TEST_VOLUME}",
-                calls=[PlannedCall(where="A", wsapi=f"POST /volumesets {{name: {TEST_VVSET}, setmembers: [{TEST_VOLUME}]}}",
-                                   cli=f"createvvset {TEST_VVSET} {TEST_VOLUME}")],
+                kind="test_vvset", name=TEST_VVSET, where="A", state="create", reason=f"holds {TEST_VOLUME}", calls=[create_set],
             ))
         else:
             plan.actions.append(ReplicationAction(kind="test_vvset", name=TEST_VVSET, state="exists", reason="already on the array"))
@@ -217,12 +228,22 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
     for row, members, local_cpg in rows:
         g = row.group_name
         existing = primary.group(g)
+        peer_set = row.peer_vvset_name
+        peer_set_call: PlannedCall | None = None
+        if peer_set not in peer.vvsets:
+            peer_set_call = PlannedCall(where="B", wsapi=f"POST /volumesets {{name: {peer_set}, setmembers: [{', '.join(members)}]}}",
+                                        cli=f"createvvset {peer_set} {' '.join(members)}")
         if existing is None:
+            setup, start = _group_calls(row, members, target, local_cpg, mirror_config)
+            number(*setup)
+            if peer_set_call is not None:
+                number(peer_set_call)
+            number(start)
             plan.actions.append(ReplicationAction(
                 kind="group", name=g, where="A", state="create",
                 reason=f"{row.mode}" + (f", RPO {row.rpo_minutes} min (period {row.period_seconds // 60} min)" if row.period_seconds else "")
                        + f" → {target}, {len(members)} volume(s) from set '{row.vvset}', secondaries on {row.peer_cpg}",
-                calls=_group_calls(row, members, target, local_cpg, mirror_config),
+                calls=[*setup, start],
                 detail={"vvset": row.vvset, "mode": row.mode, "volumes": members, "target": target},
             ))
         else:
@@ -236,16 +257,15 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
                     kind="group", name=g, state="exists",
                     reason=f"{existing.status}, {existing.role}, {existing.mode}, {len(existing.volumes)} volume(s)",
                 ))
-        peer_set = row.peer_vvset_name
-        if peer_set in peer.vvsets:
+            if peer_set_call is not None:
+                number(peer_set_call)
+        if peer_set_call is None:
             plan.actions.append(ReplicationAction(kind="peer_vvset", name=peer_set, where="B", state="exists",
                                                   reason=f"{len(peer.vvsets[peer_set])} member(s) on {b}"))
         else:
             plan.actions.append(ReplicationAction(
                 kind="peer_vvset", name=peer_set, where="B", state="create",
-                reason=f"the secondary volumes on {b}, for the DR site's exports",
-                calls=[PlannedCall(where="B", wsapi=f"POST /volumesets {{name: {peer_set}, setmembers: [{', '.join(members)}]}}",
-                                   cli=f"createvvset {peer_set} {' '.join(members)}")],
+                reason=f"the secondary volumes on {b}, for the DR site's exports", calls=[peer_set_call],
             ))
 
     planned = {row.group_name for row, _, _ in rows}

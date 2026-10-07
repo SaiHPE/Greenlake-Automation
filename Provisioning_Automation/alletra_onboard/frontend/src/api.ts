@@ -141,6 +141,8 @@ export interface InitSheetUploadResult {
   token: string; // single-use hold for the parsed sheet; the run is minted from it + the chosen mode
   work_item: any; // parsed values for review (admin/device passwords never included)
   credentials_saved: boolean;
+  // The sheet's device endpoints without passwords (array/vcenter/switch/peer _host and _user); SPEC-006 R1.
+  targets?: Record<string, string>;
 }
 // Upload the filled Initialisation_sheet.xlsx (base64). The server validates it is COMPLETE, writes
 // the GreenLake API creds to .env, and HOLDS the parsed sheet server-side — returning a token. No run
@@ -381,6 +383,37 @@ export interface HostPathStatus {
 }
 export interface PathVerification { hosts: HostPathStatus[]; notes: string[]; error: string | null; }
 export const verifyPaths = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/verify-paths`);
+
+// SPEC-016: replication to a peer array. Release (a) is read-only: both arrays read, the
+// partnership found by link address, the findings, and the exists/create/conflict plan.
+export interface RcipPort { nsp: string; state: string; ip: string; netmask: string; gateway: string; mtu: string; rate: string; }
+export interface RcTarget { name: string; id: number | null; type: string; status: string; options: string; policy: string; }
+export interface RcLink { target: string; nsp: string; address: string; status: string; }
+export interface RcGroupVolume {
+  local_name: string; local_id: number | null; remote_name: string; remote_id: number | null; sync_status: string; last_sync: string;
+}
+export interface RcGroup { name: string; target: string; status: string; role: string; mode: string; options: string[]; volumes: RcGroupVolume[]; }
+export interface ReplicationArrayView {
+  host: string; name: string; serial: string; system_id: number | null; os_version: string;
+  rc_status: string; rc_health: string; rcip_ports: RcipPort[]; targets: RcTarget[]; links: RcLink[]; groups: RcGroup[];
+  cpg_free_mib: Record<string, number>; vvsets: Record<string, string[]>; read_error: string | null;
+}
+export interface Partnership {
+  target_on_primary: string; target_on_peer: string;
+  links_primary_up: number; links_peer_up: number; links_primary_total: number; links_peer_total: number; mirror_config: boolean;
+}
+export interface ReplicationReport {
+  primary: ReplicationArrayView; peer: ReplicationArrayView; partnership: Partnership | null;
+  findings: string[]; notes: string[]; error: string | null;
+}
+export interface PlannedCall { where: 'A' | 'B'; wsapi: string; cli: string; seq: number; }
+export type ReplicationActionState = 'create' | 'exists' | 'conflict';
+export interface ReplicationAction {
+  kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset'; name: string; where: 'A' | 'B';
+  state: ReplicationActionState; reason: string; calls: PlannedCall[]; detail: Record<string, any>;
+}
+export interface ReplicationPlan { actions: ReplicationAction[]; blockers: string[]; notes: string[]; existing_groups: string[]; error: string | null; }
+export const replicationPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/preview`);
 
 export const launchBrowser = (url?: string) =>
   request<{ cdp_url: string; profile_dir: string; executable: string }>('POST', '/browser/launch', { port: 9222, url });
