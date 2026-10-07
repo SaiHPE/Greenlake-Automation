@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, SecretStr
 
+from alletra_onboard.domain.replication import ReplicationIntent
 from alletra_onboard.domain.shared import EndpointCreds
 
 ProvisioningType = Literal["tpvv", "reduce"]
@@ -130,6 +131,8 @@ class ProvisioningIntent(BaseModel):
     # Hosts the operator declared because nothing can see them yet (see DeclaredHost).
     declared_hosts: list[DeclaredHost] = Field(default_factory=list)
     exports: list[ExportRequest] = Field(default_factory=list)  # empty => default each-volume->each-host-set
+    # The Replication tab (SPEC-015), when the workbook has one. None = no replication steps possible.
+    replication: ReplicationIntent | None = None
 
     @classmethod
     def from_simple(

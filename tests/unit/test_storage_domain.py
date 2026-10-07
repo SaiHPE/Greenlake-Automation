@@ -59,3 +59,21 @@ def test_provisioning_intent_persists_with_secrets(tmp_path):
     assert loaded.switch_f2.password.get_secret_value() == "pw-sw2"
     assert [v.name for v in loaded.volumes] == ["V01", "V02"]
     assert store.get_provisioning_intent("missing") is None
+    assert loaded.replication is None
+
+
+def test_replication_intent_persists_with_the_peer_password(tmp_path):
+    from alletra_onboard.domain.replication import ProtectionRequest, ReplicationIntent
+
+    intent = _intent()
+    intent.replication = ReplicationIntent(
+        peer=_creds("10.64.154.190"), rtt_ms=1.5,
+        protections=[ProtectionRequest(vvset="zz_rc_vvs", peer_cpg="SSD_r6")],
+    )
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    store.save_provisioning_intent("run1", intent)
+    loaded = store.get_provisioning_intent("run1")
+    assert loaded.replication.peer.password.get_secret_value() == "pw-10.64.154.190"
+    assert loaded.replication.protections[0].group_name == "zz_rc_vvs_rcg"
+    assert loaded.replication.rtt_ms == 1.5

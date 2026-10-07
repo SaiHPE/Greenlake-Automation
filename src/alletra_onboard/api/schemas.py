@@ -149,6 +149,8 @@ class InitSheetComposeRequest(BaseModel):
     volumes: list[dict[str, str]] | None = None
     hostsets: list[dict[str, str]] | None = None
     hosts: list[dict[str, str]] | None = None
+    # SPEC-015 R6: {"fields": {peer_host, peer_user, peer_password, rtt_ms, …}, "rows": [{vvset, mode, …}]}
+    replication: dict | None = None
 
 
 class InitSheetComposeResponse(BaseModel):

@@ -96,6 +96,28 @@ async def test_create_run_records_mode_and_initial_phase(tmp_path):
     assert verify_run.current_phase == WorkflowPhase.CONFIG_VERIFY
 
 
+async def test_replication_steps_are_refused_without_the_replication_tab(tmp_path):
+    # SPEC-015 R4: the steps exist only when the workbook carries the tab (intent.replication).
+    import pytest
+    from alletra_onboard.domain.replication import ProtectionRequest, ReplicationIntent
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    service = _service(tmp_path)
+    with pytest.raises(ValueError, match="need the workbook's 'Replication' tab"):
+        service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=_prov_intent())
+    with pytest.raises(ValueError, match="need the workbook's 'Replication' tab"):
+        service.create_run(_item(), mode=RunMode.CUSTOM, selected_steps=["provision", "replicate"])
+
+    intent = _prov_intent()
+    intent.replication = ReplicationIntent(
+        peer=EndpointCreds(host="10.64.154.190", username="3paradm", password=SecretStr("pw")),
+        protections=[ProtectionRequest(vvset="HS", peer_cpg="SSD_r6")],
+    )
+    run = service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=intent)
+    assert run.current_phase == WorkflowPhase.STORAGE_DISCOVER
+    assert service.get_provisioning_intent(run.run_id).replication.peer.host == "10.64.154.190"
+
+
 async def test_provision_advance_is_selection_aware(tmp_path):
     # A custom run that drops cloudinit: GreenLake should advance straight to DSCC.
     result = ProvisionResult(serial="SGHD45FF0Y", succeeded=True)

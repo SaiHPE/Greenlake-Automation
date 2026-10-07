@@ -11,7 +11,8 @@ class StepDef:
 
     `key` is the stable id the frontend and `RunRecord.selected_steps` use. `phase` is the phase the
     run lands on when this step is the active one (so resume maps a persisted phase back to a step).
-    `kind` groups steps: 'init' (the A->B->C onboarding), 'provision' (storage, Phase 2), 'verify'.
+    `kind` groups steps: 'init' (the A->B->C onboarding), 'provision' (storage, Phase 2), 'replicate'
+    (Remote Copy to a peer array — needs the Replication tab), 'verify'.
     """
 
     key: str
@@ -28,6 +29,8 @@ STEP_REGISTRY: tuple[StepDef, ...] = (
     StepDef("discover", "Discovery", WorkflowPhase.STORAGE_DISCOVER, "provision"),
     StepDef("zoning", "SAN Zoning", WorkflowPhase.STORAGE_ZONING, "provision"),
     StepDef("provision", "Provision storage", WorkflowPhase.STORAGE_PROVISION, "provision"),
+    StepDef("replicate", "Replication", WorkflowPhase.STORAGE_REPLICATE, "replicate"),
+    StepDef("failover_test", "Failover test", WorkflowPhase.STORAGE_FAILOVER_TEST, "replicate"),
     # "Verify configuration", not "…& health": the HPE Design System prohibits "health" in UI copy —
     # always "status". This label is served to the UI, so this is the only place it is spelled.
     StepDef("verify", "Verify configuration", WorkflowPhase.CONFIG_VERIFY, "verify"),
@@ -39,8 +42,12 @@ _MODE_STEPS: dict[RunMode, tuple[str, ...]] = {
     RunMode.FULL_ONBOARDING: ("greenlake", "cloudinit", "dscc", "verify", "asbuilt"),
     RunMode.PROVISION_ONLY: ("discover", "zoning", "provision", "verify", "asbuilt"),
     RunMode.BOTH: ("greenlake", "cloudinit", "dscc", "discover", "zoning", "provision", "verify", "asbuilt"),
+    RunMode.REPLICATE: ("discover", "zoning", "provision", "replicate", "failover_test", "verify", "asbuilt"),
     RunMode.VERIFY_ONLY: ("verify", "asbuilt"),
 }
+
+#: Steps that exist only when the workbook carries the Replication tab (SPEC-015 R4).
+REPLICATION_STEP_KEYS: frozenset[str] = frozenset(step.key for step in STEP_REGISTRY if step.kind == "replicate")
 
 
 def mode_steps() -> dict[RunMode, tuple[str, ...]]:

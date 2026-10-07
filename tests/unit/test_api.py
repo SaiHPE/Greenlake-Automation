@@ -68,13 +68,16 @@ def test_app_profile_serves_the_step_registry(tmp_path):
     # that replaced the hand-synced frontend mirror (modes.ts).
     body = _client(tmp_path).get("/app/profile").json()
     assert [s["key"] for s in body["steps"]] == [
-        "greenlake", "cloudinit", "dscc", "discover", "zoning", "provision", "verify", "asbuilt",
+        "greenlake", "cloudinit", "dscc", "discover", "zoning", "provision",
+        "replicate", "failover_test", "verify", "asbuilt",
     ]
-    assert all(s["label"] and s["kind"] in ("init", "provision", "verify") and s["phase"] for s in body["steps"])
+    assert all(s["label"] and s["kind"] in ("init", "provision", "replicate", "verify") and s["phase"] for s in body["steps"])
     assert body["modes"]["VERIFY_ONLY"] == ["verify", "asbuilt"]
     assert body["modes"]["FULL_ONBOARDING"] == ["greenlake", "cloudinit", "dscc", "verify", "asbuilt"]
     assert body["modes"]["PROVISION_ONLY"] == ["discover", "zoning", "provision", "verify", "asbuilt"]
-    assert body["modes"]["BOTH"] == [s["key"] for s in body["steps"]]
+    # BOTH is every step EXCEPT the replication pair, which needs the Replication tab (SPEC-015 R4).
+    assert body["modes"]["BOTH"] == [s["key"] for s in body["steps"] if s["kind"] != "replicate"]
+    assert body["modes"]["REPLICATE"] == ["discover", "zoning", "provision", "replicate", "failover_test", "verify", "asbuilt"]
     # Optional-dependency capability: a frozen build that fails to bundle the 3PAR SDK degrades
     # silently until WSAPI is first touched (how v0.14.0-rc.1 shipped broken). In the dev env the
     # SDK is installed so this must be True; on a packaged build, this one field is the smoke test.
