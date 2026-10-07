@@ -33,10 +33,13 @@ credential on the primary and the tab's peer credential on the peer. No SSH writ
 primary: `GET /remotecopy`, `GET /remotecopygroups`. Parsers are pinned to the BL-38 captures first.
 
 **R2 — Check (blocking findings, one sentence each; nothing guessed).**
-- **Partnership present:** on the primary a target whose name is the peer's `showsys` name, and on
-  the peer a target named after the primary, each with ≥ 2 links `Up`. Otherwise: *"No Remote Copy
-  partnership between <A> and <B>. The tool configures partnerships from v0.19 (ADR 0015); until then
-  it has to exist before this step."* The partnership is read, never created, in this release.
+- **Partnership present, matched by address, not by name:** on each array a target whose links'
+  peer addresses (`showrctransport -rcip` `PeerIPAddress`) are the other array's RCIP addresses
+  (`showport -rcip` `IPAddr`), with ≥ 2 links `Up`. Target names are not trusted — on the lab pair
+  E18U31's target for D22U27 is itself named `AlletraMP_E18U31` (fixtures README). The matched
+  target's name is what the tool passes as `targetName`. Otherwise: *"No Remote Copy partnership
+  between <A> and <B>. The tool configures partnerships from v0.19 (ADR 0015); until then it has to
+  exist before this step."* The partnership is read, never created, in this release.
 - Remote Copy started on both arrays (`showrcopy` system status).
 - Sync rows: RTT ≤ 10 ms; async rows: ≤ 200 ms (from the tab).
 - The volume set exists on the primary with ≥ 1 member; no member is already in a Remote Copy group.
@@ -58,7 +61,7 @@ to**, labelled **A** (primary) or **B** (peer), in execution order.
 |---|---|---|---|
 | 1 | A | provisioning's own volume/VV-set calls for the test objects (if planned) | `createvv`, `createvvset` |
 | 2 | A | `POST /remotecopygroups` `{name, targets:[{targetName:<B>, mode: 1 sync / 2 periodic, userCPG:<peer CPG>}], localUserCPG:<primary CPG>}` | `creatercopygroup -usr_cpg <cpgA> <B>:<cpgB> <group> <B>:sync|periodic` |
-| 3 | A | `PUT /remotecopygroups/<group>` `{targets:[{targetName:<B>, syncPeriod: RPO×30}]}` (async only) and the policies (`autoRecover`, `autoSynchronize` — field names confirmed from the BL-38 `GET` of the existing group) | `setrcopygroup period <RPO/2>m <B> <group>` · `setrcopygroup pol auto_recover|auto_synchronize <group>` |
+| 3 | A | `PUT /remotecopygroups/<group>` `{targets:[{targetName:<B>, syncPeriod: RPO×30, policies:{autoRecover:true, autoSynchronize:true}}]}` (`syncPeriod` async only; field names confirmed from the BL-38 `GET` — fixtures README) | `setrcopygroup period <RPO/2>m <B> <group>` · `setrcopygroup pol auto_recover|auto_synchronize <group>` |
 | 4 | A | per set member: `PUT /remotecopygroups/<group>` `{action: admit, volumeName, targets:[{targetName:<B>, secVolumeName:<same name>}], volumeAutoCreation: true}` | `admitrcopyvv -createvv <vol> <group> <B>:<vol>` |
 | 5 | B | create VV set `<set>_rc` with the volumes step 4 created | `createvvset <set>_rc`, `createvvset -add …` |
 | 6 | A (B first if the target policy is `no_mirror_config`, read in R1) | `PUT /remotecopygroups/<group>` `{action: start}` | `startrcopygroup <group>` |
@@ -72,7 +75,9 @@ as *Create storage objects*. A plan with a conflict or a blocker cannot be appli
 
 **R6 — Verify (read-only, both arrays).** After apply and on demand (*Verify replication*):
 - The target's links `Up` on both arrays.
-- Each group: Status `Started`; Role `Primary` on A and `Secondary` on B; Mode as planned; async
+- Each group: Status `Started`; Role `Primary` on A and `Secondary` on B — on B the group is named
+  `<group>.r<A's decimal system ID>` (WSAPI `remoteGroupName`; `300gb` ↔ `300gb.r188150` in the
+  fixtures), which is how the tool finds it there; Mode as planned; async
   period = RPO / 2; every volume `Synced` — `Syncing` is reported as *initial sync in progress (n of
   m volumes)* and re-checked, never failed; `Stale` / `Stopped` after a start is a failure with HPE's
   own next step (troubleshooting ED6: *start the group*; *persists → contact HPE Support*). The tool
@@ -94,8 +99,9 @@ addresses per array); each group (name, mode, RPO and period, policies, role per
 sync status and last sync time); the calls made and their CLI equivalents; the removal set.
 
 **R9 — Existing replication is respected.** Groups, targets and links the run did not create are
-shown and never modified, stopped or removed. The lab pair already replicates
-(`rcopy_async_test`); every object the tool makes there is `zz_rc_*`.
+shown and never modified, stopped or removed. The lab pair already carries six Sync groups, one of
+them a Peer Persistence group (`APP_Test`, `active_active`); every object the tool makes there is
+`zz_rc_*`.
 
 ## 3. Deferred to v0.19 (ADR 0015, decision unchanged, sequenced)
 
@@ -112,20 +118,24 @@ changing an existing group (remove and recreate); replicating from the peer back
 
 ## 5. Verification
 
-**Before code (BL-38)** — read-only capture on D22U27 and E18U31 saved to `tests/fixtures/rc_pair/`:
-the SSH list in R1 plus `showrcopy -d`, `showrcopy groups rcopy_async_test`, the `-h` of every
-Remote Copy command, **and over WSAPI** `GET /remotecopy`, `GET /remotecopygroups`,
-`GET /remotecopygroups/rcopy_async_test` — this confirms the B10000 serves the remote-copy-group
-resource and fixes the `policies` / `syncPeriod` field names before R4 is coded.
+**Before code (BL-38) — done 2026-10-07.** Read-only capture on D22U27 and E18U31 saved to
+`tests/fixtures/rc_pair/` (README there lists every fact): the SSH list in R1 plus `showrcopy -d`,
+the `-h` of every Remote Copy command, **and over WSAPI** `GET /remotecopy`, `/remotecopygroups`,
+`/remotecopylinks`. Confirmed: WSAPI 1.15 on both arrays serves the remote-copy-group resource; the
+`policies` field names, `syncPeriod`, `remoteGroupName`, `role` 1/2, `mode` 1/2, `syncStatus` 3 =
+Synced. Corrected: the partnership is matched by address (R2); the pair has **no periodic group** —
+the periodic `LastSyncTime` / period output is pinned by the first live async run; `rcopy_async_test`
+never existed (the capture holds the CLI and WSAPI "does not exist" responses, useful as fixtures).
 
 **Unit** — one test per R2 check; R3 exists/create/conflict; R4 order and the `no_mirror_config`
 start order; R6 verdicts from captured `showrcopy groups` (Synced / Syncing / Stale / Stopped); R7
 order and "never the pre-existing objects"; CLI equivalents rendered per call.
 
-**Live (lab pair)** — (1) read and verify `rcopy_async_test` without touching it; (2) protect
-`zz_rc_test` **async** to E18U31 → *Replicating*, both arrays' `showrcopy groups` agree; (3) the same
-**sync** if the RTT allows; (4) removal set pasted → nothing `zz_rc_*` on either array,
-`rcopy_async_test` unchanged. Runner scenario 7 (SPEC-006 §4b) automates (2) and (4).
+**Live (lab pair)** — (1) read and verify the six existing groups without touching them; (2) protect
+`zz_rc_test` **async** to E18U31 → *Replicating*, both arrays' `showrcopy groups` agree (the first
+periodic group on this pair — its output is captured as a fixture); (3) the same **sync** if the RTT
+allows; (4) removal set pasted → nothing `zz_rc_*` on either array, the six existing groups
+unchanged. Runner scenario 7 (SPEC-006 §4b) automates (2) and (4).
 
 ## 6. Size
 

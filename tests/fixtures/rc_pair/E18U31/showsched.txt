@@ -1,0 +1,6 @@
+# showsched
+                                                                                                                ---------- Schedule -----------                                               
+SchedName   File/Command                                                                                        Interval Min Hour DOM Month DOW CreatedBy Status Alert NextRunTime            
+patchisched createsv -f -addtoset patchisched.Snapset -exp 8h -retain 8h @vvname@.@y@@m@@d@@H@@M@@S@ set:patchi        0   0   23   *     *   * 3paradm   active     Y 2026-10-07 23:00:00 IST
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+1           total                                                                                                                                                                             

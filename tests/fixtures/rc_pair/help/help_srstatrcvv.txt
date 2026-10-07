@@ -1,0 +1,194 @@
+# help srstatrcvv
+srstatrcvv - System reporter performance reports for Remote Copy volumes.
+
+SYNTAX
+    srstatrcvv [options]
+
+DESCRIPTION
+    The srstatrcvv command displays historical performance data reports for
+    Remote Copy volumes.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+    -attime
+        Performance is shown at a particular time interval, specified by the
+        -etsecs option, with one row per object group described by the
+        -groupby option. Without this option performance is shown versus time,
+        with a row per time interval.
+
+    -btsecs <secs>
+        Select the begin time in seconds for the report.
+        The value can be specified as either
+        - The absolute epoch time (for example 1351263600).
+        - The absolute time as a text string in one of the following formats:
+            - Full time string including time zone: "2012-10-26 11:00:00 PDT"
+            - Full time string excluding time zone: "2012-10-26 11:00:00"
+            - Date string: "2012-10-26" or 2012-10-26
+            - Time string: "11:00:00" or 11:00:00
+        - A negative number indicating the number of seconds before the
+          current time. Instead of a number representing seconds, <secs> can
+          be specified with a suffix of m, h or d to represent time in minutes
+          (e.g. -30m), hours (e.g. -1.5h) or days (e.g. -7d).
+        If it is not specified then the time at which the report begins depends
+        on the sample category (-hires, -hourly, -daily):
+            - For hires, the default begin time is 12 hours ago (-btsecs -12h).
+            - For hourly, the default begin time is 7 days ago (-btsecs -7d).
+            - For daily, the default begin time is 90 days ago (-btsecs -90d).
+        If begin time and sample category are not specified then the time
+        the report begins is 12 hours ago and the default sample category is hires.
+        If -btsecs 0 is specified then the report begins at the earliest sample.
+
+    -etsecs <secs>
+        Select the end time in seconds for the report.  If -attime is
+        specified, select the time for the report.
+        The value can be specified as either
+        - The absolute epoch time (for example 1351263600).
+        - The absolute time as a text string in one of the following formats:
+            - Full time string including time zone: "2012-10-26 11:00:00 PDT"
+            - Full time string excluding time zone: "2012-10-26 11:00:00"
+            - Date string: "2012-10-26" or 2012-10-26
+            - Time string: "11:00:00" or 11:00:00
+        - A negative number indicating the number of seconds before the
+          current time. Instead of a number representing seconds, <secs> can
+          be specified with a suffix of m, h or d to represent time in minutes
+          (e.g. -30m), hours (e.g. -1.5h) or days (e.g. -7d).
+        If it is not specified then the report ends with the most recent
+        sample.
+
+    -hires
+        Select high resolution samples (5 minute intervals) for the report.
+        This is the default.
+
+    -hourly
+        Select hourly samples for the report.
+
+    -daily
+        Select daily samples for the report.
+
+    -summary <keyword>[,<keyword>]...
+        Summarize performance across requested objects and time range.
+        One of these 4 summary keywords must be included:
+            min   Display the minimum for each metric
+            avg   Display the average for each metric
+            max   Display the maximum for each metric
+            <N>%  Display percentile for each metric. <N> may be any number
+                  from 0 to 100. Multiple percentiles may be specified.
+
+        Other keywords which modify the summary display or computation:
+            detail
+                Display individual performance records in addition to one
+                or more summaries. By default, -summary output excludes
+                individual records and only displays the summary.
+            per_time
+                When requesting data across multiple points in time (vstime)
+                and multiple object groupings (-groupby) compute summaries per
+                time. By default, one summary is computed across all records.
+            per_group
+                When requesting data across multiple points in time (vstime)
+                and multiple object groupings (-groupby) compute summaries per
+                object grouping. By default, one summary is computed across all
+                records.
+            only_compareby
+                When requesting data limited to certain object groupings with
+                the -compareby option, use this keyword to compute summaries
+                using only that reduced set of object groupings. By default,
+                summaries are computed from all records and ignore the
+                limitation of the -compareby option, though the "detail"
+                output does conform to the -compareby object limitation.
+
+    -groupby <groupby>[,<groupby>...]
+        For -attime reports, generate a separate row for each combination of
+        <groupby> items.  Each <groupby> must be different and
+        one of the following:
+        VV_NAME      The name of a volume admitted to a Remote Copy volume group with admitrcopyvv
+        DOM_NAME     The domain name for a Remote Copy group when group was created with creatercopygroup
+        TARGET_NAME  The target name of the Remote Copy target created with creatercopytarget
+        TARGET_MODE  The target mode - Per: Periodic, Sync: Synchronous or Async: Asynchronous
+        GROUP_NAME   The name of the Remote Copy group created with creatercopygroup
+        GROUP_ROLE   The role (primary=1 or secondary=0) of the Remote Copy group
+        PORT_TYPE    The port type (IP or FC) of the Remote Copy link(s) created with creatercopytarget
+        PORT_N       The node number for the port used by a Remote Copy link
+        PORT_S       The PCI slot number for the port used by a Remote Copy link
+        PORT_P       The port number for the port used by a Remote Copy link
+        VVSET_NAME   The virtual volume set name
+
+    -compareby <top|bottom>,<number_of_objects>,<field_used_for_comparison>
+        The compareby option limits output records to only certain objects,
+        compared by a specified field.  Either the top or bottom X objects
+        can be displayed, up to 32 objects for vstime reports or 128 objects
+        for attime reports.  The field used for comparison can be any of the
+        groupby fields or one of the following:
+        lcl_read_iops, lcl_write_iops, lcl_total_iops, lcl_read_kbps, lcl_write_kbps, lcl_total_kbps,
+        lcl_read_svctms, lcl_write_svctms, lcl_total_svctms, lcl_read_ioszkb, lcl_write_ioszkb,
+        lcl_total_ioszkb, lcl_busy_pct, lcl_total_qlen, rmt_read_iops, rmt_write_iops, rmt_total_iops,
+        rmt_read_kbps, rmt_write_kbps, rmt_total_kbps, rmt_read_svctms, rmt_write_svctms,
+        rmt_total_svctms, rmt_read_ioszkb, rmt_write_ioszkb, rmt_total_ioszkb, rmt_busy_pct,
+        rmt_total_qlen, rpo
+
+    -sortcol <col>[,<dir>][:<col>[,<dir>]...]
+        Sorts command output based on column number (<col>). Columns are
+        numbered from left to right, beginning with 0. At least one column must
+        be specified. In addition, the direction of sorting (<dir>) can be
+        specified as follows:
+          inc
+              Sort in increasing order (default).
+          dec
+              Sort in decreasing order.
+
+        Multiple columns can be specified and separated by a colon (:). Rows
+        with the same information in them as earlier columns will be sorted
+        by values in later columns.
+
+    -vv <VV_name|VV_set|pattern>[,<VV_name|VV_set|pattern>...]
+        Limit the data to VVs with names that match one or more of the
+        specified names or glob-style patterns. VV set name must be prefixed
+        by "set:" and can also include patterns.
+
+    -target <TARGET_NAME|pattern>[,<TARGET_NAME|pattern>...]
+        Limit the data to TARGET_NAMEs that match one or more of the specified
+        TARGET_NAMEs or glob-style patterns.
+
+    -mode <target_mode>[,<target_mode>]
+        Limit the data to TARGET_MODEs of the specified mode. Allowed modes are:
+          Per      - Periodic
+          Sync     - Synchronous
+          Async    - Asynchronous
+
+    -group <GROUP_NAME|pattern>[,<GROUP_NAME|pattern>...]
+        Limit the data to GROUP_NAMEs that match one or more of the specified
+        GROUP_NAMEs or glob-style patterns.
+
+SPECIFIERS
+    None.
+
+NOTES
+    For this command KB = 1000 bytes.
+
+EXAMPLES
+    The following example displays aggregate hourly performance statistics
+    for all Remote Copy volumes beginning 24 hours ago:
+
+    cli% srstatrcvv -hourly -btsecs -24h
+
+    The following example displays most recent daily Remote Copy volumes performance for
+    volumes grouped by volume name:
+
+    cli% srstatrcvv -daily -attime -groupby vv_name
+
+    The following example displays most recent daily Remote Copy volumes performance for
+    volumes grouped by target name:
+
+    cli% srstatrcvv -daily -attime -groupby target_name
+
+    The following example displays most recent daily Remote Copy volumes performance for
+    volumes grouped by group name:
+
+    cli% srstatrcvv -daily -attime -groupby group_name
+
+    The following example displays most recent daily Remote Copy volumes performance for
+    volumes grouped by port_n, port_s, port_p:
+
+    cli% srstatrcvv -daily -attime -groupby port_n,port_s,port_p
+

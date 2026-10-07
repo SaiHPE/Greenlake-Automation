@@ -223,3 +223,15 @@ group, and `srstatrcvv -hourly` once (statistics format). These pin the parsers 
 before any code. The 09-19 research expected the CRV LZ/VZ pair for this; LZ is dead, so the pair is
 **D22U27 ↔ E18U31**. E18U31's existing group has *failed reverse tasks* — a real failure state to
 capture too.
+
+### 7.1 Captured 2026-10-07 (BL-38) — what it corrected
+
+Fixtures: `tests/fixtures/rc_pair/` (README lists every fact). Two statements above were wrong:
+there is **no `rcopy_async_test`** and **no periodic group at all** on the pair — six Sync groups,
+one of them Peer Persistence (`APP_Test`, `active_active`); the periodic `LastSyncTime`/period
+output is pinned by the first live async run. New facts the specs now rest on: WSAPI 1.15 on both
+arrays serves `/remotecopy`, `/remotecopygroups`, `/remotecopylinks` (and advertises
+`/remotecopytargets`); group records carry `policies.{autoRecover,autoSynchronize,…}`,
+`remoteGroupName` = `<group>.r<creating system's decimal ID>`, `role` 1/2, `targets[].mode` 1,
+`syncStatus` 3 = Synced; **E18U31's target for D22U27 is named `AlletraMP_E18U31`** — the
+partnership is identified by link addresses, never by target name (SPEC-016 R2).

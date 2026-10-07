@@ -1,0 +1,95 @@
+# help startrcopygroup
+startrcopygroup - Starts one or multiple Remote Copy groups
+
+SYNTAX
+    startrcopygroup [options] <group_name> [<vv:sv> ...]
+                    [options] <pattern>
+
+DESCRIPTION
+    The startrcopygroup command enables Remote Copy for the specified Remote
+    Copy volume groups.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopygroup_start right
+
+OPTIONS
+    -nosync
+        Prevents the initial synchronization and sets the virtual volumes to a
+	synchronized state.
+
+    -wait
+        Specifies that the command waits until the initial synchronization is
+	completed. The system generates an event when the synchronization is
+	completed.
+
+        If a group's target has the mirror_config policy set and the group is
+        a secondary group, -wait option is not supported. If startrcopygroup
+        command is run on secondary group with -wait specified, then the
+        command will fail.
+
+    -t <target_name>
+        Only start the group on the specified target.
+
+    -pat
+        Specifies that specified patterns are treated as glob-style patterns
+        and all Remote Copy groups matching the specified pattern will be
+        started. -pat can specify a list of patterns.  This option must be
+        used if pattern specifier is used.
+
+SPECIFIERS
+    <group_name>
+        The name of the Remote Copy volume group. The group name can be obtained
+	using the "showrcopy" command.
+
+    <pattern>
+        Specifies a glob-style pattern (see help on sub,globpat). This specifier
+        can be repeated to start multiple groups. If this specifier
+        is not used, the <group_name> specifier must be used.
+
+    <vv:sv>
+        Member volumes and snapshots can be specified by vv:sv syntax, where vv is
+        the base volume name and sv is the snapshot volume name. To indicate a full
+        resync, specify the starting, read-only snapshot with "-".
+
+        When starting snapshots are applied, all vvs must be specified.
+
+        If a group's target has the mirror_config policy set and the group is a
+        secondary group, startrcopygroup command will be forwarded to the corresponding
+        primary group but starting snapshots (vv:sv) are not supported in this case.
+
+NOTES
+    Synchronous groups are automatically synchronized when started. Asynchronous
+    periodic volume groups are synchronized only on the first time they are
+    started.
+
+    You must enter this command on the secondary server before entering it on
+    the primary if the mirror_config policy is not set.
+
+    If a group's target has the mirror_config policy set and the group is a
+    primary group, then this command will be mirrored to that target and the
+    corresponding secondary group will be started. If the policy is set and the
+    group is a secondary, then this command will be automatically forwarded
+    to the corresponding primary group on remote side.
+
+    If the mirror_config policy is not set, then the corresponding secondary
+    group must already be started or this command will fail.
+
+    When a secondary group says that it is in the started state, it does not
+    necessarily mean that the group is receiving data from the primary system.
+    The primary group might be stopped, or its system might even be down. The
+    fact that the group is started only indicates that the group is ready to
+    receive writes from the primary group. To determine if writes to the volumes
+    of the primary group are being mirrored to the secondary group, the status
+    of the primary group must be examined.
+
+EXAMPLES
+    The following example starts Remote Copy for Group1:
+
+        cli% startrcopygroup Group1
+
+    To start Group2, which contains 4 vvs and specify starting snapshots, with
+    vv4 starting from a full resync:
+
+        cli% startrcopygroup Group2 vv1:sv1 vv2:sv2 vv3:sv3 vv4:-
+
