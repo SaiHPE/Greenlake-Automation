@@ -622,29 +622,38 @@ def resolve_port_fabrics(fc_ports: list[ArrayPort], switch_by_label: dict[str, s
 
 # `showportdev fcfabric` dumps the whole fabric mesh; on a large shared fabric each probe can be slow.
 # It is best-effort (parity is the fallback), so cap each probe well under the CLI's default so one
-# slow/hung port can't stall discovery for minutes.
+# slow/hung port can't stall discovery for minutes. The cap is paramiko's INACTIVITY timeout, not a
+# deadline: a dump that keeps streaming runs past it (D22U27, 2026-10-05: ~42 s per port).
 _FCFABRIC_TIMEOUT = 30.0
 
 
 def _refine_fabrics_from_switches(cli, array_ports: list[ArrayPort], *, progress=None) -> list[str]:
-    """Run `showportdev fcfabric` on each READY FC port to learn the switch it attaches to, then
+    """Run `showportdev fcfabric` on READY FC ports to learn the switch each attaches to, then
     resolve fabrics (switch-derived, parity fallback). Best-effort: a failed/empty per-port lookup
     just leaves that port on its parity fabric. Only 'ready' ports are probed — a down/loss_sync port
     isn't attached to a fabric, so probing it would only waste an SSH round-trip. `progress(msg)` (if
-    given) is called before each probe so the operator sees which port is being resolved."""
+    given) is called before each probe so the operator sees which port is being resolved.
+
+    One dump lists every F-Port of that fabric, so it also names the attach switch of the array's
+    other ports there: each dump resolves every still-unknown port, and only the rest are probed —
+    typically one probe per fabric instead of one per port (BL-31)."""
     fc_ports = [p for p in array_ports if p.protocol == "fc"]
     ready = [p for p in fc_ports if p.link_state == "ready" and p.wwpn]
     switch_by_label: dict[str, str] = {}
-    for i, port in enumerate(ready, 1):
+    probed = 0
+    for port in ready:
+        if port.label in switch_by_label:
+            continue
+        probed += 1
         if progress:
-            progress(f"Resolving the fabric switch for port {port.label} ({i}/{len(ready)})…")
+            progress(f"Resolving the fabric switch for port {port.label} (probe {probed}, {len(switch_by_label)}/{len(ready)} ports resolved)…")
         try:
             text = cli.run(f"showportdev fcfabric {port.label}", timeout=_FCFABRIC_TIMEOUT)
         except Exception:  # noqa: BLE001 - one flaky/slow lookup must not sink discovery
             continue
-        sw = switch_for_wwpn(text, port.wwpn)
-        if sw:
-            switch_by_label[port.label] = sw
+        for other in ready:
+            if other.label not in switch_by_label and (sw := switch_for_wwpn(text, other.wwpn)):
+                switch_by_label[other.label] = sw
     return resolve_port_fabrics(fc_ports, switch_by_label)
 
 

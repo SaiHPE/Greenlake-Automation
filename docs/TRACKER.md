@@ -18,12 +18,12 @@ Status: `todo` · `doing` · `blocked` · `done`
 |---|---|---|---|---|---|
 | BL-06 | Status workbook refresh | dev | todo | — | After each closed item. |
 | BL-07 | Dependabot: 4 alerts on github.com/SaiHPE/Greenlake-Automation | dev | todo | — | Bump, full test run, push both remotes. |
-| BL-31 | Discovery's fabric probe is slow on a large fabric: D22U27 (CRV) took ~42 s per ready FC port (`showportdev fcfabric`), 4½ min for 6 ports, although `_FCFABRIC_TIMEOUT` is 30 s | dev | todo | B.5 | Seen 2026-10-05. Check why the per-probe timeout is not honoured; consider probing once per switch, or in parallel. |
 
 ## Test live (built, not yet run on hardware)
 
 | ID | Item | Owner | Status | Sheet | Blocked by |
 |---|---|---|---|---|---|
+| BL-31 | Fabric probe: one `showportdev fcfabric` per fabric, not per port (each dump names the attach switch of the array's sibling ports); the 30 s cap is paramiko's inactivity timeout, so a streaming 42 s dump was never cut | dev | todo | B.5 | Built 2026-10-07 — any Discovery from the current `jumpbox-test`: the progress line should read *probe 1, 0/4 ports resolved* then *probe 2, 2/4 …* and stop (rack13: 4 ready ports, 2 fabrics). If a dump lacks the siblings it probes per port, as before. |
 | BL-32 | Provisioning gate table shows iSCSI hosts: *iSCSI — no zoning needed · logged in on …* or *IQN not logged in*; an all-iSCSI run reads as proper | dev | todo | B.6 | Built 2026-10-07 — the next iSCSI run on E18U31 (labrat, `E18U31_iscsi_test.xlsx`, Discovery + *Check zoning* only). |
 | BL-36 | Linux multipath summary (`multipath -ll` → *N Alletra/3PAR device(s), M path(s) each*) | Sai | todo | B.4 | A Linux host with dm-multipath enabled and an Alletra volume exported to it; the only lab Linux host (10.54.159.49) has neither. Parser pinned to captured output only. |
 
