@@ -42,6 +42,8 @@ class ZoningReport(BaseModel):
     # is simply offline/not logged in (the array can't tell the two apart). Surfaced, never silently
     # passed; confirm the host is up, or cross-check the switch/ESXi.
     unverified_hosts: list[str] = Field(default_factory=list)
+    # iSCSI-only hosts -> the array ports their IQN is logged in on ([] = not logged in). No zone needed.
+    iscsi_hosts: dict[str, list[str]] = Field(default_factory=dict)
     source: str = "array"    # 'array' (showportdev ns) — verification needs no switch
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
