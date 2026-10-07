@@ -27,6 +27,13 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningIntent,
     VolumeRequest,
 )
+from alletra_onboard.domain.replication import (
+    RPO_MINUTES_DEFAULT,
+    RPO_MINUTES_MIN,
+    RTT_LIMIT_MS,
+    ProtectionRequest,
+    ReplicationIntent,
+)
 from alletra_onboard.domain.workflow import enabled_steps
 
 SHEET_NAME = "Initialisation"
@@ -111,6 +118,9 @@ _STEP_REQUIRES: dict[str, tuple[str, ...]] = {
     "discover": (),
     "zoning": (),
     "provision": (),
+    # Replication steps need the Replication tab (checked when the run is minted), nothing more here.
+    "replicate": (),
+    "failover_test": (),
     "verify": ("mgmt_ipv4",),
 }
 
@@ -178,6 +188,39 @@ _PROV_LABEL_TO_KEY = {label: key for _, fields in PROVISIONING_SECTIONS for key,
 _PROV_KEY_TO_LABEL = {key: label for _, fields in PROVISIONING_SECTIONS for key, label, _, _ in fields}
 _PROV_REQUIRED = [key for _, fields in PROVISIONING_SECTIONS for key, _, required, _ in fields if required]
 
+# The Replication tab (SPEC-015): ONE optional tab, key/value sections on top (the peer array, the
+# measured RTT, the failover test) and a Protection row-table beneath (one Remote Copy group per
+# row). Direction is always this run's array -> the peer.
+REPLICATION_SHEET_NAME = "Replication"
+REPLICATION_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
+    ("Peer array — the array this one replicates TO (an existing Remote Copy partnership is required)", [
+        ("peer_host", "Peer array management IP", True, "the other B10000's mgmt IP (WSAPI + SSH)"),
+        ("peer_user", "Peer array admin username", True, "e.g. 3paradm"),
+        ("peer_password", "Peer array admin password", True, "used for WSAPI + SSH on the peer this run"),
+    ]),
+    ("Replication network", [
+        ("rtt_ms", "Measured round-trip time (ms)", False,
+         "between the two arrays' RCIP ports; required for sync (10 ms or less); async over RCIP allows 200 ms"),
+    ]),
+    ("Failover test", [
+        ("failover_test", "Run the failover test (yes / no)", False, "default yes — on the tool's own 1 GiB test group"),
+        ("failover_group", "Failover test group", False, "blank = the tool's own test group; a production group needs a typed confirmation in the app"),
+    ]),
+]
+PROTECTION_COLUMNS: list[tuple[str, str, bool]] = [
+    ("vvset", "Volume set", True),
+    ("mode", "Mode (async / sync)", False),
+    ("rpo_minutes", "RPO (minutes, async only)", False),
+    ("peer_cpg", "Peer CPG", True),
+    ("peer_vvset", "Peer volume set (optional)", False),
+    ("auto_synchronize", "Auto synchronize (yes / no)", False),
+    ("auto_recover", "Auto recover (yes / no)", False),
+]
+_REPL_LABEL_TO_KEY = {label: key for _, fields in REPLICATION_SECTIONS for key, label, _, _ in fields}
+_REPL_KEY_TO_LABEL = {key: label for _, fields in REPLICATION_SECTIONS for key, label, _, _ in fields}
+_REPL_REQUIRED = [key for _, fields in REPLICATION_SECTIONS for key, _, required, _ in fields if required]
+_UNSUPPORTED_REPLICATION_TYPES = ("peer persistence", "active sync", "sld", "3dc", "streaming", "app")
+
 
 def required_keys_for(mode: RunMode, selected_steps: list[str] | None = None) -> set[str]:
     """The sheet field keys a run of this mode must have filled."""
@@ -207,7 +250,11 @@ class ParsedInitSheet:
 
 
 def _provisioning_selected(mode: RunMode, selected_steps: list[str] | None) -> bool:
-    return any(step.kind == "provision" for step in enabled_steps(mode, selected_steps))
+    return any(step.kind in ("provision", "replicate") for step in enabled_steps(mode, selected_steps))
+
+
+def _replication_selected(mode: RunMode, selected_steps: list[str] | None) -> bool:
+    return any(step.kind == "replicate" for step in enabled_steps(mode, selected_steps))
 
 
 def _normalize_label(text: str) -> str:
@@ -263,6 +310,7 @@ def build_template_bytes(*, init_only: bool = False) -> bytes:
 
     if not init_only:
         _add_provisioning_sheet(wb)
+        _add_replication_sheet(wb)
     _add_prereq_sheet(wb)
 
     buffer = io.BytesIO()
@@ -271,10 +319,11 @@ def build_template_bytes(*, init_only: bool = False) -> bytes:
 
 
 def _write_table_tab(ws, columns: list[tuple[str, str, bool]], *, blank_rows: int, intro: str) -> None:
-    """Write a ROW-TABLE tab: an intro line, a bold header row (one column per field), then blank rows
-    the operator fills — one object per row (ADR 0010 Stage 2)."""
+    """Write a ROW-TABLE: an intro line, a bold header row (one column per field), then blank rows
+    the operator fills — one object per row (ADR 0010 Stage 2). Appends below whatever the sheet
+    already holds (the Replication tab puts it under its key/value sections)."""
     ws.append([intro])
-    ws.cell(row=1, column=1).font = Font(italic=True, color="808080")
+    ws.cell(row=ws.max_row, column=1).font = Font(italic=True, color="808080")
 
     header_fill = PatternFill("solid", fgColor=_HPE_GREEN)
     header = [f"{label} *" if required else label for _key, label, required in columns]
@@ -322,6 +371,26 @@ def _add_provisioning_sheet(wb: Workbook) -> None:
         wb.create_sheet(HOSTSETS_SHEET_NAME), HOSTSET_COLUMNS, blank_rows=8,
         intro="Host sets to create — one per row. Leave Members blank to include all discovered hosts.",
     )
+
+
+def _add_replication_sheet(wb: Workbook) -> None:
+    """The optional 'Replication' tab (SPEC-015 R1): key/value sections, then the Protection row-table
+    on the SAME tab. `_read_tab` matches the labels and ignores the table; `_read_table` finds the
+    header by its 'Volume set' column and ignores the sections above it."""
+    ws = wb.create_sheet(REPLICATION_SHEET_NAME)
+    _write_fillable_tab(ws, REPLICATION_SECTIONS)
+    ws.append([])
+    _write_table_tab(
+        ws, PROTECTION_COLUMNS, blank_rows=8,
+        intro=(
+            "Volume sets to protect — one Remote Copy group per row, from THIS array to the peer. "
+            "Mode blank = async; RPO blank = 10 minutes (the array period is RPO / 2); Peer volume set "
+            "blank = '<set>_rc'; policies blank = yes. Only async and sync are supported in this version."
+        ),
+    )
+    # _write_table_tab sized the first columns for the table; widen column A for the labels above it.
+    ws.column_dimensions["A"].width = 44
+    ws.freeze_panes = "A2"
 
 
 def _add_prereq_sheet(wb: Workbook) -> None:
@@ -404,7 +473,28 @@ def parse_workbook_bytes(
     if complete or _provisioning_selected(mode, selected_steps):
         parsed.provisioning_intent = _parse_provisioning_tab(workbook)
         _reject_two_arrays(parsed)
+        replication = _parse_replication_tab(workbook, parsed.provisioning_intent)
+        if replication is None and _replication_selected(mode, selected_steps):
+            raise ValueError(
+                "The Replication and Failover test steps need the 'Replication' tab (peer array and the "
+                "volume sets to protect), and this workbook has none filled in."
+            )
+        parsed.provisioning_intent.replication = replication
+        _reject_peer_is_this_array(parsed)
     return parsed
+
+
+def _reject_peer_is_this_array(parsed: ParsedInitSheet) -> None:
+    intent = parsed.provisioning_intent
+    if intent is None or intent.replication is None:
+        return
+    peer = intent.replication.peer.host.strip()
+    own = {ip for ip in ((intent.array.host or "").strip(), (parsed.work_item.network.mgmt_ipv4 or "").strip()) if ip}
+    if peer in own:
+        raise ValueError(
+            f"Replication tab — the peer array ({peer}) is this run's own array. Replication needs a second "
+            "array: enter the OTHER array's management IP."
+        )
 
 
 def _reject_two_arrays(parsed: ParsedInitSheet) -> None:
@@ -442,7 +532,7 @@ def _reject_two_arrays(parsed: ParsedInitSheet) -> None:
 #: Credential fields are used exactly as typed; every other field is trimmed.
 _VERBATIM_KEYS = frozenset({
     "gl_client_secret", "prov_array_password", "prov_vcenter_password",
-    "prov_sw1_password", "prov_sw2_password", "password",
+    "prov_sw1_password", "prov_sw2_password", "password", "peer_password",
 })
 
 
@@ -586,6 +676,111 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
     )
 
 
+def _yes_no(text: str | None, *, default: bool, where: str) -> bool:
+    value = (text or "").strip().lower()
+    if not value:
+        return default
+    if value in ("yes", "y", "true", "1"):
+        return True
+    if value in ("no", "n", "false", "0"):
+        return False
+    raise ValueError(f"{where} must be 'yes' or 'no' (got '{text}').")
+
+
+def _parse_replication_tab(workbook, provisioning: ProvisioningIntent) -> ReplicationIntent | None:
+    """The optional Replication tab (SPEC-015 R1/R2). Absent, or present but blank, -> None (an
+    older workbook parses exactly as before). Filled -> validated to one sentence per rule."""
+    if REPLICATION_SHEET_NAME not in workbook.sheetnames:
+        return None
+    ws = workbook[REPLICATION_SHEET_NAME]
+    fields = _read_tab(ws, _REPL_LABEL_TO_KEY)
+    rows = _read_table(ws, PROTECTION_COLUMNS)
+    if not any(fields.get(k) for k in _REPL_REQUIRED) and not rows:
+        return None
+
+    missing = [_REPL_KEY_TO_LABEL[key] for key in _REPL_REQUIRED if not fields.get(key)]
+    if missing:
+        raise ValueError("Replication tab — missing required fields: " + ", ".join(sorted(missing)))
+    if not rows:
+        raise ValueError("Replication tab — add at least one volume set to protect (a Volume set and a Peer CPG).")
+
+    rtt: float | None = None
+    if fields.get("rtt_ms"):
+        try:
+            rtt = float(fields["rtt_ms"])
+        except ValueError as exc:
+            raise ValueError(f"Replication tab — 'Measured round-trip time (ms)' must be a number (got '{fields['rtt_ms']}').") from exc
+        if rtt < 0:
+            raise ValueError("Replication tab — 'Measured round-trip time (ms)' cannot be negative.")
+
+    sheet_vvsets = {v.vvset for v in provisioning.volumes if v.vvset}
+    protections: list[ProtectionRequest] = []
+    seen: set[str] = set()
+    for r in rows:
+        vvset = r["vvset"]
+        where = f"Replication tab — row '{vvset}'"
+        if vvset in seen:
+            raise ValueError(f"{where} appears twice; one row per volume set.")
+        seen.add(vvset)
+        if vvset not in sheet_vvsets:
+            raise ValueError(
+                f"{where}: no volume on the Volumes tab is in VV-set '{vvset}'. Put the set's name in the "
+                "Volumes tab's 'VV-set' column for each volume it should hold, or remove this row."
+            )
+        mode_text = (r.get("mode") or "async").strip().lower()
+        if mode_text in ("periodic", "asynchronous", "asynchronous periodic"):
+            mode_text = "async"
+        elif mode_text == "synchronous":
+            mode_text = "sync"
+        if mode_text not in ("async", "sync"):
+            unsupported = any(t in mode_text for t in _UNSUPPORTED_REPLICATION_TYPES)
+            raise ValueError(
+                f"{where}: Mode must be 'async' or 'sync' (got '{r.get('mode')}')"
+                + ("; Peer Persistence, Active Sync, SLD and 3DC are not supported in this version." if unsupported else ".")
+            )
+        rpo: int | None = None
+        if mode_text == "async":
+            raw = (r.get("rpo_minutes") or "").strip()
+            if not raw:
+                rpo = RPO_MINUTES_DEFAULT
+            else:
+                try:
+                    value = float(raw)
+                except ValueError as exc:
+                    raise ValueError(f"{where}: RPO must be a whole number of minutes, {RPO_MINUTES_MIN} or more (got '{raw}').") from exc
+                if not value.is_integer() or value < RPO_MINUTES_MIN:
+                    raise ValueError(f"{where}: RPO must be a whole number of minutes, {RPO_MINUTES_MIN} or more (got '{raw}').")
+                rpo = int(value)
+        limit = RTT_LIMIT_MS[mode_text]
+        if mode_text == "sync" and rtt is None:
+            raise ValueError(
+                f"{where} is sync but 'Measured round-trip time (ms)' is blank; sync replication needs a "
+                f"measured RTT of {limit:g} ms or less."
+            )
+        if rtt is not None and rtt > limit:
+            raise ValueError(
+                f"{where}: the measured round-trip time is {rtt:g} ms; {mode_text} replication over RCIP needs "
+                f"{limit:g} ms or less (HPE Support Matrix)."
+            )
+        peer_cpg = (r.get("peer_cpg") or "").strip()
+        if not peer_cpg:
+            raise ValueError(f"{where}: Peer CPG is required (the CPG on the peer array for the secondary volumes).")
+        protections.append(ProtectionRequest(
+            vvset=vvset, mode=mode_text, rpo_minutes=rpo, peer_cpg=peer_cpg,  # type: ignore[arg-type]
+            peer_vvset=(r.get("peer_vvset") or "").strip(),
+            auto_synchronize=_yes_no(r.get("auto_synchronize"), default=True, where=f"{where}: Auto synchronize"),
+            auto_recover=_yes_no(r.get("auto_recover"), default=True, where=f"{where}: Auto recover"),
+        ))
+
+    return ReplicationIntent(
+        peer=EndpointCreds(host=fields["peer_host"], username=fields["peer_user"], password=fields["peer_password"]),
+        rtt_ms=rtt,
+        protections=protections,
+        failover_test=_yes_no(fields.get("failover_test"), default=True, where="Replication tab — 'Run the failover test'"),
+        failover_group=(fields.get("failover_group") or "").strip(),
+    )
+
+
 def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
     missing = [_KEY_TO_LABEL[key] for key in required if not values.get(key)]
     if missing:
@@ -703,10 +898,13 @@ def compose_workbook_bytes(
     volumes: list[dict[str, str]] | None = None,
     hostsets: list[dict[str, str]] | None = None,
     hosts: list[dict[str, str]] | None = None,
+    replication: dict | None = None,
 ) -> bytes:
     """A filled Initialisation_sheet.xlsx from JSON (SPEC-006 R3): start from `base` (the operator's
     working sheet) or the blank template; fill the key/value tabs given; REPLACE each row table given.
-    A table not given is left as it is. The result parses exactly as an operator-edited sheet would."""
+    A table not given is left as it is. `replication` = {"fields": {...}, "rows": [...]} fills the
+    Replication tab (added to a base workbook that predates it). The result parses exactly as an
+    operator-edited sheet would."""
     try:
         wb = load_workbook(io.BytesIO(base)) if base else load_workbook(io.BytesIO(build_template_bytes()))
     except (zipfile.BadZipFile, KeyError, OSError) as exc:
@@ -725,6 +923,13 @@ def compose_workbook_bytes(
         if name not in wb.sheetnames:
             raise ValueError(f"The base workbook has no '{name}' tab.")
         _replace_row_table(wb[name], columns, records)
+    if replication is not None:
+        if REPLICATION_SHEET_NAME not in wb.sheetnames:
+            _add_replication_sheet(wb)
+        ws = wb[REPLICATION_SHEET_NAME]
+        _fill_kv_tab(ws, _REPL_LABEL_TO_KEY, replication.get("fields") or {})
+        if replication.get("rows") is not None:
+            _replace_row_table(ws, PROTECTION_COLUMNS, replication["rows"])
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()

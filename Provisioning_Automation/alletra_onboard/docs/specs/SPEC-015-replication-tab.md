@@ -1,7 +1,9 @@
 # SPEC-015 — The Replication tab
 
 **Status:** APPROVED 2026-10-07; **re-cut the same day** — the two-array workbook and paired runs
-(ADR 0014) are deferred; replication is a step on the existing one-array run — not implemented
+(ADR 0014) are deferred; replication is a step on the existing one-array run. **R1–R4, R6 built
+2026-10-07** (parser, model, template, compose, registry, run-creation gate; 24 unit tests); **R5 (the
+two step pages, the mode card) ships with SPEC-016's page** — pending live run
 **ADRs:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) (sequenced: groups
 first over WSAPI; links and targets later) · [0014](../adr/0014-paired-runs-from-one-workbook.md)
 deferred · [0013](../adr/0013-one-array-credential-per-run.md) unchanged
@@ -38,7 +40,10 @@ other array with its own workbook.
 - Sync with RTT missing or > 10 ms; async with RTT > 200 ms (Support Matrix, RCIP).
 - Peer CPG blank. Peer array address, user or password blank.
 - The volume set is not on the *Volumes* tab (its presence on the array is checked at step time).
-- The derived group name (R3) exceeds 22 characters.
+- The same volume set on two rows; the peer address is this run's own array.
+- A yes/no field holding anything else.
+
+The derived group name is never refused: R3 shortens it to 22 characters.
 
 **R3 — Names the tool derives.** Group `<volume set>_rcg` (shortened with a stable suffix to stay
 ≤ 22). The failover test's own objects: volume `zz_rc_test_v01` (1 GiB) in VV set `zz_rc_test` on
@@ -46,10 +51,12 @@ this run's array, group `zz_rc_test_rcg`, peer set `zz_rc_test_rc` — created a
 Replication step through the same WSAPI calls and removal lines provisioning uses (SPEC-007).
 
 **R4 — Steps and modes.** `WorkflowPhase` gains `STORAGE_REPLICATE` and `STORAGE_FAILOVER_TEST`;
-the step registry gains `replicate` ("Replication") and `failover_test` ("Failover test"), served
-through `/app/profile` like every step. `_STEP_REQUIRES` for both = the Replication tab; a run
-whose sheet has none refuses them with one sentence. New preset `RunMode.REPLICATE` = discover →
-zoning → provision → replicate → failover_test → verify → asbuilt; *Custom* can pick them.
+the step registry gains `replicate` ("Replication") and `failover_test` ("Failover test"), kind
+`replicate`, served through `/app/profile` like every step. Both need the Replication tab: a run
+minted for a mode that includes them from a workbook without the tab is refused with one sentence
+(HTTP 422). New preset `RunMode.REPLICATE` = discover → zoning → provision → replicate →
+failover_test → verify → asbuilt; *Custom* can pick them. `BOTH` is unchanged (no replication).
+The tab is parsed whenever the provisioning tabs are, so a PROVISION_ONLY run keeps the intent.
 
 **R5 — UI.** Two step pages in the existing `StepShell` / `useStepState` pattern. The Configure page
 lists the peer array (address, and the system name once read). No pair header, no A/B switch.

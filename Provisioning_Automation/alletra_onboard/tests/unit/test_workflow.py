@@ -1,5 +1,7 @@
 from alletra_onboard.domain.models import RunMode, WorkflowPhase
 from alletra_onboard.domain.workflow import (
+    REPLICATION_STEP_KEYS,
+    STEP_REGISTRY,
     enabled_steps,
     initial_phase,
     next_enabled_phase,
@@ -48,3 +50,26 @@ def test_next_enabled_phase_skips_deselected_init_step():
 
 def test_next_enabled_phase_falls_back_to_complete_when_no_more_init():
     assert next_enabled_phase(RunMode.CUSTOM, ["greenlake"], "greenlake") == WorkflowPhase.COMPLETE
+
+
+# ---------------------------------------------------------------- SPEC-015 R4: replication steps
+
+def test_replicate_preset_runs_provisioning_then_replication_then_documents():
+    assert _keys(RunMode.REPLICATE) == [
+        "discover", "zoning", "provision", "replicate", "failover_test", "verify", "asbuilt",
+    ]
+    assert initial_phase(RunMode.REPLICATE) == WorkflowPhase.STORAGE_DISCOVER
+
+
+def test_replication_steps_have_their_own_kind_and_phases():
+    by_key = {s.key: s for s in STEP_REGISTRY}
+    assert by_key["replicate"].kind == "replicate" and by_key["replicate"].phase == WorkflowPhase.STORAGE_REPLICATE
+    assert by_key["failover_test"].kind == "replicate" and by_key["failover_test"].phase == WorkflowPhase.STORAGE_FAILOVER_TEST
+    assert REPLICATION_STEP_KEYS == {"replicate", "failover_test"}
+    # Existing presets are untouched: no replication step sneaks into BOTH or PROVISION_ONLY.
+    assert not REPLICATION_STEP_KEYS & set(_keys(RunMode.BOTH))
+    assert not REPLICATION_STEP_KEYS & set(_keys(RunMode.PROVISION_ONLY))
+
+
+def test_custom_can_pick_replication_steps_in_registry_order():
+    assert _keys(RunMode.CUSTOM, ["failover_test", "replicate", "provision"]) == ["provision", "replicate", "failover_test"]

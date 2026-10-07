@@ -24,7 +24,7 @@ from alletra_onboard.domain.models import (
 )
 from alletra_onboard.domain.ports import RunStore
 from alletra_onboard.domain.provisioning import ProvisioningIntent
-from alletra_onboard.domain.workflow import initial_phase
+from alletra_onboard.domain.workflow import enabled_steps, initial_phase
 
 
 class RunNotFoundError(LookupError):
@@ -71,6 +71,13 @@ class RunCoordinator:
         provisioning_intent: ProvisioningIntent | None = None,
     ) -> RunRecord:
         selected = list(selected_steps or [])
+        if any(step.kind == "replicate" for step in enabled_steps(mode, selected)) and (
+            provisioning_intent is None or provisioning_intent.replication is None
+        ):
+            raise ValueError(
+                "The Replication and Failover test steps need the workbook's 'Replication' tab (peer array "
+                "and the volume sets to protect). Fill it in and upload again, or choose a mode without them."
+            )
         run = RunRecord(
             serial_number=item.serial_number,
             status=RunStatus.READY,

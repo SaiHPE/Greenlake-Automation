@@ -24,6 +24,9 @@ class WorkflowPhase(StrEnum):
     STORAGE_DISCOVER = "STORAGE_DISCOVER"
     STORAGE_ZONING = "STORAGE_ZONING"
     STORAGE_PROVISION = "STORAGE_PROVISION"
+    # Replication (SPEC-015..017) — groups over WSAPI to a peer array, then the failover test.
+    STORAGE_REPLICATE = "STORAGE_REPLICATE"
+    STORAGE_FAILOVER_TEST = "STORAGE_FAILOVER_TEST"
     CONFIG_VERIFY = "CONFIG_VERIFY"
     ASBUILT_DOCUMENT = "ASBUILT_DOCUMENT"
     COMPLETE = "COMPLETE"
@@ -40,6 +43,7 @@ class RunMode(StrEnum):
     FULL_ONBOARDING = "FULL_ONBOARDING"  # GreenLake -> Cloud Connectivity -> DSCC -> Verify
     PROVISION_ONLY = "PROVISION_ONLY"    # Discovery -> Zoning -> Provision -> Verify
     BOTH = "BOTH"                        # full onboarding, then provisioning
+    REPLICATE = "REPLICATE"              # provisioning, then replication + failover test (SPEC-015)
     VERIFY_ONLY = "VERIFY_ONLY"          # just the read-only SSH config/health check
     CUSTOM = "CUSTOM"                    # exactly the steps in selected_steps
 

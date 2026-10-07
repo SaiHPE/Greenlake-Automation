@@ -274,4 +274,6 @@ def _provisioning_intent_json(intent: ProvisioningIntent) -> str:
         data[endpoint]["password"] = getattr(intent, endpoint).password.get_secret_value()
     for row, host in zip(data.get("declared_hosts", []), intent.declared_hosts):
         row["password"] = host.password.get_secret_value() if host.password is not None else None
+    if intent.replication is not None:
+        data["replication"]["peer"]["password"] = intent.replication.peer.password.get_secret_value()
     return json.dumps(data)

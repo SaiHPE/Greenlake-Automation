@@ -354,6 +354,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             content = compose_workbook_bytes(
                 base=base, init=request.init, targets=request.targets,
                 volumes=request.volumes, hostsets=request.hostsets, hosts=request.hosts,
+                replication=request.replication,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -398,6 +399,8 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             for key, ep in (("array", intent.array), ("vcenter", intent.vcenter),
                             ("switch_f1", intent.switch_f1), ("switch_f2", intent.switch_f2)):
                 targets[f"{key}_host"], targets[f"{key}_user"] = ep.host, ep.username
+            if intent.replication is not None:
+                targets["peer_host"], targets["peer_user"] = intent.replication.peer.host, intent.replication.peer.username
         return InitSheetUploadResponse(
             token=token, work_item=data, credentials_saved=credentials_saved, targets=targets,
         )
@@ -424,6 +427,8 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                 status_code=410,
                 detail="This uploaded sheet is no longer held — re-upload the Initialisation sheet.",
             ) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         return RunResponse(run=run)
 
     @app.get("/runs", response_model=RunListResponse)
