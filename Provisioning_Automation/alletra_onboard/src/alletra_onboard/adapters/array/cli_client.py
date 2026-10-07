@@ -23,6 +23,8 @@ ALLOWED_COMMANDS = (
     "showwsapi", "showcpg", "showspace", "showvv", "showvlun",
     "showhost", "showport", "showportdev", "showrcopy", "showtarget",
     "showhostset", "showvvset",
+    # replication read (SPEC-016 R1): the RCIP links with their peer addresses
+    "showrctransport",
 )
 # Shell metacharacters that could chain or redirect a second command — never present in a legit
 # show* invocation, so we reject the whole command if any appear (defence in depth on top of the

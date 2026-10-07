@@ -2,7 +2,10 @@
 
 **Status:** APPROVED 2026-10-07; **re-cut the same day** — v0.17 creates Remote Copy groups over
 **WSAPI** on a partnership that already exists; configuring the partnership itself (RCIP ports,
-targets, links) is the v0.19 release under ADR 0015 — not implemented
+targets, links) is the v0.19 release under ADR 0015. **R1–R3 built 2026-10-07** (`application/
+replication/read.py`, `plan.py`, `steps.py`; `POST /runs/{id}/replication/preview`; 25 unit tests
+pinned to the rc_pair fixtures + one through the service) — pending live run (read-only preview on
+the lab pair). R4–R8 (apply, verify, removal set) and the UI page: next.
 **ADRs:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) · [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (reads stay read-only; untouched in v0.17)
 **Depends on:** SPEC-015 (the tab, the steps)
 **Research:** [2026-10-07](../research/2026-10-07-replication-document-review.md) §3–§4 — limits

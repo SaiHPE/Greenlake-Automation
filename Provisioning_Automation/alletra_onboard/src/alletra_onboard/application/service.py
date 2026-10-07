@@ -32,6 +32,7 @@ from alletra_onboard.application.runs.coordinator import (
     StepPreconditionError,
 )
 from alletra_onboard.application.provisioning.steps import DiscoveryZoningSteps, ProvisioningSteps
+from alletra_onboard.application.replication.steps import ReplicationSteps
 from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import (
@@ -84,6 +85,7 @@ class OnboardingService:
         )
         self.discovery_zoning = DiscoveryZoningSteps(self.coordinator)
         self.provisioning = ProvisioningSteps(self.coordinator, self.discovery_zoning)
+        self.replication = ReplicationSteps(self.coordinator)
         self.documents = DocumentSteps(self.coordinator, verify_fn=verify_fn)
 
     # ------------------------------------------------------------------ run lifecycle (coordinator)
@@ -192,6 +194,11 @@ class OnboardingService:
 
     def set_provisioning_builder(self, run_id: str, builder: ProvisioningBuilder) -> ProvisioningComposition:
         return self.provisioning.set_provisioning_builder(run_id, builder)
+
+    # ------------------------------------------------------------------ replication (SPEC-016)
+
+    def start_replication_preview(self, run_id: str) -> RunRecord:
+        return self.replication.start_replication_preview(run_id)
 
     # ------------------------------------------------------------------ documents (verify + as-built)
 

@@ -598,6 +598,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # Tier-2, read-only: reads showvlun -a and reports per-host path liveness. Never gates.
         return _start_step(run_id, lambda: service.start_path_verify(run_id))
 
+    @app.post("/runs/{run_id}/replication/preview", response_model=RunResponse)
+    async def run_replication_preview(run_id: str) -> RunResponse:
+        # SPEC-016 R1-R3, read-only: both arrays over SSH, the partnership, the exists/create/conflict plan.
+        return _start_step(run_id, lambda: service.start_replication_preview(run_id))
+
     # ------------------------------------------------------------------ events
 
     @app.get("/runs/{run_id}/events", response_model=EventListResponse)
