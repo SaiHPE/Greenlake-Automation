@@ -1087,6 +1087,25 @@ def test_switch_for_wwpn_finds_the_f_port_switch():
     assert disc.switch_for_wwpn(text, "DEADBEEFDEADBEEF") is None
 
 
+def test_one_fabric_dump_resolves_every_array_port_on_that_fabric():
+    """BL-31: D22U27 took ~42 s per port. A dump lists every F-Port of its fabric, so the array's
+    sibling ports on that fabric resolve from it — one probe per fabric, not one per port."""
+    def fabric(switch: str, *wwpns: str) -> str:
+        return "".join(_fcfabric(w, switch) for w in wwpns)
+
+    blocks = dict(_ARRAY_BLOCKS)
+    blocks["showportdev fcfabric 0:3:3"] = fabric("SWX_F2", "20330002AC025515", "21330002AC025515")
+    blocks["showportdev fcfabric 0:3:4"] = fabric("SWY_F1", "20340002AC025515", "21340002AC025515")
+    cli = FakeArrayCli(blocks)
+    asked: list[str] = []
+    run = cli.run
+    cli.run = lambda cmd, timeout=None: (asked.append(cmd), run(cmd, timeout))[1]
+    report = disc.discover(_intent(), array_cli_factory=lambda c: cli, vcenter_factory=lambda c: FakeVCenter([]))
+    assert [c for c in asked if "fcfabric" in c] == ["showportdev fcfabric 0:3:3", "showportdev fcfabric 0:3:4"]
+    fc = {p.label: p.fabric_switch for p in report.array_ports if p.protocol == "fc"}
+    assert fc == {"0:3:3": "SWX_F2", "1:3:3": "SWX_F2", "0:3:4": "SWY_F1", "1:3:4": "SWY_F1"}
+
+
 def test_discovery_emits_progress_for_each_substep():
     """Discovery reports progress so a long run (per-port fabric probe + vCenter) doesn't look hung."""
     msgs: list[str] = []
