@@ -29,7 +29,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 
 | ID | Item | Area | Status | Sheet | Notes |
 |---|---|---|---|---|---|
-| BL-20 | Replication (Remote Copy) | 5 | todo | Replication B.1 | Research done: `docs/research/2026-09-19-replication-two-arrays.md` — decisions listed there are needed before a spec. Lab pair offered 2026-10-05: AlletraMP_D22U27 (10.64.122.99; RCIP 0:4:3/1:4:3 on 10.54.122.92/.93) and AlletraMP_E18U31 (10.64.154.190, CZ2D3209YV, OS 10.5.0; RCIP 10.54.154.192/.193; existing group `rcopy_async_test` with failed reverse tasks, no quorum witness). Both reachable from labrat; ESX1/ESX2 are zoned to both. |
+| BL-20 | Replication (Remote Copy) | 5 | todo | Replication B.1 | Research: `docs/research/2026-09-19-replication-two-arrays.md` (design options, run model C, decisions) + `docs/research/2026-10-07-replication-document-review.md` (the Aug-2026 ED8 HPE guides, Support Matrix limits, captured CLI help, DSCC protection-policy API; errors in two AI-written guides listed). **Eight decisions proposed with defaults (addendum §6) — need the operator's yes/no before SPEC-015.** Lab pair: AlletraMP_D22U27 ↔ AlletraMP_E18U31 (already replicating: group `rcopy_async_test`; RCIP 10.54.122.92/.93 ↔ 10.54.154.192/.193), both reachable from labrat. First live action: the read-only capture in addendum §7. |
 | BL-21 | Snapshots + schedules | 5 | todo | — | DSCC protection policies, or `createsv` / `createsched`. |
 | BL-22 | HLD document | 9 | todo | — | |
 | BL-23 | LLD document | 9 | todo | — | |
