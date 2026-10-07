@@ -3,6 +3,10 @@
 > **Amended by [ADR 0013](0013-one-array-credential-per-run.md) (2026-09-15):** the credential rule below
 > ("supplied per-run and never stored") is superseded. The run holds one array credential from the
 > sheet and every step uses it; the prompt remains only for runs whose sheet supplied none.
+>
+> **Amended by [ADR 0015](0015-tool-configures-remote-copy-write-scoped-ssh.md) (2026-10-07):** the client
+> described here stays read-only and stays the default. A second, write-scoped SSH client exists for Remote
+> Copy configuration only (its own allowlist), reachable only through an operator-approved replication plan.
 
 After the operator confirms the array is initialized, the tool verifies the **on-array config**
 against the Initialisation-sheet values by logging into the array directly over **SSH** (port 22,
