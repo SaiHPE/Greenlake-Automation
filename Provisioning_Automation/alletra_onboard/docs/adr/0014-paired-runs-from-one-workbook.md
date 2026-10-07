@@ -1,10 +1,17 @@
 # ADR 0014 — Two arrays from one workbook: paired runs
 
-**Status:** accepted 2026-10-07 (operator decision) · **Research:**
+**Status:** **deferred 2026-10-07** (accepted and deferred the same day, operator decision) · **Research:**
 [2026-09-19-replication-two-arrays.md](../research/2026-09-19-replication-two-arrays.md) §6,
 [2026-10-07-replication-document-review.md](../research/2026-10-07-replication-document-review.md) ·
-**Specs:** SPEC-015 (workbook + pairing), SPEC-016 (Replicate step), SPEC-017 (failover test),
-SPEC-018 (pair as-built)
+**Superseded for v0.17 by:** SPEC-015 (a Replication tab on the one-array workbook; the peer array is a
+step credential like the switches and vCenter)
+
+> **Why deferred.** Pairing is the largest piece of work in the replication set (header-located parser,
+> template, run pairing in the store and API, an A/B switch in the UI, the run list) and none of it is
+> replication. Replication needs the primary run plus the peer's address, credential and CPG. DR-site
+> hosts and exports on array B are a normal run on B, which the tool does today. "One sheet for both
+> sites" was the author's assumption, not a field request. The design below stays on record and is
+> additive if engineers ask for it; nothing in SPEC-015/016 prevents it.
 
 ## Context
 

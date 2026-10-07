@@ -197,13 +197,13 @@ If you agree with the defaults, SPEC-015 (sheet + paired runs) can be written wi
 
 | # | Decision | Recorded in |
 |---|---|---|
-| 1 | Paired runs from one workbook — as proposed | ADR 0014, SPEC-015 |
-| 2 | Async (periodic) default, RPO 10 min → period 5 min; sync selectable — as proposed. **Async and sync first**; every other type refused | SPEC-015 R3/R4 |
-| 3 | DSCC protection-policy API first; fallback is the CLI **issued by the tool** (not a command set); CLI always printed | ADR 0015 §4, SPEC-016 R5 |
-| 4 | Failover test **required**. Own test group by default, typed confirmation for production. **Changed:** not `switchover` — the captured `setrcopygroup -h` says switchover needs hosts connected to both arrays with an RTPG persona (the Peer Persistence topology, out of scope). The test is **failover → recover → restore** | SPEC-017 |
+| 1 | Paired runs from one workbook — accepted, then **deferred the same day** for delivery: replication is a tab + two steps on the one-array run; the peer array is a step credential like the switches | ADR 0014 (deferred), SPEC-015 |
+| 2 | Async (periodic) default, RPO 10 min → period 5 min; sync selectable — as proposed. **Async and sync first**; every other type refused | SPEC-015 R1/R2 |
+| 3 | Layer 3 control plane — **changed:** WSAPI `/remotecopygroups` (already in the tool's `hpe3parclient`: create, admit, start, stop, remove, DR actions 6–11 — confirmed 2026-10-07), issued by the tool; no DSCC path (its advantage, the snapshot schedule, left with BL-21); CLI equivalents always printed | ADR 0015 §4, SPEC-016 R4 |
+| 4 | Failover test **required**. Own test group by default, typed confirmation for production. **Changed:** not `switchover` — the captured `setrcopygroup -h` says switchover needs hosts connected to both arrays with an RTPG persona (the Peer Persistence topology, out of scope). The test is **failover → recover → restore** (WSAPI actions 7, 9, 10) | SPEC-017 |
 | 5 | Snapshot-only protection — **deferred** to BL-21 (sync and async first) | SPEC-015 §3 |
-| 6 | RTT — operator-entered, refused over the limits as proposed; **changed:** the tool runs `controlport rcip ping` itself before creating targets | ADR 0015, SPEC-016 R4 |
-| 7 | Links and targets — **reversed:** the tool configures them. Switch command sets exist because switches are heterogeneous; both ends here are B10000 arrays with one CLI dialect | ADR 0015 |
+| 6 | RTT — operator-entered, refused over the limits as proposed; the tool will run `controlport rcip ping` itself when it configures links (v0.19) | ADR 0015, SPEC-016 §3 |
+| 7 | Links and targets — **reversed:** the tool configures them. Switch command sets exist because switches are heterogeneous; both ends here are B10000 arrays with one CLI dialect. **Sequenced** to v0.19: the lab pair is already partnered, so that path cannot be proven live yet; v0.17 reads and verifies the partnership and blocks with a sentence if it is missing | ADR 0015 §Sequencing |
 | 8 | `mirror_config` start order — as proposed | SPEC-016 R4 |
 
 ## 7. First live action — unchanged, now with a file list

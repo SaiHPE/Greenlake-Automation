@@ -72,9 +72,11 @@ Four layers, dependencies point inward (`api → application → domain`; `adapt
 - **Cloud (NOT built):** the DSCC/GreenLake multi-array REST plane — the intended *primary*. Onboarding
   Component A touches the GreenLake *global* API (`adapters/greenlake/*`) and DSCC is driven via a
   **browser wizard** (Component C, Playwright/CDP), but there is **no DSCC provisioning cloud client**.
-- **Remote Copy (planned, not built — ADR 0014/0015, SPEC-015…018):** two arrays from one workbook as
-  paired runs; a second, write-scoped SSH client (`ArrayRcCliClient`, Remote Copy commands only) behind
-  an approved plan configures RCIP links, targets and groups; DSCC protection policies preferred for groups.
+- **Remote Copy (planned, not built — ADR 0015, SPEC-015…018):** a Replication tab on the one-array
+  workbook; the peer array is a step credential like the switches. Groups, period, policies and DR
+  actions over **WSAPI** `/remotecopygroups` behind the existing plan → approve → apply gate (v0.17–0.18);
+  RCIP links and targets via a second, write-scoped SSH client (`ArrayRcCliClient`, link/target
+  commands only) in v0.19. Paired runs (ADR 0014) deferred.
 - **Switch (read-only, by decision):** Brocade FOS (`adapters/fabric/brocade_client.py`) — verify +
   the zoning *plan* → an emitted **command set** the consultant applies. The tool **never writes to
   the switch** (ADR 0012; the write path that shipped in v0.14–v0.15 was removed in v0.16).

@@ -1,154 +1,133 @@
-# SPEC-016 — The Replication step: link the arrays, protect the volume sets, verify
+# SPEC-016 — The Replication step: protect volume sets over an existing partnership
 
-**Status:** APPROVED 2026-10-07 (operator decisions: the tool configures links and partnership
-itself; sync and async first) — not implemented
-**ADRs:** [0014](../adr/0014-paired-runs-from-one-workbook.md), [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md)
-**Depends on:** SPEC-015 (pair, Replication tab)
-**Research:** [2026-10-07](../research/2026-10-07-replication-document-review.md) §2–§5 — every
-command, limit and state below is traced there to an HPE guide (ED8, Aug 2026) or the array's own
-`-h` output captured on AlletraMP_D22U27
+**Status:** APPROVED 2026-10-07; **re-cut the same day** — v0.17 creates Remote Copy groups over
+**WSAPI** on a partnership that already exists; configuring the partnership itself (RCIP ports,
+targets, links) is the v0.19 release under ADR 0015 — not implemented
+**ADRs:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) · [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (reads stay read-only; untouched in v0.17)
+**Depends on:** SPEC-015 (the tab, the steps)
+**Research:** [2026-10-07](../research/2026-10-07-replication-document-review.md) §3–§4 — limits
+and states traced to the HPE guides (ED8, Aug 2026) and the array's own `-h` output; WSAPI body
+shapes from the `hpe3parclient` the tool already provisions with (`/remotecopygroups`)
 **Owner:** `application/replication/` (new bounded context: `steps.py`, `read.py`, `plan.py`,
-`apply.py`, `verify.py`), `adapters/array/rc_cli_client.py` (new, ADR 0015), `adapters/dscc/`
-(protection policies), `domain/replication.py`, `frontend/src/steps/ReplicationStep.tsx`
+`apply.py`, `verify.py`), `adapters/array/wsapi_client.py` (remote-copy-group calls),
+`domain/replication.py`, `frontend/src/steps/ReplicationStep.tsx`
 
 ## 1. Problem
 
-With two arrays paired (SPEC-015) and each one discovered, zoned and provisioned, the engineer still
-configures replication by hand on both arrays: RCIP addresses, targets, links, a Remote Copy group,
-policies, period, admitted volumes, start — in the right order, on the right array — then checks
-`showrcopy` on both. One wrong step (a gateway after the links, one link instead of two, a missing
-target CPG) fails silently or late.
+The partnership between two arrays is set up once, usually at install. What repeats per engagement
+is protecting the volume sets the engineer has just provisioned: a group with the right mode, period
+and policies, every volume admitted with its secondary created on the right CPG, started, and
+`showrcopy` checked on both arrays. By hand that is eight commands in a fixed order on the right
+array, and a mistake (wrong CPG, a volume already in another group, a group never started) shows
+late.
 
 ## 2. Requirements
 
-The step runs on the pair. It has the same five stages as provisioning: **read → check → plan →
-apply → verify**, and ends with a **removal set**.
+Same five stages as provisioning — **read → check → plan → apply → verify** — and a **removal set**.
+Writes go through **WSAPI**, the write plane provisioning already uses, with this run's array
+credential on the primary and the tab's peer credential on the peer. No SSH write in this release.
 
-**R1 — Read both arrays (read-only client).** For A and B: `showsys` (name, serial, nodes, OS),
-`showport -rcip`, `showrctransport -rcip`, `showrcopy` (system status), `showrcopy targets`,
-`showrcopy links`, `showrcopy groups`, `showvvset`, `showcpg`. All are on the read allowlist
-(ADR 0001) except `showrctransport`, which is added to it. Parsers are pinned to real captures from
-the lab pair (§4) before code.
+**R1 — Read both arrays.** Over the read-only SSH client (ADR 0001) on each: `showsys`,
+`showversion`, `showport -rcip`, `showrctransport -rcip` (added to the read allowlist), `showrcopy`,
+`showrcopy targets`, `showrcopy links`, `showrcopy groups`, `showvvset`, `showcpg`. Over WSAPI on the
+primary: `GET /remotecopy`, `GET /remotecopygroups`. Parsers are pinned to the BL-38 captures first.
 
-**R2 — Check before planning (blocking findings, one sentence each, never guessed).**
-- Each array has ≥ 2 RCIP ports usable, on 2 different nodes (from the sheet or already addressed).
-- RCIP port IPs unique; not in the management subnet; not an iSCSI port. On a node with 2 RCIP links,
-  each link on a subnet different from every other interface on that node (ED8).
-- Ports per target and partners per system within the Support Matrix column for **that array's OS**
-  (OS 10.5: 4 targets/port, 4 partners; 10.6: 6/4; 10.4: 2/2).
-- Sync rows: measured RTT ≤ 10 ms. Async rows: ≤ 200 ms.
-- The primary volume set exists on the primary (created by this run's provisioning or already there).
-- The secondary CPG exists on the secondary and has free space ≥ the primary set's provisioned size.
-- No existing Remote Copy group already holds a volume of the set (a volume belongs to one group).
-- Remote Copy started on each array, or plannable (`startrcopy`).
+**R2 — Check (blocking findings, one sentence each; nothing guessed).**
+- **Partnership present:** on the primary a target whose name is the peer's `showsys` name, and on
+  the peer a target named after the primary, each with ≥ 2 links `Up`. Otherwise: *"No Remote Copy
+  partnership between <A> and <B>. The tool configures partnerships from v0.19 (ADR 0015); until then
+  it has to exist before this step."* The partnership is read, never created, in this release.
+- Remote Copy started on both arrays (`showrcopy` system status).
+- Sync rows: RTT ≤ 10 ms; async rows: ≤ 200 ms (from the tab).
+- The volume set exists on the primary with ≥ 1 member; no member is already in a Remote Copy group.
+- The peer CPG exists on the peer with free space ≥ the set's provisioned size.
+- Group counts within the Support Matrix for that array's OS (read from `showversion`).
 
-**R3 — Plan, per layer, with *exists / create / conflict* like the provisioning plan (SPEC-001).**
-1. *Transport* — per RCIP port: already addressed as the sheet says → exists; unaddressed → create
-   (`controlport rcip addr`, then `gw` if a gateway is given); addressed differently → **conflict**
-   (the tool never re-addresses a port in use).
-2. *Partnership* — target for B on A and for A on B: present with ≥ 2 links `Up` → exists; absent →
-   create (`creatercopytarget <name> IP <N:S:P>:<peer_ip> <N:S:P>:<peer_ip>` on each side); present
-   with fewer links than planned → create the missing links (`admitrcopylink`).
-3. *Protection* — per Replication-tab row: group absent → create; present with the same volume set,
-   mode and target → exists; anything else → conflict.
-The plan shows, for every *create*, the exact commands (or the DSCC call and its CLI equivalent) per
-array, in execution order, labelled **A** / **B**.
+**R3 — Plan, exists / create / conflict (SPEC-001 pattern).** Per Protection row:
+- Group absent → **create**; present with the same volume set, mode and target → **exists**;
+  present with anything else → **conflict** (the tool never changes an existing group's mode, period
+  or members).
+- The peer volume set (`<set>_rc`): absent → create on the peer; present → exists.
+- When the tab's failover test is `yes`: a row for the test volume, set and group (SPEC-015 R3).
+The plan shows every create as the WSAPI call it will make **and the CLI command it is equivalent
+to**, labelled **A** (primary) or **B** (peer), in execution order.
 
-**R4 — Execution order (fixed, from the CLI guide ED8).**
-```
-A, B  startrcopy                                                   if not started
-A, B  controlport rcip addr …  ;  controlport rcip gw …            per new port; gateways BEFORE any link
-A, B  controlport rcip ping <peer_ip> <N:S:P>                      per planned link; up to 3 tries, 10 s apart
-A     creatercopytarget <B> IP <N:S:P>:<B_ip> <N:S:P>:<B_ip>
-B     creatercopytarget <A> IP <N:S:P>:<A_ip> <N:S:P>:<A_ip>
-      wait: showrcopy links on both shows every planned link Up    (≤ 120 s, then stop with the reason)
-A*    protection per row — DSCC (R5) or CLI:
-        creatercopygroup -usr_cpg <cpgA> <B>:<cpgB> <group> <B>:periodic|sync
-        setrcopygroup pol auto_synchronize <group>    ;  setrcopygroup pol auto_recover <group>
-        setrcopygroup period <RPO/2>m <B> <group>                  async only
-        admitrcopyvv -createvv set:<vvset> <group> <B>:<vvset_sec>
-        startrcopygroup <group>                                     secondary first only if the target
-                                                                    policy is no_mirror_config (read in R1)
-```
-*A\** = the row's primary side (Direction). When an array's RCIP ports are on different subnets, a
-ping that still fails after 3 tries stops the apply before any target is created, with the port and
-the reason; nothing half-linked is left behind. When two ports share a subnet the guide says ping
-fails until links are admitted, so the ping result is shown but not blocking, and the link wait
-(links `Up` within 120 s) is the gate.
+**R4 — Apply order (fixed; CLI equivalents from the ED8 guide).**
 
-The test group's volume and VV set (SPEC-015 R6) are created through WSAPI before the protection
-layer, as provisioning creates volumes.
+| # | Where | WSAPI | CLI equivalent |
+|---|---|---|---|
+| 1 | A | provisioning's own volume/VV-set calls for the test objects (if planned) | `createvv`, `createvvset` |
+| 2 | A | `POST /remotecopygroups` `{name, targets:[{targetName:<B>, mode: 1 sync / 2 periodic, userCPG:<peer CPG>}], localUserCPG:<primary CPG>}` | `creatercopygroup -usr_cpg <cpgA> <B>:<cpgB> <group> <B>:sync|periodic` |
+| 3 | A | `PUT /remotecopygroups/<group>` `{targets:[{targetName:<B>, syncPeriod: RPO×30}]}` (async only) and the policies (`autoRecover`, `autoSynchronize` — field names confirmed from the BL-38 `GET` of the existing group) | `setrcopygroup period <RPO/2>m <B> <group>` · `setrcopygroup pol auto_recover|auto_synchronize <group>` |
+| 4 | A | per set member: `PUT /remotecopygroups/<group>` `{action: admit, volumeName, targets:[{targetName:<B>, secVolumeName:<same name>}], volumeAutoCreation: true}` | `admitrcopyvv -createvv <vol> <group> <B>:<vol>` |
+| 5 | B | create VV set `<set>_rc` with the volumes step 4 created | `createvvset <set>_rc`, `createvvset -add …` |
+| 6 | A (B first if the target policy is `no_mirror_config`, read in R1) | `PUT /remotecopygroups/<group>` `{action: start}` | `startrcopygroup <group>` |
 
-**R5 — Protection through DSCC when available.** When the sheet carries GreenLake API credentials
-and both arrays are found in DSCC (`devtype4-storage-systems` by serial): `POST
-…/applicationsets/{id}/protection-policies` with `protectionPolicyType` `async`/`sync`,
-`policy.remote.partnerId/partnerName` (from `GET …/replication-partners`),
-`replicationType` `periodic`/`sync`, `replicationPartnerUserCpg`, `rpoSecs` = RPO × 60,
-`autoSynchronize`, `autoRecover`; poll the async operation. Otherwise the CLI commands of R4.
-Either way verification (R7) is the same SSH read.
+A failure at any step stops the apply, reports the step and the array's message, and the removal
+set covers exactly what was created up to that point.
 
-**R6 — Approval gate.** Nothing is written until the operator ticks *"I have reviewed this plan and
+**R5 — Approval gate.** Nothing is written until the operator ticks *"I have reviewed this plan and
 authorise configuring replication on both arrays"* and clicks *Configure replication* — the same gate
-as *Create storage objects*. A plan with a conflict cannot be applied (409 with the conflict).
+as *Create storage objects*. A plan with a conflict or a blocker cannot be applied (409).
 
-**R7 — Verify (read-only, both arrays).** After apply, and on demand (*Verify replication*):
-- Every planned link `Up` (`showrcopy links`) on both arrays.
-- Each group: Status `Started`; Role `Primary` on the primary and `Secondary` on the other; Mode as
-  planned; every volume's SyncStatus `Synced` — `Syncing` is reported as *initial sync in progress
-  (n of m volumes)* and re-checked, never failed; `Stale` / `Stopped` after a start is a failure with
-  HPE's own next step (troubleshooting ED6: *start the group*; *Stale persists → contact HPE
-  Support*). The tool never retries a write in a loop.
-- Async: the configured period equals RPO / 2.
-- The secondary volume set exists on the secondary with the same volume count and sizes.
-- The `RCP_<group>` VV set that `creatercopygroup` creates on the primary is expected: it is reported,
-  never a conflict and never a separate removal line (`removercopygroup` owns it).
+**R6 — Verify (read-only, both arrays).** After apply and on demand (*Verify replication*):
+- The target's links `Up` on both arrays.
+- Each group: Status `Started`; Role `Primary` on A and `Secondary` on B; Mode as planned; async
+  period = RPO / 2; every volume `Synced` — `Syncing` is reported as *initial sync in progress (n of
+  m volumes)* and re-checked, never failed; `Stale` / `Stopped` after a start is a failure with HPE's
+  own next step (troubleshooting ED6: *start the group*; *persists → contact HPE Support*). The tool
+  never retries a write in a loop.
+- The peer volume set has the same volume count and sizes as the primary set.
+- The `RCP_<group>` VV set the array creates on the primary is expected: reported, never a conflict,
+  never a removal line of its own (`removercopygroup` owns it).
 Verdict per group: **Replicating** · **Initial sync in progress** · **Not replicating (reason)**.
 
-**R8 — Removal set (SPEC-007 pattern).** Exactly what this run created, in reverse dependency order,
-per array: `stoprcopygroup` → `dismissrcopyvv -removevv set:<vvset> <group>` →
-`removercopygroup` → `dismissrcopylink` (links the run admitted) → `removercopytarget` (targets
-the run created) → the test volume and VV set on the primary (`removevvset`, `removevv`, SPEC-007
-lines) → RCIP addresses are **not** removed (re-addressing a port is the network team's
-call; the as-built records them). Objects that existed before the run are never in it. Shown as
-two blocks, **A** and **B**.
+**R7 — Removal set (SPEC-007 pattern: CLI lines the operator pastes, in reverse dependency order).**
+Exactly what this run created, as two blocks:
+- **A:** `stoprcopygroup <group>` → `dismissrcopyvv -removevv <vol> <group>` per volume (removes
+  the secondary volume too) → `removercopygroup <group>` → the test volume and set lines when created.
+- **B:** `removevvset <set>_rc`.
+Objects that existed before the run are never in it.
 
-**R9 — Facts for the as-built.** The step records: RCIP ports and addresses per array, targets and
-links (with status), each group (name, mode, period/RPO, policies, role per array, volumes with sync
-status), the control plane used (DSCC or CLI) and the commands issued.
+**R8 — Facts for the as-built (SPEC-018).** Partnership read (targets, links, RCIP ports and
+addresses per array); each group (name, mode, RPO and period, policies, role per array, volumes with
+sync status and last sync time); the calls made and their CLI equivalents; the removal set.
 
-**R10 — Existing replication is respected.** Groups, targets and links the run did not create are
-shown (read) and never modified, stopped or removed. The lab pair already replicates
-(`rcopy_async_test`); every test object is `zz_rc_*`.
+**R9 — Existing replication is respected.** Groups, targets and links the run did not create are
+shown and never modified, stopped or removed. The lab pair already replicates
+(`rcopy_async_test`); every object the tool makes there is `zz_rc_*`.
 
-## 3. Non-goals
+## 3. Deferred to v0.19 (ADR 0015, decision unchanged, sequenced)
 
-Active Peer Persistence, Active Sync, SLD, 3DC, MxN; RCFC; Quorum Witness; snapshot schedules
-(BL-21); changing a group's mode or period after creation (remove and recreate); re-addressing RCIP
-ports already in use.
+Transport and partnership configured by the tool — `startrcopy`, `controlport rcip addr/gw/ping`,
+`creatercopytarget`, `admitrcopylink` and their removal — over the write-scoped SSH client. Not in
+v0.17 because the lab pair is already partnered, so that path cannot be proven live without
+dismantling it; R2's blocker says so.
 
-## 4. Verification
+## 4. Non-goals
 
-**Before code** — read-only capture on both lab arrays (D22U27 ↔ E18U31, already replicating),
-saved to `tests/fixtures/rc_pair/`: `showsys`, `showversion`, `showport -rcip`,
-`showrctransport -rcip`, `showrcopy`, `showrcopy -d`, `showrcopy links`, `showrcopy targets`,
-`showrcopy groups`, `showvvset`, `showcpg`. Parsers are written against these.
+Peer Persistence, Active Sync, SLD, 3DC, MxN; RCFC; Quorum Witness; snapshot schedules (BL-21);
+DSCC protection-policy API (dropped — its one advantage, the snapshot schedule, left with BL-21);
+changing an existing group (remove and recreate); replicating from the peer back.
 
-**Unit** — R2 checks one test each; R3 exists/create/conflict per layer; R4 order (gateway before
-links, targets on both sides, start order by target policy); the DSCC body (R5) against the API
-mirror's field list; R7 verdicts from captured `showrcopy groups` (Synced / Syncing / Stale /
-Stopped); R8 order and "never the pre-existing objects"; the write client refuses any command not in
-ADR 0015's list and any `controlport` other than `rcip addr|gw|ping`.
+## 5. Verification
 
-**Live (lab pair)** — (1) read and verify the existing group `rcopy_async_test` without touching it;
-(2) create `zz_rc_test` (1 GiB) on D22U27 and protect it **async** to E18U31 using the existing
-partnership → *Replicating*; (3) same with **sync** (if the measured RTT allows); (4) removal set
-pasted/applied → nothing `zz_rc_*` left on either array; (5) on a pair with no partnership (if one
-becomes available) the full transport + partnership path. Runner scenario 7 (SPEC-006 addendum)
-automates (2) and (4).
+**Before code (BL-38)** — read-only capture on D22U27 and E18U31 saved to `tests/fixtures/rc_pair/`:
+the SSH list in R1 plus `showrcopy -d`, `showrcopy groups rcopy_async_test`, the `-h` of every
+Remote Copy command, **and over WSAPI** `GET /remotecopy`, `GET /remotecopygroups`,
+`GET /remotecopygroups/rcopy_async_test` — this confirms the B10000 serves the remote-copy-group
+resource and fixes the `policies` / `syncPeriod` field names before R4 is coded.
 
-## 5. Size
+**Unit** — one test per R2 check; R3 exists/create/conflict; R4 order and the `no_mirror_config`
+start order; R6 verdicts from captured `showrcopy groups` (Synced / Syncing / Stale / Stopped); R7
+order and "never the pre-existing objects"; CLI equivalents rendered per call.
 
-Read + parsers (~250), checks (~150), plan (~200), apply with ordering and ping/link waits (~250),
-DSCC adapter (~150), verify (~150), write client (~80), UI step (~350), as-built facts (~60), ~45
-unit tests. Two releases: (a) read, check, plan, verify against the existing pair; (b) apply and
-removal set.
+**Live (lab pair)** — (1) read and verify `rcopy_async_test` without touching it; (2) protect
+`zz_rc_test` **async** to E18U31 → *Replicating*, both arrays' `showrcopy groups` agree; (3) the same
+**sync** if the RTT allows; (4) removal set pasted → nothing `zz_rc_*` on either array,
+`rcopy_async_test` unchanged. Runner scenario 7 (SPEC-006 §4b) automates (2) and (4).
+
+## 6. Size
+
+Read and parsers (~200), checks (~120), plan (~150), apply (~180), verify (~120), WSAPI client
+calls (~60), UI step (~300), ~35 unit tests. **One release (v0.17)** with SPEC-015.

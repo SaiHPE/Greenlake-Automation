@@ -1,7 +1,24 @@
 # ADR 0015 — Remote Copy is configured by the tool, over a second, write-scoped SSH client
 
-**Status:** accepted 2026-10-07 (operator decision) · **Amends:** ADR 0001 (SSH is read-only) ·
+**Status:** accepted 2026-10-07 (operator decision); **sequenced the same day** — § *Sequencing* ·
+**Amends:** ADR 0001 (SSH is read-only) from the release that ships links and targets ·
 **Keeps:** ADR 0012 (no switch writes) · **Specs:** SPEC-016, SPEC-017
+
+## Sequencing (2026-10-07)
+
+The `hpe3parclient` the tool already provisions with exposes the Remote Copy **group** lifecycle and
+the **disaster-recovery actions** as WSAPI REST calls on `/remotecopygroups` (create, admit volume,
+start, stop, remove, recover-from-disaster actions 6–11). Only links, targets and `startrcopy` run
+over SSH underneath. So:
+
+| Release | What the tool configures | Write plane | Live proof |
+|---|---|---|---|
+| v0.17 | Layer 3 — groups, period, policies, admitted volumes, start (SPEC-016) | **WSAPI** (existing plan → approve → apply → removal machinery) | lab pair, already partnered |
+| v0.18 | Failover test — failover, recover, restore (SPEC-017) | **WSAPI** DR actions | lab pair |
+| v0.19 | Layers 1–2 — RCIP addressing, targets, links, `startrcopy` | the write-scoped SSH client below | needs a pair that can be partnered from scratch |
+
+ADR 0001 is untouched until v0.19. The decision — the tool configures all three layers itself — is
+unchanged; the order follows what the lab can prove.
 
 ## Context
 
@@ -9,8 +26,10 @@ Replication on a B10000 has three layers (research 2026-09-19 §2): the **transp
 addressed on both arrays), the **partnership** (each array declares the other as a Remote Copy
 target over ≥ 2 links) and the **protection** (a Remote Copy group over a volume set, started).
 
-- Layer 3 has a REST control plane: the DSCC Block Storage API's `protection-policies` on an
-  application set (research 2026-10-07 §5.1), and WSAPI's remote-copy-group calls as a fallback.
+- Layer 3 has a REST control plane the tool already uses: WSAPI's `/remotecopygroups` (create,
+  admit, start, stop, remove, DR actions) through the `hpe3parclient` provisioning writes with. The
+  DSCC Block Storage API's `protection-policies` (research 2026-10-07 §5.1) is a second REST path,
+  not taken (§4).
 - Layers 1–2 have **none**. `controlport rcip addr/gw`, `creatercopytarget`, `admitrcopylink` exist
   only as CLI commands over SSH; the DSCC API's `replication-partners` is GET-only, and the
   `hpe3parclient` functions for links run SSH underneath.
@@ -30,30 +49,32 @@ for the command set does not apply.
 
 ## Decision
 
-**The tool configures all three layers itself. Layers 1–2 go through a second SSH client that may
-run only the Remote Copy write commands, inside the same plan → review → approve → apply → removal
-flow provisioning uses. ADR 0001's read-only client is unchanged and stays the default.**
+**The tool configures all three layers itself. Layer 3 and the DR actions go over WSAPI; layers 1–2
+go through a second SSH client that may run only the Remote Copy link and target commands. Both
+inside the same plan → review → approve → apply → removal flow provisioning uses. ADR 0001's
+read-only client is unchanged and stays the default.**
 
 1. **Two clients, not one relaxed one.** `ArrayCliClient` (ADR 0001) keeps its read allowlist and is
-   what every read uses. A new `ArrayRcCliClient` carries its own allowlist — exactly:
-   `startrcopy`, `controlport rcip addr`, `controlport rcip gw`, `controlport rcip ping`,
-   `creatercopytarget`, `admitrcopylink`, `dismissrcopylink`, `removercopytarget`,
-   `creatercopygroup`, `setrcopygroup pol`, `setrcopygroup period`, `admitrcopyvv`,
-   `startrcopygroup`, `stoprcopygroup`, `dismissrcopyvv`, `removercopygroup`, `syncrcopy`,
-   `setrcopygroup switchover|failover|recover|restore|reverse` (SPEC-017 only) — and the same
-   metacharacter refusal. Sub-command shape is checked, not just the first word: `controlport` is
-   allowed only with `rcip addr|gw|ping`, never `offline` or `config`.
+   what every read uses. A new `ArrayRcCliClient` (v0.19) carries its own allowlist — exactly the
+   layer 1–2 commands that have no REST equivalent: `startrcopy`, `controlport rcip addr`,
+   `controlport rcip gw`, `controlport rcip ping`, `creatercopytarget`, `admitrcopylink`,
+   `dismissrcopylink`, `removercopytarget` — and the same metacharacter refusal. Sub-command shape is
+   checked, not just the first word: `controlport` is allowed only with `rcip addr|gw|ping`, never
+   `offline` or `config`. Group and DR commands are **not** on it: they go over WSAPI (§4).
 2. **Never without a plan.** The write client is constructed only inside `apply` of a plan the
-   operator approved in the UI (SPEC-016 §R6), the same gate as `POST /storage/apply`. No API route
+   operator approved in the UI (SPEC-016 §R5), the same gate as `POST /storage/apply`. No API route
    runs a Remote Copy write directly.
-3. **Every write has its undo.** Each command the apply issues appends its inverse to the run's
+3. **Every write has its undo.** Each write the apply issues appends its inverse to the run's
    removal set (SPEC-007 pattern): links → `dismissrcopylink`, target → `removercopytarget`, group
    → `stoprcopygroup` + `dismissrcopyvv -removevv` + `removercopygroup`. Objects that already
    existed are never in it.
-4. **Prefer the REST path where one exists.** Layer 3 is created through the DSCC protection-policy
-   API when the sheet carries GreenLake API credentials and both arrays are found in DSCC; otherwise
-   through the CLI on the write-scoped client. Either way the equivalent CLI commands are **printed**
-   in the plan and the as-built, so the operator can see what was done on the array.
+4. **Groups and DR actions go over WSAPI.** Layer 3 (`creatercopygroup`, `setrcopygroup pol|period`,
+   `admitrcopyvv`, `startrcopygroup`, `stoprcopygroup`) and the DR operations (`failover`, `recover`,
+   `restore`) have REST equivalents on `/remotecopygroups`, the write plane provisioning already uses
+   with its live-verified plan/approve/apply/removal flow. The CLI equivalent of every call is
+   **printed** in the plan and the as-built so the operator sees what was done on the array. The DSCC
+   protection-policy API is not used: its one advantage (a snapshot schedule in the same call) left
+   with BL-21.
 5. **Reads stay reads.** Verification of what the apply did (`showrcopy`, `showrctransport -rcip`,
    `showport -rcip`) uses the read-only client, exactly as path verification does after provisioning.
 6. **Switches are still never written.** ADR 0012 is unaffected: RCFC (Remote Copy over FC) zoning,
@@ -62,15 +83,17 @@ flow provisioning uses. ADR 0001's read-only client is unchanged and stays the d
 
 ## Consequences
 
-- ADR 0001's statement "the SSH client is read-only" becomes "the *read* client is read-only; one
-  write-scoped client exists for Remote Copy and is reachable only through an approved plan".
-  `docs/ARCHITECTURE.md` and the project instructions change accordingly.
+- ADR 0001's statement "the SSH client is read-only" becomes, from v0.19, "the *read* client is
+  read-only; one write-scoped client exists for Remote Copy links and targets and is reachable only
+  through an approved plan". `docs/ARCHITECTURE.md` and the project instructions change then.
 - The blast radius of a wrong apply is the two arrays' Remote Copy configuration — not hosts, not
-  volumes, not exports (those stay on WSAPI with their own plan). The removal set bounds it to what
-  the run created.
-- The runner's pair scenario (SPEC-006 addendum) writes real links and groups on the lab pair
+  volumes, not exports. The removal set bounds it to what the run created.
+- The runner's replication scenario (SPEC-006 §4b) writes real groups on the lab pair
   (D22U27 ↔ E18U31) and removes them; the pair already replicates, so the tool's objects are
   `zz_rc_*` and the existing group is never touched.
 - `controlport rcip ping` is in the write client although it changes nothing: it is not `show*`,
   and keeping the read client's definition exact matters more than one classification.
 - Not decided here: RCFC links (FC transport). Out of scope until RCIP is live.
+- The v0.19 "create partnership" path cannot be proven on the lab pair without dismantling its
+  partnership; it waits for a pair that can be partnered from scratch, or the operator's decision to
+  rebuild the lab one.
