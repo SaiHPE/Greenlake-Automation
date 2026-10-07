@@ -16,7 +16,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 
 | ID | Item | Owner | Status | Sheet | Next step / notes |
 |---|---|---|---|---|---|
-| BL-06 | Status workbook refresh | dev | todo | — | After each closed item. |
+| BL-06 | Status workbook refresh | dev | todo | — | Refreshed 2026-10-07 (A.4, B.1, B.4, B.5, B.6, B.9, B.10, replication B.1). Repeat after each closed item. |
 
 ## Test live (built, not yet run on hardware)
 
