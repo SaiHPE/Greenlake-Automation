@@ -1,0 +1,4 @@
+# showsys
+                                                                        ---------------(MiB)----------------
+     ID ------Name------ --------Model--------- --Serial-- Nodes Master TotalCap AllocCap  FreeCap FailedCap
+0x2DEF2 AlletraMP_E18U31 HPE Alletra Storage MP CZ2D3209YV     2      1 29278208  5718406 20854394         0

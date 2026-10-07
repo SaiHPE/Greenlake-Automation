@@ -1,0 +1,9 @@
+# shownet
+IP Address   Netmask/PrefixLen Nodes Active Speed Duplex AutoNeg Status Mode  
+10.64.122.99     255.255.248.0    01      1  1000 Full   Yes     Active Static
+
+Default IPv4 route :                                      10.64.127.254
+Default IPv6 route :                                               None
+NTP server         :                ntp1.bgl1.global.tslabs.hpecorp.net
+DNS server         :                                        10.203.96.9
+Proxy server       :   http://proxy.bgl1.global.tslabs.hpecorp.net:8080

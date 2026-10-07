@@ -95,18 +95,19 @@ The report ends with **Still needs eyes** — the six UI-only changes and the on
 
 Runs only when the runner is given `-PeerHost <ip>` (the peer array; its password is prompted like
 the others) and composes a Replication tab (SPEC-015 R6) onto the base sheet; every single-array
-scenario is unchanged. Lab pair: D22U27 (primary) ↔ E18U31 (peer), already partnered
-(`rcopy_async_test`) — the runner's objects are `zz_rc_*` and nothing else on either array is touched.
+scenario is unchanged. Lab pair: D22U27 (primary) ↔ E18U31 (peer), already partnered with six Sync
+groups (`tests/fixtures/rc_pair/README.md`) — the runner's objects are `zz_rc_*` and nothing else on
+either array is touched.
 
 | # | Scenario | Asserts |
 |---|---|---|
-| 7a | **Read** — Replication step read + check on the existing partnership | peer name read from `showsys`; targets and links read on both arrays, every link `Up`; `rcopy_async_test` listed under *already present*, not in the plan |
+| 7a | **Read** — Replication step read + check on the existing partnership | peer name read from `showsys`; the partnership matched by link addresses on both arrays, every link `Up`; the six existing groups listed under *already present*, not in the plan |
 | 7b | **Protect async** — `zz_rc_test` (1 GiB) on A, row `async` RPO 10 → plan, approve, apply | plan: group *create*, peer set *create*, 0 conflicts; after apply `showrcopy groups zz_rc_test_rcg` on A: Primary/Started, on B: Secondary/Started; period 5 m; volumes Synced within 10 min; `zz_rc_test_rc` on B with 1 volume |
 | 7c | **Rerun** — same sheet, new run | plan: every row *exists*, 0 to create; apply changes nothing (`showrcopy groups` unchanged) |
 | 7d | **Failover test** on `zz_rc_test_rcg` (v0.18) | every SPEC-017 step reaches its expected state; the group ends Primary on A, Secondary on B, Synced |
 | 7e | **Sync** — 7b with `sync` (skipped with a note if the sheet's RTT is > 10 ms) | as 7b, Mode Sync |
 | 7f | **Documents** — as-built | docx has the *Replication* section with the group, the A and B removal blocks, and (v0.18) the failover table |
-| 7g | **Cleanup** — the run's removal set over SSH (A block, then B block) | no `zz_rc_*` group, volume or VV set on either array; `rcopy_async_test` state read before 7b equals state after |
+| 7g | **Cleanup** — the run's removal set over SSH (A block, then B block) | no `zz_rc_*` group, volume or VV set on either array; `showrcopy groups` for the six existing groups read before 7b equals the read after |
 
 ## 5. Limits, stated
 

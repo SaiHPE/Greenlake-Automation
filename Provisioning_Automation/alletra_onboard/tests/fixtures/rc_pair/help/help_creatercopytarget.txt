@@ -1,0 +1,76 @@
+# help creatercopytarget
+creatercopytarget - Create a Remote Copy target.
+
+SYNTAX
+    Syntax for remote copy over IP (RCIP) is as follows:
+
+      creatercopytarget  [options] <target_name> IP [node:slot:port:IP_address...]
+
+    Syntax for remote copy over fibre channel (RCFC) is as follows:
+
+      creatercopytarget  [options] <target_name> FC <node_WWN>
+                        [node:slot:port:WWN...]
+
+DESCRIPTION
+    The creatercopytarget command creates a remote copy target definition.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopytarget_create right
+
+OPTIONS
+    -disabled
+        Create the target in disabled mode
+
+SPECIFIERS
+    <target_name>
+        The name of the target definition to be created, specified by using
+        up to 23 characters.
+
+    <node_WWN>
+        The node's World Wide Name (WWN) on the target system (Fibre
+        channel target only).
+
+    <node:slot:port:IP_address>...
+        Specifies the node, slot, and port of the Ethernet port on the local
+        system and an IP address of the peer port on the target system.
+
+    <node:slot:port:WWN>...
+        Specifies the node, slot, and port of the Fibre Channel port on the
+        local system and World Wide Name (WWN) of the peer port on the target
+        system.
+
+NOTES
+    Access to all domains is required to run this command.
+
+    IP targets are made up of pairs composed of the node, slot and port of the
+    ethernet port on the local system and an IP address of the peer port on the
+    target system.
+
+    FC targets are made up of sets with the node, slot, and port of the FC port
+    on the local system and WWN of the peer port on the target system.  
+
+    It is not permissible to mix IPv4 and IPv6 target addresses for the same IP
+    target.
+
+EXAMPLES
+    The following example creates a target definition named System2 on the
+    primary system, where the Ethernet ports on the primary system are located at
+    0:3:1 and 1:3:1, and the corresponding IP addresses on the backup system
+    are 10.1.1.11 and 10.1.2.11:
+
+        creatercopytarget System2 IP 0:3:1:10.1.1.11 1:3:1:10.1.2.11
+
+    The following example creates a primary target definition named System1
+    on the backup system, where the Ethernet ports on the backup system are
+    located at 2:3:1 and 3:3:1, and the corresponding IP addresses on the
+    primary system are 10.1.1.96 and 10.1.2.96:
+
+        creatercopytarget System1 IP 2:3:1:10.1.1.96 3:3:1:10.1.2.96
+
+    The following example creates a target definition named System2 on the
+    local system where the node WWN of the target system is 20010002AC000060:
+
+        creatercopytarget System2 FC 20010002AC000060 0:4:1:22410002AC000060
+        1:4:1:23410002AC000060
+

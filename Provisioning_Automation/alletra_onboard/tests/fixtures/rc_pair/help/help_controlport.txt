@@ -1,0 +1,495 @@
+# help controlport
+controlport - Controls the characteristics of Fibre Channel, NVMe, File or Remote
+    Copy ports.
+
+SYNTAX
+    The syntax for the controlport command can be one of the following:
+        controlport cl2 <cl2val> [-f] <node:slot:port>... (deprecated usage)
+        controlport config <connmode> [-ct <ctval>]
+                    [-unique_nwwn enable|disable]
+                    [-virt_ports <num_virt_ports>] [-f] [-sysreboot] <node:slot:port>...
+        controlport ct <ctval> [-f] <node:slot:port>... (deprecated usage)
+        controlport ethernet pause {on|off} [-f] <node:slot:port>...
+        controlport ethernet dcb {on|off} [-f] <node:slot:port>...
+        controlport file addr [-f] <ip_addr> <prefix_len> [-vlan <vlan_tag>] <node:slot:port>
+        controlport file delete [-f] [-vlan <vlan_tag>] <node:slot:port>
+        controlport file gw [-f] <gateway_address>|delete <node:slot:port>
+        controlport file mtu <mtu> <node:slot:port>
+        controlport file ping [-c <count>|-w <wait>|-s <size>|-vlan <vlan_tag>|-pf] <ip_addr> <node:slot:port>
+        controlport file state {up|down} [-f] <node:slot:port>
+        controlport intcoal <intcoalval> [-f] <node:slot:port>...
+        controlport label <port_label> [-f] <node:slot:port>...
+        controlport lip [-c <cagename>] [-portwwn <wwn>] [-f] <node:slot:port>...
+        controlport login <portwwn> [-f] <node:slot:port>...
+        controlport logout <portwwn> [-f] <node:slot:port>...
+        controlport nssync [-f] <node:slot:port>...
+        controlport nvme addr [-f] <ip_addr> <prefix_len> [-vlan <vlan_tag>] <node:slot:port>
+        controlport nvme delete [-f] [-vlan <vlan_tag>] <node:slot:port>...
+        controlport nvme gw [-f] <gateway_addr> [-vlan <vlan_tag>] <node:slot:port>...
+        controlport nvme mtu [-f] <mtu> <node:slot:port>...
+        controlport nvme ping [-c <count>|-w <wait>|-s <size>|-vlan <id>|-pf] <ip_addr> <node:slot:port>
+        controlport offline <node:slot:port>...
+        controlport rate <rateval> [-f] <node:slot:port>...
+        controlport rcfc delete [-f] <node:slot:port>
+        controlport rcfc init [-f] <node:slot:port>
+        controlport rcip add [-f] <IP_address> {<netmask>|<prefix_len>} <node:slot:port>...
+        controlport rcip addr [-f] <IP_address> {<netmask>|<prefix_len>} <node:slot:port>...
+        controlport rcip delete [-f] [{-v4|-v6}] <node:slot:port>...
+        controlport rcip gw [-f] <gateway_address> <node:slot:port>...
+        controlport rcip mtu <MTU_size> <node:slot:port>...
+        controlport rcip ping [-c <count>|-w <wait>|-s <size>|-pf]
+	            <IP_address> <node:slot:port>...
+        controlport rcip speed auto <node:slot:port>...
+        controlport rcip speed <value> {half|full} <node:slot:port>...
+        controlport rcip state {up|down} [-f] <node:slot:port>...
+        controlport rst [-m <mode>|-l|-i] [-f] <node:slot:port>...
+        controlport tmwo (enable|disable) [-f] <node:slot:port>...
+        controlport vcn <vcnval> [-f] <node:slot:port>...
+
+SUBCOMMANDS
+    cl2
+        Specifies the Fibre Channel Class-2 parameter of the port. The specified
+        port will be reset. Note that this subcommand is deprecated and will be
+        removed in a subsequent release.
+    config
+        Sets the specified connection mode and type on FC ports. Also allows
+        setting the unique node WWN option for the port. When unique_nwwn is
+        enabled, the port presents a unique node name on the connection, which
+        is needed by certain initiators such as ONTAP. This command is also used
+        to configure the mode of a CNA port. When configuring a peer port,
+        the command can be used to create or remove virtual peer ports.
+    ct
+        Sets the connection type. The specified port will be reset.
+        Note that this subcommand is deprecated and will be removed in a subsequent
+        release.
+    ethernet pause {on|off}
+        Enables or disables Ethernet Pause on NVMe/TCP and iSCSI ports.
+    ethernet dcb {on|off}
+        Enables or disables Ethernet DCB Priority Flow Control on NVMe/TCP and iSCSI ports.
+    file addr
+        Sets or updates the given File interface to use the specified IP address
+        and prefix length. Each interface can have one IPv4 address configured.
+        The interface should have been brought offline before updating the
+        IP address.
+    file delete
+        Deletes the configuration for the given File interface.
+    file gw
+        Sets the gateway for all configured File interfaces, as the gateway
+        will be common for all File interfaces. It is sufficient to specify
+        any one of the File interfaces on the command line. Each of the
+        configured File interfaces should have been brought offline before
+        updating the gateway.
+    file mtu
+        Sets the Maximum Transfer Unit (MTU) size for the specified File
+        interface, overriding the default of 1500. The largest supported
+        value is 9000 and the smallest is 1280. The interface should have been
+        brought offline before updating the MTU.
+    file ping
+        Performs a ping from the specified interface to the specified address.
+        Only for File ports.
+    file state {up|down}
+        Sets the specified File interface(s) as either up or down. Only
+        for File ports.
+    intcoal
+        Enables or disables interrupt coalescing. The specified port will be
+        reset.
+    label
+        Associates a human-readable label with the port. This sub-command is
+        not supported with RCIP ports.
+    lip
+        Specifies that a Loop Initialization Primitive (LIP) command is issued
+        from the port if there is a private loop topology. If the -c option is
+        specified, then the LIP command is issued through the specified drive
+        cage.If there is a point-to-point topology, then the link is reset. If
+        there is a public loop or fabric topology, then a Registered State
+        Change Notification (RSCN) is issued to the fabric controller. If the
+        -portwwn option is specified, then a selective LIP or RSCN is issued to
+        the specified attached port.
+    login
+        Performs Fibre Channel login to an attached port, identified by port
+        WWN.
+    logout
+        Performs Fibre Channel logout from an attached port, identified by port
+        WWN.
+    nssync
+        Verifies current port database against the Name Server when a fabric is
+        attached. Entries present in the database but missing from the Name
+        Server are removed. Using this command is not required under normal
+        circumstances.
+    offline
+        Holds the specified port offline indefinitely. Issue controlport rst to
+        bring the port back online.
+    rate
+        Specifies the data rate of the Fibre Channel or iSCSI port. The specified port
+        will be reset.
+    rcfc delete
+        Deletes the configuration for the Remote Copy interface on the local
+        port. This will bring the interfaces down.
+    rcfc init
+        Sets the specified Remote Copy interface on the local port. Only for
+        RCFC ports.
+    rcip add
+        Configures the given network port for Remote Copy with the specified IP
+        address and netmask or prefix length.
+    rcip addr
+        Sets the given Remote Copy interface to use the specified IP address and
+        netmask or prefix length. Each interface can have one IPv4 and one IPv6
+        address configured.
+    rcip delete
+        Deletes the configuration for one or more specified Remote Copy
+        interfaces and specified IP address type(v4/v6). If a version is not
+        specified, then both v4 and v6 configurations are deleted.
+    rcip gw
+        Sets the gateway for one or more Remote Copy interfaces. Each interface
+        can set one gateway for IPv4 (if IPv4 address configured) and one gateway
+        for IPv6 (if IPv6 address configured). Only for RCIP ports.
+    rcip mtu
+        Sets the Maximum Transfer Unit (MTU) size for the specified Remote Copy
+        interface(s), overriding the default of 1500. The largest supported
+        value is 9000 and the smallest is 1000.  Only for RCIP ports.
+    rcip ping
+        Performs a ping from the specified interface to the specified address.
+        Only for RCIP ports. Permitted for Super, Service, Edit, and Browse
+        users.
+    rcip speed
+        Instructs the specified Remote Copy interface(s) to use the specified
+        speed and duplex, or to auto negotiate speed and duplex. The default is
+        auto. Only for RCIP ports.
+    rcip state {up|down}
+        Sets the specified Remote Copy interface(s) as either up or down. Only
+        for RCIP ports.
+    rst
+        Resets a port. This subcommand is not applicable to RCIP ports.
+    tmwo
+        Enables or disables target mode write optimization. The specified port
+        will be reset.
+    vcn
+        Sets the VLUN Change Notification (VCN) generation support (enable or
+        disable). When VCN generation support is enabled with a public loop or
+        fabric topology, a RSCN message is issued to the fabric controller whenever
+        a VLUN is created or removed. In addition, if enabled with a public loop
+        topology, a LIP is issued from the port whenever a VLUN is created
+        or removed.
+
+DESCRIPTION
+    The controlport command controls all aspects of a Fibre Channel, NVMe, File or
+    Remote Copy port, including the port's connection type and data rate. The
+    controlport rcip and controlport rcfc commands are required for setting up
+    Remote Copy interfaces.
+
+AUTHORITY
+    Super, Service
+    Any role granted the port_control right
+
+OPTIONS
+    -c
+        When used with the lip subcommand:
+        -c <cage_name>
+            If using a private loop topology, a LIP command is issued from
+            the port. If a cage is specified using the <cage_name> argument,
+            the LIP is issued through the cage controller.
+
+            If using a point-to-point topology, the link is reset.
+
+            If using a public loop or fabric topology, a RSCN message is issued
+            to the fabric controller.
+
+        When used with the rcip ping or file ping subcommands:
+        -c <count>
+            Specifies the number of replies accepted by the system before
+            terminating the command. The default is 1; the maximum value is 25.
+
+    -ct
+        Sets the connection type. The specified port will be reset.
+
+    -f
+        Specifies that the command is forced. If this option is not used, the
+        command requires confirmation before proceeding with its operation.
+
+    -i
+        Forces a mode change for a port even if the port's mode change value is
+        prohibited. The partner port's mode is changed with this option as
+        well. Use with the controlport rst command. This option cannot be used
+        with the -l option.
+
+    -l
+        Forces the port to reload firmware. This option can only be used with
+        the rst subcommand and cannot be used with the -i option.
+
+    -m <mode>
+        This option can only be used with the rst subcommand. Resets the mode of
+        the port. The port can be reset to a target or initiator mode. If not
+        specified, the port is reset to its current mode. If the port's mode
+        change value is prohibited, this command fails when attempting to reset
+        to a different mode. Use showport -c to see whether mode change is
+        allowed or prohibited for a particular port. See NOTES for additional
+        information regarding port pair protection. This option is deprecated
+        and will be removed in a later release. Use controlport config to
+        set target (host) or initiator (disk) modes.
+
+    -pf
+        Prevents packet fragmentation. This option can only be used with the
+        rcip ping or file ping subcommands.
+
+    -portwwn <wwn>
+        Specifies the Fibre Channel worldwide port name of an attached device
+        for which selective LIP reset will be performed.
+
+    -s <size>
+        Specifies the packet size. If no size is specified, the option defaults
+        to 64. This option can only be used with the rcip ping or file ping
+        subcommands.
+
+    -sysreboot
+        Causes reboot of the array. This option is required only when switching
+        out of or into File mode.
+
+    -unique_nwwn enable|disable
+        Enable or disable the use of a unique node wwn on the specified port.
+
+    -virt_ports <num_virt_ports>
+        Specifies the creation/removal of virtual peer ports while
+        configuring a port using the controlport config peer command.
+
+        If the number of virtual peer ports specified is greater than
+        the number of existing virtual peer ports, then additional virtual
+        peer ports will be created to match the total num_virt_ports.
+        The maximum number of virtual peer ports that can be created is 8.
+        The showport -peer command displays the virtual peer ports.
+
+        If the number of virtual peer ports specified is zero, then the virtual
+        peer ports are removed.
+
+    -vlan
+        Specifies the VLAN tag number (1 to 4094).
+
+    -w <wait>
+        Specifies the maximum amount of time to wait for replies. The default is
+        the number of requested replies plus 5. The maximum value is 30. This
+        option can only be used with the rcip ping or file ping subcommands.
+
+    -v4
+        Specifies whether only the IPv4 address is to be deleted. This option
+        can only be used with the rcip delete subcommand.
+
+    -v6
+        Specifies whether only the IPv6 address is to be deleted. This option
+        can only be used with the rcip delete subcommand.
+
+SPECIFIERS
+    <cl2val>
+        Specifies the Fibre Channel Class-2 parameter of the port. Parameters
+        can be one of ack0, ack1, or disable. This specifier must be provided
+        when issuing the cl2 subcommand.
+        Note that this specifier is deprecated and will be removed in a subsequent
+        release.
+
+    <connmode>
+        Specifies whether the port is used for a disk, host, peer, Remote Copy
+        over Fibre Channel (rcfc) or iSCSI (iscsi) or Eth (iscsi/Eth CNA only)
+        or NVMe (nvme) or File (file). This specifier must be used when issuing
+        the config command.
+
+    <ctval>
+        Specifies the connection parameter of the port. Parameters can be loop,
+        or point. The loop parameter sets the port to arbitrated loop mode,
+        the point parameter sets the port to point-to-point mode. This
+        specifier must be provided when issuing the ct subcommand.
+
+    <gateway_address>
+        Specifies the gateway address for a Remote Copy interface.
+
+    <impval>
+        Specifies the IMP port attribute. The IMP value can be set as enable or
+        disable. This specifier must be used when issuing the imp subcommand.
+
+    <intcoalval>
+        Specifies if interrupt coalescing is enabled or disabled. The value can
+        be set as enable or disable. This specifier must be used with the
+        intcoal subcommand.
+
+    <IP_address>
+        Specifies the IP address for a Remote Copy interface.
+
+    <MTU_size>
+        Specifies the MTU size for a Remote Copy interface using an integer from
+        1000 through 9000.
+
+    <netmask>
+        Specifies the netmask for a Remote Copy interface. This specifier can
+        only be used when <IP_address> is of IPv4 type.
+
+    <prefix_len>
+        Specifies the prefix length for a Remote Copy interface. This specifier
+        can only be used when <IP_address> is of IPv6 type.
+
+    <node:slot:port>
+        Specifies the port to be controlled.
+            node
+                Specifies the node using a number between 0 and 7.
+            slot
+                Specifies the PCI slot in the specified node.
+                Valid range is 0 - 9.
+            port
+                Specifies the port using a number from 1 through 4.
+
+    <port_label>
+        Specifies the value of the port label. The port label value is a
+        human-readable string used for easy identification of the port.
+
+    <portwwn>
+        Specifies the Fibre Channel worldwide port name of an attached port.
+        This specifier is used with the login and logout subcommands.
+
+    <rateval>
+        Specifies the data rate of the Fibre Channel port. Rates can be 4, 8,
+        16, 32, 64 or auto. 4 sets the data rate to 4 Gbps. And similarly for
+        the other rates.
+        The auto parameter sets the port to auto detect the data rate. This
+        specifier must be used when issuing the rate subcommand.
+
+    <target>
+        IP address or name of the target host.
+
+    <value> {half|full}
+        Use only with the rcip speed subcommand. Specifies the speed setting
+        (1000) and duplex setting (half or full) for a Remote Copy
+        interface. In addition to this specifier, you must also specify an
+        interface using <node:slot:port>. If no speed or duplex settings are
+        specified, or if you specify auto with the rcip speed subcommand, the
+        system auto-negotiates the speed and duplex.
+
+    <vcnval>
+        Specifies the value of the VCN. The VCN value can be set to enable or
+        disable. This specifier must be used when issuing the vcn subcommand.
+
+NOTES
+    Access to all domains is required to run this command.
+
+    The -m <mode> option for the rst subcommand cannot be specified if there
+    are active connections already using the port (port online) except as noted
+    in the following section under port pair protection.
+
+    Port pair protection:
+        For dual-port LSI Fibre Channel adapters, both ports in the pair
+        must use the same mode (initiator or target).
+
+        For quad-port LSI Fibre Channel adapters, each port pair (ports 1
+        and 2, ports 3 and 4) must use the same mode.
+
+        Changing the mode of one port in a pair (for example, from initiator
+        to target) causes the other port in the pair to undergo a mode
+        as well.
+
+    If there are active hosts or physical disks when issuing the controlport
+    rst or offline commands, a warning is returned and you are prompted for
+    confirmation to complete the execution of the commands.
+
+    When issuing the controlport ct, cl2, rate, or vcn commands, if there are
+    active disks on the port, an error is returned. If there are active hosts
+    on the port, the -f option is overridden (if specified), a warning is
+    returned, and you are prompted for confirmation to complete the execution
+    of the commands.
+
+    When issuing the controlport cl2 or vcn commands, if the port is configured
+    as peer connection mode, an error is returned.
+
+    The controlport rcip add command is only allowed for node/slot/port
+    combinations where there is an interface installed.
+
+    The controlport rcip addr command is only allowed for node/slot/port
+    combinations where there is an interface installed.
+
+    Controlport config mode changes are not allowed when ports are online.
+
+    Removing virtual peer ports through controlport config peer -virt_ports 0
+    is not allowed when the port is online.
+
+    Controlport config nvme command changes the port from iSCSI or File to NVMe
+    on all nodes in the array following array reboot.
+
+    Controlport config iscsi command changes the port from NVMe or File to iSCSI
+    on all nodes in the array following array reboot.
+
+    Controlport config file command changes the port from iSCSI or NVMe to File
+    on all nodes in the array following array reboot.
+
+    The ct, cl2, or rate subcommands automatically resets the port for
+    the changes to take effect.
+
+    Issue the showport command with either the -i or -par options to verify the
+    success of the controlport command.
+
+    Resetting a port causes a momentary dip in throughput, but no loss of
+    connectivity.
+
+    The -f flag forces the operation. Without the flag, the command prompts
+    for confirmation. In some cases, unless the TPDFORCE_OVERRIDE environment
+    variable is set, the command will ask for confirmation even if the -f flag
+    is specified because the operation may disrupt the system operation.
+
+    Use caution when changing modes for ports in LSI Fibre Channel adapters.
+    Changing the mode of one port in a pair (for example, from initiator to
+    target) causes the other port in the pair to also undergo a mode change. In
+    the case where one port in the pair is offline (and therefore a mode change
+    can be allowed), but the partner port is online, changing the mode of the
+    offline port causes the online partner port to undergo mode change as well.
+    This results in loss of use of the partner port because it is no longer
+    online.
+
+    Issuing the controlport rst -l command affects both ports of a port pair.
+    Only use this command when irreversible damage has been done to a port or
+    port pair.
+
+    if specified, <ctval> will depend on <connmode> value:
+    if <connmode> is "disk" then <ctval> can only be "loop".
+    if <connmode> is "rcfc", then <ctval> can only be "point".
+    if <connmode> is "host", then <ctval> can be either "loop" or "point".
+    if <connmode> is "peer", then <ctval> can only be "point".
+    if <connmode> is "iscsi", then <ctval> can only be "point".
+
+EXAMPLES
+    The following example shows how to increase MTU to 9000 on Ethernet port
+    in node 0, slot 1:
+
+        cli% controlport rcip mtu 9000 0:1:1
+        Remote Copy change successful.
+
+    The following example shows how to set Remote Copy interface on Ethernet
+    port in node 0, slot 1, configure IP address 172.16.1.11 using a netmask
+    of 255.255.255.0:
+
+        cli% controlport rcip addr 172.16.1.11 255.255.255.0 0:1:1
+        Are you sure you want to change the address for 0:1:1?
+        select q=quit y=yes n=no: y
+        Remote Copy interface change successful.
+
+    The following example shows how to set Remote Copy interface on Ethernet
+    port in node 0, slot 1, configure IP address 2ff7:2:ac01:0:172:16:1:11
+	using a PrefixLen of 64:
+
+        cli% controlport rcip addr 2ff7:2:ac01:0:172:16:1:11 64 0:1:1
+        Are you sure you want to change the address for 0:1:1?
+        select q=quit y=yes n=no: y
+        Remote Copy interface change successful.
+
+    The following example shows how to set the gateway for Ethernet port
+    in node 0, slot 1 using a gateway address of 172.16.1.1:
+
+        cli% controlport rcip gw 172.16.1.1 0:1:1
+        Are you sure you want to change the gateway for 0:1:1?
+        select q=quit y=yes n=no: y
+        Remote Copy interface change successful.
+
+    The following examples show usage of controlport config:
+        controlport config host -ct point 1:3:1
+        controlport config host -unique_nwwn enable 1:2:3
+        controlport config rcfc 0:0:1
+        controlport config disk 2:2:2
+        controlport config iscsi 1:5:1
+        controlport config eth   1:5:1
+        controlport config peer -ct point 1:5:1
+        controlport config peer -virt_ports 8 3:2:1
+        controlport config nvme 1:4:1
+        controlport config file 0:4:1
+

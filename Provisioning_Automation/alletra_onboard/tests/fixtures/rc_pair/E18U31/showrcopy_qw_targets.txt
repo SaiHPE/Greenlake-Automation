@@ -1,0 +1,9 @@
+# showrcopy -qw targets
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name             ID Type Status Policy        QW-Server QW-Ver Q-Status Q-Status-Qual ATF-Timeout
+AlletraMP_E18U31  3 IP   ready  mirror_config NA        NA     NA       NA                     NA

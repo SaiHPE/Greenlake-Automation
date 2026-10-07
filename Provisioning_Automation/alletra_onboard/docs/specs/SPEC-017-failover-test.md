@@ -49,9 +49,10 @@ or reverse natural*; *Primary-Rev/Stopped + Secondary/Stopped → reverse local 
 does **not** run those recovery actions automatically — it shows them, as CLI lines.
 
 `restore` alone would run the recover implicitly (captured help); the test runs step 4 separately so
-the sync back to P is measured on its own. The action codes and their mapping to the CLI verbs are
-confirmed against the BL-38 `GET /remotecopygroups/rcopy_async_test` and the array's WSAPI version
-before implementation; the sequence is not.
+the sync back to P is measured on its own. WSAPI 1.15 on both lab arrays serves `/remotecopygroups`
+with `role` 1 Primary / 2 Secondary (BL-38 fixtures); the action codes' mapping to the CLI verbs comes
+from the client's own documentation and is observed live on the test group before any production
+group is offered. The sequence is not up for confirmation.
 
 **R3 — Measured, not assumed.** The record captures: start/end time of each step, the roles and
 status read after each, time to Primary-Rev (failover), time to Synced after recover, and — for

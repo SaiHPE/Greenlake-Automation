@@ -1,0 +1,10 @@
+# showrcopy groups rcopy_async_test
+
+Remote Copy System Information
+Status: Started, Normal
+
+Group Information
+
+
+# stderr
+Error: group matching rcopy_async_test does not exist on the system
