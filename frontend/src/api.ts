@@ -274,6 +274,7 @@ export interface ZoningReport {
   proper: boolean;
   zoned_hosts: string[];     // per-host provisioning gate; other hosts are skipped by name
   unverified_hosts: string[]; // expected hosts seen on neither fabric — not zoned OR offline
+  iscsi_hosts?: Record<string, string[]>; // iSCSI-only host -> array ports its IQN is logged in on ([] = not)
   source: string;             // 'array' — verified from showportdev ns, no switch
   notes: string[]; error: string | null;
 }

@@ -1430,11 +1430,22 @@ def test_an_iscsi_host_logged_in_on_the_array_passes_the_export_gate():
                       ArrayHost(name="ESX9-iscsi", persona="VMware", iqns={idle: []})]
     report = zoning.build_report(_intent(members=["esx1", "ESX1-iscsi", "ESX9-iscsi"]), d)
     assert report.zoned_hosts == ["esx1", "ESX1-iscsi"]
+    assert report.iscsi_hosts == {"ESX1-iscsi": ["0:4:1", "1:4:1"], "ESX9-iscsi": []}   # BL-32: the gate table's rows
+    assert not report.proper                                                            # ESX9's IQN is not logged in
     assert any("ESX1-iscsi: iSCSI, logged in on 0:4:1, 1:4:1" in n for n in report.notes)
     assert any("ESX9-iscsi: iSCSI, IQN not logged in" in n for n in report.notes)
     plan = prov.build_plan(_intent(members=["ESX1-iscsi"]), d, reachable_hosts=set(report.zoned_hosts),
                            wsapi_factory=lambda c: FakeWsapi())
     assert [a for a in plan.actions if a.kind == "vlun"] and not any("held back" in n for n in plan.notes)
+
+
+def test_a_run_of_only_logged_in_iscsi_hosts_reads_as_proper():
+    """BL-32: with no FC host in the run, `expected` is empty; the iSCSI logins alone decide."""
+    d = _disc_for_zoning([])
+    d.array_hosts += [ArrayHost(name="ESX1-iscsi", persona="VMware", iqns={"iqn.x:esx1": ["0:4:1", "1:4:2"]})]
+    report = zoning.build_report(_intent(members=["ESX1-iscsi"]), d)
+    assert report.expected == [] and report.iscsi_hosts == {"ESX1-iscsi": ["0:4:1", "1:4:2"]}
+    assert report.proper and report.zoned_hosts == ["ESX1-iscsi"]
 
 
 # ---------------- port roles: file + replication (real captures, 2026-09-02) ----------------

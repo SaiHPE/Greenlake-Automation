@@ -20,6 +20,7 @@ interface HostRow {
   host: string;
   odd: boolean;
   even: boolean;
+  iscsi?: string[];   // iSCSI-only: the array ports its IQN is logged in on; no zone needed
 }
 
 /** What a re-check changed, in the operator's words: the loop is design → SAN team applies →
@@ -31,6 +32,11 @@ function describeChange(before: HostRow[], after: HostRow[]): string | null {
   after.forEach((r) => {
     const p = prev.get(r.host);
     if (!p) { if (r.odd || r.even) gained.push(`${r.host} (new)`); return; }
+    if (r.iscsi) {
+      if (r.odd && !p.odd) gained.push(`${r.host} iSCSI now logged in`);
+      if (!r.odd && p.odd) lost.push(`${r.host} iSCSI no longer logged in`);
+      return;
+    }
     const fabrics: string[] = [];
     if (r.odd && !p.odd) fabrics.push('F1');
     if (r.even && !p.even) fabrics.push('F2');
@@ -63,6 +69,9 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
     const host = zone.name.replace(/_(odd|even)$/, '');
     byHost[host] = byHost[host] ?? { host, odd: false, even: false };
     byHost[host][zone.fabric] = zone.present;
+  });
+  Object.entries(report?.iscsi_hosts ?? {}).forEach(([host, ports]) => {
+    byHost[host] = { host, odd: ports.length > 0, even: ports.length > 0, iscsi: ports };
   });
   const rows = Object.values(byHost);
   const outstanding = rows.filter((row) => !row.odd || !row.even).length;
@@ -166,8 +175,8 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
 
       {rows.length > 0 && (
         <Surface
-          title="Provisioning gate — hosts zoned on both fabrics (array view)"
-          description="Read from the array's logins. A host is provisioned in this run only when both columns show Zoned."
+          title="Provisioning gate — hosts the array can reach (array view)"
+          description="Read from the array's logins. An FC host is provisioned in this run only when both fabric columns show Zoned; an iSCSI host needs no zone, only its IQN logged in on the array."
         >
           <DataTable
             columns={[
@@ -175,24 +184,35 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
               {
                 property: 'odd',
                 header: 'Fabric F1 (odd)',
-                render: (row: HostRow) => (
-                  <StatusIndicator state={row.odd ? 'complete' : 'failed'} label={row.odd ? 'Zoned' : 'Not zoned'} />
-                ),
+                render: (row: HostRow) =>
+                  row.iscsi ? (
+                    <StatusIndicator
+                      state={row.iscsi.length ? 'complete' : 'failed'}
+                      label={row.iscsi.length ? 'iSCSI — no zoning needed' : 'iSCSI — IQN not logged in'}
+                    />
+                  ) : (
+                    <StatusIndicator state={row.odd ? 'complete' : 'failed'} label={row.odd ? 'Zoned' : 'Not zoned'} />
+                  ),
               },
               {
                 property: 'even',
                 header: 'Fabric F2 (even)',
-                render: (row: HostRow) => (
-                  <StatusIndicator state={row.even ? 'complete' : 'failed'} label={row.even ? 'Zoned' : 'Not zoned'} />
-                ),
+                render: (row: HostRow) =>
+                  row.iscsi ? (
+                    <Text size="small" color="text-weak">
+                      {row.iscsi.length ? `logged in on ${row.iscsi.join(', ')}` : '—'}
+                    </Text>
+                  ) : (
+                    <StatusIndicator state={row.even ? 'complete' : 'failed'} label={row.even ? 'Zoned' : 'Not zoned'} />
+                  ),
               },
             ]}
             data={rows}
             primaryKey="host"
-            a11yTitle="Zoning check: one row per host with its state on each fabric"
+            a11yTitle="Zoning check: one row per host with its state on each fabric, or its iSCSI login"
           />
           <TableSummary>
-            {rows.length - outstanding} of {rows.length} hosts zoned on both fabrics
+            {rows.length - outstanding} of {rows.length} hosts can be provisioned
           </TableSummary>
         </Surface>
       )}
