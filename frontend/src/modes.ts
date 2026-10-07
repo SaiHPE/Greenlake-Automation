@@ -3,7 +3,7 @@
 // are SERVED by the backend (GET /app/profile — single source of truth: domain/workflow.py). This
 // module keeps only presentation extras (subtitles, mode labels/blurbs) and helpers over served data.
 
-export type RunMode = 'FULL_ONBOARDING' | 'PROVISION_ONLY' | 'BOTH' | 'VERIFY_ONLY' | 'CUSTOM';
+export type RunMode = 'FULL_ONBOARDING' | 'PROVISION_ONLY' | 'BOTH' | 'REPLICATE' | 'VERIFY_ONLY' | 'CUSTOM';
 
 export type ActionKey =
   | 'greenlake'
@@ -12,6 +12,8 @@ export type ActionKey =
   | 'discover'
   | 'zoning'
   | 'provision'
+  | 'replicate'
+  | 'failover_test'
   | 'verify'
   | 'asbuilt';
 
@@ -19,7 +21,7 @@ export type ActionKey =
 export interface ServedStep {
   key: ActionKey;
   label: string;
-  kind: 'init' | 'provision' | 'verify';
+  kind: 'init' | 'provision' | 'replicate' | 'verify';
   phase: string;
 }
 
@@ -36,6 +38,8 @@ const STEP_SUBTITLES: Record<ActionKey, string> = {
   discover: 'Array ports, host adapters, fabric logins',
   zoning: 'Verify and draft switch commands',
   provision: 'Hosts, volumes and exports',
+  replicate: 'Remote Copy groups to the peer array',
+  failover_test: 'Fail over, recover, restore',
   verify: 'Read-only configuration check',
   asbuilt: 'Handover document',
 };
@@ -54,12 +58,18 @@ export interface ModePreset {
   mode: RunMode;
   label: string;
   blurb: string;
+  /** The workbook tab this mode cannot run without (SPEC-015 R4). */
+  needs?: 'replication';
 }
 
 export const MODE_PRESETS: ModePreset[] = [
   { mode: 'FULL_ONBOARDING', label: 'Full onboarding', blurb: 'GreenLake → Cloud Connectivity → DSCC, then verify. For a brand-new array.' },
   { mode: 'PROVISION_ONLY', label: 'Provision storage only', blurb: 'Discovery, zoning, and host + LUN provisioning on an already-initialised array.' },
   { mode: 'BOTH', label: 'Onboard, then provision', blurb: 'The full chain end to end: initialise the array, then provision storage.' },
+  {
+    mode: 'REPLICATE', label: 'Provision, then replicate', needs: 'replication',
+    blurb: 'Discovery, zoning and provisioning, then Remote Copy of the new volume sets to a peer array and a failover test. Needs the workbook’s Replication tab.',
+  },
   { mode: 'VERIFY_ONLY', label: 'Verify only', blurb: 'A read-only verification of the array configuration and status.' },
   { mode: 'CUSTOM', label: 'Custom…', blurb: 'Pick exactly the steps to run.' },
 ];

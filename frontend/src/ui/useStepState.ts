@@ -60,6 +60,9 @@ const SIGNALS: Record<string, Signals> = {
   },
   verify: { complete: ['verify.completed'], gate: [] },
   asbuilt: { complete: ['asbuilt.generated'], gate: [] },
+  // SPEC-016: the preview is the gate (approve, or resolve the findings); apply completes the step.
+  replicate: { complete: ['replication.applied'], gate: ['replication.previewed'], ignore: ['replication.verified'] },
+  failover_test: { complete: ['failover.completed'], gate: [] },
 };
 const DEFAULT_SIGNALS: Signals = { complete: ['step.completed'], gate: [] };
 
@@ -171,6 +174,12 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
     }
     case 'asbuilt.generated':
       return 'document ready';
+    case 'replication.previewed': {
+      const blockers = list(deciding.data?.plan?.blockers).length;
+      return blockers ? `${blockers} finding${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
+    }
+    case 'replication.applied':
+      return 'replication configured';
     default:
       return '';
   }

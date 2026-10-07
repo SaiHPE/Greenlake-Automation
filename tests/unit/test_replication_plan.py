@@ -165,6 +165,13 @@ def test_plan_creates_the_group_the_peer_set_and_the_test_objects_with_wsapi_and
     assert "volumeAutoCreation: true" in g.calls[2].wsapi
     peer_set = by[("peer_vvset", "zz_rc_vvs_rc")]
     assert peer_set.state == "create" and peer_set.where == "B" and peer_set.calls[0].cli == "createvvset zz_rc_vvs_rc zz_rc_vol01 zz_rc_vol02"
+    # R4 order across the whole plan: test objects first; per group create → policies → admits → the
+    # peer set that groups the secondaries → start; every call numbered once, in that order.
+    ordered = sorted((c for x in plan.actions for c in x.calls), key=lambda c: c.seq)
+    assert [c.seq for c in ordered] == list(range(1, len(ordered) + 1))
+    clis = [c.cli for c in ordered]
+    assert clis.index("createvvset zz_rc_vvs_rc zz_rc_vol01 zz_rc_vol02") < clis.index("startrcopygroup zz_rc_vvs_rcg")
+    assert clis[0].startswith("createvv -tpvv") or clis[0].startswith("createvvset zz_rc_test ")
     # the failover test's own objects (SPEC-015 R3): volume + set on A, group, peer set on B
     assert by[("test_volume", TEST_VOLUME)].state == "exists"       # already on the array in _SHOWVV_A
     assert by[("test_vvset", TEST_VVSET)].state == "create"

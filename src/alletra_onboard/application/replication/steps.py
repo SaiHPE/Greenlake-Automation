@@ -86,7 +86,7 @@ class ReplicationSteps:
                        "nothing can be configured until they are resolved.")
         else:
             summary = (f"Read {a_name} and {b_name} — plan ready: {creates} to create, {exists} already there. "
-                       "Review, then confirm to configure replication.")
+                       "Review the plan.")
         coord.set_state(run, RunStatus.WAITING_FOR_OPERATOR, phase)
         coord.emit(run.run_id, phase, "replication.previewed", summary,
                    data={"report": report.model_dump(mode="json"), "plan": plan.model_dump(mode="json")})
