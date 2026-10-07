@@ -193,6 +193,19 @@ The five questions in the 09-19 research §8 stand. The evidence now supports th
 
 If you agree with the defaults, SPEC-015 (sheet + paired runs) can be written without further research.
 
+### 6.1 Operator decisions (2026-10-07) — what the specs follow
+
+| # | Decision | Recorded in |
+|---|---|---|
+| 1 | Paired runs from one workbook — as proposed | ADR 0014, SPEC-015 |
+| 2 | Async (periodic) default, RPO 10 min → period 5 min; sync selectable — as proposed. **Async and sync first**; every other type refused | SPEC-015 R3/R4 |
+| 3 | DSCC protection-policy API first; fallback is the CLI **issued by the tool** (not a command set); CLI always printed | ADR 0015 §4, SPEC-016 R5 |
+| 4 | Failover test **required**. Own test group by default, typed confirmation for production. **Changed:** not `switchover` — the captured `setrcopygroup -h` says switchover needs hosts connected to both arrays with an RTPG persona (the Peer Persistence topology, out of scope). The test is **failover → recover → restore** | SPEC-017 |
+| 5 | Snapshot-only protection — **deferred** to BL-21 (sync and async first) | SPEC-015 §3 |
+| 6 | RTT — operator-entered, refused over the limits as proposed; **changed:** the tool runs `controlport rcip ping` itself before creating targets | ADR 0015, SPEC-016 R4 |
+| 7 | Links and targets — **reversed:** the tool configures them. Switch command sets exist because switches are heterogeneous; both ends here are B10000 arrays with one CLI dialect | ADR 0015 |
+| 8 | `mirror_config` start order — as proposed | SPEC-016 R4 |
+
 ## 7. First live action — unchanged, now with a file list
 
 Read-only capture on **both lab arrays** (D22U27 ↔ E18U31, which already replicate: group

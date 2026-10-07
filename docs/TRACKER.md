@@ -18,6 +18,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 |---|---|---|---|---|---|
 | BL-37 | Submit and publish the two canned demos (needed for tenet approval, BL-30) | Sai | doing | B.9 | 2026-10-07: initialization-track demo — submission in progress; discovery → zoning → provisioning → as-built demo (edited 6:02 cut) — not yet submitted. Neither published. |
 | BL-06 | Status workbook refresh | dev | todo | — | Refreshed 2026-10-07 (A.4, B.1, B.4, B.5, B.6, B.9, B.10, replication B.1). Repeat after each closed item. |
+| BL-38 | Read-only capture of the lab replication pair (fixtures before any replication code) | Sai | todo | Replication B.1 | labrat → D22U27 (10.64.122.99) and E18U31 (10.64.154.190) over SSH, the command list in SPEC-016 §4 / research 2026-10-07 §7, plus every `setrcopygroup`/`creatercopygroup`/`admitrcopyvv`/`creatercopytarget`/`controlport` `-h` (option spellings for SPEC-016/017). Output files → `tests/fixtures/rc_pair/`. Nothing written. |
 
 ## Test live (built, not yet run on hardware)
 
@@ -29,7 +30,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 
 | ID | Item | Area | Status | Sheet | Notes |
 |---|---|---|---|---|---|
-| BL-20 | Replication (Remote Copy) | 5 | todo | Replication B.1 | Research: `docs/research/2026-09-19-replication-two-arrays.md` (design options, run model C, decisions) + `docs/research/2026-10-07-replication-document-review.md` (the Aug-2026 ED8 HPE guides, Support Matrix limits, captured CLI help, DSCC protection-policy API; errors in two AI-written guides listed). **Eight decisions proposed with defaults (addendum §6) — need the operator's yes/no before SPEC-015.** Lab pair: AlletraMP_D22U27 ↔ AlletraMP_E18U31 (already replicating: group `rcopy_async_test`; RCIP 10.54.122.92/.93 ↔ 10.54.154.192/.193), both reachable from labrat. First live action: the read-only capture in addendum §7. |
+| BL-20 | Replication (Remote Copy) | 5 | todo | Replication B.1 | Research: `docs/research/2026-09-19-replication-two-arrays.md` (design options, run model C, decisions) + `docs/research/2026-10-07-replication-document-review.md` (the Aug-2026 ED8 HPE guides, Support Matrix limits, captured CLI help, DSCC protection-policy API; errors in two AI-written guides listed). **Eight decisions proposed with defaults (addendum §6) — need the operator's yes/no before SPEC-015.** Lab pair: AlletraMP_D22U27 ↔ AlletraMP_E18U31 (already replicating: group `rcopy_async_test`; RCIP 10.54.122.92/.93 ↔ 10.54.154.192/.193), both reachable from labrat. First live action: the read-only capture in addendum §7. **2026-10-07 decisions taken** (addendum §6.1): paired runs (ADR 0014); the tool configures links, targets and groups itself over a write-scoped SSH client (ADR 0015, amends ADR 0001); async default, sync and async first; failover test required (failover → recover → restore). Specs approved, build in order: **SPEC-015** two-array workbook + paired runs → **SPEC-016** Replication step (release a: read/check/plan/verify on the existing pair; release b: apply + removal set) → **SPEC-017** failover test → **SPEC-018** pair as-built; runner scenario 7 (SPEC-006 §4b). Code starts after BL-38. |
 | BL-21 | Snapshots + schedules | 5 | todo | — | DSCC protection policies, or `createsv` / `createsched`. |
 | BL-22 | HLD document | 9 | todo | — | |
 | BL-23 | LLD document | 9 | todo | — | |

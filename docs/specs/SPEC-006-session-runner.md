@@ -91,6 +91,22 @@ step) and one read-only preflight (WSAPI + vCenter):
 
 The report ends with **Still needs eyes** — the six UI-only changes and the one screenshot each needs.
 
+## 4b. Amendment — 2026-10-07 (approved, not built): scenario 7, the replicated pair
+
+Runs only when the runner is given `-PairSheet <a two-array workbook>` (SPEC-015); every single-array
+scenario is unchanged. Lab pair: D22U27 ↔ E18U31, which already replicate (`rcopy_async_test`) — the
+runner's objects are `zz_rc_*` and nothing else on either array is touched.
+
+| # | Scenario | Asserts |
+|---|---|---|
+| 7a | **Pair** — upload the pair sheet | two runs, one `pair_id`, roles primary/secondary; the Replicate preset lists *Replication* and *Failover test* |
+| 7b | **Read** — Replication step read + check on the existing partnership | targets and links read on both arrays, every link `Up`; `rcopy_async_test` listed under *already present*, not in the plan |
+| 7c | **Protect async** — `zz_rc_test` (1 GiB) on A, row `async` RPO 10 → plan, approve, apply | plan: transport and partnership *exists*, group *create*; after apply `showrcopy groups zz_rc_test_rcg` on A: Primary/Started, on B: Secondary/Started; period 5 m; volumes Synced within 10 min |
+| 7d | **Failover test** on `zz_rc_test_rcg` | every SPEC-017 step reaches its expected state; the group ends Primary on A, Secondary on B, Synced |
+| 7e | **Sync** — same as 7c with `sync` (skipped with a note if the sheet's RTT is > 10 ms) | as 7c, Mode Sync |
+| 7f | **Documents** — pair as-built | docx has both site headings, the group, the failover table, the A and B removal blocks |
+| 7g | **Cleanup** — the run's removal set | no `zz_rc_*` group, volume or VV set on either array; `rcopy_async_test` unchanged (state read before 7c equals state after) |
+
 ## 5. Limits, stated
 
 - The runner tests what it is told to expect; the assertions are today's register turned into
