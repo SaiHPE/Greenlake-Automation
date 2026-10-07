@@ -4,9 +4,11 @@
 > ("supplied per-run and never stored") is superseded. The run holds one array credential from the
 > sheet and every step uses it; the prompt remains only for runs whose sheet supplied none.
 >
-> **Amended by [ADR 0015](0015-tool-configures-remote-copy-write-scoped-ssh.md) (2026-10-07):** the client
-> described here stays read-only and stays the default. A second, write-scoped SSH client exists for Remote
-> Copy configuration only (its own allowlist), reachable only through an operator-approved replication plan.
+> **Amended by [ADR 0015](0015-tool-configures-remote-copy-write-scoped-ssh.md) (2026-10-07, effective
+> from the release that ships Remote Copy links and targets, v0.19):** the client described here stays
+> read-only and stays the default. A second, write-scoped SSH client will exist for Remote Copy links
+> and targets only (its own allowlist), reachable only through an operator-approved replication plan.
+> Remote Copy groups and DR actions go over WSAPI, not SSH.
 
 After the operator confirms the array is initialized, the tool verifies the **on-array config**
 against the Initialisation-sheet values by logging into the array directly over **SSH** (port 22,

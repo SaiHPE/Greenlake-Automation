@@ -87,9 +87,10 @@ In the order the scope owner set (2026-09-12); item-level status is in [TRACKER.
    2026-09-28; the Linux read over SSH is built and waits on a Linux login (TRACKER BL-10).
 3. **Snapshots and replication** (area 5) — next. Replication research done
    (`research/2026-09-19-replication-two-arrays.md`, `research/2026-10-07-replication-document-review.md`);
-   decisions taken 2026-10-07 (ADR 0014, ADR 0015); specs approved: SPEC-015 (two-array workbook,
-   paired runs), SPEC-016 (Replication step), SPEC-017 (failover test), SPEC-018 (pair as-built).
-   Sync and async first; snapshots (BL-21) after.
+   decisions taken 2026-10-07 (ADR 0015; ADR 0014 paired runs deferred); specs approved and re-cut for
+   delivery: SPEC-015 (Replication tab on the one-array workbook), SPEC-016 (groups over WSAPI on an
+   existing partnership — v0.17), SPEC-017 (failover test — v0.18), SPEC-018 (as-built sections); links
+   and targets configured by the tool in v0.19. Sync and async first; snapshots (BL-21) after.
 4. Then: performance reporting (8), HLD/LLD (9), VLAN / peer-port / migration (3), file column (6, 7).
 
 ## Known gaps from the deep research
