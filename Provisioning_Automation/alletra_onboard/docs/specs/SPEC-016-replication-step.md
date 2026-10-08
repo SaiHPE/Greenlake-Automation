@@ -6,8 +6,9 @@ targets, links) is the v0.19 release under ADR 0015. **R1–R3 built 2026-10-07*
 replication/read.py`, `plan.py`, `steps.py`; `POST /runs/{id}/replication/preview`; 25 unit tests
 pinned to the rc_pair fixtures + one through the service; the Replication step page shows both
 arrays, the partnership, the plan with every call's CLI equivalent in apply order, and the groups
-already present) — pending live run (read-only preview on the lab pair). R4–R8 (apply, verify,
-removal set): next.
+already present) — **R1–R3 live-verified 2026-10-08** on D22U27 → E18U31, read-only
+([validation record](../validation/2026-10-08-rc-pair-replication-preview.md)). R4–R8 (apply,
+verify, removal set): next.
 **ADRs:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) · [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (reads stay read-only; untouched in v0.17)
 **Depends on:** SPEC-015 (the tab, the steps)
 **Research:** [2026-10-07](../research/2026-10-07-replication-document-review.md) §3–§4 — limits
