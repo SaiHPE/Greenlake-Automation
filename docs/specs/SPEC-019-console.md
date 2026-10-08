@@ -3,7 +3,7 @@
 **Status:** APPROVED 2026-10-08 (operator: "this would work"; no full shell) — not implemented
 **ADRs:** [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (the prompt runs the read-only
 client and nothing else) · [0013](../adr/0013-one-array-credential-per-run.md) (the run's credential,
-never typed) · [0012](../adr/0012-zoning-command-set-never-write-switch.md) unaffected
+never typed) · [0012](../adr/0012-no-switch-writes-the-tool-emits-a-command-set.md) unaffected
 **Owner:** `adapters/array/cli_client.py` + `wsapi_client.py` (emit hook), `application/runs/coordinator.py`
 (`command.executed` event + `command_log` artifact), `api/app.py` (`POST /runs/{id}/console`),
 `frontend/src/ui/ConsolePane.tsx` (xterm.js), `application/documents/asbuilt.py` (evidence appendix)
