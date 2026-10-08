@@ -7,8 +7,11 @@ replication/read.py`, `plan.py`, `steps.py`; `POST /runs/{id}/replication/previe
 pinned to the rc_pair fixtures + one through the service; the Replication step page shows both
 arrays, the partnership, the plan with every call's CLI equivalent in apply order, and the groups
 already present) — **R1–R3 live-verified 2026-10-08** on D22U27 → E18U31, read-only
-([validation record](../validation/2026-10-08-rc-pair-replication-preview.md)). R4–R8 (apply,
-verify, removal set): next.
+([validation record](../validation/2026-10-08-rc-pair-replication-preview.md)). **R4–R8 built
+2026-10-08** (`apply.py` over WSAPI `/remotecopygroups` in the R4 order with stop-at-first-failure,
+`verify.py` with the ED6 vocabulary and HPE's next step per state, the A/B removal set; `POST
+/runs/{id}/replication/apply|verify`; approve → result → verify in the step page; 15 unit tests + the
+service path) — **pending live run**: `zz_rc_test` async on the lab pair, then its removal set.
 **ADRs:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) · [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (reads stay read-only; untouched in v0.17)
 **Depends on:** SPEC-015 (the tab, the steps)
 **Research:** [2026-10-07](../research/2026-10-07-replication-document-review.md) §3–§4 — limits

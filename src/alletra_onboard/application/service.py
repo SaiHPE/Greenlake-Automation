@@ -200,6 +200,12 @@ class OnboardingService:
     def start_replication_preview(self, run_id: str) -> RunRecord:
         return self.replication.start_replication_preview(run_id)
 
+    def start_replication_apply(self, run_id: str) -> RunRecord:
+        return self.replication.start_replication_apply(run_id)
+
+    def start_replication_verify(self, run_id: str) -> RunRecord:
+        return self.replication.start_replication_verify(run_id)
+
     # ------------------------------------------------------------------ documents (verify + as-built)
 
     def start_verify(self, run_id: str, *, username: str | None = None, password: str | None = None) -> RunRecord:

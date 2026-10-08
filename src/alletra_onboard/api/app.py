@@ -603,6 +603,16 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # SPEC-016 R1-R3, read-only: both arrays over SSH, the partnership, the exists/create/conflict plan.
         return _start_step(run_id, lambda: service.start_replication_preview(run_id))
 
+    @app.post("/runs/{run_id}/replication/apply", response_model=RunResponse)
+    async def run_replication_apply(run_id: str) -> RunResponse:
+        # SPEC-016 R4/R7: creates Remote Copy groups over WSAPI — the UI must preview + confirm first.
+        return _start_step(run_id, lambda: service.start_replication_apply(run_id))
+
+    @app.post("/runs/{run_id}/replication/verify", response_model=RunResponse)
+    async def run_replication_verify(run_id: str) -> RunResponse:
+        # SPEC-016 R6, read-only: showrcopy on both arrays, one verdict per planned group.
+        return _start_step(run_id, lambda: service.start_replication_verify(run_id))
+
     # ------------------------------------------------------------------ events
 
     @app.get("/runs/{run_id}/events", response_model=EventListResponse)

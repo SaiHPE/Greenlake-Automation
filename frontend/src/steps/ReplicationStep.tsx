@@ -1,14 +1,21 @@
-import { Box, Button, DataTable, Text } from 'grommet';
+import { Box, Button, CheckBox, DataTable, Text } from 'grommet';
 import { useState } from 'react';
 import {
+  GroupVerdict,
+  GroupVerification,
   Partnership,
   RcGroup,
   ReplicationAction,
   ReplicationActionState,
   ReplicationArrayView,
+  ReplicationOutcome,
   ReplicationPlan,
   ReplicationReport,
+  ReplicationResult,
+  ReplicationVerification,
+  replicationApply,
   replicationPreview,
+  replicationVerify,
   RunEvent,
   RunRecord,
 } from '../api';
@@ -34,11 +41,90 @@ const KIND_LABEL: Record<ReplicationAction['kind'], string> = {
   test_volume: 'Test volume',
   test_vvset: 'Test volume set',
 };
+const OUTCOME_KIND: Record<ReplicationOutcome['kind'], string> = {
+  ...KIND_LABEL,
+  volume_admit: 'Volume admitted',
+  start: 'Group started',
+  policy: 'Policies and period',
+};
+const OUTCOME: Record<ReplicationOutcome['status'], { state: StepState; label: string }> = {
+  created: { state: 'complete', label: 'Done' },
+  exists: { state: 'not_started', label: 'Existed' },
+  failed: { state: 'failed', label: 'Failed' },
+  skipped: { state: 'not_started', label: 'Skipped' },
+};
+const VERDICT: Record<GroupVerdict, { state: StepState; label: string }> = {
+  replicating: { state: 'complete', label: 'Replicating' },
+  syncing: { state: 'running', label: 'Initial sync in progress' },
+  not_replicating: { state: 'failed', label: 'Not replicating' },
+};
 const mono = { fontFamily: 'Consolas, "Courier New", monospace' } as const;
 
 function latest<T>(events: RunEvent[], types: string[], key: string): T | null {
   const event = [...events].reverse().find((item) => types.includes(item.event_type));
   return (event?.data?.[key] as T) ?? null;
+}
+
+/** Index of the newest event of one of these types, or -1 — to decide which of two artifacts is current. */
+function latestIndex(events: RunEvent[], types: string[]): number {
+  for (let i = events.length - 1; i >= 0; i -= 1) if (types.includes(events[i].event_type)) return i;
+  return -1;
+}
+
+function download(filename: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** SPEC-007 pattern, two blocks: the undo for exactly what this apply created, on A then on B. */
+function RemovalSets({ result, runId, a, b }: { result: ReplicationResult; runId: string; a: string; b: string }) {
+  const [copied, setCopied] = useState(false);
+  const blocks: [string, string, string[]][] = [
+    [a, 'A', result.removals_a],
+    [b, 'B', result.removals_b],
+  ];
+  const text = [
+    `# Removal of what run ${runId.slice(0, 8)} configured for replication — ${new Date().toISOString()}`,
+    '# Review before pasting. The tool never runs these. Paste the A block on array A, then the B block on array B.',
+    ...blocks.flatMap(([name, label, lines]) => (lines.length ? [``, `# ---- ${label}: ${name}`, ...lines] : [])),
+    '',
+  ].join('\n');
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { setCopied(false); }
+  };
+  const total = result.removals_a.length + result.removals_b.length;
+  return (
+    <Box gap="xsmall" margin={{ top: 'small' }} flex={false}>
+      <Text size="small" weight={600}>Removal command set</Text>
+      {total === 0 ? (
+        <Text size="small" color="text-weak">Nothing to remove — this apply created nothing.</Text>
+      ) : (
+        <>
+          <Text size="small" color="text-weak">
+            Undoes exactly what this apply created, in dependency order: on A each group is stopped, its volumes dismissed
+            (removing the secondaries), then removed; on B the peer volume set. Objects that already existed are not touched.
+          </Text>
+          <Box background="background-contrast" round="xsmall" pad="small" tabIndex={0} style={{ overflowX: 'auto' }}>
+            {blocks.map(([name, label, lines]) =>
+              lines.length ? (
+                <Box key={label} margin={{ bottom: 'xsmall' }}>
+                  <Text size="small" color="text-weak" style={mono}># ---- {label}: {name}</Text>
+                  {lines.map((c, i) => <Text key={i} size="small" style={{ ...mono, whiteSpace: 'pre-wrap' }}>{c}</Text>)}
+                </Box>
+              ) : null,
+            )}
+          </Box>
+          <Box direction="row" gap="small">
+            <Button size="small" label={copied ? 'Copied' : 'Copy removal set'} onClick={copy} />
+            <Button size="small" label="Download .txt" onClick={() => download(`removal_replication_${runId.slice(0, 8)}.txt`, text)} />
+          </Box>
+        </>
+      )}
+      {result.notes.length > 0 && <NotesList notes={result.notes} />}
+    </Box>
+  );
 }
 
 /** One array as the step read it: identity, Remote Copy status, RCIP ports. */
@@ -93,10 +179,18 @@ function PartnershipLine({ partnership, report }: { partnership: Partnership | n
 export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [showCalls, setShowCalls] = useState(false);
+  const [authorised, setAuthorised] = useState(false);
   const running = run?.status === 'running';
 
   const report = latest<ReplicationReport>(events, ['replication.previewed', 'replication.preview.failed'], 'report');
   const plan = latest<ReplicationPlan>(events, ['replication.previewed', 'replication.preview.failed'], 'plan');
+  // A result reflects the plan on screen only while it is newer than the newest preview: a re-read after
+  // an apply must offer Configure again (if anything is left to create), not leave the operator stuck.
+  const applied = latestIndex(events, ['replication.applied', 'replication.apply.failed']);
+  const previewed = latestIndex(events, ['replication.previewed', 'replication.preview.failed']);
+  const result = applied > previewed ? latest<ReplicationResult>(events, ['replication.applied', 'replication.apply.failed'], 'result') : null;
+  const verification = latest<ReplicationVerification>(events, ['replication.verified', 'replication.verify.failed'], 'verification');
+  const everApplied = events.some((e) => e.event_type === 'replication.applied');
   const blocked = !!plan && plan.blockers.length > 0;
   const count = (state: ReplicationActionState) => (plan ? plan.actions.filter((a) => a.state === state).length : 0);
   const toCreate = count('create');
@@ -104,6 +198,9 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const conflicts = count('conflict');
   const calls = plan ? [...plan.actions.flatMap((a) => a.calls)].sort((x, y) => x.seq - y.seq) : [];
   const existingGroups: RcGroup[] = report ? report.primary.groups.filter((g) => plan?.existing_groups.includes(g.name)) : [];
+  const aName = report?.primary.name || 'array A';
+  const bName = report?.peer.name || 'array B';
+  const canApply = !!plan && !plan.error && !blocked && toCreate > 0 && !result;
 
   const call = (action: () => Promise<unknown>) => async () => {
     setError(null);
@@ -118,29 +215,44 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
     <StepShell
       title="Replication"
       description="Reads both arrays (read-only), finds the Remote Copy partnership between them, and plans one Remote Copy group per volume set on the Replication tab: created over WSAPI on this array, with the secondary volumes auto-created on the peer’s CPG. Nothing is written until the plan is approved."
-      stateDetail={plan ? (blocked ? `${plan.blockers.length} finding${plan.blockers.length === 1 ? '' : 's'} to resolve` : 'awaiting approval') : undefined}
+      stateDetail={
+        result && !result.error
+          ? 'replication configured'
+          : plan
+            ? blocked
+              ? `${plan.blockers.length} finding${plan.blockers.length === 1 ? '' : 's'} to resolve`
+              : toCreate > 0
+                ? 'awaiting approval'
+                : 'nothing to create'
+            : undefined
+      }
       error={error}
       onDismissError={() => setError(null)}
       activityEmpty="Read both arrays to see the partnership and what this run would configure. Nothing is written by the read."
       footerNote="The partnership (RCIP ports, targets, links) has to exist already; this release reads and verifies it. Groups the run did not create are listed and never touched."
       gate={
-        plan && !plan.error
+        plan && !plan.error && !result
           ? blocked
             ? {
                 title: 'The plan cannot be applied yet',
                 message: <NotesList notes={plan.blockers} />,
               }
-            : {
-                title: 'Review the plan',
-                message:
-                  'No changes have been made to either array. Configuring replication from this plan arrives in the next build of this release; the read and the plan are live now so the arrays can be checked.',
-              }
+            : toCreate > 0
+              ? {
+                  title: 'Review the plan, then approve configuring replication',
+                  message:
+                    'No changes have been made to either array. Objects marked Exists are left alone. Approving creates the groups over WSAPI on this array; the secondary volumes are created on the peer by the array itself.',
+                }
+              : null
           : null
       }
       actions={
         <>
           <Button busy={running} label={report ? 'Read both arrays again' : 'Read both arrays'} onClick={call(() => replicationPreview(runId))} />
-          <ContinueButton onClick={onDone} suffix="without configuring replication" />
+          {canApply && (
+            <Button busy={running} label="Configure replication" disabled={!authorised} onClick={call(() => replicationApply(runId))} />
+          )}
+          <ContinueButton onClick={onDone} suffix={everApplied ? '' : 'without configuring replication'} />
         </>
       }
     >
@@ -213,8 +325,83 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
               )}
             </Box>
           )}
+          {/* The only replication action that writes to the arrays: an explicit authorisation, not a click. */}
+          {canApply && (
+            <CheckBox
+              label={`I have reviewed this plan and authorise configuring replication on ${aName} and ${bName}.`}
+              checked={authorised}
+              disabled={running}
+              onChange={(event) => setAuthorised(event.target.checked)}
+            />
+          )}
         </Surface>
       )}
+
+      {result && (
+        <Surface title="Result" description="What each array reported for every write, in the order they were made.">
+          {result.error ? (
+            <InlineNotification tone="critical" title="Configuring replication stopped" message={result.error} />
+          ) : (
+            <InlineNotification
+              tone="ok"
+              title={result.groups_created.length ? `${result.groups_created.join(', ')} created and started` : 'Nothing new to create'}
+              message={`${result.outcomes.filter((o) => o.status === 'exists').length} already existed and were left untouched. Verify replication reads both arrays back.`}
+            />
+          )}
+          <DataTable
+            columns={[
+              { property: 'kind', header: 'Kind', render: (o: ReplicationOutcome) => <Text size="small">{OUTCOME_KIND[o.kind]}</Text> },
+              { property: 'name', header: 'Name', render: (o: ReplicationOutcome) => <Text size="small" style={mono}>{o.name}</Text> },
+              { property: 'where', header: 'On', render: (o: ReplicationOutcome) => <Text size="small">{o.where}</Text> },
+              { property: 'status', header: 'Result', render: (o: ReplicationOutcome) => <StatusIndicator state={OUTCOME[o.status].state} label={OUTCOME[o.status].label} /> },
+              { property: 'detail', header: 'Detail', render: (o: ReplicationOutcome) => <Text size="small" color="text-weak">{o.detail || '—'}</Text> },
+            ]}
+            data={result.outcomes}
+            primaryKey={false}
+            a11yTitle="Replication result: one row per write, with what the array reported"
+          />
+          <RemovalSets result={result} runId={runId} a={aName} b={bName} />
+        </Surface>
+      )}
+
+      <Surface
+        title="Verify replication"
+        description="Reads showrcopy on both arrays and judges each planned group: Started, Primary here and Secondary on the peer, every volume Synced. Read-only, report-only; an initial sync still running is reported, not failed."
+        actions={<Button busy={running} label="Verify replication" disabled={!plan} onClick={call(() => replicationVerify(runId))} />}
+      >
+        {!verification && <Text size="small" color="text-weak">Not verified yet.</Text>}
+        {verification?.error && <InlineNotification tone="critical" title="The arrays could not be read" message={verification.error} />}
+        {verification && !verification.error && (
+          <>
+            <StatusIndicator state={verification.links_ok ? 'complete' : 'action_required'} label={verification.links_detail || 'links'} />
+            {verification.groups.length === 0 ? (
+              <Text size="small" color="text-weak">No group in the plan to verify.</Text>
+            ) : (
+              <DataTable
+                columns={[
+                  { property: 'group', header: 'Group', render: (g: GroupVerification) => (
+                    <Box>
+                      <Text size="small" style={mono}>{g.group}</Text>
+                      {g.peer_group && <Text size="xsmall" color="text-weak" style={mono}>{g.peer_group} on the peer</Text>}
+                    </Box>
+                  ) },
+                  { property: 'verdict', header: 'Result', render: (g: GroupVerification) => <StatusIndicator state={VERDICT[g.verdict].state} label={VERDICT[g.verdict].label} /> },
+                  { property: 'detail', header: 'What the arrays say', render: (g: GroupVerification) => (
+                    <Box>
+                      <Text size="small" color="text-weak">{g.detail}</Text>
+                      {g.next_step && <Text size="xsmall" color="status-critical">{g.next_step}</Text>}
+                    </Box>
+                  ) },
+                ]}
+                data={verification.groups}
+                primaryKey="group"
+                a11yTitle="Replication verification: one row per group, the verdict and what both arrays report"
+              />
+            )}
+            {verification.notes.length > 0 && <NotesList notes={verification.notes} />}
+          </>
+        )}
+      </Surface>
 
       {report && existingGroups.length > 0 && (
         <Surface

@@ -414,6 +414,22 @@ export interface ReplicationAction {
 }
 export interface ReplicationPlan { actions: ReplicationAction[]; blockers: string[]; notes: string[]; existing_groups: string[]; error: string | null; }
 export const replicationPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/preview`);
+// R4/R7: what the arrays said per write, and the removal lines per array (the operator pastes; the tool never runs them).
+export interface ReplicationOutcome {
+  kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset' | 'volume_admit' | 'start' | 'policy';
+  name: string; where: 'A' | 'B'; status: 'created' | 'exists' | 'failed' | 'skipped'; detail: string;
+}
+export interface ReplicationResult {
+  outcomes: ReplicationOutcome[]; removals_a: string[]; removals_b: string[]; notes: string[]; groups_created: string[]; error: string | null;
+}
+export const replicationApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/apply`);
+// R6: read-only verdict per planned group from `showrcopy` on both arrays.
+export type GroupVerdict = 'replicating' | 'syncing' | 'not_replicating';
+export interface GroupVerification {
+  group: string; peer_group: string; verdict: GroupVerdict; detail: string; next_step: string; volumes_total: number; volumes_synced: number;
+}
+export interface ReplicationVerification { links_ok: boolean; links_detail: string; groups: GroupVerification[]; notes: string[]; error: string | null; }
+export const replicationVerify = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/verify`);
 
 export const launchBrowser = (url?: string) =>
   request<{ cdp_url: string; profile_dir: string; executable: string }>('POST', '/browser/launch', { port: 9222, url });

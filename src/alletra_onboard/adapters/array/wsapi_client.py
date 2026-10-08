@@ -460,6 +460,92 @@ class WsapiClient:
                 return "exists"
             raise self._translate(exc, where=f"createVLUN {volume_name}->{host_name}") from exc
 
+    # ------------------------------------------------------------------ Remote Copy groups (SPEC-016 R4)
+    # The `/remotecopygroups` resource, confirmed on WSAPI 1.15 (B10000, OS 10.5.0, both lab
+    # arrays): group records carry `role` 1/2, `targets[].mode` 1 sync / 2 periodic,
+    # `targets[].policies.{autoRecover,autoSynchronize,…}`, `targets[].syncPeriod`,
+    # `remoteGroupName`, `volumes[].remoteVolumes[].syncStatus` (tests/fixtures/rc_pair/README.md).
+
+    def remote_copy_groups(self) -> list[dict]:
+        try:
+            return _members(self._require().getRemoteCopyGroups())
+        except Exception as exc:  # noqa: BLE001
+            raise self._translate(exc, where="getRemoteCopyGroups") from exc
+
+    def remote_copy_group(self, name: str) -> dict | None:
+        try:
+            body = self._require().getRemoteCopyGroup(name)
+            return body if isinstance(body, dict) else None
+        except Exception as exc:  # noqa: BLE001 - 404 (code 187) is "does not exist"
+            if hpe_exc is not None and isinstance(exc, hpe_exc.HTTPNotFound):
+                return None
+            raise self._translate(exc, where=f"getRemoteCopyGroup {name}") from exc
+
+    def create_remote_copy_group(self, name: str, *, target: str, mode: str, peer_cpg: str, local_cpg: str = "") -> str:
+        """`creatercopygroup -usr_cpg <local> <target>:<peer_cpg> <name> <target>:<sync|periodic>`."""
+        targets = [{"targetName": target, "mode": 1 if mode == "sync" else 2, "userCPG": peer_cpg}]
+        optional = {"localUserCPG": local_cpg} if local_cpg else None
+        try:
+            self._require().createRemoteCopyGroup(name, targets, optional=optional)
+            return "created"
+        except Exception as exc:  # noqa: BLE001
+            if self._is_conflict(exc):
+                return "exists"
+            raise self._translate(exc, where=f"createRemoteCopyGroup {name}") from exc
+
+    def set_remote_copy_group(
+        self, name: str, *, target: str, period_seconds: int | None, auto_recover: bool, auto_synchronize: bool,
+    ) -> str:
+        """`setrcopygroup period …` + `setrcopygroup pol …` in one PUT. Returns a note when the array
+        refused `autoSynchronize` as a WSAPI field (then only `autoRecover` and the period were set)."""
+        policies = {"autoRecover": auto_recover, "autoSynchronize": auto_synchronize}
+        entry: dict = {"targetName": target, "policies": policies}
+        if period_seconds:
+            entry["syncPeriod"] = period_seconds
+        try:
+            self._require().modifyRemoteCopyGroup(name, optional={"targets": [entry]})
+            return ""
+        except Exception as exc:  # noqa: BLE001
+            detail = self._safe_str(exc).lower()
+            if "autosynchronize" not in detail and "unrecognized" not in detail:
+                raise self._translate(exc, where=f"modifyRemoteCopyGroup {name}") from exc
+        entry["policies"] = {"autoRecover": auto_recover}
+        try:
+            self._require().modifyRemoteCopyGroup(name, optional={"targets": [entry]})
+        except Exception as exc:  # noqa: BLE001
+            raise self._translate(exc, where=f"modifyRemoteCopyGroup {name}") from exc
+        return (f"The array did not accept 'autoSynchronize' over WSAPI for {name}; auto_recover and the "
+                f"period were set. Set it on the array: setrcopygroup pol {'auto_synchronize' if auto_synchronize else 'no_auto_synchronize'} {name}")
+
+    def admit_remote_copy_volume(self, group: str, volume: str, *, target: str, secondary: str | None = None) -> str:
+        """`admitrcopyvv -createvv <volume> <group> <target>:<secondary>` — the secondary is auto-created."""
+        targets = [{"targetName": target, "secVolumeName": secondary or volume}]
+        try:
+            self._require().addVolumeToRemoteCopyGroup(group, volume, targets, optional={"volumeAutoCreation": True})
+            return "created"
+        except Exception as exc:  # noqa: BLE001
+            if self._is_conflict(exc):
+                return "exists"
+            raise self._translate(exc, where=f"addVolumeToRemoteCopyGroup {group} {volume}") from exc
+
+    def start_remote_copy_group(self, name: str) -> str:
+        try:
+            self._require().startRemoteCopy(name)
+            return "started"
+        except Exception as exc:  # noqa: BLE001
+            if self._is_conflict(exc) or "already" in self._safe_str(exc).lower():
+                return "exists"
+            raise self._translate(exc, where=f"startRemoteCopy {name}") from exc
+
+    def stop_remote_copy_group(self, name: str) -> str:
+        try:
+            self._require().stopRemoteCopy(name)
+            return "stopped"
+        except Exception as exc:  # noqa: BLE001
+            if self._is_conflict(exc) or "already" in self._safe_str(exc).lower():
+                return "exists"
+            raise self._translate(exc, where=f"stopRemoteCopy {name}") from exc
+
     # ------------------------------------------------------------------ internals
 
     def _require(self):

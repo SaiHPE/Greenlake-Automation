@@ -61,7 +61,12 @@ const SIGNALS: Record<string, Signals> = {
   verify: { complete: ['verify.completed'], gate: [] },
   asbuilt: { complete: ['asbuilt.generated'], gate: [] },
   // SPEC-016: the preview is the gate (approve, or resolve the findings); apply completes the step.
-  replicate: { complete: ['replication.applied'], gate: ['replication.previewed'], ignore: ['replication.verified'] },
+  // Verify is a read-back report, like path verification: it never decides the step.
+  replicate: {
+    complete: ['replication.applied'],
+    gate: ['replication.previewed'],
+    ignore: ['replication.verify.started', 'replication.verified', 'replication.verify.failed'],
+  },
   failover_test: { complete: ['failover.completed'], gate: [] },
 };
 const DEFAULT_SIGNALS: Signals = { complete: ['step.completed'], gate: [] };
