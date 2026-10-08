@@ -211,6 +211,7 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
             plan.actions.append(ReplicationAction(
                 kind="test_volume", name=TEST_VOLUME, where="A", state="create",
                 reason=f"{TEST_VOLUME_GIB} GiB tpvv for the failover test", calls=[create_vv],
+                detail={"cpg": test_cpg, "size_gib": TEST_VOLUME_GIB},
             ))
         else:
             plan.actions.append(ReplicationAction(kind="test_volume", name=TEST_VOLUME, state="exists", reason="already on the array"))
@@ -220,6 +221,7 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
             number(create_set)
             plan.actions.append(ReplicationAction(
                 kind="test_vvset", name=TEST_VVSET, where="A", state="create", reason=f"holds {TEST_VOLUME}", calls=[create_set],
+                detail={"members": [TEST_VOLUME]},
             ))
         else:
             plan.actions.append(ReplicationAction(kind="test_vvset", name=TEST_VVSET, state="exists", reason="already on the array"))
@@ -244,7 +246,12 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
                 reason=f"{row.mode}" + (f", RPO {row.rpo_minutes} min (period {row.period_seconds // 60} min)" if row.period_seconds else "")
                        + f" → {target}, {len(members)} volume(s) from set '{row.vvset}', secondaries on {row.peer_cpg}",
                 calls=[*setup, start],
-                detail={"vvset": row.vvset, "mode": row.mode, "volumes": members, "target": target},
+                detail={
+                    "vvset": row.vvset, "mode": row.mode, "volumes": members, "target": target,
+                    "peer_cpg": row.peer_cpg, "local_cpg": local_cpg, "period_seconds": row.period_seconds,
+                    "auto_recover": row.auto_recover, "auto_synchronize": row.auto_synchronize,
+                    "peer_vvset": peer_set, "start_where": start.where, "is_test": row.vvset == TEST_VVSET,
+                },
             ))
         else:
             diff = _group_matches(existing, row, members, target)
@@ -266,6 +273,7 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
             plan.actions.append(ReplicationAction(
                 kind="peer_vvset", name=peer_set, where="B", state="create",
                 reason=f"the secondary volumes on {b}, for the DR site's exports", calls=[peer_set_call],
+                detail={"members": members, "group": g},
             ))
 
     planned = {row.group_name for row, _, _ in rows}

@@ -173,6 +173,53 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     assert service.replication.previewed_plan(run.run_id).actions[0].name == "HS_rcg"
     assert "password" not in str(event.data)          # the report carries addresses and names, never a credential
 
+    # ---- R4/R7 through the service: apply the approved plan; the approval is then spent
+    import pytest
+    from alletra_onboard.application.replication import apply as replication_apply
+    from alletra_onboard.application.replication import verify as replication_verify
+    from alletra_onboard.application.replication.steps import RESULT_ARTIFACT
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.replication import (
+        GroupVerification, ReplicationOutcome, ReplicationResult, ReplicationVerification,
+    )
+
+    applied: list = []
+
+    def fake_apply(plan, provisioning, *, wsapi_factory=None, progress=None):
+        applied.append([a.name for a in plan.actions])
+        return ReplicationResult(
+            outcomes=[ReplicationOutcome(kind="group", name="HS_rcg", status="created", detail="async → ArrayB"),
+                      ReplicationOutcome(kind="peer_vvset", name="HS_rc", where="B", status="created")],
+            removals_a=["stoprcopygroup -f HS_rcg", "dismissrcopyvv -f -removevv V01 HS_rcg", "removercopygroup -f HS_rcg"],
+            removals_b=["removevvset -f HS_rc"], groups_created=["HS_rcg"],
+        )
+
+    monkeypatch.setattr(replication_apply, "apply_plan", fake_apply)
+    service.start_replication_apply(run.run_id)
+    await service.wait(run.run_id)
+    assert applied == [["HS_rcg", "HS_rc"]]
+    assert service.get_run(run.run_id).status == RunStatus.READY
+    done = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.applied")
+    assert done.message.startswith("Replication configured — HS_rcg; 2 write(s), 0 already there.")
+    assert done.data["result"]["removals_a"][0] == "stoprcopygroup -f HS_rcg"
+    assert ReplicationResult.model_validate_json(service.store.load_artifact(run.run_id, RESULT_ARTIFACT)).groups_created == ["HS_rcg"]
+    with pytest.raises(StepPreconditionError, match="read both arrays first"):
+        service.start_replication_apply(run.run_id)                 # spent: a second apply needs a fresh plan
+
+    # ---- R6: verify finds the plan in the run's events once the approval is spent
+    def fake_verify(provisioning, plan, *, read_fn=None, progress=None):
+        assert [a.name for a in plan.actions] == ["HS_rcg", "HS_rc"]
+        return ReplicationVerification(links_ok=True, links_detail="2/2 · 2/2",
+                                       groups=[GroupVerification(group="HS_rcg", peer_group="HS_rcg.r100", verdict="replicating",
+                                                                 detail="Started · Primary here, Secondary on the peer")])
+
+    monkeypatch.setattr(replication_verify, "verify", fake_verify)
+    service.start_replication_verify(run.run_id)
+    await service.wait(run.run_id)
+    verified = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.verified")
+    assert verified.message == "1 replicating · 0 syncing · 0 not replicating · links Up"
+    assert verified.data["verification"]["groups"][0]["peer_group"] == "HS_rcg.r100"
+
 
 async def test_provision_advance_is_selection_aware(tmp_path):
     # A custom run that drops cloudinit: GreenLake should advance straight to DSCC.

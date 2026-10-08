@@ -261,3 +261,47 @@ class ReplicationPlan(BaseModel):
     notes: list[str] = Field(default_factory=list)
     existing_groups: list[str] = Field(default_factory=list)   # R9: present, never touched
     error: str | None = None
+
+
+# ------------------------------------------------------------------ apply (R4) and its removal set (R7)
+
+class ReplicationOutcome(BaseModel):
+    """What the array said for one planned write."""
+
+    kind: Literal["group", "peer_vvset", "test_volume", "test_vvset", "volume_admit", "start", "policy"]
+    name: str
+    where: Literal["A", "B"] = "A"
+    status: Literal["created", "exists", "failed", "skipped"] = "created"
+    detail: str = ""
+
+
+class ReplicationResult(BaseModel):
+    outcomes: list[ReplicationOutcome] = Field(default_factory=list)
+    removals_a: list[str] = Field(default_factory=list)    # CLI lines the operator pastes on A, in order
+    removals_b: list[str] = Field(default_factory=list)    # … and on B
+    notes: list[str] = Field(default_factory=list)
+    groups_created: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+# ------------------------------------------------------------------ verify (R6)
+
+GroupVerdict = Literal["replicating", "syncing", "not_replicating"]
+
+
+class GroupVerification(BaseModel):
+    group: str
+    peer_group: str = ""                 # `<group>.r<id>` as the peer names it
+    verdict: GroupVerdict = "not_replicating"
+    detail: str = ""                     # one line for the operator
+    next_step: str = ""                  # HPE's documented action when not replicating
+    volumes_total: int = 0
+    volumes_synced: int = 0
+
+
+class ReplicationVerification(BaseModel):
+    links_ok: bool = False
+    links_detail: str = ""
+    groups: list[GroupVerification] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    error: str | None = None
