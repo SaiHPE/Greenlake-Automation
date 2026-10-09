@@ -132,3 +132,29 @@ the secondary on E18U31 was gone with it — `showvv zz_rc_vol01` there: *no vv 
 `removercopygroup -f` (*"Group zz_rc_vvs_rcg has been deleted"*), `removevvset -f zz_rc_test`,
 `removevv -f zz_rc_test_v01` all succeeded; `zz_rc_vvs` on D22U27 still holds `zz_rc_vol01`. The page
 now says **A first, then B**, with the array's sentence as the reason.
+
+## 2026-10-09 22:07 — third apply, `jumpbox-test` 47084d7, **sync: configured and verified**
+
+Sheet rebuilt with `mode: sync` (RTT 1 ms). Read → 6 to create, 0 findings, every group line
+`…:sync`; the tool's own test group followed. Approved → *Configure replication*: **12 writes in two
+seconds, all Done** — test volume and set; `zz_rc_vvs_rcg` created (sync → AlletraMP_E18U31,
+localUserCPG SSD_r6), policies set, `zz_rc_vol01` admitted with its secondary auto-created on
+E18U31, peer set `zz_rc_vvs_rc` created on E18U31, group started; the same five for
+`zz_rc_test_rcg`. Header: *Complete · replication configured*. Removal set: 8 lines on A, 2 on B.
+
+*Verify replication* (screenshot kept): links *2/2 Up* each way; **both groups Replicating** —
+*Started · Primary here, Secondary on the peer · Sync · 1 volume(s) Synced*; peer names
+`zz_rc_vvs_rcg.r188150`, `zz_rc_test_rcg.r188150`.
+
+Read-only capture minutes later (`tests/fixtures/rc_pair/after_apply/`): `showrcopy` on both arrays
+shows the two new groups beside the six old ones (8 each side), `auto_recover,auto_synchronize`,
+`Synced`, `LastSyncTime NA`; WSAPI records `role 1`/`mode 1`/`state 3`/`syncStatus 3`,
+`volumeLastSyncTime 2026-10-09T22:07:07+05:30`, `localVolumeSetName zz_rc_vvs`; `showvvset` on
+E18U31 lists `zz_rc_vvs_rc` and `zz_rc_test_rc` with the secondaries. **No `RCP_<group>` set was
+created** — that is CLI `creatercopygroup` behaviour, not WSAPI's. Pinned by
+`test_verify_on_the_live_after_apply_capture_says_replicating_for_both_groups`.
+
+**SPEC-016 R1–R8 are live-verified for sync.** Three live lessons on the way, each now a test:
+two PUTs for period and policies (code 44); one mode per target is a finding, not a failed start
+(code 236); the removal set pastes A before B. Owed: the periodic path end to end (needs a target
+without sync groups), the *Provision, then replicate* preset with a real host, runner scenario 7.

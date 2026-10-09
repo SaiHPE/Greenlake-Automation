@@ -11,7 +11,11 @@ already present) — **R1–R3 live-verified 2026-10-08** on D22U27 → E18U31, 
 2026-10-08** (`apply.py` over WSAPI `/remotecopygroups` in the R4 order with stop-at-first-failure,
 `verify.py` with the ED6 vocabulary and HPE's next step per state, the A/B removal set; `POST
 /runs/{id}/replication/apply|verify`; approve → result → verify in the step page; 15 unit tests + the
-service path) — **pending live run**: `zz_rc_test` async on the lab pair, then its removal set.
+service path) — **R1–R8 live-verified for sync 2026-10-09** on D22U27 → E18U31: 12 writes, both groups
+*Replicating*, removal set exact (validation record; `tests/fixtures/rc_pair/after_apply/`). Three
+live corrections folded in: two PUTs for period/policies, one mode per target as a finding, removal
+set A before B. **Owed:** the periodic path (needs a target with no sync groups), the
+*Provision, then replicate* preset with a real host, runner scenario 7.
 **ADRs:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) · [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (reads stay read-only; untouched in v0.17)
 **Depends on:** SPEC-015 (the tab, the steps)
 **Research:** [2026-10-07](../research/2026-10-07-replication-document-review.md) §3–§4 — limits
