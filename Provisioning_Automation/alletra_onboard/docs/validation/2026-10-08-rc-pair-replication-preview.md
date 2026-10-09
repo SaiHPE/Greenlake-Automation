@@ -158,3 +158,10 @@ created** — that is CLI `creatercopygroup` behaviour, not WSAPI's. Pinned by
 two PUTs for period and policies (code 44); one mode per target is a finding, not a failed start
 (code 236); the removal set pastes A before B. Owed: the periodic path end to end (needs a target
 without sync groups), the *Provision, then replicate* preset with a real host, runner scenario 7.
+
+**Cleanup 22:40 — the tool's removal set, A then B, plus the two hand-made objects:** every A line
+accepted (*"Volume … has been dismissed"*, *"Group … has been deleted"*, *"Removing vv …"*); on B
+both `removevvset` lines answered *"vv set … does not exist"* — **the array removes the peer set
+itself when a started group is removed** (it did not on the never-started group of the second
+attempt). `showrcopy groups zz_rc*` / `showvvset zz_rc*` / `showvv zz_rc*` empty on both arrays;
+the six original groups untouched. Both arrays are as they were on 2026-10-07.

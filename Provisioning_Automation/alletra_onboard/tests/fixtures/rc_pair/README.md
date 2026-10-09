@@ -45,7 +45,9 @@ written.
   236 *"Group with different modes on a single target is not supported"* (Support Matrix note 1).
   **Removal order:** the peer refuses `removevvset` on a set holding secondaries while the group
   exists (*"Set … is currently admitted to Remote Copy Group and may not be directly removed"*);
-  `dismissrcopyvv -removevv` on the primary removes the secondary volume on the peer.
+  `dismissrcopyvv -removevv` on the primary removes the secondary volume on the peer. Removing a
+  **started** group removes its peer volume set too (`removevvset` on B then says *does not exist*);
+  a never-started group leaves the set behind.
 - **CPGs:** D22U27 `3sc`, `SSD_r6`, `test`; E18U31 `SSD_r6` only.
 - **`help/`** — the array's own `-h` for every Remote Copy command (D22U27; identical OS on E18U31).
   Confirms: `creatercopygroup -usr_cpg <cpg> <target>:<cpg> <group> <target>:<mode>`;
