@@ -216,8 +216,10 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
       title="Replication"
       description="Reads both arrays (read-only), finds the Remote Copy partnership between them, and plans one Remote Copy group per volume set on the Replication tab: created over WSAPI on this array, with the secondary volumes auto-created on the peer’s CPG. Nothing is written until the plan is approved."
       stateDetail={
-        result && !result.error
-          ? 'replication configured'
+        result
+          ? result.error
+            ? `stopped after ${result.outcomes.filter((o) => o.status === 'created').length} write(s)`
+            : 'replication configured'
           : plan
             ? blocked
               ? `${plan.blockers.length} finding${plan.blockers.length === 1 ? '' : 's'} to resolve`

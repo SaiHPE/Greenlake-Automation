@@ -57,3 +57,36 @@ Seen on the page, each as the spec words it:
 Two operational notes from the session, not defects: an earlier app instance (`python`, PID 2152)
 still held port 8765 and had to be stopped before the new build could start; labrat has no copy of
 a D22U27 workbook, so the sheet was composed from the template.
+
+## 2026-10-09 21:22 — first apply (R4), `jumpbox-test` 2ab24f34: stopped at write 4, as designed
+
+Same sheet and mode. `zz_rc_vol01` / `zz_rc_vvs` created by hand on D22U27 first (the sheet's host
+set has no real member, so the Provision step would have blocked — a different test). Read both
+arrays again → **6 to create · 0 conflicts**, no finding (the clean-plan path owed above: seen).
+Approved → *Configure replication*:
+
+| # | Write | Result |
+|---|---|---|
+| 1 | `createvv -tpvv SSD_r6 zz_rc_test_v01 1g` (WSAPI) | Done |
+| 2 | `createvvset zz_rc_test zz_rc_test_v01` (WSAPI) | Done |
+| 3 | `POST /remotecopygroups zz_rc_vvs_rcg` (mode 2, userCPG SSD_r6, localUserCPG SSD_r6) | Done — the group exists on the array |
+| 4 | `PUT /remotecopygroups/zz_rc_vvs_rcg {syncPeriod: 300, policies: {…}}` | **HTTP 400 code 44** — *invalid input: parameters cannot be present at the same time - policies, syncPeriod* |
+
+The step stopped there (*Stopped after 3 write(s)*), nothing after write 4 ran, and the removal set
+listed exactly the three objects: `stoprcopygroup -f zz_rc_vvs_rcg` · `removercopygroup -f
+zz_rc_vvs_rcg` · `removevvset -f zz_rc_test` · `removevv -f zz_rc_test_v01` (B block empty — the
+peer was never written). R4's stop-at-first-failure and R7's bounded removal set are live-verified
+by this.
+
+**The defect:** one `modifyRemoteCopyGroup` body may carry the period *or* the policies, not both —
+a WSAPI rule absent from the client docs and from the 2026-10-07 capture (no periodic group
+existed to read). Fixed the same evening: two PUTs, period first, then policies
+(`WsapiClient.set_remote_copy_group`), pinned by `test_period_and_policies_go_in_two_puts_period_first`
+with a stub that raises the array's exact error on a combined body. Also: the step header read
+*Failed · awaiting approval* after the stop; it now reads *stopped after N write(s)*.
+
+Also noticed: `APP_Test` is now **Primary** on D22U27 (Secondary on 10-08) — someone switched the
+Peer Persistence group between the two sessions; not ours, listed and untouched.
+
+Still owed: the retry on the fixed build after the removal set is pasted, then Verify, then the
+first periodic group's `showrcopy` as a fixture.

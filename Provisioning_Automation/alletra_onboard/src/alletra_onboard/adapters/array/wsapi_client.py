@@ -496,24 +496,27 @@ class WsapiClient:
     def set_remote_copy_group(
         self, name: str, *, target: str, period_seconds: int | None, auto_recover: bool, auto_synchronize: bool,
     ) -> str:
-        """`setrcopygroup period …` + `setrcopygroup pol …` in one PUT. Returns a note when the array
-        refused `autoSynchronize` as a WSAPI field (then only `autoRecover` and the period were set)."""
-        policies = {"autoRecover": auto_recover, "autoSynchronize": auto_synchronize}
-        entry: dict = {"targetName": target, "policies": policies}
+        """`setrcopygroup period …` then `setrcopygroup pol …` — as TWO PUTs. Proven live on
+        AlletraMP_D22U27 (WSAPI 1.15, 2026-10-09): one body carrying both draws HTTP 400 code 44
+        "parameters cannot be present at the same time - policies, syncPeriod". Returns a note when
+        the array refused `autoSynchronize` as a WSAPI field (then only `autoRecover` was set)."""
         if period_seconds:
-            entry["syncPeriod"] = period_seconds
+            try:
+                self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "syncPeriod": period_seconds}]})
+            except Exception as exc:  # noqa: BLE001
+                raise self._translate(exc, where=f"modifyRemoteCopyGroup {name} (period)") from exc
+        policies = {"autoRecover": auto_recover, "autoSynchronize": auto_synchronize}
         try:
-            self._require().modifyRemoteCopyGroup(name, optional={"targets": [entry]})
+            self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": policies}]})
             return ""
         except Exception as exc:  # noqa: BLE001
             detail = self._safe_str(exc).lower()
             if "autosynchronize" not in detail and "unrecognized" not in detail:
-                raise self._translate(exc, where=f"modifyRemoteCopyGroup {name}") from exc
-        entry["policies"] = {"autoRecover": auto_recover}
+                raise self._translate(exc, where=f"modifyRemoteCopyGroup {name} (policies)") from exc
         try:
-            self._require().modifyRemoteCopyGroup(name, optional={"targets": [entry]})
+            self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": {"autoRecover": auto_recover}}]})
         except Exception as exc:  # noqa: BLE001
-            raise self._translate(exc, where=f"modifyRemoteCopyGroup {name}") from exc
+            raise self._translate(exc, where=f"modifyRemoteCopyGroup {name} (policies)") from exc
         return (f"The array did not accept 'autoSynchronize' over WSAPI for {name}; auto_recover and the "
                 f"period were set. Set it on the array: setrcopygroup pol {'auto_synchronize' if auto_synchronize else 'no_auto_synchronize'} {name}")
 

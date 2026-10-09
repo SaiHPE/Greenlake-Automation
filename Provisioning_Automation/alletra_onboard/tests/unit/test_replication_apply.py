@@ -224,6 +224,71 @@ def test_apply_refuses_a_plan_with_findings_or_an_error():
     assert result.error.startswith("Could not read") and log == []
 
 
+# ------------------------------------------------------------------ the WSAPI client's group calls
+
+class _StubRcSdk:
+    """Stands in for hpe3parclient's remote-copy surface. Enforces the rule the live array taught us
+    (D22U27, WSAPI 1.15, 2026-10-09): one `modifyRemoteCopyGroup` body may carry `syncPeriod` OR
+    `policies`, not both — HTTP 400 code 44."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def modifyRemoteCopyGroup(self, name, optional=None):
+        entry = (optional or {})["targets"][0]
+        if "syncPeriod" in entry and "policies" in entry:
+            raise RuntimeError("Bad request (HTTP 400) 44 - invalid input: parameters cannot be present at the same time - policies, syncPeriod")
+        self.calls.append(("modify", name, entry))
+
+    def createRemoteCopyGroup(self, name, targets, optional=None):
+        self.calls.append(("create", name, targets, optional))
+
+    def addVolumeToRemoteCopyGroup(self, group, volume, targets, optional=None):
+        self.calls.append(("admit", group, volume, targets, optional))
+
+    def startRemoteCopy(self, name, optional=None):
+        self.calls.append(("start", name))
+
+
+def _wsapi(stub):
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+
+    c = WsapiClient("192.0.2.1", "u", "p")
+    c._client = stub
+    return c
+
+
+def test_period_and_policies_go_in_two_puts_period_first():
+    stub = _StubRcSdk()
+    note = _wsapi(stub).set_remote_copy_group("g", target="B", period_seconds=300, auto_recover=True, auto_synchronize=True)
+    assert note == ""
+    assert stub.calls == [
+        ("modify", "g", {"targetName": "B", "syncPeriod": 300}),
+        ("modify", "g", {"targetName": "B", "policies": {"autoRecover": True, "autoSynchronize": True}}),
+    ]
+
+
+def test_a_sync_group_sets_policies_only():
+    stub = _StubRcSdk()
+    _wsapi(stub).set_remote_copy_group("g", target="B", period_seconds=None, auto_recover=False, auto_synchronize=True)
+    assert stub.calls == [("modify", "g", {"targetName": "B", "policies": {"autoRecover": False, "autoSynchronize": True}})]
+
+
+def test_group_create_admit_and_start_bodies_match_the_wsapi_reference():
+    stub = _StubRcSdk()
+    c = _wsapi(stub)
+    assert c.create_remote_copy_group("g", target="B", mode="async", peer_cpg="SSD_r6", local_cpg="SSD_r6") == "created"
+    assert c.create_remote_copy_group("s", target="B", mode="sync", peer_cpg="SSD_r6") == "created"
+    assert c.admit_remote_copy_volume("g", "v1", target="B") == "created"
+    assert c.start_remote_copy_group("g") == "started"
+    assert stub.calls == [
+        ("create", "g", [{"targetName": "B", "mode": 2, "userCPG": "SSD_r6"}], {"localUserCPG": "SSD_r6"}),
+        ("create", "s", [{"targetName": "B", "mode": 1, "userCPG": "SSD_r6"}], None),
+        ("admit", "g", "v1", [{"targetName": "B", "secVolumeName": "v1"}], {"volumeAutoCreation": True}),
+        ("start", "g"),
+    ]
+
+
 # ------------------------------------------------------------------ R6: verify
 
 def _view(name: str, system_id: int, groups: list[RcGroup], vvsets: dict | None = None) -> ReplicationArrayView:
