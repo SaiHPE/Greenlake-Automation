@@ -424,7 +424,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
           <DataTable
             columns={[
               { property: 'name', header: 'Group', render: (g: RcGroup) => <Text size="small" style={mono}>{g.name}</Text> },
-              { property: 'mode', header: 'Mode', render: (g: RcGroup) => <Text size="small">{g.mode}</Text> },
+              { property: 'mode', header: 'Mode', render: (g: RcGroup) => <Text size="small">{g.mode}{g.period ? ` · every ${g.period}` : ''}</Text> },
               { property: 'role', header: 'Role here', render: (g: RcGroup) => <Text size="small">{g.role}</Text> },
               {
                 property: 'status',
@@ -432,7 +432,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
                 render: (g: RcGroup) => {
                   const synced = g.volumes.filter((v) => v.sync_status === 'Synced').length;
                   const ok = g.status === 'Started' && synced === g.volumes.length;
-                  return <StatusIndicator state={ok ? 'complete' : 'action_required'} label={`${g.status} · ${synced}/${g.volumes.length} synced`} />;
+                  return <StatusIndicator state={ok ? 'complete' : 'action_required'} label={`${g.status} · ${synced}/${g.volumes.length} synced${g.last_sync ? ` · last sync ${g.last_sync}` : ''}`} />;
                 },
               },
               {

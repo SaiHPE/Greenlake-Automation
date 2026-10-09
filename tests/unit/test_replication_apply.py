@@ -414,3 +414,34 @@ def test_verify_on_the_live_after_apply_capture_says_replicating_for_both_groups
     ]
     # the six pre-existing groups are still there, untouched
     assert len(a.groups) == 8 and len(b.groups) == 8
+
+
+def test_verify_on_the_live_periodic_capture_says_replicating_with_the_last_sync_time():
+    """The 2026-10-09 23:39 capture: the first periodic apply (12 writes, the six Sync groups stopped
+    for the test), minutes after the start. Both groups Started, Periodic, period 5m, Synced with a
+    timestamp — the verdict is the same sentence as for sync plus `last sync`."""
+    after = _FIXTURES / "after_apply_periodic"
+
+    class _After(_Cli):
+        def run(self, command, timeout=None):
+            name = command.replace(" -", "_").replace(" ", "_")
+            if command.startswith("showrcopy") or command == "showvvset":
+                return (after / self.array / (name + ".txt")).read_text(encoding="utf-8")
+            return super().run(command, timeout)
+
+    a = read_array(_creds("10.64.122.99"), array_cli_factory=lambda c: _After("D22U27", showvv=_SHOWVV_A))
+    b = read_array(_creds("10.64.154.190"), array_cli_factory=lambda c: _After("E18U31", showvv="Name VSize_MB\n"))
+    plan = ReplicationPlan.model_validate_json((after / "plan.json").read_text(encoding="utf-8"))
+    assert [c.cli for x in plan.actions if x.name == "zz_rc_vvs_rcg" for c in x.calls][0].endswith("zz_rc_vvs_rcg AlletraMP_E18U31:periodic")
+    reads = iter([a, b])
+    out = verify(_prov(), plan, read_fn=lambda creds, progress=None: next(reads))
+    assert out.error is None and out.links_ok
+    assert [(g.group, g.peer_group, g.verdict, g.detail) for g in out.groups] == [
+        ("zz_rc_vvs_rcg", "zz_rc_vvs_rcg.r188150", "replicating",
+         "Started · Primary here, Secondary on the peer · Periodic · 1 volume(s) Synced · last sync 2026-10-09 23:39:23 IST"),
+        ("zz_rc_test_rcg", "zz_rc_test_rcg.r188150", "replicating",
+         "Started · Primary here, Secondary on the peer · Periodic · 1 volume(s) Synced · last sync 2026-10-09 23:39:24 IST"),
+    ]
+    # the stopped Sync groups did not stop the periodic start: the array counts STARTED groups
+    assert {g.status for g in a.groups if not g.name.startswith("zz_rc_")} == {"Stopped"}
+    assert not any(s.startswith("RCP_") for s in a.vvsets)

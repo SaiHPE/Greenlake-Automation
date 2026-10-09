@@ -392,7 +392,10 @@ export interface RcLink { target: string; nsp: string; address: string; status: 
 export interface RcGroupVolume {
   local_name: string; local_id: number | null; remote_name: string; remote_id: number | null; sync_status: string; last_sync: string;
 }
-export interface RcGroup { name: string; target: string; status: string; role: string; mode: string; options: string[]; volumes: RcGroupVolume[]; }
+export interface RcGroup {
+  name: string; target: string; status: string; role: string; mode: string; options: string[]; volumes: RcGroupVolume[];
+  period?: string; last_sync?: string;
+}
 export interface ReplicationArrayView {
   host: string; name: string; serial: string; system_id: number | null; os_version: string;
   rc_status: string; rc_health: string; rcip_ports: RcipPort[]; targets: RcTarget[]; links: RcLink[]; groups: RcGroup[];
