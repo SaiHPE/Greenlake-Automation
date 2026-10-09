@@ -52,15 +52,21 @@ primary: `GET /remotecopy`, `GET /remotecopygroups`. Parsers are pinned to the B
   E18U31's target for D22U27 is itself named `AlletraMP_E18U31` (fixtures README). The matched
   target's name is what the tool passes as `targetName`. Otherwise: *"No Remote Copy partnership
   between <A> and <B>. The tool configures partnerships from v0.19 (ADR 0015); until then it has to
-  exist before this step."* The partnership is read, never created, in this release.
+  exist before this step."* (plus one sentence if the only targets are RCFC — IP only in this
+  release). The partnership is read, never created, in this release. **A pair may have several
+  such targets** (HPE's layout for mixed modes: a target per mode over links of their own — a link
+  belongs to one target, live 2026-10-09); each primary target is paired with the peer target that
+  answers over the same ports, and the links finding is judged on the target(s) this run uses.
 - Remote Copy started on both arrays (`showrcopy` system status).
 - **One mode per target** (Support Matrix: *"RC Groups using the same RC-Target must replicate in the
   same mode (either Sync or Async Periodic)"*; Getting-started guide: *"If you want to use more than
-  one mode, create a separate target for each mode"*): every Protection row has the same mode, and
-  that mode equals the mode of the groups already on the matched target. Otherwise one sentence
-  naming the target, how many groups of which mode it carries, and the way out (use that mode, or a
-  second target from v0.19). Learned live 2026-10-09: the array accepts every write and refuses the
-  **start** (HTTP 400 code 236) — the check has to say it before the plan.
+  one mode, create a separate target for each mode"*): each sheet mode is given one target — the one
+  already holding this run's groups of that mode (rerun), else one carrying only that mode, else a
+  free one not taken by the other mode. Mixed rows are fine when the pair has a target per mode. A
+  mode without a target is one sentence naming the target(s), what each carries, and the way out
+  (use the carried mode, or a target of its own over spare RCIP ports; the tool configures targets
+  from v0.19). Learned live 2026-10-09: the array accepts every write and refuses the **start**
+  (HTTP 400 code 236) — the check has to say it before the plan.
 - Sync rows: RTT ≤ 10 ms; async rows: ≤ 200 ms (from the tab).
 - The volume set exists on the primary with ≥ 1 member; no member is already in a Remote Copy group.
 - The peer CPG exists on the peer with free space ≥ the set's provisioned size.

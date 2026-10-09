@@ -208,9 +208,28 @@ class ReplicationArrayView(BaseModel):
         return None
 
 
+class PartnerTarget(BaseModel):
+    """One target on the primary whose outbound links point at the peer, with the peer's target that
+    answers over the same ports. A pair may have several (HPE's own layout for mixed modes is one
+    target per mode over separate links); `modes` are the sheet words for the groups it already carries."""
+
+    name: str
+    peer_name: str = ""
+    links_up: int = 0
+    links_total: int = 0
+    peer_links_up: int = 0
+    peer_links_total: int = 0
+    mirror_config: bool = True
+    modes: list[str] = Field(default_factory=list)      # of groups not planned by this run
+    groups: int = 0
+    own_modes: list[str] = Field(default_factory=list)  # of this run's groups already on it (rerun)
+
+
 class Partnership(BaseModel):
-    """The two targets that point at each other, found by LINK ADDRESS (never by name — on the lab
-    pair the peer's target for us carries the peer's own name)."""
+    """The targets that point at each other, found by LINK ADDRESS (never by name — on the lab pair
+    the peer's target for us carries the peer's own name). `target_on_primary` / `target_on_peer`
+    are the target this run uses first; `targets` lists every one; `target_by_mode` is the choice
+    per sheet mode (a mode without an entry has no target it may start on)."""
 
     target_on_primary: str
     target_on_peer: str
@@ -219,6 +238,12 @@ class Partnership(BaseModel):
     links_primary_total: int = 0
     links_peer_total: int = 0
     mirror_config: bool = True
+    targets: list[PartnerTarget] = Field(default_factory=list)
+    target_by_mode: dict[str, str] = Field(default_factory=dict)
+
+    def target_for(self, mode: str) -> PartnerTarget | None:
+        name = self.target_by_mode.get(mode)
+        return next((t for t in self.targets if t.name == name), None) if name else None
 
 
 class ReplicationReport(BaseModel):

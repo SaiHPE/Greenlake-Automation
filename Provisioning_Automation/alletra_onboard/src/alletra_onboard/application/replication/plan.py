@@ -7,6 +7,8 @@ Every sentence here is for the operator. Every WSAPI body shape and CLI line com
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     RTT_LIMIT_MS,
@@ -16,9 +18,12 @@ from alletra_onboard.domain.replication import (
     TEST_VOLUME_GIB,
     TEST_VVSET,
     Partnership,
+    PartnerTarget,
     PlannedCall,
     ProtectionRequest,
     RcGroup,
+    RcLink,
+    RcTarget,
     ReplicationAction,
     ReplicationArrayView,
     ReplicationIntent,
@@ -34,28 +39,70 @@ WSAPI_MODE = {"sync": 1, "async": 2}
 
 # ------------------------------------------------------------------ the partnership (by address)
 
-def find_partnership(primary: ReplicationArrayView, peer: ReplicationArrayView) -> Partnership | None:
-    """The target on each array whose outbound links point at the OTHER array's RCIP addresses.
-    Names are never compared: on the lab pair E18U31's target for D22U27 is named AlletraMP_E18U31."""
-    def _target_towards(view: ReplicationArrayView, other: ReplicationArrayView) -> tuple[str, int, int] | None:
-        if not other.rcip_addresses:
-            return None
-        for target in view.targets:
-            links = [link for link in view.links if link.target == target.name and not link.inbound]
-            if links and {link.address for link in links} <= other.rcip_addresses:
-                return target.name, sum(1 for link in links if link.up), len(links)
-        return None
+def _targets_towards(view: ReplicationArrayView, other: ReplicationArrayView) -> list[tuple[RcTarget, list[RcLink]]]:
+    """Every target on `view` whose outbound links all point at `other`'s RCIP addresses."""
+    if not other.rcip_addresses:
+        return []
+    out = []
+    for target in view.targets:
+        links = [link for link in view.links if link.target == target.name and not link.inbound]
+        if links and {link.address for link in links} <= other.rcip_addresses:
+            out.append((target, links))
+    return out
 
-    forward = _target_towards(primary, peer)
-    backward = _target_towards(peer, primary)
-    if forward is None or backward is None:
+
+def _assign(targets: list[PartnerTarget], modes: Iterable[str]) -> dict[str, str]:
+    """One target per sheet mode: the one already holding this run's groups of that mode (rerun), else
+    one carrying only that mode, else an empty one not taken by the other mode. Fixed order, so the
+    choice is the same on every preview."""
+    chosen: dict[str, str] = {}
+    taken: set[str] = set()
+    for mode in ("sync", "async"):
+        if mode not in modes:
+            continue
+        pick = (next((t for t in targets if mode in t.own_modes and t.name not in taken), None)
+                or next((t for t in targets if t.modes == [mode] and t.name not in taken), None)
+                or next((t for t in targets if not t.modes and t.name not in taken), None))
+        if pick is not None:
+            chosen[mode] = pick.name
+            taken.add(pick.name)
+    return chosen
+
+
+def find_partnership(primary: ReplicationArrayView, peer: ReplicationArrayView, *,
+                     modes: Iterable[str] = (), own_groups: Iterable[str] = ()) -> Partnership | None:
+    """The target(s) on each array whose outbound links point at the OTHER array's RCIP addresses.
+    Names are never compared: on the lab pair E18U31's target for D22U27 is named AlletraMP_E18U31.
+    Each primary target is paired with the peer target that answers over the same ports (its links
+    point back at the addresses of the ports the primary target uses)."""
+    forward, backward = _targets_towards(primary, peer), _targets_towards(peer, primary)
+    if not forward or not backward:
         return None
-    target = next(t for t in primary.targets if t.name == forward[0])
+    own = set(own_groups)
+    port_ip = {p.nsp: p.ip for p in primary.rcip_ports}
+    targets: list[PartnerTarget] = []
+    for t, links in forward:
+        local = {port_ip.get(link.nsp, "") for link in links} - {""}
+        pair = (next((bt for bt in backward if {link.address for link in bt[1]} == local), None)
+                or next((bt for bt in backward if {link.address for link in bt[1]} & local), None)
+                or backward[0])
+        on_target = [g for g in primary.groups if g.target == t.name]
+        targets.append(PartnerTarget(
+            name=t.name, peer_name=pair[0].name,
+            links_up=sum(1 for link in links if link.up), links_total=len(links),
+            peer_links_up=sum(1 for link in pair[1] if link.up), peer_links_total=len(pair[1]),
+            mirror_config=t.mirror_config,
+            modes=sorted({g.mode_key for g in on_target if g.name not in own}),
+            groups=sum(1 for g in on_target if g.name not in own),
+            own_modes=sorted({g.mode_key for g in on_target if g.name in own}),
+        ))
+    chosen = _assign(targets, set(modes))
+    first = next((t for t in targets if t.name in chosen.values()), targets[0])
     return Partnership(
-        target_on_primary=forward[0], target_on_peer=backward[0],
-        links_primary_up=forward[1], links_primary_total=forward[2],
-        links_peer_up=backward[1], links_peer_total=backward[2],
-        mirror_config=target.mirror_config,
+        target_on_primary=first.name, target_on_peer=first.peer_name,
+        links_primary_up=first.links_up, links_primary_total=first.links_total,
+        links_peer_up=first.peer_links_up, links_peer_total=first.peer_links_total,
+        mirror_config=first.mirror_config, targets=targets, target_by_mode=chosen,
     )
 
 
@@ -72,20 +119,29 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
         return report
 
     a, b = primary.name or primary.host, peer.name or peer.host
-    report.partnership = find_partnership(primary, peer)
+    row_modes = {row.mode for row in intent.protections}
+    planned = {row.group_name for row in intent.protections} | {TEST_GROUP}
+    report.partnership = find_partnership(primary, peer, modes=row_modes, own_groups=planned)
     if report.partnership is None:
         f.append(
             f"No Remote Copy partnership between {a} and {b}: neither array has a target whose links point at "
             f"the other's RCIP addresses. The tool configures partnerships from v0.19 (ADR 0015); until then it "
             "has to exist before this step."
         )
+        fc = [t.name for v in (primary, peer) for t in v.targets if t.type.upper() == "FC"]
+        if fc:
+            f.append(f"Remote Copy over Fibre Channel target(s) found ({', '.join(sorted(set(fc)))}); this release "
+                     "supports Remote Copy over IP only (ADR 0015).")
     else:
         p = report.partnership
-        if p.links_primary_up < 2 or p.links_peer_up < 2:
-            f.append(
-                f"The partnership needs at least 2 links Up each way: {a} → {b} has {p.links_primary_up} of "
-                f"{p.links_primary_total} Up, {b} → {a} has {p.links_peer_up} of {p.links_peer_total} Up."
-            )
+        used = [p.target_for(m) for m in sorted(row_modes)]
+        for t in [t for t in used if t is not None] or p.targets[:1]:
+            if t.links_up < 2 or t.peer_links_up < 2:
+                f.append(
+                    f"The partnership needs at least 2 links Up each way: {a} → {b} via target '{t.name}' has "
+                    f"{t.links_up} of {t.links_total} Up, {b} → {a} via '{t.peer_name}' has {t.peer_links_up} of "
+                    f"{t.peer_links_total} Up."
+                )
     for view, label in ((primary, a), (peer, b)):
         if not view.rc_started:
             f.append(f"Remote Copy is not started on {label} (showrcopy says '{view.rc_status or 'unknown'}'); "
@@ -94,25 +150,47 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
     rtt = intent.rtt_ms
     # One mode per target (Support Matrix: "RC Groups using the same RC-Target must replicate in the
     # same mode"; proven live 2026-10-09 — the array refuses the START, HTTP 400 code 236, after
-    # every other write has succeeded). Groups this run plans are not "existing" on a rerun.
-    row_modes = {row.mode for row in intent.protections}
-    if len(row_modes) > 1:
-        f.append("The Replication tab mixes async and sync rows; every group on one target must use the same mode "
-                 "(HPE Support Matrix) and this release uses one target. Make all rows the same mode.")
+    # every other write has succeeded). HPE's answer is a target per mode over links of their own
+    # (a link belongs to one target, live 2026-10-09), so a pair with such targets serves mixed rows.
     if report.partnership is not None:
-        target = report.partnership.target_on_primary
-        planned = {row.group_name for row in intent.protections} | {TEST_GROUP}
-        on_target = [g for g in primary.groups if g.target == target and g.name not in planned]
-        existing_modes = {g.mode_key for g in on_target}
+        p = report.partnership
         for mode in sorted(row_modes):
-            if existing_modes and mode not in existing_modes:
-                have = sorted(existing_modes)[0]
+            if mode in p.target_by_mode:
+                continue
+            tail = ("Use {have} on the Replication tab, or a second target over spare RCIP ports (a link belongs "
+                    "to one target; the tool configures targets from v0.19).")
+            if len(p.targets) == 1 and p.targets[0].modes:
+                t = p.targets[0]
+                have = t.modes[0]
+                on_target = [g for g in primary.groups if g.target == t.name and g.name not in planned]
                 names = ", ".join(g.name for g in on_target[:4]) + ("…" if len(on_target) > 4 else "")
                 f.append(
-                    f"Target '{target}' already carries {len(on_target)} {have} group(s) ({names}); every group on one "
+                    f"Target '{t.name}' already carries {len(on_target)} {have} group(s) ({names}); every group on one "
                     f"target must replicate in the same mode (HPE Support Matrix), so {mode} groups cannot be started "
-                    f"there. Use {have} on the Replication tab, or a second target over spare RCIP ports (a link belongs "
-                    f"to one target; the tool configures targets from v0.19)."
+                    f"there. " + tail.format(have=have)
+                )
+            elif len(p.targets) == 1:
+                f.append(
+                    f"The Replication tab mixes sync and async rows and {a} → {b} has one target ('{p.targets[0].name}'); "
+                    "every group on one target must replicate in the same mode (HPE Support Matrix). Make all rows one "
+                    "mode, or add a second target over spare RCIP ports (a link belongs to one target; the tool "
+                    "configures targets from v0.19)."
+                )
+            else:
+                other = next((m for m, n in p.target_by_mode.items() if m != mode), None)
+                parts = []
+                for t in p.targets:
+                    if t.modes:
+                        parts.append(f"'{t.name}' carries {t.groups} {'/'.join(t.modes)} group(s)")
+                    elif other and p.target_by_mode.get(other) == t.name:
+                        parts.append(f"'{t.name}' takes this run's {other} rows")
+                    else:
+                        parts.append(f"'{t.name}' is free")
+                f.append(
+                    f"None of the {len(p.targets)} targets from {a} to {b} can carry a {mode} group ({'; '.join(parts)}); "
+                    "every group on one target must replicate in the same mode (HPE Support Matrix). Use that mode on "
+                    "the Replication tab, or a target of its own over spare RCIP ports (a link belongs to one target; "
+                    "the tool configures targets from v0.19)."
                 )
     for row in intent.protections:
         limit = RTT_LIMIT_MS[row.mode]
@@ -206,9 +284,15 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
         plan.error = report.error
         return plan
     primary, peer = report.primary, report.peer
-    target = report.partnership.target_on_primary if report.partnership else "<peer>"
-    mirror_config = report.partnership.mirror_config if report.partnership else True
+    partnership = report.partnership
     a, b = primary.name or primary.host, peer.name or peer.host
+
+    def target_for(mode: str) -> tuple[str, bool]:
+        """(target name, mirror_config) for a row's mode — the per-mode choice, else the first target."""
+        if partnership is None:
+            return "<peer>", True
+        t = partnership.target_for(mode)
+        return (t.name, t.mirror_config) if t else (partnership.target_on_primary, partnership.mirror_config)
 
     rows: list[tuple[ProtectionRequest, list[str], str]] = []
     for row in intent.protections:
@@ -254,6 +338,7 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
 
     for row, members, local_cpg in rows:
         g = row.group_name
+        target, mirror_config = target_for(row.mode)
         existing = primary.group(g)
         peer_set = row.peer_vvset_name
         peer_set_call: PlannedCall | None = None
@@ -308,9 +393,14 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
                           + ", ".join(plan.existing_groups) + ".")
     if report.partnership:
         p = report.partnership
-        plan.notes.append(f"Partnership: {a} → {b} via target '{p.target_on_primary}' ({p.links_primary_up}/{p.links_primary_total} links Up), "
-                          f"{b} → {a} via target '{p.target_on_peer}' ({p.links_peer_up}/{p.links_peer_total} Up), policy "
-                          + ("mirror_config" if p.mirror_config else "no_mirror_config") + ".")
+        legs = "; ".join(
+            f"{a} → {b} via target '{t.name}' ({t.links_up}/{t.links_total} links Up), {b} → {a} via '{t.peer_name}' "
+            f"({t.peer_links_up}/{t.peer_links_total} Up), policy " + ("mirror_config" if t.mirror_config else "no_mirror_config")
+            + ("" if not t.modes else f", carries {t.groups} {'/'.join(t.modes)} group(s)")
+            for t in p.targets)
+        plan.notes.append(f"Partnership: {legs}.")
+        if len(p.targets) > 1 and p.target_by_mode:
+            plan.notes.append("Target per mode this run: " + ", ".join(f"{m} → '{n}'" for m, n in sorted(p.target_by_mode.items())) + ".")
     if primary.system_id is not None:
         plan.notes.append(f"On {b} each new group will be named '<group>.r{primary.system_id}'.")
     return plan
