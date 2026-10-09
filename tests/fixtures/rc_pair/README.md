@@ -77,3 +77,27 @@ arrays with the tool's two **sync** groups live beside the six old ones: `zz_rc_
 `volumeLastSyncTime` set, `localVolumeSetName` = the primary set; peer sets `zz_rc_vvs_rc` /
 `zz_rc_test_rc` hold the secondaries. No `RCP_<group>` set exists — the WSAPI path does not create
 one. Pinned by `test_verify_on_the_live_after_apply_capture_says_replicating_for_both_groups`.
+
+## `after_apply_periodic/` — 2026-10-09 23:39, the first live periodic apply
+
+The same reads on both arrays, plus the harness's `plan.json` / `result.json` / `verify.json`, with
+the tool's two **periodic** groups live (`zz_rc_vvs_rcg`, `zz_rc_test_rcg`; period 5m, RPO 10) and
+the six Sync groups **Stopped** for the window (`scripts/rc_option1.py stop` on the lab branch; the
+six were restarted afterwards and `showrcopy groups` / `showrcopy -d groups` / `showvvset` /
+`showvlun` diffed **identical** to the baseline). Facts:
+
+- **The array's one-mode rule counts STARTED groups only:** the periodic start was accepted beside
+  six stopped Sync groups (the same start was code 236 with them started, 21:41). The tool still
+  refuses to plan that — the stopped groups' restart would be at risk — and says so in its own
+  sentence (pinned by `test_stopped_groups_of_the_other_mode_are_still_a_finding_with_the_honest_sentence`).
+  Not learned: whether the Sync groups restart beside a started periodic group (they were restarted
+  after the periodic groups were removed).
+- **The periodic PRIMARY's `showrcopy` row carries spaces in Options:** `Last-Sync 2026-10-09
+  23:39:23 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize`; the secondary's row reads
+  `Period 5m,auto_recover,over_per_alert,auto_synchronize`. `over_per_alert` is the array's own
+  default. Volume rows carry `LastSyncTime 2026-10-09 23:39:23 IST`; `showrcopy -d` adds the resync
+  snapshot `Resync_ss rcpy.27.12373.5` and `VV_iter`/`R_iter` `188150/1`. Parsed into `RcGroup.period`
+  / `.last_sync` (pinned by `test_a_periodic_group_row_parses_last_sync_and_period_out_of_its_options`).
+- Verify: *Replicating · last sync <ts>* for both, links 2/2 each way (pinned by
+  `test_verify_on_the_live_periodic_capture_says_replicating_with_the_last_sync_time`). The removal
+  set (A then B) was the same shape as for sync and every line was accepted.
