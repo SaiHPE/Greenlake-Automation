@@ -34,6 +34,17 @@ written.
   `volumes[].remoteVolumes[]` = `remoteVolumeName`, `remoteVolumeID`, `syncStatus` 3 (Synced),
   `volumeLastSyncTime` (ISO, +05:30) / `volumeLastSyncTimeSec`, `localVolumeSetName` /
   `remoteVolumeSetName` (`300gb` ↔ `300gb`).
+- **A second target between the same two arrays needs links of its own** (`second_target/`, live
+  2026-10-09 23:10): `creatercopytarget AlletraMP_E18U31_async IP 0:4:3:10.54.154.192 1:4:3:10.54.154.193`
+  is refused on both arrays with *"Link 0:4:3:10.54.154.192 appears to exist on another target."* —
+  a link is (local port, peer address) and belongs to one target. So the HPE way out of "one mode
+  per target" (a separate target per mode) needs spare RCIP ports with addresses: on this pair
+  0:4:4 / 1:4:4 are `offline`, no cable, on both arrays. Nothing was created; targets and links after
+  are identical to before.
+- **The third lab array** `MPB10K-D24U21-VZ` (10.64.122.140, SGHD44LQLS, OS **10.5.51**) cannot
+  stand in: its four RCIP ports (10.222.1.5–.8/24, no gateway) are `loss_sync`, its only target
+  `MPB10K-E24U21-LZ` is `failed` with all four links `Down` (`second_target/VZ_*`); `controlport rcip
+  ping` fails both ways (10.222.1.0/24 is not routed from 10.54.0.0/16).
 - **`/remotecopy`:** `mode 2`, `status 1`, `asyncEnabled false`; links to `/remotecopygroups`,
   `/remotecopytargets` (not captured), `/remotecopylinks` (captured: one member per link, named
   `<target>_<N>_<S>_<P>`).

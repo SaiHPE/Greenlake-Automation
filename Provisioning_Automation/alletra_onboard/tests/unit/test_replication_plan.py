@@ -112,8 +112,9 @@ def test_an_async_row_on_a_target_that_carries_sync_groups_is_a_finding():
     [finding] = report.findings
     assert finding == (
         "Target 'AlletraMP_E18U31' already carries 6 sync group(s) (300gb, APP_Test, Intern_Automation, Intern_Automation2…); "
-        "every group on one target must replicate in the same mode (HPE Support Matrix), so a async group cannot be started "
-        "there. Use sync on the Replication tab, or a second target (the tool configures targets from v0.19)."
+        "every group on one target must replicate in the same mode (HPE Support Matrix), so async groups cannot be started "
+        "there. Use sync on the Replication tab, or a second target over spare RCIP ports (a link belongs "
+        "to one target; the tool configures targets from v0.19)."
     )
 
 

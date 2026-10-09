@@ -165,3 +165,29 @@ both `removevvset` lines answered *"vv set … does not exist"* — **the array 
 itself when a started group is removed** (it did not on the never-started group of the second
 attempt). `showrcopy groups zz_rc*` / `showvvset zz_rc*` / `showvv zz_rc*` empty on both arrays;
 the six original groups untouched. Both arrays are as they were on 2026-10-07.
+
+## Where a periodic target could come from — 2026-10-09 22:50–23:10, read-only plus one refused write
+
+`scripts/rc_options.py` (jumpbox-test branch) read all three lab arrays and pinged across the
+replication networks; `scripts/rc_target2.py` tried the cheapest idea, a second target over the
+existing ports. Captures in `tests/fixtures/rc_pair/second_target/`.
+
+- **VZ** (`MPB10K-D24U21-VZ`, 10.64.122.140, OS 10.5.51) is up on management but its RCIP ports
+  10.222.1.5–.8/24 have no gateway and no carrier (`loss_sync`); its one target `MPB10K-E24U21-LZ`
+  is `failed`, four links `Down`. Pings D22U27→VZ and E18U31→VZ: 100 % loss; VZ→either:
+  *Destination Host Unreachable* from itself. The VZ/LZ pair is physically down today — relevant to
+  the owed CRV VZ/LZ run too. Not a candidate without recabling the CRV pair's ports.
+- **Spare ports** 0:4:4 / 1:4:4 on D22U27 and E18U31: `offline`, no cable.
+- **Second target over the same links — refused on both arrays**, nothing created:
+  `creatercopytarget AlletraMP_E18U31_async IP 0:4:3:10.54.154.192 1:4:3:10.54.154.193` →
+  *"Link 0:4:3:10.54.154.192 appears to exist on another target."* A link (local port, peer address)
+  belongs to one target. Targets and links after are identical to before (captured).
+
+**So the periodic run needs new links:** cable the spare x:4:4 ports and give them routed
+addresses (lab-team ticket; the two arrays' RCIP subnets 10.54.120.0/21 and 10.54.152.0/21 are
+routed, not flat). Since a link is unique per *local port + peer address*, cabling one array's two
+spare ports is enough in principle: the other array's second target uses its existing ports toward
+the two new addresses, and the cabled array's second target uses its new ports toward the existing
+addresses — the shared-port layout HPE describes for 1-to-N. To be proven once ports have carrier.
+The other way is the group owners' agreement to re-home the six Sync groups, which is not ours to ask
+for lightly. **Decision owed by the operator (BL-20).**

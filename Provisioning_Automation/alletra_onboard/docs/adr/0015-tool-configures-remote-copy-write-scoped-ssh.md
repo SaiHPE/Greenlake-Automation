@@ -97,3 +97,8 @@ read-only client is unchanged and stays the default.**
 - The v0.19 "create partnership" path cannot be proven on the lab pair without dismantling its
   partnership; it waits for a pair that can be partnered from scratch, or the operator's decision to
   rebuild the lab one.
+- Learned live 2026-10-09 (`tests/fixtures/rc_pair/second_target/`): a link — local port plus peer
+  address — belongs to exactly one target (*"Link 0:4:3:10.54.154.192 appears to exist on another
+  target."*). The v0.19 "second target for the other mode" therefore needs spare RCIP ports with
+  addresses on at least one side; the tool must say so from `showport -rcip` before it plans one,
+  and must recognise that sentence as the array's refusal.
