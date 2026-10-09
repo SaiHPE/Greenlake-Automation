@@ -123,3 +123,12 @@ Consequence for this pair: the live test runs in **sync** (RTT 1 ms). The first 
 `showrcopy` fixture waits for a target that carries no sync groups.
 
 Still owed: paste this removal set (B, then A), retry with `mode: sync` on the tab, Verify.
+
+**Removal set pasted 2026-10-09 (B first, as the page then said) — the order was wrong, the lines right.**
+E18U31 refused `removevvset -f zz_rc_vvs_rc` while the group existed: *"Set zz_rc_vvs_rc is currently
+admitted to Remote Copy Group and may not be directly removed."* On D22U27 `stoprcopygroup -f`,
+`dismissrcopyvv -f -removevv zz_rc_vol01 zz_rc_vvs_rcg` (*"Volume zz_rc_vol01 has been dismissed"*;
+the secondary on E18U31 was gone with it — `showvv zz_rc_vol01` there: *no vv listed*),
+`removercopygroup -f` (*"Group zz_rc_vvs_rcg has been deleted"*), `removevvset -f zz_rc_test`,
+`removevv -f zz_rc_test_v01` all succeeded; `zz_rc_vvs` on D22U27 still holds `zz_rc_vol01`. The page
+now says **A first, then B**, with the array's sentence as the reason.
