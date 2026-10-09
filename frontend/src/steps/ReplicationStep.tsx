@@ -105,8 +105,8 @@ function RemovalSets({ result, runId, a, b }: { result: ReplicationResult; runId
         <>
           <Text size="small" color="text-weak">
             Undoes exactly what this apply created, in dependency order: on A each group is stopped, its volumes dismissed
-            (which removes the secondaries on B), then removed; only then can B’s peer volume set go — while the group
-            exists the peer refuses to remove it. Objects that already existed are not touched.
+            (which removes the secondaries on B), then removed; then B’s peer volume sets — the array usually removes
+            them with the group, so those lines may answer “does not exist”. Objects that already existed are not touched.
           </Text>
           <Box background="background-contrast" round="xsmall" pad="small" tabIndex={0} style={{ overflowX: 'auto' }}>
             {blocks.map(([name, label, lines]) =>
