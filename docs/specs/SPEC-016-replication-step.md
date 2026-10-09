@@ -50,6 +50,13 @@ primary: `GET /remotecopy`, `GET /remotecopygroups`. Parsers are pinned to the B
   between <A> and <B>. The tool configures partnerships from v0.19 (ADR 0015); until then it has to
   exist before this step."* The partnership is read, never created, in this release.
 - Remote Copy started on both arrays (`showrcopy` system status).
+- **One mode per target** (Support Matrix: *"RC Groups using the same RC-Target must replicate in the
+  same mode (either Sync or Async Periodic)"*; Getting-started guide: *"If you want to use more than
+  one mode, create a separate target for each mode"*): every Protection row has the same mode, and
+  that mode equals the mode of the groups already on the matched target. Otherwise one sentence
+  naming the target, how many groups of which mode it carries, and the way out (use that mode, or a
+  second target from v0.19). Learned live 2026-10-09: the array accepts every write and refuses the
+  **start** (HTTP 400 code 236) — the check has to say it before the plan.
 - Sync rows: RTT ≤ 10 ms; async rows: ≤ 200 ms (from the tab).
 - The volume set exists on the primary with ≥ 1 member; no member is already in a Remote Copy group.
 - The peer CPG exists on the peer with free space ≥ the set's provisioned size.

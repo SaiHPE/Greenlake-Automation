@@ -37,10 +37,12 @@ written.
 - **`/remotecopy`:** `mode 2`, `status 1`, `asyncEnabled false`; links to `/remotecopygroups`,
   `/remotecopytargets` (not captured), `/remotecopylinks` (captured: one member per link, named
   `<target>_<N>_<S>_<P>`).
-- **WSAPI write rule (live, 2026-10-09):** `PUT /remotecopygroups/<g>` refuses `syncPeriod` and
+- **WSAPI write rules (live, 2026-10-09):** `PUT /remotecopygroups/<g>` refuses `syncPeriod` and
   `policies` in the same `targets[]` entry — HTTP 400 code 44 *"parameters cannot be present at the
   same time - policies, syncPeriod"*. Two PUTs. `POST /remotecopygroups` with `localUserCPG` in the
-  body was accepted.
+  body was accepted. **One mode per target:** a Periodic group on this target (six Sync groups) is
+  created, configured and populated without complaint and then refused at **start** — HTTP 400 code
+  236 *"Group with different modes on a single target is not supported"* (Support Matrix note 1).
 - **CPGs:** D22U27 `3sc`, `SSD_r6`, `test`; E18U31 `SSD_r6` only.
 - **`help/`** — the array's own `-h` for every Remote Copy command (D22U27; identical OS on E18U31).
   Confirms: `creatercopygroup -usr_cpg <cpg> <target>:<cpg> <group> <target>:<mode>`;
