@@ -164,11 +164,20 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                 have = t.modes[0]
                 on_target = [g for g in primary.groups if g.target == t.name and g.name not in planned]
                 names = ", ".join(g.name for g in on_target[:4]) + ("…" if len(on_target) > 4 else "")
-                f.append(
-                    f"Target '{t.name}' already carries {len(on_target)} {have} group(s) ({names}); every group on one "
-                    f"target must replicate in the same mode (HPE Support Matrix), so {mode} groups cannot be started "
-                    f"there. " + tail.format(have=have)
-                )
+                if any(g.status.lower() == "started" for g in on_target):
+                    f.append(
+                        f"Target '{t.name}' already carries {len(on_target)} {have} group(s) ({names}); every group on one "
+                        f"target must replicate in the same mode (HPE Support Matrix), so {mode} groups cannot be started "
+                        f"there. " + tail.format(have=have)
+                    )
+                else:
+                    # Live 2026-10-09: the array starts a periodic group beside STOPPED sync groups. The
+                    # rule still binds the stopped ones when they restart, so the tool does not go there.
+                    f.append(
+                        f"Target '{t.name}' already carries {len(on_target)} {have} group(s) ({names}), all stopped. The array "
+                        f"would start {mode} groups beside them, but every group on one target must replicate in the same "
+                        f"mode (HPE Support Matrix), so the tool will not put their restart at risk. " + tail.format(have=have)
+                    )
             elif len(p.targets) == 1:
                 f.append(
                     f"The Replication tab mixes sync and async rows and {a} → {b} has one target ('{p.targets[0].name}'); "

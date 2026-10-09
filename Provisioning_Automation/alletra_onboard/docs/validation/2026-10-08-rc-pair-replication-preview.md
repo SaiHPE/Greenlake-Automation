@@ -191,3 +191,46 @@ the two new addresses, and the cabled array's second target uses its new ports t
 addresses — the shared-port layout HPE describes for 1-to-N. To be proven once ports have carrier.
 The other way is the group owners' agreement to re-home the six Sync groups, which is not ours to ask
 for lightly. **Decision owed by the operator (BL-20).**
+
+## The periodic run — 2026-10-09 23:30–23:55, the six Sync groups paused for the window
+
+The operator chose the pause. Baseline captured (`rc_option1.py baseline`: `showrcopy`, `showrcopy
+-d groups`, `showvvset`, `showvlun`, `showvv` both arrays), `zz_rc_vol01` + `zz_rc_vvs` recreated,
+then `stoprcopygroup -f` on each of the six from its Primary side — read at run time, because
+**APP_Test had swapped sides since 10-07** (Primary on D22U27 now; the first draft of the script
+had it hard-coded on E18U31, the kind of overfit this session was asked to avoid).
+
+**The UI refused, as designed:** the R2 finding counts stopped groups too (*already carries 6 sync
+group(s)*), because a periodic group started beside stopped Sync groups puts their restart at risk.
+So the run went through the product's own modules from a harness (`scripts/rc_async_lab.py` on the
+lab branch): same `read_array` / `check` / `build_plan` / `apply_plan` / `verify`, with exactly that
+one finding dropped. Sheet composed by `rc_sheet.py async` (one row, `zz_rc_vvs` → `SSD_r6`, async,
+RPO 10 → period 5 min).
+
+**Apply: 12 writes, all `created`, no error** — test volume, test set, `creatercopygroup …:periodic`
+(with `localUserCPG`), the two PUTs (period 300 s, then policies), admit with `volumeAutoCreation`,
+peer set on B, **start accepted** — the same start that was code 236 at 21:41 with the Sync groups
+started. **The array's one-mode rule counts started groups only.** Verify, twice: both groups
+*Replicating · Started · Primary here, Secondary on the peer · Periodic · 1 volume(s) Synced · last
+sync 2026-10-09 23:39:23 IST*, links 2/2 each way. Captures in
+`tests/fixtures/rc_pair/after_apply_periodic/` with the harness's plan / result / verify JSON.
+
+**What the capture taught the code:** the periodic primary's `showrcopy` row has spaces inside its
+Options column (`Last-Sync <ts>, Period 5m,<policies>`); the parser split on whitespace and would
+have shown "Last-Sync" as the only policy. Fixed the same night: `period` and `last_sync` are fields,
+the Replication page shows *Periodic · every 5m* and the last sync. The array adds
+`over_per_alert` to a periodic group by itself.
+
+**Cleanup and restore:** the removal set (A then B) run by `rc_async_lab.py cleanup`, every line
+accepted; `rc_option1.py start` restarted the six (delta resync from the stop snapshots, all volume
+rows Synced within minutes); `rc_option1.py compare` — **IDENTICAL to the baseline** on `showrcopy
+groups`, `showrcopy -d groups`, `showvvset`, `showvlun` on both arrays; `unprep` removed the test
+volume and set. The pair is as it was on 10-07 plus APP_Test's side swap, which predates us.
+
+**Not learned, on purpose:** whether the Sync groups restart beside a *started* periodic group (the
+periodic groups were removed first). The tool's finding for stopped groups therefore stays, with the
+honest sentence (*the array would start … but … the tool will not put their restart at risk*).
+
+**SPEC-016 R1–R8 are live for sync and periodic.** Through the UI for sync; through the same
+modules for periodic. Owed: periodic through the UI itself (a target of its own, BL-20), the preset
+with a real host, runner scenario 7.

@@ -133,6 +133,27 @@ def test_mixed_modes_on_the_tab_with_one_target_is_a_finding():
     assert report.partnership.target_by_mode == {"sync": "AlletraMP_E18U31"}
 
 
+def test_stopped_groups_of_the_other_mode_are_still_a_finding_with_the_honest_sentence():
+    # after_apply_periodic/: the six Sync groups STOPPED and the tool's two periodic groups started —
+    # the array accepted that start (live 2026-10-09 23:39). The tool still refuses to plan it, and
+    # says why; this run's own groups on the target are not "existing".
+    periodic = _FIXTURES / "after_apply_periodic"
+    a, b = _views(a_overrides={"showrcopy": (periodic / "D22U27" / "showrcopy.txt").read_text(encoding="utf-8")},
+                  b_overrides={"showrcopy": (periodic / "E18U31" / "showrcopy.txt").read_text(encoding="utf-8")})
+    # with the tool's own groups present this is a rerun and the target is theirs: no finding
+    assert check(a, b, _intent([_ASYNC_ROW])).findings == []
+    a.groups = [g for g in a.groups if not g.name.startswith("zz_rc_")]
+    b.groups = [g for g in b.groups if not g.name.startswith("zz_rc_")]
+    report = check(a, b, _intent([_ASYNC_ROW]))
+    [finding] = report.findings
+    assert finding == (
+        "Target 'AlletraMP_E18U31' already carries 6 sync group(s) (300gb, APP_Test, Intern_Automation, Intern_Automation2…), "
+        "all stopped. The array would start async groups beside them, but every group on one target must replicate in the "
+        "same mode (HPE Support Matrix), so the tool will not put their restart at risk. Use sync on the Replication tab, or "
+        "a second target over spare RCIP ports (a link belongs to one target; the tool configures targets from v0.19)."
+    )
+
+
 # ---- a pair laid out the way HPE describes for mixed modes: a target per mode over links of its own
 
 _PORTS = ("0:4:3", "1:4:3", "0:4:4", "1:4:4")
