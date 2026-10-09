@@ -69,7 +69,8 @@ def _prov(*, failover=True) -> ProvisioningIntent:
     )
     intent.replication = ReplicationIntent(
         peer=_creds("10.64.154.190"), rtt_ms=1.0, failover_test=failover,
-        protections=[ProtectionRequest(vvset="zz_rc_vvs", peer_cpg="SSD_r6")],
+        # the lab target carries six Sync groups: one mode per target, so the row is sync
+        protections=[ProtectionRequest(vvset="zz_rc_vvs", peer_cpg="SSD_r6", mode="sync", rpo_minutes=None)],
     )
     return intent
 
@@ -143,13 +144,13 @@ def test_apply_writes_in_the_fixed_order_and_builds_both_removal_blocks():
         ("A", "createvv zz_rc_test_v01"),
         ("A", "createvvset zz_rc_test"),
         ("A", "creatercopygroup zz_rc_vvs_rcg"),
-        ("A", "setrcopygroup zz_rc_vvs_rcg period=300 ar=True as=True"),
+        ("A", "setrcopygroup zz_rc_vvs_rcg period=None ar=True as=True"),
         ("A", "admitrcopyvv zz_rc_vol01->zz_rc_vvs_rcg"),
         ("A", "admitrcopyvv zz_rc_vol02->zz_rc_vvs_rcg"),
         ("B", "createvvset zz_rc_vvs_rc"),
         ("A", "startrcopygroup zz_rc_vvs_rcg"),
         ("A", "creatercopygroup zz_rc_test_rcg"),
-        ("A", "setrcopygroup zz_rc_test_rcg period=300 ar=True as=True"),
+        ("A", "setrcopygroup zz_rc_test_rcg period=None ar=True as=True"),
         ("A", "admitrcopyvv zz_rc_test_v01->zz_rc_test_rcg"),
         ("B", "createvvset zz_rc_test_rc"),
         ("A", "startrcopygroup zz_rc_test_rcg"),

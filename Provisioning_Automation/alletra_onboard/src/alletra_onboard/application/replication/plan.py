@@ -10,6 +10,7 @@ from __future__ import annotations
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     RTT_LIMIT_MS,
+    TEST_GROUP,
     TEST_PEER_VVSET,
     TEST_VOLUME,
     TEST_VOLUME_GIB,
@@ -91,6 +92,27 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                      "it has to be started before groups can be created.")
 
     rtt = intent.rtt_ms
+    # One mode per target (Support Matrix: "RC Groups using the same RC-Target must replicate in the
+    # same mode"; proven live 2026-10-09 — the array refuses the START, HTTP 400 code 236, after
+    # every other write has succeeded). Groups this run plans are not "existing" on a rerun.
+    row_modes = {row.mode for row in intent.protections}
+    if len(row_modes) > 1:
+        f.append("The Replication tab mixes async and sync rows; every group on one target must use the same mode "
+                 "(HPE Support Matrix) and this release uses one target. Make all rows the same mode.")
+    if report.partnership is not None:
+        target = report.partnership.target_on_primary
+        planned = {row.group_name for row in intent.protections} | {TEST_GROUP}
+        on_target = [g for g in primary.groups if g.target == target and g.name not in planned]
+        existing_modes = {g.mode_key for g in on_target}
+        for mode in sorted(row_modes):
+            if existing_modes and mode not in existing_modes:
+                have = sorted(existing_modes)[0]
+                names = ", ".join(g.name for g in on_target[:4]) + ("…" if len(on_target) > 4 else "")
+                f.append(
+                    f"Target '{target}' already carries {len(on_target)} {have} group(s) ({names}); every group on one "
+                    f"target must replicate in the same mode (HPE Support Matrix), so a {mode} group cannot be started "
+                    f"there. Use {have} on the Replication tab, or a second target (the tool configures targets from v0.19)."
+                )
     for row in intent.protections:
         limit = RTT_LIMIT_MS[row.mode]
         if rtt is not None and rtt > limit:
@@ -201,7 +223,9 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
             c.seq = seq
 
     if intent.failover_test and not intent.failover_group:
-        test_row = ProtectionRequest(vvset=TEST_VVSET, mode="async", peer_cpg=(intent.protections[0].peer_cpg if intent.protections else ""),
+        # The test group rides the same target, so it takes the rows' mode (one mode per target).
+        lead = intent.protections[0] if intent.protections else ProtectionRequest(vvset=TEST_VVSET, peer_cpg="")
+        test_row = ProtectionRequest(vvset=TEST_VVSET, mode=lead.mode, rpo_minutes=lead.rpo_minutes, peer_cpg=lead.peer_cpg,
                                      peer_vvset=TEST_PEER_VVSET)
         test_cpg = next((v.cpg for v in provisioning.volumes), "")
         if TEST_VOLUME not in primary.volume_size_mib:

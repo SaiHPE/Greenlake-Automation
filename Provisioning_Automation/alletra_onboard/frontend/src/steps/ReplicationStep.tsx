@@ -78,16 +78,17 @@ function download(filename: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-/** SPEC-007 pattern, two blocks: the undo for exactly what this apply created, on A then on B. */
+/** SPEC-007 pattern, two blocks. B first: the secondaries live inside the peer volume set, and a volume
+ *  in a set cannot be removed, so the set goes before `dismissrcopyvv -removevv` on A takes the volumes. */
 function RemovalSets({ result, runId, a, b }: { result: ReplicationResult; runId: string; a: string; b: string }) {
   const [copied, setCopied] = useState(false);
   const blocks: [string, string, string[]][] = [
-    [a, 'A', result.removals_a],
     [b, 'B', result.removals_b],
+    [a, 'A', result.removals_a],
   ];
   const text = [
     `# Removal of what run ${runId.slice(0, 8)} configured for replication — ${new Date().toISOString()}`,
-    '# Review before pasting. The tool never runs these. Paste the A block on array A, then the B block on array B.',
+    '# Review before pasting. The tool never runs these. Paste the B block on array B FIRST, then the A block on array A.',
     ...blocks.flatMap(([name, label, lines]) => (lines.length ? [``, `# ---- ${label}: ${name}`, ...lines] : [])),
     '',
   ].join('\n');
@@ -103,8 +104,9 @@ function RemovalSets({ result, runId, a, b }: { result: ReplicationResult; runId
       ) : (
         <>
           <Text size="small" color="text-weak">
-            Undoes exactly what this apply created, in dependency order: on A each group is stopped, its volumes dismissed
-            (removing the secondaries), then removed; on B the peer volume set. Objects that already existed are not touched.
+            Undoes exactly what this apply created, in dependency order: first on B the peer volume set (a volume inside a set
+            cannot be removed), then on A each group is stopped, its volumes dismissed (removing the secondaries on B), then
+            removed. Objects that already existed are not touched.
           </Text>
           <Box background="background-contrast" round="xsmall" pad="small" tabIndex={0} style={{ overflowX: 'auto' }}>
             {blocks.map(([name, label, lines]) =>

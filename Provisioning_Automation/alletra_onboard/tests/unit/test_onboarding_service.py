@@ -153,7 +153,7 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     intent.volumes[0].vvset = "HS"
     intent.replication = ReplicationIntent(
         peer=EndpointCreds(host="b", username="u", password=SecretStr("p")), failover_test=False,
-        protections=[ProtectionRequest(vvset="HS", peer_cpg="SSD_r6")],
+        protections=[ProtectionRequest(vvset="HS", peer_cpg="SSD_r6", mode="sync", rpo_minutes=None)],   # old_rcg on the target is Sync
     )
     service = _service(tmp_path)
     run = service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=intent)

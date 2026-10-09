@@ -90,3 +90,36 @@ Peer Persistence group between the two sessions; not ours, listed and untouched.
 
 Still owed: the retry on the fixed build after the removal set is pasted, then Verify, then the
 first periodic group's `showrcopy` as a fixture.
+
+## 2026-10-09 21:41 — second apply, `jumpbox-test` ab8059e: stopped at write 7, the start
+
+Removal set pasted, read again → 6 to create, approved. The two-PUT fix held: period and policies
+both *Done*. Then:
+
+| # | Write | Result |
+|---|---|---|
+| 1–2 | test volume, test set | Done |
+| 3 | `creatercopygroup zz_rc_vvs_rcg … periodic` | Done |
+| 4 | period 300 s, then policies (two PUTs) | Done |
+| 5 | `admitrcopyvv -createvv zz_rc_vol01` — the secondary was created on E18U31 | Done |
+| 6 | `createvvset zz_rc_vvs_rc` on E18U31 | Done |
+| 7 | `startrcopygroup zz_rc_vvs_rcg` | **HTTP 400 code 236** — *Group with different modes on a single target is not supported* |
+
+Removal set: A `stoprcopygroup -f` · `dismissrcopyvv -f -removevv zz_rc_vol01 zz_rc_vvs_rcg` ·
+`removercopygroup -f` · `removevvset -f zz_rc_test` · `removevv -f zz_rc_test_v01`; B `removevvset -f
+zz_rc_vvs_rc`. Exactly what was created.
+
+**The rule:** one mode per target. The lab target already carries six **Sync** groups; a Periodic
+group can be created, configured and populated on it, but not started. HPE says so in two places
+we had read and not turned into a check — Support Matrix note 1 (*"RC Groups using the same
+RC-Target must replicate in the same mode"*) and the Getting-started guide (*"create a separate
+target for each mode"*). Fixed the same evening: R2 gains the finding (names the target, the
+groups and their mode, the way out), the Replication tab may not mix modes, and the tool's own test
+group follows the rows' mode. Pinned by `test_an_async_row_on_a_target_that_carries_sync_groups_is_a_finding`
+with the exact sentence. The removal set's paste order is now B first (the peer set must go before
+`-removevv` takes the secondaries).
+
+Consequence for this pair: the live test runs in **sync** (RTT 1 ms). The first periodic group's
+`showrcopy` fixture waits for a target that carries no sync groups.
+
+Still owed: paste this removal set (B, then A), retry with `mode: sync` on the tab, Verify.
