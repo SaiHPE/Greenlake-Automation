@@ -380,3 +380,36 @@ def test_verify_reports_a_failed_read_as_its_error():
     bad = ReplicationArrayView(host="10.64.122.99", read_error="Could not read 10.64.122.99: Login failed")
     out = verify(prov, ReplicationPlan(), read_fn=lambda creds, progress=None: bad)
     assert out.error == "Could not read 10.64.122.99: Login failed" and out.groups == []
+
+
+def test_verify_on_the_live_after_apply_capture_says_replicating_for_both_groups():
+    """The 2026-10-09 22:07 capture, minutes after the first live apply: both groups Started, Primary on
+    D22U27, Secondary on E18U31 as `<g>.r188150`, Synced; peer sets hold the secondaries."""
+    after = _FIXTURES / "after_apply"
+
+    class _After(_Cli):
+        def run(self, command, timeout=None):
+            name = command.replace(" -", "_").replace(" ", "_")
+            if command.startswith("showrcopy") or command == "showvvset":
+                return (after / self.array / (name + ".txt")).read_text(encoding="utf-8")
+            return super().run(command, timeout)
+
+    a = read_array(_creds("10.64.122.99"), array_cli_factory=lambda c: _After("D22U27", showvv=_SHOWVV_A))
+    b = read_array(_creds("10.64.154.190"), array_cli_factory=lambda c: _After("E18U31", showvv="Name VSize_MB\n"))
+    assert a.vvsets["zz_rc_vvs"] == ["zz_rc_vol01"] and a.vvsets["zz_rc_test"] == ["zz_rc_test_v01"]
+    assert b.vvsets["zz_rc_vvs_rc"] == ["zz_rc_vol01"] and b.vvsets["zz_rc_test_rc"] == ["zz_rc_test_v01"]
+    assert not any(s.startswith("RCP_") for s in a.vvsets)          # the WSAPI path made no RCP_ set
+    plan = ReplicationPlan(actions=[
+        ReplicationAction(kind="group", name="zz_rc_vvs_rcg", state="create", detail={"mode": "sync", "peer_vvset": "zz_rc_vvs_rc"}),
+        ReplicationAction(kind="group", name="zz_rc_test_rcg", state="create", detail={"mode": "sync", "peer_vvset": "zz_rc_test_rc"}),
+    ])
+    reads = iter([a, b])
+    out = verify(_prov(), plan, read_fn=lambda creds, progress=None: next(reads))
+    assert out.error is None and out.links_ok
+    assert out.links_detail == "AlletraMP_D22U27 → AlletraMP_E18U31 2/2 links Up · AlletraMP_E18U31 → AlletraMP_D22U27 2/2 links Up"
+    assert [(g.group, g.peer_group, g.verdict, g.detail) for g in out.groups] == [
+        ("zz_rc_vvs_rcg", "zz_rc_vvs_rcg.r188150", "replicating", "Started · Primary here, Secondary on the peer · Sync · 1 volume(s) Synced"),
+        ("zz_rc_test_rcg", "zz_rc_test_rcg.r188150", "replicating", "Started · Primary here, Secondary on the peer · Sync · 1 volume(s) Synced"),
+    ]
+    # the six pre-existing groups are still there, untouched
+    assert len(a.groups) == 8 and len(b.groups) == 8

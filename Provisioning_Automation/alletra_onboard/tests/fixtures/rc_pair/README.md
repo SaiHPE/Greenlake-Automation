@@ -54,3 +54,13 @@ written.
   `setrcopygroup failover|recover|restore -f`; `dismissrcopyvv -removevv`; `stoprcopygroup -f`.
 
 Pinned by `tests/unit/test_replication_read.py` (SPEC-016 R1/R2/R6) — to be written with SPEC-016.
+
+## `after_apply/` — 2026-10-09 22:07, minutes after the first successful live apply
+
+`showrcopy`, `showrcopy groups`, `showrcopy -d`, `showvvset` and WSAPI `/remotecopygroups` on both
+arrays with the tool's two **sync** groups live beside the six old ones: `zz_rc_vvs_rcg` /
+`zz_rc_test_rcg` on D22U27 (Primary, Started, Synced, `auto_recover,auto_synchronize`), their
+`.r188150` copies on E18U31 (Secondary); WSAPI `role 1`, `mode 1`, `state 3`, `syncStatus 3`,
+`volumeLastSyncTime` set, `localVolumeSetName` = the primary set; peer sets `zz_rc_vvs_rc` /
+`zz_rc_test_rc` hold the secondaries. No `RCP_<group>` set exists — the WSAPI path does not create
+one. Pinned by `test_verify_on_the_live_after_apply_capture_says_replicating_for_both_groups`.
