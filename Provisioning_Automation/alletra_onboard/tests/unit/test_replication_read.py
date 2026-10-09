@@ -112,19 +112,38 @@ def test_showrcopy_groups_subset_and_a_missing_group_parse_cleanly():
     assert len(links_only["links"]) == 4 and links_only["groups"] == []
 
 
-def test_a_periodic_group_block_parses_its_timestamped_last_sync():
-    # No periodic group exists on the lab pair yet (README); the format follows the CLI reference —
-    # re-pin this against the first live async run's capture.
+def test_a_periodic_group_row_parses_last_sync_and_period_out_of_its_options():
+    # The first live periodic capture (2026-10-09 23:39, after_apply_periodic/): the Options column
+    # of a periodic PRIMARY carries spaces — "Last-Sync <ts>, Period 5m,<policies>" — so the row
+    # cannot be split on whitespace alone; the secondary's row has Period and the policies only.
+    periodic = _FIXTURES / "after_apply_periodic"
+    rc = parse_showrcopy((periodic / "D22U27" / "showrcopy.txt").read_text(encoding="utf-8"))
+    groups = {g.name: g for g in rc["groups"]}
+    assert len(groups) == 8                                   # the six (stopped for the test) + ours
+    g = groups["zz_rc_vvs_rcg"]
+    assert (g.status, g.role, g.mode, g.mode_key) == ("Started", "Primary", "Periodic", "async")
+    assert g.options == ["auto_recover", "over_per_alert", "auto_synchronize"]   # over_per_alert: the array's own default
+    assert (g.period, g.last_sync) == ("5m", "2026-10-09 23:39:23 IST")
+    assert [(v.local_name, v.remote_name, v.sync_status, v.last_sync) for v in g.volumes] == [
+        ("zz_rc_vol01", "zz_rc_vol01", "Synced", "2026-10-09 23:39:23 IST"),
+    ]
+    assert groups["300gb"].status == "Stopped" and groups["300gb"].options == ["auto_recover", "auto_synchronize"]
+    peer = {g.name: g for g in parse_showrcopy((periodic / "E18U31" / "showrcopy.txt").read_text(encoding="utf-8"))["groups"]}
+    s = peer["zz_rc_vvs_rcg.r188150"]
+    assert (s.role, s.mode, s.period, s.last_sync, s.options) == ("Secondary", "Periodic", "5m", "", ["auto_recover", "over_per_alert", "auto_synchronize"])
+
+
+def test_a_periodic_group_still_syncing_parses_too():
     text = (
         "Group Information\n\n"
         "Name            Target           Status   Role       Mode     Options\n"
-        "zz_rc_test_rcg  AlletraMP_E18U31 Started  Primary    Periodic Period 5m,auto_recover,auto_synchronize\n"
+        "zz_rc_test_rcg  AlletraMP_E18U31 Started  Primary    Periodic Last-Sync NA, Period 5m,auto_recover,auto_synchronize\n"
         "  LocalVV        ID   RemoteVV       ID   SyncStatus    LastSyncTime\n"
-        "  zz_rc_test_v01 9901 zz_rc_test_v01 1601 Syncing       2026-10-07 19:10:03 IST\n"
+        "  zz_rc_test_v01 9901 zz_rc_test_v01 1601 Syncing       NA\n"
     )
     [g] = parse_showrcopy(text)["groups"]
-    assert g.mode == "Periodic" and g.mode_key == "async"
-    assert g.volumes[0].sync_status == "Syncing" and g.volumes[0].last_sync == "2026-10-07 19:10:03 IST"
+    assert (g.mode_key, g.period, g.last_sync, g.options) == ("async", "5m", "NA", ["auto_recover", "auto_synchronize"])
+    assert g.volumes[0].sync_status == "Syncing" and g.volumes[0].last_sync == "NA"
 
 
 def test_showcpg_free_space_per_cpg():

@@ -156,7 +156,9 @@ class RcGroup(BaseModel):
     status: str = ""            # Started | Stopped | Failsafe
     role: str = ""              # Primary | Secondary | Primary-Rev | Secondary-Rev
     mode: str = ""              # Sync | Periodic | Async
-    options: list[str] = Field(default_factory=list)
+    options: list[str] = Field(default_factory=list)   # the policies (auto_recover, over_per_alert, …)
+    period: str = ""            # periodic groups: "5m" (the Options column's `Period 5m`)
+    last_sync: str = ""         # periodic primaries: the Options column's `Last-Sync <timestamp>`
     volumes: list[RcGroupVolume] = Field(default_factory=list)
 
     @property

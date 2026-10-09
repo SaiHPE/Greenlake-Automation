@@ -154,9 +154,19 @@ def parse_showrcopy(text: str) -> dict:
                 expect_group_row, in_volumes = False, True
                 continue
             if expect_group_row and len(tokens) >= 5:
+                # Periodic rows carry spaces in Options (live 2026-10-09 23:39):
+                # "Last-Sync 2026-10-09 23:39:23 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize"
+                options, period, last_sync = [], "", ""
+                for part in (p.strip() for p in " ".join(tokens[5:]).split(",")):
+                    if part.startswith("Last-Sync "):
+                        last_sync = part[len("Last-Sync "):].strip()
+                    elif part.startswith("Period "):
+                        period = part[len("Period "):].strip()
+                    elif part:
+                        options.append(part)
                 current = RcGroup(
                     name=tokens[0], target=tokens[1], status=tokens[2], role=tokens[3], mode=tokens[4],
-                    options=[o for o in (tokens[5] if len(tokens) > 5 else "").split(",") if o],
+                    options=options, period=period, last_sync=last_sync,
                 )
                 groups.append(current)
                 expect_group_row = False
