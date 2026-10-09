@@ -110,8 +110,9 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                 names = ", ".join(g.name for g in on_target[:4]) + ("…" if len(on_target) > 4 else "")
                 f.append(
                     f"Target '{target}' already carries {len(on_target)} {have} group(s) ({names}); every group on one "
-                    f"target must replicate in the same mode (HPE Support Matrix), so a {mode} group cannot be started "
-                    f"there. Use {have} on the Replication tab, or a second target (the tool configures targets from v0.19)."
+                    f"target must replicate in the same mode (HPE Support Matrix), so {mode} groups cannot be started "
+                    f"there. Use {have} on the Replication tab, or a second target over spare RCIP ports (a link belongs "
+                    f"to one target; the tool configures targets from v0.19)."
                 )
     for row in intent.protections:
         limit = RTT_LIMIT_MS[row.mode]
