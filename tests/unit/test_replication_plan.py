@@ -118,12 +118,119 @@ def test_an_async_row_on_a_target_that_carries_sync_groups_is_a_finding():
     )
 
 
-def test_mixed_modes_on_the_tab_is_a_finding():
+def test_mixed_modes_on_the_tab_with_one_target_is_a_finding():
     a, b = _views(a_overrides={"showrcopy": _RC_A_NO_GROUPS})
     rows = [ProtectionRequest(vvset="zz_rc_vvs", peer_cpg="SSD_r6", mode="sync", rpo_minutes=None),
             ProtectionRequest(vvset="300gb", peer_cpg="SSD_r6")]
     report = check(a, b, _intent(rows))
-    assert any(f.startswith("The Replication tab mixes async and sync rows") for f in report.findings)
+    [finding] = [f for f in report.findings if "mixes" in f]
+    assert finding == (
+        "The Replication tab mixes sync and async rows and AlletraMP_D22U27 → AlletraMP_E18U31 has one target "
+        "('AlletraMP_E18U31'); every group on one target must replicate in the same mode (HPE Support Matrix). Make all "
+        "rows one mode, or add a second target over spare RCIP ports (a link belongs to one target; the tool configures "
+        "targets from v0.19)."
+    )
+    assert report.partnership.target_by_mode == {"sync": "AlletraMP_E18U31"}
+
+
+# ---- a pair laid out the way HPE describes for mixed modes: a target per mode over links of its own
+
+_PORTS = ("0:4:3", "1:4:3", "0:4:4", "1:4:4")
+_A_IPS = ("10.54.122.92", "10.54.122.93", "10.54.122.94", "10.54.122.95")
+_B_IPS = ("10.54.154.192", "10.54.154.193", "10.54.154.194", "10.54.154.195")
+
+
+def _second_target(array: str, mine: tuple[str, ...], theirs: tuple[str, ...], second: str, *, second_up: bool = True) -> dict[str, str]:
+    """Overrides giving `array` four RCIP ports and a second target `second` over 0:4:4 / 1:4:4, the
+    first target and the fixture's groups untouched."""
+    ports = "N:S:P State HwAddr IPAddr Netmask/PrefixLen Gateway MTU Rate Duplex AutoNeg\n" + \
+        "".join(f"{nsp} ready 00 {ip} 255.255.248.0 - 1500 10Gbps Full Yes\n" for nsp, ip in zip(_PORTS, mine))
+    groups = (_FIXTURES / array / "showrcopy.txt").read_text(encoding="utf-8").split("Group Information")[1]
+    up = "Up" if second_up else "Down"
+    rc = ("Remote Copy System Information\nStatus: Started, Normal\n\nTarget Information\n\n"
+          "Name ID Type Status Options Policy\nAlletraMP_E18U31 5 IP ready - mirror_config\n"
+          f"{second} 6 IP ready - mirror_config\n\nLink Information\n\nTarget Node Address Status Options\n"
+          f"AlletraMP_E18U31 0:4:3 {theirs[0]} Up -\nAlletraMP_E18U31 1:4:3 {theirs[1]} Up -\n"
+          f"{second} 0:4:4 {theirs[2]} {up} -\n{second} 1:4:4 {theirs[3]} {up} -\n"
+          + "".join(f"receive {nsp} {ip} Up -\n" for nsp, ip in zip(_PORTS, mine)) + "\nGroup Information" + groups)
+    return {"showport -rcip": ports, "showrcopy": rc}
+
+
+def _two_target_views(**kw):
+    return _views(a_overrides=_second_target("D22U27", _A_IPS, _B_IPS, "E18U31_async", **kw),
+                  b_overrides=_second_target("E18U31", _B_IPS, _A_IPS, "D22U27_async", **kw))
+
+
+def test_two_targets_are_paired_by_the_ports_they_share_not_by_order_or_name():
+    a, b = _two_target_views()
+    p = find_partnership(a, b, modes={"sync", "async"})
+    assert [(t.name, t.peer_name, t.links_up, t.peer_links_up, t.modes, t.groups) for t in p.targets] == [
+        ("AlletraMP_E18U31", "AlletraMP_E18U31", 2, 2, ["sync"], 6),
+        ("E18U31_async", "D22U27_async", 2, 2, [], 0),
+    ]
+    assert p.target_by_mode == {"sync": "AlletraMP_E18U31", "async": "E18U31_async"}
+
+
+def test_mixed_rows_on_a_pair_with_a_target_per_mode_have_no_finding_and_each_row_gets_its_target():
+    a, b = _two_target_views()
+    rows = [ProtectionRequest(vvset="zz_rc_vvs", peer_cpg="SSD_r6", mode="sync", rpo_minutes=None),
+            ProtectionRequest(vvset="zz_rc_vvs2", peer_cpg="SSD_r6")]
+    a.vvsets["zz_rc_vvs2"] = ["zz_rc_vol02"]
+    a.vvsets["zz_rc_vvs"] = ["zz_rc_vol01"]
+    intent = _intent(rows, failover=False)
+    report = check(a, b, intent)
+    assert report.findings == []
+    plan = build_plan(report, intent, _prov())
+    by = {x.name: x for x in plan.actions if x.kind == "group"}
+    assert by["zz_rc_vvs_rcg"].detail["target"] == "AlletraMP_E18U31"
+    assert by["zz_rc_vvs2_rcg"].detail["target"] == "E18U31_async"
+    assert by["zz_rc_vvs2_rcg"].calls[0].cli.endswith("zz_rc_vvs2_rcg E18U31_async:periodic")
+    assert any(n == "Target per mode this run: async → 'E18U31_async', sync → 'AlletraMP_E18U31'." for n in plan.notes)
+
+
+def test_an_async_row_goes_to_the_free_target_when_the_first_carries_sync_groups():
+    a, b = _two_target_views()
+    intent = _intent([_ASYNC_ROW])
+    report = check(a, b, intent)
+    assert report.findings == []
+    assert report.partnership.target_on_primary == "E18U31_async"       # the one this run uses
+    plan = build_plan(report, intent, _prov())
+    group = next(x for x in plan.actions if x.kind == "group" and x.name == "zz_rc_vvs_rcg")
+    assert group.detail["target"] == "E18U31_async"
+    test_group = next(x for x in plan.actions if x.kind == "group" and x.name == TEST_GROUP)
+    assert test_group.detail["target"] == "E18U31_async" and test_group.detail["mode"] == "async"
+
+
+def test_links_are_judged_on_the_target_the_run_uses():
+    a, b = _two_target_views(second_up=False)
+    report = check(a, b, _intent([_ASYNC_ROW]))
+    [finding] = report.findings
+    assert finding == ("The partnership needs at least 2 links Up each way: AlletraMP_D22U27 → AlletraMP_E18U31 via target "
+                       "'E18U31_async' has 0 of 2 Up, AlletraMP_E18U31 → AlletraMP_D22U27 via 'D22U27_async' has 0 of 2 Up.")
+    assert check(a, b, _intent()).findings == []          # the sync target's links are fine
+
+
+def test_a_rerun_keeps_a_group_on_the_target_it_was_created_on():
+    # This run's async group already sits on the SECOND target; the first is empty on this view, so
+    # "first empty target" would move it and conflict. The rerun must find it where it is.
+    a, b = _two_target_views()
+    a.groups = [g for g in a.groups if g.name == "300gb"]
+    a.groups[0].name, a.groups[0].target, a.groups[0].mode = "zz_rc_vvs_rcg", "E18U31_async", "Periodic"
+    a.groups[0].volumes = []
+    intent = _intent([_ASYNC_ROW], failover=False)
+    report = check(a, b, intent)
+    assert report.partnership.target_by_mode == {"async": "E18U31_async"}
+
+
+def test_a_fibre_channel_only_pair_says_so():
+    fc = ("Remote Copy System Information\nStatus: Started, Normal\n\nTarget Information\n\n"
+          "Name ID Type Status Options Policy\nSiteB 1 FC ready - mirror_config\n\nLink Information\n\n"
+          "Target Node Address Status Options\nSiteB 0:3:2 20320202AC02DEF2 Up -\n\nGroup Information\n\n")
+    a, b = _views(a_overrides={"showrcopy": fc, "showport -rcip": "There is no specified port information\n"})
+    report = check(a, b, _intent())
+    assert any(f.startswith("No Remote Copy partnership") for f in report.findings)
+    assert any(f == "Remote Copy over Fibre Channel target(s) found (SiteB); this release supports Remote Copy over IP only (ADR 0015)."
+               for f in report.findings)
 
 
 def test_an_async_row_on_a_target_with_no_groups_has_no_mode_finding():
@@ -158,7 +265,7 @@ def test_remote_copy_not_started_and_too_few_links_are_findings():
     a, b = _views(b_overrides={"showrcopy": stopped})
     report = check(a, b, _intent())
     assert any("Remote Copy is not started on AlletraMP_E18U31 (showrcopy says 'Stopped')" in f for f in report.findings)
-    assert any("AlletraMP_E18U31 → AlletraMP_D22U27 has 1 of 2 Up" in f for f in report.findings)
+    assert any("AlletraMP_E18U31 → AlletraMP_D22U27 via 'AlletraMP_E18U31' has 1 of 2 Up" in f for f in report.findings)
 
 
 def test_a_peer_cpg_too_small_is_a_finding():

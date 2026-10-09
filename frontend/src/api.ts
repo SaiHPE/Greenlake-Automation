@@ -398,9 +398,14 @@ export interface ReplicationArrayView {
   rc_status: string; rc_health: string; rcip_ports: RcipPort[]; targets: RcTarget[]; links: RcLink[]; groups: RcGroup[];
   cpg_free_mib: Record<string, number>; vvsets: Record<string, string[]>; read_error: string | null;
 }
+export interface PartnerTarget {
+  name: string; peer_name: string; links_up: number; links_total: number; peer_links_up: number; peer_links_total: number;
+  mirror_config: boolean; modes: string[]; groups: number; own_modes: string[];
+}
 export interface Partnership {
   target_on_primary: string; target_on_peer: string;
   links_primary_up: number; links_peer_up: number; links_primary_total: number; links_peer_total: number; mirror_config: boolean;
+  targets?: PartnerTarget[]; target_by_mode?: Record<string, string>;
 }
 export interface ReplicationReport {
   primary: ReplicationArrayView; peer: ReplicationArrayView; partnership: Partnership | null;

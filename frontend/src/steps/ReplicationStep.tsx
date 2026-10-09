@@ -164,6 +164,8 @@ function PartnershipLine({ partnership, report }: { partnership: Partnership | n
     return <StatusIndicator state="failed" label={`No partnership between ${a} and ${b}`} />;
   }
   const ok = partnership.links_primary_up >= 2 && partnership.links_peer_up >= 2;
+  const targets = partnership.targets ?? [];
+  const byMode = partnership.target_by_mode ?? {};
   return (
     <Box gap="xxsmall" flex={false}>
       <StatusIndicator
@@ -174,6 +176,13 @@ function PartnershipLine({ partnership, report }: { partnership: Partnership | n
         Target on {a}: “{partnership.target_on_primary}” · target on {b}: “{partnership.target_on_peer}” · policy {partnership.mirror_config ? 'mirror_config' : 'no_mirror_config'}.
         Found by link address; target names are not relied on.
       </Text>
+      {targets.length > 1 && (
+        <Text size="xsmall" color="text-weak">
+          {targets.length} targets between the two arrays (one mode per target):{' '}
+          {targets.map((t) => `“${t.name}” ${t.links_up}/${t.links_total} Up, ${t.modes.length ? `${t.groups} ${t.modes.join('/')} group(s)` : 'no groups'}`).join(' · ')}.
+          {Object.keys(byMode).length > 0 && ` This run: ${Object.entries(byMode).map(([m, n]) => `${m} → “${n}”`).join(', ')}.`}
+        </Text>
+      )}
     </Box>
   );
 }

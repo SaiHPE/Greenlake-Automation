@@ -406,7 +406,8 @@ def test_verify_on_the_live_after_apply_capture_says_replicating_for_both_groups
     reads = iter([a, b])
     out = verify(_prov(), plan, read_fn=lambda creds, progress=None: next(reads))
     assert out.error is None and out.links_ok
-    assert out.links_detail == "AlletraMP_D22U27 → AlletraMP_E18U31 2/2 links Up · AlletraMP_E18U31 → AlletraMP_D22U27 2/2 links Up"
+    assert out.links_detail == ("AlletraMP_D22U27 → AlletraMP_E18U31 via 'AlletraMP_E18U31' 2/2 links Up · "
+                               "AlletraMP_E18U31 → AlletraMP_D22U27 via 'AlletraMP_E18U31' 2/2 links Up")
     assert [(g.group, g.peer_group, g.verdict, g.detail) for g in out.groups] == [
         ("zz_rc_vvs_rcg", "zz_rc_vvs_rcg.r188150", "replicating", "Started · Primary here, Secondary on the peer · Sync · 1 volume(s) Synced"),
         ("zz_rc_test_rcg", "zz_rc_test_rcg.r188150", "replicating", "Started · Primary here, Secondary on the peer · Sync · 1 volume(s) Synced"),

@@ -93,9 +93,13 @@ def verify(
     if p is None:
         out.links_detail = "no partnership found between the two arrays"
     else:
-        out.links_ok = p.links_primary_up >= 2 and p.links_peer_up >= 2
-        out.links_detail = (f"{a.name} → {b.name} {p.links_primary_up}/{p.links_primary_total} links Up · "
-                            f"{b.name} → {a.name} {p.links_peer_up}/{p.links_peer_total} links Up")
+        used = {x.detail.get("target") for x in plan.actions if x.kind == "group"} - {None, ""}
+        targets = [t for t in p.targets if t.name in used] or p.targets
+        out.links_ok = all(t.links_up >= 2 and t.peer_links_up >= 2 for t in targets)
+        out.links_detail = " · ".join(
+            f"{a.name} → {b.name} via '{t.name}' {t.links_up}/{t.links_total} links Up · "
+            f"{b.name} → {a.name} via '{t.peer_name}' {t.peer_links_up}/{t.peer_links_total} links Up"
+            for t in targets)
     for action in (x for x in plan.actions if x.kind == "group" and x.state in ("create", "exists")):
         g = action.name
         expected_mode = action.detail.get("mode", "")
