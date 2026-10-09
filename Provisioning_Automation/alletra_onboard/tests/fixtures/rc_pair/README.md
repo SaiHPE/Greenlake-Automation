@@ -43,6 +43,9 @@ written.
   body was accepted. **One mode per target:** a Periodic group on this target (six Sync groups) is
   created, configured and populated without complaint and then refused at **start** — HTTP 400 code
   236 *"Group with different modes on a single target is not supported"* (Support Matrix note 1).
+  **Removal order:** the peer refuses `removevvset` on a set holding secondaries while the group
+  exists (*"Set … is currently admitted to Remote Copy Group and may not be directly removed"*);
+  `dismissrcopyvv -removevv` on the primary removes the secondary volume on the peer.
 - **CPGs:** D22U27 `3sc`, `SSD_r6`, `test`; E18U31 `SSD_r6` only.
 - **`help/`** — the array's own `-h` for every Remote Copy command (D22U27; identical OS on E18U31).
   Confirms: `creatercopygroup -usr_cpg <cpg> <target>:<cpg> <group> <target>:<mode>`;
