@@ -1,0 +1,17 @@
+# showrcopy -d groups
+
+Remote Copy System Information
+Status: Started, Normal
+
+Group Information
+
+Name           ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                                                                                  
+zz_rc_test_rcg   30 AlletraMP_E18U31 Started  Primary    Periodic SSD_r6       SSD_r6     Last-Sync 2026-10-10 15:42:48 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV         ID   RemoteVV       ID   SyncStatus    Resync_ss         Sync_ss  VV_iter  R_iter   S_iter LastSyncTime            LocalSet   RemoteSet
+  zz_rc_test_v01 12449 zz_rc_test_v01 1802 Synced        rcpy.30.12449.5.1 none     188150/2 188150/2 NA     2026-10-10 15:42:48 IST zz_rc_test NA       
+
+Name          ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                                                                                  
+zz_rc_vvs_rcg   29 AlletraMP_E18U31 Started  Primary    Periodic SSD_r6       SSD_r6     Last-Sync 2026-10-10 15:42:48 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV       ID   RemoteVV     ID   SyncStatus    Resync_ss         Sync_ss  VV_iter  R_iter   S_iter LastSyncTime            LocalSet  RemoteSet
+  zz_rc_vol01  12447 zz_rc_vol01  1801 Synced        rcpy.29.12447.5.1 none     188150/2 188150/2 NA     2026-10-10 15:42:48 IST zz_rc_vvs NA       
+

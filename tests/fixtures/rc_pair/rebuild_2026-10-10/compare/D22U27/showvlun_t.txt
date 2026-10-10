@@ -1,0 +1,59 @@
+# showvlun -t
+Lun VVName                    HostName                    -Host_WWN/iSCSI_Name- Port     Type
+  8 test7                     ESX1                        ----------------       ---     host
+  9 test8                     ESX1                        ----------------       ---     host
+ 10 test9                     ESX1                        ----------------       ---     host
+ 11 VV1_Esxi1                 ESX1                        ----------------       ---     host
+ 13 Alletra_VV1               ESX1                        ----------------       ---     host
+ 14 Alletra_VV2               ESX1                        ----------------       ---     host
+ 15 Alletra_VV3               ESX1                        ----------------       ---     host
+ 17 Alletra_Test1             ESX1                        ----------------       ---     host
+ 18 Alletra_Test2             ESX1                        ----------------       ---     host
+ 19 Alletra_Test3             ESX1                        ----------------       ---     host
+ 20 New_Test_VV1              ESX1                        ----------------       ---     host
+ 21 New_Test_VV2              ESX1                        ----------------       ---     host
+ 22 New_Test_VV3              ESX1                        ----------------       ---     host
+ 25 Alletra_HPE_VV1           ESX1                        ----------------       ---     host
+ 26 Alletra_HPE_VV2           ESX1                        ----------------       ---     host
+ 27 Alletra_HPE_VV3           ESX1                        ----------------       ---     host
+ 28 HPE_ESXi_VLUN1            ESX1                        ----------------       ---     host
+ 29 HPE_ESXi_VLUN2            ESX1                        ----------------       ---     host
+ 30 HPE_ESXi_VLUN3            ESX1                        ----------------       ---     host
+ 31 HPE_GCC_VLUN1             ESX1                        ----------------       ---     host
+ 32 HPE_GCC_VLUN2             ESX1                        ----------------       ---     host
+ 33 HPE_GCC_VLUN3             ESX1                        ----------------       ---     host
+ 34 VV2_Esxi2                 ESX1                        ----------------       ---     host
+ 35 VV3_Esxi3                 ESX1                        ----------------       ---     host
+ 36 VV01_BLR                  ESX1                        ----------------       ---     host
+ 37 VV02_DEL                  ESX1                        ----------------       ---     host
+ 38 VV03_HYD                  ESX1                        ----------------       ---     host
+ 39 VV01_SAPHANA              ESX1                        ----------------       ---     host
+ 40 VV02_SAPHANA              ESX1                        ----------------       ---     host
+ 41 VV03_SAPHANA              ESX1                        ----------------       ---     host
+100 AlletraVol                ESX1                        ----------------       ---     host
+  0 Yoshino_774718_480550.0   set:DL380G10C12U29_58EX_SET ----------------       --- host set
+  1 Yoshino_774718_480550.1   set:DL380G10C12U29_58EX_SET ----------------       --- host set
+  3 Yoshino_774718_480550_1TB set:DL380G10C12U29_58EX_SET ----------------       --- host set
+  0 Yoshino_774718_480550.0   set:DL380G11D21U6_3D1X      ----------------       --- host set
+  1 Yoshino_774718_480550.1   set:DL380G11D21U6_3D1X      ----------------       --- host set
+  2 Yoshino_774718_480550_1TB set:DL380G11D21U6_3D1X      ----------------       --- host set
+  0 rcopy_async_test_vv       set:ESX_1                   ----------------       --- host set
+  5 IBK-test-v1               set:ESX_1                   ----------------       --- host set
+ 12 test_CRV.r                set:ESX_1                   ----------------       --- host set
+ 16 APP.test.vv               set:ESX_1                   ----------------       --- host set
+ 43 Morpheus-datastore        set:ESX_1                   ----------------       --- host set
+  0 Morpheus-datastore        set:esx_2                   ----------------       --- host set
+  1 test5                     set:h1                      ----------------       --- host set
+  2 300gb                     set:h1                      ----------------       --- host set
+  3 600gb                     set:h1                      ----------------       --- host set
+  4 700gb                     set:h1                      ----------------       --- host set
+  6 dsccvv200                 set:h1                      ----------------       --- host set
+  7 DR_Repl                   set:h1                      ----------------       --- host set
+ 23 devwinvm-basic-core02     set:h1                      ----------------       --- host set
+ 24 devvm-basic-ghb01         set:h1                      ----------------       --- host set
+ 42 Test                      set:h1                      ----------------       --- host set
+ 50 vv100                     set:h1                      ----------------       --- host set
+ 13 S-test7_2026072109_Tue    test2-alletra               ----------------       ---     host
+ 31 S-test7_2026071516_Wed    test2-alletra               ----------------       ---     host
+---------------------------------------------------------------------------------------------
+ 55 total                                                                                    

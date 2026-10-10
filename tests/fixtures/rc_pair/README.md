@@ -104,7 +104,17 @@ six were restarted afterwards and `showrcopy groups` / `showrcopy -d groups` / `
 
 ## 2026-10-10 — the six groups removed and rebuilt; periodic through the UI (validation record)
 
-Not captured here yet (zip owed: `rc_rebuild/`), facts from the session:
+`after_apply_periodic_ui/`: `showrcopy`, `showrcopy groups`, `showrcopy -d groups`, `showvvset` on both
+arrays at 15:4x, after the UI run (run `a9476922`, groups started 15:37:45) and before its cleanup.
+Only the tool's two periodic groups are on the target; last sync 15:42:48, one period after the
+start. Test: `test_verify_on_the_ui_periodic_capture_shows_the_five_minute_cycle_ran`.
+
+`rebuild_2026-10-10/`: `saved/` (the six groups before removal: `showrcopy groups`, `showvlun -t`,
+`showvvset` both arrays) and `compare/` (the same after the rebuild); `groups.json` (the definitions
+the rebuild used); `answers/` (what the array said to the Peer Persistence steps). `showrcopy groups`
+and `showvlun -t` are identical before and after; `showvvset` differs only in the `test999` snapshots.
+
+What the arrays said during this session:
 
 - **Peer Persistence (`active_active`) group removal:** `setrcopygroup pol no_active_active` and
   `removercopygroup -f` are both refused while the secondary volume is exported — *"Please unexport
