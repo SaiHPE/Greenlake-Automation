@@ -474,6 +474,10 @@ def test_storage_builder_saves_composition_and_objects_needs_discovery(tmp_path)
     # SPEC-016: the replication preview is registered; a workbook without the Replication tab -> 409
     refused = client.post(f"/runs/{rid}/replication/preview")
     assert refused.status_code == 409 and "no Replication tab" in refused.json()["detail"]
+    # SPEC-017: so is the failover test, with and without a body
+    assert client.post(f"/runs/{rid}/replication/failover-test").status_code == 409
+    refused = client.post(f"/runs/{rid}/replication/failover-test", json={"group": "zz_rc_test_rcg", "confirm": None})
+    assert refused.status_code == 409 and "no Replication tab" in refused.json()["detail"]
     # and REPLICATE mode cannot even be minted from such a workbook -> 422 with the sentence
     token = _upload_complete(client)
     minted = client.post("/runs/from-sheet", json={"token": token, "mode": "REPLICATE"})

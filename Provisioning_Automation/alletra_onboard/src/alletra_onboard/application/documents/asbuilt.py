@@ -996,13 +996,68 @@ def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> Non
             _para(doc, "Nothing — this run created no replication objects.")
 
 
+_FAILOVER_RESULT = {"passed": "Passed", "failed": "Failed", "aborted": "Not started"}
+_FAILOVER_OUTCOME = {"ok": "OK", "failed": "Failed", "skipped": "Skipped", "pending": "—"}
+
+
+def _side_text(side: dict | None) -> str:
+    if not side:
+        return "—"
+    if not side.get("present", True):
+        return "not on the array"
+    bits = [f"{side.get('role', '')}/{side.get('status', '')}", f"{side.get('synced', 0)}/{side.get('volumes', 0)} Synced"]
+    last = side.get("last_sync")
+    if last and last != "NA":
+        bits.append(f"last sync {last}")
+    return " · ".join(bits)
+
+
 def _add_failover_section(doc, data: AsBuiltData) -> None:
     _h1(doc, "Failover test")
-    if not data.failover_record:
+    rec = data.failover_record
+    if not rec:
         _para(doc, "The failover test was not run in this run.")
         return
-    # SPEC-017 R6 fills this in v0.18
-    _para(doc, "The failover test ran; see the run's events for its record.")
+    result = rec.get("result", "")
+    label = _FAILOVER_RESULT.get(result, result)
+    if result == "failed" and rec.get("failed_step") is not None:
+        label += f" at step {rec['failed_step']}"
+    mode = rec.get("mode") or "—"
+    _para(doc, f"Result: {label}.", bold=True)
+    _para(doc, f"Group {rec.get('group', '')} ({mode}) on {rec.get('primary_array', 'this array')} (P), named "
+               f"{rec.get('peer_group') or '—'} on {rec.get('peer_array', 'the peer')} (S). Started {_when(rec.get('started_at', ''))}, "
+               f"ended {_when(rec.get('ended_at', ''))}. Each role change is the array's own disaster-recovery action over WSAPI; "
+               "both arrays were read after every step.")
+    if rec.get("time_to_failover_s") is not None or rec.get("time_to_synced_s") is not None:
+        bits = []
+        if rec.get("time_to_failover_s") is not None:
+            bits.append(f"the peer took over (Primary-Rev) {rec['time_to_failover_s']:g} s after the failover was issued")
+        if rec.get("time_to_synced_s") is not None:
+            bits.append(f"every volume was Synced again {rec['time_to_synced_s']:g} s after the recover")
+        _para(doc, "Measured: " + "; ".join(bits) + ".")
+    if mode == "async":
+        _para(doc, "Data-loss bound (async): " + (rec.get("data_loss_bound") or "not recorded") + ". Writes after that sync and "
+                   "before the failover would not have reached the peer.")
+    rows = []
+    for s in rec.get("steps", []):
+        when = _when(s.get("started_at", "")) if s.get("started_at") else "—"
+        secs = f"{s['seconds']:g} s" if s.get("seconds") is not None else "—"
+        rows.append([str(s.get("seq", "")), s.get("title", ""), s.get("where", "-"), s.get("cli") or s.get("action") or "—",
+                     when, secs, _side_text(s.get("primary")), _side_text(s.get("peer")), _FAILOVER_OUTCOME.get(s.get("outcome", ""), s.get("outcome", ""))])
+    if rows:
+        _table(doc, ["#", "Step", "On", "Command (CLI equivalent)", "Started", "Took", "P after", "S after", "Outcome"], rows,
+               widths=[0.03, 0.14, 0.04, 0.22, 0.11, 0.06, 0.16, 0.16, 0.08])
+    if result != "passed":
+        if rec.get("error"):
+            _para(doc, f"Stopped: {rec['error']}")
+        if rec.get("observed_state"):
+            _para(doc, f"Observed when it stopped: {rec['observed_state']}")
+        if rec.get("recovery_action"):
+            _para(doc, "The documented way back to the normal state (not run by the tool):", bold=True)
+            _mono(doc, [rec["recovery_action"]])
+    else:
+        _para(doc, "The group ended the test in its starting state: Primary and Started on this array, Secondary and Started "
+                   "on the peer, every volume Synced.")
 
 
 # SPEC-012 R3 (A-4): the two run sections share a page — a one-sentence zoning record owned a whole

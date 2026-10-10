@@ -56,6 +56,9 @@ class DocumentSteps:
         "replication.previewed": ("replication_plan", "plan"),
         "replication.applied": ("replication_result", "result"),
         "replication.apply.failed": ("replication_result", "result"),
+        # SPEC-017 R6: the failover test's record, passed or not
+        "failover.completed": ("failover_record", "record"),
+        "failover.failed": ("failover_record", "record"),
     })
 
     def __init__(self, coord: RunCoordinator, *, verify_fn: Callable = verify,

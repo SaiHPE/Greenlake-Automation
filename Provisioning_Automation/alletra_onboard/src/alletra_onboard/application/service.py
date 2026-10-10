@@ -206,6 +206,9 @@ class OnboardingService:
     def start_replication_verify(self, run_id: str) -> RunRecord:
         return self.replication.start_replication_verify(run_id)
 
+    def start_failover_test(self, run_id: str, *, group: str | None = None, confirm: str | None = None) -> RunRecord:
+        return self.replication.start_failover_test(run_id, group=group, confirm=confirm)
+
     # ------------------------------------------------------------------ documents (verify + as-built)
 
     def start_verify(self, run_id: str, *, username: str | None = None, password: str | None = None) -> RunRecord:

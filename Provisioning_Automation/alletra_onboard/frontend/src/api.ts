@@ -439,6 +439,26 @@ export interface GroupVerification {
 export interface ReplicationVerification { links_ok: boolean; links_detail: string; groups: GroupVerification[]; notes: string[]; error: string | null; }
 export const replicationVerify = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/verify`);
 
+// SPEC-017: the failover test record. P = this run's array, S = the peer.
+export type FailoverOutcome = 'pending' | 'ok' | 'failed' | 'skipped';
+export type FailoverResult = 'passed' | 'failed' | 'aborted';
+export interface FailoverSide {
+  array: string; group: string; present: boolean; role: string; status: string; mode: string; volumes: number; synced: number; last_sync: string;
+}
+export interface FailoverStepRecord {
+  seq: number; title: string; where: 'P' | 'S' | '-'; action: string; cli: string; expected: string;
+  started_at: string; ended_at: string; seconds: number | null; primary: FailoverSide | null; peer: FailoverSide | null;
+  outcome: FailoverOutcome; detail: string;
+}
+export interface FailoverRecord {
+  group: string; peer_group: string; mode: string; primary_array: string; peer_array: string; started_at: string; ended_at: string;
+  steps: FailoverStepRecord[]; result: FailoverResult; failed_step: number | null;
+  time_to_failover_s: number | null; time_to_synced_s: number | null; data_loss_bound: string;
+  observed_state: string; recovery_action: string; error: string | null;
+}
+export const failoverTest = (runId: string, group: string | null, confirm: string | null) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/failover-test`, { group, confirm });
+
 export const launchBrowser = (url?: string) =>
   request<{ cdp_url: string; profile_dir: string; executable: string }>('POST', '/browser/launch', { port: 9222, url });
 
