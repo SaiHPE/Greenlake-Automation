@@ -101,3 +101,27 @@ six were restarted afterwards and `showrcopy groups` / `showrcopy -d groups` / `
 - Verify: *Replicating · last sync <ts>* for both, links 2/2 each way (pinned by
   `test_verify_on_the_live_periodic_capture_says_replicating_with_the_last_sync_time`). The removal
   set (A then B) was the same shape as for sync and every line was accepted.
+
+## 2026-10-10 — the six groups removed and rebuilt; periodic through the UI (validation record)
+
+Not captured here yet (zip owed: `rc_rebuild/`), facts from the session:
+
+- **Peer Persistence (`active_active`) group removal:** `setrcopygroup pol no_active_active` and
+  `removercopygroup -f` are both refused while the secondary volume is exported — *"Please unexport
+  the secondary volume so the host only has access to the primary volume and retry."* After
+  `removevlun -f <vv> <lun> set:<hostset>` on the peer (answer *"Issuing removevlun …"*) the
+  removal goes through. Re-exporting the secondary afterwards needs the host (set) admitted to the
+  group first: `admitrcopyhost -proximity {primary|secondary|all} <group> set:<hostset>` (*"Cannot
+  export to host which is not admitted to the group"*). The value shows in `showhostset -summary`
+  column `RC_host` (`Pri`/`Sec`/`All`); the array keeps a host set `RH<n>_<group>` per admission.
+  Proximity should be set on the primary; the secondary accepts it *"to correct inconsistencies"*.
+- **`removercopygroup -f` without `-removevv`** on a stopped group: accepted, primary and secondary
+  volumes stay; re-admitting them later is a full initial copy (all Synced within minutes here).
+- **Single-volume CLI `admitrcopyvv <vv> <group> <target>:<existing secondary>` never answered**
+  over `exec_command` (the set form `admitrcopyvv set:<s> <g> <t>:<s>` did); WSAPI
+  `addVolumeToRemoteCopyGroup` with the existing `secVolumeName` and no `volumeAutoCreation`
+  admitted the same volumes at once.
+- **CLI `creatercopygroup` created no `RCP_<group>` set** on OS 10.5.0, although its help says it
+  will — `showvvset` was identical before and after the rebuild.
+- A 15-minute snapshot schedule on D22U27 (`test999.*` into `set-test999…`) ages snapshots out and
+  adds new ones; it shows up in any `showvvset` diff and is not ours.
