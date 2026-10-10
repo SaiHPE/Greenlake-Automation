@@ -79,6 +79,10 @@ def recovery_action(p: FailoverSide, s: FailoverSide) -> str:
         return "The group is already in its natural direction and started; nothing to do."
     if pr == "Primary-Rev" and sr == "Secondary":
         return f"On {p.array}: setrcopygroup reverse -natural -f {p.group}  (reverse local natural; ED6)"
+    if pr == "Secondary" and sr == "Primary":
+        # live 2026-10-10: the array made the peer the natural primary; this put it back on the lab pair
+        return (f"The peer is now the group's natural primary. On {s.array}: stoprcopygroup -f {s.group} ; "
+                f"setrcopygroup reverse -f {s.group} ; then on {p.array}: startrcopygroup {p.group}")
     return (f"Roles {pr}/{p.status} on {p.array} and {sr}/{s.status} on {s.array} are not a combination this tool "
             "knows the way back from. Do not change roles further; contact HPE Support with `showrcopy -d groups` from both arrays.")
 
@@ -220,7 +224,7 @@ def run_failover_test(
         except Exception as exc:  # noqa: BLE001
             p, s = both()
             return fail(s2, f"{record.peer_array} refused the failover: {exc}", p, s)
-        ok, p, s, waited = wait_for(lambda p, s: s.role == "Primary-Rev", lim["failover"])
+        ok, p, s, waited = wait_for(lambda p, s: s.role in ("Primary-Rev", "Primary"), lim["failover"])
         if not ok:
             return fail(s2, f"The peer did not show Primary-Rev within {lim['failover']} s.", p, s)
         finish(s2, p, s, t)
@@ -238,7 +242,8 @@ def run_failover_test(
         # was mirrored to P as Secondary-Rev and the array started the group from S within seconds; a
         # recover sent then is refused with 403 code 284 "Remote copy group not stopped".
         t = begin(s4)
-        recovered = lambda p, s: p.role == "Secondary-Rev" and s.role == "Primary-Rev" and s.status.lower() == "started"  # noqa: E731
+        recovered = lambda p, s: (p.role in ("Secondary-Rev", "Secondary") and s.role in ("Primary-Rev", "Primary")  # noqa: E731
+                                  and s.status.lower() == "started")
         ok, p, s, _w = wait_for(recovered, lim["auto_start"])
         if ok:
             s4.title, s4.action, s4.cli = "Recover (done by the array)", "(not sent: the array did it)", ""
@@ -267,17 +272,49 @@ def run_failover_test(
         finish(s5, p, s, t)
         record.time_to_synced_s = waited
 
-        # 6. restore on S
+        # 6. back to this array. Live 2026-10-10 (twice): once the sync back completed, the array turned
+        # Primary-Rev/Secondary-Rev into plain Primary on S and Secondary on P, and `restore` was then
+        # refused (HTTP 400 code 29, "was not previously switched"). So: restore while the roles still
+        # carry -Rev; otherwise fail back the way the failover went, from the other side.
         t = begin(s6)
-        _p(f"Restoring the natural direction: {group} Primary on {record.primary_array} again…")
-        try:
-            ws.remote_copy_dr_action(record.peer_group, DR_ACTION_RESTORE)
-        except Exception as exc:  # noqa: BLE001
-            p, s = both()
-            return fail(s6, f"{record.peer_array} refused the restore: {exc}", p, s)
-        ok, p, s, _w = wait_for(
-            lambda p, s: p.role == "Primary" and s.role == "Secondary" and p.status.lower() == "started"
-            and s.status.lower() == "started" and p.volumes > 0 and p.synced == p.volumes, lim["restore"])
+        normal = lambda p, s: (p.role == "Primary" and s.role == "Secondary" and p.status.lower() == "started"  # noqa: E731
+                               and s.status.lower() == "started" and p.volumes > 0 and p.synced == p.volumes)
+        flipped = lambda p, s: p.role == "Secondary" and s.role == "Primary"  # noqa: E731
+        p, s = both()
+        if not flipped(p, s) and p.role != "Secondary":
+            _p(f"Restoring the natural direction: {group} Primary on {record.primary_array} again…")
+            try:
+                ws.remote_copy_dr_action(record.peer_group, DR_ACTION_RESTORE)
+            except Exception as exc:  # noqa: BLE001
+                p, s = both()
+                if not flipped(p, s) and p.role != "Secondary":
+                    return fail(s6, f"{record.peer_array} refused the restore: {exc}", p, s)
+                s6.detail = f"{record.peer_array} answered '{exc}': the array had already made it the natural primary. "
+        if flipped(p, s) or p.role == "Secondary":
+            ok, p, s, _w = wait_for(flipped, lim["auto_start"])
+            if not ok:
+                return fail(s6, f"The array did not settle on {record.peer_array} as primary within {lim['auto_start']} s.", p, s)
+            s6.title, s6.where = "Fail back to this array", "P"
+            s6.action = (f"PUT /remotecopygroups/{record.peer_group} {{action: stop}} on S; "
+                         f"POST /remotecopygroups/{group} {{action: 7}} on P")
+            s6.cli = f"stoprcopygroup -f {record.peer_group}  (on S) ; setrcopygroup failover -f {group}  (on P)"
+            s6.detail += (f"The array had made {record.peer_array} the natural primary after the sync, so the group was "
+                          f"failed back the same way: stopped on {record.peer_array}, failed over on {record.primary_array}.")
+            _p(f"Failing back: stopping {record.peer_group} on {record.peer_array}, then failing over to {record.primary_array}…")
+            try:
+                ws.stop_remote_copy_group(record.peer_group)
+            except Exception as exc:  # noqa: BLE001
+                p, s = both()
+                return fail(s6, f"{record.peer_array} refused the stop: {exc}", p, s)
+            ok, p, s, _w = wait_for(lambda p, s: p.status.lower() == "stopped" and s.status.lower() == "stopped", lim["stop"])
+            if not ok:
+                return fail(s6, f"Not Stopped on both sides within {lim['stop']} s.", p, s)
+            try:
+                wp.remote_copy_dr_action(group, DR_ACTION_FAILOVER)
+            except Exception as exc:  # noqa: BLE001
+                p, s = both()
+                return fail(s6, f"{record.primary_array} refused the failover back: {exc}", p, s)
+        ok, p, s, _w = wait_for(normal, lim["restore"])
         if not ok:
             return fail(s6, f"Not back to Primary/Started on P and Secondary/Started on S with every volume Synced within {lim['restore']} s.", p, s)
         finish(s6, p, s, t)

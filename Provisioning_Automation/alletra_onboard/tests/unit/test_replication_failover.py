@@ -47,14 +47,16 @@ class FakePair:
     """Both arrays' view of ONE group. `apply(where, verb)` moves the state the way the arrays do; the
     reads return RcGroups built from it. `sync_after` polls: how many reads of step 5 until Synced."""
 
-    def __init__(self, *, mode="Sync", sync_after=1, last_sync="2026-10-10 15:42:48 IST", refuse=(), stuck=(), mirror=False, start_after=1):
+    def __init__(self, *, mode="Sync", sync_after=1, last_sync="2026-10-10 15:42:48 IST", refuse=(), stuck=(), mirror=False, start_after=1,
+                 flip=False):
         self.p = {"role": "Primary", "status": "Started", "synced": True}
         self.s = {"role": "Secondary", "status": "Started", "synced": True}
         self.mode, self.last_sync, self.refuse, self.stuck = mode, last_sync, set(refuse), set(stuck)
         self.sync_after, self.calls, self.reads = sync_after, [], 0
-        # mirror=True is what the lab pair did on 2026-10-10: the failover also makes P Secondary-Rev and
-        # the array starts the group from S by itself `start_after` reads of S later.
-        self.mirror, self.start_after, self.start_pending = mirror, start_after, None
+        # mirror=True is what the lab pair did on 2026-10-10: the failover also makes the other side
+        # Secondary-Rev and the array starts the group by itself `start_after` reads later. flip=True is the
+        # rest of what it did: once synced, Primary-Rev/Secondary-Rev become plain Primary/Secondary.
+        self.mirror, self.start_after, self.start_pending, self.flip = mirror, start_after, None, flip
 
     # -- what the WSAPI writes do to the roles
     def stop(self, where, name):
@@ -71,10 +73,11 @@ class FakePair:
             raise RuntimeError(f"HTTP 403 INV_OPERATION_RCOPY_GROUP_ROLE_CONFLICT ({verb})")
         if verb in self.stuck:
             return
+        me, other = (self.p, self.s) if where == P else (self.s, self.p)
         if verb == "failover":
-            self.s["role"] = "Primary-Rev"
+            me["role"] = "Primary-Rev"
             if self.mirror:
-                self.p["role"] = "Secondary-Rev"
+                other["role"] = "Secondary-Rev"
                 self.p["synced"] = self.s["synced"] = False
                 self.sync_reads_left, self.start_pending = self.sync_after, self.start_after
         elif verb == "recover":
@@ -85,6 +88,8 @@ class FakePair:
             self.p["synced"] = self.s["synced"] = False
             self.sync_reads_left = self.sync_after
         elif verb == "restore":
+            if "-Rev" not in self.p["role"] + self.s["role"]:
+                raise RuntimeError(f"Error: The role of group {name} was not previously switched.: Bad request (HTTP 400) 29")
             self.p.update(role="Primary", status="Started", synced=True)
             self.s.update(role="Secondary", status="Started", synced=True)
 
@@ -92,15 +97,19 @@ class FakePair:
     def group(self, host, name) -> RcGroup | None:
         self.reads += 1
         side = self.p if host == P else self.s
-        if host == S and self.start_pending is not None:
+        if self.start_pending is not None:
             self.start_pending -= 1
             if self.start_pending <= 0:
-                self.s["status"], self.start_pending = "Started", None
-        if side["role"] == "Secondary-Rev" or self.s["role"] == "Primary-Rev":
+                self.p["status"] = self.s["status"] = "Started"
+                self.start_pending = None
+        if "-Rev" in self.p["role"] + self.s["role"]:
             if not side["synced"] and getattr(self, "sync_reads_left", 0) <= 0:
                 self.p["synced"] = self.s["synced"] = True
             elif not side["synced"]:
                 self.sync_reads_left -= 1
+            if self.flip and self.p["synced"] and self.s["synced"] and self.start_pending is None:
+                for x in (self.p, self.s):
+                    x["role"] = x["role"].replace("-Rev", "")
         status = "Synced" if side["synced"] else "Syncing"
         return RcGroup(name=name, target="AlletraMP_E18U31", status=side["status"], role=side["role"], mode=self.mode,
                        period="5m" if self.mode == "Periodic" else "",
@@ -176,6 +185,48 @@ def test_a_recover_refused_because_the_array_started_meanwhile_is_not_a_failure(
     assert pair.calls == [(P, "stop", G), (S, "failover", PG), (S, "recover", PG), (S, "restore", PG)]
     assert rec.steps[4].detail.startswith("AlletraMP_E18U31 answered 'Remote copy group not stopped")
     assert rec.steps[4].detail.endswith("and the group is already in the recovered state.")
+
+
+def test_when_the_array_makes_the_peer_the_natural_primary_the_tool_fails_back_the_same_way():
+    """Live 18:45: after the sync back the array turned Primary-Rev/Secondary-Rev into plain Primary on S
+    and Secondary on P; restore was then refused (HTTP 400 code 29). The tool now fails back the way it
+    failed over: stop on S, failover on P, and waits until the array settles back to normal."""
+    pair = FakePair(mirror=True, flip=True)
+    rec = _run(pair)
+    assert rec.result == "passed" and rec.error is None
+    assert pair.calls == [(P, "stop", G), (S, "failover", PG), (S, "stop", PG), (P, "failover", G)]
+    s6 = rec.steps[6]
+    assert (s6.title, s6.where, s6.outcome) == ("Fail back to this array", "P", "ok")
+    assert s6.cli == f"stoprcopygroup -f {PG}  (on S) ; setrcopygroup failover -f {G}  (on P)"
+    assert s6.detail.startswith("The array had made AlletraMP_E18U31 the natural primary after the sync")
+    assert (s6.primary.role, s6.primary.status, s6.peer.role, s6.peer.status) == ("Primary", "Started", "Secondary", "Started")
+
+
+def test_a_restore_refused_because_the_array_flipped_meanwhile_falls_back_to_the_failover_path():
+    pair = FakePair(mirror=True, flip=True)
+    real_group = pair.group
+
+    def group_without_flip_until_restore(host, name):
+        flip, pair.flip = pair.flip, False          # the array has not settled yet when the tool decides
+        try:
+            return real_group(host, name)
+        finally:
+            pair.flip = flip
+
+    real_dr = pair.dr
+
+    def dr(where, name, action):
+        if action == DR_ACTION_RESTORE:             # ...and settles just as the restore arrives
+            for x in (pair.p, pair.s):
+                x["role"] = x["role"].replace("-Rev", "")
+            pair.group = real_group
+        return real_dr(where, name, action)
+
+    pair.group, pair.dr = group_without_flip_until_restore, dr
+    rec = _run(pair)
+    assert rec.result == "passed"
+    assert pair.calls == [(P, "stop", G), (S, "failover", PG), (S, "restore", PG), (S, "stop", PG), (P, "failover", G)]
+    assert rec.steps[6].detail.startswith("AlletraMP_E18U31 answered 'Error: The role of group")
 
 
 # ------------------------------------------------------------------ R2 + R3: the sequence, sync and async
@@ -306,6 +357,10 @@ def test_recovery_actions_follow_the_observed_roles_not_the_step():
     assert recovery_action(_side("Primary", "Started"), _side("Secondary", "Started", array="B")) == \
         "The group is already in its natural direction and started; nothing to do."
     assert "reverse -natural" in recovery_action(_side("Primary-Rev", "Stopped"), _side("Secondary", "Stopped", array="B"))
+    # live 2026-10-10: the state the array left after the first test, and what put it back
+    assert recovery_action(_side("Secondary", "Started"), _side("Primary", "Started", array="B", group="g.r1")) == (
+        "The peer is now the group's natural primary. On B: stoprcopygroup -f g.r1 ; setrcopygroup reverse -f g.r1 ; "
+        "then on A: startrcopygroup g")
     assert "Failsafe" in recovery_action(_side("Primary", "Failsafe"), _side("Primary-Rev", "Stopped", array="B", group="g.r1"))
     assert "missing on one side" in recovery_action(_side("Primary", "Started"), _side("", "", present=False))
     assert "contact HPE Support" in recovery_action(_side("Secondary", "Started"), _side("Secondary", "Started", array="B"))
