@@ -1,7 +1,13 @@
 # SPEC-018 — As-built: replication and failover sections
 
 **Status:** APPROVED 2026-10-07; **re-cut the same day** — sections in the existing one-array
-document, not a pair document (ADR 0014 deferred) — not implemented
+document, not a pair document (ADR 0014 deferred). **R1, R3, R4 built 2026-10-10** in
+`asbuilt.py` (`_add_replication_section`, `_add_failover_section`) and `documents/steps.py`
+(both arrays read again with `replication.read.read_array` when the document is made; the plan,
+report and result come from the run's `replication.*` events). R2 is the one sentence until
+SPEC-017 fills it. 8 unit tests in `test_asbuilt_replication.py`, built on the live captures of
+2026-10-09 (sync) and 2026-10-10 (periodic through the UI). **Not yet seen live:** the as-built
+itself generated on the lab pair after a replication run.
 **Depends on:** SPEC-016 R8 (replication facts), SPEC-017 R6 (failover record), SPEC-002 (the
 provisioned sections this follows)
 **Owner:** `application/documents/asbuilt.py`, `asbuilt_parse.py`

@@ -108,6 +108,15 @@ class AsBuiltData:
     provisioning_applied_at: str = ""
     provisioning_removals: list[dict] = field(default_factory=list)   # RemovalItem dicts from EVERY apply in the run (SPEC-007)
     path_verification: dict | None = None
+    # SPEC-018: replication. All None/empty when the workbook has no Replication tab (R4).
+    replication_tab: dict | None = None            # {peer_host, rows: [{vvset, mode, rpo_minutes, peer_cpg}], failover_test}
+    replication_report: dict | None = None         # replication.previewed -> report (JSON)
+    replication_plan: dict | None = None           # replication.previewed -> plan (JSON)
+    replication_result: dict | None = None         # replication.applied / .apply.failed -> result (JSON)
+    replication_applied_at: str = ""
+    replication_primary: object | None = None      # ReplicationArrayView read when the document is made (R3)
+    replication_peer: object | None = None         # ReplicationArrayView of the peer, same moment
+    failover_record: dict | None = None            # SPEC-017 R6; None = the test did not run
 
 
 def _resource_dir() -> Path:
@@ -792,17 +801,214 @@ def _add_provisioning_section(doc, data: AsBuiltData) -> None:
 
 
 def _add_provisioned_sections(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    """SPEC-002: the five sections appended after the template's last section."""
+    """SPEC-002: the five sections appended after the template's last section; SPEC-018 adds two
+    more when the run's workbook has a Replication tab."""
     _add_hosts_section(doc, data, warnings)
     _add_volumes_section(doc, data, warnings)
     _add_presentations_section(doc, data, warnings)
     _add_zoning_section(doc, data)
     _add_provisioning_section(doc, data)
+    if data.replication_tab is not None:
+        _add_replication_section(doc, data, warnings)
+        _add_failover_section(doc, data)
+
+
+# ------------------------------------------------------------------ SPEC-018: replication
+
+_RC_OUTCOME_LABEL = {"created": "Done", "exists": "Already existed", "failed": "Failed", "skipped": "Skipped"}
+_RC_KIND_LABEL = {
+    "group": "Remote Copy group", "peer_vvset": "Peer volume set", "test_volume": "Test volume",
+    "test_vvset": "Test volume set", "volume_admit": "Volume admitted", "start": "Group started",
+    "policy": "Policies and period",
+}
+
+
+def _rc_view(view, name_fallback: str):
+    """(view or None, display name, read error or '') for one side."""
+    if view is None:
+        return None, name_fallback, "not read"
+    err = getattr(view, "read_error", None) or ""
+    return (None if err else view), (getattr(view, "name", "") or getattr(view, "host", "") or name_fallback), err
+
+
+def _rc_group_rows(data: AsBuiltData) -> list[dict]:
+    """The groups this run configured: from the apply's outcomes when it ran, else from the plan."""
+    if data.replication_result:
+        names = [o.get("name") for o in data.replication_result.get("outcomes", [])
+                 if o.get("kind") == "group" and o.get("status") in ("created", "exists")]
+    elif data.replication_plan:
+        names = [a.get("name") for a in data.replication_plan.get("actions", [])
+                 if a.get("kind") == "group" and a.get("state") in ("create", "exists")]
+    else:
+        names = []
+    detail = {a.get("name"): a.get("detail") or {} for a in (data.replication_plan or {}).get("actions", []) if a.get("kind") == "group"}
+    return [{"name": n, **detail.get(n, {})} for n in dict.fromkeys(n for n in names if n)]
+
+
+def _rc_rpo_text(row: dict, tab: dict, period_read: str = "") -> str:
+    """'RPO 10 min (period 5m)' for a periodic group, 'sync (every write)' otherwise. The period comes
+    from the array when it was read; the RPO is the workbook's number for that volume set."""
+    period = row.get("period_seconds")
+    if not period and not period_read:
+        return "sync (every write)"
+    rpo = next((r.get("rpo_minutes") for r in tab.get("rows", []) if r.get("vvset") == row.get("vvset")), None)
+    if not rpo and period:
+        rpo = period * 2 // 60
+    shown = period_read or (f"{period // 60}m" if period else "?")
+    return (f"RPO {rpo} min " if rpo else "") + f"(period {shown})"
+
+
+def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
+    from alletra_onboard.application.replication.plan import find_partnership
+    from alletra_onboard.application.replication.verify import peer_group_name
+
+    tab = data.replication_tab or {}
+    _h1(doc, "Replication configured in this run")
+    a, a_name, a_err = _rc_view(data.replication_primary, data.name or "this array")
+    b, b_name, b_err = _rc_view(data.replication_peer, tab.get("peer_host", "the peer array"))
+    rows = tab.get("rows", [])
+    _para(doc, f"The workbook's Replication tab asked for {len(rows)} volume set(s) to be replicated to "
+               f"{b_name}. Everything below was read from both arrays when this document was generated; "
+               "nothing is copied from the plan.")
+    if a_err:
+        _para(doc, f"{a_name} could not be read for this section: {a_err}")
+        warnings.append(f"The replication section could not read this array ({a_err}); its states are missing.")
+    if b_err:
+        _para(doc, f"The peer array could not be read for this section: {b_err}. Its columns below say so.")
+        warnings.append(f"The replication section could not read the peer array ({b_err}); the peer's columns are empty.")
+
+    # -- partner array and partnership
+    _para(doc, "Partner array", bold=True)
+    def side(view, name, err):
+        if view is None:
+            return [name, "could not be read" if err else "—", "—", "—", "—"]
+        rc = f"{view.rc_status}{', ' + view.rc_health if view.rc_health else ''}" or "—"
+        ports = "; ".join(f"{p.nsp} {p.ip}" for p in view.rcip_ports) or "none configured"
+        return [name, view.serial or "—", view.os_version or "—", rc, ports]
+    _table(doc, ["Array", "Serial", "OS", "Remote Copy", "RCIP ports"],
+           [["This array: " + a_name, *side(a, a_name, a_err)[1:]], ["Peer: " + b_name, *side(b, b_name, b_err)[1:]]],
+           widths=[0.26, 0.14, 0.10, 0.16, 0.34])
+    partnership = find_partnership(a, b) if a is not None and b is not None else None
+    if partnership is None:
+        _para(doc, "No Remote Copy partnership between the two arrays could be confirmed when this document was "
+                   "generated" + (" (one side was not readable)." if a_err or b_err else "."))
+    else:
+        link_rows = []
+        for view, name in ((a, a_name), (b, b_name)):
+            for t in view.targets:
+                for link in view.links:
+                    if link.target == t.name and not link.inbound:
+                        link_rows.append([name, t.name, t.policy or "—", f"{link.nsp} → {link.address}", link.status])
+        _para(doc, f"Partnered: {a_name} → {b_name} via target '{partnership.target_on_primary}' "
+                   f"({partnership.links_primary_up}/{partnership.links_primary_total} links Up); "
+                   f"{b_name} → {a_name} via target '{partnership.target_on_peer}' "
+                   f"({partnership.links_peer_up}/{partnership.links_peer_total} links Up). Found by link address.")
+        _table(doc, ["Array", "Target", "Policy", "Link (port → peer address)", "Status"], link_rows,
+               widths=[0.22, 0.22, 0.16, 0.28, 0.12])
+
+    # -- groups configured by this run
+    _para(doc, "Remote Copy groups configured by this run", bold=True)
+    groups = _rc_group_rows(data)
+    if not data.replication_result and not data.replication_plan:
+        _para(doc, "The replication step was not run in this run.")
+    elif not data.replication_result:
+        _para(doc, "A replication plan was built but not applied.")
+    elif not groups:
+        _para(doc, "The apply created no Remote Copy group.")
+    if groups:
+        when = f" at {_when(data.replication_applied_at)}" if data.replication_applied_at else ""
+        _para(doc, f"Configured over WSAPI{when}. Roles and states are as read now; on the peer each group's name "
+                   f"carries the suffix .r{a.system_id} (this array's system ID)." if a is not None and a.system_id is not None
+              else f"Configured over WSAPI{when}. Roles and states are as read now.")
+        group_rows, volume_rows = [], []
+        for row in groups:
+            g = row["name"]
+            ag = a.group(g) if a is not None else None
+            bg = b.group(peer_group_name(g, a)) if (a is not None and b is not None) else None
+            if ag is None:
+                state = "could not be read" if a_err else "not on the array now"
+                group_rows.append([g, row.get("mode", "—"), _rc_rpo_text(row, tab), "—", state, "—", "—", row.get("peer_vvset") or "—"])
+                continue
+            period = _rc_rpo_text(row, tab, ag.period)
+            peer_role = (bg.role if bg else ("could not be read" if b_err else "not found on the peer"))
+            peer_set = row.get("peer_vvset") or "—"
+            if b is not None and peer_set != "—":
+                members = b.vvsets.get(peer_set)
+                peer_set += " (missing on the peer)" if members is None else f" ({len(members)} volume(s))"
+            synced = sum(1 for v in ag.volumes if v.sync_status.lower() == "synced")
+            status = f"{ag.status} · {synced}/{len(ag.volumes)} Synced" + (f" · last sync {ag.last_sync}" if ag.last_sync and ag.last_sync != "NA" else "")
+            group_rows.append([g, ag.mode, period, ", ".join(ag.options) or "—", ag.role, peer_role, status, peer_set])
+            for v in ag.volumes:
+                size = a.volume_size_mib.get(v.local_name) if a is not None else None
+                volume_rows.append([g, v.local_name, _gib(str(size)) if size else "—", v.remote_name or "—",
+                                    v.sync_status or "—", v.last_sync if v.last_sync and v.last_sync != "NA" else "—"])
+        _table(doc, ["Group", "Mode", "RPO / period", "Policies", "Role here", "Role on peer", "Status", "Peer volume set"],
+               group_rows, widths=[0.14, 0.08, 0.14, 0.16, 0.09, 0.10, 0.17, 0.12])
+        if volume_rows:
+            _table(doc, ["Group", "Volume here", "Size (GiB)", "Volume on peer", "Sync status", "Last sync"],
+                   volume_rows, widths=[0.18, 0.20, 0.10, 0.20, 0.12, 0.20])
+
+    # -- groups the run did not create
+    _para(doc, "Replication already present", bold=True)
+    ours = {row["name"] for row in groups}
+    others = [g for g in (a.groups if a is not None else []) if g.name not in ours]
+    if a is None:
+        _para(doc, "Not known: this array could not be read.")
+    elif not others:
+        _para(doc, f"No other Remote Copy groups are on {a_name}.")
+    else:
+        _para(doc, "Groups on this array that this run did not configure. Listed for the record; not changed by the tool.")
+        _table(doc, ["Group", "Target", "Mode", "Role here", "Status", "Volumes"],
+               [[g.name, g.target, g.mode + (f" every {g.period}" if g.period else ""), g.role, g.status, str(len(g.volumes))] for g in others],
+               widths=[0.28, 0.22, 0.14, 0.10, 0.12, 0.14])
+
+    # -- what was run and how to undo it
+    result = data.replication_result
+    if result:
+        calls = sorted(((c.get("seq", 0), c.get("where", "A"), c.get("cli", "")) for act in (data.replication_plan or {}).get("actions", [])
+                        for c in act.get("calls", [])), key=lambda t: t[0])
+        if calls:
+            _para(doc, "What was run, in order", bold=True)
+            _para(doc, "Each WSAPI call the tool made, shown as the array CLI command it is equivalent to. A = this array, B = the peer.")
+            _mono(doc, [f"{where}  {cli}" for _seq, where, cli in calls])
+        outcomes = result.get("outcomes", [])
+        if outcomes:
+            _para(doc, "What each array reported", bold=True)
+            _table(doc, ["Kind", "Name", "On", "Result", "Detail"],
+                   [[_RC_KIND_LABEL.get(o.get("kind", ""), o.get("kind", "")), o.get("name", ""), o.get("where", "A"),
+                     _RC_OUTCOME_LABEL.get(o.get("status", ""), o.get("status", "")), o.get("detail") or "—"] for o in outcomes],
+                   widths=[0.18, 0.22, 0.06, 0.14, 0.40])
+        if result.get("error"):
+            _para(doc, f"Replication stopped with an error: {result['error']}")
+        _para(doc, "To remove what this run created", bold=True)
+        rem_a, rem_b = result.get("removals_a") or [], result.get("removals_b") or []
+        if rem_a or rem_b:
+            _para(doc, "Paste the A block on this array first, then the B block on the peer. The array removes a "
+                       "started group's peer volume set itself, so a B line may answer 'does not exist'. "
+                       "Objects that existed before the run are not listed. The tool never runs these.")
+            lines = []
+            if rem_a:
+                lines += [f"# ---- A: {a_name}", *rem_a]
+            if rem_b:
+                lines += [f"# ---- B: {b_name}", *rem_b]
+            _mono(doc, lines)
+        else:
+            _para(doc, "Nothing — this run created no replication objects.")
+
+
+def _add_failover_section(doc, data: AsBuiltData) -> None:
+    _h1(doc, "Failover test")
+    if not data.failover_record:
+        _para(doc, "The failover test was not run in this run.")
+        return
+    # SPEC-017 R6 fills this in v0.18
+    _para(doc, "The failover test ran; see the run's events for its record.")
 
 
 # SPEC-012 R3 (A-4): the two run sections share a page — a one-sentence zoning record owned a whole
-# page when every Heading 1 broke. The second run section flows on from the first.
-_FLOWS_ON = {"Provisioning performed in this run"}
+# page when every Heading 1 broke. The second run section flows on from the first. SPEC-018: the
+# failover section (one sentence until SPEC-017) flows on from the replication section.
+_FLOWS_ON = {"Provisioning performed in this run", "Failover test"}
 
 
 def _update_fields_on_open(doc) -> None:
