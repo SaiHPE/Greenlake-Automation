@@ -47,11 +47,14 @@ class FakePair:
     """Both arrays' view of ONE group. `apply(where, verb)` moves the state the way the arrays do; the
     reads return RcGroups built from it. `sync_after` polls: how many reads of step 5 until Synced."""
 
-    def __init__(self, *, mode="Sync", sync_after=1, last_sync="2026-10-10 15:42:48 IST", refuse=(), stuck=()):
+    def __init__(self, *, mode="Sync", sync_after=1, last_sync="2026-10-10 15:42:48 IST", refuse=(), stuck=(), mirror=False, start_after=1):
         self.p = {"role": "Primary", "status": "Started", "synced": True}
         self.s = {"role": "Secondary", "status": "Started", "synced": True}
         self.mode, self.last_sync, self.refuse, self.stuck = mode, last_sync, set(refuse), set(stuck)
         self.sync_after, self.calls, self.reads = sync_after, [], 0
+        # mirror=True is what the lab pair did on 2026-10-10: the failover also makes P Secondary-Rev and
+        # the array starts the group from S by itself `start_after` reads of S later.
+        self.mirror, self.start_after, self.start_pending = mirror, start_after, None
 
     # -- what the WSAPI writes do to the roles
     def stop(self, where, name):
@@ -70,7 +73,14 @@ class FakePair:
             return
         if verb == "failover":
             self.s["role"] = "Primary-Rev"
+            if self.mirror:
+                self.p["role"] = "Secondary-Rev"
+                self.p["synced"] = self.s["synced"] = False
+                self.sync_reads_left, self.start_pending = self.sync_after, self.start_after
         elif verb == "recover":
+            if self.s["status"] == "Started" or (self.mirror and self.start_pending is not None):
+                self.s["status"], self.start_pending = "Started", None
+                raise RuntimeError("Remote copy group not stopped : Forbidden (HTTP 403) 284 - Remote copy group not stopped")
             self.p["role"], self.p["status"], self.s["status"] = "Secondary-Rev", "Started", "Started"
             self.p["synced"] = self.s["synced"] = False
             self.sync_reads_left = self.sync_after
@@ -82,6 +92,10 @@ class FakePair:
     def group(self, host, name) -> RcGroup | None:
         self.reads += 1
         side = self.p if host == P else self.s
+        if host == S and self.start_pending is not None:
+            self.start_pending -= 1
+            if self.start_pending <= 0:
+                self.s["status"], self.start_pending = "Started", None
         if side["role"] == "Secondary-Rev" or self.s["role"] == "Primary-Rev":
             if not side["synced"] and getattr(self, "sync_reads_left", 0) <= 0:
                 self.p["synced"] = self.s["synced"] = True
@@ -132,9 +146,36 @@ def _run(pair: FakePair, **kw):
         read_fn=lambda creds, progress=None: pair.view(creds.host),
         read_group_fn=lambda creds, name: pair.group(creds.host, name),
         sleep=lambda s: None, clock=tick,
-        limits={"stop": 5, "failover": 5, "recover": 5, "sync": 30, "restore": 5, "poll": 1},
+        limits={"stop": 5, "failover": 5, "recover": 5, "sync": 30, "restore": 5, "poll": 1, "auto_start": 2},
         **kw,
     )
+
+
+# ------------------------------------------------------------------ what the lab pair did (2026-10-10)
+
+def test_with_both_arrays_up_the_array_does_the_recover_itself_and_the_tool_does_not_send_one():
+    """Live 18:18: the failover was mirrored to P as Secondary-Rev and the group started from S on its
+    own; the recover the tool then sent was refused (403 code 284, not stopped). It must not be sent."""
+    pair = FakePair(mirror=True, start_after=1)
+    rec = _run(pair)
+    assert rec.result == "passed" and rec.error is None
+    assert pair.calls == [(P, "stop", G), (S, "failover", PG), (S, "restore", PG)]
+    s4 = rec.steps[4]
+    assert (s4.title, s4.cli, s4.outcome) == ("Recover (done by the array)", "", "ok")
+    assert s4.detail == ("Recover was not needed: the array made AlletraMP_D22U27 Secondary-Rev and started the group from "
+                         "AlletraMP_E18U31 by itself after the failover.")
+    assert (rec.steps[2].primary.role, rec.steps[2].peer.role) == ("Secondary-Rev", "Primary-Rev")
+    assert (rec.steps[6].primary.role, rec.steps[6].peer.role) == ("Primary", "Secondary")
+
+
+def test_a_recover_refused_because_the_array_started_meanwhile_is_not_a_failure():
+    # the array starts the group only after the tool's wait gave up: the recover meets a started group
+    pair = FakePair(mirror=True, start_after=10_000)
+    rec = _run(pair)
+    assert rec.result == "passed"
+    assert pair.calls == [(P, "stop", G), (S, "failover", PG), (S, "recover", PG), (S, "restore", PG)]
+    assert rec.steps[4].detail.startswith("AlletraMP_E18U31 answered 'Remote copy group not stopped")
+    assert rec.steps[4].detail.endswith("and the group is already in the recovered state.")
 
 
 # ------------------------------------------------------------------ R2 + R3: the sequence, sync and async

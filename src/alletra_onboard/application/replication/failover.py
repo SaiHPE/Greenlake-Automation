@@ -31,6 +31,7 @@ from alletra_onboard.domain.shared import EndpointCreds
 STOP_WAIT_S = 120           # step 1: both sides Stopped
 FAILOVER_WAIT_S = 180       # step 2: the peer shows Primary-Rev
 RECOVER_WAIT_S = 180        # step 4: the old primary shows Secondary-Rev and the group is Started
+AUTO_START_WAIT_S = 60      # step 4: how long to watch for the array starting the group itself after failover
 SYNC_WAIT_S = 15 * 60       # step 5: every volume Synced after the recover
 RESTORE_WAIT_S = 300        # step 6: back to Primary on P, Secondary on S, Started, Synced
 POLL_S = 10
@@ -99,7 +100,7 @@ def run_failover_test(
     """The R2 sequence on `group`, as the record. Writes only through `wsapi_factory`; every state
     through the read functions. Returns, never raises: a failure is a record with `result` failed."""
     lim = {"stop": STOP_WAIT_S, "failover": FAILOVER_WAIT_S, "recover": RECOVER_WAIT_S, "sync": SYNC_WAIT_S,
-           "restore": RESTORE_WAIT_S, "poll": POLL_S}
+           "restore": RESTORE_WAIT_S, "poll": POLL_S, "auto_start": AUTO_START_WAIT_S}
     lim.update(limits or {})
     rep = intent.replication
     record = FailoverRecord(group=group, started_at=_now())
@@ -176,7 +177,8 @@ def run_failover_test(
         FailoverStepRecord(seq=1, title="Stop the group", where="P", action=f"PUT /remotecopygroups/{group} {{action: stop}}",
                            cli=f"stoprcopygroup -f {group}", expected="Stopped on both arrays"),
         FailoverStepRecord(seq=2, title="Fail over to the peer", where="S", action=f"POST /remotecopygroups/{record.peer_group} {{action: 7}}",
-                           cli=f"setrcopygroup failover -f {record.peer_group}", expected="Primary-Rev on S; Primary/Stopped on P"),
+                           cli=f"setrcopygroup failover -f {record.peer_group}",
+                           expected="Primary-Rev on S; with both arrays up the array also makes P Secondary-Rev"),
         FailoverStepRecord(seq=3, title="The peer's volumes are now read/write", where="-", action="(read)",
                            expected="recorded, not written to"),
         FailoverStepRecord(seq=4, title="Recover", where="S", action=f"POST /remotecopygroups/{record.peer_group} {{action: 9}}",
@@ -232,17 +234,28 @@ def run_failover_test(
         s3.detail = f"{s.array} holds the group as {s.role}/{s.status}; its {s.volumes} volume(s) are writable. Not written to."
         finish(s3, p, s, t)
 
-        # 4. recover on S
+        # 4. recover on S, unless the array already did it. Live 2026-10-10 (both arrays up): the failover
+        # was mirrored to P as Secondary-Rev and the array started the group from S within seconds; a
+        # recover sent then is refused with 403 code 284 "Remote copy group not stopped".
         t = begin(s4)
-        _p(f"Recovering: {group} on {record.primary_array} becomes Secondary-Rev, syncing back…")
-        try:
-            ws.remote_copy_dr_action(record.peer_group, DR_ACTION_RECOVER)
-        except Exception as exc:  # noqa: BLE001
-            p, s = both()
-            return fail(s4, f"{record.peer_array} refused the recover: {exc}", p, s)
-        ok, p, s, _w = wait_for(lambda p, s: p.role == "Secondary-Rev" and s.role == "Primary-Rev" and s.status.lower() == "started", lim["recover"])
-        if not ok:
-            return fail(s4, f"Not Secondary-Rev on P with Primary-Rev/Started on S within {lim['recover']} s.", p, s)
+        recovered = lambda p, s: p.role == "Secondary-Rev" and s.role == "Primary-Rev" and s.status.lower() == "started"  # noqa: E731
+        ok, p, s, _w = wait_for(recovered, lim["auto_start"])
+        if ok:
+            s4.title, s4.action, s4.cli = "Recover (done by the array)", "(not sent: the array did it)", ""
+            s4.detail = (f"Recover was not needed: the array made {p.array} Secondary-Rev and started the group from "
+                         f"{s.array} by itself after the failover.")
+        else:
+            _p(f"Recovering: {group} on {record.primary_array} becomes Secondary-Rev, syncing back…")
+            try:
+                ws.remote_copy_dr_action(record.peer_group, DR_ACTION_RECOVER)
+            except Exception as exc:  # noqa: BLE001
+                p, s = both()
+                if not recovered(p, s):
+                    return fail(s4, f"{record.peer_array} refused the recover: {exc}", p, s)
+                s4.detail = f"{record.peer_array} answered '{exc}', and the group is already in the recovered state."
+            ok, p, s, _w = wait_for(recovered, lim["recover"])
+            if not ok:
+                return fail(s4, f"Not Secondary-Rev on P with Primary-Rev/Started on S within {lim['recover']} s.", p, s)
         finish(s4, p, s, t)
 
         # 5. wait for the sync back

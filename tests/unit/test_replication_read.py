@@ -133,6 +133,20 @@ def test_a_periodic_group_row_parses_last_sync_and_period_out_of_its_options():
     assert (s.role, s.mode, s.period, s.last_sync, s.options) == ("Secondary", "Periodic", "5m", "", ["auto_recover", "over_per_alert", "auto_synchronize"])
 
 
+def test_a_volume_syncing_with_a_percentage_keeps_last_sync_clean():
+    # live 2026-10-10 18:18, the failover test's recover: "Syncing (100%)" put "(100%)" into last sync
+    text = (
+        "Group Information\n\n"
+        "Name             Target           Status   Role        Mode     Options\n"
+        "zz_rc_test_rcg.r188150 AlletraMP_E18U31 Started  Primary-Rev Sync     auto_recover\n"
+        "  LocalVV        ID   RemoteVV       ID   SyncStatus    LastSyncTime\n"
+        "  zz_rc_test_v01 1779 zz_rc_test_v01 12389 Syncing (100%) NA\n"
+    )
+    [g] = parse_showrcopy(text)["groups"]
+    v = g.volumes[0]
+    assert (g.role, v.sync_status, v.sync_progress, v.last_sync) == ("Primary-Rev", "Syncing", "100%", "NA")
+
+
 def test_a_periodic_group_still_syncing_parses_too():
     text = (
         "Group Information\n\n"
