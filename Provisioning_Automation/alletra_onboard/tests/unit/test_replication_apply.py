@@ -445,3 +445,33 @@ def test_verify_on_the_live_periodic_capture_says_replicating_with_the_last_sync
     # the stopped Sync groups did not stop the periodic start: the array counts STARTED groups
     assert {g.status for g in a.groups if not g.name.startswith("zz_rc_")} == {"Stopped"}
     assert not any(s.startswith("RCP_") for s in a.vvsets)
+
+
+def test_verify_on_the_ui_periodic_capture_shows_the_five_minute_cycle_ran():
+    """2026-10-10 15:4x: the periodic run made through the UI itself, the target otherwise empty.
+    Groups started 15:37:45; the capture shows last sync 15:42:48, one period later."""
+    after = _FIXTURES / "after_apply_periodic_ui"
+
+    class _After(_Cli):
+        def run(self, command, timeout=None):
+            name = command.replace(" -", "_").replace(" ", "_")
+            if command.startswith("showrcopy") or command == "showvvset":
+                return (after / self.array / (name + ".txt")).read_text(encoding="utf-8")
+            return super().run(command, timeout)
+
+    a = read_array(_creds("10.64.122.99"), array_cli_factory=lambda c: _After("D22U27", showvv=_SHOWVV_A))
+    b = read_array(_creds("10.64.154.190"), array_cli_factory=lambda c: _After("E18U31", showvv="Name VSize_MB\n"))
+    assert [g.name for g in a.groups] == ["zz_rc_test_rcg", "zz_rc_vvs_rcg"]          # nothing else on the target
+    assert [g.name for g in b.groups] == ["zz_rc_test_rcg.r188150", "zz_rc_vvs_rcg.r188150"]
+    plan = ReplicationPlan(actions=[
+        ReplicationAction(kind="group", name="zz_rc_vvs_rcg", state="create", detail={"mode": "async", "period_seconds": 300, "peer_vvset": "zz_rc_vvs_rc"}),
+        ReplicationAction(kind="group", name="zz_rc_test_rcg", state="create", detail={"mode": "async", "period_seconds": 300, "peer_vvset": "zz_rc_test_rc"}),
+    ])
+    reads = iter([a, b])
+    out = verify(_prov(), plan, read_fn=lambda creds, progress=None: next(reads))
+    assert out.error is None and out.links_ok
+    assert [(g.verdict, g.detail) for g in out.groups] == [
+        ("replicating", "Started · Primary here, Secondary on the peer · Periodic · 1 volume(s) Synced · last sync 2026-10-10 15:42:48 IST"),
+        ("replicating", "Started · Primary here, Secondary on the peer · Periodic · 1 volume(s) Synced · last sync 2026-10-10 15:42:48 IST"),
+    ]
+    assert a.group("zz_rc_vvs_rcg").period == "5m" and b.vvsets["zz_rc_vvs_rc"] == ["zz_rc_vol01"]

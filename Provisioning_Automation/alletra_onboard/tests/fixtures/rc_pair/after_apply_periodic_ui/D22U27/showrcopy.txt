@@ -1,0 +1,30 @@
+# showrcopy
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name             ID Type Status Options Policy       
+AlletraMP_E18U31  5 IP   ready  -       mirror_config
+
+Link Information
+
+Target           Node  Address       Status Options
+AlletraMP_E18U31 0:4:3 10.54.154.192 Up     -      
+AlletraMP_E18U31 1:4:3 10.54.154.193 Up     -      
+receive          0:4:3 10.54.122.92  Up     -      
+receive          1:4:3 10.54.122.93  Up     -      
+
+Group Information
+
+Name           Target           Status   Role       Mode     Options                                                                                  
+zz_rc_test_rcg AlletraMP_E18U31 Started  Primary    Periodic Last-Sync 2026-10-10 15:42:48 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV         ID   RemoteVV       ID   SyncStatus    LastSyncTime           
+  zz_rc_test_v01 12449 zz_rc_test_v01 1802 Synced        2026-10-10 15:42:48 IST
+
+Name          Target           Status   Role       Mode     Options                                                                                  
+zz_rc_vvs_rcg AlletraMP_E18U31 Started  Primary    Periodic Last-Sync 2026-10-10 15:42:48 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV       ID   RemoteVV     ID   SyncStatus    LastSyncTime           
+  zz_rc_vol01  12447 zz_rc_vol01  1801 Synced        2026-10-10 15:42:48 IST
+
