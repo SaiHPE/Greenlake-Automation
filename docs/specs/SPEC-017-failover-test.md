@@ -16,7 +16,16 @@ itself** within seconds, so the recover sent at step 4 was refused (HTTP 403 cod
 group not stopped*). The test stopped there as designed and named the right way back (restore on
 S). Fixed the same evening: step 4 first watches for the array's own start and sends recover only
 when it does not come; a code-284 refusal with the group already recovered is not a failure. Also
-fixed: `Syncing (100%)` in the SyncStatus column. **Owed:** a clean live pass, sync then async.
+fixed: `Syncing (100%)` in the SyncStatus column. **Second live run 18:45** (same group, after the
+script had swapped its direction back with stop, `setrcopygroup reverse`, start): steps 0 to 5
+passed, step 4 correctly sent no recover. Then the array did one more thing the table below does not
+say: as soon as the sync back finished, it turned Primary-Rev/Secondary-Rev into plain **Primary on
+S and Secondary on P** (the peer became the group's natural primary), and `restore` was refused
+(HTTP 400 code 29, *the role of group … was not previously switched*). The first run's state 25
+minutes later was the same, so this is the array's normal behaviour with both arrays up, not a
+race. Step 6 now restores only while the roles still carry -Rev; otherwise it fails back the way the
+failover went, from the other side (stop on S, failover on P) and waits for the array to settle on
+Primary/Secondary again. **Owed:** a clean live pass, sync then async.
 **ADR:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) §4 (DR operations are
 WSAPI calls on the write plane provisioning already uses)
 **Depends on:** SPEC-016 (a replicating group)
