@@ -234,3 +234,61 @@ honest sentence (*the array would start … but … the tool will not put their 
 **SPEC-016 R1–R8 are live for sync and periodic.** Through the UI for sync; through the same
 modules for periodic. Owed: periodic through the UI itself (a target of its own, BL-20), the preset
 with a real host, runner scenario 7.
+
+## Periodic through the UI — 2026-10-10 15:29–17:05, the six Sync groups removed and rebuilt
+
+The operator's decision (2026-10-10): the six lab groups may be removed and rebuilt; no data at
+stake. `scripts/rc_rebuild.py` (lab branch) first **saved** every group's definition from
+`showrcopy -d groups` (Primary side, target, mode, CPGs, policies, volume pairs, local/remote sets)
+plus `showvvset`, `showvlun -t`, `showhost` on both arrays, then stopped and removed them from
+their Primary side with `removercopygroup -f` — **without `-removevv`, so every volume stayed on
+both arrays**.
+
+**Five went at once; the Peer Persistence group did not.** `APP_Test` (`active_active`) answered
+`setrcopygroup pol no_active_active` with *"Cannot remove active_active policy … Remote group
+APP_Test.r188150 contains an exported Peer Persistence volume (Id=531). Please unexport
+geoclustered volumes"* and `removercopygroup -f` with *"Volume APP.test.vv of group
+APP_Test.r188150 is an Active-Active Peer Persistence volume. Please unexport the secondary volume
+so the host only has access to the primary volume and retry."* After `removevlun -f APP.test.vv 16
+set:ESX1` on E18U31 (answer: *"Issuing removevlun …"*) the removal was accepted (*"Group APP_Test
+has been deleted."*). The UI read in between showed the honest finding for one stopped sync group
+(*… already carries 1 sync group(s) (APP_Test), all stopped …*).
+
+**The UI run, no override anywhere (run `a9476922`):** `D22U27_replication_async.xlsx`, Custom,
+Replication only. *Read both arrays* → no findings, 0 groups each side, plan 6 to create, every
+group line `…:periodic`. *Configure replication* → **12 writes Done** at 15:37:44–45.
+*Verify* at 15:38: both *Replicating · Started · Primary here, Secondary on the peer · Periodic ·
+1 volume(s) Synced*; *Verify* again at 15:45: **last sync 2026-10-10 15:42:48 IST** — the
+5-minute resync cycle ran on its own between the two reads. Removal set shown by the page, A then
+B; run by `rc_rebuild.py ui-cleanup` straight from the app's event (every A line accepted, both B
+lines *does not exist* — the array removes the peer set with a started group, as on the 9th).
+Capture of the live state in `ui_before_cleanup/`.
+
+**Rebuild, from the saved definitions:** `creatercopygroup [-usr_cpg …] <g> <target>:sync`,
+volumes admitted to the EXISTING secondaries, policies set, `startrcopygroup`. Two things the array
+taught on the way: (1) the CLI `admitrcopyvv <vv> <group> <target>:<existing secondary>` for a
+single volume **never answered** (set-based `admitrcopyvv set:300gb …` did) — switched to the
+product's WSAPI `addVolumeToRemoteCopyGroup` without `volumeAutoCreation`, which admitted every
+volume at once; (2) `creatercopygroup` from the CLI did **not** create the `RCP_<group>` set its
+help promises (`showvvset` identical before and after). All six Started, every volume **Synced**
+on both sides within minutes, `active_active` accepted on `APP_Test`.
+
+**Peer Persistence host proximity — one wrong guess, corrected:** `createvlun APP.test.vv 16
+set:ESX1` on E18U31 was refused (*"Cannot export to host which is not admitted to the group"*);
+the host set has to be admitted with `admitrcopyhost -proximity {primary|secondary|all}`. The
+save had not captured `showhostset -summary` (its `RC_host` column holds the value), and I
+inferred `secondary` from the host set living on E18U31 — the array's first summary showed the
+original was **`Pri`**, so the inference was wrong and changed it. Put back with the same command
+and `primary` (allowed on the secondary *"to correct inconsistencies"*; the export was accepted in
+between and is in place). Each `admitrcopyhost` leaves an array-made host set `RH<n>_<group>`
+(`RH0_APP_Test` on D22U27, `RH0_APP_Test.r188150` on E18U31, both `Pri`) — the array's own
+bookkeeping, the only visible difference from before. The script now captures
+`showhostset -summary` in every save.
+
+**Compare against the save:** `showrcopy groups` identical, `showvlun -t` identical, `showvvset`
+differs only in `test999.2610…` snapshots — a pre-existing 15-minute snapshot schedule on D22U27
+that ages old ones out and adds new ones (`showsched`, captured 10-07). Lab restored.
+
+**SPEC-016 R1–R8 are live for sync and periodic, both through the UI.** Owed: the preset with a
+real host, runner scenario 7, and (still) whether a stopped Sync group restarts beside a started
+periodic group — not taken today either, the periodic groups were removed before the rebuild.

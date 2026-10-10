@@ -16,9 +16,11 @@ service path) — **R1–R8 live-verified for sync 2026-10-09** on D22U27 → E1
 live corrections folded in: two PUTs for period/policies, one mode per target as a finding, removal
 set A before B. **Periodic live-verified 2026-10-09 23:39** through the same modules (the six lab
 Sync groups paused for the window, restored and diffed IDENTICAL; `after_apply_periodic/`): 12
-writes, both groups *Replicating* with `last sync`, the periodic Options row parsed. **Owed:** the
-*Provision, then replicate* preset with a real host, runner scenario 7, the periodic path through the
-UI itself (needs a target of its own — BL-20).
+writes, both groups *Replicating* with `last sync`, the periodic Options row parsed. **Periodic
+through the UI itself 2026-10-10 15:37** (the six lab Sync groups removed and rebuilt, operator's
+decision): no findings, 12 writes Done, two Verifies 7 minutes apart showing the 5-minute cycle
+run (*last sync 15:42:48*). **Owed:** the *Provision, then replicate* preset with a real host,
+runner scenario 7.
 **ADRs:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) · [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (reads stay read-only; untouched in v0.17)
 **Depends on:** SPEC-015 (the tab, the steps)
 **Research:** [2026-10-07](../research/2026-10-07-replication-document-review.md) §3–§4 — limits
