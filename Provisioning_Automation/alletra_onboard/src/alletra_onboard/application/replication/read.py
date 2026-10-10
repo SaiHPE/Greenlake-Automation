@@ -172,10 +172,15 @@ def parse_showrcopy(text: str) -> dict:
                 expect_group_row = False
                 continue
             if in_volumes and current is not None and len(tokens) >= 5:
+                rest = tokens[5:]
+                progress = ""
+                if rest and re.fullmatch(r"\(\d+%\)", rest[0]):
+                    # live 2026-10-10: a volume syncing shows "Syncing (100%)" in the SyncStatus column
+                    progress, rest = rest[0].strip("()"), rest[1:]
                 current.volumes.append(RcGroupVolume(
                     local_name=tokens[0], local_id=_int(tokens[1]), remote_name=tokens[2],
-                    remote_id=_int(tokens[3]), sync_status=tokens[4],
-                    last_sync=" ".join(tokens[5:]) if len(tokens) > 5 else "",
+                    remote_id=_int(tokens[3]), sync_status=tokens[4], sync_progress=progress,
+                    last_sync=" ".join(rest),
                 ))
     return {"status": status, "health": health, "targets": targets, "links": links, "groups": groups}
 

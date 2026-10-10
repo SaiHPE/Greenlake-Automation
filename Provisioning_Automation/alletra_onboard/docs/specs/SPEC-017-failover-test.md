@@ -8,9 +8,15 @@ R3 timings, R5 stop with the observed state and the ED6 way back), `WsapiClient.
 created; any other group only with its name typed back), the Failover test step page (R4 tick-box
 and button), the as-built section (R6). 11 sequence tests on a fake pair that moves roles the way
 the arrays do, plus service, API and as-built tests. Checked on the Mac through the real HTTP API
-and UI against a faked pair (passed and failed screens). **Owed:** the live run on
-`zz_rc_test_rcg`, sync then async, which also confirms the WSAPI action codes 7/9/10 against the CLI
-verbs.
+and UI against a faked pair (passed and failed screens). **First live run 2026-10-10 18:18** on
+`zz_rc_test_rcg` (sync, lab pair): steps 0 to 3 as specified, action 7 confirmed as failover. Then
+the array differed from the table below: with both arrays up, the failover was mirrored to P
+(**Secondary-Rev** at once, not Primary/Stopped) and the array **started the group from S by
+itself** within seconds, so the recover sent at step 4 was refused (HTTP 403 code 284, *Remote copy
+group not stopped*). The test stopped there as designed and named the right way back (restore on
+S). Fixed the same evening: step 4 first watches for the array's own start and sends recover only
+when it does not come; a code-284 refusal with the group already recovered is not a failure. Also
+fixed: `Syncing (100%)` in the SyncStatus column. **Owed:** a clean live pass, sync then async.
 **ADR:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) §4 (DR operations are
 WSAPI calls on the write plane provisioning already uses)
 **Depends on:** SPEC-016 (a replicating group)

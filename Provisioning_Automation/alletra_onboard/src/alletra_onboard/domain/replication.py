@@ -145,6 +145,7 @@ class RcGroupVolume(BaseModel):
     remote_name: str = ""
     remote_id: int | None = None
     sync_status: str = ""       # Synced | Syncing | Stopped | Stale | NotSynced | …
+    sync_progress: str = ""     # "100%" when the array prints "Syncing (100%)"
     last_sync: str = ""         # NA on sync groups; a timestamp on periodic ones
 
 
