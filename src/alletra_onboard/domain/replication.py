@@ -332,3 +332,74 @@ class ReplicationVerification(BaseModel):
     groups: list[GroupVerification] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
+
+
+# ------------------------------------------------------------------ failover test (SPEC-017)
+
+#: WSAPI `recoverRemoteCopyGroupFromDisaster` action codes (hpe3parclient), with the CLI verb each is.
+DR_ACTION_FAILOVER = 7      # setrcopygroup failover: the secondary becomes Primary-Rev
+DR_ACTION_RECOVER = 9       # setrcopygroup recover: the old primary becomes Secondary-Rev, sync back
+DR_ACTION_RESTORE = 10      # setrcopygroup restore: natural direction, started
+
+FailoverOutcome = Literal["pending", "ok", "failed", "skipped"]
+FailoverResult = Literal["passed", "failed", "aborted"]
+
+
+class FailoverSide(BaseModel):
+    """What one array showed for the group after a step (`showrcopy groups <group>`)."""
+
+    array: str = ""                 # the array's name
+    group: str = ""                 # the group's name on that array (the peer adds .r<id>)
+    present: bool = True
+    role: str = ""                  # Primary | Secondary | Primary-Rev | Secondary-Rev
+    status: str = ""                # Started | Stopped | Failsafe
+    mode: str = ""
+    volumes: int = 0
+    synced: int = 0
+    last_sync: str = ""             # periodic groups: the newest LastSyncTime seen
+
+    @property
+    def summary(self) -> str:
+        if not self.present:
+            return "not on the array"
+        bits = [f"{self.role}/{self.status}", f"{self.synced}/{self.volumes} Synced"]
+        if self.last_sync and self.last_sync != "NA":
+            bits.append(f"last sync {self.last_sync}")
+        return " · ".join(bits)
+
+
+class FailoverStepRecord(BaseModel):
+    """One row of the SPEC-017 R2 table, with what was measured (R3)."""
+
+    seq: int
+    title: str
+    where: Literal["P", "S", "-"] = "-"
+    action: str = ""                # the WSAPI call, or "(read)"
+    cli: str = ""                   # the CLI equivalent
+    expected: str = ""
+    started_at: str = ""
+    ended_at: str = ""
+    seconds: float | None = None
+    primary: FailoverSide | None = None
+    peer: FailoverSide | None = None
+    outcome: FailoverOutcome = "pending"
+    detail: str = ""
+
+
+class FailoverRecord(BaseModel):
+    group: str
+    peer_group: str = ""
+    mode: str = ""                  # sync | async
+    primary_array: str = ""
+    peer_array: str = ""
+    started_at: str = ""
+    ended_at: str = ""
+    steps: list[FailoverStepRecord] = Field(default_factory=list)
+    result: FailoverResult = "aborted"
+    failed_step: int | None = None
+    time_to_failover_s: float | None = None     # step 2: until the peer shows Primary-Rev
+    time_to_synced_s: float | None = None       # step 5: until every volume is Synced after recover
+    data_loss_bound: str = ""                   # async: the last sync before failover and how old it was
+    observed_state: str = ""                    # on failure: both sides, one line
+    recovery_action: str = ""                   # on failure: HPE's documented way back, as CLI lines
+    error: str | None = None

@@ -11,15 +11,22 @@ import asyncio
 from functools import partial
 
 from alletra_onboard.application.replication import apply as replication_apply
+from alletra_onboard.application.replication import failover as replication_failover
 from alletra_onboard.application.replication import plan as replication_plan
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.replication import verify as replication_verify
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
-from alletra_onboard.domain.replication import ReplicationPlan, ReplicationReport
+from alletra_onboard.domain.replication import (
+    TEST_GROUP,
+    FailoverRecord,
+    ReplicationPlan,
+    ReplicationReport,
+)
 
 REPORT_ARTIFACT = "replication_report"
 RESULT_ARTIFACT = "replication_result"
+FAILOVER_ARTIFACT = "failover_record"
 
 
 class ReplicationSteps:
@@ -190,3 +197,77 @@ class ReplicationSteps:
         summary = (f"{counts['replicating']} replicating · {counts['syncing']} syncing · {counts['not_replicating']} not replicating · "
                    + ("links Up" if verification.links_ok else "links NOT all Up"))
         coord.emit(run.run_id, phase, "replication.verified", summary, data={"verification": verification.model_dump(mode="json")})
+
+    # ------------------------------------------------------------------ SPEC-017: the failover test
+
+    def groups_created(self, run_id: str) -> list[str]:
+        """The Remote Copy groups this run's applies created (from the run's events)."""
+        names: list[str] = []
+        for event in self._coord.list_events(run_id):
+            if event.event_type in ("replication.applied", "replication.apply.failed"):
+                for g in (event.data.get("result") or {}).get("groups_created") or []:
+                    if g not in names:
+                        names.append(g)
+        return names
+
+    def failover_group_choice(self, run_id: str, group: str | None, confirm: str | None) -> str:
+        """SPEC-017 R1: the tool's own test group by default; a group this run created may be picked;
+        any other group only when its name is typed back in the confirmation field."""
+        intent = self._require_replication(run_id)
+        chosen = (group or "").strip() or intent.replication.failover_group_name
+        offered = {TEST_GROUP, intent.replication.failover_group_name, *self.groups_created(run_id)}
+        if chosen not in offered and (confirm or "").strip() != chosen:
+            raise StepPreconditionError(
+                f"'{chosen}' was not created by this run. To test failover on it, type its name in the confirmation "
+                "field: hosts running on its primary volumes lose access for the duration of the test."
+            )
+        return chosen
+
+    def start_failover_test(self, run_id: str, *, group: str | None = None, confirm: str | None = None) -> RunRecord:
+        coord = self._coord
+        run = coord.get_run(run_id)
+        intent = self._require_replication(run_id)
+        chosen = self.failover_group_choice(run_id, group, confirm)
+        coord.spawn(run_id, self._run_failover(run, intent, chosen))
+        return run
+
+    async def _run_failover(self, run: RunRecord, intent, group: str) -> None:
+        coord = self._coord
+        phase = WorkflowPhase.STORAGE_FAILOVER_TEST
+        coord.set_state(run, RunStatus.RUNNING, phase)
+        coord.emit(run.run_id, phase, "failover.started",
+                   f"Failover test on {group}: stop → fail over to the peer → recover → wait for sync → restore…",
+                   data={"group": group})
+        loop = asyncio.get_running_loop()
+
+        def progress(message: str) -> None:
+            loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
+
+        record: FailoverRecord = await asyncio.to_thread(partial(replication_failover.run_failover_test, intent, group, progress=progress))
+        try:
+            coord.store.save_artifact(run.run_id, FAILOVER_ARTIFACT, record.model_dump_json().encode("utf-8"))
+        except Exception:  # noqa: BLE001, S110 - the test ran; failing to cache the record must not fail the step
+            pass
+        data = {"record": record.model_dump(mode="json")}
+        if record.result == "passed":
+            coord.set_state(run, RunStatus.READY, phase)
+            timing = (f" Failover in {record.time_to_failover_s:g} s, synced back in {record.time_to_synced_s:g} s."
+                      if record.time_to_failover_s is not None and record.time_to_synced_s is not None else "")
+            coord.emit(run.run_id, phase, "failover.completed",
+                       f"Failover test passed on {group}: the peer took over and the group is back to its normal state.{timing}",
+                       data=data)
+            return
+        coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
+        where = f" at step {record.failed_step}" if record.failed_step is not None else ""
+        coord.emit(run.run_id, phase, "failover.failed",
+                   f"Failover test {record.result}{where}: {record.error} " + (f"Way back: {record.recovery_action}" if record.recovery_action else ""),
+                   data=data)
+
+    def failover_record(self, run_id: str) -> FailoverRecord | None:
+        raw = self._coord.store.load_artifact(run_id, FAILOVER_ARTIFACT)
+        if raw is None:
+            return None
+        try:
+            return FailoverRecord.model_validate_json(raw)
+        except Exception:  # noqa: BLE001
+            return None

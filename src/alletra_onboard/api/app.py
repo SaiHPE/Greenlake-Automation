@@ -28,9 +28,15 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
+from alletra_onboard import __version__
 from alletra_onboard.adapters.browser.debug_browser import launch_debug_browser
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
-from alletra_onboard.adapters.system.clock import ClockStatus, ClockSyncResult, clock_status, sync_clock
+from alletra_onboard.adapters.system.clock import (
+    ClockStatus,
+    ClockSyncResult,
+    clock_status,
+    sync_clock,
+)
 from alletra_onboard.adapters.system.discovery_tool import launch_discovery_tool
 from alletra_onboard.api.schemas import (
     AsBuiltStepRequest,
@@ -45,15 +51,15 @@ from alletra_onboard.api.schemas import (
     CreateRunRequest,
     DiscoveryToolResponse,
     DsccStepRequest,
+    EventListResponse,
+    FailoverTestRequest,
     FirewallRule,
     FirewallRulesResponse,
+    HealthResponse,
     InitSheetComposeRequest,
     InitSheetComposeResponse,
     InitSheetUploadRequest,
     InitSheetUploadResponse,
-    VerifyStepRequest,
-    EventListResponse,
-    HealthResponse,
     PreflightRequest,
     PreflightResponse,
     ProvisionStepRequest,
@@ -63,19 +69,22 @@ from alletra_onboard.api.schemas import (
     RunFromSheetRequest,
     RunListResponse,
     RunResponse,
+    VerifyStepRequest,
 )
+from alletra_onboard.application.onboarding.health import greenlake_check
+from alletra_onboard.application.onboarding.preflight_service import PreflightService
+from alletra_onboard.application.platform import prereqs
 from alletra_onboard.application.platform.configuring import (
     masked_gl_credentials,
     set_env_values,
     update_gl_credentials,
 )
-from alletra_onboard.application.runs.event_bus import InMemoryEventBus
-from alletra_onboard.application.onboarding.health import greenlake_check
 from alletra_onboard.application.platform.init_sheet import (
     build_template_bytes,
     compose_workbook_bytes,
     parse_workbook_bytes,
 )
+from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
 from alletra_onboard.application.platform.proxy import (
     DIRECT,
     ProxyResolver,
@@ -84,6 +93,19 @@ from alletra_onboard.application.platform.proxy import (
     normalize_proxy,
     os_system_proxy,
 )
+from alletra_onboard.application.provisioning.zoning_plan import (
+    alias_name_warnings,
+    render_commands,
+)
+from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+from alletra_onboard.application.service import (
+    OnboardingService,
+    PendingSheetNotFoundError,
+    RunBusyError,
+    RunNotFoundError,
+    StepPreconditionError,
+)
+from alletra_onboard.config import load_settings
 from alletra_onboard.domain.models import RunMode
 from alletra_onboard.domain.provisioning import (
     PreflightReport,
@@ -93,28 +115,13 @@ from alletra_onboard.domain.provisioning import (
 )
 from alletra_onboard.domain.workflow import STEP_REGISTRY, mode_steps
 from alletra_onboard.domain.zoning import ZoningPlan
-from alletra_onboard.application.provisioning.zoning_plan import alias_name_warnings, render_commands
-
-
-from alletra_onboard import __version__
-from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
-from alletra_onboard.application.service import (
-    OnboardingService,
-    PendingSheetNotFoundError,
-    RunBusyError,
-    RunNotFoundError,
-    StepPreconditionError,
-)
-from alletra_onboard.application.platform import prereqs
-from alletra_onboard.application.onboarding.preflight_service import PreflightService
-from alletra_onboard.config import load_settings
 
 SSE_HEARTBEAT_S = 15.0
 
 
 def _wsapi_capability() -> dict:
     """Whether this build (frozen or not) actually imported the 3PAR SDK — and if not, WHY."""
-    from alletra_onboard.adapters.array.wsapi_client import HPE3ParClient, SDK_IMPORT_ERROR
+    from alletra_onboard.adapters.array.wsapi_client import SDK_IMPORT_ERROR, HPE3ParClient
 
     return {"wsapi_sdk": HPE3ParClient is not None, "wsapi_sdk_error": SDK_IMPORT_ERROR}
 
@@ -612,6 +619,13 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def run_replication_verify(run_id: str) -> RunResponse:
         # SPEC-016 R6, read-only: showrcopy on both arrays, one verdict per planned group.
         return _start_step(run_id, lambda: service.start_replication_verify(run_id))
+
+    @app.post("/runs/{run_id}/replication/failover-test", response_model=RunResponse)
+    async def run_failover_test(run_id: str, request: FailoverTestRequest | None = None) -> RunResponse:
+        # SPEC-017: stop -> failover -> recover -> wait -> restore on one group over WSAPI's DR action;
+        # the UI's own tick-box and button gate it (R4). Role changes on two arrays: never implicit.
+        req = request or FailoverTestRequest()
+        return _start_step(run_id, lambda: service.start_failover_test(run_id, group=req.group, confirm=req.confirm))
 
     # ------------------------------------------------------------------ events
 

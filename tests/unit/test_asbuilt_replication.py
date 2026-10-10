@@ -268,3 +268,83 @@ def test_the_failover_section_shares_the_replication_page(tmp_path):
     h1 = {p.text.strip(): p for p in doc.paragraphs if p.style.name == "Heading 1"}
     assert h1["Replication configured in this run"].paragraph_format.page_break_before is True
     assert h1["Failover test"].paragraph_format.page_break_before is not True
+
+
+# ------------------------------------------------------------------ SPEC-017 R6: the failover record
+
+def _side(array, group, role, status, last=""):
+    return {"array": array, "group": group, "present": True, "role": role, "status": status, "mode": "async", "volumes": 1, "synced": 1, "last_sync": last}
+
+
+def _failover_record(result="passed", **over) -> dict:
+    p, s = "AlletraMP_D22U27", "AlletraMP_E18U31"
+    rec = {
+        "group": "zz_rc_test_rcg", "peer_group": "zz_rc_test_rcg.r188150", "mode": "async", "primary_array": p, "peer_array": s,
+        "started_at": "2026-10-10T10:20:00+00:00", "ended_at": "2026-10-10T10:26:30+00:00", "result": result, "failed_step": None,
+        "time_to_failover_s": 6.2, "time_to_synced_s": 41.0,
+        "data_loss_bound": "last sync before failover 2026-10-10 15:42:48 IST; failover completed at 2026-10-10T10:20:40+00:00",
+        "observed_state": "", "recovery_action": "", "error": None,
+        "steps": [
+            {"seq": 0, "title": "Read both arrays", "where": "-", "action": "(read)", "cli": "", "started_at": "2026-10-10T10:20:00+00:00", "seconds": 5.1,
+             "primary": _side(p, "zz_rc_test_rcg", "Primary", "Started", "2026-10-10 15:42:48 IST"), "peer": _side(s, "zz_rc_test_rcg.r188150", "Secondary", "Started"), "outcome": "ok"},
+            {"seq": 1, "title": "Stop the group", "where": "P", "cli": "stoprcopygroup -f zz_rc_test_rcg", "started_at": "2026-10-10T10:20:06+00:00", "seconds": 3.0,
+             "primary": _side(p, "zz_rc_test_rcg", "Primary", "Stopped"), "peer": _side(s, "zz_rc_test_rcg.r188150", "Secondary", "Stopped"), "outcome": "ok"},
+            {"seq": 2, "title": "Fail over to the peer", "where": "S", "cli": "setrcopygroup failover -f zz_rc_test_rcg.r188150", "started_at": "2026-10-10T10:20:34+00:00", "seconds": 6.2,
+             "primary": _side(p, "zz_rc_test_rcg", "Primary", "Stopped"), "peer": _side(s, "zz_rc_test_rcg.r188150", "Primary-Rev", "Stopped"), "outcome": "ok"},
+            {"seq": 6, "title": "Restore the natural direction", "where": "S", "cli": "setrcopygroup restore -f zz_rc_test_rcg.r188150", "started_at": "2026-10-10T10:26:00+00:00", "seconds": 30.0,
+             "primary": _side(p, "zz_rc_test_rcg", "Primary", "Started"), "peer": _side(s, "zz_rc_test_rcg.r188150", "Secondary", "Started"), "outcome": "ok"},
+        ],
+    }
+    rec.update(over)
+    return rec
+
+
+def test_a_passed_failover_test_renders_the_step_table_timings_and_bound(tmp_path):
+    a, b = _views("after_apply_periodic_ui")
+    out, _ = generate_asbuilt(_data(replication_tab=_tab(), replication_primary=a, replication_peer=b, failover_record=_failover_record()),
+                              tmp_path / "failover.docx")
+    doc, text = _read(out)
+    assert "The failover test was not run in this run." not in text
+    assert "Result: Passed." in text
+    assert "Group zz_rc_test_rcg (async) on AlletraMP_D22U27 (P), named zz_rc_test_rcg.r188150 on AlletraMP_E18U31 (S)." in text
+    assert "the peer took over (Primary-Rev) 6.2 s after the failover was issued; every volume was Synced again 41 s after the recover" in text
+    assert "Data-loss bound (async): last sync before failover 2026-10-10 15:42:48 IST" in text
+    rows = _tables(doc)[("#", "Step", "On", "Command (CLI equivalent)", "Started", "Took", "P after", "S after", "Outcome")]
+    assert rows[1] == ["1", "Stop the group", "P", "stoprcopygroup -f zz_rc_test_rcg", "2026-10-10 10:20 UTC", "3 s",
+                       "Primary/Stopped · 1/1 Synced", "Secondary/Stopped · 1/1 Synced", "OK"]
+    assert rows[2][7] == "Primary-Rev/Stopped · 1/1 Synced"
+    assert rows[0][6] == "Primary/Started · 1/1 Synced · last sync 2026-10-10 15:42:48 IST"
+    assert "ended the test in its starting state" in text
+
+
+def test_a_failed_failover_test_names_the_step_the_state_and_the_way_back(tmp_path):
+    a, b = _views("after_apply_periodic_ui")
+    rec = _failover_record(result="failed", failed_step=4, time_to_synced_s=None,
+                           error="AlletraMP_E18U31 refused the recover: HTTP 403 INV_OPERATION_RCOPY_GROUP_ROLE_CONFLICT",
+                           observed_state="AlletraMP_D22U27: Primary/Stopped · 1/1 Synced · AlletraMP_E18U31: Primary-Rev/Stopped · 1/1 Synced",
+                           recovery_action="On AlletraMP_E18U31: setrcopygroup recover -f zz_rc_test_rcg.r188150 ; then setrcopygroup restore -f zz_rc_test_rcg.r188150")
+    rec["steps"][3]["outcome"] = "skipped"
+    out, _ = generate_asbuilt(_data(replication_tab=_tab(), replication_primary=a, replication_peer=b, failover_record=rec), tmp_path / "failed.docx")
+    doc, text = _read(out)
+    assert "Result: Failed at step 4." in text
+    assert "Stopped: AlletraMP_E18U31 refused the recover" in text
+    assert "Observed when it stopped: AlletraMP_D22U27: Primary/Stopped" in text
+    i = text.index("The documented way back to the normal state (not run by the tool):")
+    assert text.index("On AlletraMP_E18U31: setrcopygroup recover -f zz_rc_test_rcg.r188150", i) > i
+    rows = _tables(doc)[("#", "Step", "On", "Command (CLI equivalent)", "Started", "Took", "P after", "S after", "Outcome")]
+    assert rows[3][8] == "Skipped" and "ended the test in its starting state" not in text
+
+
+def test_run_records_take_the_failover_record_from_either_event():
+    from types import SimpleNamespace
+
+    from alletra_onboard.application.documents import steps as st
+
+    def ev(t, data, ts):
+        return SimpleNamespace(event_type=t, data=data, created_at=ts)
+
+    events = [ev("failover.failed", {"record": {"result": "failed", "failed_step": 2}}, "t1"),
+              ev("failover.completed", {"record": {"result": "passed"}}, "t2")]
+    data = AsBuiltData()
+    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events))._run_records("r1", data)
+    assert data.failover_record == {"result": "passed"}

@@ -232,3 +232,11 @@ class ProxySaveRequest(BaseModel):
     # host:port (or user:pass@host:port) to force that proxy; "direct://" to force NO proxy;
     # null/"" to go back to auto-detecting the OS setting.
     proxy: str | None = None
+
+
+class FailoverTestRequest(BaseModel):
+    """SPEC-017 R1: blank group = the tool's own test group. A group this run did not create needs its
+    name typed back in `confirm`."""
+
+    group: str | None = None
+    confirm: str | None = None

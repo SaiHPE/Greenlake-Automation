@@ -549,6 +549,15 @@ class WsapiClient:
                 return "exists"
             raise self._translate(exc, where=f"stopRemoteCopy {name}") from exc
 
+    def remote_copy_dr_action(self, name: str, action: int) -> None:
+        """`setrcopygroup failover|recover|restore -f <name>` as the WSAPI disaster-recovery action
+        (7 / 9 / 10) on `/remotecopygroups/<name>`. Issued on the array that holds the group under
+        that name; the array mirrors the role change to its partner. SPEC-017."""
+        try:
+            self._require().recoverRemoteCopyGroupFromDisaster(name, action)
+        except Exception as exc:  # noqa: BLE001
+            raise self._translate(exc, where=f"recoverRemoteCopyGroupFromDisaster {name} action {action}") from exc
+
     # ------------------------------------------------------------------ internals
 
     def _require(self):

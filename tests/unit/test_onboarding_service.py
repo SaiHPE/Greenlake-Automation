@@ -220,6 +220,54 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     assert verified.message == "1 replicating · 0 syncing · 0 not replicating · links Up"
     assert verified.data["verification"]["groups"][0]["peer_group"] == "HS_rcg.r100"
 
+    # ---- SPEC-017 R1/R4/R5 through the service: which group may be tested, the record, the events
+    from alletra_onboard.application.replication import failover as replication_failover
+    from alletra_onboard.application.replication.steps import FAILOVER_ARTIFACT
+    from alletra_onboard.domain.replication import FailoverRecord, FailoverSide, FailoverStepRecord
+
+    # a group this run did not create needs its name typed back; a blank choice is the tool's test group
+    with pytest.raises(StepPreconditionError, match="'old_rcg' was not created by this run"):
+        service.start_failover_test(run.run_id, group="old_rcg")
+    assert service.replication.failover_group_choice(run.run_id, None, None) == "zz_rc_test_rcg"
+    assert service.replication.failover_group_choice(run.run_id, "HS_rcg", None) == "HS_rcg"        # created by this run
+    assert service.replication.failover_group_choice(run.run_id, "old_rcg", "old_rcg") == "old_rcg"  # typed back
+
+    tested: list = []
+
+    def fake_failover(intent, group, *, progress=None, **kw):
+        tested.append(group)
+        side = FailoverSide(array="ArrayA", group=group, role="Primary", status="Started", volumes=1, synced=1)
+        return FailoverRecord(group=group, peer_group=f"{group}.r100", mode="async", primary_array="ArrayA", peer_array="ArrayB",
+                              result="passed", time_to_failover_s=4.0, time_to_synced_s=31.0,
+                              steps=[FailoverStepRecord(seq=0, title="Read both arrays", outcome="ok", primary=side)])
+
+    monkeypatch.setattr(replication_failover, "run_failover_test", fake_failover)
+    service.start_failover_test(run.run_id, group="HS_rcg")
+    await service.wait(run.run_id)
+    assert tested == ["HS_rcg"]
+    assert service.get_run(run.run_id).status == RunStatus.READY
+    assert service.get_run(run.run_id).current_phase == WorkflowPhase.STORAGE_FAILOVER_TEST
+    done = next(e for e in service.list_events(run.run_id) if e.event_type == "failover.completed")
+    assert done.message == ("Failover test passed on HS_rcg: the peer took over and the group is back to its normal state. "
+                            "Failover in 4 s, synced back in 31 s.")
+    assert done.data["record"]["steps"][0]["primary"]["role"] == "Primary"
+    assert FailoverRecord.model_validate_json(service.store.load_artifact(run.run_id, FAILOVER_ARTIFACT)).result == "passed"
+    assert service.replication.failover_record(run.run_id).time_to_synced_s == 31.0
+
+    def failed_failover(intent, group, *, progress=None, **kw):
+        return FailoverRecord(group=group, result="failed", failed_step=4, error="ArrayB refused the recover: ROLE_CONFLICT",
+                              observed_state="ArrayA: Primary/Stopped · ArrayB: Primary-Rev/Stopped",
+                              recovery_action="On ArrayB: setrcopygroup recover -f HS_rcg.r100 ; then setrcopygroup restore -f HS_rcg.r100")
+
+    monkeypatch.setattr(replication_failover, "run_failover_test", failed_failover)
+    service.start_failover_test(run.run_id, group="HS_rcg")
+    await service.wait(run.run_id)
+    assert service.get_run(run.run_id).status == RunStatus.RETRYABLE_FAILURE
+    failed = next(e for e in reversed(service.list_events(run.run_id)) if e.event_type == "failover.failed")
+    assert failed.message == ("Failover test failed at step 4: ArrayB refused the recover: ROLE_CONFLICT "
+                              "Way back: On ArrayB: setrcopygroup recover -f HS_rcg.r100 ; then setrcopygroup restore -f HS_rcg.r100")
+    assert failed.data["record"]["recovery_action"].startswith("On ArrayB:")
+
 
 async def test_provision_advance_is_selection_aware(tmp_path):
     # A custom run that drops cloudinit: GreenLake should advance straight to DSCC.

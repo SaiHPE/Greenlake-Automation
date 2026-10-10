@@ -279,7 +279,7 @@ export default function App() {
               {current.key === 'zoning' && runId && <ZoningStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'provision' && runId && <ProvisionStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'replicate' && runId && <ReplicationStep runId={runId} run={run} events={events} onDone={next} />}
-              {current.key === 'failover_test' && runId && <FailoverTestStep onDone={next} />}
+              {current.key === 'failover_test' && runId && <FailoverTestStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'verify' && runId && <VerifyStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'asbuilt' && runId && <AsBuiltStep runId={runId} run={run} events={events} onDone={next} />}
               {current.key === 'done' && (

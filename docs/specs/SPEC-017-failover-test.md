@@ -1,8 +1,16 @@
 # SPEC-017 — Failover test
 
 **Status:** APPROVED 2026-10-07 (operator: failover testing is required); **re-cut the same day** —
-the role changes go through WSAPI's disaster-recovery action on `/remotecopygroups`, not SSH — not
-implemented
+the role changes go through WSAPI's disaster-recovery action on `/remotecopygroups`, not SSH.
+**Built 2026-10-10, not yet run live:** `application/replication/failover.py` (the R2 sequence,
+R3 timings, R5 stop with the observed state and the ED6 way back), `WsapiClient.remote_copy_dr_action`,
+`POST /runs/{id}/replication/failover-test` (R1 group rule: the test group or a group this run
+created; any other group only with its name typed back), the Failover test step page (R4 tick-box
+and button), the as-built section (R6). 11 sequence tests on a fake pair that moves roles the way
+the arrays do, plus service, API and as-built tests. Checked on the Mac through the real HTTP API
+and UI against a faked pair (passed and failed screens). **Owed:** the live run on
+`zz_rc_test_rcg`, sync then async, which also confirms the WSAPI action codes 7/9/10 against the CLI
+verbs.
 **ADR:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) §4 (DR operations are
 WSAPI calls on the write plane provisioning already uses)
 **Depends on:** SPEC-016 (a replicating group)
