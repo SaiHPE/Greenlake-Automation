@@ -832,17 +832,26 @@ def _rc_view(view, name_fallback: str):
 
 
 def _rc_group_rows(data: AsBuiltData) -> list[dict]:
-    """The groups this run configured: from the apply's outcomes when it ran, else from the plan."""
+    """The groups this run configured: from the apply's outcomes when it ran; without an apply, only the
+    groups the plan found already in place (a planned-but-not-created group is not on the array)."""
     if data.replication_result:
         names = [o.get("name") for o in data.replication_result.get("outcomes", [])
                  if o.get("kind") == "group" and o.get("status") in ("created", "exists")]
     elif data.replication_plan:
         names = [a.get("name") for a in data.replication_plan.get("actions", [])
-                 if a.get("kind") == "group" and a.get("state") in ("create", "exists")]
+                 if a.get("kind") == "group" and a.get("state") == "exists"]
     else:
         names = []
     detail = {a.get("name"): a.get("detail") or {} for a in (data.replication_plan or {}).get("actions", []) if a.get("kind") == "group"}
     return [{"name": n, **detail.get(n, {})} for n in dict.fromkeys(n for n in names if n)]
+
+
+def _rc_peer_set(peer, peer_group) -> str:
+    """The peer volume set holding exactly the peer group's volumes (the array's own RCP_ sets aside)."""
+    if peer is None or peer_group is None or not peer_group.volumes:
+        return ""
+    want = set(peer_group.volume_names)
+    return next((name for name, members in peer.vvsets.items() if set(members) == want and not name.startswith("RCP_")), "")
 
 
 def _rc_rpo_text(row: dict, tab: dict, period_read: str = "") -> str:
@@ -909,17 +918,22 @@ def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> Non
     # -- groups configured by this run
     _para(doc, "Remote Copy groups configured by this run", bold=True)
     groups = _rc_group_rows(data)
+    planned_new = [a for a in (data.replication_plan or {}).get("actions", []) if a.get("kind") == "group" and a.get("state") == "create"]
     if not data.replication_result and not data.replication_plan:
         _para(doc, "The replication step was not run in this run.")
-    elif not data.replication_result:
+    elif not data.replication_result and planned_new:
         _para(doc, "A replication plan was built but not applied.")
-    elif not groups:
+    elif data.replication_result and not groups:
         _para(doc, "The apply created no Remote Copy group.")
     if groups:
-        when = f" at {_when(data.replication_applied_at)}" if data.replication_applied_at else ""
-        _para(doc, f"Configured over WSAPI{when}. Roles and states are as read now; on the peer each group's name "
-                   f"carries the suffix .r{a.system_id} (this array's system ID)." if a is not None and a.system_id is not None
-              else f"Configured over WSAPI{when}. Roles and states are as read now.")
+        suffix = (f" On the peer each group's name carries the suffix .r{a.system_id} (this array's system ID)."
+                  if a is not None and a.system_id is not None else "")
+        if data.replication_result:
+            when = f" at {_when(data.replication_applied_at)}" if data.replication_applied_at else ""
+            _para(doc, f"Configured over WSAPI{when}. Roles and states are as read now.{suffix}")
+        else:
+            _para(doc, "Already in place when this run read the arrays (configured by an earlier run); this run made no "
+                       f"replication change. Roles and states are as read now.{suffix}")
         group_rows, volume_rows = [], []
         for row in groups:
             g = row["name"]
@@ -931,7 +945,7 @@ def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> Non
                 continue
             period = _rc_rpo_text(row, tab, ag.period)
             peer_role = (bg.role if bg else ("could not be read" if b_err else "not found on the peer"))
-            peer_set = row.get("peer_vvset") or "—"
+            peer_set = row.get("peer_vvset") or _rc_peer_set(b, bg) or "—"
             if b is not None and peer_set != "—":
                 members = b.vvsets.get(peer_set)
                 peer_set += " (missing on the peer)" if members is None else f" ({len(members)} volume(s))"
