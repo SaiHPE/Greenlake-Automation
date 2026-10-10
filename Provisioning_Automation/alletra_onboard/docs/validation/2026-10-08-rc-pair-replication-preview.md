@@ -292,3 +292,37 @@ that ages old ones out and adds new ones (`showsched`, captured 10-07). Lab rest
 **SPEC-016 R1–R8 are live for sync and periodic, both through the UI.** Owed: the preset with a
 real host, runner scenario 7, and (still) whether a stopped Sync group restarts beside a started
 periodic group — not taken today either, the periodic groups were removed before the rebuild.
+
+## Failover test (SPEC-017) — 2026-10-10 18:18 to 19:01, sync, the tool's test group
+
+Three runs on `zz_rc_test_rcg` (1 GiB, sync, D22U27 → E18U31), each run from the Failover test
+page, the terminal side done by `scripts/rc_failover_lab.py` (lab branch).
+
+1. **18:18, stopped at step 4.** Stop (P) and failover (action 7 on S) worked. With both arrays up
+   the array mirrored the failover at once (P Secondary-Rev) and started the group from S by itself,
+   so the recover the tool sent was refused: HTTP 403 code 284 *Remote copy group not stopped*. The
+   test stopped and showed the state and the way back, as designed. Also seen: `Syncing (100%)` in
+   the SyncStatus column (parser fixed).
+2. Between runs the group was found as **Secondary on P, Primary on S** (no -Rev): the array had made
+   S the natural primary once the sync back finished. The lab script put it back with stop on S,
+   `setrcopygroup reverse -f` on S, `startrcopygroup` on P; every command accepted.
+3. **18:45, stopped at step 6.** Steps 0 to 5 passed and step 4 correctly sent no recover. As the
+   sync finished the array again turned the -Rev roles into plain Primary (S) / Secondary (P), and
+   `restore` (action 10) was refused: HTTP 400 code 29 *the role of group … was not previously
+   switched*. Step 6 changed to follow the array: restore while the roles carry -Rev, otherwise
+   fail back the way it failed over (stop on S, failover on P).
+4. **18:55, PASSED.** All 7 steps OK; failover 1.6 s; synced back at once; fail back 16 s; the
+   group ended Primary/Started on D22U27 and Secondary/Started on E18U31, every volume Synced.
+
+**As-built generated live** after the pass: the replication section (partner array, links, the two
+groups with roles and sync state, the six lab groups listed as already present) and the Failover
+test section (result, timings, the 7-step table with both arrays' state after each step). Two
+wording faults in the replication section for a run that found the groups already in place were
+fixed the same evening (it said both *built but not applied* and *Configured over WSAPI*; the peer
+volume set showed —).
+
+**What this teaches about the arrays (OS 10.5.0, mirror_config, both arrays up):** a failover is
+mirrored to the old primary straight away, the array starts replication back by itself, and once
+that sync is complete it makes the peer the natural primary. So in a planned test the way home is
+the same move from the other side, not recover + restore. Recover and restore remain the path when
+the old primary was unreachable at failover (a real disaster); the tool picks by what the arrays show.

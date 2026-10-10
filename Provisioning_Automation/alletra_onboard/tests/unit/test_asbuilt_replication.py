@@ -144,7 +144,7 @@ def test_replication_section_renders_partner_groups_volumes_and_removal_blocks_f
         ["zz_rc_vvs_rcg", "zz_rc_vol01", "1", "zz_rc_vol01", "Synced", "2026-10-10 15:42:48 IST"],
         ["zz_rc_test_rcg", "zz_rc_test_v01", "1", "zz_rc_test_v01", "Synced", "2026-10-10 15:42:48 IST"],
     ]
-    assert "on the peer each group's name carries the suffix .r188150" in text
+    assert "On the peer each group's name carries the suffix .r188150" in text
     assert "<group>" not in text                                   # no placeholder-looking text for the check to flag
     assert "Configured over WSAPI at 2026-10-10 10:07 UTC" in text
     assert "No other Remote Copy groups are on AlletraMP_D22U27." in text
@@ -223,6 +223,25 @@ def test_a_plan_without_an_apply_and_a_tab_without_the_step_each_say_so(tmp_path
 
 
 # ------------------------------------------------------------------ the step: events and the read of both arrays
+
+def test_a_run_that_found_the_groups_already_in_place_says_so(tmp_path):
+    """Live 2026-10-10 19:01: the failover run re-read the arrays, every group already existed, nothing was
+    applied. The section said 'built but not applied' AND 'Configured over WSAPI', and the peer set was '—'."""
+    a, b = _views("after_apply")
+    plan = {"actions": [
+        {"kind": "group", "name": "zz_rc_vvs_rcg", "state": "exists", "reason": "Started, Primary, Sync, 1 volume(s)", "calls": [], "detail": {}},
+        {"kind": "peer_vvset", "name": "zz_rc_vvs_rc", "state": "exists", "calls": [], "detail": {}},
+        {"kind": "group", "name": "zz_rc_test_rcg", "state": "exists", "reason": "Started, Primary, Sync, 1 volume(s)", "calls": [], "detail": {}},
+    ]}
+    out, _ = generate_asbuilt(_data(replication_tab=_tab("sync"), replication_plan=plan, replication_primary=a, replication_peer=b),
+                              tmp_path / "inplace.docx")
+    doc, text = _read(out)
+    assert "built but not applied" not in text and "Configured over WSAPI" not in text
+    assert "Already in place when this run read the arrays (configured by an earlier run); this run made no replication change." in text
+    groups = _tables(doc)[("Group", "Mode", "RPO / period", "Policies", "Role here", "Role on peer", "Status", "Peer volume set")]
+    assert [(r[0], r[7]) for r in groups] == [("zz_rc_vvs_rcg", "zz_rc_vvs_rc (1 volume(s))"), ("zz_rc_test_rcg", "zz_rc_test_rc (1 volume(s))")]
+    assert "To remove what this run created" not in text
+
 
 def test_run_records_take_the_replication_plan_report_and_result():
     from types import SimpleNamespace

@@ -25,7 +25,11 @@ S and Secondary on P** (the peer became the group's natural primary), and `resto
 minutes later was the same, so this is the array's normal behaviour with both arrays up, not a
 race. Step 6 now restores only while the roles still carry -Rev; otherwise it fails back the way the
 failover went, from the other side (stop on S, failover on P) and waits for the array to settle on
-Primary/Secondary again. **Owed:** a clean live pass, sync then async.
+Primary/Secondary again. **Third live run 18:55: PASSED, sync** — 7 steps, the peer took over 1.6 s
+after the failover, synced back at once (1 GiB test volume), fail back by stop on S and failover on P
+in 16 s, group back to Primary/Started on P and Secondary/Started on S, every volume Synced. The
+record landed in the as-built (generated live the same evening, run `as-built-CZ2D320BT1.docx`).
+**Owed:** the async (periodic) pass, which needs a target free of sync groups (BL-20).
 **ADR:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) §4 (DR operations are
 WSAPI calls on the write plane provisioning already uses)
 **Depends on:** SPEC-016 (a replicating group)
