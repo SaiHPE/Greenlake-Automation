@@ -13,10 +13,12 @@ from typing import Callable, Mapping
 
 from alletra_onboard.application.documents.asbuilt import generate_asbuilt
 from alletra_onboard.application.documents.asbuilt_parse import parse_asbuilt
+from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.domain.models import ArrayWorkItem, RunRecord, WorkflowPhase
+from alletra_onboard.domain.replication import ReplicationIntent
 from alletra_onboard.domain.shared import EndpointCreds
 
 
@@ -50,11 +52,17 @@ class DocumentSteps:
         "storage.previewed": ("provisioning_plan", "plan"),
         "storage.applied": ("provisioning_result", "result"),
         "storage.paths.verified": ("path_verification", "verification"),
+        # SPEC-018: the replication plan and what the apply did (a failed apply also carries a result)
+        "replication.previewed": ("replication_plan", "plan"),
+        "replication.applied": ("replication_result", "result"),
+        "replication.apply.failed": ("replication_result", "result"),
     })
 
-    def __init__(self, coord: RunCoordinator, *, verify_fn: Callable = verify) -> None:
+    def __init__(self, coord: RunCoordinator, *, verify_fn: Callable = verify,
+                 read_replication: Callable = replication_read.read_array) -> None:
         self._coord = coord
         self._verify_fn = verify_fn
+        self._read_replication = read_replication
         self._asbuilt: dict[str, bytes] = {}  # generated as-built .docx bytes, per run
 
     # ------------------------------------------------------------------ post-init verification
@@ -132,6 +140,13 @@ class DocumentSteps:
         try:
             data = await asyncio.to_thread(self._collect_asbuilt, host, username, password)
             self._run_records(run.run_id, data)
+            replication = self._replication_intent(run.run_id)
+            if replication is not None:
+                # SPEC-018 R3: the replication states are read from BOTH arrays now, not copied from the plan
+                data.replication_tab = self._replication_tab(replication)
+                data.replication_primary, data.replication_peer = await asyncio.to_thread(
+                    self._collect_replication, EndpointCreds(host=host, username=username, password=password), replication.peer,
+                )
             # The step's own fields win over the workbook's — the operator is looking at the
             # document about to be produced, and the sheet may have been filled weeks earlier.
             data.customer = customer or item.customer_name or ""
@@ -182,6 +197,8 @@ class DocumentSteps:
         for event in self._coord.list_events(run_id):
             if event.event_type == "storage.applied":
                 data.provisioning_removals.extend((event.data.get("result") or {}).get("removals") or [])
+            if event.event_type == "replication.previewed" and event.data.get("report") is not None:
+                data.replication_report = event.data["report"]
             target = self._ASBUILT_RECORDS.get(event.event_type)
             if target is None:
                 continue
@@ -194,6 +211,27 @@ class DocumentSteps:
         if "provisioning_result" in seen:
             ts = seen["provisioning_result"]
             data.provisioning_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        if "replication_result" in seen:
+            ts = seen["replication_result"]
+            data.replication_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+
+    def _replication_intent(self, run_id: str) -> ReplicationIntent | None:
+        intent = self._coord.store.get_provisioning_intent(run_id)
+        return intent.replication if intent is not None else None
+
+    @staticmethod
+    def _replication_tab(replication: ReplicationIntent) -> dict:
+        return {
+            "peer_host": replication.peer.host,
+            "rows": [{"vvset": r.vvset, "mode": r.mode, "rpo_minutes": r.rpo_minutes, "peer_cpg": r.peer_cpg}
+                     for r in replication.protections],
+            "failover_test": replication.failover_test,
+        }
+
+    def _collect_replication(self, primary: EndpointCreds, peer: EndpointCreds):
+        """Both arrays, read-only, at generation time. A read that fails is the view's `read_error`;
+        the renderer names it and the document is still produced (R3)."""
+        return self._read_replication(primary), self._read_replication(peer)
 
     def _render_asbuilt(self, data) -> tuple[bytes, list[str]]:
         import os

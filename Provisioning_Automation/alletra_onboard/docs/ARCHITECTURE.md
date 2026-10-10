@@ -166,6 +166,9 @@ inventory, checkhealth; no performance) · Documentation ◐ (as-built ✅; HLD/
    writes) → `verify-paths` (tier-2, report-only).
 4. **As-built (last):** `POST /runs/{id}/asbuilt` → SSH read-only (`show*`/`checkhealth`/`showinventory
    -csvtable`) → `parse_asbuilt` → `generate_asbuilt` → **.docx bytes (durable `run_artifacts`)** → `GET /asbuilt/download`.
+   With a Replication tab (SPEC-018) the step also reads both arrays with `replication.read.read_array`
+   and takes the plan/result from the run's `replication.*` events; two more sections follow the
+   provisioning record.
 
 ## 7. State & persistence
 - **Durable (SQLite):** runs, work items, pending sheets (single-use token), provisioning intent.
