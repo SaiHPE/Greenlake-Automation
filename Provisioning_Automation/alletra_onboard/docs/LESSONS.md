@@ -373,3 +373,13 @@ had pinned the placeholder as a name, and another pinned the silent dedupe of tw
 alias — both passing, both wrong. Rules: a self-reported name joins nothing until something
 independent agrees with it (and defaults are refused outright); before pinning observed behaviour in a
 test, ask whether the behaviour is correct or merely current.
+
+**43. A security alert can be the price of a field requirement; write the trade-off where the alert will be fixed.**
+On 2026-10-11 the tool could not log in to a FOS 7.0.2c switch (`SW6505_D21U36_F1`): `paramiko>=3.4`
+had let the jump box take 5.0, which removed every SHA-1 key exchange and `ssh-rsa` host key (4.0 had
+already removed `ssh-dss`), and old FOS offers nothing else. Pinning `paramiko>=3.4.0,<4` fixed it live;
+the same push opened a Dependabot alert (*rsakey.py allows SHA-1*) with no 3.x fix. The alert was
+dismissed as tolerable risk (read-only switch logins) with the reason on the alert, at the pin in
+`pyproject.toml`, and in `test_dependencies.py`, which fails if the pin is loosened. Rule: when a
+dependency is held back for a device, say why in all three places a future "clear the alerts" pass
+will touch, and test the pin so that pass has to read the reason before it can undo it.

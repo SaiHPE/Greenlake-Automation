@@ -12,4 +12,6 @@ def test_paramiko_stays_below_4_so_old_fos_switches_can_still_be_read():
     """BL-40: FOS 7.0.2c offers only SHA-1 kex and ssh-rsa/ssh-dss, which paramiko 4/5 removed."""
     deps = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"]["dependencies"]
     paramiko = [d.replace(" ", "") for d in deps if d.lower().startswith("paramiko")]
-    assert paramiko == ["paramiko>=3.4.0,<4"]
+    assert paramiko == ["paramiko>=3.4.0,<4"], (
+        "paramiko must stay below 4: FOS 7.x switches need SHA-1 kex / ssh-rsa / ssh-dss (BL-40, LESSONS 43). "
+        "The Dependabot SHA-1 alert on 3.x was accepted on purpose; do not bump the pin to clear it.")
