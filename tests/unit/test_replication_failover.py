@@ -6,6 +6,8 @@ nothing is written before the normal starting state is confirmed."""
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from pydantic import SecretStr
 
@@ -263,7 +265,8 @@ def test_the_async_sequence_records_the_data_loss_bound_and_waits_for_the_sync_b
     pair = FakePair(mode="Periodic", sync_after=3)
     rec = _run(pair)
     assert rec.result == "passed" and rec.mode == "async"
-    assert rec.data_loss_bound.startswith("last sync before failover 2026-10-10 15:42:48 IST; failover completed at ")
+    assert re.fullmatch(r"last sync before failover 2026-10-10 15:42:48 IST; failover completed at \d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC",
+                        rec.data_loss_bound)
     assert rec.steps[0].primary.last_sync == "2026-10-10 15:42:48 IST"
     assert rec.time_to_synced_s >= 1                       # the fake was Syncing at first; the wait polled
 

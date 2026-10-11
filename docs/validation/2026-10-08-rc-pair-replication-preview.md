@@ -326,3 +326,27 @@ mirrored to the old primary straight away, the array starts replication back by 
 that sync is complete it makes the peer the natural primary. So in a planned test the way home is
 the same move from the other side, not recover + restore. Recover and restore remain the path when
 the old primary was unreachable at failover (a real disaster); the tool picks by what the arrays show.
+
+## Failover test, async — 2026-10-11 04:55 to 05:00 UTC, one script (`rc_async_failover_lab.py`)
+
+The target allows one mode, so the six lab Sync groups were saved and removed first (volumes kept),
+as on 10-10, and the leftover zz_rc_* objects of the sync runs removed with the app's own removal set.
+
+1. **Replication through the UI, periodic:** plan 6 to create, applied 12 writes in 2 s, verify
+   *2 replicating, links Up*. Both groups Periodic, RPO 10 min, period 5 m.
+2. **Failover test PASSED** on `zz_rc_test_rcg` (async): the same array behaviour as in sync — the
+   failover mirrored to P (Secondary-Rev), the array started the group from S itself (recover not
+   sent), synced back, made S the natural primary; fail back by stop on S + failover on P, 26.8 s.
+   Failover 1.3 s, synced back 1.3 s. Data-loss bound recorded: last sync 10:25:42 IST.
+3. **As-built generated live**: replication section (both groups Periodic with RPO, period, last
+   sync, peer volume set) and the failover section with the data-loss bound.
+4. **Cleanup and rebuild**: the async run's removal set ran (the B lines answered *does not exist*:
+   the array had removed the peer sets with the groups, as the document says it may). The six were
+   rebuilt; APP_Test's Peer Persistence export came back after `admitrcopyhost -proximity primary`
+   on E18U31 (proximity read from the saved `showhostset -summary`, now done by `rc_rebuild.py`).
+   Every volume Synced, then compare: `showrcopy groups` and `showvlun -t` identical on both arrays,
+   `showvvset` identical on E18U31; on D22U27 only the lab prep set `zz_rc_vvs` is gone (removed on
+   purpose) and the members of a foreign snapshot schedule's set (`test999.*`) moved on.
+
+One wording fix from the document: the failover time in the data-loss bound was raw ISO
+(`2026-10-11T04:58:14+00:00`) next to the array's local time; it is now `2026-10-11 04:58:14 UTC`.
