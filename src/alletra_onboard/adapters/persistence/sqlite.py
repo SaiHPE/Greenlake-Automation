@@ -88,6 +88,17 @@ class SqliteRunStore:
                 )
                 """
             )
+            # SPEC-019: every command a client sent for a run, in order, with its (capped, redacted) output.
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS run_commands (
+                    run_id TEXT NOT NULL,
+                    seq INTEGER NOT NULL,
+                    payload TEXT NOT NULL,
+                    PRIMARY KEY (run_id, seq)
+                )
+                """
+            )
 
     def upsert_run(self, run: RunRecord) -> None:
         with self._connect() as connection:
@@ -251,6 +262,28 @@ class SqliteRunStore:
                 "SELECT payload FROM run_artifacts WHERE run_id = ? AND kind = ?", (run_id, kind)
             ).fetchone()
         return None if row is None else bytes(row[0])
+
+    def append_command(self, run_id: str, entry: dict) -> int:
+        with self._connect() as connection:
+            row = connection.execute("SELECT COALESCE(MAX(seq), 0) FROM run_commands WHERE run_id = ?", (run_id,)).fetchone()
+            seq = int(row[0]) + 1
+            connection.execute("INSERT INTO run_commands (run_id, seq, payload) VALUES (?, ?, ?)",
+                               (run_id, seq, json.dumps(dict(entry, seq=seq))))
+            if seq == 1:
+                # same retention as the artifacts: outputs are up to 64 KB each
+                connection.execute(
+                    "DELETE FROM run_commands WHERE run_id != ? AND run_id NOT IN "
+                    "(SELECT run_id FROM runs ORDER BY updated_at DESC LIMIT ?)",
+                    (run_id, ARTIFACT_RETENTION_RUNS),
+                )
+        return seq
+
+    def list_commands(self, run_id: str, since: int = 0) -> list[dict]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM run_commands WHERE run_id = ? AND seq > ? ORDER BY seq", (run_id, since)
+            ).fetchall()
+        return [json.loads(r[0]) for r in rows]
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.database_path, timeout=5)

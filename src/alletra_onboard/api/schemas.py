@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from alletra_onboard.application.onboarding.health import GreenLakeCheckReport
@@ -232,6 +234,17 @@ class ProxySaveRequest(BaseModel):
     # host:port (or user:pass@host:port) to force that proxy; "direct://" to force NO proxy;
     # null/"" to go back to auto-detecting the OS setting.
     proxy: str | None = None
+
+
+class ConsoleRequest(BaseModel):
+    """SPEC-019 R3: one read-only command on the run's array (`array`) or its Replication peer (`peer`)."""
+
+    command: str = Field(min_length=1, max_length=400)
+    target: Literal["array", "peer"] = "array"
+
+
+class ConsoleTerminalRequest(BaseModel):
+    target: Literal["array", "peer"] = "array"
 
 
 class FailoverTestRequest(BaseModel):

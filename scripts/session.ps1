@@ -274,8 +274,10 @@ function Upload([string]$b64, [string]$Save) {
 }
 function New-Run([string]$token, [string]$Save) {
   $r = ApiOk 'POST' '/runs/from-sheet' @{ token = $token; mode = 'PROVISION_ONLY' } $Save
+  [void]$script:RunIds.Add($r.run.run_id)
   return $r.run.run_id
 }
+$script:RunIds = New-Object System.Collections.ArrayList
 
 # ------------------------------------------------------------------ prompts (R1)
 
@@ -649,6 +651,13 @@ if ($SkipCleanup) {
   }
 }
 Wsapi-Logout
+# SPEC-019 R6: every command the tool sent, per run, with the device's own output (replaces pasted show* scripts)
+$n = 0
+foreach ($id in $script:RunIds) {
+  $n++
+  try { Invoke-WebRequest @Common -Method Get -Uri "$Api/runs/$id/console/log?format=txt" -OutFile (Join-Path $Out "commands-run$n.txt") | Out-Null }
+  catch { Note "command log for run $n not saved: $($_.Exception.Message)" }
+}
 $ArrayPw = $null; $VcPw = $null; $SwPw = $null; $Targets = $null
 
 # ------------------------------------------------------------------ report

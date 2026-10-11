@@ -305,6 +305,27 @@ def test_a_failed_read_is_the_report_error():
 
 # ------------------------------------------------------------------ R3 plan
 
+def test_an_existing_set_not_on_the_volumes_tab_is_replicated_from_what_the_array_holds():
+    # v0.17.0: the Replication tab may name a set the array already has. Members come from the
+    # array's showvvset; no local CPG is known, so the group is created without -usr_cpg.
+    a, b = _views(a_overrides={"showrcopy": _RC_A_NO_GROUPS})
+    intent = _intent([_ASYNC_ROW], failover=False)
+    report = check(a, b, intent)
+    assert report.findings == []
+    plan = build_plan(report, intent, _prov().model_copy(update={"volumes": []}))
+    g = next(x for x in plan.actions if (x.kind, x.name) == ("group", "zz_rc_vvs_rcg"))
+    assert g.state == "create" and "2 volume(s) from set 'zz_rc_vvs'" in g.reason
+    assert g.calls[0].cli == "creatercopygroup zz_rc_vvs_rcg AlletraMP_E18U31:periodic"
+    assert "localUserCPG" not in g.calls[0].wsapi
+    assert [c.cli for c in g.calls if c.cli.startswith("admitrcopyvv")] == [
+        "admitrcopyvv -createvv zz_rc_vol01 zz_rc_vvs_rcg AlletraMP_E18U31:zz_rc_vol01",
+        "admitrcopyvv -createvv zz_rc_vol02 zz_rc_vvs_rcg AlletraMP_E18U31:zz_rc_vol02",
+    ]
+    # A set that is neither on the array nor provisioned by this run is refused with its sentence.
+    missing = check(a, b, _intent([ProtectionRequest(vvset="no_such_set", peer_cpg="SSD_r6")], failover=False))
+    assert any("Volume set 'no_such_set' does not exist on AlletraMP_D22U27. Create it first" in f for f in missing.findings)
+
+
 def test_plan_creates_the_group_the_peer_set_and_the_test_objects_with_wsapi_and_cli():
     # An async row on a target with no groups yet: the full periodic rendering.
     a, b = _views(a_overrides={"showrcopy": _RC_A_NO_GROUPS})

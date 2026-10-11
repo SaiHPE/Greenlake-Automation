@@ -39,3 +39,26 @@ class InMemoryEventBus:
             self._subscribers[run_id].remove(queue)
         except ValueError:
             pass
+
+
+class ConsoleBus:
+    """SPEC-019: live fan-out of command records to open console panes. No history here; the store
+    keeps it. Kept apart from the run events so steps' activity lists never fill with commands."""
+
+    def __init__(self) -> None:
+        self._subscribers: dict[str, list[asyncio.Queue[dict]]] = defaultdict(list)
+
+    def publish(self, run_id: str, entry: dict) -> None:
+        for queue in list(self._subscribers[run_id]):
+            queue.put_nowait(entry)
+
+    def subscribe(self, run_id: str) -> asyncio.Queue[dict]:
+        queue: asyncio.Queue[dict] = asyncio.Queue()
+        self._subscribers[run_id].append(queue)
+        return queue
+
+    def unsubscribe(self, run_id: str, queue: asyncio.Queue[dict]) -> None:
+        try:
+            self._subscribers[run_id].remove(queue)
+        except ValueError:
+            pass

@@ -33,6 +33,7 @@ from alletra_onboard.application.runs.coordinator import (
 )
 from alletra_onboard.application.provisioning.steps import DiscoveryZoningSteps, ProvisioningSteps
 from alletra_onboard.application.replication.steps import ReplicationSteps
+from alletra_onboard.application.runs.console import ConsoleService
 from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import (
@@ -87,6 +88,7 @@ class OnboardingService:
         self.provisioning = ProvisioningSteps(self.coordinator, self.discovery_zoning)
         self.replication = ReplicationSteps(self.coordinator)
         self.documents = DocumentSteps(self.coordinator, verify_fn=verify_fn)
+        self.console = ConsoleService(self.coordinator)
 
     # ------------------------------------------------------------------ run lifecycle (coordinator)
 

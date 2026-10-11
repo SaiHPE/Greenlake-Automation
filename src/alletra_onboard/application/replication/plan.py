@@ -208,7 +208,8 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                      f"over RCIP needs {limit:g} ms or less.")
         members = primary.vvsets.get(row.vvset)
         if members is None:
-            f.append(f"Volume set '{row.vvset}' does not exist on {a}. Run Provision storage first, or correct the name.")
+            f.append(f"Volume set '{row.vvset}' does not exist on {a}. Create it first (Volumes tab and "
+                     "Provision storage, or on the array), or correct the name.")
             continue
         if not members:
             f.append(f"Volume set '{row.vvset}' on {a} is empty; a Remote Copy group needs at least one volume.")

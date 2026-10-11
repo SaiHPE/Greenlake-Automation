@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import time
 
+from alletra_onboard.adapters import command_log
+
 try:
     import paramiko
 except ImportError:  # pragma: no cover - bundled in the .exe
@@ -126,7 +128,15 @@ class BrocadeClient:
             raise BrocadeRefused(f"refused: '{base}' is not an allowed read-only command")
 
     def _exec(self, command: str) -> str:
-        _status, out = self._exec_status(command)
+        started = time.monotonic()
+        try:
+            status, out = self._exec_status(command)
+        except BrocadeError as exc:
+            command_log.record(target=self.host, transport="fos", command=command, started=started, ok=False,
+                               result=str(exc), secrets=[self.password])
+            raise
+        command_log.record(target=self.host, transport="fos", command=command, started=started, ok=status == 0,
+                           result=f"exit {status}", output=out, secrets=[self.password])
         return out
 
     def _exec_status(self, command: str) -> tuple[int, str]:

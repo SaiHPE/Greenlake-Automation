@@ -8,10 +8,15 @@ application/storage/steps.py, application/documents/steps.py); they all compose 
 from __future__ import annotations
 
 import asyncio
+import contextvars
+import threading
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+from alletra_onboard.adapters import command_log
+from alletra_onboard.application.runs.event_bus import ConsoleBus, InMemoryEventBus
 from alletra_onboard.config import Settings, load_settings
 from alletra_onboard.domain.models import (
     ArrayCredential,
@@ -49,6 +54,7 @@ class RunCoordinator:
         self.settings = settings
         self.store = store
         self.events = events
+        self.console = ConsoleBus()
         self._tasks: dict[str, asyncio.Task] = {}
 
     def current_settings(self) -> Settings:
@@ -77,6 +83,15 @@ class RunCoordinator:
             raise ValueError(
                 "The Replication and Failover test steps need the workbook's 'Replication' tab (peer array "
                 "and the volume sets to protect). Fill it in and upload again, or choose a mode without them."
+            )
+        if (
+            any(step.key == "provision" for step in enabled_steps(mode, selected))
+            and provisioning_intent is not None
+            and not provisioning_intent.volumes
+        ):
+            raise ValueError(
+                "The Volumes tab is empty, so there is nothing to provision. To replicate volume sets that "
+                "already exist on the array, choose Custom with Replication (and Failover test, As-built)."
             )
         run = RunRecord(
             serial_number=item.serial_number,
@@ -208,7 +223,42 @@ class RunCoordinator:
         if existing is not None and not existing.done():
             coro.close()
             raise RunBusyError(run_id)
-        self._tasks[run_id] = asyncio.create_task(self._guarded(run_id, coro))
+        # the step's task, and every asyncio.to_thread it starts, records its commands to this run
+        ctx = contextvars.copy_context()
+        ctx.run(command_log.bind, self.command_sink(run_id))
+        self._tasks[run_id] = asyncio.create_task(self._guarded(run_id, coro), context=ctx)
+
+    # ------------------------------------------------------------------ SPEC-019 command log
+
+    def record_command(self, run_id: str, entry: dict) -> dict:
+        """Store one command record and push it to open console panes. Call on the event loop."""
+        entry = dict(entry, seq=self.store.append_command(run_id, entry))
+        self.console.publish(run_id, entry)
+        return entry
+
+    def command_sink(self, run_id: str) -> Callable[[dict], None]:
+        loop = asyncio.get_running_loop()
+        loop_thread = threading.get_ident()
+
+        def sink(entry: dict) -> None:
+            if threading.get_ident() == loop_thread:
+                self.record_command(run_id, entry)
+            else:
+                loop.call_soon_threadsafe(self.record_command, run_id, entry)
+
+        return sink
+
+    @contextmanager
+    def recording(self, run_id: str) -> Iterator[None]:
+        """For reads made outside a spawned step (a route's to_thread, the console prompt)."""
+        token = command_log.bind(self.command_sink(run_id))
+        try:
+            yield
+        finally:
+            command_log.unbind(token)
+
+    def list_commands(self, run_id: str, since: int = 0) -> list[dict]:
+        return self.store.list_commands(run_id, since)
 
     async def _guarded(self, run_id: str, coro) -> None:
         # A crash must never leave a run stuck in RUNNING with no trace.

@@ -24,6 +24,9 @@ never monkey-patch, so it stays dormant).
 from __future__ import annotations
 
 import os
+import time
+
+from alletra_onboard.adapters import command_log
 
 try:
     from hpe3parclient import exceptions as hpe_exc
@@ -171,6 +174,43 @@ def _bypass_proxy_for(host: str) -> None:
             os.environ[var] = ",".join(sorted(hosts))
 
 
+def _record_calls(client, host: str, api_url: str, password: str) -> None:
+    """SPEC-019 R1: every HTTP call the SDK makes goes through `http._time_request(url, method, **kw)`."""
+    http = getattr(client, "http", None)
+    inner = getattr(http, "_time_request", None)
+    if inner is None:
+        return
+
+    def timed(url, method, **kwargs):
+        if not command_log.active():
+            return inner(url, method, **kwargs)
+        path = url[len(api_url):] if url.startswith(api_url) else url
+        login = path.startswith("/credentials")
+        if login and path != "/credentials":
+            path = "/credentials/********"   # logout carries the session key in the URL
+        # Opening or closing a session changes nothing on the array: not a write.
+        write = method != "GET" and not login
+        body = kwargs.get("body")
+        shown = "{user, password: ********}" if login else command_log.as_text(body).replace("\n", " ")
+        command = f"{method} {path}" + ("" if body is None else f" {shown}")
+        started = time.monotonic()
+        try:
+            resp, out = inner(url, method, **kwargs)
+        except Exception as exc:
+            status = getattr(exc, "http_status", None) or getattr(exc, "code", None) or type(exc).__name__
+            command_log.record(target=host, transport="wsapi", command=command, started=started, ok=False,
+                               result=f"HTTP {status}: {WsapiClient._safe_str(exc)}", secrets=[password],
+                               write=write)
+            raise
+        status = getattr(resp, "status_code", None) or getattr(resp, "status", None) or ""
+        command_log.record(target=host, transport="wsapi", command=command, started=started, ok=True,
+                           result=f"HTTP {status}".strip(), output="(session key withheld)" if login else out,
+                           secrets=[password], write=write)
+        return resp, out
+
+    http._time_request = timed
+
+
 class WsapiClient:
     def __init__(self, host: str, username: str, password: str, port: int = 443, timeout: float = 30.0) -> None:
         self.host = host
@@ -190,6 +230,7 @@ class WsapiClient:
         _bypass_proxy_for(self.host)
         try:
             client = HPE3ParClient(self.api_url, secure=False, timeout=self.timeout, suppress_ssl_warnings=True)
+            _record_calls(client, self.host, self.api_url, self.password)
             client.login(self.username, self.password)  # the readiness gate
         except Exception as exc:  # noqa: BLE001
             raise self._translate(exc, where="login") from exc

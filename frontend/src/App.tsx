@@ -6,6 +6,7 @@ import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
 import { AppHeader, RailItem, StepRail, WizardBar } from './ui/AppChrome';
 import { StepProvider } from './ui/StepContext';
+import { ConsolePane } from './ui/ConsolePane';
 import { StepState } from './ui/status';
 import { deriveStepHint, deriveStepState, runStatusToState } from './ui/useStepState';
 import { AsBuiltStep } from './steps/AsBuiltStep';
@@ -231,6 +232,7 @@ export default function App() {
           }}
         />
         {/* A real <main> landmark: assistive technology needs to skip the rail to the step content. */}
+        <Box flex direction="column" overflow="hidden">
         <Main flex overflow="auto" background="background-back">
           <WizardBar
             onPrevious={previous}
@@ -289,6 +291,8 @@ export default function App() {
             </StepProvider>
           </Box>
         </Main>
+        {runId && <ConsolePane runId={runId} />}
+        </Box>
       </Box>
 
       {/* X-9: open an earlier run - the runner's runs, or a run from another day - without the console. */}

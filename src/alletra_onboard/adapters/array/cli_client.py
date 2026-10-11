@@ -7,6 +7,10 @@ verification can never mutate the array.
 
 from __future__ import annotations
 
+import time
+
+from alletra_onboard.adapters import command_log
+
 try:
     import paramiko
 except ImportError:  # pragma: no cover - bundled in the .exe; optional for non-SSH runs
@@ -34,6 +38,17 @@ _FORBIDDEN_CHARS = set(";|&`$><\n\r")
 
 class ArrayCliError(Exception):
     """Couldn't connect, authenticate, or run a command on the array."""
+
+
+def refusal(command: str) -> str | None:
+    """Why this client would refuse `command`, or None when it may run."""
+    if any(ch in command for ch in _FORBIDDEN_CHARS):
+        return "refused: command contains a forbidden shell metacharacter"
+    parts = command.split()
+    base = parts[0] if parts else ""
+    if base not in ALLOWED_COMMANDS:
+        return f"refused: '{base}' is not a read-only show command"
+    return None
 
 
 class ArrayCliClient:
@@ -80,12 +95,23 @@ class ArrayCliClient:
     def run(self, command: str, timeout: float | None = None) -> str:
         if self._client is None:
             raise ArrayCliError("not connected")
-        if any(ch in command for ch in _FORBIDDEN_CHARS):
-            raise ArrayCliError("refused: command contains a forbidden shell metacharacter")
-        parts = command.split()
-        base = parts[0] if parts else ""
-        if base not in ALLOWED_COMMANDS:
-            raise ArrayCliError(f"refused: '{base}' is not a read-only show command")
+        started = time.monotonic()
+        try:
+            text = self._run(command, timeout)
+        except ArrayCliError as exc:
+            command_log.record(target=self.host, transport="ssh", command=command, started=started, ok=False,
+                               result=str(exc), secrets=[self.password])
+            raise
+        failed = text.lstrip().lower().startswith("error")
+        command_log.record(target=self.host, transport="ssh", command=command, started=started, ok=not failed,
+                           result=text.strip().splitlines()[0] if failed else "ok", output=text,
+                           secrets=[self.password])
+        return text
+
+    def _run(self, command: str, timeout: float | None) -> str:
+        why = refusal(command)
+        if why:
+            raise ArrayCliError(why)
         try:
             _stdin, stdout, stderr = self._client.exec_command(command, timeout=timeout or self.exec_timeout)
             out = stdout.read().decode("utf-8", "replace")

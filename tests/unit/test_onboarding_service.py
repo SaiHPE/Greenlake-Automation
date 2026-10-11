@@ -117,6 +117,13 @@ async def test_replication_steps_are_refused_without_the_replication_tab(tmp_pat
     assert run.current_phase == WorkflowPhase.STORAGE_DISCOVER
     assert service.get_provisioning_intent(run.run_id).replication.peer.host == "10.64.154.190"
 
+    # A replicate-only workbook (existing sets, Volumes tab empty): Provision has nothing to do.
+    only = intent.model_copy(update={"volumes": [], "host_sets": []})
+    with pytest.raises(ValueError, match="The Volumes tab is empty, so there is nothing to provision"):
+        service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=only)
+    run = service.create_run(_item(), mode=RunMode.CUSTOM, selected_steps=["replicate", "failover_test"], provisioning_intent=only)
+    assert run.current_phase == WorkflowPhase.STORAGE_REPLICATE
+
 
 async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path, monkeypatch):
     # SPEC-016 R1-R3 through the step service: two faked reads, the stored report, the SSE payload.
