@@ -199,6 +199,30 @@ export const startAsbuilt = (
   });
 export const asbuiltDownloadUrl = (runId: string) => `${API}/runs/${runId}/asbuilt/download`;
 
+// ------------------------------------------------------------------ console (SPEC-019)
+export interface CommandRecord {
+  seq: number;
+  at: string;
+  target: string;
+  transport: 'ssh' | 'wsapi' | 'fos' | 'vcenter' | string;
+  command: string;
+  duration_s: number;
+  ok: boolean;
+  result: string;
+  write: boolean;
+  output: string;
+}
+export const getConsoleLog = (runId: string, since = 0) =>
+  request<{ commands: CommandRecord[] }>('GET', `/runs/${runId}/console/log?since=${since}`);
+export const getConsoleTargets = (runId: string) =>
+  request<{ targets: Record<string, string> }>('GET', `/runs/${runId}/console/targets`);
+export const runConsoleCommand = (runId: string, command: string, target: string) =>
+  request<{ ok: boolean; refused: boolean; output: string; target: string }>('POST', `/runs/${runId}/console`, { command, target });
+export const openConsoleTerminal = (runId: string, target: string) =>
+  request<{ launched: boolean; command: string; error: string | null }>('POST', `/runs/${runId}/console/terminal`, { target });
+export const consoleStreamUrl = (runId: string) => `${API}/runs/${runId}/console/stream`;
+export const consoleLogTxtUrl = (runId: string) => `${API}/runs/${runId}/console/log?format=txt`;
+
 // ------------------------------------------------------------------ storage provisioning (Phase 2)
 export interface ArrayPort {
   node: number; slot: number; card_port: number;

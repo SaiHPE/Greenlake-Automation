@@ -117,6 +117,7 @@ class AsBuiltData:
     replication_primary: object | None = None      # ReplicationArrayView read when the document is made (R3)
     replication_peer: object | None = None         # ReplicationArrayView of the peer, same moment
     failover_record: dict | None = None            # SPEC-017 R6; None = the test did not run
+    commands: list[dict] = field(default_factory=list)   # SPEC-019 R2: the run's command log, without output
 
 
 def _resource_dir() -> Path:
@@ -811,6 +812,36 @@ def _add_provisioned_sections(doc, data: AsBuiltData, warnings: list[str]) -> No
     if data.replication_tab is not None:
         _add_replication_section(doc, data, warnings)
         _add_failover_section(doc, data)
+    if data.commands:
+        _add_commands_appendix(doc, data)
+
+
+_TRANSPORT_LABEL = {"ssh": "CLI (SSH)", "wsapi": "WSAPI", "fos": "switch (SSH)", "vcenter": "vCenter"}
+
+
+def _add_commands_appendix(doc, data: AsBuiltData) -> None:
+    """SPEC-019 R2: what touched the arrays in this run. Changes one by one; reads counted, not shown."""
+    _h1(doc, "Commands run on the array")
+    writes = [c for c in data.commands if c.get("write")]
+    reads = [c for c in data.commands if not c.get("write")]
+    _para(doc, f"The tool recorded every command it sent for this run as it ran: {len(writes)} change(s) and "
+               f"{len(reads)} read-only command(s). The full output of each is in the run's command log "
+               "(the app's console, Download .txt).")
+    if writes:
+        _para(doc, "Changes", bold=True)
+        _table(doc, ["Time", "Device", "Via", "Call", "Result"],
+               [[_when(c.get("at", "")), c.get("target", ""), _TRANSPORT_LABEL.get(c.get("transport", ""), c.get("transport", "")),
+                 c.get("command", "")[:160], c.get("result", "")[:120]] for c in writes])
+    else:
+        _para(doc, "No change was made to any array by this run.")
+    counted: OrderedDict[tuple[str, str, str], int] = OrderedDict()
+    for c in reads:
+        key = (c.get("target", ""), c.get("transport", ""), c.get("command", "")[:120])
+        counted[key] = counted.get(key, 0) + 1
+    if counted:
+        _para(doc, "Read-only commands", bold=True)
+        _table(doc, ["Device", "Via", "Command", "Times"],
+               [[t, _TRANSPORT_LABEL.get(v, v), cmd, str(n)] for (t, v, cmd), n in counted.items()])
 
 
 # ------------------------------------------------------------------ SPEC-018: replication

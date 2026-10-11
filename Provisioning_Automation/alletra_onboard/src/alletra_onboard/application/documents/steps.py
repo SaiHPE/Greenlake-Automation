@@ -217,6 +217,7 @@ class DocumentSteps:
         if "replication_result" in seen:
             ts = seen["replication_result"]
             data.replication_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        data.commands = [{k: v for k, v in c.items() if k != "output"} for c in self._coord.list_commands(run_id)]
 
     def _replication_intent(self, run_id: str) -> ReplicationIntent | None:
         intent = self._coord.store.get_provisioning_intent(run_id)

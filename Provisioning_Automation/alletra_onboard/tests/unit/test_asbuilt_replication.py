@@ -258,7 +258,7 @@ def test_run_records_take_the_replication_plan_report_and_result():
         ev("replication.applied", {"result": {"outcomes": [{"kind": "group"}], "error": None}}, "t4"),
     ]
     data = AsBuiltData()
-    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events))._run_records("r1", data)
+    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events, list_commands=lambda run_id, since=0: []))._run_records("r1", data)
     assert data.replication_plan == {"actions": [], "v": 2} and data.replication_report == {"findings": []}
     assert data.replication_result == {"outcomes": [{"kind": "group"}], "error": None}
     assert data.replication_applied_at == "t4"
@@ -365,5 +365,5 @@ def test_run_records_take_the_failover_record_from_either_event():
     events = [ev("failover.failed", {"record": {"result": "failed", "failed_step": 2}}, "t1"),
               ev("failover.completed", {"record": {"result": "passed"}}, "t2")]
     data = AsBuiltData()
-    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events))._run_records("r1", data)
+    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events, list_commands=lambda run_id, since=0: []))._run_records("r1", data)
     assert data.failover_record == {"result": "passed"}

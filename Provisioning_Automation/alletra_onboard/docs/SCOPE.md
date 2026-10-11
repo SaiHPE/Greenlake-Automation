@@ -85,13 +85,15 @@ In the order the scope owner set (2026-09-12); item-level status is in [TRACKER.
    60/60 (2026-09-19, 2026-09-28), G-1 closed, zoning designer changes seen live 2026-09-29.
 2. **Agentless Windows/Linux host discovery** (area 2, SPEC-014) — Windows over WinRM live
    2026-09-28; the Linux read over SSH is built and waits on a Linux login (TRACKER BL-10).
-3. **Snapshots and replication** (area 5) — next. Replication research done
-   (`research/2026-09-19-replication-two-arrays.md`, `research/2026-10-07-replication-document-review.md`);
-   decisions taken 2026-10-07 (ADR 0015; ADR 0014 paired runs deferred); specs approved and re-cut for
-   delivery: SPEC-015 (Replication tab on the one-array workbook), SPEC-016 (groups over WSAPI on an
-   existing partnership — v0.17), SPEC-017 (failover test — v0.18), SPEC-018 (as-built sections); links
-   and targets configured by the tool in v0.19. Sync and async first; snapshots (BL-21) after.
-4. Then: performance reporting (8), HLD/LLD (9), VLAN / peer-port / migration (3), file column (6, 7).
+3. **Snapshots and replication** (area 5) — replication done (TRACKER BL-20 closed 2026-10-11, v0.17.0):
+   groups over WSAPI on an existing partnership, sync and periodic, the failover test in both modes,
+   the as-built sections, all live on the lab pair. A Replication row may name a volume set already on
+   the array. Links and targets set up by the tool are BL-41 (v0.19). Snapshots (BL-21) next.
+   Research: `research/2026-09-19-replication-two-arrays.md`, `research/2026-10-07-replication-document-review.md`;
+   ADR 0015; specs SPEC-015 to SPEC-018.
+4. **Console** (SPEC-019, BL-39) — built in v0.17.0, pending a live run: every command the tool sends
+   to an array or switch, with its output, in a pane under each step and in the as-built.
+5. Then: performance reporting (8), HLD/LLD (9), VLAN / peer-port / migration (3), file column (6, 7).
 
 ## Known gaps from the deep research
 

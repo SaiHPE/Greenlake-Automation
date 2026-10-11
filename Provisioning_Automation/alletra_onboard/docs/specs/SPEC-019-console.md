@@ -1,6 +1,7 @@
 # SPEC-019 — Console: the live command log, and a read-only prompt
 
-**Status:** APPROVED 2026-10-08 (operator: "this would work"; no full shell) — not implemented
+**Status:** APPROVED 2026-10-08 (operator: "this would work"; no full shell) — **built 2026-10-11 (v0.17.0),
+pending a live run** (TRACKER BL-39). See §6 for where the build differs from this text.
 **ADRs:** [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (the prompt runs the read-only
 client and nothing else) · [0013](../adr/0013-one-array-credential-per-run.md) (the run's credential,
 never typed) · [0012](../adr/0012-no-switch-writes-the-tool-emits-a-command-set.md) unaffected
@@ -67,3 +68,28 @@ type `showrcopy groups zz_rc_vvs_rcg` on the peer target.
 Emit hooks + redaction (~120 lines), route + artifact (~80), xterm pane (~250), as-built appendix (~40),
 ~15 unit tests; `@xterm/xterm` + two addons in `frontend/package.json` (pure JS, bundled by Vite into
 `frontend/dist`, which the exe already ships). After the first live replication apply.
+
+## 6. As built (2026-10-11)
+
+- **Where the records go.** Not run events and not an artifact: a table of their own,
+  `run_commands(run_id, seq, payload)`, and an SSE stream of their own (`GET /runs/{id}/console/stream`).
+  Reads are many; in the run events they would bury the activity list. The store keeps the newest 20
+  runs' logs and prunes older ones when a run writes its first record.
+- **How the clients report.** A context variable (`adapters/command_log.py`) bound by
+  `RunCoordinator.spawn()` for step work and by `recording(run_id)` for the API reads that run outside a
+  step (storage preflight, the objects list). `ArrayCliClient.run`, the WSAPI SDK's one request
+  method (`http._time_request`) and `BrocadeClient._exec` record into it. No sink bound, nothing
+  recorded.
+- **vCenter is not recorded.** pyVmomi has no single call every read goes through; its reads stay the
+  tool's own and are listed by what they found, as before.
+- **Routes.** `GET /runs/{id}/console/log?since=&format=json|txt`, `GET /runs/{id}/console/targets`,
+  `POST /runs/{id}/console {command, target: array|peer}` (the target is a field, not a `--peer`
+  prefix), `POST /runs/{id}/console/terminal {target}`.
+- **WSAPI redaction.** The login body shows as `{user, password: ********}` and its answer as
+  `(session key withheld)`; any value equal to a credential the run holds is masked in every record.
+- **As-built appendix.** Changes (every write: time, device, via, call, result) in full; reads
+  counted per command, not listed one by one.
+- **R6.** `session.ps1` saves `commands-run<n>.txt` per run into the session folder.
+- **Checked on the Mac only** (dev server, faked arrays): three commands recorded with output, a
+  write refused with the sentence, the peer target read, no password in the log. Owed: the live
+  check in §4 on labrat.

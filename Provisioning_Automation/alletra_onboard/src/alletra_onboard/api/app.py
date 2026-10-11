@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import os
 import sys
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
@@ -48,6 +49,8 @@ from alletra_onboard.api.schemas import (
     ConfigureRequest,
     ConnectivityResponse,
     ConnectivityResultItem,
+    ConsoleRequest,
+    ConsoleTerminalRequest,
     CreateRunRequest,
     DiscoveryToolResponse,
     DsccStepRequest,
@@ -97,6 +100,7 @@ from alletra_onboard.application.provisioning.zoning_plan import (
     alias_name_warnings,
     render_commands,
 )
+from alletra_onboard.application.runs.console import console_text
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.service import (
     OnboardingService,
@@ -568,7 +572,8 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # named BEFORE discovery runs instead of surfacing as a failed step. Makes no writes.
         _get_run_or_404(run_id)
         try:
-            return await asyncio.to_thread(service.get_storage_preflight, run_id)
+            with service.coordinator.recording(run_id):
+                return await asyncio.to_thread(service.get_storage_preflight, run_id)
         except StepPreconditionError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -578,7 +583,8 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # array over WSAPI, so run it off the event loop.
         _get_run_or_404(run_id)
         try:
-            return await asyncio.to_thread(service.get_storage_objects, run_id)
+            with service.coordinator.recording(run_id):
+                return await asyncio.to_thread(service.get_storage_objects, run_id)
         except StepPreconditionError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -650,6 +656,58 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                     yield f"data: {event.model_dump_json()}\n\n"
             finally:
                 service.events.unsubscribe(run_id, queue)
+
+        return StreamingResponse(generate(), media_type="text/event-stream")
+
+    # ------------------------------------------------------------------ console (SPEC-019)
+
+    @app.get("/runs/{run_id}/console/log")
+    async def console_log(run_id: str, since: int = 0, format: str = "json") -> Response:
+        _get_run_or_404(run_id)
+        entries = service.coordinator.list_commands(run_id, since)
+        if format == "txt":
+            return Response(content=console_text(entries), media_type="text/plain; charset=utf-8",
+                            headers={"Content-Disposition": f'attachment; filename="commands-{run_id[:8]}.txt"'})
+        return JSONResponse({"commands": entries})
+
+    @app.get("/runs/{run_id}/console/targets")
+    async def console_targets(run_id: str) -> dict:
+        _get_run_or_404(run_id)
+        return {"targets": service.console.targets(run_id)}
+
+    @app.post("/runs/{run_id}/console")
+    async def console_run(run_id: str, request: ConsoleRequest) -> dict:
+        # SPEC-019 R3: read-only allowlist only, with the run's own credential; refusals are answered, not raised
+        _get_run_or_404(run_id)
+        try:
+            return await service.console.run(run_id, request.command, request.target)
+        except StepPreconditionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.post("/runs/{run_id}/console/terminal")
+    async def console_terminal(run_id: str, request: ConsoleTerminalRequest) -> dict:
+        _get_run_or_404(run_id)
+        try:
+            return service.console.open_terminal(run_id, request.target)
+        except StepPreconditionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.get("/runs/{run_id}/console/stream")
+    async def console_stream(run_id: str) -> StreamingResponse:
+        _get_run_or_404(run_id)
+        queue = service.coordinator.console.subscribe(run_id)
+
+        async def generate():
+            try:
+                while True:
+                    try:
+                        entry = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_S)
+                    except TimeoutError:
+                        yield ": heartbeat\n\n"
+                        continue
+                    yield f"data: {json.dumps(entry)}\n\n"
+            finally:
+                service.coordinator.console.unsubscribe(run_id, queue)
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 

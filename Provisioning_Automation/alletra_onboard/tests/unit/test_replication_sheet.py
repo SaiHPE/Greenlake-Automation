@@ -140,7 +140,6 @@ def test_the_tab_is_parsed_whenever_the_provisioning_tabs_are_even_without_a_rep
      "250 ms; async replication over RCIP needs 200 ms or less"),
     ({**_PEER, "rtt_ms": "fast"}, [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6"}], "must be a number"),
     (_PEER, [{"vvset": "zz_rc_vvs"}], "Peer CPG is required"),
-    (_PEER, [{"vvset": "not_on_volumes_tab", "peer_cpg": "SSD_r6"}], "no volume on the Volumes tab is in VV-set 'not_on_volumes_tab'"),
     (_PEER, [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6"}, {"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6"}], "appears twice"),
     (_PEER, [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "auto_recover": "maybe"}], "Auto recover must be 'yes' or 'no'"),
     ({**_PEER, "failover_test": "sometimes"}, [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6"}], "'Run the failover test' must be 'yes' or 'no'"),
@@ -148,6 +147,25 @@ def test_the_tab_is_parsed_whenever_the_provisioning_tabs_are_even_without_a_rep
 def test_each_validation_rule_refuses_with_its_sentence(fields, rows, expected):
     with pytest.raises(ValueError, match=expected):
         _parse(_sheet(fields=fields, rows=rows))
+
+
+def test_a_row_may_name_a_set_that_is_already_on_the_array_and_not_on_the_volumes_tab():
+    # The preview reads the array and refuses a set that is missing there (test_replication_plan).
+    rep = _parse(_sheet(fields=_PEER, rows=[{"vvset": "existing_set", "peer_cpg": "SSD_r6"}])).provisioning_intent.replication
+    assert [p.vvset for p in rep.protections] == ["existing_set"]
+
+
+def test_a_replicate_only_workbook_may_leave_volumes_and_host_sets_empty():
+    rows = [{"vvset": "existing_set", "peer_cpg": "SSD_r6"}]
+    data = compose_workbook_bytes(base=None, init=_INIT, targets=_TARGETS, volumes=[], hostsets=[],
+                                  replication={"fields": _PEER, "rows": rows})
+    intent = parse_workbook_bytes(data, mode=RunMode.CUSTOM, selected_steps=["replicate"]).provisioning_intent
+    assert intent.volumes == [] and intent.host_sets == []
+    assert intent.replication.protections[0].vvset == "existing_set"
+    # Without Replication rows an empty Volumes tab is still refused, and the sentence names the way out.
+    bare = compose_workbook_bytes(base=None, init=_INIT, targets=_TARGETS, volumes=[], hostsets=[])
+    with pytest.raises(ValueError, match="add at least one volume.*leave Volumes and Host sets empty and fill the Replication tab"):
+        parse_workbook_bytes(bare, mode=RunMode.PROVISION_ONLY)
 
 
 def test_the_peer_must_be_a_different_array():

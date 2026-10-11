@@ -473,7 +473,7 @@ def parse_workbook_bytes(
     if complete or _provisioning_selected(mode, selected_steps):
         parsed.provisioning_intent = _parse_provisioning_tab(workbook)
         _reject_two_arrays(parsed)
-        replication = _parse_replication_tab(workbook, parsed.provisioning_intent)
+        replication = _parse_replication_tab(workbook)
         if replication is None and _replication_selected(mode, selected_steps):
             raise ValueError(
                 "The Replication and Failover test steps need the 'Replication' tab (peer array and the "
@@ -606,8 +606,14 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
         raise ValueError("Default provisioning type must be 'tpvv' or 'reduce'.")
 
     vol_rows = _read_table(workbook[VOLUMES_SHEET_NAME], VOLUME_COLUMNS)
-    if not vol_rows:
-        raise ValueError("Volumes tab — add at least one volume (a name and a size).")
+    # A workbook that only replicates sets already on the array may leave Volumes and Host sets
+    # empty; the run guard then refuses the Provision step (nothing to provision).
+    replicate_only = not vol_rows and _replication_rows_present(workbook)
+    if not vol_rows and not replicate_only:
+        raise ValueError(
+            "Volumes tab — add at least one volume (a name and a size). To replicate volume sets that "
+            "already exist on the array, leave Volumes and Host sets empty and fill the Replication tab."
+        )
     volumes: list[VolumeRequest] = []
     for r in vol_rows:
         ptype = (r.get("provisioning_type") or default_type).strip().lower()
@@ -627,7 +633,7 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
         ))
 
     hs_rows = _read_table(workbook[HOSTSETS_SHEET_NAME], HOSTSET_COLUMNS)
-    if not hs_rows:
+    if not hs_rows and not replicate_only:
         raise ValueError("Host sets tab — add at least one host set (a name).")
     host_sets = [
         HostSetRequest(name=r["name"], members=[m.strip() for m in (r.get("members") or "").split(",") if m.strip()])
@@ -687,7 +693,13 @@ def _yes_no(text: str | None, *, default: bool, where: str) -> bool:
     raise ValueError(f"{where} must be 'yes' or 'no' (got '{text}').")
 
 
-def _parse_replication_tab(workbook, provisioning: ProvisioningIntent) -> ReplicationIntent | None:
+def _replication_rows_present(workbook) -> bool:
+    return REPLICATION_SHEET_NAME in workbook.sheetnames and bool(
+        _read_table(workbook[REPLICATION_SHEET_NAME], PROTECTION_COLUMNS)
+    )
+
+
+def _parse_replication_tab(workbook) -> ReplicationIntent | None:
     """The optional Replication tab (SPEC-015 R1/R2). Absent, or present but blank, -> None (an
     older workbook parses exactly as before). Filled -> validated to one sentence per rule."""
     if REPLICATION_SHEET_NAME not in workbook.sheetnames:
@@ -713,7 +725,8 @@ def _parse_replication_tab(workbook, provisioning: ProvisioningIntent) -> Replic
         if rtt < 0:
             raise ValueError("Replication tab — 'Measured round-trip time (ms)' cannot be negative.")
 
-    sheet_vvsets = {v.vvset for v in provisioning.volumes if v.vvset}
+    # A set not on the Volumes tab is an EXISTING set: the Replication preview reads the array and
+    # refuses it there if it is missing or empty (plan.check).
     protections: list[ProtectionRequest] = []
     seen: set[str] = set()
     for r in rows:
@@ -722,11 +735,6 @@ def _parse_replication_tab(workbook, provisioning: ProvisioningIntent) -> Replic
         if vvset in seen:
             raise ValueError(f"{where} appears twice; one row per volume set.")
         seen.add(vvset)
-        if vvset not in sheet_vvsets:
-            raise ValueError(
-                f"{where}: no volume on the Volumes tab is in VV-set '{vvset}'. Put the set's name in the "
-                "Volumes tab's 'VV-set' column for each volume it should hold, or remove this row."
-            )
         mode_text = (r.get("mode") or "async").strip().lower()
         if mode_text in ("periodic", "asynchronous", "asynchronous periodic"):
             mode_text = "async"

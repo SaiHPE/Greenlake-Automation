@@ -354,7 +354,7 @@ def test_run_records_take_the_latest_event_of_each_type():
         ev("storage.applied", {"result": {"outcomes": []}}, "t7"),
         ev("storage.paths.verified", {"verification": {"hosts": []}}, "t8"),
     ]
-    coord = SimpleNamespace(list_events=lambda run_id: events)
+    coord = SimpleNamespace(list_events=lambda run_id: events, list_commands=lambda run_id, since=0: [])
     data = AsBuiltData()
     st.DocumentSteps(coord=coord)._run_records("r1", data)
     assert data.zoning_plan == {"fabrics": [], "v": 2}
@@ -426,7 +426,7 @@ def test_run_records_union_removals_from_every_apply():
         ev("storage.applied", {"result": {"outcomes": [], "removals": [{"kind": "host", "name": "h2", "command": "removehost h2"}]}}, "t2"),
     ]
     data = AsBuiltData()
-    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events))._run_records("r1", data)
+    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events, list_commands=lambda run_id, since=0: []))._run_records("r1", data)
     assert [r["command"] for r in data.provisioning_removals] == ["removevv -f v1", "removehost h2"]
 
 
