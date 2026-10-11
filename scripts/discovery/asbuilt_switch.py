@@ -22,7 +22,7 @@ from pathlib import Path
 try:
     import paramiko
 except ImportError:
-    sys.exit("paramiko not found -- 'pip install paramiko' (or run with the app venv python). See README.")
+    sys.exit("paramiko not found -- 'pip install \"paramiko<4\"' (or run with the app venv python). See README.")
 
 # name, ip  -- edit here if the Alletra MP is on different switches.
 SWITCHES = [

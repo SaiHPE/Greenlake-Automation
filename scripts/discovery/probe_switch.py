@@ -8,7 +8,7 @@ command: each command is matched against the literal allowlist below before bein
 
     python probe_switch.py 10.64.154.53 10.64.154.52 [--user PanduM] [--out switch-probe.txt]
 
-On a fresh box:  python -m pip install paramiko   then run the line above.
+On a fresh box:  python -m pip install "paramiko<4"   then run the line above.
 Password: set BROCADE_PASSWORD, or type it at the prompt (same password is reused for all switches).
 """
 
@@ -24,7 +24,7 @@ import sys
 try:
     import paramiko
 except ImportError:  # pragma: no cover
-    sys.exit("paramiko is required:  python -m pip install paramiko")
+    sys.exit("paramiko is required:  python -m pip install \"paramiko<4\"")
 
 # EXACT command strings the probe may run — all read-only. Nothing else is ever sent to the switch.
 # (defzone --show / zoneshow --validate are read-only inspection forms; no write variant is listed.)
