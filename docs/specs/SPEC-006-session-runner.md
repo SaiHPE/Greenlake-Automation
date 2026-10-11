@@ -91,7 +91,15 @@ step) and one read-only preflight (WSAPI + vCenter):
 
 The report ends with **Still needs eyes** — the six UI-only changes and the one screenshot each needs.
 
-## 4b. Amendment — 2026-10-07 (approved, not built): scenario 7, replication
+## 4b. Amendment — 2026-10-07 (approved; built and run live 2026-10-11): scenario 7, replication
+
+**Live 2026-10-11, 32 PASS / 0 FAIL** on D22U27 → E18U31 with ESX1 as the host, through the
+*Provision, then replicate* preset. Built as the Python lab runner `rc_preset_lab.py` (lab branch
+`jumpbox-test`, drives the same API), not inside `session.ps1`. 7a–7d, 7f, 7g as below; **7e (async)
+is not in this runner**: the lab target carries six started Sync groups and the array allows one mode
+per target, so the async path was proven separately with the six removed and rebuilt
+(`rc_async_failover_lab.py`, SPEC-017 validation). 7c asserts the app's refusal (HTTP 409 *nothing to
+create*) rather than an empty apply.
 
 Runs only when the runner is given `-PeerHost <ip>` (the peer array; its password is prompted like
 the others) and composes a Replication tab (SPEC-015 R6) onto the base sheet; every single-array
