@@ -6,12 +6,14 @@ nothing is written before the normal starting state is confirmed."""
 
 from __future__ import annotations
 
+import pytest
 from pydantic import SecretStr
 
 from alletra_onboard.application.replication.failover import (
     DR_ACTION_FAILOVER,
     DR_ACTION_RECOVER,
     DR_ACTION_RESTORE,
+    period_seconds,
     read_group,
     recovery_action,
     run_failover_test,
@@ -264,6 +266,19 @@ def test_the_async_sequence_records_the_data_loss_bound_and_waits_for_the_sync_b
     assert rec.data_loss_bound.startswith("last sync before failover 2026-10-10 15:42:48 IST; failover completed at ")
     assert rec.steps[0].primary.last_sync == "2026-10-10 15:42:48 IST"
     assert rec.time_to_synced_s >= 1                       # the fake was Syncing at first; the wait polled
+
+
+def test_an_async_group_waits_at_least_one_period_for_the_sync_back():
+    # limits say 30 s, the group's period is 5 m: a sync back that shows only after ~100 s still passes
+    pair = FakePair(mode="Periodic", sync_after=100)
+    rec = _run(pair)
+    assert rec.result == "passed", rec.error
+    assert rec.time_to_synced_s > 30
+
+
+@pytest.mark.parametrize("text,seconds", [("5m", 300), ("30s", 30), ("1h", 3600), ("1d", 86400), ("", 0), ("NA", 0), (" 10m ", 600)])
+def test_period_seconds_reads_the_options_column(text, seconds):
+    assert period_seconds(text) == seconds
 
 
 # ------------------------------------------------------------------ step 0: never write from a wrong start
