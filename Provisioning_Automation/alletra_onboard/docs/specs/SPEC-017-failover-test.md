@@ -29,7 +29,12 @@ Primary/Secondary again. **Third live run 18:55: PASSED, sync** — 7 steps, the
 after the failover, synced back at once (1 GiB test volume), fail back by stop on S and failover on P
 in 16 s, group back to Primary/Started on P and Secondary/Started on S, every volume Synced. The
 record landed in the as-built (generated live the same evening, run `as-built-CZ2D320BT1.docx`).
-**Owed:** the async (periodic) pass, which needs a target free of sync groups (BL-20). Before it, the
+**Async pass 2026-10-11 04:58 UTC: PASSED** (periodic, RPO 10 min, period 5 m; six lab groups removed for
+the run and rebuilt after it): the array behaved as in sync — failover mirrored, recover done by the
+array, synced back at once, made the peer the natural primary, fail back by stop on S + failover on P
+in 27 s. Failover 1.3 s, synced back 1.3 s. As-built generated live with the data-loss bound. Same
+day: the bound now writes the failover time as `YYYY-MM-DD HH:MM:SS UTC` (it was raw ISO beside the
+array's local last-sync time). Before it, the
 waits of steps 5 and 6 were made at least one period plus 2 minutes for a periodic group (a 5-minute
 period could show Synced only after the next period, longer than the 300 s step-6 wait).
 **ADR:** [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) §4 (DR operations are

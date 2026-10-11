@@ -301,7 +301,7 @@ def _failover_record(result="passed", **over) -> dict:
         "group": "zz_rc_test_rcg", "peer_group": "zz_rc_test_rcg.r188150", "mode": "async", "primary_array": p, "peer_array": s,
         "started_at": "2026-10-10T10:20:00+00:00", "ended_at": "2026-10-10T10:26:30+00:00", "result": result, "failed_step": None,
         "time_to_failover_s": 6.2, "time_to_synced_s": 41.0,
-        "data_loss_bound": "last sync before failover 2026-10-10 15:42:48 IST; failover completed at 2026-10-10T10:20:40+00:00",
+        "data_loss_bound": "last sync before failover 2026-10-10 15:42:48 IST; failover completed at 2026-10-10 10:20:40 UTC",
         "observed_state": "", "recovery_action": "", "error": None,
         "steps": [
             {"seq": 0, "title": "Read both arrays", "where": "-", "action": "(read)", "cli": "", "started_at": "2026-10-10T10:20:00+00:00", "seconds": 5.1,
