@@ -350,3 +350,33 @@ as on 10-10, and the leftover zz_rc_* objects of the sync runs removed with the 
 
 One wording fix from the document: the failover time in the data-loss bound was raw ISO
 (`2026-10-11T04:58:14+00:00`) next to the array's local time; it is now `2026-10-11 04:58:14 UTC`.
+
+## Provision, then replicate, with a real host + runner scenario 7 — 2026-10-11, 32 PASS / 0 FAIL
+
+`rc_preset_lab.py` (no prompts) drove the app's API on one run in the REPLICATE mode, then a rerun.
+Sheet: array D22U27, host **ESX1 by name only** (Hosts tab), one 1 GiB volume `zz_rc_vol01` in
+`zz_rc_vvs`, host set `zz_rc_hs`, one sync Protection row to E18U31. Switches: F2 = D22U27's own
+`SN3600B_D21U34_F2` 10.64.127.244; F1 = `SW3700B_D24U32_F1` 10.64.122.146 (same fabric) because
+D22U27's own F1 switch `SW6505_D21U36_F1` 10.64.127.243 runs FOS 7.0.2c and refused the SSH client
+(*IncompatiblePeer*) — found with the read-only `rc_find_fabric.py`. vCenter 10.54.154.226 was read
+but does not manage ESX1 (10.99.1.100 is not reachable from labrat), so ESX1 came from the array.
+
+1. Discovery: ESX1 in this run and identified, sources *array, sheet*, both WWPNs.
+2. Zoning check: ESX1 zoned; zoning plan read both fabrics (read-only).
+3. Provision: volume, VV set, host set, export *create*; ESX1 *exists*; 0 blockers; nothing failed.
+4. Paths: ESX1 *live*, 1 LUN, 2 HBAs, 4 paths per LUN, both fabrics.
+5. 7a: partnership by link address, 2/2 links Up each way; the six lab groups listed as already
+   present. 7b: `zz_rc_vvs_rcg` + `zz_rc_test_rcg` created, both *replicating*, Primary/Started on
+   D22U27, Secondary/Started on E18U31.
+6. 7c rerun (second run, same sheet): every row *exists*; apply refused HTTP 409 *nothing to create*;
+   `showrcopy groups` unchanged. (The first attempt of the runner stopped here because it expected an
+   empty apply; the app's refusal is the right answer and the runner now asserts it.)
+7. 7d failover test passed: failover 1.3 s, synced back 1.4 s.
+8. Verify ran (5 mismatches: the sheet's init fields are placeholders, not the array's). 7f as-built:
+   volume, sets, *Replication configured in this run*, the group, *Failover test*, *Result: Passed.*,
+   *To remove what this run created* and the A and B removal lines.
+9. 7g cleanup by the runs' own removal sets: no `zz_rc_*` object left on either array; the six lab
+   groups' role/status/mode identical to before.
+
+Finding, not fixed: the tool's switch client cannot log in to FOS 7.0.x switches (old SSH
+algorithms). Any newer switch of the same fabric reads the same zoning database.
