@@ -33,7 +33,7 @@ import sys
 try:
     import paramiko
 except ImportError:  # pragma: no cover
-    sys.exit("paramiko is required:  pip install paramiko   (or use the app's .venv python)")
+    sys.exit("paramiko is required:  pip install \"paramiko<4\"   (or use the app's .venv python)")
 
 _NSP = re.compile(r"\b(\d+):(\d+):(\d+)\b")
 # A WWPN with or without separators -> 16 hex.
