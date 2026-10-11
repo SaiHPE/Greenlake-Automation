@@ -8,6 +8,7 @@ back (troubleshooting guide ED6, role/status table) as CLI lines. The tool never
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -34,6 +35,7 @@ RECOVER_WAIT_S = 180        # step 4: the old primary shows Secondary-Rev and th
 AUTO_START_WAIT_S = 60      # step 4: how long to watch for the array starting the group itself after failover
 SYNC_WAIT_S = 15 * 60       # step 5: every volume Synced after the recover
 RESTORE_WAIT_S = 300        # step 6: back to Primary on P, Secondary on S, Started, Synced
+PERIOD_MARGIN_S = 120       # async: steps 5 and 6 wait at least one period plus this
 POLL_S = 10
 
 
@@ -42,6 +44,12 @@ def read_group(creds: EndpointCreds, group: str, *, array_cli_factory: Callable 
     with array_cli_factory(creds) as cli:
         rc = replication_read.parse_showrcopy(cli.run(f"showrcopy groups {group}"))
     return next((g for g in rc["groups"] if g.name == group), None)
+
+
+def period_seconds(text: str) -> int:
+    """The Options column's period (`5m`, `30s`, `1h`, `1d`) in seconds; 0 when absent or unreadable."""
+    m = re.fullmatch(r"(\d+)\s*([smhd])", (text or "").strip().lower())
+    return int(m.group(1)) * {"s": 1, "m": 60, "h": 3600, "d": 86400}[m.group(2)] if m else 0
 
 
 def side_of(array_name: str, group: str, g: RcGroup | None) -> FailoverSide:
@@ -162,6 +170,11 @@ def run_failover_test(
     if record.mode == "async":
         record.data_loss_bound = (f"last sync before failover {p_side.last_sync}" if p_side.last_sync
                                   else "no last sync time was shown before failover")
+        # a periodic group may only show Synced after its next period
+        period = period_seconds(a.group(group).period if a.group(group) else "")
+        if period:
+            for key in ("sync", "restore"):
+                lim[key] = max(lim[key], period + PERIOD_MARGIN_S)
 
     def both() -> tuple[FailoverSide, FailoverSide]:
         return (side_of(record.primary_array, group, read_group_fn(p_creds, group)),
