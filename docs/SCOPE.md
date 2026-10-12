@@ -91,7 +91,7 @@ In the order the scope owner set (2026-09-12); item-level status is in [TRACKER.
    the array. Links and targets set up by the tool are BL-41 (v0.19). Snapshots (BL-21) next.
    Research: `research/2026-09-19-replication-two-arrays.md`, `research/2026-10-07-replication-document-review.md`;
    ADR 0015; specs SPEC-015 to SPEC-018.
-4. **Console** (SPEC-019, BL-39) — built in v0.17.0, pending a live run: every command the tool sends
+4. **Console** (SPEC-019, BL-39) — built in v0.17.0, live on labrat 2026-10-12: every command the tool sends
    to an array or switch, with its output, in a pane under each step and in the as-built.
 5. Then: performance reporting (8), HLD/LLD (9), VLAN / peer-port / migration (3), file column (6, 7).
 

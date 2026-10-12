@@ -1,7 +1,7 @@
 # SPEC-019 — Console: the live command log, and a read-only prompt
 
 **Status:** APPROVED 2026-10-08 (operator: "this would work"; no full shell) — **built 2026-10-11 (v0.17.0),
-pending a live run** (TRACKER BL-39). See §6 for where the build differs from this text.
+pending a live run** (TRACKER BL-39) — **live 2026-10-12** (§6). See §6 for where the build differs from this text.
 **ADRs:** [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (the prompt runs the read-only
 client and nothing else) · [0013](../adr/0013-one-array-credential-per-run.md) (the run's credential,
 never typed) · [0012](../adr/0012-no-switch-writes-the-tool-emits-a-command-set.md) unaffected
@@ -90,6 +90,8 @@ Emit hooks + redaction (~120 lines), route + artifact (~80), xterm pane (~250), 
 - **As-built appendix.** Changes (every write: time, device, via, call, result) in full; reads
   counted per command, not listed one by one.
 - **R6.** `session.ps1` saves `commands-run<n>.txt` per run into the session folder.
-- **Checked on the Mac only** (dev server, faked arrays): three commands recorded with output, a
-  write refused with the sentence, the peer target read, no password in the log. Owed: the live
-  check in §4 on labrat.
+- **Checked on the Mac** (dev server, faked arrays), then **live on labrat 2026-10-12, 22/0**
+  (`rc_console_lab.py`, run `e689758b`, read-only): 64 commands on D22U27 and E18U31 over SSH and
+  WSAPI, console reads on both, two refusals, the live stream, Open terminal, the as-built appendix
+  (0 changes, 48 reads), no password, no session key, no write
+  ([validation record](../validation/2026-10-08-rc-pair-replication-preview.md), last section).

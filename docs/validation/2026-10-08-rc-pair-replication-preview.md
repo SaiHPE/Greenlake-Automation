@@ -380,3 +380,23 @@ but does not manage ESX1 (10.99.1.100 is not reachable from labrat), so ESX1 cam
 
 Finding, not fixed: the tool's switch client cannot log in to FOS 7.0.x switches (old SSH
 algorithms). Any newer switch of the same fabric reads the same zoning database.
+
+## Console (SPEC-019) and an existing volume set on the Replication tab — 2026-10-12, 22 PASS / 0 FAIL
+
+`rc_console_lab.py` (no prompts, read-only on both arrays) on v0.17.0, run `e689758b`.
+Sheet: Volumes and Host sets empty; two sync Protection rows to E18U31: `test_CRV_set` (already on
+D22U27) and `zz_rc_no_such_set`; failover test off.
+
+1. The *Provision, then replicate* preset was refused, HTTP 422 *The Volumes tab is empty, so there
+   is nothing to provision...*. A Custom run (Replication + As-built) was created.
+2. Console: targets `3paradm@10.64.122.99` and `3paradm@10.64.154.190`; `showsys` read on both;
+   `removevv` and `showvv; removevv x` refused with the sentence; a `showdate` seen on the live
+   stream as it ran; Open terminal launched `ssh 3paradm@10.64.122.99`.
+3. Replication preview: `test_CRV_set` found on the array; `zz_rc_no_such_set` got *does not exist on
+   AlletraMP_D22U27. Create it first...*. Nothing applied.
+4. Storage preflight connected over WSAPI. As-built generated with *Commands run on the array*:
+   0 changes, 48 read-only commands.
+5. The log: 64 commands, both arrays, SSH and WSAPI. The WSAPI login shows as
+   `POST /credentials {user, password: ********}`, the logout as `DELETE /credentials/********`.
+   No lab password anywhere, no write. `checkhealth -svc -detail` took 30 s; `GET /volumes` was capped
+   at 64 KB as designed.
