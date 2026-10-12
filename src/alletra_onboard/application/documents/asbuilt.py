@@ -116,6 +116,7 @@ class AsBuiltData:
     replication_applied_at: str = ""
     replication_primary: object | None = None      # ReplicationArrayView read when the document is made (R3)
     replication_peer: object | None = None         # ReplicationArrayView of the peer, same moment
+    link_check: dict | None = None                 # SPEC-020 R6: replication.link_checked -> link_check (JSON)
     failover_record: dict | None = None            # SPEC-017 R6; None = the test did not run
     commands: list[dict] = field(default_factory=list)   # SPEC-019 R2: the run's command log, without output
 
@@ -898,6 +899,42 @@ def _rc_rpo_text(row: dict, tab: dict, period_read: str = "") -> str:
     return (f"RPO {rpo} min " if rpo else "") + f"(period {shown})"
 
 
+def _add_link_check(doc, data: AsBuiltData) -> None:
+    """SPEC-020 R6: what `checkrclink` measured, the limit for each configured mode, and whether the
+    operator accepted a latency over it (the apply's note says so)."""
+    from alletra_onboard.domain.replication import RTT_LIMIT_MS
+
+    check = data.link_check or {}
+    _para(doc, "Link check", bold=True)
+    results = check.get("results", [])
+    measured = [r for r in results if r.get("status") == "measured" and r.get("latency_ms") is not None]
+    modes = check.get("modes", [])
+    limits = "; ".join(f"{m} replication over RCIP needs {RTT_LIMIT_MS[m]:g} ms or less" for m in modes if m in RTT_LIMIT_MS)
+    if check.get("error") or not measured:
+        _para(doc, f"The latency between the arrays was not measured: {check.get('error') or 'no link could be tested'}.")
+        return
+    worst = max(r["latency_ms"] for r in measured)
+    accepted = any("accepted it and chose to continue" in n for n in (data.replication_result or {}).get("notes", []))
+    over = [m for m in modes if worst > RTT_LIMIT_MS.get(m, 0)]
+    verdict = ("over HPE's limit for " + "/".join(over) + (" — the operator accepted the measured latency and continued." if accepted else ".")
+               if over else "within HPE's limit.")
+    _para(doc, f"Measured with checkrclink on {check.get('at', '')} (test length {check.get('duration_s', '')} s, stopped "
+               f"once the latency was printed): worst latency {worst:g} ms on {len(measured)} link(s); {limits}. "
+               f"The latency is {verdict}")
+    rows = []
+    for r in results:
+        pair = r.get("pair", {})
+        link = f"A {pair.get('nsp_a', '')} ({pair.get('ip_a', '')}) → B {pair.get('nsp_b', '')} ({pair.get('ip_b', '')})"
+        if r.get("status") == "measured":
+            lost = r.get("pings_lost_pct")
+            rows.append([link, f"{r.get('latency_ms'):g} ms", f"{lost:g} %" if lost is not None else "—"])
+        else:
+            rows.append([link, "not measured", r.get("detail") or "—"])
+    _table(doc, ["Link", "Latency", "Pings lost"], rows, widths=[0.56, 0.18, 0.26])
+    for line in check.get("unchecked", []):
+        _para(doc, f"Not checked: {line}")
+
+
 def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
     from alletra_onboard.application.replication.plan import find_partnership
     from alletra_onboard.application.replication.verify import peer_group_name
@@ -945,6 +982,10 @@ def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> Non
                    f"({partnership.links_peer_up}/{partnership.links_peer_total} links Up). Found by link address.")
         _table(doc, ["Array", "Target", "Policy", "Link (port → peer address)", "Status"], link_rows,
                widths=[0.22, 0.22, 0.16, 0.28, 0.12])
+
+    # -- SPEC-020 R6: the measured latency
+    if data.link_check:
+        _add_link_check(doc, data)
 
     # -- groups configured by this run
     _para(doc, "Remote Copy groups configured by this run", bold=True)

@@ -260,6 +260,66 @@ class ReplicationReport(BaseModel):
     error: str | None = None
 
 
+# ------------------------------------------------------------------ the link check (SPEC-020)
+
+#: `checkrclink startclient <N:S:P> <addr> <time>`: the array's documented range for <time>.
+LINK_CHECK_TIME_MIN = 300
+LINK_CHECK_TIME_MAX = 172800
+LINK_CHECK_TIME_DEFAULT = 600
+
+
+class LinkPair(BaseModel):
+    """One outbound link of A toward B, as the two ports and addresses `checkrclink` needs (R1)."""
+
+    nsp_a: str
+    ip_a: str
+    nsp_b: str
+    ip_b: str
+
+    @property
+    def label(self) -> str:
+        return f"A {self.nsp_a} → B {self.nsp_b} ({self.ip_b})"
+
+
+class LinkCheckResult(BaseModel):
+    """What `checkrclink` said for one pair (R3)."""
+
+    pair: LinkPair
+    status: Literal["measured", "failed"] = "measured"
+    latency_ms: float | None = None
+    pings_lost_pct: float | None = None
+    detail: str = ""            # the array's words on failure
+    output: str = ""            # the client's output up to the stop
+
+
+class LinkCheck(BaseModel):
+    """The run's link check: every pair measured, against the limit of each mode on the tab."""
+
+    at: str = ""
+    duration_s: int = LINK_CHECK_TIME_DEFAULT
+    results: list[LinkCheckResult] = Field(default_factory=list)
+    unchecked: list[str] = Field(default_factory=list)     # pairs not checked, with the reason
+    modes: list[str] = Field(default_factory=list)         # the sheet modes this run configures
+    notes: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+    @property
+    def worst_ms(self) -> float | None:
+        values = [r.latency_ms for r in self.results if r.latency_ms is not None]
+        return max(values) if values else None
+
+    @property
+    def measured(self) -> bool:
+        return self.error is None and any(r.status == "measured" for r in self.results)
+
+    def over_limit(self) -> list[str]:
+        """The modes on the tab whose RTT limit the worst latency exceeds."""
+        worst = self.worst_ms
+        if worst is None:
+            return []
+        return [m for m in self.modes if worst > RTT_LIMIT_MS.get(m, 0)]
+
+
 # ------------------------------------------------------------------ the plan (SPEC-016 R3)
 
 class PlannedCall(BaseModel):

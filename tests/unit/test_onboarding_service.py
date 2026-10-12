@@ -202,6 +202,34 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
         )
 
     monkeypatch.setattr(replication_apply, "apply_plan", fake_apply)
+
+    # ---- SPEC-020 R4: on RCIP the link must have been checked in this run before the apply
+    from alletra_onboard.application.replication import link_check as replication_link
+    from alletra_onboard.application.replication.steps import LINK_CHECK_ARTIFACT
+    from alletra_onboard.domain.replication import LinkCheck, LinkCheckResult, LinkPair
+
+    with pytest.raises(StepPreconditionError, match="Check the link first: the latency between the arrays has not been measured"):
+        service.start_replication_apply(run.run_id)
+    assert applied == []
+
+    said: list[str] = []
+
+    def fake_check(array, replication, report, *, duration_s, progress=None, **kw):
+        said.append(f"{array.host}->{replication.peer.host} {duration_s}s {report.partnership.target_on_primary}")
+        pair = LinkPair(nsp_a="0:4:3", ip_a="10.1.0.1", nsp_b="0:4:3", ip_b="10.2.0.1")
+        return LinkCheck(at="2026-10-12T07:00:00+00:00", duration_s=duration_s, modes=["sync"],
+                         results=[LinkCheckResult(pair=pair, latency_ms=0.4, pings_lost_pct=0.0)])
+
+    monkeypatch.setattr(replication_link, "run_link_check", fake_check)
+    service.start_link_check(run.run_id, duration_s=600)
+    await service.wait(run.run_id)
+    assert said == ["a->b 600s ArrayB"]
+    checked = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.link_checked")
+    assert checked.message == "Latency 0.4 ms on 1 link(s) (sync needs 10 ms or less) — within the limit."
+    assert checked.data["link_check"]["results"][0]["latency_ms"] == 0.4
+    assert LinkCheck.model_validate_json(service.store.load_artifact(run.run_id, LINK_CHECK_ARTIFACT)).worst_ms == 0.4
+    assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR
+
     service.start_replication_apply(run.run_id)
     await service.wait(run.run_id)
     assert applied == [["HS_rcg", "HS_rc"]]
@@ -209,6 +237,7 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     done = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.applied")
     assert done.message.startswith("Replication configured — HS_rcg; 2 write(s), 0 already there.")
     assert done.data["result"]["removals_a"][0] == "stoprcopygroup -f HS_rcg"
+    assert done.data["result"]["notes"] == ["Link check 2026-10-12T07:00:00+00:00: latency 0.4 ms on 1 link(s); within the limit."]
     assert ReplicationResult.model_validate_json(service.store.load_artifact(run.run_id, RESULT_ARTIFACT)).groups_created == ["HS_rcg"]
     with pytest.raises(StepPreconditionError, match="read both arrays first"):
         service.start_replication_apply(run.run_id)                 # spent: a second apply needs a fresh plan
@@ -317,6 +346,68 @@ async def test_provision_failure_is_retryable_and_warnings_collected(tmp_path):
     updated = service.get_run(run.run_id)
     assert updated.status == RunStatus.RETRYABLE_FAILURE
     assert any("no seat" in w for w in updated.warnings)
+
+
+async def test_the_link_gate_refuses_over_the_limit_without_the_tick_and_records_the_choice_with_it(tmp_path, monkeypatch):
+    # SPEC-020 R4: the operator's option to continue when the measured latency is over HPE's limit.
+    import pytest
+    from alletra_onboard.application.replication import apply as replication_apply
+    from alletra_onboard.application.replication import link_check as replication_link
+    from alletra_onboard.application.replication import read as replication_read
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.replication import (
+        LinkCheck, LinkCheckResult, LinkPair, ProtectionRequest, RcLink, RcTarget, RcipPort, ReplicationArrayView,
+        ReplicationIntent, ReplicationResult,
+    )
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    a = ReplicationArrayView(host="a", name="ArrayA", system_id=100, rc_status="Started",
+                             rcip_ports=[RcipPort(nsp="0:4:3", ip="10.1.0.1"), RcipPort(nsp="1:4:3", ip="10.1.0.2")],
+                             targets=[RcTarget(name="ArrayB", status="ready", policy="mirror_config")],
+                             links=[RcLink(target="ArrayB", nsp="0:4:3", address="10.2.0.1", status="Up"),
+                                    RcLink(target="ArrayB", nsp="1:4:3", address="10.2.0.2", status="Up")],
+                             cpg_free_mib={"SSD_r6": 10 ** 7}, vvsets={"HS": ["V01"]}, volume_size_mib={"V01": 10240})
+    b = ReplicationArrayView(host="b", name="ArrayB", system_id=200, rc_status="Started",
+                             rcip_ports=[RcipPort(nsp="0:4:3", ip="10.2.0.1"), RcipPort(nsp="1:4:3", ip="10.2.0.2")],
+                             targets=[RcTarget(name="ArrayA", status="ready", policy="mirror_config")],
+                             links=[RcLink(target="ArrayA", nsp="0:4:3", address="10.1.0.1", status="Up"),
+                                    RcLink(target="ArrayA", nsp="1:4:3", address="10.1.0.2", status="Up")],
+                             cpg_free_mib={"SSD_r6": 10 ** 7})
+    monkeypatch.setattr(replication_read, "read_array", lambda creds, progress=None: a if creds.host == "a" else b)
+    pair = LinkPair(nsp_a="0:4:3", ip_a="10.1.0.1", nsp_b="0:4:3", ip_b="10.2.0.1")
+    monkeypatch.setattr(replication_link, "run_link_check", lambda *args, duration_s, **kw: LinkCheck(
+        at="2026-10-12T07:00:00+00:00", duration_s=duration_s, modes=["sync"],
+        results=[LinkCheckResult(pair=pair, latency_ms=12.0, pings_lost_pct=1.0)]))
+    applied: list = []
+    monkeypatch.setattr(replication_apply, "apply_plan", lambda plan, prov, **kw: applied.append(1) or ReplicationResult(groups_created=["HS_rcg"]))
+
+    intent = _prov_intent()
+    intent.array = EndpointCreds(host="a", username="u", password=SecretStr("p"))
+    intent.volumes[0].vvset = "HS"
+    intent.replication = ReplicationIntent(peer=EndpointCreds(host="b", username="u", password=SecretStr("p")), failover_test=False,
+                                           protections=[ProtectionRequest(vvset="HS", peer_cpg="SSD_r6", mode="sync", rpo_minutes=None)])
+    service = _service(tmp_path)
+    run = service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=intent)
+    with pytest.raises(StepPreconditionError, match="read both arrays first"):
+        service.start_link_check(run.run_id, duration_s=600)       # the check needs the read's ports and links
+    service.start_replication_preview(run.run_id)
+    await service.wait(run.run_id)
+    service.start_link_check(run.run_id, duration_s=600)
+    await service.wait(run.run_id)
+    checked = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.link_checked")
+    assert checked.message == ("Latency 12 ms on 1 link(s) (sync needs 10 ms or less) — over the limit for sync; "
+                               "the operator decides whether to continue. Pings were lost on 0:4:3 (1 %).")
+
+    with pytest.raises(StepPreconditionError, match="The measured latency is 12 ms; sync replication over RCIP needs 10 ms or less. Tick 'Continue anyway'"):
+        service.start_replication_apply(run.run_id)
+    assert applied == []
+    service.start_replication_apply(run.run_id, accept_latency=True)
+    await service.wait(run.run_id)
+    assert applied == [1]
+    done = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.applied")
+    assert done.data["result"]["notes"] == [
+        "Link check 2026-10-12T07:00:00+00:00: latency 12 ms on 1 link(s); over the 10 ms limit for sync — the operator accepted it and chose to continue."
+    ]
 
 
 async def test_cloudinit_review_then_submit_succeeds(tmp_path):

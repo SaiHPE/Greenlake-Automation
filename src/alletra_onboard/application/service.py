@@ -202,8 +202,11 @@ class OnboardingService:
     def start_replication_preview(self, run_id: str) -> RunRecord:
         return self.replication.start_replication_preview(run_id)
 
-    def start_replication_apply(self, run_id: str) -> RunRecord:
-        return self.replication.start_replication_apply(run_id)
+    def start_replication_apply(self, run_id: str, *, accept_latency: bool = False) -> RunRecord:
+        return self.replication.start_replication_apply(run_id, accept_latency=accept_latency)
+
+    def start_link_check(self, run_id: str, *, duration_s: int) -> RunRecord:
+        return self.replication.start_link_check(run_id, duration_s=duration_s)
 
     def start_replication_verify(self, run_id: str) -> RunRecord:
         return self.replication.start_replication_verify(run_id)

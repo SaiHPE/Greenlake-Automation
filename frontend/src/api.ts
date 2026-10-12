@@ -454,7 +454,20 @@ export interface ReplicationOutcome {
 export interface ReplicationResult {
   outcomes: ReplicationOutcome[]; removals_a: string[]; removals_b: string[]; notes: string[]; groups_created: string[]; error: string | null;
 }
-export const replicationApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/apply`);
+export const replicationApply = (runId: string, acceptLatency = false) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/apply`, { accept_latency: acceptLatency });
+// SPEC-020: the latency between the arrays measured with checkrclink (server on B, client on A, read until
+// the latency is printed, stop both). RTT_LIMIT_MS mirrors the domain's HPE limits for the verdict per mode.
+export const RTT_LIMIT_MS: Record<string, number> = { sync: 10, async: 200 };
+export interface LinkPair { nsp_a: string; ip_a: string; nsp_b: string; ip_b: string; }
+export interface LinkCheckResult {
+  pair: LinkPair; status: 'measured' | 'failed'; latency_ms: number | null; pings_lost_pct: number | null; detail: string; output: string;
+}
+export interface LinkCheck {
+  at: string; duration_s: number; results: LinkCheckResult[]; unchecked: string[]; modes: string[]; notes: string[]; error: string | null;
+}
+export const replicationLinkCheck = (runId: string, durationS = 600) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/link-check`, { duration_s: durationS });
 // R6: read-only verdict per planned group from `showrcopy` on both arrays.
 export type GroupVerdict = 'replicating' | 'syncing' | 'not_replicating';
 export interface GroupVerification {

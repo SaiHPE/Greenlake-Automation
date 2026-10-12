@@ -56,6 +56,9 @@ class DocumentSteps:
         "replication.previewed": ("replication_plan", "plan"),
         "replication.applied": ("replication_result", "result"),
         "replication.apply.failed": ("replication_result", "result"),
+        # SPEC-020 R6: the measured latency
+        "replication.link_checked": ("link_check", "link_check"),
+        "replication.link_check.failed": ("link_check", "link_check"),
         # SPEC-017 R6: the failover test's record, passed or not
         "failover.completed": ("failover_record", "record"),
         "failover.failed": ("failover_record", "record"),
