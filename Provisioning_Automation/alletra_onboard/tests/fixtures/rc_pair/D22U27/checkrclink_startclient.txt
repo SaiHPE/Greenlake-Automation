@@ -1,0 +1,33 @@
+Running Client Side
+Running link test on:  0:4:3
+Test length (secs):    600
+Destination Addr:      10.54.122.93
+Adding route:            10.54.122.93 -> 10.54.127.254
+Local IP Addr:           10.54.122.92
+Local Device name:       eth10
+
+------------------------------------------------------------
+Measuring link latency
+------------------------------------------------------------
+ 
+Average measured latency: 0.044 ms
+Pings Lost:               0 %
+ 
+------------------------------------------------------------
+Starting max MTU test, from 0:4:3 -> 10.54.122.93
+------------------------------------------------------------
+ 
+MTU: 1500
+ 
+------------------------------------------------------------
+Starting throughput test, from 0:4:3 -> 10.54.122.93
+------------------------------------------------------------
+------------------------------------------------------------
+Client connecting to 10.54.122.93, TCP port 5001
+MSS req size 1460 bytes (per TCP_MAXSEG)
+TCP window size: 64.0 KByte (default)
+------------------------------------------------------------
+[  3] local 10.54.122.92 port 39766 connected with 10.54.122.93 port 5001 (icwnd/mss/irtt=14/1448/114)
+[  2] local 10.54.122.92 port 39740 connected with 10.54.122.93 port 5001 (icwnd/mss/irtt=14/1448/74)
+[  1] local 10.54.122.92 port 39750 connected with 10.54.122.93 port 5001 (icwnd/mss/irtt=14/1448/105)
+[  4] local 10.54.122.92 port 39762 connected with 10.54.122.93 port 5001 (icwnd/mss/irtt=14/1448/103)

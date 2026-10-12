@@ -75,6 +75,16 @@ def test_no_partnership_means_nothing_to_measure():
     assert pairs == [] and "No Remote Copy partnership" in unchecked[0]
 
 
+def test_parse_client_output_on_the_real_capture():
+    # D22U27 0:4:3 -> its own 1:4:3, 2026-10-12 (tests/fixtures/rc_pair/README.md): an MTU phase follows the latency.
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[1] / "fixtures" / "rc_pair" / "D22U27" / "checkrclink_startclient.txt").read_text(encoding="utf-8")
+    assert link_check.parse_client_output(text) == (0.044, 0.0)
+    import re
+    assert re.search(link_check.UNTIL, text)
+    assert text.index("Pings Lost") < text.index("Starting max MTU test") < text.index("Starting throughput test")
+
+
 # ------------------------------------------------------------------ R2: the allowlist of its own
 
 @pytest.mark.parametrize("command", [

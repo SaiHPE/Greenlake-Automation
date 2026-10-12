@@ -2,7 +2,9 @@
 
 **Status:** PROPOSED 2026-10-12 from field feedback (operator: "port is configured but before
 replication we have to do that start stop and show the latency"; "give option to continue or not by
-latency"). Built the same day, pending a live run (TRACKER BL-42).
+latency"). Built the same day. **Live on one array 2026-10-12** (`rc_link_solo_lab.py`, D22U27's two
+RCIP ports, 8/0: the sequence, the read-until, the parser, the stops — fixtures `rc_pair/D22U27/checkrclink_*.txt`);
+the pair, the gate and the page wait for the replacement peer (TRACKER BL-42).
 **ADRs:** [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (addendum: `checkrclink` is the one
 non-`show` command the SSH client runs, on its own allowlist) · [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md)
 (the same check runs before the tool configures links and targets in v0.19)
