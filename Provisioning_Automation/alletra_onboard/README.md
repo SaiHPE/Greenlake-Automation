@@ -359,7 +359,7 @@ In short (as of **v0.16.0**, 2026-09-19 — the first non-pre-release):
 3. **Replication is live** on the lab pair (v0.17.0): Remote Copy groups on an existing partnership,
    sync and periodic, the failover test, the as-built sections. Links and targets set up by the tool
    are planned (BL-41). Snapshots are not started. v0.17.0 also adds the **Console** (SPEC-019): every
-   command the tool sends to an array or switch, with its output, under each step; pending a live run.
+   command the tool sends to an array or switch, with its output, under each step; live 2026-10-12.
 
 4. **Subscription key for the target lab array is unresolved.** The factory activation produced
    AutoPass on-array licenses + an EON order number — **not** a GreenLake "Storage Central"
