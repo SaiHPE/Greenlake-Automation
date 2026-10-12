@@ -135,3 +135,18 @@ What the arrays said during this session:
   will — `showvvset` was identical before and after the rebuild.
 - A 15-minute snapshot schedule on D22U27 (`test999.*` into `set-test999…`) ages snapshots out and
   adds new ones; it shows up in any `showvvset` diff and is not ours.
+
+## `D22U27/checkrclink_*.txt` — 2026-10-12, the link test on one array (SPEC-020)
+
+E18U31 was degraded (the lab is replacing it), so `rc_link_solo_lab.py` ran `checkrclink` between
+D22U27's own two RCIP ports: server on 1:4:3 toward 10.54.122.92, client on 0:4:3 toward
+10.54.122.93, 600 s. Facts the parser is pinned to:
+
+- `startserver` returns at once ("Starting Server", test length 172800, "Adding route"); the client
+  prints "Average measured latency: 0.044 ms" and "Pings Lost: 0 %" within 4 s, then a **max MTU
+  phase** ("MTU: 1500") the field screenshots did not show, then the throughput test (four iperf
+  streams to TCP 5001). The tool stops reading at *Pings Lost* and the client 4 s after it started.
+- `stopclient` answers "Stopping Client"; `stopserver` answers "Stopping Server" plus "Removing
+  route" when one was running, and plain "Stopping Server" when nothing was — a stop with nothing
+  running is harmless, as the sequence assumes.
+- The product's `_check_pair` measured the same pair (0.044 ms) with the four progress lines in order.
