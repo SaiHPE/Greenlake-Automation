@@ -12,14 +12,18 @@ from functools import partial
 
 from alletra_onboard.application.replication import apply as replication_apply
 from alletra_onboard.application.replication import failover as replication_failover
+from alletra_onboard.application.replication import link_check as replication_link
 from alletra_onboard.application.replication import plan as replication_plan
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.replication import verify as replication_verify
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.replication import (
+    LINK_CHECK_TIME_DEFAULT,
+    RTT_LIMIT_MS,
     TEST_GROUP,
     FailoverRecord,
+    LinkCheck,
     ReplicationPlan,
     ReplicationReport,
 )
@@ -27,6 +31,7 @@ from alletra_onboard.domain.replication import (
 REPORT_ARTIFACT = "replication_report"
 RESULT_ARTIFACT = "replication_result"
 FAILOVER_ARTIFACT = "failover_record"
+LINK_CHECK_ARTIFACT = "link_check"
 
 
 class ReplicationSteps:
@@ -102,26 +107,121 @@ class ReplicationSteps:
         coord.emit(run.run_id, phase, "replication.previewed", summary,
                    data={"report": report.model_dump(mode="json"), "plan": plan.model_dump(mode="json")})
 
+    # ------------------------------------------------------------------ SPEC-020: the link check
+
+    def link_check(self, run_id: str) -> LinkCheck | None:
+        raw = self._coord.store.load_artifact(run_id, LINK_CHECK_ARTIFACT)
+        if raw is None:
+            return None
+        try:
+            return LinkCheck.model_validate_json(raw)
+        except Exception:  # noqa: BLE001 - an unreadable stored check means "check again"
+            return None
+
+    def start_link_check(self, run_id: str, *, duration_s: int = LINK_CHECK_TIME_DEFAULT) -> RunRecord:
+        coord = self._coord
+        run = coord.get_run(run_id)
+        intent = self._require_replication(run_id)
+        report = self.current_report(run_id)
+        if report is None or report.error:
+            raise StepPreconditionError("read both arrays first — the link check needs the ports and links the read found")
+        if report.partnership is None:
+            raise StepPreconditionError("no Remote Copy partnership between the arrays was found; there is no link to check")
+        coord.spawn(run_id, self._run_link_check(run, intent, report, duration_s))
+        return run
+
+    async def _run_link_check(self, run: RunRecord, intent, report: ReplicationReport, duration_s: int) -> None:
+        coord = self._coord
+        phase = WorkflowPhase.STORAGE_REPLICATE
+        coord.set_state(run, RunStatus.RUNNING, phase)
+        coord.emit(run.run_id, phase, "replication.link_check.started",
+                   "Measuring the latency between the arrays with checkrclink…")
+        loop = asyncio.get_running_loop()
+
+        def progress(message: str) -> None:
+            loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
+
+        check = await asyncio.to_thread(partial(
+            replication_link.run_link_check, intent.array, intent.replication, report,
+            duration_s=duration_s, progress=progress,
+        ))
+        try:
+            coord.store.save_artifact(run.run_id, LINK_CHECK_ARTIFACT, check.model_dump_json().encode("utf-8"))
+        except Exception:  # noqa: BLE001, S110 - the test ran; failing to cache it must not fail the step
+            pass
+        data = {"link_check": check.model_dump(mode="json")}
+        failed = [r for r in check.results if r.status == "failed"]
+        if check.error or not check.measured:
+            coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
+            coord.emit(run.run_id, phase, "replication.link_check.failed",
+                       check.error or "; ".join(r.detail for r in failed) or "No link was measured.", data=data)
+            return
+        coord.set_state(run, RunStatus.WAITING_FOR_OPERATOR, phase)
+        coord.emit(run.run_id, phase, "replication.link_checked", self._link_summary(check, failed), data=data)
+
+    @staticmethod
+    def _link_summary(check: LinkCheck, failed: list) -> str:
+        measured = [r for r in check.results if r.status == "measured"]
+        worst = check.worst_ms
+        limits = ", ".join(f"{m} needs {RTT_LIMIT_MS[m]:g} ms or less" for m in check.modes)
+        text = f"Latency {worst:g} ms on {len(measured)} link(s)" + (f" ({limits})" if limits else "")
+        over = check.over_limit()
+        if over:
+            text += f" — over the limit for {'/'.join(over)}; the operator decides whether to continue."
+        else:
+            text += " — within the limit."
+        if failed:
+            text += f" {len(failed)} link(s) could not be measured."
+        lost = [r for r in measured if (r.pings_lost_pct or 0) > 0]
+        if lost:
+            text += " Pings were lost on " + ", ".join(f"{r.pair.nsp_a} ({r.pings_lost_pct:g} %)" for r in lost) + "."
+        return text
+
+    def _gate_on_link(self, run_id: str, report: ReplicationReport, accept_latency: bool) -> list[str]:
+        """R4: notes for the result, or a StepPreconditionError. RCIP partnerships only."""
+        if report.partnership is None:
+            return []
+        check = self.link_check(run_id)
+        if check is None or not check.measured:
+            raise StepPreconditionError(
+                "Check the link first: the latency between the arrays has not been measured in this run."
+            )
+        over = check.over_limit()
+        if over and not accept_latency:
+            mode = over[0]
+            raise StepPreconditionError(
+                f"The measured latency is {check.worst_ms:g} ms; {mode} replication over RCIP needs "
+                f"{RTT_LIMIT_MS[mode]:g} ms or less. Tick 'Continue anyway' to configure it regardless."
+            )
+        note = f"Link check {check.at}: latency {check.worst_ms:g} ms on {len(check.results)} link(s)"
+        if over:
+            note += (f"; over the {RTT_LIMIT_MS[over[0]]:g} ms limit for {'/'.join(over)} — "
+                     "the operator accepted it and chose to continue.")
+        else:
+            note += "; within the limit."
+        return [note]
+
     # ------------------------------------------------------------------ R4/R7: apply the approved plan
 
-    def start_replication_apply(self, run_id: str) -> RunRecord:
+    def start_replication_apply(self, run_id: str, *, accept_latency: bool = False) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
         intent = self._require_replication(run_id)
         entry = self._plan.get(run_id)
         if entry is None:
             raise StepPreconditionError("no replication plan to apply — read both arrays first")
-        plan, _report = entry
+        plan, report = entry
         if plan.error:
             raise StepPreconditionError(f"the replication preview reported a blocking problem: {plan.error}")
         if plan.blockers:
             raise StepPreconditionError("the plan has findings that must be resolved first: " + "; ".join(plan.blockers))
         if not any(a.state == "create" for a in plan.actions):
             raise StepPreconditionError("nothing to create — every object in the plan already exists")
-        coord.spawn(run_id, self._run_apply(run, intent, plan))
+        notes = self._gate_on_link(run_id, report, accept_latency)
+        coord.spawn(run_id, self._run_apply(run, intent, plan, notes))
         return run
 
-    async def _run_apply(self, run: RunRecord, intent, plan: ReplicationPlan) -> None:
+    async def _run_apply(self, run: RunRecord, intent, plan: ReplicationPlan, notes: list[str] | None = None) -> None:
         coord = self._coord
         phase = WorkflowPhase.STORAGE_REPLICATE
         coord.set_state(run, RunStatus.RUNNING, phase)
@@ -132,6 +232,7 @@ class ReplicationSteps:
             loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
 
         result = await asyncio.to_thread(partial(replication_apply.apply_plan, plan, intent, progress=progress))
+        result.notes.extend(notes or [])
         # the approval is spent: a second apply needs a fresh read and plan
         self._plan.pop(run.run_id, None)
         try:

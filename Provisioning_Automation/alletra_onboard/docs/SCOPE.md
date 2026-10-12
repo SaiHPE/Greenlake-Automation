@@ -89,6 +89,9 @@ In the order the scope owner set (2026-09-12); item-level status is in [TRACKER.
    groups over WSAPI on an existing partnership, sync and periodic, the failover test in both modes,
    the as-built sections, all live on the lab pair. A Replication row may name a volume set already on
    the array. Links and targets set up by the tool are BL-41 (v0.19). Snapshots (BL-21) next.
+   Field feedback 2026-10-12: the latency between the arrays is measured with `checkrclink` before
+   replication and the operator decides on a latency over the limit (SPEC-020, BL-42; built, pending a
+   live run).
    Research: `research/2026-09-19-replication-two-arrays.md`, `research/2026-10-07-replication-document-review.md`;
    ADR 0015; specs SPEC-015 to SPEC-018.
 4. **Console** (SPEC-019, BL-39) — built in v0.17.0, live on labrat 2026-10-12: every command the tool sends

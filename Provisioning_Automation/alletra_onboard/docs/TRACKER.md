@@ -24,6 +24,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 | ID | Item | Owner | Status | Sheet | Blocked by |
 |---|---|---|---|---|---|
 | BL-36 | Linux multipath summary (`multipath -ll` → *N Alletra/3PAR device(s), M path(s) each*) | Sai | todo | B.4 | A Linux host with dm-multipath enabled and an Alletra volume exported to it; the only lab Linux host (10.54.159.49) has neither. Parser pinned to captured output only. |
+| BL-42 | Link check before replication: `checkrclink` latency, operator's option to continue ([SPEC-020](specs/SPEC-020-link-check.md)) | Sai | todo | Replication B.1 | **Built 2026-10-12 from field feedback, checked on the Mac only** (dev server, faked arrays: both links measured, the gate before a check, the over-the-limit gate, the tick-box, the page). Server on B, client on A, read until the latency is printed, both stopped; on RCIP *Configure replication* needs the check, and a latency over HPE's limit needs *Continue anyway*; as-built paragraph; `checkrclink` on an allowlist of its own (ADR 0001 addendum), never from the console. Sheet RTT now optional for sync. Owed: `rc_link_lab.py` on labrat (read-only), then `rc_preset_lab.py` with the gate. |
 
 ## Build (not started or partial)
 

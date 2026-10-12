@@ -200,7 +200,7 @@ REPLICATION_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
     ]),
     ("Replication network", [
         ("rtt_ms", "Measured round-trip time (ms)", False,
-         "between the two arrays' RCIP ports; required for sync (10 ms or less); async over RCIP allows 200 ms"),
+         "optional — the Replication step measures RCIP links itself (checkrclink); sync needs 10 ms or less, async over RCIP 200 ms"),
     ]),
     ("Failover test", [
         ("failover_test", "Run the failover test (yes / no)", False, "default yes — on the tool's own 1 GiB test group"),
@@ -760,11 +760,7 @@ def _parse_replication_tab(workbook) -> ReplicationIntent | None:
                     raise ValueError(f"{where}: RPO must be a whole number of minutes, {RPO_MINUTES_MIN} or more (got '{raw}').")
                 rpo = int(value)
         limit = RTT_LIMIT_MS[mode_text]
-        if mode_text == "sync" and rtt is None:
-            raise ValueError(
-                f"{where} is sync but 'Measured round-trip time (ms)' is blank; sync replication needs a "
-                f"measured RTT of {limit:g} ms or less."
-            )
+        # SPEC-020: a blank RTT is fine for every mode — the Replication step measures it (checkrclink).
         if rtt is not None and rtt > limit:
             raise ValueError(
                 f"{where}: the measured round-trip time is {rtt:g} ms; {mode_text} replication over RCIP needs "

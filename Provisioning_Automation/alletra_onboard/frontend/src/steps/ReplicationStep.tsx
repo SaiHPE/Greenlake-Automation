@@ -3,6 +3,8 @@ import { useState } from 'react';
 import {
   GroupVerdict,
   GroupVerification,
+  LinkCheck,
+  LinkCheckResult,
   Partnership,
   RcGroup,
   ReplicationAction,
@@ -14,8 +16,10 @@ import {
   ReplicationResult,
   ReplicationVerification,
   replicationApply,
+  replicationLinkCheck,
   replicationPreview,
   replicationVerify,
+  RTT_LIMIT_MS,
   RunEvent,
   RunRecord,
 } from '../api';
@@ -187,10 +191,60 @@ function PartnershipLine({ partnership, report }: { partnership: Partnership | n
   );
 }
 
+function LinkLatency({ check, worstMs, overLimit, aName, bName }: {
+  check: LinkCheck; worstMs: number | null; overLimit: string[]; aName: string; bName: string;
+}) {
+  const measured = check.results.filter((r) => r.status === 'measured');
+  const limits = check.modes.map((m) => `${m} needs ${RTT_LIMIT_MS[m]} ms or less`).join(' · ');
+  return (
+    <Box gap="small" flex={false}>
+      {check.error ? (
+        <InlineNotification tone="critical" title="The link could not be measured" message={check.error} />
+      ) : worstMs === null ? (
+        <InlineNotification tone="critical" title="No link was measured" message={check.results.map((r) => r.detail).filter(Boolean).join(' ') || 'The client printed no latency.'} />
+      ) : (
+        <StatusIndicator
+          state={overLimit.length ? 'action_required' : 'complete'}
+          label={`Latency ${worstMs} ms on ${measured.length} link${measured.length === 1 ? '' : 's'} · ${limits} · ${overLimit.length ? `over the limit for ${overLimit.join(' and ')}` : 'within the limit'}`}
+        />
+      )}
+      {check.results.length > 0 && (
+        <DataTable
+          columns={[
+            { property: 'link', header: 'Link', render: (r: LinkCheckResult) => (
+              <Text size="small" style={mono}>{aName} {r.pair.nsp_a} ({r.pair.ip_a}) → {bName} {r.pair.nsp_b} ({r.pair.ip_b})</Text>
+            ) },
+            { property: 'latency', header: 'Latency', render: (r: LinkCheckResult) => (
+              r.status === 'measured'
+                ? <Text size="small">{r.latency_ms} ms</Text>
+                : <StatusIndicator state="failed" label="Not measured" />
+            ) },
+            { property: 'lost', header: 'Pings lost', render: (r: LinkCheckResult) => (
+              <Text size="small" color={(r.pings_lost_pct ?? 0) > 0 ? 'status-warning' : 'text-weak'}>
+                {r.pings_lost_pct === null ? '—' : `${r.pings_lost_pct} %`}
+              </Text>
+            ) },
+            { property: 'detail', header: 'Detail', render: (r: LinkCheckResult) => <Text size="small" color="text-weak">{r.detail || '—'}</Text> },
+          ]}
+          data={check.results.map((r, i) => ({ ...r, key: i }))}
+          primaryKey="key"
+          a11yTitle="Link latency: one row per Remote Copy link, with the measured latency and pings lost"
+        />
+      )}
+      {check.unchecked.length > 0 && <InlineNotification tone="info" title="Not checked" message={<NotesList notes={check.unchecked} />} />}
+      <Text size="xsmall" color="text-weak">
+        Measured {check.at.replace('T', ' ').slice(0, 19)} UTC with a {check.duration_s} s test, stopped after the latency phase. The full throughput test is
+        the operator’s to run from Open terminal.
+      </Text>
+    </Box>
+  );
+}
+
 export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [showCalls, setShowCalls] = useState(false);
   const [authorised, setAuthorised] = useState(false);
+  const [acceptLatency, setAcceptLatency] = useState(false);
   const running = run?.status === 'running';
 
   const report = latest<ReplicationReport>(events, ['replication.previewed', 'replication.preview.failed'], 'report');
@@ -201,6 +255,12 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const previewed = latestIndex(events, ['replication.previewed', 'replication.preview.failed']);
   const result = applied > previewed ? latest<ReplicationResult>(events, ['replication.applied', 'replication.apply.failed'], 'result') : null;
   const verification = latest<ReplicationVerification>(events, ['replication.verified', 'replication.verify.failed'], 'verification');
+  // SPEC-020: the measured latency, and the progress lines while the check runs
+  const linkCheck = latest<LinkCheck>(events, ['replication.link_checked', 'replication.link_check.failed'], 'link_check');
+  const linkStarted = latestIndex(events, ['replication.link_check.started']);
+  const linkDone = latestIndex(events, ['replication.link_checked', 'replication.link_check.failed']);
+  const linkRunning = running && linkStarted > linkDone;
+  const linkProgress = linkRunning ? events.slice(linkStarted + 1).filter((e) => e.event_type === 'phase.progress').map((e) => e.message) : [];
   const everApplied = events.some((e) => e.event_type === 'replication.applied');
   const blocked = !!plan && plan.blockers.length > 0;
   const count = (state: ReplicationActionState) => (plan ? plan.actions.filter((a) => a.state === state).length : 0);
@@ -211,6 +271,11 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const existingGroups: RcGroup[] = report ? report.primary.groups.filter((g) => plan?.existing_groups.includes(g.name)) : [];
   const aName = report?.primary.name || 'array A';
   const bName = report?.peer.name || 'array B';
+  const rcip = !!report?.partnership;
+  const measured = !!linkCheck && !linkCheck.error && linkCheck.results.some((r) => r.status === 'measured');
+  const worstMs = measured ? Math.max(...linkCheck!.results.filter((r) => r.latency_ms !== null).map((r) => r.latency_ms as number)) : null;
+  const overLimit = worstMs !== null && linkCheck ? linkCheck.modes.filter((m) => worstMs > (RTT_LIMIT_MS[m] ?? 0)) : [];
+  const linkOk = !rcip || (measured && (overLimit.length === 0 || acceptLatency));
   const canApply = !!plan && !plan.error && !blocked && toCreate > 0 && !result;
 
   const call = (action: () => Promise<unknown>) => async () => {
@@ -251,11 +316,22 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
                 message: <NotesList notes={plan.blockers} />,
               }
             : toCreate > 0
-              ? {
-                  title: 'Review the plan, then approve configuring replication',
-                  message:
-                    'No changes have been made to either array. Objects marked Exists are left alone. Approving creates the groups over WSAPI on this array; the secondary volumes are created on the peer by the array itself.',
-                }
+              ? rcip && !measured
+                ? {
+                    title: 'Check the link before configuring replication',
+                    message:
+                      'HPE’s procedure before Remote Copy over RCIP: measure the latency between the two arrays with checkrclink. The tool runs it (server on the peer, client on this array), shows the latency against the limit for the mode on the tab, and stops the test. Nothing is configured by the check.',
+                  }
+                : rcip && overLimit.length > 0 && !acceptLatency
+                  ? {
+                      title: `The measured latency is ${worstMs} ms — over HPE’s limit for ${overLimit.join(' and ')}`,
+                      message: `${overLimit.map((m) => `${m} replication over RCIP needs ${RTT_LIMIT_MS[m]} ms or less`).join('; ')}. Replication can still be configured; tick “Continue anyway” in the Link latency panel to accept the measured latency.`,
+                    }
+                  : {
+                      title: 'Review the plan, then approve configuring replication',
+                      message:
+                        'No changes have been made to either array. Objects marked Exists are left alone. Approving creates the groups over WSAPI on this array; the secondary volumes are created on the peer by the array itself.',
+                    }
               : null
           : null
       }
@@ -263,7 +339,12 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
         <>
           <Button busy={running} label={report ? 'Read both arrays again' : 'Read both arrays'} onClick={call(() => replicationPreview(runId))} />
           {canApply && (
-            <Button busy={running} label="Configure replication" disabled={!authorised} onClick={call(() => replicationApply(runId))} />
+            <Button
+              busy={running}
+              label="Configure replication"
+              disabled={!authorised || !linkOk}
+              onClick={call(() => replicationApply(runId, acceptLatency))}
+            />
           )}
           <ContinueButton onClick={onDone} suffix={everApplied ? '' : 'without configuring replication'} />
         </>
@@ -280,6 +361,33 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
           <Box margin={{ top: 'small' }} flex={false}>
             <PartnershipLine partnership={report.partnership} report={report} />
           </Box>
+        </Surface>
+      )}
+
+      {report && !report.error && rcip && (
+        <Surface
+          title="Link latency"
+          description={`checkrclink between the arrays’ Remote Copy ports: a test server on ${bName}, a test client on ${aName}, stopped as soon as the latency is printed. HPE’s limits over RCIP: sync 10 ms, async 200 ms. No configuration is changed.`}
+          actions={<Button busy={linkRunning} disabled={running} label={linkCheck ? 'Check again' : 'Check the link'} onClick={call(() => replicationLinkCheck(runId))} />}
+        >
+          {linkRunning && (
+            <Box gap="xxsmall" flex={false}>
+              <StatusIndicator state="running" label={linkProgress[linkProgress.length - 1] || 'Starting the link check…'} />
+              {linkProgress.slice(0, -1).map((line, i) => <Text key={i} size="xsmall" color="text-weak">{line}</Text>)}
+            </Box>
+          )}
+          {!linkCheck && !linkRunning && <Text size="small" color="text-weak">Not measured yet.</Text>}
+          {linkCheck && !linkRunning && (
+            <LinkLatency check={linkCheck} worstMs={worstMs} overLimit={overLimit} aName={aName} bName={bName} />
+          )}
+          {linkCheck && !linkRunning && overLimit.length > 0 && canApply && (
+            <CheckBox
+              label={`Continue anyway — I accept the measured latency of ${worstMs} ms for ${overLimit.join(' and ')} replication.`}
+              checked={acceptLatency}
+              disabled={running}
+              onChange={(event) => setAcceptLatency(event.target.checked)}
+            />
+          )}
         </Surface>
       )}
 

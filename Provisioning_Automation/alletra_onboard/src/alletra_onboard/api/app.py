@@ -63,11 +63,13 @@ from alletra_onboard.api.schemas import (
     InitSheetComposeResponse,
     InitSheetUploadRequest,
     InitSheetUploadResponse,
+    LinkCheckRequest,
     PreflightRequest,
     PreflightResponse,
     ProvisionStepRequest,
     ProxySaveRequest,
     ProxyStatusResponse,
+    ReplicationApplyRequest,
     RunDetailResponse,
     RunFromSheetRequest,
     RunListResponse,
@@ -616,10 +618,18 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # SPEC-016 R1-R3, read-only: both arrays over SSH, the partnership, the exists/create/conflict plan.
         return _start_step(run_id, lambda: service.start_replication_preview(run_id))
 
+    @app.post("/runs/{run_id}/replication/link-check", response_model=RunResponse)
+    async def run_replication_link_check(run_id: str, request: LinkCheckRequest | None = None) -> RunResponse:
+        # SPEC-020 R2: checkrclink server on B, client on A, read until the latency, stop both. No config change.
+        req = request or LinkCheckRequest()
+        return _start_step(run_id, lambda: service.start_link_check(run_id, duration_s=req.duration_s))
+
     @app.post("/runs/{run_id}/replication/apply", response_model=RunResponse)
-    async def run_replication_apply(run_id: str) -> RunResponse:
+    async def run_replication_apply(run_id: str, request: ReplicationApplyRequest | None = None) -> RunResponse:
         # SPEC-016 R4/R7: creates Remote Copy groups over WSAPI — the UI must preview + confirm first.
-        return _start_step(run_id, lambda: service.start_replication_apply(run_id))
+        # SPEC-020 R4: on RCIP the link must have been checked; over the limit needs accept_latency.
+        req = request or ReplicationApplyRequest()
+        return _start_step(run_id, lambda: service.start_replication_apply(run_id, accept_latency=req.accept_latency))
 
     @app.post("/runs/{run_id}/replication/verify", response_model=RunResponse)
     async def run_replication_verify(run_id: str) -> RunResponse:

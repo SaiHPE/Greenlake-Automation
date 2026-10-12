@@ -43,3 +43,12 @@ a cloud-side attribute, so it isn't verified here.
 - Requires **SSH (22) reachable** from the jump box to the array's mgmt IP, and the array admin
   credentials (the DSCC System Credential). The password is supplied per-run and never stored.
 - Only an allowlist of `show*` commands is ever run — the path is structurally read-only.
+
+## Addendum 2026-10-12 (SPEC-020)
+
+One command that is not a `show` runs over this client: `checkrclink`, HPE's link test between two
+Remote Copy ports (a test server on one array, a test client on the other). It changes no
+configuration, but it starts and stops a process on the array, so it does not join the read allowlist.
+It has an allowlist of its own (`run_diagnostic`: exactly `startserver`, `stopserver`, `startclient`,
+`stopclient`, with the port, address and test length validated), is called only by the replication
+link check, and is never reachable from the Console prompt (SPEC-019), which keeps the read allowlist.

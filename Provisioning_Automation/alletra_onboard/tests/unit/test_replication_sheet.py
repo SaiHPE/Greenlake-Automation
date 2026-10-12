@@ -133,7 +133,6 @@ def test_the_tab_is_parsed_whenever_the_provisioning_tabs_are_even_without_a_rep
     (_PEER, [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "rpo_minutes": "0.5"}], "RPO must be a whole number of minutes, 1 or more"),
     (_PEER, [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "rpo_minutes": "0"}], "RPO must be a whole number of minutes"),
     (_PEER, [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "rpo_minutes": "ten"}], "RPO must be a whole number of minutes"),
-    (_PEER, [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "mode": "sync"}], "is sync but 'Measured round-trip time \\(ms\\)' is blank"),
     ({**_PEER, "rtt_ms": "12"}, [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "mode": "sync"}],
      "12 ms; sync replication over RCIP needs 10 ms or less"),
     ({**_PEER, "rtt_ms": "250"}, [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6"}],
@@ -176,6 +175,9 @@ def test_the_peer_must_be_a_different_array():
 def test_rtt_within_limits_is_accepted_for_both_modes():
     rows = [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "mode": "sync"}]
     assert _parse(_sheet(fields={**_PEER, "rtt_ms": "10"}, rows=rows)).provisioning_intent.replication.protections[0].mode == "sync"
+    # SPEC-020: a sync row no longer needs a typed RTT; the Replication step measures it with checkrclink
+    rep = _parse(_sheet(fields=_PEER, rows=rows)).provisioning_intent.replication
+    assert rep.rtt_ms is None and rep.protections[0].mode == "sync"
     rows = [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "mode": "periodic"}]   # the CLI's word for async
     assert _parse(_sheet(fields={**_PEER, "rtt_ms": "200"}, rows=rows)).provisioning_intent.replication.protections[0].mode == "async"
 

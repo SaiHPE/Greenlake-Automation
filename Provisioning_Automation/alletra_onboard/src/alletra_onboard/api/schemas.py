@@ -253,3 +253,16 @@ class FailoverTestRequest(BaseModel):
 
     group: str | None = None
     confirm: str | None = None
+
+
+class LinkCheckRequest(BaseModel):
+    """SPEC-020 R2: the client's test length; the tool stops it once the latency is printed."""
+
+    duration_s: int = Field(default=600, ge=300, le=172800)
+
+
+class ReplicationApplyRequest(BaseModel):
+    """SPEC-020 R4: `accept_latency` is the operator's 'Continue anyway' when the measured latency is
+    over HPE's limit for a mode on the tab."""
+
+    accept_latency: bool = False

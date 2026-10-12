@@ -7,6 +7,7 @@ verification can never mutate the array.
 
 from __future__ import annotations
 
+import re
 import time
 
 from alletra_onboard.adapters import command_log
@@ -35,6 +36,19 @@ ALLOWED_COMMANDS = (
 # base-command allowlist).
 _FORBIDDEN_CHARS = set(";|&`$><\n\r")
 
+# SPEC-020 R2: the ONE non-show command, on an allowlist of its own. `checkrclink` starts and stops
+# a link test between two Remote Copy ports; it changes no configuration. Only the link check calls
+# `run_diagnostic`; the console prompt and `run()` keep the read allowlist above.
+_NSP = r"\d{1,2}:\d{1,2}:\d{1,2}"
+_IPV4 = r"(?:\d{1,3}\.){3}\d{1,3}"
+_DIAGNOSTIC_FORMS = (
+    re.compile(rf"^checkrclink startserver {_NSP} {_IPV4}$"),
+    re.compile(rf"^checkrclink stopserver {_NSP}$"),
+    re.compile(rf"^checkrclink startclient {_NSP} {_IPV4} (?P<time>\d+)$"),
+    re.compile(rf"^checkrclink stopclient {_NSP}$"),
+)
+DIAGNOSTIC_TIME_RANGE = (300, 172800)       # the array's documented range for <time>
+
 
 class ArrayCliError(Exception):
     """Couldn't connect, authenticate, or run a command on the array."""
@@ -49,6 +63,22 @@ def refusal(command: str) -> str | None:
     if base not in ALLOWED_COMMANDS:
         return f"refused: '{base}' is not a read-only show command"
     return None
+
+
+def diagnostic_refusal(command: str) -> str | None:
+    """Why `run_diagnostic` would refuse `command`: anything but a well-formed checkrclink."""
+    if any(ch in command for ch in _FORBIDDEN_CHARS):
+        return "refused: command contains a forbidden shell metacharacter"
+    for form in _DIAGNOSTIC_FORMS:
+        m = form.match(command)
+        if m:
+            if "time" in m.groupdict():
+                lo, hi = DIAGNOSTIC_TIME_RANGE
+                if not lo <= int(m.group("time")) <= hi:
+                    return f"refused: checkrclink time must be {lo} to {hi} seconds"
+            return None
+    return ("refused: only 'checkrclink startserver <N:S:P> <addr>', 'stopserver <N:S:P>', "
+            "'startclient <N:S:P> <addr> <secs>' and 'stopclient <N:S:P>' may run here")
 
 
 class ArrayCliClient:
@@ -112,6 +142,9 @@ class ArrayCliClient:
         why = refusal(command)
         if why:
             raise ArrayCliError(why)
+        return self._exec(command, timeout)
+
+    def _exec(self, command: str, timeout: float | None) -> str:
         try:
             _stdin, stdout, stderr = self._client.exec_command(command, timeout=timeout or self.exec_timeout)
             out = stdout.read().decode("utf-8", "replace")
@@ -119,6 +152,62 @@ class ArrayCliClient:
         except Exception as exc:  # noqa: BLE001
             raise ArrayCliError(f"running '{command}' failed: {type(exc).__name__}") from exc
         return out if out.strip() else err
+
+    def run_diagnostic(self, command: str, *, until: str | None = None, timeout: float | None = None) -> str:
+        """SPEC-020 R2: one `checkrclink` subcommand. With `until` (a regex) the output is read as it
+        arrives and the channel closed once the pattern appears or `timeout` passes — the client
+        prints the latency first and then blocks for the whole test length."""
+        if self._client is None:
+            raise ArrayCliError("not connected")
+        started = time.monotonic()
+        why = diagnostic_refusal(command)
+        if why:
+            command_log.record(target=self.host, transport="ssh", command=command, started=started, ok=False,
+                               result=why, secrets=[self.password])
+            raise ArrayCliError(why)
+        try:
+            if until is None:
+                text, result = self._exec(command, timeout), "ok"
+            else:
+                text, matched = self._exec_until(command, until, timeout)
+                result = "stopped after the latency" if matched else f"no latency within {timeout or self.exec_timeout:g} s"
+        except ArrayCliError as exc:
+            command_log.record(target=self.host, transport="ssh", command=command, started=started, ok=False,
+                               result=str(exc), secrets=[self.password])
+            raise
+        failed = text.lstrip().lower().startswith("error") or result.startswith("no latency")
+        command_log.record(target=self.host, transport="ssh", command=command, started=started, ok=not failed,
+                           result=text.strip().splitlines()[0] if text.lstrip().lower().startswith("error") else result,
+                           output=text, secrets=[self.password])
+        return text
+
+    def _exec_until(self, command: str, until: str, timeout: float | None) -> tuple[str, bool]:
+        pattern = re.compile(until, re.MULTILINE)
+        deadline = time.monotonic() + (timeout or self.exec_timeout)
+        chunks: list[bytes] = []
+        matched = False
+        try:
+            channel = self._client.get_transport().open_session()
+            channel.settimeout(1.0)
+            channel.exec_command(command)
+            try:
+                while time.monotonic() < deadline:
+                    if channel.recv_ready():
+                        chunks.append(channel.recv(65536))
+                    elif channel.exit_status_ready():
+                        chunks.append(channel.recv(65536))
+                        matched = bool(pattern.search(b"".join(chunks).decode("utf-8", "replace")))
+                        break
+                    else:
+                        time.sleep(0.2)
+                    if pattern.search(b"".join(chunks).decode("utf-8", "replace")):
+                        matched = True
+                        break
+            finally:
+                channel.close()
+        except Exception as exc:  # noqa: BLE001
+            raise ArrayCliError(f"running '{command}' failed: {type(exc).__name__}") from exc
+        return b"".join(chunks).decode("utf-8", "replace"), matched
 
     def close(self) -> None:
         if self._client is not None:
