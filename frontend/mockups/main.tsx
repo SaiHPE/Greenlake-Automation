@@ -18,6 +18,7 @@ import { stopped } from './screens/Stopped';
 const SCREENS: Screen[] = [home, prerequisites, sheet, mode, overview, discovery, replication, handoff, stopped, finish];
 const WIDTHS = [
   { label: 'Jump box 1366 × 768', w: 1366, h: 768 },
+  { label: 'Small laptop 1080 × 720', w: 1080, h: 720 },
   { label: 'Large monitor 1920 × 1080', w: 1920, h: 1080 },
   { label: 'Fit this window', w: 0, h: 0 },
 ];
@@ -26,6 +27,29 @@ const parseHash = () => {
   const [id, state] = window.location.hash.slice(1).split('/');
   return { id: id || 'M0', state };
 };
+
+/**
+ * Frame mode (`?frame=1`): one screen, nothing else, inside the gallery's iframe. The iframe is the
+ * size of the chosen device, so Grommet's breakpoints see that width and the layout responds for
+ * real (the step rail hides, the guidance stacks) instead of the page being clipped.
+ */
+function Frame() {
+  const [h, setH] = useState(parseHash);
+  const notes = new URLSearchParams(window.location.search).get('notes') === '1';
+  useEffect(() => {
+    const onHash = () => setH(parseHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const all = useMemo(() => [startScreen(SCREENS, (id) => { window.location.hash = id; }), ...SCREENS], []);
+  const screen = all.find((s) => s.id === h.id) ?? all[0];
+  const state = h.state ?? screen.states?.[0]?.key ?? '';
+  const setState = (s: string) => {
+    window.location.hash = `${screen.id}/${s}`;
+    window.parent.postMessage({ mockupState: s, id: screen.id }, '*');
+  };
+  return <NotesContext.Provider value={notes}>{screen.render(state, setState)}</NotesContext.Provider>;
+}
 
 function Gallery() {
   const [id, setId] = useState(() => parseHash().id);
@@ -55,6 +79,15 @@ function Gallery() {
     setStates((m) => ({ ...m, [screen.id]: s }));
     window.history.replaceState(null, '', `#${screen.id}/${s}`);
   };
+  // the frame reports state changes made inside it (clicking through the Replication parts)
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.data && e.data.mockupState && e.data.id) setStates((m) => ({ ...m, [e.data.id]: e.data.mockupState }));
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+  const frameSrc = `${window.location.pathname}?frame=1&notes=${notes ? 1 : 0}#${screen.id}${state ? '/' + state : ''}`;
 
   return (
     <Box fill>
@@ -104,18 +137,22 @@ function Gallery() {
       <Box direction="row" flex overflow="hidden" background="background-contrast">
         <Box flex overflow="auto" align="center" pad={width.w ? 'small' : 'none'}>
           <Box
-            key={screen.id + state}
             background="background-front"
             elevation={width.w ? 'medium' : undefined}
             flex={false}
-            style={width.w ? { width: width.w, height: width.h, maxWidth: '100%', maxHeight: '100%' } : { width: '100%', height: '100%' }}
+            style={width.w ? { width: width.w, height: width.h, maxWidth: '100%' } : { width: '100%', height: '100%' }}
             overflow="hidden"
           >
-            <NotesContext.Provider value={notes}>{screen.render(state, setState)}</NotesContext.Provider>
+            <iframe
+              key={frameSrc}
+              title={`${screen.id} ${screen.title}`}
+              src={frameSrc}
+              style={{ border: 0, width: '100%', height: '100%', display: 'block' }}
+            />
           </Box>
         </Box>
         {notes && screen.notes.length > 0 && (
-          <Box width="380px" flex={false} background="background-front" border={{ side: 'left', color: 'border-weak' }} pad="medium" gap="medium" overflow="auto">
+          <Box width="medium" flex={false} background="background-front" border={{ side: 'left', color: 'border-weak' }} pad="medium" gap="medium" overflow="auto">
             <Box>
               <Text size="small" color="text-weak">{screen.id}</Text>
               <Text weight="bold" color="text-strong">{screen.title}</Text>
@@ -123,7 +160,7 @@ function Gallery() {
             <Box gap="small" flex={false}>
               {screen.notes.map((n, i) => (
                 <Box key={i} direction="row" gap="small" flex={false}>
-                  <Box round="full" background="decorative-purple" width="22px" height="22px" align="center" justify="center" flex={false}>
+                  <Box round="full" background="decorative-purple" pad={{ horizontal: 'xsmall' }} align="center" justify="center" flex={false} style={{ minWidth: '1.6em', height: '1.6em' }}>
                     <Text size="xsmall" weight="bold" color="text-onStrong">{i + 1}</Text>
                   </Box>
                   <Text size="small">{n}</Text>
@@ -148,8 +185,10 @@ function Gallery() {
   );
 }
 
+const isFrame = new URLSearchParams(window.location.search).get('frame') === '1';
+
 createRoot(document.getElementById('root')!).render(
   <Grommet theme={theme} full>
-    <Gallery />
+    {isFrame ? <Frame /> : <Gallery />}
   </Grommet>,
 );

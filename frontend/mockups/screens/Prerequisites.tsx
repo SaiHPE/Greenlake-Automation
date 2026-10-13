@@ -16,7 +16,7 @@ const ENDPOINTS = [
 function Recording({ title, steps }: { title: string; steps: string[] }) {
   return (
     <Box direction="row" gap="medium" align="start" flex={false}>
-      <Box width="200px" height="112px" background="background-contrast" round="xsmall" align="center" justify="center" flex={false}>
+      <Box width="small" height="xsmall" background="background-contrast" round="xsmall" align="center" justify="center" flex={false}>
         <Button icon={<PlayFill />} a11yTitle={`Play the recording: ${title}`} />
       </Box>
       <Box gap="xxsmall">

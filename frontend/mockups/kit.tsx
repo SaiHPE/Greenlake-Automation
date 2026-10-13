@@ -8,9 +8,6 @@ import { createContext, ReactNode, useContext, useState } from 'react';
 import { HpeElement } from '../src/ui/AppChrome';
 import { StatusIcon, StepState } from '../src/ui/status';
 
-/** The medium spacing step of the HPE theme, as a CSS value. */
-const GAP = '24px';
-
 /**
  * The step vocabulary plus one word the app lacks today: `waiting`, for a step that waits on someone
  * else (the SAN team applying zones, the network team opening a port). It is drawn calm and grey, with a
@@ -45,13 +42,13 @@ export function Mark({ n }: { n: number }) {
       as="span"
       round="full"
       background="decorative-purple"
-      width="22px"
-      height="22px"
+      pad={{ horizontal: 'xsmall' }}
       align="center"
       justify="center"
       flex={false}
       aria-label={`Note ${n}`}
-      style={{ display: 'inline-flex', verticalAlign: 'middle', marginLeft: 6 }}
+      margin={{ left: 'xsmall' }}
+      style={{ display: 'inline-flex', verticalAlign: 'middle', minWidth: '1.4em', lineHeight: '1.4em' }}
     >
       <Text size="xsmall" weight="bold" color="text-onStrong">{n}</Text>
     </Box>
@@ -98,7 +95,7 @@ function RailRow({ step, current, onSelect, icon }: { step: RailStep; current: b
       aria-current={current ? 'step' : undefined}
       flex={false}
     >
-      <Box pad={{ top: '2px' }} flex={false}>
+      <Box pad={{ top: 'xxsmall' }} flex={false}>
         {icon ?? <RailIcon state={step.state} />}
       </Box>
       <Box>
@@ -157,11 +154,12 @@ export function AppFrame({
       <Box direction="row" flex overflow="hidden">
         {!narrow && (
           <Box
-            width="248px"
+            width={{ min: 'small', max: 'medium' }}
+            basis="1/6"
             flex={false}
             background="background-front"
             border={{ side: 'right', color: 'border-weak' }}
-            pad={{ vertical: 'small', horizontal: 'small' }}
+            pad={{ vertical: 'small', horizontal: 'xsmall' }}
             overflow="auto"
             gap="small"
           >
@@ -268,7 +266,7 @@ export function StepPage({
         {done ? <Box /> : <Button label={runExists ? 'Cancel run' : 'Start over'} size="small" />}
       </Box>
       <Box flex overflow="auto">
-        <Box pad={{ horizontal: 'large', top: 'small', bottom: 'large' }} flex={false} style={{ gap: GAP }}>
+        <Box pad={{ horizontal: 'large', top: 'small', bottom: 'large' }} flex={false} gap="medium">
           <Box direction="row" justify="between" align="end" gap="medium" flex={false}>
             <Box>
               {stepLabel && <Text size="small" color="text-weak">{stepLabel}</Text>}
@@ -299,8 +297,8 @@ export function StepPage({
           )}
           {top}
           <Box direction="row" gap="large" align="start" flex={false}>
-            {/* CSS gap, not Grommet's: Grommet counts a React fragment as one child and puts no gap inside it */}
-            <Box flex style={{ minWidth: 0, gap: GAP }}>{children}</Box>
+            {/* screens pass Boxes, never fragments: Grommet's gap counts a fragment as one child */}
+            <Box flex gap="medium" style={{ minWidth: 0 }}>{children}</Box>
             {!stacked && guidance && guideOpen && (
               <Box width="medium" flex={false} background="background-contrast" round="small" pad="medium" gap="medium">
                 <Box direction="row" justify="between" align="center">
@@ -435,7 +433,7 @@ export function Section({
         {right}
       </Box>
       <Collapsible open={open}>
-        <Box pad={{ horizontal: 'medium', bottom: 'medium' }} style={{ gap: '12px' }}>{children}</Box>
+        <Box pad={{ horizontal: 'medium', bottom: 'medium' }} gap="small">{children}</Box>
       </Collapsible>
     </Box>
   );
@@ -461,6 +459,47 @@ export function DoneList({ items }: { items: { text: string; again?: string; det
             {it.again && <Button size="small" label={it.again} />}
           </Box>
           {it.detail && <Collapsible open={open === i}><Box pad={{ horizontal: 'medium', bottom: 'small' }}>{it.detail}</Box></Collapsible>}
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+/**
+ * Files a run produces, as the Design System's list pattern: one row per file with its icon, name,
+ * detail and action. Replaces rows of buttons, which wrap unevenly.
+ */
+export interface DocItem {
+  icon: ReactNode;
+  name: string;
+  detail: string;
+  action?: string;
+  disabled?: boolean;
+}
+
+export function DocList({ items, head }: { items: DocItem[]; head?: ReactNode }) {
+  return (
+    <Box background="background-front" round="small" border={{ color: 'border-weak' }} flex={false}>
+      {head && (
+        <Box direction="row" justify="end" pad={{ horizontal: 'medium', vertical: 'xsmall' }} border={{ side: 'bottom', color: 'border-weak' }}>
+          {head}
+        </Box>
+      )}
+      {items.map((d, i) => (
+        <Box
+          key={d.name}
+          direction="row"
+          gap="small"
+          align="center"
+          pad={{ horizontal: 'medium', vertical: 'xsmall' }}
+          border={i > 0 ? { side: 'top', color: 'border-weak' } : undefined}
+        >
+          <Box flex={false}>{d.icon}</Box>
+          <Box flex>
+            <Text size="small" weight={600} color={d.disabled ? 'text-weak' : 'text-strong'}>{d.name}</Text>
+            <Text size="xsmall" color="text-weak">{d.detail}</Text>
+          </Box>
+          <Button size="small" label={d.action ?? 'Download'} disabled={d.disabled} />
         </Box>
       ))}
     </Box>

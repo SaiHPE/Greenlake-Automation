@@ -109,7 +109,7 @@ function Start({ screens, go }: { screens: Screen[]; go: (id: string) => void })
           <Heading level={2} size="small" margin="none">How to give feedback</Heading>
           <Text size="small">Turn on Notes (top right) to see numbered markers on each screen and what each one changes.</Text>
           <Text size="small">Tell me in plain words, with the screen and note number. For example: "M6 note 4: keep the tick at the top" or "M1: the Done ticks are not needed".</Text>
-          <Text size="small">Use the State list to see a screen at different moments, and Width to see it at the jump box size (1366 pixels) or a large monitor.</Text>
+          <Text size="small">Use the State list to see a screen at different moments. Width shows the screen at a real device size: the layout responds to it (the explanations fold away under 1440 pixels, the step list hides under 768), it is not just cropped.</Text>
         </Box>
       </Box>
     </Box>
