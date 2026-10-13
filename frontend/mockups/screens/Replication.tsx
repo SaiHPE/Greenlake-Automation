@@ -1,13 +1,12 @@
-import { Box, Button, CheckBox, DataTable, Text } from 'grommet';
+import { Box, Button, DataTable, Text } from 'grommet';
 import { Radial } from 'grommet-icons';
 import { Fragment, useState } from 'react';
 import { StatusIcon, StatusIndicator, StepState } from '../../src/ui/status';
-import { COMMANDS, EXISTING_GROUPS, PLAN, RUN, TOTAL, rail, stepNo } from '../data';
-import { Action, AppFrame, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
+import { COMMANDS, EXISTING_GROUPS, PLAN, RUN, rail, stepLabel } from '../data';
+import { Action, AppFrame, Confirmation, DoneList, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
 import { Screen } from '../screen';
 
 const PARTS = ['Read both arrays', 'Check the link', 'Review the plan', 'Configure', 'Verify'];
-const ORDER = ['read', 'link', 'link-over', 'plan', 'configured', 'verified'];
 const PART_OF: Record<string, number> = { read: 0, link: 1, 'link-over': 1, plan: 2, configured: 3, verified: 4 };
 
 function PartsBar({ at, doneAll }: { at: number; doneAll: boolean }) {
@@ -29,28 +28,21 @@ function PartsBar({ at, doneAll }: { at: number; doneAll: boolean }) {
   );
 }
 
-function Done({ children, detail, mark }: { children: string; detail?: React.ReactNode; mark?: number }) {
-  return (
-    <Section title={<Box direction="row" gap="small" align="center"><StatusIcon state="complete" /><Text>{children}</Text>{mark && <Mark n={mark} />}</Box>}>
-      {detail ?? null}
-    </Section>
-  );
-}
-
 function LinkTable({ ms }: { ms: string }) {
   const rows = [
-    { link: 'D22U27 0:4:3 (10.54.122.92) → E18U31 0:4:3 (10.54.154.192)', ms, lost: '0 %' },
-    { link: 'D22U27 1:4:3 (10.54.122.93) → E18U31 1:4:3 (10.54.154.193)', ms, lost: '0 %' },
+    { a: '0:4:3 · 10.54.122.92', b: '0:4:3 · 10.54.154.192', ms, lost: '0 %' },
+    { a: '1:4:3 · 10.54.122.93', b: '1:4:3 · 10.54.154.193', ms, lost: '0 %' },
   ];
   return (
     <DataTable
       columns={[
-        { property: 'link', header: 'Link', render: (r) => <Text size="small" style={mono}>{r.link}</Text> },
-        { property: 'ms', header: 'Latency', render: (r) => <Text size="small">{r.ms} ms</Text> },
+        { property: 'a', header: 'From D22U27', render: (r) => <Text size="small" style={mono}>{r.a}</Text> },
+        { property: 'b', header: 'To E18U31', render: (r) => <Text size="small" style={mono}>{r.b}</Text> },
+        { property: 'ms', header: 'Latency', render: (r) => <Text size="small" weight={600}>{r.ms} ms</Text> },
         { property: 'lost', header: 'Pings lost', render: (r) => <Text size="small" color="text-weak">{r.lost}</Text> },
       ]}
       data={rows}
-      primaryKey="link"
+      primaryKey="a"
     />
   );
 }
@@ -67,28 +59,38 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
   const primary: Action = {
     read: { label: 'Read both arrays', onClick: next('link') },
     link: { label: 'Check the link', onClick: next('plan') },
-    'link-over': { label: 'Continue to the plan', disabled: !accept, onClick: next('plan'), hint: 'Tick Continue anyway first' },
-    plan: { label: 'Configure replication', disabled: !authorised, onClick: next('configured'), hint: 'Tick the authorisation first' },
+    'link-over': { label: 'Continue to the plan', disabled: !accept, onClick: next('plan') },
+    plan: { label: 'Configure replication', disabled: !authorised, onClick: next('configured') },
     configured: { label: 'Verify replication', onClick: next('verified') },
     verified: { label: 'Continue to Failover test' },
   }[state] as Action;
-  const secondary: Action[] = [];
-  if (ORDER.indexOf(state) > 0) secondary.push({ label: 'Read both arrays again', onClick: next('link') });
-  if (ORDER.indexOf(state) > 1 && state !== 'verified') secondary.push({ label: 'Check the link again' });
-  if (!verified && state !== 'configured') secondary.push({ label: 'Continue without replication' });
+  const confirmation: Confirmation | undefined = {
+    'link-over': { label: 'Continue anyway: I accept the measured latency of 12 ms for sync replication.', checked: accept, onChange: setAccept },
+    plan: { label: 'I have reviewed the plan and authorise these changes on both arrays.', checked: authorised, onChange: setAuthorised },
+  }[state as 'link-over' | 'plan'];
+  const secondary: Action[] = !verified && state !== 'configured' ? [{ label: 'Continue without replication' }] : [];
+
+  const done: { text: string; again?: string; detail?: React.ReactNode }[] = [];
+  if (at > 0) done.push({ text: 'Read both arrays: partnered over 2 of 2 links each way.', again: 'Read again',
+    detail: <Text size="small">Target AlletraMP_E18U31 on both arrays, policy mirror_config, found by link address. Remote Copy started on both.</Text> });
+  if (at > 1) done.push({ text: over || accept ? 'Link: 12 ms, over the 10 ms sync limit. You chose to continue.' : 'Link: 0.4 ms on 2 links. Sync allows 10 ms.',
+    again: 'Check again', detail: <LinkTable ms={over || accept ? '12' : '0.4'} /> });
+  if (at > 2) done.push({ text: 'Plan approved at 19:31: 6 objects, 12 commands.', detail: <Text size="small" style={mono}>{PLAN.map((p) => p.name).join(' · ')}</Text> });
+  if (at > 3) done.push({ text: 'Configured at 19:32: 12 writes done, both groups started.',
+    detail: <Box direction="row" gap="small"><Button size="small" secondary label="Copy the removal commands for A" /><Button size="small" secondary label="Copy the removal commands for B" /></Box> });
 
   return (
     <AppFrame run={RUN} groups={rail('replicate', verified ? 'complete' : 'action_required')} current="replicate">
       <StepPage
-        stepNo={stepNo('replicate')}
-        total={TOTAL}
+        stepLabel={stepLabel('replicate')}
         title="Replication"
         description="Remote Copy of this run's volume sets to the peer array AlletraMP_E18U31."
         state={verified ? 'complete' : 'action_required'}
         stateLabel={verified ? 'Replicating' : `Part ${at + 1} of 5`}
         primary={primary}
         secondary={secondary}
-        guideOpen={state !== 'plan' && state !== 'configured'}
+        confirmation={confirmation}
+        guideOpen={state === 'read'}
         top={
           <Box direction="row" align="center" flex={false}>
             <PartsBar at={at} doneAll={verified} />
@@ -107,25 +109,11 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
           />
         }
       >
-        {at > 0 && (
-          <Done mark={2} detail={<Text size="small">Target AlletraMP_E18U31 on both arrays, policy mirror_config, found by link address. Remote Copy started on both.</Text>}>
-            Read both arrays: partnered over 2 of 2 links each way.
-          </Done>
-        )}
-        {at > 1 && (
-          <Done detail={<LinkTable ms={over || accept ? '12' : '0.4'} />}>
-            {over || accept ? 'Link: 12 ms, over the 10 ms sync limit. You chose to continue.' : 'Link: 0.4 ms on 2 links. Sync allows 10 ms.'}
-          </Done>
-        )}
-        {at > 2 && (
-          <Done detail={<Text size="small" style={mono}>{PLAN.map((p) => p.name).join(' · ')}</Text>}>
-            Plan approved at 19:31: 6 objects, 12 commands.
-          </Done>
-        )}
-        {at > 3 && (
-          <Done detail={<Box direction="row" gap="small"><Button size="small" secondary label="Copy the removal commands for A" /><Button size="small" secondary label="Copy the removal commands for B" /></Box>}>
-            Configured: 12 writes done, both groups started.
-          </Done>
+        {done.length > 0 && (
+          <Box flex={false}>
+            <DoneList items={done} />
+            <Mark n={2} />
+          </Box>
         )}
 
         {state === 'read' && (
@@ -142,14 +130,9 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
               </Text>
             ) : (
               <>
-                <StatusLine state="action_required" time="19:30">Latency 12 ms on 2 links: over the 10 ms limit for sync.</StatusLine>
+                <StatusLine state="action_required" time="19:30">Latency 12 ms on 2 links: over the 10 ms limit for sync.<Mark n={5} /></StatusLine>
                 <LinkTable ms="12" />
-                <CheckBox
-                  checked={accept}
-                  onChange={(e) => setAccept(e.target.checked)}
-                  label="Continue anyway: I accept the measured latency of 12 ms for sync replication."
-                />
-                <Text size="small" color="text-weak">Your choice is written in the result and the as-built document.<Mark n={5} /></Text>
+                <Text size="small" color="text-weak">To continue regardless, tick the box next to the green button. Your choice is written in the result and the as-built document.</Text>
               </>
             )}
           </Box>
@@ -181,14 +164,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
                 {COMMANDS.map((c) => <Text key={c} size="small" style={mono}>{c}</Text>)}
               </Box>
             )}
-            <Box border={{ side: 'top', color: 'border-weak' }} pad={{ top: 'small' }} direction="row" align="center">
-              <CheckBox
-                checked={authorised}
-                onChange={(e) => setAuthorised(e.target.checked)}
-                label="I have reviewed this plan and authorise configuring replication on AlletraMP_D22U27 and AlletraMP_E18U31."
-              />
-              <Mark n={4} />
-            </Box>
+            <Text size="small" color="text-weak">When you have reviewed the plan, tick the box next to the green button.<Mark n={4} /></Text>
           </Box>
         )}
 
@@ -251,16 +227,17 @@ export const replication: Screen = {
   ],
   notes: [
     'The step is split into five parts done in order. The bar shows where you are, and the green button is always the next part: Read, Check the link, Configure, Verify. Today this page has 9 buttons at once.',
-    'Finished parts fold to one line each, so the page tells the story of the step without scrolling.',
+    'Finished parts fold to one line each, with Show for the detail and the part\'s own Read again or Check again. The footer keeps only Continue without replication and the green button.',
     'Groups already on the array fold into one line at the bottom.',
-    'The authorisation tick sits right above the green button it unlocks. Today the tick is mid-page and the button at the bottom.',
-    'Latency over the limit: same rule as today. You tick Continue anyway, and the choice goes into the result and the as-built.',
+    'The authorisation tick sits in the footer, right next to the button it unlocks, so it is always on screen. Today the tick is mid-page and the button at the bottom.',
+    'Latency over the limit: same rule as today. The Continue anyway tick is in the footer next to the green button, and the choice goes into the result and the as-built.',
   ],
   keeps: [
-    ['Read both arrays / Read both arrays again', 'Footer: green first, then on the left'],
-    ['Check the link / Check again', 'Part 2, then on the left'],
-    ['Continue anyway tick', 'Part 2, when the latency is over the limit'],
-    ['Plan table, Show N commands, authorise tick', 'Part 3'],
+    ['Read both arrays / Read both arrays again', 'Footer (green) first, then Read again on the finished line'],
+    ['Check the link / Check again', 'Part 2, then Check again on the finished line'],
+    ['Continue anyway tick', 'Footer, next to the green button, when the latency is over the limit'],
+    ['Plan table, Show N commands', 'Part 3'],
+    ['Authorise tick', 'Footer, next to Configure replication'],
     ['Configure replication', 'Footer, right (green) in part 3'],
     ['Result table, removal sets with Copy and Download', 'Part 4'],
     ['Verify replication and its table', 'Part 5'],

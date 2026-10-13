@@ -1,8 +1,8 @@
 import { Box, DataTable, Text } from 'grommet';
 import { InlineNotification } from '../../src/ui/primitives';
 import { StatusIndicator } from '../../src/ui/status';
-import { ARRAY_PORTS, HOSTS, RUN, TOTAL, rail, stepNo } from '../data';
-import { AppFrame, Figures, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
+import { ARRAY_PORTS, HOSTS, RUN, rail, stepLabel } from '../data';
+import { AppFrame, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
 import { Screen } from '../screen';
 
 function Discovery({ state, setState }: { state: string; setState: (s: string) => void }) {
@@ -11,8 +11,7 @@ function Discovery({ state, setState }: { state: string; setState: (s: string) =
   return (
     <AppFrame run={RUN} groups={rail('discover', done ? 'complete' : running ? 'running' : 'not_started')} current="discover">
       <StepPage
-        stepNo={stepNo('discover')}
-        total={TOTAL}
+        stepLabel={stepLabel('discover')}
         title="Discovery"
         description="Reads the array's ports, the hosts and their fabric logins. Changes nothing."
         state={done ? 'complete' : running ? 'running' : 'not_started'}
@@ -52,14 +51,7 @@ function Discovery({ state, setState }: { state: string; setState: (s: string) =
                 message="vCenter 10.54.154.226 does not manage ESX1. Its two adapters are logged in to the array, and the Hosts tab names it, so it is in this run."
               />
             </Box>
-            <Figures
-              items={[
-                { value: '8', label: 'Array ports', note: '6 FC ready · 2 replication' },
-                { value: '2', label: 'Hosts in this run', note: '1 logged in on both fabrics' },
-                { value: '2', label: 'Fabrics', note: 'F1 and F2' },
-              ]}
-            />
-            <Section title={<>Array ports<Mark n={2} /></>} summary="6 FC ready, 2 RCIP (replication)">
+            <Section title={<>8 array ports<Mark n={2} /></>} summary="6 FC ready on 2 fabrics (F1, F2) · 2 RCIP for replication">
               <DataTable
                 columns={[
                   { property: 'nsp', header: 'Port', render: (p) => <Text size="small" style={mono}>{p.nsp}</Text> },
@@ -73,7 +65,7 @@ function Discovery({ state, setState }: { state: string; setState: (s: string) =
                 primaryKey="nsp"
               />
             </Section>
-            <Section title="Hosts in this run" summary="ESX1, ESX2">
+            <Section title="2 hosts in this run" summary="ESX1 logged in on both fabrics · ESX2 not logged in">
               <DataTable
                 columns={[
                   { property: 'name', header: 'Host', render: (h) => <Text size="small" weight={600}>{h.name}</Text> },
@@ -86,7 +78,7 @@ function Discovery({ state, setState }: { state: string; setState: (s: string) =
                 primaryKey="name"
               />
             </Section>
-            <Section title="Hosts not in this run" summary="3 hosts in vCenter that the sheet does not name">
+            <Section title="3 hosts not in this run" summary="in vCenter, not named on the sheet">
               <Text size="small" color="text-weak">esx-lab-03, esx-lab-04, esx-lab-07. Add them to the Hosts tab to include them.</Text>
             </Section>
           </>
@@ -106,7 +98,7 @@ export const discovery: Screen = {
   ],
   notes: [
     'Every step follows this template. One line at the top: what happened, in one sentence, with the time. A coloured note only when there is something to know.',
-    'Results show as counts first. The tables fold away until you open them, so the page fits on one screen.',
+    'Results are sections with the count in the title. They stay folded until you open them, so the page fits on one screen.',
   ],
   keeps: [
     ['Check readiness', 'Footer, left'],
