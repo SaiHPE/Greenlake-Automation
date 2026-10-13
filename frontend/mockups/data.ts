@@ -1,6 +1,5 @@
 /** Lab-like data for the mockups (names and numbers from the D22U27 / E18U31 captures). */
-import { StepState } from '../src/ui/status';
-import { RailGroup, RunSummary } from './kit';
+import { RailGroup, RunState, RunSummary } from './kit';
 
 export const STEPS: { key: string; label: string; stage: string }[] = [
   { key: 'prereq', label: 'Prerequisites', stage: 'Prepare' },
@@ -34,8 +33,8 @@ export const RESULTS: Record<string, string> = {
  * greyed, as the Mode screen does while you pick. */
 export function rail(
   current: string,
-  state: StepState = 'action_required',
-  overrides: Record<string, StepState> = {},
+  state: RunState = 'action_required',
+  overrides: Record<string, RunState> = {},
   opts: { runSteps?: boolean; preview?: string[] } = {},
 ): RailGroup[] {
   const at = STEPS.findIndex((s) => s.key === current);
@@ -44,7 +43,7 @@ export function rail(
   STEPS.forEach((s, i) => {
     const prepare = s.stage === 'Prepare';
     if (!prepare && !runSteps && !(opts.preview ?? []).includes(s.key)) return;
-    const st: StepState = overrides[s.key] ?? (i < at ? 'complete' : i === at ? state : 'not_started');
+    const st: RunState = overrides[s.key] ?? (i < at ? 'complete' : i === at ? state : 'not_started');
     const step = { key: s.key, label: s.label, state: st, result: st === 'complete' ? RESULTS[s.key] : undefined };
     const g = groups.find((x) => x.stage === s.stage);
     if (g) g.steps.push(step);

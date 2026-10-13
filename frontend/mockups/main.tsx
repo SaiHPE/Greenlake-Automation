@@ -5,13 +5,17 @@ import { theme } from '../src/theme';
 import { NotesContext } from './kit';
 import { Screen } from './screen';
 import { discovery } from './screens/Discovery';
+import { finish } from './screens/Finish';
+import { handoff } from './screens/Handoff';
+import { home } from './screens/Home';
 import { overview } from './screens/Overview';
 import { prerequisites } from './screens/Prerequisites';
 import { replication } from './screens/Replication';
 import { mode, sheet } from './screens/SheetMode';
 import { startScreen } from './screens/Start';
+import { stopped } from './screens/Stopped';
 
-const SCREENS: Screen[] = [prerequisites, sheet, mode, overview, discovery, replication];
+const SCREENS: Screen[] = [home, prerequisites, sheet, mode, overview, discovery, replication, handoff, stopped, finish];
 const WIDTHS = [
   { label: 'Jump box 1366 × 768', w: 1366, h: 768 },
   { label: 'Large monitor 1920 × 1080', w: 1920, h: 1080 },
