@@ -1,9 +1,8 @@
 import { Box, Button, DataTable, Text } from 'grommet';
-import { Radial } from 'grommet-icons';
 import { Fragment, useState } from 'react';
-import { StatusIcon, StatusIndicator, StepState } from '../../src/ui/status';
+import { StatusIndicator, StepState } from '../../src/ui/status';
 import { COMMANDS, EXISTING_GROUPS, PLAN, RUN, rail, stepLabel } from '../data';
-import { Action, AppFrame, Confirmation, DoneList, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
+import { Action, AppFrame, Confirmation, DoneList, Guidance, Mark, Section, StateIcon, StatusLine, StepPage, mono } from '../kit';
 import { Screen } from '../screen';
 
 const PARTS = ['Read both arrays', 'Check the link', 'Review the plan', 'Configure', 'Verify'];
@@ -16,9 +15,9 @@ function PartsBar({ at, doneAll }: { at: number; doneAll: boolean }) {
         const state: StepState = doneAll || i < at ? 'complete' : i === at ? 'action_required' : 'not_started';
         return (
           <Fragment key={p}>
-            {i > 0 && <Box width="24px" border={{ side: 'top', color: i <= at ? 'border-strong' : 'border-weak' }} />}
+            {i > 0 && <Box pad={{ horizontal: 'small' }} border={{ side: 'top', color: i <= at ? 'border-strong' : 'border-weak' }} />}
             <Box direction="row" gap="xsmall" align="center" pad={{ horizontal: 'small', vertical: 'xsmall' }} round="large" background={i === at && !doneAll ? 'background-selected-primary' : undefined}>
-              {state === 'not_started' ? <Radial size="small" color="text-weak" /> : <StatusIcon state={state} />}
+              <StateIcon state={state} />
               <Text size="small" weight={i === at ? 'bold' : 500} color={state === 'not_started' ? 'text-weak' : 'text-strong'}>{i + 1}. {p}</Text>
             </Box>
           </Fragment>
@@ -129,11 +128,11 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
                 stopped as soon as the latency is printed. About 10 seconds per link.
               </Text>
             ) : (
-              <>
+              <Box gap="small" flex={false}>
                 <StatusLine state="action_required" time="19:30">Latency 12 ms on 2 links: over the 10 ms limit for sync.<Mark n={5} /></StatusLine>
                 <LinkTable ms="12" />
                 <Text size="small" color="text-weak">To continue regardless, tick the box next to the green button. Your choice is written in the result and the as-built document.</Text>
-              </>
+              </Box>
             )}
           </Box>
         )}
@@ -195,7 +194,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
             <StatusLine state="complete" time="19:33">2 groups replicating. Links up 2 of 2 each way.</StatusLine>
             {['zz_rc_vvs_rcg', 'zz_rc_test_rcg'].map((g) => (
               <Box key={g} direction="row" gap="medium" align="center">
-                <Box width="180px" flex={false}><Text size="small" style={mono}>{g}</Text></Box>
+                <Box width="small" flex={false}><Text size="small" style={mono}>{g}</Text></Box>
                 <StatusIndicator state="complete" label="Replicating" />
                 <Text size="small" color="text-weak">Started · Primary here, Secondary on the peer · 1 of 1 volume synced</Text>
               </Box>

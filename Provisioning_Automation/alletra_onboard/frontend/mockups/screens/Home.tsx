@@ -1,7 +1,7 @@
-import { Box, Button, DataTable, Heading, Text } from 'grommet';
+import { Box, Button, Heading, Text } from 'grommet';
 import { Document, Terminal } from 'grommet-icons';
 import { HpeElement } from '../../src/ui/AppChrome';
-import { Mark, RunState, StateLabel } from '../kit';
+import { DocList, Mark, RunState, StateIcon } from '../kit';
 import { Screen } from '../screen';
 
 interface Run {
@@ -16,17 +16,17 @@ interface Run {
 }
 
 const RUNS: Run[] = [
-  { array: 'AlletraMP_D22U27', serial: 'CZ2D320BT1', mode: 'Provision, then replicate', where: 'Replication · part 3 of 5', state: 'action_required', status: 'Waiting for you: approve the plan', last: 'today 19:31', group: 'you' },
-  { array: 'CZ2D2K014S (rack13)', serial: 'CZ2D2K014S', mode: 'Full onboarding', where: 'Cloud Connectivity', state: 'failed', status: 'Stopped: the array says it is not registered in GreenLake', last: 'today 11:02', group: 'you' },
-  { array: 'AlletraMP_D22U27', serial: 'CZ2D320BT1', mode: 'Provision storage only', where: 'SAN zoning', state: 'waiting', status: 'Waiting on the SAN team: 2 zones for ESX2 on F2, sent 19:40', last: 'today 19:40', group: 'others' },
-  { array: 'AlletraMP_E18U31', serial: 'CZ2D3209YV', mode: 'Provision storage only', where: 'Done', state: 'complete', status: 'Done · as-built downloaded', last: '05/10/2026', group: 'done' },
-  { array: 'AlletraMP_E18U31', serial: 'CZ2D3209YV', mode: 'Verify only', where: 'Done', state: 'complete', status: 'Done · 12 of 12 checks match', last: '05/10/2026', group: 'done' },
+  { array: 'AlletraMP_D22U27', serial: 'CZ2D320BT1', mode: 'Provision, then replicate', where: 'Replication, part 3 of 5', state: 'action_required', status: 'Approve the replication plan', last: 'today 19:31', group: 'you' },
+  { array: 'CZ2D2K014S (rack13)', serial: 'CZ2D2K014S', mode: 'Full onboarding', where: 'Cloud Connectivity', state: 'failed', status: 'Stopped: the array is not registered in GreenLake', last: 'today 11:02', group: 'you' },
+  { array: 'AlletraMP_D22U27', serial: 'CZ2D320BT1', mode: 'Provision storage only', where: 'SAN zoning', state: 'waiting', status: 'SAN team: 2 zones for ESX2 on F2', last: 'sent today 19:40', group: 'others' },
+  { array: 'AlletraMP_E18U31', serial: 'CZ2D3209YV', mode: 'Provision storage only', where: 'As-built downloaded', state: 'complete', status: 'Done', last: '05/10/2026', group: 'done' },
+  { array: 'AlletraMP_E18U31', serial: 'CZ2D3209YV', mode: 'Verify only', where: '12 of 12 checks match', state: 'complete', status: 'Done', last: '05/10/2026', group: 'done' },
 ];
 
-const GROUPS: { key: Run['group']; title: string; text: string }[] = [
-  { key: 'you', title: 'Needs you', text: 'A decision or a fix is waiting.' },
-  { key: 'others', title: 'Waiting on others', text: 'Nothing for you to do until they are done. Check again when they tell you.' },
-  { key: 'done', title: 'Done', text: 'Documents stay available.' },
+const GROUPS: { key: Run['group']; title: string }[] = [
+  { key: 'you', title: 'Needs you' },
+  { key: 'others', title: 'Waiting on others' },
+  { key: 'done', title: 'Done' },
 ];
 
 function Home() {
@@ -48,53 +48,63 @@ function Home() {
         <Text size="small" color="text-weak">Jump box LABRAT · 5 runs</Text>
       </Box>
       <Box flex overflow="auto">
-        <Box pad={{ horizontal: 'large', vertical: 'medium' }} flex={false} style={{ gap: '24px' }}>
+        <Box pad={{ horizontal: 'large', vertical: 'medium' }} flex={false} gap="medium">
           <Box direction="row" justify="between" align="end" flex={false}>
             <Box>
               <Text size="small" color="text-weak">Tuesday 13 October 2026</Text>
               <Heading level={1} size="small" margin="none">Your runs</Heading>
             </Box>
-            <Button primary label="Start a new run" />
-            <Mark n={1} />
+            <Box direction="row" align="center">
+              <Button primary label="Start a new run" />
+              <Mark n={1} />
+            </Box>
           </Box>
-          {GROUPS.map((g) => {
-            const rows = RUNS.filter((r) => r.group === g.key);
-            if (!rows.length) return null;
-            return (
-              <Box key={g.key} gap="xsmall" flex={false}>
-                <Box direction="row" gap="small" align="baseline">
-                  <Heading level={2} size="small" margin="none">{g.title} · {rows.length}</Heading>
-                  <Text size="small" color="text-weak">{g.text}</Text>
-                  {g.key === 'others' && <Mark n={2} />}
+          <Box background="background-front" round="small" border={{ color: 'border-weak' }} flex={false}>
+            {GROUPS.map((g) => {
+              const rows = RUNS.filter((r) => r.group === g.key);
+              if (!rows.length) return null;
+              return (
+                <Box key={g.key} flex={false}>
+                  <Box direction="row" gap="small" align="center" pad={{ horizontal: 'medium', vertical: 'xsmall' }} background="background-contrast">
+                    <Text size="small" weight="bold" color="text-strong">{g.title}</Text>
+                    <Text size="small" color="text-weak">{rows.length}</Text>
+                    {g.key === 'others' && <Mark n={2} />}
+                  </Box>
+                  {rows.map((r) => (
+                    <Box
+                      key={r.array + r.mode}
+                      direction="row"
+                      gap="medium"
+                      align="center"
+                      pad={{ horizontal: 'medium', vertical: 'small' }}
+                      border={{ side: 'top', color: 'border-weak' }}
+                      hoverIndicator="background-hover"
+                      onClick={() => undefined}
+                    >
+                      <StateIcon state={r.state} />
+                      <Box basis="1/3" flex={false}>
+                        <Text size="small" weight={600} color="text-strong">{r.array}</Text>
+                        <Text size="xsmall" color="text-weak">{r.mode}</Text>
+                      </Box>
+                      <Box flex>
+                        <Text size="small">{r.status}</Text>
+                        <Text size="xsmall" color="text-weak">{r.where} · {r.last}</Text>
+                      </Box>
+                      <Button size="small" label={r.group === 'done' ? 'Open' : 'Continue'} />
+                    </Box>
+                  ))}
                 </Box>
-                <Box background="background-front" round="small" border={{ color: 'border-weak' }} flex={false}>
-                  <DataTable
-                    columns={[
-                      { property: 'array', header: 'Array', render: (r: Run) => (
-                        <Box><Text size="small" weight={600}>{r.array}</Text><Text size="xsmall" color="text-weak">{r.serial} · {r.mode}</Text></Box>
-                      ) },
-                      { property: 'status', header: 'Where it stands', render: (r: Run) => (
-                        <Box><StateLabel state={r.state} label={r.status} /><Text size="xsmall" color="text-weak">{r.where}</Text></Box>
-                      ) },
-                      { property: 'last', header: 'Last activity', size: 'small', render: (r: Run) => <Text size="small" color="text-weak">{r.last}</Text> },
-                      { property: 'open', header: '', size: 'xsmall', render: (r: Run) => (
-                        <Button size="small" secondary={r.group === 'you'} label={r.group === 'done' ? 'Open' : 'Continue'} />
-                      ) },
-                    ]}
-                    data={rows}
-                    primaryKey={false}
-                    pad={{ horizontal: 'medium', vertical: 'small' }}
-                  />
-                </Box>
-              </Box>
-            );
-          })}
+              );
+            })}
+          </Box>
           <Box gap="small" flex={false}>
             <Heading level={2} size="small" margin="none">Recent documents<Mark n={3} /></Heading>
-            <Box direction="row" gap="small" wrap>
-              <Button secondary icon={<Document />} label="As-built · AlletraMP_E18U31 · 05/10" />
-              <Button secondary icon={<Terminal />} label="Command log · AlletraMP_D22U27 · today" />
-            </Box>
+            <DocList
+              items={[
+                { icon: <Document />, name: 'As-built document · AlletraMP_E18U31', detail: '05/10/2026 · Provision storage only · 712 KB' },
+                { icon: <Terminal />, name: 'Command log · AlletraMP_D22U27', detail: 'today 19:31 · Provision, then replicate · 41 commands so far' },
+              ]}
+            />
           </Box>
         </Box>
       </Box>

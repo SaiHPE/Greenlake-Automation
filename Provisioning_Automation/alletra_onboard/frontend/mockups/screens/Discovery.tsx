@@ -40,7 +40,7 @@ function Discovery({ state, setState }: { state: string; setState: (s: string) =
           </Box>
         )}
         {done && (
-          <>
+          <Box gap="medium" flex={false}>
             <StatusLine state="complete" time="19:22">
               Discovery finished: 8 array ports, 2 hosts, 2 fabrics. Nothing was changed.<Mark n={1} />
             </StatusLine>
@@ -81,7 +81,7 @@ function Discovery({ state, setState }: { state: string; setState: (s: string) =
             <Section title="3 hosts not in this run" summary="in vCenter, not named on the sheet">
               <Text size="small" color="text-weak">esx-lab-03, esx-lab-04, esx-lab-07. Add them to the Hosts tab to include them.</Text>
             </Section>
-          </>
+          </Box>
         )}
       </StepPage>
     </AppFrame>

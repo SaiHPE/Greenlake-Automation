@@ -58,7 +58,7 @@ function Sheet({ state }: { state: string }) {
             {CONTENTS.map((c) => (
               <Box key={c.tab} direction="row" gap="small" align="center">
                 <StatusIcon state={c.state} />
-                <Box width="120px" flex={false}><Text size="small" weight={600}>{c.tab}</Text></Box>
+                <Box width="xsmall" flex={false}><Text size="small" weight={600}>{c.tab}</Text></Box>
                 <Text size="small">{c.text}</Text>
               </Box>
             ))}

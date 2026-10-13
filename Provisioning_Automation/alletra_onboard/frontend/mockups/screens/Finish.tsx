@@ -1,17 +1,17 @@
-import { Box, Button, Heading, Text } from 'grommet';
-import { Document, Download, Terminal } from 'grommet-icons';
+import { Box, Button, DataTable, Heading, Text } from 'grommet';
+import { Archive, Document, Terminal } from 'grommet-icons';
 import { StatusIndicator } from '../../src/ui/status';
 import { RUN, rail } from '../data';
-import { AppFrame, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
+import { AppFrame, DocList, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
 import { Screen } from '../screen';
 
 const CREATED = [
-  ['Volume', 'zz_rc_vol01', '10 GiB on SSD_r6'],
-  ['Volume set', 'zz_rc_vvs', 'holds zz_rc_vol01'],
-  ['Host set', 'zz_rc_hs', 'ESX1'],
-  ['Export', 'zz_rc_vvs → zz_rc_hs', 'LUN 1, 4 paths'],
-  ['Remote Copy group', 'zz_rc_vvs_rcg', 'sync → AlletraMP_E18U31, replicating'],
-  ['Remote Copy group', 'zz_rc_test_rcg', 'the failover test group, replicating'],
+  { kind: 'Volume', name: 'zz_rc_vol01', detail: '10 GiB on SSD_r6' },
+  { kind: 'Volume set', name: 'zz_rc_vvs', detail: 'holds zz_rc_vol01' },
+  { kind: 'Host set', name: 'zz_rc_hs', detail: 'ESX1' },
+  { kind: 'Export', name: 'zz_rc_vvs → zz_rc_hs', detail: 'LUN 1, 4 paths' },
+  { kind: 'Remote Copy group', name: 'zz_rc_vvs_rcg', detail: 'sync → AlletraMP_E18U31, replicating' },
+  { kind: 'Remote Copy group', name: 'zz_rc_test_rcg', detail: 'the failover test group, replicating' },
 ];
 
 function Finish() {
@@ -41,21 +41,25 @@ function Finish() {
         </StatusLine>
         <Box gap="small" flex={false}>
           <Heading level={2} size="small" margin="none">Hand-over package<Mark n={2} /></Heading>
-          <Box direction="row" gap="small" wrap>
-            <Button secondary icon={<Download />} label="Download everything (zip)" />
-            <Button secondary icon={<Document />} label="As-built document (.docx)" />
-            <Button secondary icon={<Terminal />} label="Command log (.txt, 112 commands)" />
-            <Button secondary icon={<Download />} label="Removal commands (A and B)" />
-          </Box>
+          <DocList
+            head={<Button size="small" icon={<Archive size="small" />} label="Download everything as one zip" />}
+            items={[
+              { icon: <Document />, name: 'As-built document', detail: 'AlletraMP_D22U27_as-built_2026-10-13.docx · 764 KB · for the customer' },
+              { icon: <Terminal />, name: 'Command log', detail: 'commands-e689758b.txt · 112 commands on 2 arrays · the evidence' },
+              { icon: <Archive />, name: 'Removal commands', detail: 'A then B, 9 lines · for you, if this work has to be undone' },
+            ]}
+          />
         </Box>
         <Section title="Created by this run" summary="6 objects on 2 arrays" open>
-          {CREATED.map(([kind, name, detail]) => (
-            <Box key={name} direction="row" gap="medium" align="center">
-              <Box width="150px" flex={false}><Text size="small" color="text-weak">{kind}</Text></Box>
-              <Box width="220px" flex={false}><Text size="small" style={mono}>{name}</Text></Box>
-              <Text size="small">{detail}</Text>
-            </Box>
-          ))}
+          <DataTable
+            columns={[
+              { property: 'kind', header: 'Kind', render: (r) => <Text size="small" color="text-weak">{r.kind}</Text> },
+              { property: 'name', header: 'Name', render: (r) => <Text size="small" style={mono}>{r.name}</Text> },
+              { property: 'detail', header: 'Detail', render: (r) => <Text size="small">{r.detail}</Text> },
+            ]}
+            data={CREATED}
+            primaryKey="name"
+          />
         </Section>
         <Section title="Checked" summary="12 of 12 configuration checks match the sheet · failover test passed in 1.3 s">
           <StatusIndicator state="complete" label="Verify configuration: 12 of 12 match" />
@@ -74,7 +78,7 @@ export const finish: Screen = {
   title: 'Done: the hand-over',
   notes: [
     'The end of the job reads like a hand-over, not like the end of a wizard: what was done, in one sentence.',
-    'Everything the customer or the next engineer needs, in one place. "Download everything" is a proposal (one zip of the as-built, the command log and the removal commands); the three single downloads exist today.',
+    'Everything the customer or the next engineer needs, as a list: one file per line with what it is for. "Download everything as one zip" is a proposal; the three single downloads exist today.',
     'What the tool did not do, said plainly, so nothing is assumed finished.',
   ],
   keeps: [
