@@ -3,13 +3,35 @@
  * used by the app; when a mockup is agreed, these become the real components.
  */
 import { Box, Button, CheckBox, Collapsible, Heading, Menu, ResponsiveContext, Text } from 'grommet';
-import { Apps, FormDown, FormNext, FormPrevious, Radial, Terminal, Time } from 'grommet-icons';
+import { Apps, Clock, FormDown, FormNext, FormPrevious, Radial, Terminal, Time } from 'grommet-icons';
 import { createContext, ReactNode, useContext, useState } from 'react';
 import { HpeElement } from '../src/ui/AppChrome';
-import { StatusIcon, StatusIndicator, StepState } from '../src/ui/status';
+import { StatusIcon, StepState } from '../src/ui/status';
 
 /** The medium spacing step of the HPE theme, as a CSS value. */
 const GAP = '24px';
+
+/**
+ * The step vocabulary plus one word the app lacks today: `waiting`, for a step that waits on someone
+ * else (the SAN team applying zones, the network team opening a port). It is drawn calm and grey, with a
+ * clock: not the operator's problem right now, unlike orange `action_required`.
+ */
+export type RunState = StepState | 'waiting';
+
+export function StateIcon({ state, size = 'small' }: { state: RunState; size?: string }) {
+  if (state === 'waiting') return <Clock size={size} color="text-weak" a11yTitle="Waiting on others" />;
+  if (state === 'not_started') return <Radial size={size} color="text-weak" a11yTitle="Not started" />;
+  return <StatusIcon state={state} size={size} />;
+}
+
+export function StateLabel({ state, label, size = 'small' }: { state: RunState; label: string; size?: 'small' | 'medium' }) {
+  return (
+    <Box direction="row" gap="xsmall" align="center" flex={false}>
+      <StateIcon state={state} size={size} />
+      <Text size={size} weight={500}>{label}</Text>
+    </Box>
+  );
+}
 
 // ------------------------------------------------------------------ note markers
 
@@ -41,7 +63,7 @@ export function Mark({ n }: { n: number }) {
 export interface RailStep {
   key: string;
   label: string;
-  state: StepState;
+  state: RunState;
   result?: string;
 }
 export interface RailGroup {
@@ -52,14 +74,12 @@ export interface RunSummary {
   array: string;
   serial: string;
   mode: string;
-  state: StepState;
+  state: RunState;
   stateLabel: string;
 }
 
-export function StepIcon({ state }: { state: StepState }) {
-  // A plain empty circle for "not started": the current app's question mark reads as "unknown".
-  if (state === 'not_started') return <Radial size="small" color="text-weak" a11yTitle="Not started" />;
-  return <StatusIcon state={state} />;
+export function StepIcon({ state }: { state: RunState }) {
+  return <StateIcon state={state} />;
 }
 
 const RailIcon = StepIcon;
@@ -128,10 +148,10 @@ export function AppFrame({
             <Box direction="row" gap="small" align="center">
               <Text size="small" weight="bold" color="text-strong">{run.array}</Text>
               <Text size="small" color="text-weak">{run.serial} · {run.mode}</Text>
-              <StatusIndicator state={run.state} label={run.stateLabel} />
+              <StateLabel state={run.state} label={run.stateLabel} />
             </Box>
           )}
-          <Menu label="Runs" items={[{ label: 'Open another run' }, { label: 'Start a new run' }]} dropAlign={{ top: 'bottom', right: 'right' }} />
+          <Menu label="Runs" items={[{ label: 'All runs (home)' }, { label: 'Start a new run' }]} dropAlign={{ top: 'bottom', right: 'right' }} />
         </Box>
       </Box>
       <Box direction="row" flex overflow="hidden">
@@ -197,6 +217,7 @@ export function StepPage({
   stepLabel,
   first = false,
   runExists = true,
+  done = false,
   title,
   description,
   state,
@@ -213,9 +234,10 @@ export function StepPage({
   stepLabel?: string;
   first?: boolean;
   runExists?: boolean;
+  done?: boolean;
   title: string;
   description?: string;
-  state?: StepState;
+  state?: RunState;
   stateLabel?: string;
   primary?: Action;
   secondary?: Action[];
@@ -243,7 +265,7 @@ export function StepPage({
         flex={false}
       >
         {first ? <Box /> : <Button icon={<FormPrevious />} label="Previous step" plain={false} size="small" />}
-        <Button label={runExists ? 'Cancel run' : 'Start over'} size="small" />
+        {done ? <Box /> : <Button label={runExists ? 'Cancel run' : 'Start over'} size="small" />}
       </Box>
       <Box flex overflow="auto">
         <Box pad={{ horizontal: 'large', top: 'small', bottom: 'large' }} flex={false} style={{ gap: GAP }}>
@@ -258,7 +280,7 @@ export function StepPage({
                 {!stacked && guidance && !guideOpen && (
                   <Button size="small" label="About this step" onClick={() => setGuideOpen(true)} />
                 )}
-                <StatusIndicator state={state} label={stateLabel} size="medium" />
+                <StateLabel state={state} label={stateLabel ?? ''} size="medium" />
               </Box>
             )}
           </Box>
@@ -353,19 +375,20 @@ export function ActivityBar({ last, events, commands }: { last: string; events: 
 
 // ------------------------------------------------------------------ content blocks
 
-const TONE: Record<StepState, string> = {
+const TONE: Record<RunState, string> = {
   complete: 'background-ok',
   action_required: 'background-warning',
   failed: 'background-critical',
   running: 'background-info',
   not_started: 'background-contrast',
+  waiting: 'background-contrast',
 };
 
 /** One sentence saying what happened, at the top of the step. */
-export function StatusLine({ state, children, time }: { state: StepState; children: ReactNode; time?: string }) {
+export function StatusLine({ state, children, time }: { state: RunState; children: ReactNode; time?: string }) {
   return (
     <Box direction="row" gap="small" align="center" pad={{ horizontal: 'medium', vertical: 'small' }} round="small" background={TONE[state]} flex={false}>
-      <StatusIcon state={state} size="medium" />
+      <StateIcon state={state} size="medium" />
       <Box flex>
         <Text weight={500} color="text-strong">{children}</Text>
       </Box>
