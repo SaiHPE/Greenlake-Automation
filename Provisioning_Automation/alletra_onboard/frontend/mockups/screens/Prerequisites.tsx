@@ -2,7 +2,7 @@ import { Anchor, Box, Button, CheckBox, DataTable, Heading, Text, TextInput } fr
 import { PlayFill } from 'grommet-icons';
 import { useState } from 'react';
 import { StatusIndicator } from '../../src/ui/status';
-import { TOTAL, rail, stepNo } from '../data';
+import { stepLabel, rail } from '../data';
 import { AppFrame, Guidance, Mark, Section, StatusLine, StepPage } from '../kit';
 import { Screen } from '../screen';
 
@@ -40,16 +40,19 @@ function Prerequisites({ state }: { state: string }) {
   const [done, setDone] = useState<Record<string, boolean>>({});
   const tick = (k: string) => (v: boolean) => setDone((d) => ({ ...d, [k]: v }));
   return (
-    <AppFrame groups={rail('prereq')} current="prereq">
+    <AppFrame groups={rail('prereq')} current="prereq" railNote="The steps of your run appear here once you choose what to do (step 3).">
       <StepPage
-        stepNo={stepNo('prereq')}
-        total={TOTAL}
+        stepLabel={stepLabel('prereq')}
+        first
+        runExists={false}
         title="Prerequisites"
         description="What HPE requires before onboarding, and checks of this workstation."
         state={clockOk ? 'complete' : 'action_required'}
         stateLabel={clockOk ? 'Checks passed' : 'Action required'}
-        secondary={[{ label: 'Download the initialisation sheet' }]}
-        primary={{ label: 'Continue to Initialisation sheet' }}
+        secondary={clockOk
+          ? [{ label: 'Download the initialisation sheet' }]
+          : [{ label: 'Download the initialisation sheet' }, { label: 'Continue without syncing' }]}
+        primary={clockOk ? { label: 'Continue to Initialisation sheet' } : { label: 'Sync system clock' }}
         activity={{ last: '19:20:41  Connectivity test: 12 of 12 endpoints reachable', events: 3, commands: 0 }}
         guidance={
           <Guidance
@@ -110,11 +113,7 @@ function Prerequisites({ state }: { state: string }) {
             open={!clockOk}
             right={<StatusIndicator state={clockOk ? 'complete' : 'action_required'} label={clockOk ? 'Passed' : 'Sync needed'} />}
           >
-            <Text size="small">A clock that is off stops the array connecting to DSCC (the error says "iat is in the future").</Text>
-            <Box direction="row" gap="small" align="center">
-              <Button primary size="small" label="Sync system clock" />
-              <Text size="small" color="text-weak">The app must run as Administrator to set the clock.</Text>
-            </Box>
+            <Text size="small">A clock that is off stops the array connecting to DSCC (the error says "iat is in the future"). Sync system clock, bottom right, sets it; the app must run as Administrator for that.<Mark n={5} /></Text>
           </Section>
         </Box>
 
@@ -172,12 +171,13 @@ export const prerequisites: Screen = {
     'Every prerequisite from today stays. The three the tool checks for you come first, with their result next to the title.',
     'The four you do by hand come next. Each is one row; open it for the steps and the recording.',
     'Optional idea: a Done tick on each manual row, for your own tracking. It does not block Continue. Say if you want it.',
+    'One green button per page. While the clock is off the green button is Sync system clock; Continue without syncing stays available on the left. Once the clock is in sync the green button is Continue.',
   ],
   keeps: [
     ['Test connectivity, Retest', 'Connection row, Retest'],
     ['DSCC region field, Download list, endpoint table, network notes', 'Connection row'],
     ['Proxy field, Save and retest, Connect directly, Use detected', 'Proxy row'],
-    ['Sync system clock', 'Clock row (opens by itself when the clock is off)'],
+    ['Sync system clock', 'Footer, right (green) while the clock is off'],
     ['4 recordings and their steps', 'GreenLake workspace row and API client row'],
     ['Cabling and This workstation text', 'Their own rows'],
     ['Download the initialisation sheet', 'Footer, left'],

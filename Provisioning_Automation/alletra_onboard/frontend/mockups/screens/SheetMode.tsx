@@ -1,7 +1,7 @@
-import { Anchor, Box, FileInput, Grid, Heading, RadioButton, Text } from 'grommet';
+import { Anchor, Box, Button, FileInput, Grid, RadioButton, Text } from 'grommet';
 import { useState } from 'react';
 import { StatusIcon, StepState } from '../../src/ui/status';
-import { TOTAL, rail, stepNo } from '../data';
+import { STEPS, rail, stepLabel } from '../data';
 import { AppFrame, Guidance, Mark, StatusLine, StepPage } from '../kit';
 import { Screen } from '../screen';
 
@@ -15,16 +15,16 @@ const CONTENTS: { tab: string; state: StepState; text: string }[] = [
 function Sheet({ state }: { state: string }) {
   const read = state === 'read';
   return (
-    <AppFrame groups={rail('sheet')} current="sheet">
+    <AppFrame groups={rail('sheet', read ? 'complete' : 'action_required')} current="sheet" railNote="The steps of your run appear here once you choose what to do (step 3).">
       <StepPage
-        stepNo={stepNo('sheet')}
-        total={TOTAL}
+        stepLabel={stepLabel('sheet')}
+        runExists={false}
         title="Initialisation sheet"
         description="One workbook per array. Upload it to start a run."
         state={read ? 'complete' : 'action_required'}
         stateLabel={read ? 'Workbook read' : 'Upload the workbook'}
         secondary={[{ label: 'Validate GreenLake credentials', disabled: !read }]}
-        primary={{ label: 'Continue to Mode', disabled: !read }}
+        primary={{ label: 'Continue to Mode', disabled: !read, hint: 'Upload the workbook first' }}
         activity={{ last: read ? '19:21:58  Workbook read: CZ2D320BT1, 4 tabs' : 'No activity yet', events: read ? 4 : 3, commands: 0 }}
         guidance={
           <Guidance
@@ -41,7 +41,17 @@ function Sheet({ state }: { state: string }) {
             Workbook read for CZ2D320BT1 (AlletraMP_D22U27). Nothing is sent to the array yet.
           </StatusLine>
         )}
-        <FileInput name="sheet" messages={{ dropPrompt: 'Drop the completed workbook here', browse: 'browse' }} />
+        {read ? (
+          <Box direction="row" justify="between" align="center" background="background-front" round="small" border={{ color: 'border-weak' }} pad={{ horizontal: 'medium', vertical: 'small' }} flex={false}>
+            <Text size="small">Initialisation_sheet.xlsx · 48 KB</Text>
+            <Box direction="row" gap="small">
+              <Button size="small" label="Remove" />
+              <Button size="small" secondary label="Upload another" />
+            </Box>
+          </Box>
+        ) : (
+          <FileInput name="sheet" messages={{ dropPrompt: 'Drop the completed workbook here', browse: 'browse' }} />
+        )}
         {read && (
           <Box background="background-front" round="small" border={{ color: 'border-weak' }} pad="medium" gap="small" flex={false}>
             <Text weight={600}>What the workbook holds<Mark n={1} /></Text>
@@ -81,28 +91,37 @@ export const sheet: Screen = {
 
 // ------------------------------------------------------------------ mode
 
-const MODES: { key: string; title: string; text: string; steps: string[]; needs?: string }[] = [
-  { key: 'full', title: 'Full onboarding', text: 'A brand-new array: GreenLake, Cloud Connectivity, DSCC, then verify.', steps: ['GreenLake registration', 'Cloud Connectivity', 'DSCC Setup', 'Verify', 'As-built'] },
-  { key: 'prov', title: 'Provision storage only', text: 'An array that is already set up.', steps: ['Discovery', 'SAN zoning', 'Provision storage', 'Verify', 'As-built'] },
-  { key: 'both', title: 'Onboard, then provision', text: 'Set up the array, then provision storage.', steps: ['GreenLake registration', 'Cloud Connectivity', 'DSCC Setup', 'Discovery', 'SAN zoning', 'Provision storage', 'Verify', 'As-built'] },
-  { key: 'repl', title: 'Provision, then replicate', text: 'Provision, then Remote Copy to the peer array and a failover test.', steps: ['Discovery', 'SAN zoning', 'Provision storage', 'Replication', 'Failover test', 'Verify', 'As-built'] },
-  { key: 'verify', title: 'Verify only', text: 'Read the array and compare it with the sheet. Changes nothing.', steps: ['Verify', 'As-built'] },
+const MODES: { key: string; title: string; text: string; steps: string[] }[] = [
+  { key: 'full', title: 'Full onboarding', text: 'A brand-new array: GreenLake, Cloud Connectivity, DSCC, then verify.', steps: ['greenlake', 'cloudinit', 'dscc', 'verify', 'asbuilt'] },
+  { key: 'prov', title: 'Provision storage only', text: 'An array that is already set up.', steps: ['discover', 'zoning', 'provision', 'verify', 'asbuilt'] },
+  { key: 'both', title: 'Onboard, then provision', text: 'Set up the array, then provision storage.', steps: ['greenlake', 'cloudinit', 'dscc', 'discover', 'zoning', 'provision', 'verify', 'asbuilt'] },
+  { key: 'repl', title: 'Provision, then replicate', text: 'Provision, then Remote Copy to the peer array and a failover test.', steps: ['discover', 'zoning', 'provision', 'replicate', 'failover', 'verify', 'asbuilt'] },
+  { key: 'verify', title: 'Verify only', text: 'Read the array and compare it with the sheet. Changes nothing.', steps: ['verify', 'asbuilt'] },
   { key: 'custom', title: 'Custom', text: 'Pick the steps yourself.', steps: [] },
 ];
+const LABEL: Record<string, string> = Object.fromEntries(STEPS.map((s) => [s.key, s.label]));
+LABEL.greenlake = 'GreenLake registration';
+LABEL.cloudinit = 'Cloud Connectivity';
+LABEL.dscc = 'DSCC Setup';
 
 function Mode() {
   const [mode, setMode] = useState('repl');
   const chosen = MODES.find((m) => m.key === mode)!;
   return (
-    <AppFrame groups={rail('mode')} current="mode">
+    <AppFrame
+      groups={rail('mode', 'action_required', {}, { runSteps: false, preview: chosen.steps })}
+      current="mode"
+      railNote={chosen.steps.length ? `${chosen.steps.length} steps for ${chosen.title}. Create the run to start.` : 'Pick the steps on the next screen.'}
+    >
       <StepPage
-        stepNo={stepNo('mode')}
-        total={TOTAL}
+        stepLabel={stepLabel('mode')}
+        runExists={false}
         title="What do you want to do?"
-        description="The run includes only the steps this choice needs."
+        description="The run includes only the steps this choice needs. Each run keeps its own steps; start another run from Runs, top right, to do something else with the same workbook."
         state="action_required"
         stateLabel="Choose a mode"
         primary={{ label: `Create run · ${chosen.steps.length || 'your'} steps` }}
+        guideOpen={false}
         activity={{ last: '19:21:58  Workbook read: CZ2D320BT1, 4 tabs', events: 4, commands: 0 }}
         guidance={
           <Guidance
@@ -113,7 +132,7 @@ function Mode() {
           />
         }
       >
-        <Grid columns={['flex', 'flex']} gap="small">
+        <Grid columns={['flex', 'flex', 'flex']} gap="small">
           {MODES.map((m) => (
             <Box
               key={m.key}
@@ -131,10 +150,11 @@ function Mode() {
             </Box>
           ))}
         </Grid>
-        <Box background="background-contrast" round="small" pad="medium" gap="xsmall" flex={false}>
-          <Heading level={3} size="small" margin="none">This run will do<Mark n={1} /></Heading>
-          <Text size="small">{chosen.steps.length ? chosen.steps.join('  →  ') : 'The steps you tick on the next screen.'}</Text>
-        </Box>
+        <Text size="small" color="text-weak">
+          <Text size="small" weight={600} color="text-strong">This run will do: </Text>
+          {chosen.steps.length ? chosen.steps.map((k) => LABEL[k] ?? k).join('  →  ') : 'the steps you tick on the next screen.'}
+          <Mark n={1} />
+        </Text>
       </StepPage>
     </AppFrame>
   );
@@ -144,10 +164,10 @@ export const mode: Screen = {
   id: 'M3',
   title: 'Mode',
   notes: [
-    'The steps of the chosen mode show before you create the run, so the step count does not jump from 9 to 11 afterwards. The button says how many steps it creates.',
+    'The steps of the chosen mode show in the list on the left as you pick, so the count does not jump from 9 to 11 after the run is created. The button says how many steps it creates.',
   ],
   keeps: [
-    ['The six mode cards', 'Same six, two per row'],
+    ['The six mode cards', 'Same six, three per row'],
     ['Create run', 'Footer, right (green)'],
   ],
   render: () => <Mode />,

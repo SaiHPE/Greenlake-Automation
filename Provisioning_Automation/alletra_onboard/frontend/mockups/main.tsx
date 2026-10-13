@@ -69,7 +69,7 @@ function Gallery() {
           <Box background="decorative-purple" round="xsmall" pad={{ horizontal: 'small', vertical: 'xxsmall' }}>
             <Text size="xsmall" weight="bold" color="text-onStrong">MOCKUP</Text>
           </Box>
-          <Text size="small" weight="bold" color="text-strong">Redesign draft 1</Text>
+          <Text size="small" weight="bold" color="text-strong">Redesign draft 2</Text>
           {all.map((s) => (
             <Button key={s.id} size="small" primary={s.id === screen.id} label={s.id} tip={s.title} onClick={() => go(s.id)} />
           ))}

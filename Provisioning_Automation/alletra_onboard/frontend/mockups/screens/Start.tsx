@@ -18,7 +18,7 @@ function Start({ screens, go }: { screens: Screen[]; go: (id: string) => void })
     <Box fill overflow="auto" background="background-back">
       <Box pad="large" gap="medium" width={{ max: '900px' }} flex={false}>
         <Box>
-          <Text size="small" color="text-weak">Redesign mockups · draft 1 · 13/10/2026</Text>
+          <Text size="small" color="text-weak">Redesign mockups · draft 2 · 13/10/2026</Text>
           <Heading level={1} size="small" margin="none">Alletra MP Onboarding: a calmer screen per step</Heading>
         </Box>
         <Text>
@@ -36,11 +36,12 @@ function Start({ screens, go }: { screens: Screen[]; go: (id: string) => void })
         <Box gap="small" flex={false}>
           <Heading level={2} size="small" margin="none">The rules every screen follows</Heading>
           <Rule n={1} title="One line says what happened" text="At the top of each step: one sentence and the time. Coloured only when something needs you." />
-          <Rule n={2} title="One green button, always bottom right" text="It is the next thing to do. Other actions are outlined buttons on the left. The button never moves between steps." />
-          <Rule n={3} title="Details fold away" text="Tables and long lists sit in sections you open. Counts show first." />
-          <Rule n={4} title="Explanations go to the right" text="What the step does, what it reads, what it changes: in a panel beside the work, not between you and the button." />
+          <Rule n={2} title="One green button, always bottom right" text="It is the next thing to do. Other actions are outlined buttons on the left. When a tick is needed first (authorise, accept), the tick sits in the footer next to the button." />
+          <Rule n={3} title="Details fold away" text="Tables and long lists sit in sections you open. Counts show in the section titles." />
+          <Rule n={4} title="Explanations go to the right" text="What the step does, what it reads, what it changes: in a panel beside the work, not between you and the button. Hide it when you know the step." />
           <Rule n={5} title="Status means status" text="A grey circle for not started, never a question mark. Orange only when you must act." />
           <Rule n={6} title="Activity and console fold into the bottom line" text="The last event is always visible. Open the full list or the console when you need it." />
+          <Rule n={7} title="Prepare first, then the run" text="The three preparation steps count as Prepare 1 to 3. The list of run steps appears when you choose the mode, so the step count never jumps." />
         </Box>
 
         <Box gap="small" flex={false}>

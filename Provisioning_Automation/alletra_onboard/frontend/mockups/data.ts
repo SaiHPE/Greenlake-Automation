@@ -29,11 +29,21 @@ export const RESULTS: Record<string, string> = {
   asbuilt: 'Generated · 764 KB',
 };
 
-/** The step rail with every step before `current` complete and `current` in `state`. */
-export function rail(current: string, state: StepState = 'action_required', overrides: Record<string, StepState> = {}): RailGroup[] {
+/** The step rail with every step before `current` complete and `current` in `state`. Before a run
+ * exists (`runSteps` false) only the Prepare group is listed; `preview` adds the chosen mode's steps
+ * greyed, as the Mode screen does while you pick. */
+export function rail(
+  current: string,
+  state: StepState = 'action_required',
+  overrides: Record<string, StepState> = {},
+  opts: { runSteps?: boolean; preview?: string[] } = {},
+): RailGroup[] {
   const at = STEPS.findIndex((s) => s.key === current);
+  const runSteps = opts.runSteps ?? at >= 3;
   const groups: RailGroup[] = [];
   STEPS.forEach((s, i) => {
+    const prepare = s.stage === 'Prepare';
+    if (!prepare && !runSteps && !(opts.preview ?? []).includes(s.key)) return;
     const st: StepState = overrides[s.key] ?? (i < at ? 'complete' : i === at ? state : 'not_started');
     const step = { key: s.key, label: s.label, state: st, result: st === 'complete' ? RESULTS[s.key] : undefined };
     const g = groups.find((x) => x.stage === s.stage);
@@ -43,8 +53,18 @@ export function rail(current: string, state: StepState = 'action_required', over
   return groups;
 }
 
+const PREPARE = STEPS.filter((s) => s.stage === 'Prepare');
+const RUN_STEPS = STEPS.filter((s) => s.stage !== 'Prepare' && s.key !== 'finish');
+
+/** "Prepare · step 1 of 3" before the run exists; "Step 1 of 7" inside it (Finish is not a step). */
+export function stepLabel(key: string): string {
+  const p = PREPARE.findIndex((s) => s.key === key);
+  if (p >= 0) return `Prepare · step ${p + 1} of ${PREPARE.length}`;
+  const r = RUN_STEPS.findIndex((s) => s.key === key);
+  return `Step ${r + 1} of ${RUN_STEPS.length}`;
+}
+
 export const stepNo = (key: string) => STEPS.findIndex((s) => s.key === key) + 1;
-export const TOTAL = STEPS.length;
 
 export const RUN: RunSummary = {
   array: 'AlletraMP_D22U27',

@@ -2,11 +2,14 @@
  * The proposed app shell and its building blocks, for the redesign mockups only. Nothing here is
  * used by the app; when a mockup is agreed, these become the real components.
  */
-import { Box, Button, Collapsible, Heading, Menu, ResponsiveContext, Text } from 'grommet';
+import { Box, Button, CheckBox, Collapsible, Heading, Menu, ResponsiveContext, Text } from 'grommet';
 import { Apps, FormDown, FormNext, FormPrevious, Radial, Terminal, Time } from 'grommet-icons';
 import { createContext, ReactNode, useContext, useState } from 'react';
 import { HpeElement } from '../src/ui/AppChrome';
 import { StatusIcon, StatusIndicator, StepState } from '../src/ui/status';
+
+/** The medium spacing step of the HPE theme, as a CSS value. */
+const GAP = '24px';
 
 // ------------------------------------------------------------------ note markers
 
@@ -93,12 +96,14 @@ export function AppFrame({
   groups,
   current,
   onSelect,
+  railNote,
   children,
 }: {
   run?: RunSummary;
   groups: RailGroup[];
   current: string;
   onSelect?: (key: string) => void;
+  railNote?: string;
   children: ReactNode;
 }) {
   const size = useContext(ResponsiveContext);
@@ -140,12 +145,14 @@ export function AppFrame({
             overflow="auto"
             gap="small"
           >
-            <RailRow
-              step={{ key: 'overview', label: 'Run overview', state: 'complete', result: 'Every step on one page' }}
-              icon={<Apps size="small" />}
-              current={current === 'overview'}
-              onSelect={onSelect ? () => onSelect('overview') : undefined}
-            />
+            {run && (
+              <RailRow
+                step={{ key: 'overview', label: 'Run overview', state: 'complete', result: 'Every step on one page' }}
+                icon={<Apps size="small" />}
+                current={current === 'overview'}
+                onSelect={onSelect ? () => onSelect('overview') : undefined}
+              />
+            )}
             {groups.map((g) => (
               <Box key={g.stage} gap="xxsmall" flex={false}>
                 <Text size="xsmall" weight="bold" color="text-weak" margin={{ left: 'small', top: 'xsmall' }}>
@@ -156,6 +163,11 @@ export function AppFrame({
                 ))}
               </Box>
             ))}
+            {railNote && (
+              <Box pad="small" margin={{ top: 'xsmall' }} background="background-contrast" round="xsmall" flex={false}>
+                <Text size="xsmall" color="text-weak">{railNote}</Text>
+              </Box>
+            )}
           </Box>
         )}
         <Box flex overflow="hidden">{children}</Box>
@@ -174,29 +186,40 @@ export interface Action {
   hint?: string;
 }
 
+/** A tick the operator must give before the primary action runs; it sits in the footer next to the button. */
+export interface Confirmation {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}
+
 export function StepPage({
-  stepNo,
-  total,
+  stepLabel,
+  first = false,
+  runExists = true,
   title,
   description,
   state,
   stateLabel,
   primary,
   secondary = [],
+  confirmation,
   guidance,
   guideOpen: guideInitiallyOpen = true,
   top,
   activity,
   children,
 }: {
-  stepNo?: number;
-  total?: number;
+  stepLabel?: string;
+  first?: boolean;
+  runExists?: boolean;
   title: string;
   description?: string;
   state?: StepState;
   stateLabel?: string;
   primary?: Action;
   secondary?: Action[];
+  confirmation?: Confirmation;
   guidance?: ReactNode;
   guideOpen?: boolean;
   top?: ReactNode;
@@ -209,7 +232,7 @@ export function StepPage({
   const [guideOpen, setGuideOpen] = useState(guideInitiallyOpen);
   return (
     <Box fill>
-      {/* wizard header: Previous left, Cancel right (HPE wizard template) */}
+      {/* wizard header: Previous left (not on the first step), Cancel right (HPE wizard template) */}
       <Box
         direction="row"
         justify="between"
@@ -219,14 +242,14 @@ export function StepPage({
         border={{ side: 'bottom', color: 'border-weak' }}
         flex={false}
       >
-        <Button icon={<FormPrevious />} label="Previous step" plain={false} size="small" disabled={stepNo === 1} />
-        <Button label="Cancel run" size="small" />
+        {first ? <Box /> : <Button icon={<FormPrevious />} label="Previous step" plain={false} size="small" />}
+        <Button label={runExists ? 'Cancel run' : 'Start over'} size="small" />
       </Box>
       <Box flex overflow="auto">
-        <Box pad={{ horizontal: 'large', top: 'medium', bottom: 'large' }} gap="medium" flex={false}>
+        <Box pad={{ horizontal: 'large', top: 'small', bottom: 'large' }} flex={false} style={{ gap: GAP }}>
           <Box direction="row" justify="between" align="end" gap="medium" flex={false}>
             <Box>
-              {stepNo && total && <Text size="small" color="text-weak">Step {stepNo} of {total}</Text>}
+              {stepLabel && <Text size="small" color="text-weak">{stepLabel}</Text>}
               <Heading level={1} size="small" margin="none">{title}</Heading>
               {description && <Text color="text-weak" margin={{ top: 'xxsmall' }}>{description}</Text>}
             </Box>
@@ -254,7 +277,8 @@ export function StepPage({
           )}
           {top}
           <Box direction="row" gap="large" align="start" flex={false}>
-            <Box flex gap="medium" style={{ minWidth: 0 }}>{children}</Box>
+            {/* CSS gap, not Grommet's: Grommet counts a React fragment as one child and puts no gap inside it */}
+            <Box flex style={{ minWidth: 0, gap: GAP }}>{children}</Box>
             {!stacked && guidance && guideOpen && (
               <Box width="medium" flex={false} background="background-contrast" round="small" pad="medium" gap="medium">
                 <Box direction="row" justify="between" align="center">
@@ -284,8 +308,15 @@ export function StepPage({
             ))}
           </Box>
           {primary && (
-            <Box direction="row" gap="small" align="center">
-              {primary.disabled && primary.hint && <Text size="small" color="text-weak">{primary.hint}</Text>}
+            <Box direction="row" gap="medium" align="center">
+              {confirmation && (
+                <CheckBox
+                  checked={confirmation.checked}
+                  onChange={(e) => confirmation.onChange(e.target.checked)}
+                  label={<Text size="small">{confirmation.label}</Text>}
+                />
+              )}
+              {!confirmation && primary.disabled && primary.hint && <Text size="small" color="text-weak">{primary.hint}</Text>}
               <Button primary label={primary.label} onClick={primary.onClick} disabled={primary.disabled} busy={primary.busy} />
             </Box>
           )}
@@ -364,10 +395,13 @@ export function Section({
         direction="row"
         gap="small"
         align="center"
-        pad={{ horizontal: 'medium', vertical: 'small' }}
+        pad={{ horizontal: 'medium', vertical: 'xsmall' }}
         onClick={() => setOpen((v) => !v)}
         hoverIndicator="background-hover"
         round="small"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen((v) => !v); } }}
         aria-expanded={open}
       >
         {open ? <FormDown /> : <FormNext />}
@@ -378,21 +412,32 @@ export function Section({
         {right}
       </Box>
       <Collapsible open={open}>
-        <Box pad={{ horizontal: 'medium', bottom: 'medium' }} gap="small">{children}</Box>
+        <Box pad={{ horizontal: 'medium', bottom: 'medium' }} style={{ gap: '12px' }}>{children}</Box>
       </Collapsible>
     </Box>
   );
 }
 
-/** Small summary figures ("8 array ports"). */
-export function Figures({ items }: { items: { value: string; label: string; note?: string }[] }) {
+/** Finished parts of a step, one compact line each, with the part's own "do it again" on the right. */
+export function DoneList({ items }: { items: { text: string; again?: string; detail?: ReactNode }[] }) {
+  const [open, setOpen] = useState<number | null>(null);
   return (
-    <Box direction="row" gap="medium" wrap flex={false}>
-      {items.map((f) => (
-        <Box key={f.label} background="background-front" round="small" border={{ color: 'border-weak' }} pad="medium" width={{ min: '160px' }} flex={false}>
-          <Text size="xxlarge" weight="bold" color="text-strong">{f.value}</Text>
-          <Text size="small" color="text-strong">{f.label}</Text>
-          {f.note && <Text size="xsmall" color="text-weak">{f.note}</Text>}
+    <Box background="background-front" round="small" border={{ color: 'border-weak' }} flex={false}>
+      {items.map((it, i) => (
+        <Box key={i} border={i > 0 ? { side: 'top', color: 'border-weak' } : undefined}>
+          <Box direction="row" gap="small" align="center" pad={{ horizontal: 'medium', vertical: 'xsmall' }}>
+            <StatusIcon state="complete" />
+            <Box flex direction="row" gap="small" align="center">
+              <Text size="small" color="text-strong">{it.text}</Text>
+              {it.detail && (
+                <Button plain onClick={() => setOpen(open === i ? null : i)}>
+                  <Text size="small" color="text-anchor">{open === i ? 'Hide' : 'Show'}</Text>
+                </Button>
+              )}
+            </Box>
+            {it.again && <Button size="small" label={it.again} />}
+          </Box>
+          {it.detail && <Collapsible open={open === i}><Box pad={{ horizontal: 'medium', bottom: 'small' }}>{it.detail}</Box></Collapsible>}
         </Box>
       ))}
     </Box>
