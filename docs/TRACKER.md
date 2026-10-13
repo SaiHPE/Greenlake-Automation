@@ -18,6 +18,7 @@ Status: `todo` · `doing` · `blocked` · `done`
 |---|---|---|---|---|---|
 | BL-37 | Submit and publish the two canned demos (needed for tenet approval, BL-30) | Sai | doing | B.9 | 2026-10-07: initialization-track demo — submission in progress; discovery → zoning → provisioning → as-built demo (edited 6:02 cut) — not yet submitted. Neither published. |
 | BL-06 | Status workbook refresh | dev | todo | — | Refreshed 2026-10-07 (A.4, B.1, B.4, B.5, B.6, B.9, B.10, replication B.1). Repeat after each closed item. |
+| BL-43 | UI redesign: a calmer screen per step | Sai + dev | doing | — | Operator feedback 2026-10-13: the UI needs a big improvement. Review of the app at 1366 × 768: pages of 760 to 830 words, main actions not styled as buttons, mode chosen after the GreenLake prerequisites, alarming status before anything happens, internal words in messages. **Rule: no behaviour changes; every prerequisite, check and button stays.** Draft 1 mockups built with the app's own HPE Design System parts in `frontend/mockups/` (`npm run mockups`, http://127.0.0.1:5175): Start, Prerequisites, Initialisation sheet, Mode, Run overview (new), Discovery (the step template), Replication. Each screen has numbered notes and a list of where every current control now lives. Next: the operator's feedback on draft 1, then zoning, provisioning, verify, as-built and failover screens, then build step by step. |
 
 ## Test live (built, not yet run on hardware)
 
