@@ -1,4 +1,6 @@
 import { Box, Button, CheckBox, Grommet, Select, Text } from 'grommet';
+import { hpe } from 'grommet-theme-hpe';
+import { deepMerge } from 'grommet/utils';
 import { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { theme } from '../src/theme';
@@ -106,7 +108,7 @@ function Gallery() {
           <Box background="decorative-purple" round="xsmall" pad={{ horizontal: 'small', vertical: 'xxsmall' }}>
             <Text size="xsmall" weight="bold" color="text-onStrong">MOCKUP</Text>
           </Box>
-          <Text size="small" weight="bold" color="text-strong">Redesign draft 2</Text>
+          <Text size="small" weight="bold" color="text-strong">Redesign draft 3</Text>
           {all.map((s) => (
             <Button key={s.id} size="small" primary={s.id === screen.id} label={s.id} tip={s.title} onClick={() => go(s.id)} />
           ))}
@@ -187,8 +189,15 @@ function Gallery() {
 
 const isFrame = new URLSearchParams(window.location.search).get('frame') === '1';
 
+/**
+ * The Design System keeps heading level and heading size independent. The HPE theme stops at 1.5rem
+ * for an h2, which is too much for a section title inside a step, so h2 and h3 get an `xsmall` size
+ * taken from the theme's own small text token. The app theme would get the same two lines.
+ */
+const mockTheme = deepMerge(theme, { heading: { level: { 2: { xsmall: hpe.text.small }, 3: { xsmall: hpe.text.small } } } });
+
 createRoot(document.getElementById('root')!).render(
-  <Grommet theme={theme} full>
+  <Grommet theme={mockTheme} full>
     {isFrame ? <Frame /> : <Gallery />}
   </Grommet>,
 );

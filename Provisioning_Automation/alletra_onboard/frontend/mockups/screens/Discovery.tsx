@@ -1,8 +1,9 @@
 import { Box, DataTable, Text } from 'grommet';
+import { Search } from 'grommet-icons';
 import { InlineNotification } from '../../src/ui/primitives';
 import { StatusIndicator } from '../../src/ui/status';
 import { ARRAY_PORTS, HOSTS, RUN, rail, stepLabel } from '../data';
-import { AppFrame, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
+import { AppFrame, EmptyState, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
 import { Screen } from '../screen';
 
 function Discovery({ state, setState }: { state: string; setState: (s: string) => void }) {
@@ -16,8 +17,8 @@ function Discovery({ state, setState }: { state: string; setState: (s: string) =
         description="Reads the array's ports, the hosts and their fabric logins. Changes nothing."
         state={done ? 'complete' : running ? 'running' : 'not_started'}
         stateLabel={done ? 'Complete' : running ? 'Reading' : 'Not started'}
-        secondary={done ? [{ label: 'Check readiness' }, { label: 'Run discovery again', onClick: () => setState('running') }] : [{ label: 'Check readiness' }]}
-        primary={done ? { label: 'Continue to SAN zoning' } : { label: 'Run discovery', busy: running, onClick: () => setState('running') }}
+        actions={done ? [{ label: 'Check readiness' }, { label: 'Run discovery again', onClick: () => setState('running') }] : [{ label: 'Check readiness' }]}
+        primary={done ? { label: 'Continue to SAN zoning' } : running ? undefined : { label: 'Run discovery', onClick: () => setState('running') }}
         activity={{ last: done ? '19:22:43  Discovery finished: 8 ports, 2 hosts, 2 fabrics' : running ? '19:22:31  Reading the array ports' : '19:22:22  Run created', events: done ? 9 : 1, commands: done ? 14 : running ? 3 : 0 }}
         guidance={
           <Guidance
@@ -31,12 +32,13 @@ function Discovery({ state, setState }: { state: string; setState: (s: string) =
         }
       >
         {state === 'not-run' && (
-          <StatusLine state="not_started">Not run yet. Zoning and provisioning need what discovery finds.<Mark n={1} /></StatusLine>
+          <EmptyState icon={<Search size="large" color="icon-weak" />} title={<>Not run yet<Mark n={1} /></>}>
+            Run discovery to read the array's ports, the hosts and their fabric logins. SAN zoning and Provision storage need what it finds. It changes nothing.
+          </EmptyState>
         )}
         {running && (
           <Box gap="xsmall" flex={false}>
-            <StatusLine state="running" time="19:22:31">Reading AlletraMP_D22U27…<Mark n={1} /></StatusLine>
-            <Text size="small" color="text-weak">Array ports read · reading the host view · vCenter next</Text>
+            <StatusLine state="running" time="19:22:31">Reading AlletraMP_D22U27. Array ports read, reading the host view, vCenter next.<Mark n={1} /></StatusLine>
           </Box>
         )}
         {done && (
@@ -97,12 +99,12 @@ export const discovery: Screen = {
     { key: 'done', label: 'Finished' },
   ],
   notes: [
-    'Every step follows this template. One line at the top: what happened, in one sentence, with the time. A coloured note only when there is something to know.',
+    'Every step follows this template. One line at the top: what happened, in one sentence, with the time. Before the first run it is the Design System empty state (what is missing and how to move on); while running, a spinner; after, a coloured notification only when there is something to know.',
     'Results are sections with the count in the title. They stay folded until you open them, so the page fits on one screen.',
   ],
   keeps: [
-    ['Check readiness', 'Footer, left'],
-    ['Run discovery / Re-run discovery', 'Footer, right (green) until it has run; then Run discovery again on the left'],
+    ['Check readiness', 'Footer, beside the green button'],
+    ['Run discovery / Re-run discovery', 'Footer, right (green) until it has run; then Run discovery again beside Continue. While it runs the footer shows only Check readiness: a button that does not apply is not shown'],
     ['Port, host and fabric tables', 'In their own sections, folded'],
     ['Activity list', 'Bottom line; opens on click'],
     ['Explanations', 'Right panel'],

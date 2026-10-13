@@ -2,7 +2,7 @@ import { Box, Button, DataTable, Text } from 'grommet';
 import { Copy, Download } from 'grommet-icons';
 import { StatusIndicator } from '../../src/ui/status';
 import { RUN, rail, stepLabel } from '../data';
-import { AppFrame, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
+import { AppFrame, CodeBlock, Guidance, Mark, Section, StatusLine, StepPage, mono } from '../kit';
 import { Screen } from '../screen';
 
 const HOSTS = [
@@ -34,7 +34,7 @@ function Handoff({ state }: { state: string }) {
         description="Which hosts can reach the array through the fabrics, and the zones the SAN team still has to add. This tool never writes to a switch."
         state={back ? 'complete' : 'waiting'}
         stateLabel={back ? 'All hosts zoned' : 'Waiting on the SAN team'}
-        secondary={back ? [{ label: 'Check zoning again' }] : [{ label: 'Continue with ESX1 only' }]}
+        actions={back ? [{ label: 'Check zoning again' }] : [{ label: 'Continue with ESX1 only' }]}
         primary={back ? { label: 'Continue to Provision storage' } : { label: 'Check zoning again' }}
         guideOpen={false}
         activity={{ last: back ? '09:12:04  Zoning checked: ESX2 logged in on F2' : '19:40:12  Command set for F2 copied (7 lines)', events: 14, commands: 31 }}
@@ -80,9 +80,7 @@ function Handoff({ state }: { state: string }) {
               </Box>
             }
           >
-            <Box background="background-contrast" round="xsmall" pad="small" flex={false}>
-              {F2_COMMANDS.map((c) => <Text key={c} size="small" style={mono}>{c}</Text>)}
-            </Box>
+            <CodeBlock lines={F2_COMMANDS} a11yTitle="Command set for fabric F2" />
             <Text size="small" color="text-weak">
               After the paste the SAN team runs <Text size="small" style={mono}>cfgenable "lab_F2_cfg"</Text> themselves. The zone names were checked against both switches: none clash.<Mark n={2} />
             </Text>
@@ -111,7 +109,7 @@ export const handoff: Screen = {
     ['Check zoning on the array', 'Green button while waiting'],
     ['Build zoning plan, the pair picker, the Names panel', 'Opened from the hosts section before the hand-off (not mocked here)'],
     ['Command set with Copy and Download', 'Command set section'],
-    ['Continue with the zoned hosts only', 'Footer, left'],
+    ['Continue with the zoned hosts only', 'Footer, beside the green button'],
     ['Switch aliases and zones', 'Folded section at the bottom'],
   ],
   render: (state) => <Handoff state={state} />,
