@@ -1,8 +1,8 @@
-import { Anchor, Box, Button, FileInput, Grid, RadioButton, Text } from 'grommet';
+import { Anchor, Box, Button, FileInput, Grid, Text } from 'grommet';
 import { useState } from 'react';
 import { StatusIcon, StepState } from '../../src/ui/status';
 import { STEPS, rail, stepLabel } from '../data';
-import { AppFrame, Guidance, Mark, StatusLine, StepPage } from '../kit';
+import { AppFrame, Guidance, Mark, Panel, SelectorCard, StatusLine, StepPage } from '../kit';
 import { Screen } from '../screen';
 
 const CONTENTS: { tab: string; state: StepState; text: string }[] = [
@@ -23,8 +23,8 @@ function Sheet({ state }: { state: string }) {
         description="One workbook per array. Upload it to start a run."
         state={read ? 'complete' : 'action_required'}
         stateLabel={read ? 'Workbook read' : 'Upload the workbook'}
-        secondary={[{ label: 'Validate GreenLake credentials', disabled: !read }]}
-        primary={{ label: 'Continue to Mode', disabled: !read, hint: 'Upload the workbook first' }}
+        actions={[{ label: 'Validate GreenLake credentials', blocked: read ? undefined : 'Upload the workbook first. The credentials are read from its Initialisation tab.' }]}
+        primary={{ label: 'Continue to Mode', blocked: read ? undefined : 'Upload the completed workbook first.' }}
         activity={{ last: read ? '19:21:58  Workbook read: CZ2D320BT1, 4 tabs' : 'No activity yet', events: read ? 4 : 3, commands: 0 }}
         guidance={
           <Guidance
@@ -46,23 +46,22 @@ function Sheet({ state }: { state: string }) {
             <Text size="small">Initialisation_sheet.xlsx · 48 KB</Text>
             <Box direction="row" gap="small">
               <Button size="small" label="Remove" />
-              <Button size="small" secondary label="Upload another" />
+              <Button size="small" label="Upload another" />
             </Box>
           </Box>
         ) : (
           <FileInput name="sheet" messages={{ dropPrompt: 'Drop the completed workbook here', browse: 'browse' }} />
         )}
         {read && (
-          <Box background="background-front" round="small" border={{ color: 'border-weak' }} pad="medium" gap="small" flex={false}>
-            <Text weight={600}>What the workbook holds<Mark n={1} /></Text>
+          <Panel title={<>What the workbook holds<Mark n={1} /></>}>
             {CONTENTS.map((c) => (
               <Box key={c.tab} direction="row" gap="small" align="center">
                 <StatusIcon state={c.state} />
-                <Box width="xsmall" flex={false}><Text size="small" weight={600}>{c.tab}</Text></Box>
+                <Box width="xsmall" flex={false}><Text size="small" weight={500}>{c.tab}</Text></Box>
                 <Text size="small">{c.text}</Text>
               </Box>
             ))}
-          </Box>
+          </Panel>
         )}
       </StepPage>
     </AppFrame>
@@ -82,8 +81,8 @@ export const sheet: Screen = {
   keeps: [
     ['Download blank template', 'Right panel'],
     ['Upload box', 'Same place'],
-    ['Validate GreenLake credentials', 'Footer, left'],
-    ['Continue to Mode', 'Footer, right (green)'],
+    ['Validate GreenLake credentials', 'Footer, beside the green button'],
+    ['Continue to Mode', 'Footer, right (green). Active before the upload: pressing it says what is missing, as the Design System asks, instead of a greyed button'],
     ['Note about passwords', 'Right panel, corrected: the array password is in the Provisioning tab now'],
   ],
   render: (state) => <Sheet state={state} />,
@@ -132,26 +131,15 @@ function Mode() {
           />
         }
       >
-        <Grid columns={['flex', 'flex', 'flex']} gap="small">
+        <Grid columns={{ count: 'fit', size: 'small' }} gap="small" role="radiogroup" aria-label="What do you want to do?">
           {MODES.map((m) => (
-            <Box
-              key={m.key}
-              pad="medium"
-              round="small"
-              background="background-front"
-              border={{ color: m.key === mode ? 'border-selected' : 'border-weak', size: m.key === mode ? 'medium' : 'xsmall' }}
-              onClick={() => setMode(m.key)}
-              gap="xsmall"
-            >
-              <Box direction="row" gap="small" align="center">
-                <RadioButton name="mode" checked={m.key === mode} onChange={() => setMode(m.key)} label={<Text weight={600}>{m.title}</Text>} />
-              </Box>
+            <SelectorCard key={m.key} title={m.title} checked={m.key === mode} onSelect={() => setMode(m.key)}>
               <Text size="small" color="text-weak">{m.text}</Text>
-            </Box>
+            </SelectorCard>
           ))}
         </Grid>
         <Text size="small" color="text-weak">
-          <Text size="small" weight={600} color="text-strong">This run will do: </Text>
+          <Text size="small" weight={500} color="text-strong">This run will do: </Text>
           {chosen.steps.length ? chosen.steps.map((k) => LABEL[k] ?? k).join('  →  ') : 'the steps you tick on the next screen.'}
           <Mark n={1} />
         </Text>
@@ -167,7 +155,7 @@ export const mode: Screen = {
     'The steps of the chosen mode show in the list on the left as you pick, so the count does not jump from 9 to 11 after the run is created. The button says how many steps it creates.',
   ],
   keeps: [
-    ['The six mode cards', 'Same six, three per row'],
+    ['The six mode cards', 'Same six, as Design System selector cards: the whole card is the choice, as many per row as fit'],
     ['Create run', 'Footer, right (green)'],
   ],
   render: () => <Mode />,

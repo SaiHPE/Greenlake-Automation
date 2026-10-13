@@ -49,7 +49,7 @@ function Prerequisites({ state }: { state: string }) {
         description="What HPE requires before onboarding, and checks of this workstation."
         state={clockOk ? 'complete' : 'action_required'}
         stateLabel={clockOk ? 'Checks passed' : 'Action required'}
-        secondary={clockOk
+        actions={clockOk
           ? [{ label: 'Download the initialisation sheet' }]
           : [{ label: 'Download the initialisation sheet' }, { label: 'Continue without syncing' }]}
         primary={clockOk ? { label: 'Continue to Initialisation sheet' } : { label: 'Sync system clock' }}
@@ -74,6 +74,7 @@ function Prerequisites({ state }: { state: string }) {
         <Box gap="small" flex={false}>
           <Heading level={2} size="small" margin="none">Checked by this tool<Mark n={2} /></Heading>
           <Section
+            level={3}
             title="Connection to HPE GreenLake"
             summary="12 of 12 endpoints reachable · region jp1"
             right={<StatusIndicator state="complete" label="Passed" />}
@@ -81,7 +82,7 @@ function Prerequisites({ state }: { state: string }) {
             <Box direction="row" gap="small" align="center">
               <Text size="small" color="text-weak">DSCC region</Text>
               <Box width="xsmall"><TextInput size="small" value="jp1" readOnly aria-label="DSCC region" /></Box>
-              <Button size="small" secondary label="Retest" />
+              <Button size="small" label="Retest" />
               <Anchor size="small" label="Download the list for the firewall team" href="#" />
             </Box>
             <DataTable
@@ -97,17 +98,19 @@ function Prerequisites({ state }: { state: string }) {
             <Text size="small">Also needed: mDNS on UDP 5353 for local discovery; the array's DNS resolves HPE's global names; 16.1.8.x and 16.1.9.x stay unassigned (reserved for the array).</Text>
           </Section>
           <Section
+            level={3}
             title="Proxy"
             summary="In use: system proxy web-proxy.corp.hpe.com:8080"
             right={<StatusIndicator state="complete" label="Detected" />}
           >
             <Box direction="row" gap="small" align="center" wrap>
               <Box width="medium"><TextInput size="small" placeholder="host:port" aria-label="Manual proxy override" /></Box>
-              <Button size="small" secondary label="Save and retest" disabled />
+              <Button size="small" label="Save and retest" />
               <Button size="small" label="Connect directly (no proxy)" />
             </Box>
           </Section>
           <Section
+            level={3}
             title="Workstation clock"
             summary={clockOk ? 'In sync' : 'Off by 11 seconds'}
             open={!clockOk}
@@ -120,6 +123,7 @@ function Prerequisites({ state }: { state: string }) {
         <Box gap="small" flex={false}>
           <Heading level={2} size="small" margin="none">Confirm before you start<Mark n={3} /></Heading>
           <Section
+            level={3}
             title="HPE GreenLake workspace and DSCC"
             summary="Activate the subscriptions, then 3 tasks in HPE GreenLake · recordings"
             right={<Confirm done={!!done.ws} set={tick('ws')} />}
@@ -130,6 +134,7 @@ function Prerequisites({ state }: { state: string }) {
             <Recording title="3. Assign the Data Services administrator role" steps={['Manage Workspace, Identity and Access, Assign Role: your user, Data Services, Administrator.', 'Launch Data Services and check Setup, Block Storage and Data Ops Manager appear.']} />
           </Section>
           <Section
+            level={3}
             title="API client"
             summary="Create a personal API client; its ID, secret and token URL go in the sheet"
             right={<Confirm done={!!done.api} set={tick('api')} />}
@@ -137,6 +142,7 @@ function Prerequisites({ state }: { state: string }) {
             <Recording title="4. Create a personal API client" steps={['Manage Workspace, API, Create personal API client.', 'Name it and pick the HPE GreenLake Cloud Platform service.', 'Write down the client ID, secret and token URL. The secret is shown once.', 'Enter all three in the initialisation sheet.']} />
           </Section>
           <Section
+            level={3}
             title="Management network cabling"
             summary="Admin, iLO and CDM ports on every controller"
             right={<Confirm done={!!done.cab} set={tick('cab')} />}
@@ -146,6 +152,7 @@ function Prerequisites({ state }: { state: string }) {
             <Text size="small">CDM ports: each controller chassis CDM port (OCuLink adapter) and at least one drive-chassis CDM per rack. They pick their own link-local addresses.</Text>
           </Section>
           <Section
+            level={3}
             title="This workstation"
             summary="Same subnet as the array, run as Administrator"
             right={<Confirm done={!!done.ws2} set={tick('ws2')} />}
@@ -171,7 +178,7 @@ export const prerequisites: Screen = {
     'Every prerequisite from today stays. The three the tool checks for you come first, with their result next to the title.',
     'The four you do by hand come next. Each is one row; open it for the steps and the recording.',
     'Optional idea: a Done tick on each manual row, for your own tracking. It does not block Continue. Say if you want it.',
-    'One green button per page. While the clock is off the green button is Sync system clock; Continue without syncing stays available on the left. Once the clock is in sync the green button is Continue.',
+    'One green button per page, far right, as the Design System places a wizard\'s next action. While the clock is off the green button is Sync system clock; Continue without syncing stays available beside it. Once the clock is in sync the green button is Continue.',
   ],
   keeps: [
     ['Test connectivity, Retest', 'Connection row, Retest'],
@@ -180,7 +187,7 @@ export const prerequisites: Screen = {
     ['Sync system clock', 'Footer, right (green) while the clock is off'],
     ['4 recordings and their steps', 'GreenLake workspace row and API client row'],
     ['Cabling and This workstation text', 'Their own rows'],
-    ['Download the initialisation sheet', 'Footer, left'],
+    ['Download the initialisation sheet', 'Footer, beside the green button'],
     ['Continue', 'Footer, right (green)'],
   ],
   render: (state) => <Prerequisites state={state} />,

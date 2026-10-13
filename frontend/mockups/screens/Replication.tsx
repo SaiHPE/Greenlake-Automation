@@ -1,8 +1,9 @@
 import { Box, Button, DataTable, Text } from 'grommet';
+import { Connect } from 'grommet-icons';
 import { Fragment, useState } from 'react';
 import { StatusIndicator, StepState } from '../../src/ui/status';
 import { COMMANDS, EXISTING_GROUPS, PLAN, RUN, rail, stepLabel } from '../data';
-import { Action, AppFrame, Confirmation, DoneList, Guidance, Mark, Section, StateIcon, StatusLine, StepPage, mono } from '../kit';
+import { Action, AppFrame, CodeBlock, Confirmation, DoneList, EmptyState, Guidance, Mark, Panel, Section, StateIcon, StatusLine, StepPage, mono } from '../kit';
 import { Screen } from '../screen';
 
 const PARTS = ['Read both arrays', 'Check the link', 'Review the plan', 'Configure', 'Verify'];
@@ -58,8 +59,8 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
   const primary: Action = {
     read: { label: 'Read both arrays', onClick: next('link') },
     link: { label: 'Check the link', onClick: next('plan') },
-    'link-over': { label: 'Continue to the plan', disabled: !accept, onClick: next('plan') },
-    plan: { label: 'Configure replication', disabled: !authorised, onClick: next('configured') },
+    'link-over': { label: 'Continue to the plan', onClick: next('plan') },
+    plan: { label: 'Configure replication', onClick: next('configured') },
     configured: { label: 'Verify replication', onClick: next('verified') },
     verified: { label: 'Continue to Failover test' },
   }[state] as Action;
@@ -67,7 +68,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
     'link-over': { label: 'Continue anyway: I accept the measured latency of 12 ms for sync replication.', checked: accept, onChange: setAccept },
     plan: { label: 'I have reviewed the plan and authorise these changes on both arrays.', checked: authorised, onChange: setAuthorised },
   }[state as 'link-over' | 'plan'];
-  const secondary: Action[] = !verified && state !== 'configured' ? [{ label: 'Continue without replication' }] : [];
+  const actions: Action[] = !verified && state !== 'configured' ? [{ label: 'Continue without replication' }] : [];
 
   const done: { text: string; again?: string; detail?: React.ReactNode }[] = [];
   if (at > 0) done.push({ text: 'Read both arrays: partnered over 2 of 2 links each way.', again: 'Read again',
@@ -76,7 +77,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
     again: 'Check again', detail: <LinkTable ms={over || accept ? '12' : '0.4'} /> });
   if (at > 2) done.push({ text: 'Plan approved at 19:31: 6 objects, 12 commands.', detail: <Text size="small" style={mono}>{PLAN.map((p) => p.name).join(' · ')}</Text> });
   if (at > 3) done.push({ text: 'Configured at 19:32: 12 writes done, both groups started.',
-    detail: <Box direction="row" gap="small"><Button size="small" secondary label="Copy the removal commands for A" /><Button size="small" secondary label="Copy the removal commands for B" /></Box> });
+    detail: <Box direction="row" gap="small"><Button size="small" label="Copy the removal commands for A" /><Button size="small" label="Copy the removal commands for B" /></Box> });
 
   return (
     <AppFrame run={RUN} groups={rail('replicate', verified ? 'complete' : 'action_required')} current="replicate">
@@ -87,7 +88,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
         state={verified ? 'complete' : 'action_required'}
         stateLabel={verified ? 'Replicating' : `Part ${at + 1} of 5`}
         primary={primary}
-        secondary={secondary}
+        actions={actions}
         confirmation={confirmation}
         guideOpen={state === 'read'}
         top={
@@ -116,12 +117,13 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
         )}
 
         {state === 'read' && (
-          <StatusLine state="not_started">Not read yet. Reading both arrays changes nothing.</StatusLine>
+          <EmptyState icon={<Connect size="large" color="icon-weak" />} title="Not read yet">
+            Read both arrays to see the partnership, the links and the groups already there. Reading changes nothing.
+          </EmptyState>
         )}
 
         {(state === 'link' || over) && (
-          <Box background="background-front" round="small" border={{ color: 'border-weak' }} pad="medium" gap="small" flex={false}>
-            <Text weight={600}>Check the link</Text>
+          <Panel title="Check the link">
             {state === 'link' ? (
               <Text size="small">
                 checkrclink measures the latency between the two arrays' replication ports: a test server on AlletraMP_E18U31, a test client here,
@@ -134,21 +136,17 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
                 <Text size="small" color="text-weak">To continue regardless, tick the box next to the green button. Your choice is written in the result and the as-built document.</Text>
               </Box>
             )}
-          </Box>
+          </Panel>
         )}
 
         {state === 'plan' && (
-          <Box background="background-front" round="small" border={{ color: 'border-weak' }} pad="medium" gap="small" flex={false}>
-            <Box direction="row" justify="between" align="center">
-              <Text weight={600}>Review the plan</Text>
-              <Text size="small" color="text-weak">6 to create · 0 already there · 0 conflicts</Text>
-            </Box>
+          <Panel title="Review the plan" right={<Text size="small" color="text-weak">6 to create · 0 already there · 0 conflicts</Text>}>
             <DataTable
               columns={[
                 { property: 'kind', header: 'Kind', render: (p) => <Text size="small">{p.kind}</Text> },
                 { property: 'name', header: 'Name', render: (p) => <Text size="small" style={mono}>{p.name}</Text> },
                 { property: 'on', header: 'On', render: (p) => <Text size="small">{p.on}</Text> },
-                { property: 'action', header: 'Action', render: () => <Text size="small" weight={600}>Create</Text> },
+                { property: 'action', header: 'Action', render: () => <Text size="small" weight={500}>Create</Text> },
                 { property: 'detail', header: 'Detail', render: (p) => <Text size="small" color="text-weak">{p.detail}</Text> },
               ]}
               data={PLAN}
@@ -156,19 +154,15 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
             />
             <Text size="xsmall" color="text-weak">A = AlletraMP_D22U27 (this array), B = AlletraMP_E18U31 (the peer).</Text>
             <Box direction="row" gap="small" align="center">
-              <Button size="small" label={showCalls ? 'Hide the commands' : 'Show the 12 commands'} onClick={() => setShowCalls((v) => !v)} />
+              <Button size="small" label={showCalls ? 'Hide the commands' : 'Show the 12 commands'} onClick={() => setShowCalls((v) => !v)} aria-expanded={showCalls} />
             </Box>
-            {showCalls && (
-              <Box background="background-contrast" round="xsmall" pad="small" flex={false}>
-                {COMMANDS.map((c) => <Text key={c} size="small" style={mono}>{c}</Text>)}
-              </Box>
-            )}
+            {showCalls && <CodeBlock lines={COMMANDS} a11yTitle="The 12 commands of the plan" />}
             <Text size="small" color="text-weak">When you have reviewed the plan, tick the box next to the green button.<Mark n={4} /></Text>
-          </Box>
+          </Panel>
         )}
 
         {state === 'configured' && (
-          <Box background="background-front" round="small" border={{ color: 'border-weak' }} pad="medium" gap="small" flex={false}>
+          <Panel>
             <StatusLine state="complete" time="19:32">zz_rc_vvs_rcg and zz_rc_test_rcg created and started. 12 writes, none failed.</StatusLine>
             <Section title="What each array answered" summary="12 writes, in the order they were made">
               {COMMANDS.slice(0, 6).map((c) => (
@@ -181,16 +175,16 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
             </Section>
             <Section title="To remove what this run created" summary="Paste on A first, then on B">
               <Box direction="row" gap="small">
-                <Button size="small" secondary label="Copy the commands for A" />
-                <Button size="small" secondary label="Copy the commands for B" />
+                <Button size="small" label="Copy the commands for A" />
+                <Button size="small" label="Copy the commands for B" />
                 <Button size="small" label="Download both" />
               </Box>
             </Section>
-          </Box>
+          </Panel>
         )}
 
         {verified && (
-          <Box background="background-front" round="small" border={{ color: 'border-weak' }} pad="medium" gap="small" flex={false}>
+          <Panel>
             <StatusLine state="complete" time="19:33">2 groups replicating. Links up 2 of 2 each way.</StatusLine>
             {['zz_rc_vvs_rcg', 'zz_rc_test_rcg'].map((g) => (
               <Box key={g} direction="row" gap="medium" align="center">
@@ -199,7 +193,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
                 <Text size="small" color="text-weak">Started · Primary here, Secondary on the peer · 1 of 1 volume synced</Text>
               </Box>
             ))}
-          </Box>
+          </Panel>
         )}
 
         {at > 0 && (
@@ -228,7 +222,7 @@ export const replication: Screen = {
     'The step is split into five parts done in order. The bar shows where you are, and the green button is always the next part: Read, Check the link, Configure, Verify. Today this page has 9 buttons at once.',
     'Finished parts fold to one line each, with Show for the detail and the part\'s own Read again or Check again. The footer keeps only Continue without replication and the green button.',
     'Groups already on the array fold into one line at the bottom.',
-    'The authorisation tick sits in the footer, right next to the button it unlocks, so it is always on screen. Today the tick is mid-page and the button at the bottom.',
+    'The authorisation tick sits in the footer, right next to the button it unlocks, so it is always on screen. The button stays active: press it before the tick and it tells you what is missing, as the Design System asks, instead of a greyed button that says nothing.',
     'Latency over the limit: same rule as today. The Continue anyway tick is in the footer next to the green button, and the choice goes into the result and the as-built.',
   ],
   keeps: [
@@ -241,7 +235,7 @@ export const replication: Screen = {
     ['Result table, removal sets with Copy and Download', 'Part 4'],
     ['Verify replication and its table', 'Part 5'],
     ['Replication already present table', 'Folded section at the bottom'],
-    ['Continue without configuring replication', 'Footer, left'],
+    ['Continue without configuring replication', 'Footer, beside the green button'],
   ],
   render: (state, setState) => <Replication state={state} setState={setState} />,
 };
