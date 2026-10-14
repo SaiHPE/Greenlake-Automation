@@ -1,23 +1,27 @@
-import { Box, Button, CheckBox, Grommet, Select, Text } from 'grommet';
+import { Box, Button, CheckBox, Grommet, Select, Text, ThemeType } from 'grommet';
 import { hpe } from 'grommet-theme-hpe';
 import { deepMerge } from 'grommet/utils';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { theme } from '../src/theme';
 import { NotesContext } from './kit';
 import { Screen } from './screen';
+import { asbuilt } from './screens/AsBuilt';
 import { discovery } from './screens/Discovery';
+import { failover } from './screens/Failover';
 import { finish } from './screens/Finish';
 import { handoff } from './screens/Handoff';
 import { home } from './screens/Home';
 import { overview } from './screens/Overview';
 import { prerequisites } from './screens/Prerequisites';
+import { provision } from './screens/Provision';
 import { replication } from './screens/Replication';
-import { mode, sheet } from './screens/SheetMode';
+import { custom, mode, sheet } from './screens/SheetMode';
 import { startScreen } from './screens/Start';
 import { stopped } from './screens/Stopped';
+import { verify } from './screens/Verify';
 
-const SCREENS: Screen[] = [home, prerequisites, sheet, mode, overview, discovery, replication, handoff, stopped, finish];
+const SCREENS: Screen[] = [home, prerequisites, sheet, mode, overview, discovery, replication, handoff, stopped, finish, provision, failover, verify, asbuilt, custom];
 const WIDTHS = [
   { label: 'Jump box 1366 × 768', w: 1366, h: 768 },
   { label: 'Small laptop 1080 × 720', w: 1080, h: 720 },
@@ -50,7 +54,11 @@ function Frame() {
     window.location.hash = `${screen.id}/${s}`;
     window.parent.postMessage({ mockupState: s, id: screen.id }, '*');
   };
-  return <NotesContext.Provider value={notes}>{screen.render(state, setState)}</NotesContext.Provider>;
+  return (
+    <NotesContext.Provider value={notes}>
+      <Fragment key={`${screen.id}/${state}`}>{screen.render(state, setState)}</Fragment>
+    </NotesContext.Provider>
+  );
 }
 
 function Gallery() {
@@ -194,7 +202,8 @@ const isFrame = new URLSearchParams(window.location.search).get('frame') === '1'
  * for an h2, which is too much for a section title inside a step, so h2 and h3 get an `xsmall` size
  * taken from the theme's own small text token. The app theme would get the same two lines.
  */
-const mockTheme = deepMerge(theme, { heading: { level: { 2: { xsmall: hpe.text.small }, 3: { xsmall: hpe.text.small } } } });
+const small = (hpe as ThemeType).text?.small;
+const mockTheme = deepMerge(theme, { heading: { level: { 2: { xsmall: small }, 3: { xsmall: small } } } } as unknown as ThemeType);
 
 createRoot(document.getElementById('root')!).render(
   <Grommet theme={mockTheme} full>

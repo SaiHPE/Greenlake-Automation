@@ -1,5 +1,5 @@
-import { Anchor, Box, Button, FileInput, Grid, Text } from 'grommet';
-import { useState } from 'react';
+import { Anchor, Box, Button, CheckBox, FileInput, Grid, Notification, ResponsiveContext, Text } from 'grommet';
+import { useContext, useState } from 'react';
 import { StatusIcon, StepState } from '../../src/ui/status';
 import { STEPS, rail, stepLabel } from '../data';
 import { AppFrame, Guidance, Mark, Panel, SelectorCard, StatusLine, StepPage } from '../kit';
@@ -96,21 +96,52 @@ const MODES: { key: string; title: string; text: string; steps: string[] }[] = [
   { key: 'both', title: 'Onboard, then provision', text: 'Set up the array, then provision storage.', steps: ['greenlake', 'cloudinit', 'dscc', 'discover', 'zoning', 'provision', 'verify', 'asbuilt'] },
   { key: 'repl', title: 'Provision, then replicate', text: 'Provision, then Remote Copy to the peer array and a failover test.', steps: ['discover', 'zoning', 'provision', 'replicate', 'failover', 'verify', 'asbuilt'] },
   { key: 'verify', title: 'Verify only', text: 'Read the array and compare it with the sheet. Changes nothing.', steps: ['verify', 'asbuilt'] },
-  { key: 'custom', title: 'Custom', text: 'Pick the steps yourself.', steps: [] },
+  { key: 'custom', title: 'Custom', text: 'Pick the steps yourself, below.', steps: [] },
 ];
 const LABEL: Record<string, string> = Object.fromEntries(STEPS.map((s) => [s.key, s.label]));
 LABEL.greenlake = 'GreenLake registration';
 LABEL.cloudinit = 'Cloud Connectivity';
 LABEL.dscc = 'DSCC Setup';
 
-function Mode() {
-  const [mode, setMode] = useState('repl');
-  const chosen = MODES.find((m) => m.key === mode)!;
+// The step catalogue the app serves, with its one-line subtitles, grouped by stage for the picker.
+const CATALOG: { stage: string; steps: { key: string; label: string; subtitle: string }[] }[] = [
+  { stage: 'Onboard', steps: [
+    { key: 'greenlake', label: 'GreenLake registration', subtitle: 'Register, assign and subscribe' },
+    { key: 'cloudinit', label: 'Cloud Connectivity', subtitle: 'Connect the array to HPE GreenLake' },
+    { key: 'dscc', label: 'DSCC Setup', subtitle: 'Set Up System wizard' },
+  ] },
+  { stage: 'Provision', steps: [
+    { key: 'discover', label: 'Discovery', subtitle: 'Array ports, host adapters, fabric logins' },
+    { key: 'zoning', label: 'SAN zoning', subtitle: 'Check the zoning, draft the switch commands' },
+    { key: 'provision', label: 'Provision storage', subtitle: 'Hosts, volumes and exports' },
+  ] },
+  { stage: 'Replicate', steps: [
+    { key: 'replicate', label: 'Replication', subtitle: 'Remote Copy groups to the peer array' },
+    { key: 'failover', label: 'Failover test', subtitle: 'Fail over, recover, restore' },
+  ] },
+  { stage: 'Document', steps: [
+    { key: 'verify', label: 'Verify configuration', subtitle: 'Read-only configuration check' },
+    { key: 'asbuilt', label: 'As-built document', subtitle: 'Hand-over document' },
+  ] },
+];
+const ORDER = CATALOG.flatMap((g) => g.steps.map((s) => s.key));
+
+function Mode({ state }: { state: string }) {
+  const size = useContext(ResponsiveContext);
+  const columns = size === 'xsmall' ? 1 : size === 'small' ? 2 : 3;
+  const custom = state.startsWith('custom');
+  const [mode, setMode] = useState(custom ? 'custom' : 'repl');
+  const [picked, setPicked] = useState<string[]>(state === 'custom-missing' ? ['zoning', 'provision', 'verify'] : ['discover', 'zoning', 'provision', 'verify']);
+  const preset = MODES.find((m) => m.key === mode)!;
+  const steps = mode === 'custom' ? ORDER.filter((k) => picked.includes(k)) : preset.steps;
+  const missingDiscovery = mode === 'custom' && (picked.includes('zoning') || picked.includes('provision')) && !picked.includes('discover');
+  const blocked = mode === 'custom' && picked.length === 0 ? 'Tick at least one step.' : missingDiscovery ? 'Add Discovery: SAN zoning and Provision storage work from what it finds.' : undefined;
+  const toggle = (key: string) => (on: boolean) => setPicked((p) => (on ? [...p, key] : p.filter((k) => k !== key)));
   return (
     <AppFrame
-      groups={rail('mode', 'action_required', {}, { runSteps: false, preview: chosen.steps })}
+      groups={rail('mode', 'action_required', {}, { runSteps: false, preview: steps })}
       current="mode"
-      railNote={chosen.steps.length ? `${chosen.steps.length} steps for ${chosen.title}. Create the run to start.` : 'Pick the steps on the next screen.'}
+      railNote={steps.length ? `${steps.length} steps for ${preset.title}. Create the run to start.` : 'Tick the steps to see them here.'}
     >
       <StepPage
         stepLabel={stepLabel('mode')}
@@ -118,29 +149,57 @@ function Mode() {
         title="What do you want to do?"
         description="The run includes only the steps this choice needs. Each run keeps its own steps; start another run from Runs, top right, to do something else with the same workbook."
         state="action_required"
-        stateLabel="Choose a mode"
-        primary={{ label: `Create run · ${chosen.steps.length || 'your'} steps` }}
+        stateLabel={mode === 'custom' ? 'Pick the steps' : 'Choose a mode'}
+        primary={{ label: `Create run · ${steps.length} step${steps.length === 1 ? '' : 's'}`, blocked }}
         guideOpen={false}
         activity={{ last: '19:21:58  Workbook read: CZ2D320BT1, 4 tabs', events: 4, commands: 0 }}
         guidance={
           <Guidance
             items={[
               { title: 'You can change your mind', body: 'Each run keeps its own steps. Start another run from Runs, top right, to do something else with the same workbook.' },
-              { title: 'Replication needs its tab', body: 'Provision, then replicate is offered when the workbook has the Replication tab filled in.' },
+              { title: 'Replication needs its tab', body: 'Provision, then replicate, and the Replication and Failover test steps, are offered when the workbook has the Replication tab filled in.' },
+              { title: 'Custom', body: 'SAN zoning and Provision storage work from what Discovery finds, so a custom run that has either of them needs Discovery too.' },
             ]}
           />
         }
       >
-        <Grid columns={{ count: 'fit', size: 'small' }} gap="small" role="radiogroup" aria-label="What do you want to do?">
+        <Grid columns={{ count: columns, size: 'auto' }} gap="small" role="radiogroup" aria-label="What do you want to do?">
           {MODES.map((m) => (
             <SelectorCard key={m.key} title={m.title} checked={m.key === mode} onSelect={() => setMode(m.key)}>
               <Text size="small" color="text-weak">{m.text}</Text>
             </SelectorCard>
           ))}
         </Grid>
+        {mode === 'custom' && (
+          <Panel title={<>Steps to run<Mark n={2} /></>} right={<Text size="small" color="text-weak">{picked.length} of {ORDER.length} ticked</Text>}>
+            <Grid columns={{ count: 'fit', size: 'small' }} gap="medium">
+              {CATALOG.map((g) => (
+                <Box key={g.stage} gap="xsmall" flex={false}>
+                  <Text size="small" weight={500} color="text-weak">{g.stage}</Text>
+                  {g.steps.map((s) => (
+                    <CheckBox
+                      key={s.key}
+                      checked={picked.includes(s.key)}
+                      onChange={(e) => toggle(s.key)(e.target.checked)}
+                      label={
+                        <Box>
+                          <Text size="small">{s.label}</Text>
+                          <Text size="xsmall" color="text-weak">{s.subtitle}</Text>
+                        </Box>
+                      }
+                    />
+                  ))}
+                </Box>
+              ))}
+            </Grid>
+            {missingDiscovery && (
+              <Notification status="warning" message="SAN zoning and Provision storage work from the discovery results. Tick Discovery as well." />
+            )}
+          </Panel>
+        )}
         <Text size="small" color="text-weak">
           <Text size="small" weight={500} color="text-strong">This run will do: </Text>
-          {chosen.steps.length ? chosen.steps.map((k) => LABEL[k] ?? k).join('  →  ') : 'the steps you tick on the next screen.'}
+          {steps.length ? steps.map((k) => LABEL[k] ?? k).join('  →  ') : 'the steps you tick above.'}
           <Mark n={1} />
         </Text>
       </StepPage>
@@ -158,5 +217,26 @@ export const mode: Screen = {
     ['The six mode cards', 'Same six, as Design System selector cards: the whole card is the choice, as many per row as fit'],
     ['Create run', 'Footer, right (green)'],
   ],
-  render: () => <Mode />,
+  render: () => <Mode state="preset" />,
+};
+
+export const custom: Screen = {
+  id: 'M15',
+  title: 'Custom: pick the steps',
+  states: [
+    { key: 'custom', label: 'A valid pick (4 steps)' },
+    { key: 'custom-missing', label: 'Zoning without Discovery' },
+  ],
+  notes: [
+    'Same screen as Mode. Choosing Custom opens the step list under the cards, in the order the run will take them, grouped by stage, each with the one line that says what it does. The list on the left fills in as you tick.',
+    'A pick that cannot run (SAN zoning without Discovery) says so right under the list, and Create run says it again if pressed. The button is never greyed out.',
+  ],
+  keeps: [
+    ['Custom mode card', 'Same card'],
+    ['Steps to run checkboxes with their subtitles', 'Steps to run panel, grouped by stage'],
+    ['"Discovery is required" warning', 'Under the list, and the Create run message'],
+    ['"The Replication tab is required" warning', 'Same place when the workbook has no Replication tab (this workbook has one)'],
+    ['Create run', 'Footer, right (green), with the step count'],
+  ],
+  render: (state) => <Mode state={state} />,
 };

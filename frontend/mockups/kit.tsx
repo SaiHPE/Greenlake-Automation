@@ -630,6 +630,29 @@ export function Section({
   );
 }
 
+/**
+ * The parts of a step done in order (read, check, plan, configure, verify): a status indicator per
+ * part, the current one highlighted. Shows where the operator is inside a long step.
+ */
+export function PartsBar({ parts, at, doneAll }: { parts: string[]; at: number; doneAll: boolean }) {
+  return (
+    <Box direction="row" align="center" gap="xsmall" wrap flex={false} role="list" aria-label="Parts of this step">
+      {parts.map((p, i) => {
+        const state: RunState = doneAll || i < at ? 'complete' : i === at ? 'action_required' : 'not_started';
+        return (
+          <Box key={p} direction="row" align="center" gap="xsmall" role="listitem" aria-current={i === at && !doneAll ? 'step' : undefined}>
+            {i > 0 && <Box pad={{ horizontal: 'small' }} border={{ side: 'top', color: i <= at ? 'border-strong' : 'border-weak' }} aria-hidden />}
+            <Box direction="row" gap="xsmall" align="center" pad={{ horizontal: 'small', vertical: 'xsmall' }} round="large" background={i === at && !doneAll ? 'background-selected-primary' : undefined}>
+              <StateIcon state={state} />
+              <Text size="small" weight={i === at ? 'bold' : 500} color={state === 'not_started' ? 'text-weak' : 'text-strong'}>{i + 1}. {p}</Text>
+            </Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
 /** Finished parts of a step, one compact line each, with the part's own "do it again" on the right. */
 export function DoneList({ items }: { items: { text: string; again?: string; detail?: ReactNode }[] }) {
   const [open, setOpen] = useState<number | null>(null);
