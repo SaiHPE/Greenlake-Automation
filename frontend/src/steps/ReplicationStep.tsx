@@ -345,7 +345,9 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
             ? `stopped after ${result.outcomes.filter((o) => o.status === 'created').length} write(s)`
             : 'replication configured'
           : plan
-            ? blocked
+            ? plan.error
+              ? 'the arrays could not be read'
+              : blocked
               ? `${plan.blockers.length} finding${plan.blockers.length === 1 ? '' : 's'} to resolve`
               : toCreate > 0
                 ? 'awaiting approval'

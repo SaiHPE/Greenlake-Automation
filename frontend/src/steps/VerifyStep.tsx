@@ -107,6 +107,8 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
   const currentKeys = new Set((report?.health_issues ?? []).map(issueKey));
   const cleared = (previous?.health_issues ?? []).filter((i) => !currentKeys.has(issueKey(i)));
   const issues = report?.health_issues ?? [];
+  // each line is one component and summary; qty is how many items the array counts on it
+  const issueItems = issues.reduce((n, i) => n + (i.qty || 0), 0);
   const newIssues = previousEvent ? issues.filter((i) => !previousKeys.has(issueKey(i))).length : 0;
 
   const verify = async () => {
@@ -137,7 +139,9 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
         `${matches} of ${report.checks.length} settings match`,
         differ.length ? `${differ.map((c) => c.field).join(', ')} differ${differ.length === 1 ? 's' : ''}` : '',
         notReadable ? `${notReadable} not readable` : '',
-        issues.length ? `${issues.length} array status issue${issues.length === 1 ? '' : 's'}${newIssues ? `, ${newIssues} new since the last check` : ''}` : 'The array reports no status issues',
+        issues.length
+          ? `The array's status check lists ${issueItems} item${issueItems === 1 ? '' : 's'} on ${issues.length} line${issues.length === 1 ? '' : 's'}${newIssues ? `, ${newIssues} line${newIssues === 1 ? '' : 's'} new since the last check` : ''}`
+          : 'The array reports no status issues',
       ].filter(Boolean).join('. ') + '.'
     : '';
 
