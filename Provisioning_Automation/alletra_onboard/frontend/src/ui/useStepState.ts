@@ -98,12 +98,15 @@ export function deriveStepState(step: ServedStep, run: RunRecord | null, events:
   const mine = events.filter((event) => owns(step, event.phase));
   // a zoning command set generated after the newest check means the run now waits on the SAN team
   let handedOff = false;
+  let ended = false;
 
   for (let i = mine.length - 1; i >= 0; i -= 1) {
     const event = mine[i];
     const type = event.event_type;
     if (signals.ignore?.includes(type)) {
       if (type === 'zoning.rendered') handedOff = true;
+      // a finished report (replication verify, path check) closes the progress lines that led to it
+      if (!ACTIVE.test(type)) ended = true;
       continue;
     }
     if (FAILURE.test(type)) return 'failed';
@@ -117,7 +120,12 @@ export function deriveStepState(step: ServedStep, run: RunRecord | null, events:
       return 'complete';
     }
     if (signals.gate.includes(type)) return handedOff ? 'waiting' : 'action_required';
-    if (ACTIVE.test(type)) return 'running';
+    // a progress line followed by a newer result (the link check's) is history, not "running"
+    if (ACTIVE.test(type)) {
+      if (!ended) return 'running';
+      continue;
+    }
+    ended = true;
   }
 
   if (run && owns(step, run.current_phase)) return runStatusToState(run.status);
