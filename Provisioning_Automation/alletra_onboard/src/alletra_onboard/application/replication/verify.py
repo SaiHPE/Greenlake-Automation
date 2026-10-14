@@ -23,9 +23,9 @@ from alletra_onboard.domain.replication import (
 _NEXT_STEP = {
     "stopped": "Start the group (`startrcopygroup <group>`); if it stops again, check the links and the target's status.",
     "stale": "A Stale volume needs a full resynchronisation; if it persists after a start, contact HPE Support.",
-    "failsafe": "The group is in Failsafe: I/O is blocked on the primary. Follow the DR procedure (recover or restore) — see SPEC-017.",
+    "failsafe": "The group is in Failsafe: I/O is blocked on the primary. Follow HPE's disaster recovery procedure (recover or restore).",
     "missing_peer": "The peer has no group of that name: the start did not mirror. Check `showrcopy groups` on the peer.",
-    "role": "Roles are not Primary here / Secondary on the peer: a failover or reverse has happened. See the DR role table (SPEC-017).",
+    "role": "Roles are not Primary here / Secondary on the peer: a failover or reverse has happened. Check the roles on both arrays (`showrcopy groups`) before going on.",
 }
 
 

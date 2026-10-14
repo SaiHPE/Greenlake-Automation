@@ -125,13 +125,13 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
     if report.partnership is None:
         f.append(
             f"No Remote Copy partnership between {a} and {b}: neither array has a target whose links point at "
-            f"the other's RCIP addresses. The tool configures partnerships from v0.19 (ADR 0015); until then it "
-            "has to exist before this step."
+            f"the other's RCIP addresses. Set up the partnership on the arrays first; this tool does not create "
+            "partnerships yet."
         )
         fc = [t.name for v in (primary, peer) for t in v.targets if t.type.upper() == "FC"]
         if fc:
-            f.append(f"Remote Copy over Fibre Channel target(s) found ({', '.join(sorted(set(fc)))}); this release "
-                     "supports Remote Copy over IP only (ADR 0015).")
+            f.append(f"Remote Copy over Fibre Channel target(s) found ({', '.join(sorted(set(fc)))}); this tool "
+                     "supports Remote Copy over IP only.")
     else:
         p = report.partnership
         used = [p.target_for(m) for m in sorted(row_modes)]
@@ -158,7 +158,7 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
             if mode in p.target_by_mode:
                 continue
             tail = ("Use {have} on the Replication tab, or a second target over spare RCIP ports (a link belongs "
-                    "to one target; the tool configures targets from v0.19).")
+                    "to one target; set it up on the arrays, this tool does not create targets yet).")
             if len(p.targets) == 1 and p.targets[0].modes:
                 t = p.targets[0]
                 have = t.modes[0]
@@ -182,8 +182,8 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                 f.append(
                     f"The Replication tab mixes sync and async rows and {a} → {b} has one target ('{p.targets[0].name}'); "
                     "every group on one target must replicate in the same mode (HPE Support Matrix). Make all rows one "
-                    "mode, or add a second target over spare RCIP ports (a link belongs to one target; the tool "
-                    "configures targets from v0.19)."
+                    "mode, or add a second target over spare RCIP ports (a link belongs to one target; set it up on "
+                    "the arrays, this tool does not create targets yet)."
                 )
             else:
                 other = next((m for m, n in p.target_by_mode.items() if m != mode), None)
@@ -199,7 +199,7 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                     f"None of the {len(p.targets)} targets from {a} to {b} can carry a {mode} group ({'; '.join(parts)}); "
                     "every group on one target must replicate in the same mode (HPE Support Matrix). Use that mode on "
                     "the Replication tab, or a target of its own over spare RCIP ports (a link belongs to one target; "
-                    "the tool configures targets from v0.19)."
+                    "set it up on the arrays, this tool does not create targets yet)."
                 )
     for row in intent.protections:
         limit = RTT_LIMIT_MS[row.mode]

@@ -93,7 +93,10 @@ def test_no_partnership_when_the_links_point_elsewhere():
     a, b = _views(b_overrides={"showport -rcip": "N:S:P State HwAddr IPAddr Netmask Gateway MTU Rate\n0:4:3 ready 00 10.9.9.1 255.255.255.0 - 1500 10Gbps\n"})
     assert find_partnership(a, b) is None
     report = check(a, b, _intent())
-    assert any("No Remote Copy partnership between AlletraMP_D22U27 and AlletraMP_E18U31" in f and "v0.19" in f for f in report.findings)
+    assert any("No Remote Copy partnership between AlletraMP_D22U27 and AlletraMP_E18U31" in f
+               and "Set up the partnership on the arrays first" in f for f in report.findings)
+    # operator-facing text carries no internal version or document number
+    assert not any("v0." in f or "ADR" in f or "SPEC-" in f for f in report.findings)
 
 
 # ------------------------------------------------------------------ R2 findings
@@ -114,7 +117,7 @@ def test_an_async_row_on_a_target_that_carries_sync_groups_is_a_finding():
         "Target 'AlletraMP_E18U31' already carries 6 sync group(s) (300gb, APP_Test, Intern_Automation, Intern_Automation2…); "
         "every group on one target must replicate in the same mode (HPE Support Matrix), so async groups cannot be started "
         "there. Use sync on the Replication tab, or a second target over spare RCIP ports (a link belongs "
-        "to one target; the tool configures targets from v0.19)."
+        "to one target; set it up on the arrays, this tool does not create targets yet)."
     )
 
 
@@ -127,8 +130,8 @@ def test_mixed_modes_on_the_tab_with_one_target_is_a_finding():
     assert finding == (
         "The Replication tab mixes sync and async rows and AlletraMP_D22U27 → AlletraMP_E18U31 has one target "
         "('AlletraMP_E18U31'); every group on one target must replicate in the same mode (HPE Support Matrix). Make all "
-        "rows one mode, or add a second target over spare RCIP ports (a link belongs to one target; the tool configures "
-        "targets from v0.19)."
+        "rows one mode, or add a second target over spare RCIP ports (a link belongs to one target; set it up on the "
+        "arrays, this tool does not create targets yet)."
     )
     assert report.partnership.target_by_mode == {"sync": "AlletraMP_E18U31"}
 
@@ -150,7 +153,8 @@ def test_stopped_groups_of_the_other_mode_are_still_a_finding_with_the_honest_se
         "Target 'AlletraMP_E18U31' already carries 6 sync group(s) (300gb, APP_Test, Intern_Automation, Intern_Automation2…), "
         "all stopped. The array would start async groups beside them, but every group on one target must replicate in the "
         "same mode (HPE Support Matrix), so the tool will not put their restart at risk. Use sync on the Replication tab, or "
-        "a second target over spare RCIP ports (a link belongs to one target; the tool configures targets from v0.19)."
+        "a second target over spare RCIP ports (a link belongs to one target; set it up on the arrays, this tool does not "
+        "create targets yet)."
     )
 
 
@@ -250,7 +254,7 @@ def test_a_fibre_channel_only_pair_says_so():
     a, b = _views(a_overrides={"showrcopy": fc, "showport -rcip": "There is no specified port information\n"})
     report = check(a, b, _intent())
     assert any(f.startswith("No Remote Copy partnership") for f in report.findings)
-    assert any(f == "Remote Copy over Fibre Channel target(s) found (SiteB); this release supports Remote Copy over IP only (ADR 0015)."
+    assert any(f == "Remote Copy over Fibre Channel target(s) found (SiteB); this tool supports Remote Copy over IP only."
                for f in report.findings)
 
 
