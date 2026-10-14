@@ -1,7 +1,8 @@
-import { Box, Button, Notification, Spinner, Text } from 'grommet';
+import { Box, Button, Text } from 'grommet';
 import { useEffect, useState } from 'react';
 import { ClockStatus, getClock, syncClock } from './api';
-import { Surface } from './ui/primitives';
+import { Panel, StatusLine } from './ui/blocks';
+import { StatusIndicator } from './ui/status';
 
 interface Props {
   // When set, the skew is measured against this host's HTTPS Date header (the DSCC console);
@@ -49,38 +50,52 @@ export function useClock(consoleUrl?: string) {
 
 export function ClockSync({ consoleUrl, title = 'System clock', note }: Props) {
   const { clock, message, busy, error, setError, skewOff, sync } = useClock(consoleUrl);
+  const skew = Math.abs(Math.round(clock?.skew_seconds ?? 0));
 
   return (
-    <Surface title={title}>
-      {clock === null ? (
-        <Box direction="row" gap="small" align="center">
-          <Spinner size="small" />
-          <Text size="small" color="text-weak">Checking the clock…</Text>
-        </Box>
-      ) : skewOff ? (
-        <Notification
-          status="warning"
-          title={`Clock is off by ~${Math.abs(Math.round(clock.skew_seconds as number))}s`}
-          message='A skewed clock stops the array connecting to DSCC ("iat is in the future"). Sync it now.'
+    <Panel
+      title={title}
+      right={
+        <StatusIndicator
+          state={clock === null ? 'running' : skewOff ? 'action_required' : clock.skew_seconds == null ? 'not_started' : 'complete'}
+          label={clock === null ? 'Checking' : skewOff ? `Off by about ${skew} s` : clock.skew_seconds == null ? 'Not checked' : `In sync (±${skew} s)`}
         />
-      ) : clock.skew_seconds == null ? (
+      }
+    >
+      {skewOff ? (
+        <StatusLine state="action_required" title={`The clock is off by about ${skew} seconds`}>
+          A clock that is off stops the array connecting to DSCC (&quot;iat is in the future&quot;). Sync it now.
+        </StatusLine>
+      ) : clock && clock.skew_seconds == null ? (
         <Text size="small" color="text-weak">
-          Couldn&apos;t reach a time source to check ({clock.error ?? 'unknown'}). You can still sync below.
+          Could not reach a time source to check ({clock.error ?? 'unknown'}). You can still sync.
         </Text>
-      ) : (
-        <Text size="small" color="status-ok">
-          ✓ Clock is in sync (±{Math.abs(Math.round(clock.skew_seconds))}s vs {clock.source}).
+      ) : clock ? (
+        <Text size="small" color="text-weak">
+          Compared with {clock.source}.
         </Text>
-      )}
-      <Box direction="row" gap="small" align="center">
-        <Button primary={skewOff} label={busy ? 'Syncing…' : 'Sync system clock'} disabled={busy} onClick={sync} />
-        <Text size="small" color="text-weak">{note ?? 'Uses an HTTPS time source — works where NTP is blocked.'}</Text>
+      ) : null}
+      <Box direction="row" gap="small" align="center" wrap>
+        <Button size="small" primary={skewOff} busy={busy} label="Sync system clock" onClick={sync} />
+        <Text size="small" color="text-weak">
+          {note ?? 'Uses an HTTPS time source, which works where NTP is blocked.'}
+        </Text>
       </Box>
       {clock && !clock.is_admin && (
-        <Text size="small" color="text-weak">Run the app as Administrator for the sync to set the clock.</Text>
+        <Text size="small" color="text-weak">
+          Run the app as Administrator for the sync to set the clock.
+        </Text>
       )}
-      {message && <Text size="small" color="status-ok">{message}</Text>}
-      {error && <Notification status="critical" title="Sync failed" message={error} onClose={() => setError(null)} />}
-    </Surface>
+      {message && (
+        <Text size="small" color="text-weak">
+          {message}
+        </Text>
+      )}
+      {error && (
+        <StatusLine state="failed" title="Sync failed" onClose={() => setError(null)}>
+          {error}
+        </StatusLine>
+      )}
+    </Panel>
   );
 }
