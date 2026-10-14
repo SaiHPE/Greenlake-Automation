@@ -167,9 +167,9 @@ export function Section({
         </Box>
         {right && (
           // controls in the header must not toggle the section
-          <Box flex={false} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+          <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()} style={{ flex: '0 0 auto' }}>
             {right}
-          </Box>
+          </span>
         )}
       </Box>
       <Collapsible open={open}>

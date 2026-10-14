@@ -13,7 +13,7 @@ interface Props {
 
 // Shared "System clock" check + sync. A drifted clock (>2 min) blocks the array from connecting
 // to DSCC, so the operator can correct it both up front (prerequisites) and at the DSCC step.
-export function ClockSync({ consoleUrl, title = 'System clock', note }: Props) {
+export function useClock(consoleUrl?: string) {
   const [clock, setClock] = useState<ClockStatus | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -43,6 +43,12 @@ export function ClockSync({ consoleUrl, title = 'System clock', note }: Props) {
       setBusy(false);
     }
   };
+
+  return { clock, message, busy, error, setError, skewOff, sync };
+}
+
+export function ClockSync({ consoleUrl, title = 'System clock', note }: Props) {
+  const { clock, message, busy, error, setError, skewOff, sync } = useClock(consoleUrl);
 
   return (
     <Surface title={title}>

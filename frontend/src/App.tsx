@@ -183,7 +183,7 @@ export default function App() {
   // itself: deriving it in both places is how a rail entry ends up disagreeing with its own header.
   const scaffoldState = (key: string): StepState => {
     if (key === 'prereq') return maxStep > 0 ? 'complete' : 'action_required';
-    if (key === 'sheet') return sheetToken || runId ? 'complete' : maxStep >= 1 ? 'action_required' : 'not_started';
+    if (key === 'sheet') return sheetToken || runId || sheetResult ? 'complete' : maxStep >= 1 ? 'action_required' : 'not_started';
     if (key === 'mode') return runId ? 'complete' : maxStep >= 2 ? 'action_required' : 'not_started';
     return run?.status === 'succeeded' ? 'complete' : runId ? 'action_required' : 'not_started';
   };
@@ -333,6 +333,7 @@ export default function App() {
                         catalog={registry?.steps ?? []}
                         state={scaffoldState('mode')}
                         hasReplicationTab={Boolean(sheetResult?.targets?.peer_host) || Boolean(runId)}
+                        runSteps={runSteps.map((item) => item.label)}
                       />
                     )}
                     {current.key === 'greenlake' && runId && <GreenLakeStep runId={runId} run={run} events={events} onDone={next} />}
