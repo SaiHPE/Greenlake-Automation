@@ -1,4 +1,5 @@
 import { Box, Button, DataTable, Text } from 'grommet';
+import { Search } from 'grommet-icons';
 import { useState } from 'react';
 import {
   ArrayPort,
@@ -12,9 +13,11 @@ import {
   getStoragePreflight,
   startDiscover,
 } from '../api';
+import { EmptyState, Guidance, Section, StatusLine } from '../ui/blocks';
 import { DiscoveryFreshness } from '../ui/discoveryAge';
-import { ContinueButton, InlineNotification, NotesList, Surface, TableSummary } from '../ui/primitives';
+import { InlineNotification, NotesList, TableSummary } from '../ui/primitives';
 import { StatusIndicator } from '../ui/status';
+import { useStepContext } from '../ui/StepContext';
 import { StepShell } from '../ui/StepShell';
 
 interface Props {
@@ -130,11 +133,15 @@ const HOST_COLUMNS = [
   },
 ];
 
-function HostsTable({ title, description, rows, fold }: { title: string; description: string; rows: DiscoveredHost[]; fold?: boolean }) {
+function HostsTable({ title, description, rows, fold, open: openInitially }: { title: string; description: string; rows: DiscoveredHost[]; fold?: boolean; open?: boolean }) {
   const [open, setOpen] = useState(false);
   const folded = !!fold && !open && rows.length > OTHER_HOSTS_FOLD;
+  const loggedIn = rows.filter((h) => h.logged_in).length;
   return (
-    <Surface title={`${title} (${rows.length})`} description={description}>
+    <Section title={`${title} (${rows.length})`} summary={`${loggedIn} logged in to the array`} open={openInitially}>
+      <Text size="small" color="text-weak">
+        {description}
+      </Text>
       <DataTable columns={HOST_COLUMNS} data={folded ? rows.slice(0, OTHER_HOSTS_FOLD) : rows} primaryKey={false} a11yTitle={`${title}: one row per server`} />
       {folded && (
         <Box direction="row" align="center" gap="small">
@@ -142,11 +149,12 @@ function HostsTable({ title, description, rows, fold }: { title: string; descrip
           <Button size="small" label={`Show all ${rows.length}`} onClick={() => setOpen(true)} />
         </Box>
       )}
-    </Surface>
+    </Section>
   );
 }
 
 export function DiscoveryStep({ runId, run, events, onDone }: Props) {
+  const { nextTitle } = useStepContext();
   const [error, setError] = useState<string | null>(null);
   const [preflight, setPreflight] = useState<PreflightReport | null>(null);
   const [checking, setChecking] = useState(false);
@@ -156,6 +164,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
     ([...events].reverse().find((event) => event.event_type === 'discover.completed')?.data?.report as
       | DiscoveryReport
       | undefined) ?? null;
+  const reportAt = [...events].reverse().find((event) => event.event_type === 'discover.completed')?.created_at;
   const fcPorts = (report?.array_ports ?? []).filter((port) => port.protocol === 'fc');
   const iscsiPorts = (report?.array_ports ?? []).filter((port) => port.protocol === 'iscsi');
   const readyPorts = fcPorts.filter((port) => port.link_state === 'ready').length;
@@ -211,25 +220,47 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
       stateDetail={report ? `${fcPorts.length} ports · ${inRun.length} host${inRun.length === 1 ? '' : 's'} in this run` : undefined}
       error={error}
       onDismissError={() => setError(null)}
-      activityEmpty="Run discovery to read the environment."
-      footerNote="Discovery results persist with the run and survive an application restart."
-      actions={
-        <>
-          <Button busy={checking} label={checking ? 'Checking' : 'Check readiness'} onClick={checkReadiness} />
-          <Button
-            busy={running}
-            label={report ? 'Re-run discovery' : running ? 'Discovering' : 'Run discovery'}
-            onClick={discover}
-          />
-          {report && <ContinueButton onClick={onDone} />}
-        </>
+      buttons={[
+        { label: checking ? 'Checking' : 'Check readiness', busy: checking, onClick: checkReadiness },
+        ...(report ? [{ label: running ? 'Discovering' : 'Run discovery again', busy: running, onClick: discover }] : []),
+      ]}
+      primary={
+        report
+          ? { label: nextTitle ? `Continue to ${nextTitle}` : 'Continue', onClick: onDone }
+          : { label: running ? 'Discovering' : 'Run discovery', busy: running, onClick: discover }
+      }
+      guidance={
+        <Guidance
+          items={[
+            {
+              title: 'What it reads',
+              body: "The array's target ports and host view over SSH, each ESXi host's adapters from vCenter, and the Windows and Linux hosts listed on the Hosts tab.",
+            },
+            { title: 'Read-only', body: 'Discovery changes nothing on the array, vCenter or the switches.' },
+            { title: 'Kept with the run', body: 'The results stay with this run and survive a restart of the app. Run it again any time.' },
+            { title: 'Not sure the array is reachable?', body: 'Check readiness tests the array and vCenter logins first, in a few seconds.' },
+          ]}
+        />
       }
     >
+      {running && <StatusLine state="running">Reading the array, vCenter and the hosts. Each part appears in Activity, below.</StatusLine>}
+      {report && !running && !report.error && (
+        <StatusLine state="complete" time={reportAt ? new Date(reportAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined}>
+          Discovery finished: {fcPorts.length} Fibre Channel ports ({readyPorts} ready), {inRun.length} host{inRun.length === 1 ? '' : 's'} in
+          this run, {others.length} other host{others.length === 1 ? '' : 's'} on the array. Nothing was changed.
+        </StatusLine>
+      )}
+
       {preflight && (
-        <Surface
+        <Section
           title="Environment readiness"
-          description="Read-only checks against the array and vCenter named in the sheet. Nothing is modified."
+          summary={preflight.ready ? 'Every prerequisite is met' : 'Something is blocked'}
+          open
+          right={<StatusIndicator state={preflight.ready ? 'complete' : 'failed'} label={preflight.ready ? 'Ready' : 'Blocked'} />}
         >
+          <Text size="small" color="text-weak">
+            Read-only checks against the array and vCenter named in the sheet. Nothing is modified.
+          </Text>
           <DataTable
             columns={[
               {
@@ -263,27 +294,27 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
           />
           <TableSummary>
             {preflight.ready
-              ? 'Every prerequisite is satisfied — discovery can run.'
+              ? 'Every prerequisite is satisfied. Discovery can run.'
               : 'Resolve the blocked checks above; discovery cannot succeed until they pass.'}
           </TableSummary>
-        </Surface>
+        </Section>
       )}
 
       {!report && !running && (
-        <Surface title="Nothing discovered yet">
-          <Text size="small" color="text-weak">
-            {/* X-5: what's missing, why, the way forward. */}
-            No array ports, hosts or fabric logins are known for this run yet. Zoning and provisioning need them
-            to decide which hosts can be presented to. Run discovery (read-only: the array's ports and host view,
-            plus each ESXi host's adapters from vCenter) — or run <i>Check readiness</i> first if you are unsure the
-            array and vCenter are reachable.
-          </Text>
-        </Surface>
+        <EmptyState icon={<Search size="large" color="icon-weak" />} title="Not run yet">
+          {/* X-5: what's missing, why, the way forward. */}
+          Run discovery to read the array&apos;s ports, the hosts and their fabric logins. SAN zoning and Provision storage need what it
+          finds. It changes nothing. Not sure the array and vCenter are reachable? Check readiness first.
+        </EmptyState>
       )}
 
       <DiscoveryFreshness events={events} action="continuing" />
 
-      {report?.error && <InlineNotification tone="critical" title="Discovery reported a problem" message={report.error} />}
+      {report?.error && (
+        <StatusLine state="failed" title="Discovery reported a problem">
+          {report.error}
+        </StatusLine>
+      )}
 
       {report && previousDiscovery && (
         <InlineNotification
@@ -294,7 +325,13 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
       )}
 
       {report && (
-        <Surface title="Array target ports" description="Fibre Channel ports the array presents to hosts.">
+        <Section
+          title={`${fcPorts.length} array Fibre Channel port${fcPorts.length === 1 ? '' : 's'}`}
+          summary={`${readyPorts} ready · ${fcPorts.length - readyPorts} need a cable or switch-port check`}
+        >
+          <Text size="small" color="text-weak">
+            Fibre Channel ports the array presents to hosts.
+          </Text>
           <DataTable
             columns={[
               { property: 'label', header: 'Port', render: (port: ArrayPort) => <Text size="small" style={mono}>{`${port.node}:${port.slot}:${port.card_port}`}</Text> },
@@ -324,11 +361,11 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
           <TableSummary>
             {readyPorts} ready · {fcPorts.length - readyPorts} require a cable or switch-port check
           </TableSummary>
-        </Surface>
+        </Section>
       )}
 
       {iscsiPorts.length > 0 && (
-        <Surface title="Array iSCSI ports">
+        <Section title={`${iscsiPorts.length} array iSCSI port${iscsiPorts.length === 1 ? '' : 's'}`} summary={`${iscsiPorts.filter((p) => p.link_state === 'ready').length} ready`}>
           <DataTable
             columns={[
               { property: 'label', header: 'Port', render: (port: ArrayPort) => <Text size="small" style={mono}>{`${port.node}:${port.slot}:${port.card_port}`}</Text> },
@@ -345,14 +382,14 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             primaryKey={false}
             a11yTitle="Array iSCSI ports with address and link state"
           />
-        </Surface>
+        </Section>
       )}
 
       {report && report.file_ports.length > 0 && (
-        <Surface
-          title="File service ports"
-          description="Ethernet ports serving file protocols. These occupy the same n:s:p as iSCSI ports, so the role comes from the array's own port type, never from the slot number."
-        >
+        <Section title={`${report.file_ports.length} file service port${report.file_ports.length === 1 ? '' : 's'}`} summary="Ethernet ports serving file protocols">
+          <Text size="small" color="text-weak">
+            These occupy the same n:s:p as iSCSI ports, so the role comes from the array&apos;s own port type, never from the slot number.
+          </Text>
           <DataTable
             columns={[
               { property: 'label', header: 'Port', render: (p: EthernetPort) => <Text size="small" style={mono}>{`${p.node}:${p.slot}:${p.card_port}`}</Text> },
@@ -392,14 +429,18 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             primaryKey={false}
             a11yTitle="File service ports with address, VLAN, MTU and link"
           />
-        </Surface>
+        </Section>
       )}
 
       {report && report.replication_ports.length > 0 && (
-        <Surface
-          title="Replication ports (RCIP)"
-          description="IP replication ports. Configured = carries a replication address; Available = link up, no replication configuration yet; Not cabled = no link. The array's node interconnect looks identical apart from its port type and is deliberately excluded."
+        <Section
+          title={`${report.replication_ports.length} replication port${report.replication_ports.length === 1 ? '' : 's'} (RCIP)`}
+          summary={`${report.replication_ports.filter((p) => p.role === 'rcip').length} configured for Remote Copy over IP`}
         >
+          <Text size="small" color="text-weak">
+            Configured = carries a replication address; Available = link up, no replication configuration yet; Not cabled = no link. The
+            array&apos;s node interconnect looks identical apart from its port type and is deliberately excluded.
+          </Text>
           <DataTable
             columns={[
               { property: 'label', header: 'Port', render: (p: EthernetPort) => <Text size="small" style={mono}>{`${p.node}:${p.slot}:${p.card_port}`}</Text> },
@@ -433,34 +474,35 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
             {report.replication_ports.filter((p) => p.role === 'rcip').length} of{' '}
             {report.replication_ports.length} replication-capable ports configured
           </TableSummary>
-        </Surface>
+        </Section>
       )}
 
       {report && hosts.length > 0 && (
-        <>
+        <Box gap="medium" flex={false}>
           {/* SPEC-014: the run's hosts, one table per OS. */}
           {(Object.keys(OS_LABEL) as DiscoveredHost['os'][])
             .filter((os) => inRun.some((h) => h.os === os))
             .map((os) => (
               <HostsTable
                 key={os}
-                title={`Hosts in this run — ${os === 'unknown' ? 'OS not reported' : OS_LABEL[os]}`}
+                open
+                title={`Hosts in this run, ${os === 'unknown' ? 'OS not reported' : OS_LABEL[os]}`}
                 description="Servers the sheet's vCenter reports, the sheet declares, or a sheet host set names. A sheet host typed without a WWPN/IQN is looked up in vCenter and on the array; its serial number, WWPNs and IQN are filled in from what was found."
                 rows={inRun.filter((h) => h.os === os)}
               />
             ))}
           <HostsTable
             title="Other hosts on this array"
-            description="Every other server the array can see — other tenants of a shared array. Listed so you know what not to touch; this run never changes them."
+            description="Every other server the array can see: other tenants of a shared array. Listed so you know what not to touch; this run never changes them."
             rows={others}
             fold
           />
           <Text size="xsmall" color="text-weak">
-            Legend — <b>Logged in (odd, even)</b>: the array sees the initiator on those fabrics · <b>Not logged in</b>: configured
-            or expected but no login (not zoned, or the server is off) · <b>none yet</b>: no host object on the array; provisioning
-            creates one · <b>OS not reported</b>: no source states an operating system (the array's persona is shown when it has one).
+            Legend. <b>Logged in (odd, even)</b>: the array sees the initiator on those fabrics. <b>Not logged in</b>: configured
+            or expected but no login (not zoned, or the server is off). <b>none yet</b>: no host object on the array; provisioning
+            creates one. <b>OS not reported</b>: no source states an operating system (the array&apos;s persona is shown when it has one).
           </Text>
-        </>
+        </Box>
       )}
 
       {report && report.notes.length > 0 && (
