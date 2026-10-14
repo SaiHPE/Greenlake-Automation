@@ -354,7 +354,16 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
       }
       error={error}
       onDismissError={() => setError(null)}
-      top={<PartsBar parts={['Read both arrays', 'Check the link', 'Review the plan', 'Configure', 'Verify']} at={at} doneAll={replicating} failed={partFailed} />}
+      top={
+        <PartsBar
+          parts={['Read both arrays', 'Check the link', 'Review the plan', 'Configure', 'Verify']}
+          at={at}
+          doneAll={replicating}
+          failed={partFailed}
+          // a blocked plan is reviewed before the link is measured
+          notDone={rcip && !measured && !result ? [1] : []}
+        />
+      }
       primary={primary}
       buttons={buttons}
       // The only replication action that writes to the arrays: an explicit authorisation, not a click.

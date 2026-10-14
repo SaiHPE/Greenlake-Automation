@@ -377,13 +377,25 @@ export function SelectorCard({
   );
 }
 
-/** The parts of a long step, done in order, the current one highlighted. */
-export function PartsBar({ parts, at, doneAll, failed }: { parts: string[]; at: number; doneAll: boolean; failed?: boolean }) {
+/** The parts of a long step, done in order, the current one highlighted. `notDone`: earlier parts still open. */
+export function PartsBar({
+  parts,
+  at,
+  doneAll,
+  failed,
+  notDone = [],
+}: {
+  parts: string[];
+  at: number;
+  doneAll: boolean;
+  failed?: boolean;
+  notDone?: number[];
+}) {
   return (
     <Box direction="row" align="center" gap="xsmall" wrap flex={false} role="list" aria-label="Parts of this step">
       {parts.map((p, i) => {
         const state: StepState =
-          doneAll || i < at ? 'complete' : i === at ? (failed ? 'failed' : 'action_required') : 'not_started';
+          doneAll || (i < at && !notDone.includes(i)) ? 'complete' : i === at ? (failed ? 'failed' : 'action_required') : 'not_started';
         return (
           <Box key={p} direction="row" align="center" gap="xsmall" role="listitem" aria-current={i === at && !doneAll ? 'step' : undefined}>
             {i > 0 && <Box pad={{ horizontal: 'small' }} border={{ side: 'top', color: i <= at ? 'border-strong' : 'border-weak' }} aria-hidden />}
