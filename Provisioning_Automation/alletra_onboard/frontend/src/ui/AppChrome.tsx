@@ -1,6 +1,7 @@
-import { Box, Button, Header, Nav, Text } from 'grommet';
-import { FormPrevious } from 'grommet-icons';
+import { Box, Button, Header, Menu, Nav, ResponsiveContext, Text } from 'grommet';
+import { Apps, Close, LinkPrevious } from 'grommet-icons';
 import { light } from 'hpe-design-tokens/grommet';
+import { useContext } from 'react';
 import { StatusIcon, StatusIndicator, StepState } from './status';
 
 const BRAND = light.hpe.color.decorative.brand;
@@ -20,95 +21,109 @@ export function HpeElement({ width = 40 }: { width?: number }) {
   );
 }
 
-/** Brand and service name on the left; which array, which mode and how the run is doing on the right. */
+/**
+ * The Design System app header: brand element and product name on the left, linking to the
+ * landing page (Your runs); the open run and the Runs menu on the right.
+ */
 export function AppHeader({
-  title,
+  appName,
   serial,
   mode,
   runState,
   runLabel,
+  onHome,
+  onNewRun,
 }: {
-  title: string;
+  appName: string;
   serial?: string;
   mode?: string;
   runState?: StepState;
   runLabel?: string;
+  onHome: () => void;
+  onNewRun: () => void;
 }) {
+  const size = useContext(ResponsiveContext);
+  const narrow = size === 'small' || size === 'xsmall';
   return (
     <Header
       background="background-front"
       pad={{ horizontal: 'medium', vertical: 'small' }}
-      justify="between"
-      align="center"
+      border={{ side: 'bottom', color: 'border-weak' }}
       gap="medium"
       flex={false}
     >
-      <Box direction="row" align="center" gap="small" flex={false}>
-        <HpeElement />
-        <Text size="large" weight="bold" color="text-strong">
-          {title}
-        </Text>
-      </Box>
-      <Box direction="row" align="center" gap="small" flex={false} wrap>
-        {serial && (
-          <Text size="small" color="text-strong">
-            {serial}
-          </Text>
-        )}
-        {mode && (
-          <>
-            <Text size="small" color="text-weak">
-              ·
+      <Button plain onClick={onHome} a11yTitle={`HPE Alletra Storage MP ${appName}: your runs`}>
+        <Box direction="row" align="center" gap="small">
+          <HpeElement width={36} />
+          <Box direction="row" gap="xsmall" align="baseline" wrap>
+            <Text weight="bold" color="text-strong">
+              HPE Alletra Storage MP
             </Text>
-            <Text size="small">{mode}</Text>
-          </>
-        )}
-        {runState && (
-          <>
-            <Text size="small" color="text-weak">
-              ·
+            <Text color="text-strong">{appName}</Text>
+          </Box>
+        </Box>
+      </Button>
+      <Box direction="row" align="center" gap="medium" flex={false}>
+        {serial && !narrow && (
+          <Box direction="row" align="center" gap="small">
+            <Text size="small" weight="bold" color="text-strong">
+              {serial}
             </Text>
-            <StatusIndicator state={runState} label={runLabel} />
-          </>
+            {mode && (
+              <Text size="small" color="text-weak">
+                {mode}
+              </Text>
+            )}
+            {runState && <StatusIndicator state={runState} label={runLabel} />}
+          </Box>
         )}
+        <Menu
+          label="Runs"
+          items={[
+            { label: 'Your runs', onClick: onHome },
+            { label: 'Start a new run', onClick: onNewRun },
+          ]}
+          dropAlign={{ top: 'bottom', right: 'right' }}
+        />
       </Box>
     </Header>
   );
 }
 
 /**
- * The wizard bar: Previous step on the left, Cancel run on the right, pinned above the step so both
- * stay reachable while scrolling — the Design System's wizard header controls.
+ * The Design System wizard header: the previous step by name on the left, what is being done in the
+ * middle, Cancel on the right. A control that does not apply is not shown.
  */
 export function WizardBar({
-  onPrevious,
-  canGoPrevious,
-  onCancel,
-  canCancel,
-  onOpenRun,
+  flow,
+  previous,
+  cancel,
 }: {
-  onPrevious: () => void;
-  canGoPrevious: boolean;
-  onCancel: () => void;
-  canCancel: boolean;
-  onOpenRun?: () => void;
+  flow: string;
+  previous?: { label: string; onClick: () => void };
+  cancel?: { label: string; onClick: () => void };
 }) {
+  const size = useContext(ResponsiveContext);
+  const compact = size === 'small' || size === 'xsmall';
   return (
-    <Box
-      direction="row"
-      justify="between"
-      align="center"
-      pad={{ horizontal: 'medium', vertical: 'xsmall' }}
-      border={{ side: 'bottom', color: 'border-weak' }}
-      flex={false}
-    >
-      <Button icon={<FormPrevious />} label="Previous step" onClick={onPrevious} disabled={!canGoPrevious} />
-      <Box direction="row" gap="small">
-        {/* X-9 (2026-09-16): the browser remembers one run; every other run needed the console. */}
-        {onOpenRun && <Button label="Open another run" onClick={onOpenRun} />}
-        <Button label="Cancel run" onClick={onCancel} disabled={!canCancel} />
+    <Header background="background-contrast" pad={{ horizontal: 'medium', vertical: 'xsmall' }} responsive={false} flex={false}>
+      <Box direction="row" flex>
+        {previous && (
+          <Button
+            icon={<LinkPrevious />}
+            label={compact ? undefined : previous.label}
+            a11yTitle={`Previous step: ${previous.label}`}
+            onClick={previous.onClick}
+          />
+        )}
       </Box>
-    </Box>
+      <Text size="small" weight={500} color="text-strong" truncate>
+        {flow}
+      </Text>
+      <Box direction="row" flex justify="end">
+        {cancel && <Button icon={<Close />} label={compact ? undefined : cancel.label} reverse onClick={cancel.onClick} />}
+      </Box>
+    </Header>
   );
 }
 
@@ -121,23 +136,85 @@ export interface RailItem {
   reachable: boolean;
 }
 
+function RailRow({
+  label,
+  hint,
+  icon,
+  current,
+  reachable,
+  a11yTitle,
+  onSelect,
+  muted,
+}: {
+  label: string;
+  hint?: string;
+  icon: React.ReactNode;
+  current: boolean;
+  reachable: boolean;
+  a11yTitle: string;
+  onSelect: () => void;
+  muted?: boolean;
+}) {
+  return (
+    <Box
+      direction="row"
+      gap="small"
+      align="start"
+      pad={{ horizontal: 'small', vertical: 'xsmall' }}
+      round="xsmall"
+      background={current ? 'background-selected-primary' : undefined}
+      onClick={reachable ? onSelect : undefined}
+      hoverIndicator={reachable && !current ? 'background-hover' : undefined}
+      focusIndicator={reachable}
+      flex={false}
+      // Which step is active must be programmatic, not just bold text on a tinted row.
+      role={reachable ? 'button' : undefined}
+      aria-current={current ? 'step' : undefined}
+      aria-disabled={reachable ? undefined : true}
+      a11yTitle={a11yTitle}
+      style={{ cursor: reachable ? 'pointer' : 'default' }}
+    >
+      <Box pad={{ top: 'xxsmall' }} flex={false}>
+        {icon}
+      </Box>
+      <Box>
+        <Text size="small" weight={current ? 'bold' : 500} color={muted && !current ? 'text-weak' : 'text-strong'}>
+          {label}
+        </Text>
+        {hint && (
+          <Text size="xsmall" color="text-weak">
+            {hint}
+          </Text>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
 /**
  * The step rail, grouped by deployment stage.
  *
  * The Design System's wizard is linear and forward-only. This one is not: the operator chooses a
  * mode that selects a subset of steps, several steps wait on the operator, and any completed step
- * can be revisited. The rail is what makes that scope and position legible, so it stays — and the
+ * can be revisited. The rail is what makes that scope and position legible, so it stays, and the
  * step identifier carries "Step X of Y" to meet the progress guidance. See docs/UX-GUIDELINES.md.
  */
 export function StepRail({
   items,
   activeKey,
   onSelect,
+  overview,
+  note,
 }: {
   items: RailItem[];
   activeKey: string;
   onSelect: (key: string) => void;
+  /** The run overview row, shown once a run exists. */
+  overview?: { current: boolean; onSelect: () => void };
+  note?: string;
 }) {
+  const size = useContext(ResponsiveContext);
+  if (size === 'small' || size === 'xsmall') return null;
   const groups: { name: string; items: RailItem[] }[] = [];
   items.forEach((item) => {
     const existing = groups.find((group) => group.name === item.group);
@@ -148,55 +225,53 @@ export function StepRail({
   return (
     <Nav
       background="background-front"
-      pad={{ horizontal: 'small', vertical: 'medium' }}
-      gap="medium"
-      width="medium"
+      border={{ side: 'right', color: 'border-weak' }}
+      pad={{ horizontal: 'xsmall', vertical: 'small' }}
+      gap="small"
+      width={{ min: 'small', max: 'medium' }}
+      basis="1/6"
       flex={false}
       overflow="auto"
-      a11yTitle="Deployment steps"
+      a11yTitle="Steps of this run"
     >
+      {overview && (
+        <RailRow
+          label="Run overview"
+          hint="Every step on one page"
+          icon={<Apps size="small" />}
+          current={overview.current}
+          reachable
+          a11yTitle="Run overview"
+          onSelect={overview.onSelect}
+        />
+      )}
       {groups.map((group) => (
         <Box key={group.name} gap="xxsmall" flex={false}>
-          <Text size="xsmall" weight={600} color="text-weak" margin={{ horizontal: 'small', bottom: 'xxsmall' }}>
-            {group.name.toUpperCase()}
+          <Text size="small" weight={500} color="text-weak" margin={{ left: 'small', top: 'xsmall' }}>
+            {group.name}
           </Text>
-          {group.items.map((item) => {
-            const current = item.key === activeKey;
-            return (
-              <Box
-                key={item.key}
-                direction="row"
-                gap="small"
-                align="center"
-                pad={{ horizontal: 'small', vertical: 'xsmall' }}
-                round="xsmall"
-                background={current ? 'background-contrast' : undefined}
-                onClick={item.reachable ? () => onSelect(item.key) : undefined}
-                focusIndicator={item.reachable}
-                flex={false}
-                // Which step is active must be programmatic, not just bold text on a tinted row.
-                role={item.reachable ? 'button' : undefined}
-                aria-current={current ? 'step' : undefined}
-                aria-disabled={item.reachable ? undefined : true}
-                a11yTitle={`${item.label} — ${item.state.replace('_', ' ')}`}
-                style={{ opacity: item.reachable ? 1 : 0.5, cursor: item.reachable ? 'pointer' : 'default' }}
-              >
-                <StatusIcon state={item.state} />
-                <Box flex>
-                  <Text size="small" weight={current ? 'bold' : undefined} color={current ? 'text-strong' : undefined}>
-                    {item.label}
-                  </Text>
-                  {item.hint && (
-                    <Text size="xsmall" color="text-weak">
-                      {item.hint}
-                    </Text>
-                  )}
-                </Box>
-              </Box>
-            );
-          })}
+          {group.items.map((item) => (
+            <RailRow
+              key={item.key}
+              label={item.label}
+              hint={item.hint}
+              icon={<StatusIcon state={item.state} />}
+              current={item.key === activeKey}
+              reachable={item.reachable}
+              muted={item.state === 'not_started'}
+              a11yTitle={`${item.label}: ${item.state.replace('_', ' ')}`}
+              onSelect={() => onSelect(item.key)}
+            />
+          ))}
         </Box>
       ))}
+      {note && (
+        <Box pad="small" margin={{ top: 'xsmall' }} background="background-contrast" round="xsmall" flex={false}>
+          <Text size="xsmall" color="text-weak">
+            {note}
+          </Text>
+        </Box>
+      )}
     </Nav>
   );
 }
