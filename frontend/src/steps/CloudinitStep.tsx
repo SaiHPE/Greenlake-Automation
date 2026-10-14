@@ -1,7 +1,7 @@
 import { Box, Button, FormField, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
 import { useState } from 'react';
 import { launchDiscoveryTool, RunEvent, RunRecord, startCloudinit } from '../api';
-import { ContinueButton, InlineNotification, Surface } from '../ui/primitives';
+import { Guidance, Panel, StatusLine } from '../ui/blocks';
 import { StatusIndicator } from '../ui/status';
 import { StepShell } from '../ui/StepShell';
 import { useStepContext } from '../ui/StepContext';
@@ -26,6 +26,10 @@ export function isLinkLocalWizardUrl(raw: string): boolean {
   return ipv6.test(value);
 }
 
+function Value({ children }: { children: string }) {
+  return children ? <Text size="small">{children}</Text> : <Text size="small" color="text-weak" a11yTitle="No value">--</Text>;
+}
+
 export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
   // 169.254.0.0 is the placeholder the workbook carries when no per-boot address was recorded, so
   // the field starts empty and the operator must paste the current one.
@@ -33,7 +37,7 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [discoveryBusy, setDiscoveryBusy] = useState(false);
   const [discovery, setDiscovery] = useState<{ ok: boolean; text: string } | null>(null);
-  const { step } = useStepContext();
+  const { step, nextTitle } = useStepContext();
 
   const mine = events.filter((event) => event.phase === 'CLOUDINIT_CONNECT');
   const running = run?.status === 'running' && run?.current_phase === 'CLOUDINIT_CONNECT';
@@ -44,11 +48,11 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
     run?.status === 'waiting_for_operator' &&
     run?.current_phase === 'CLOUDINIT_CONNECT' &&
     mine.some((event) => event.event_type === 'operator.review_ready');
-  // Accepts BOTH link-local families — the Discovery Tool reports whichever it found the array on,
+  // Accepts BOTH link-local families: the Discovery Tool reports whichever it found the array on,
   // and an IPv6-only result is normal (reported live: serial CZ2D2K014S returned only
   // https://[fe80::6095:14a0:b25d:fcb0], and this gate rejected it so the step could not start).
   // The path is optional here because the tool's Launch field gives a bare origin; the backend
-  // normalises and is authoritative — see domain/cloudinit_url.py.
+  // normalises and is authoritative; see domain/cloudinit_url.py.
   const valid = isLinkLocalWizardUrl(url);
 
   const dns = form.dns
@@ -87,108 +91,102 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
   return (
     <StepShell
       title="Cloud Connectivity"
-      description="Populates the array's on-box wizard with the network configuration from the workbook, then connects the array to HPE GreenLake."
+      description="Fills the array's own setup wizard with the network values from the workbook, then connects the array to HPE GreenLake."
       error={error}
       onDismissError={() => setError(null)}
-      activityEmpty="Paste the array wizard address and start the connection."
-      footerNote="Values are verified against the array's own review screen immediately before submission."
       gate={
         awaitingSubmit
           ? {
               title: 'Submit the wizard in the array console',
               message:
-                'The values are populated and verified. Select Submit in the browser window that is open on the array wizard; this step continues as soon as the array reports connected.',
+                'The values are filled in and checked. Select Submit in the browser window open on the array wizard; this step carries on as soon as the array reports connected.',
             }
           : null
       }
-      actions={
-        connected ? (
-          <ContinueButton onClick={onDone} />
-        ) : (
-          <Button
-            primary
-            busy={running}
-            label={running ? 'Connecting' : 'Populate and connect'}
-            disabled={!valid}
-            onClick={start}
-          />
-        )
+      primary={
+        connected
+          ? { label: nextTitle ? `Continue to ${nextTitle}` : 'Continue', onClick: onDone }
+          : {
+              label: running ? 'Connecting' : 'Fill in and connect',
+              busy: running,
+              onClick: start,
+              blocked: valid ? undefined : "Paste the array's wizard address first: https://169.254.x.x/cloudinit or https://[fe80::…]/cloudinit.",
+            }
+      }
+      guidance={
+        <Guidance
+          items={[
+            { title: 'The address changes on every boot', body: 'Search the HPE Discovery Tool for the serial number and copy the wizard link. IPv4 or IPv6, whichever it reports.' },
+            {
+              title: 'A wrong address cannot be applied',
+              body: 'The array wizard forgets typed values if it is left idle, so the tool reads its review screen again just before submitting and refuses if the management IP does not match the workbook.',
+            },
+            { title: 'To change a value', body: 'Go back to the initialisation sheet, correct the workbook and upload it again.' },
+          ]}
+        />
       }
     >
-      <Surface
+      {connected && (
+        <StatusLine state="complete" title="The array is connected to HPE GreenLake">
+          Cloud connectivity is established.
+        </StatusLine>
+      )}
+      {running && !awaitingSubmit && <StatusLine state="running">Filling in the array wizard. Each screen appears in Activity, below.</StatusLine>}
+
+      <Panel
         title="Array wizard address"
-        description="The link-local address changes on every boot; paste the current value."
-        actions={
-          <Button busy={discoveryBusy} label="Launch the HPE Discovery Tool" onClick={openDiscovery} />
-        }
+        description="The link-local address changes on every boot; paste the current one."
+        right={<Button size="small" busy={discoveryBusy} label="Launch the HPE Discovery Tool" onClick={openDiscovery} />}
       >
-        <Box width="large" flex={false}>
+        <Box width={{ max: 'large' }} flex={false}>
           <FormField
             label="Cloud Connectivity URL"
             htmlFor="cloudinit-url"
-            help={`Search the Discovery Tool for ${run?.serial_number ?? 'the serial number'} and copy the wizard link. IPv4 or IPv6 — paste whichever it reports.`}
+            name="cloudinit-url"
+            help={`Search the Discovery Tool for ${run?.serial_number ?? 'the serial number'} and copy the wizard link.`}
             error={
               url.trim() && !valid
-                ? 'Enter the array’s link-local address — https://169.254.12.34/cloudinit or https://[fe80::1]/cloudinit'
+                ? 'Enter the array’s link-local address: https://169.254.12.34/cloudinit or https://[fe80::1]/cloudinit'
                 : undefined
             }
           >
             <TextInput
               id="cloudinit-url"
+              name="cloudinit-url"
               placeholder="https://169.254.x.x/cloudinit or https://[fe80::…]/cloudinit"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
             />
           </FormField>
         </Box>
-        {discovery && (
-          <Box pad={{ top: 'xsmall' }} flex={false}>
-            <StatusIndicator state={discovery.ok ? 'complete' : 'failed'} label={discovery.text} />
-          </Box>
-        )}
-      </Surface>
+        {discovery && <StatusIndicator state={discovery.ok ? 'complete' : 'failed'} label={discovery.text} />}
+      </Panel>
 
-      <Surface
-        title="Configuration to be applied"
-        description="Review these here. To change any value, return to the initialisation sheet."
-      >
+      <Panel title="Values the wizard gets" description="From the workbook. To change one, correct the workbook and upload it again.">
         <NameValueList pairProps={{ direction: 'column' }} valueProps={{ width: 'medium' }}>
           <NameValuePair name="Management IP">
-            <Text>{form.mgmt_ipv4 || '—'}</Text>
+            <Value>{form.mgmt_ipv4}</Value>
           </NameValuePair>
           <NameValuePair name="Subnet mask">
-            <Text>{form.mask || '—'}</Text>
+            <Value>{form.mask}</Value>
           </NameValuePair>
           <NameValuePair name="Gateway">
-            <Text>{form.gateway || '—'}</Text>
+            <Value>{form.gateway}</Value>
           </NameValuePair>
           <NameValuePair name="DNS">
-            <Text>{dns || '—'}</Text>
+            <Value>{dns}</Value>
           </NameValuePair>
           <NameValuePair name="NTP">
-            <Text>{form.ntp || '—'}</Text>
+            <Value>{form.ntp}</Value>
           </NameValuePair>
           <NameValuePair name="Time zone">
-            <Text>{form.timezone || '—'}</Text>
+            <Value>{form.timezone}</Value>
           </NameValuePair>
           <NameValuePair name="Proxy">
-            <Text>{proxy}</Text>
+            <Value>{proxy}</Value>
           </NameValuePair>
         </NameValueList>
-        <InlineNotification
-          tone="info"
-          title="A wrong address cannot be applied"
-          message="The array wizard discards typed values if it is left idle, so the tool re-reads the review screen immediately before submitting and refuses to proceed if the management IP does not match the values above."
-        />
-      </Surface>
-
-      {connected && (
-        <InlineNotification
-          tone="ok"
-          title="The array is connected to HPE GreenLake"
-          message="Cloud connectivity is established. Continue to DSCC setup."
-        />
-      )}
+      </Panel>
     </StepShell>
   );
 }
