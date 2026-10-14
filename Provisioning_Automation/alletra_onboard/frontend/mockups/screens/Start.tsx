@@ -4,12 +4,12 @@ import { Screen } from '../screen';
 
 const DAY: { moment: string; what: string; screen: string }[] = [
   { moment: 'Arrive', what: 'Open the app on the jump box. See every run on this box, who each one waits on, and pick up where you left off.', screen: 'M7' },
-  { moment: 'Prepare', what: 'Check the workstation and the HPE side (connection, proxy, clock, workspace, API client, cabling). Upload the sheet. Say what you want to do.', screen: 'M1 M2 M3' },
-  { moment: 'Work', what: 'One step at a time: one line of status, one green button, details folded. Nothing is written without your tick.', screen: 'M5 M6' },
+  { moment: 'Prepare', what: 'Check the workstation and the HPE side (connection, proxy, clock, workspace, API client, cabling). Upload the sheet. Say what you want to do.', screen: 'M1 M2 M3 M15' },
+  { moment: 'Work', what: 'One step at a time: one line of status, one green button, details folded. Nothing is written without your tick.', screen: 'M5 M11 M6 M12' },
   { moment: 'Hand off', what: 'Zoning goes to the SAN team as a command set. The run says who it waits on and since when. You go and do something else.', screen: 'M8' },
   { moment: 'Come back', what: 'Next morning, on Home the run shows what changed. Check zoning again and carry on.', screen: 'M7 M8 M4' },
   { moment: 'Something stops', what: 'One sentence on what the device refused, then numbered options: fix and retry, or undo with the removal commands.', screen: 'M9' },
-  { moment: 'Finish', what: 'The hand-over package: as-built, command log, removal commands, and what still has to be done by hand.', screen: 'M10' },
+  { moment: 'Finish', what: 'Verify, write the as-built, then the hand-over package: as-built, command log, removal commands, and what still has to be done by hand.', screen: 'M13 M14 M10' },
 ];
 
 const VOCAB: { state: RunState; word: string; means: string; colour: string }[] = [
@@ -49,7 +49,7 @@ function Start({ screens, go }: { screens: Screen[]; go: (id: string) => void })
     <Box fill overflow="auto" background="background-back">
       <Box pad="large" gap="medium" width={{ max: 'xlarge' }} flex={false}>
         <Box>
-          <Text size="small" color="text-weak">Redesign mockups · draft 3 · 13/10/2026</Text>
+          <Text size="small" color="text-weak">Redesign mockups · draft 3 · 14/10/2026 · every step of the run is now mocked (M11 to M15 are new)</Text>
           <Heading level={1} size="small" margin="none">HPE Alletra Storage MP onboarding: a calmer screen per step</Heading>
         </Box>
         <Text>

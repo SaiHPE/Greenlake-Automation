@@ -1,32 +1,13 @@
 import { Box, Button, DataTable, Text } from 'grommet';
 import { Connect } from 'grommet-icons';
-import { Fragment, useState } from 'react';
-import { StatusIndicator, StepState } from '../../src/ui/status';
+import { useState } from 'react';
+import { StatusIndicator } from '../../src/ui/status';
 import { COMMANDS, EXISTING_GROUPS, PLAN, RUN, rail, stepLabel } from '../data';
-import { Action, AppFrame, CodeBlock, Confirmation, DoneList, EmptyState, Guidance, Mark, Panel, Section, StateIcon, StatusLine, StepPage, mono } from '../kit';
+import { Action, AppFrame, CodeBlock, Confirmation, DoneList, EmptyState, Guidance, Mark, Panel, PartsBar, Section, StatusLine, StepPage, mono } from '../kit';
 import { Screen } from '../screen';
 
 const PARTS = ['Read both arrays', 'Check the link', 'Review the plan', 'Configure', 'Verify'];
 const PART_OF: Record<string, number> = { read: 0, link: 1, 'link-over': 1, plan: 2, configured: 3, verified: 4 };
-
-function PartsBar({ at, doneAll }: { at: number; doneAll: boolean }) {
-  return (
-    <Box direction="row" align="center" gap="xsmall" wrap flex={false}>
-      {PARTS.map((p, i) => {
-        const state: StepState = doneAll || i < at ? 'complete' : i === at ? 'action_required' : 'not_started';
-        return (
-          <Fragment key={p}>
-            {i > 0 && <Box pad={{ horizontal: 'small' }} border={{ side: 'top', color: i <= at ? 'border-strong' : 'border-weak' }} />}
-            <Box direction="row" gap="xsmall" align="center" pad={{ horizontal: 'small', vertical: 'xsmall' }} round="large" background={i === at && !doneAll ? 'background-selected-primary' : undefined}>
-              <StateIcon state={state} />
-              <Text size="small" weight={i === at ? 'bold' : 500} color={state === 'not_started' ? 'text-weak' : 'text-strong'}>{i + 1}. {p}</Text>
-            </Box>
-          </Fragment>
-        );
-      })}
-    </Box>
-  );
-}
 
 function LinkTable({ ms }: { ms: string }) {
   const rows = [
@@ -93,7 +74,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
         guideOpen={state === 'read'}
         top={
           <Box direction="row" align="center" flex={false}>
-            <PartsBar at={at} doneAll={verified} />
+            <PartsBar parts={PARTS} at={at} doneAll={verified} />
             <Mark n={1} />
           </Box>
         }
