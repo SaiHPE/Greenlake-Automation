@@ -276,7 +276,8 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
         </StatusLine>
       )}
 
-      <Section title={result ? 'Composition applied' : 'Compose'} summary="Host set members and exports" open={!plan}>
+      {/* keyed: Section reads `open` once, so it folds when the plan arrives */}
+      <Section key={plan ? 'planned' : 'compose'} title={result ? 'Composition applied' : 'Compose'} summary="Host set members and exports" open={!plan}>
         <ProvisioningBuilderView runId={runId} disabled={running} readOnly={!!result} />
       </Section>
 
@@ -365,6 +366,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
       )}
 
       <Section
+        key={paths ? 'read' : 'not-read'}
         title="Path verification"
         summary={
           paths?.error
