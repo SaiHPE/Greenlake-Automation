@@ -19,6 +19,8 @@ export interface StepContextValue {
   nextTitle?: string;
   /** Advance to the next step in the wizard. */
   onDone: () => void;
+  /** Where the step's footer is drawn: under the scrolling page, so the actions are always on screen. */
+  footerHost?: HTMLElement | null;
 }
 
 const StepContext = createContext<StepContextValue | null>(null);

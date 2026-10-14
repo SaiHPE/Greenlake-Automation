@@ -2,7 +2,7 @@
 // output; a prompt that runs only the read-only allowlist with the run's credential (R3); and Open
 // terminal for anything else (R5). The log comes from the run's store, so a refresh loses nothing.
 import { Box, Button, Select, Text, TextInput } from 'grommet';
-import { Copy, Download, Down, Search, Terminal as TerminalIcon, Up } from 'grommet-icons';
+import { Copy, Download, Search, Terminal as TerminalIcon, Time } from 'grommet-icons';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
@@ -15,8 +15,10 @@ import {
   getConsoleLog,
   getConsoleTargets,
   openConsoleTerminal,
+  RunEvent,
   runConsoleCommand,
 } from '../api';
+import { ActivityTimeline } from './primitives';
 
 const DIM = '\x1b[2m';
 const GREY = '\x1b[90m';
@@ -39,8 +41,15 @@ function paint(term: Terminal, e: CommandRecord) {
   if (out) for (const line of out.split(/\r?\n/)) term.writeln(`${DIM}    ${line}${RESET}`);
 }
 
-export function ConsolePane({ runId }: { runId: string }) {
-  const [open, setOpen] = useState(false);
+/**
+ * The bar under every step: the step's last event always visible, its full activity list and the
+ * console one click away. `activity` is the current step's events (the whole run's on pages that are
+ * not a step).
+ */
+export function ConsolePane({ runId, activity }: { runId: string; activity: RunEvent[] }) {
+  const [panel, setPanel] = useState<'none' | 'activity' | 'console'>('none');
+  const open = panel === 'console';
+  const toggle = (which: 'activity' | 'console') => setPanel((p) => (p === which ? 'none' : which));
   const [count, setCount] = useState(0);
   const [targets, setTargets] = useState<Record<string, string>>({});
   const [target, setTarget] = useState('array');
@@ -156,19 +165,45 @@ export function ConsolePane({ runId }: { runId: string }) {
   };
 
   const targetOptions = Object.entries(targets).map(([key, who]) => ({ key, label: `${key === 'peer' ? 'Peer' : 'Array'} · ${who}` }));
+  const last = activity[activity.length - 1];
 
   return (
-    <Box flex={false} border={{ side: 'top', color: 'border' }} background="background-front">
-      <Box direction="row" align="center" justify="between" pad={{ horizontal: 'medium', vertical: 'xsmall' }}>
-        <Button
-          plain
-          onClick={() => setOpen(!open)}
-          label={<Text size="small" weight="bold">Console · {count} command{count === 1 ? '' : 's'}</Text>}
-          icon={open ? <Down size="small" /> : <Up size="small" />}
-          a11yTitle={open ? 'Hide the console' : 'Show the console'}
-        />
-        {open && (
-          <Box direction="row" gap="small" align="center">
+    <Box flex={false} border={{ side: 'top', color: 'border-weak' }} background="background-contrast">
+      <Box direction="row" align="center" justify="between" gap="small" pad={{ horizontal: 'medium', vertical: 'xsmall' }}>
+        <Box direction="row" gap="xsmall" align="center" flex style={{ minWidth: 0 }}>
+          <Time size="small" color="icon-weak" aria-hidden />
+          <Text size="small" color="text-weak" truncate>
+            {last ? `${new Date(last.created_at).toLocaleTimeString()}  ${last.message}` : 'No activity yet'}
+          </Text>
+        </Box>
+        <Box direction="row" gap="small" flex={false}>
+          <Button
+            size="small"
+            label={`Activity (${activity.length})`}
+            onClick={() => toggle('activity')}
+            aria-expanded={panel === 'activity'}
+            primary={panel === 'activity'}
+          />
+          <Button
+            size="small"
+            icon={<TerminalIcon size="small" />}
+            label={`Console (${count} command${count === 1 ? '' : 's'})`}
+            onClick={() => toggle('console')}
+            aria-expanded={open}
+            primary={open}
+          />
+        </Box>
+      </Box>
+      {panel === 'activity' && (
+        <Box pad={{ horizontal: 'medium', bottom: 'small' }} background="background-front" border={{ side: 'top', color: 'border-weak' }}>
+          <Box pad={{ top: 'small' }}>
+            <ActivityTimeline events={activity} />
+          </Box>
+        </Box>
+      )}
+      {open && (
+        <Box pad={{ horizontal: 'medium', bottom: 'small' }} gap="xsmall" background="background-front" border={{ side: 'top', color: 'border-weak' }}>
+          <Box direction="row" gap="small" align="center" justify="end" pad={{ top: 'xsmall' }} wrap>
             <Box width="small">
               <TextInput
                 size="xsmall"
@@ -177,16 +212,13 @@ export function ConsolePane({ runId }: { runId: string }) {
                 value={find}
                 onChange={(event) => setFind(event.target.value)}
                 onKeyDown={(event) => event.key === 'Enter' && search.current?.findNext(find)}
+                aria-label="Find in the console"
               />
             </Box>
             <Button size="small" icon={<Copy size="small" />} label="Copy" onClick={copy} />
             <Button size="small" icon={<Download size="small" />} label="Download .txt" href={consoleLogTxtUrl(runId)} />
             <Button size="small" icon={<TerminalIcon size="small" />} label="Open terminal" onClick={terminal} disabled={!targets[target]} />
           </Box>
-        )}
-      </Box>
-      {open && (
-        <Box pad={{ horizontal: 'medium', bottom: 'small' }} gap="xsmall">
           <div ref={host} style={{ height: 220, width: '100%' }} />
           <Box direction="row" gap="small" align="center">
             {targetOptions.length > 1 && (

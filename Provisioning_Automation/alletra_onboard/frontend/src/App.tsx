@@ -8,7 +8,7 @@ import { AppHeader, RailItem, StepRail, WizardBar } from './ui/AppChrome';
 import { StepProvider } from './ui/StepContext';
 import { ConsolePane } from './ui/ConsolePane';
 import { StepState } from './ui/status';
-import { deriveStepHint, deriveStepState, runStatusToState } from './ui/useStepState';
+import { deriveStepHint, deriveStepState, runStatusToState, stepEvents } from './ui/useStepState';
 import { AsBuiltStep } from './steps/AsBuiltStep';
 import { CloudinitStep } from './steps/CloudinitStep';
 import { DiscoveryStep } from './steps/DiscoveryStep';
@@ -70,6 +70,7 @@ export default function App() {
   const [appTitle, setAppTitle] = useState('Alletra MP B10000 Onboarding');
   const [registry, setRegistry] = useState<StepRegistry | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [footerHost, setFooterHost] = useState<HTMLDivElement | null>(null);
   // X-9: the run picker. `undefined` = closed; `null` = loading; a list = open.
   const [runList, setRunList] = useState<RunRecord[] | null | undefined>(undefined);
   const openRunPicker = async () => {
@@ -197,6 +198,7 @@ export default function App() {
         complete: 'Run complete',
         failed: 'Run needs attention',
         action_required: 'Action required',
+        waiting: 'Waiting on others',
         running: 'Run in progress',
         not_started: 'Run open',
       }[runState ?? 'not_started']
@@ -211,6 +213,7 @@ export default function App() {
     position: { index: stepIndex + 1, total: steps.length },
     nextTitle: steps[stepIndex + 1]?.label,
     onDone: next,
+    footerHost,
   };
 
   return (
@@ -291,7 +294,9 @@ export default function App() {
             </StepProvider>
           </Box>
         </Main>
-        {runId && <ConsolePane runId={runId} />}
+        {/* the current step's footer is drawn here (StepShell portals into it) */}
+        <Box ref={setFooterHost} flex={false} />
+        {runId && <ConsolePane runId={runId} activity={current.served ? stepEvents(current.served, events) : events} />}
         </Box>
       </Box>
 
