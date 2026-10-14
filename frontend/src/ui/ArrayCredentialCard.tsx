@@ -1,7 +1,8 @@
 import { Box, Button, Text } from 'grommet';
 import { useEffect, useState } from 'react';
 import { ArrayCredentialInfo, CredentialOverride, getRun } from '../api';
-import { CredentialsFields, Surface } from './primitives';
+import { Section } from './blocks';
+import { CredentialsFields } from './primitives';
 
 /**
  * ADR 0013 / SPEC-008 R4 — the array credential card shared by Verify and As-built.
@@ -48,17 +49,24 @@ export function ArrayCredentialCard({
   const set = (u: string, p: string) => onOverride({ username: u, password: p });
 
   return (
-    <Surface
+    // remounts once the run's credential is known, so it opens by itself when the run holds none
+    <Section
+      key={info === undefined ? 'loading' : held ? 'held' : 'none'}
       title="Array credentials"
-      description={
+      open={info !== undefined && !held}
+      summary={
         held
-          ? `Using the array credential from ${SOURCE_LABEL[info!.source]}: ${info!.username} @ ${info!.host || serial || 'this array'}.`
-          : `The array admin account registered in DSCC as the system credential for ${serial ?? 'this array'}.`
+          ? override
+            ? `Using a different credential for this step: ${override.username || 'no user name yet'}`
+            : `From ${SOURCE_LABEL[info!.source]}: ${info!.username} @ ${info!.host || serial || 'this array'} · held by this run only`
+          : info === undefined
+            ? 'Reading the run'
+            : `None held by this run. Enter the array admin account for ${serial ?? 'this array'}.`
       }
     >
       {held && !editing && (
-        <Box direction="row" align="center" gap="small">
-          <Text size="small" color="text-weak">Typed once, on the sheet; held by this run only.</Text>
+        <Box direction="row" align="center" gap="small" wrap>
+          <Text size="small" color="text-weak">Typed once, on the sheet. A different credential here is used for this step only and is not stored.</Text>
           <Button size="small" label="Use a different credential" onClick={() => setEditing(true)} />
         </Box>
       )}
@@ -82,7 +90,7 @@ export function ArrayCredentialCard({
           )}
         </Box>
       )}
-    </Surface>
+    </Section>
   );
 }
 

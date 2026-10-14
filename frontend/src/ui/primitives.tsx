@@ -1,30 +1,8 @@
-import { Box, Button, FormField, Heading, Notification, Text, TextInput } from 'grommet';
+import { Box, FormField, Heading, Notification, Text, TextInput } from 'grommet';
 import { ReactNode } from 'react';
 import { RunEvent } from '../api';
 import { Panel } from './blocks';
 import { StatusIcon, StepState } from './status';
-import { useStepContext } from './StepContext';
-
-/**
- * The primary "go on" action, naming where it goes (SPEC-004 R1): "Continue to Provision storage",
- * or "Finish" on the last step. A bare "Continue" on eight steps was the register's X-4.
- */
-export function ContinueButton({
-  onClick,
-  disabled,
-  prefix = 'Continue to',
-  suffix = '',
-}: {
-  onClick?: () => void;
-  disabled?: boolean;
-  prefix?: string;
-  suffix?: string;   // e.g. "without provisioning" (SPEC-012 R2) - what continuing means here
-}) {
-  const { nextTitle, onDone } = useStepContext();
-  const base = nextTitle ? `${prefix} ${nextTitle}` : 'Finish';
-  const label = suffix ? `${base} ${suffix}` : base;
-  return <Button primary label={label} disabled={disabled} onClick={onClick ?? onDone} />;
-}
 
 /**
  * Many notes, one per line (SPEC-004 R3). A single note renders as plain text; the " · "-joined
@@ -84,15 +62,6 @@ export function InlineNotification({
   onClose?: () => void;
 }) {
   return <Notification status={TONE_STATUS[tone]} title={title} message={message} onClose={onClose} />;
-}
-
-/**
- * The operator gate: the one pattern that says an operator must act, and exactly what to do. Used
- * wherever the tool deliberately stops — the Cloud Connectivity submission, the DSCC credential,
- * and provisioning approval.
- */
-export function ActionRequired({ title, message }: { title: string; message: ReactNode }) {
-  return <InlineNotification tone="warning" title={title} message={message} />;
 }
 
 /** A step's event stream, newest last, with status-coloured markers and tabular timestamps. */

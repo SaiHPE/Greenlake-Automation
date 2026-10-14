@@ -286,7 +286,7 @@ export default function App() {
             note={!runId && current.key !== 'mode' ? 'The steps of your run appear here once you choose what to do (step 3).' : undefined}
           />
           <Box flex direction="column" overflow="hidden">
-            {view === 'wizard' && (
+            {view === 'wizard' && !finished && (
               <WizardBar
                 flow={runId ? `${currentModeLabel} on ${run?.serial_number ?? 'this array'}` : 'Prepare a run'}
                 previous={stepIndex > 0 ? { label: steps[stepIndex - 1].label, onClick: previous } : undefined}
@@ -303,6 +303,15 @@ export default function App() {
                   steps={overviewSteps}
                   modeLabel={currentModeLabel}
                   onOpenStep={openStep}
+                  onHome={() => setView('home')}
+                />
+              ) : finished ? (
+                <DoneStep
+                  runId={runId}
+                  run={run}
+                  events={events}
+                  modeLabel={runId ? currentModeLabel : ''}
+                  onRestart={() => setConfirmCancel(true)}
                   onHome={() => setView('home')}
                 />
               ) : (
@@ -350,9 +359,6 @@ export default function App() {
                     {current.key === 'failover_test' && runId && <FailoverTestStep runId={runId} run={run} events={events} onDone={next} />}
                     {current.key === 'verify' && runId && <VerifyStep runId={runId} run={run} events={events} onDone={next} />}
                     {current.key === 'asbuilt' && runId && <AsBuiltStep runId={runId} run={run} events={events} onDone={next} />}
-                    {current.key === 'done' && (
-                      <DoneStep runId={runId} run={run} events={events} onRestart={() => setConfirmCancel(true)} />
-                    )}
                     {needsRun && <Text color="text-weak">Choose a mode first. That creates the run.</Text>}
                   </StepProvider>
                 </Box>
