@@ -1,5 +1,5 @@
-import { Box, Button, CheckBox, DataTable, FormField, Select, Text, TextInput } from 'grommet';
-import { useState } from 'react';
+import { Box, DataTable, FormField, ResponsiveContext, Select, Text, TextInput } from 'grommet';
+import { useContext, useState } from 'react';
 import {
   FailoverOutcome,
   FailoverRecord,
@@ -10,9 +10,11 @@ import {
   RunRecord,
   failoverTest,
 } from '../api';
-import { ContinueButton, InlineNotification, Surface } from '../ui/primitives';
+import { CodeBlock, Guidance, Panel, StatusLine } from '../ui/blocks';
+import { InlineNotification } from '../ui/primitives';
 import { StatusIndicator, StepState } from '../ui/status';
-import { StepShell } from '../ui/StepShell';
+import { useStepContext } from '../ui/StepContext';
+import { FooterAction, StepShell } from '../ui/StepShell';
 
 interface Props {
   runId: string;
@@ -26,7 +28,7 @@ const OTHER = 'Another group…';
 const mono = { fontFamily: 'Consolas, Menlo, monospace' } as const;
 
 const OUTCOME: Record<FailoverOutcome, { state: StepState; label: string }> = {
-  pending: { state: 'not_started', label: '—' },
+  pending: { state: 'not_started', label: '--' },
   ok: { state: 'complete', label: 'OK' },
   failed: { state: 'failed', label: 'Failed' },
   skipped: { state: 'not_started', label: 'Skipped' },
@@ -49,7 +51,7 @@ function latest<T>(events: RunEvent[], types: string[], key: string): T | null {
 }
 
 function sideText(side: FailoverSideLike | null): string {
-  if (!side) return '—';
+  if (!side) return '--';
   if (!side.present) return 'not on the array';
   const bits = [`${side.role}/${side.status}`, `${side.synced}/${side.volumes} Synced`];
   if (side.last_sync && side.last_sync !== 'NA') bits.push(`last sync ${side.last_sync}`);
@@ -58,13 +60,17 @@ function sideText(side: FailoverSideLike | null): string {
 type FailoverSideLike = { present: boolean; role: string; status: string; synced: number; volumes: number; last_sync: string };
 
 function when(iso: string): string {
-  if (!iso) return '—';
+  if (!iso) return '--';
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleTimeString();
 }
 
 export function FailoverTestStep({ runId, run, events, onDone }: Props) {
+  const { nextTitle } = useStepContext();
+  const wide = useContext(ResponsiveContext) === 'large' || useContext(ResponsiveContext) === 'xlarge';
   const [error, setError] = useState<string | null>(null);
+  // started_at of a passed test the operator chose to run again
+  const [again, setAgain] = useState<string | null>(null);
   const [authorised, setAuthorised] = useState(false);
   const [choice, setChoice] = useState<string>(TEST_GROUP);
   const [typed, setTyped] = useState('');
@@ -73,19 +79,21 @@ export function FailoverTestStep({ runId, run, events, onDone }: Props) {
   const report = latest<ReplicationReport>(events, ['replication.previewed'], 'report');
   const result = latest<ReplicationResult>(events, ['replication.applied', 'replication.apply.failed'], 'result');
   const record = latest<FailoverRecord>(events, ['failover.completed', 'failover.failed'], 'record');
-  const started = events.some((e) => e.event_type === 'failover.started');
+  const lastStart = events.map((e) => e.event_type).lastIndexOf('failover.started');
+  const lastEnd = Math.max(...['failover.completed', 'failover.failed'].map((t) => events.map((e) => e.event_type).lastIndexOf(t)));
+  const testing = running && lastStart > lastEnd;
   const aName = report?.primary.name || 'this array';
   const bName = report?.peer.name || 'the peer';
 
-  // R1: offered by default — the tool's test group and the groups this run created. Anything else is typed.
+  // R1: offered by default: the tool's test group and the groups this run created. Anything else is typed.
   const created = result?.groups_created ?? [];
   const onArray = new Set((report?.primary.groups ?? []).map((g) => g.name));
   const offered = [TEST_GROUP, ...created.filter((g) => g !== TEST_GROUP)];
   const options = [...offered, OTHER];
   const other = choice === OTHER;
   const group = other ? typed.trim() : choice;
-  const knownMissing = group && onArray.size > 0 && !onArray.has(group);
-  const canRun = !!group && authorised && !running && (!other || typed.trim().length > 0);
+  // groups this run created were made after the read, so their absence from it says nothing
+  const knownMissing = group && onArray.size > 0 && !onArray.has(group) && !created.includes(group);
 
   const call = (action: () => Promise<unknown>) => async () => {
     setError(null);
@@ -96,111 +104,183 @@ export function FailoverTestStep({ runId, run, events, onDone }: Props) {
     }
   };
 
-  const rows: FailoverStepRecord[] = record
+  const rows: FailoverStepRecord[] = record && !testing
     ? record.steps
     : SEQUENCE.map((s) => ({ ...s, action: '', cli: '', started_at: '', ended_at: '', seconds: null, primary: null, peer: null, outcome: 'pending', detail: '' }));
+
+  const next = nextTitle ? `Continue to ${nextTitle}` : 'Continue';
+  const passed = !testing && record?.result === 'passed' && record.started_at !== again;
+  const shown = testing ? null : record;
+  const runTest: FooterAction = {
+    label: record ? 'Run the failover test again' : 'Run failover test',
+    busy: running,
+    onClick: passed
+      ? () => setAgain(record?.started_at ?? '')
+      : call(async () => {
+          await failoverTest(runId, group, other ? typed.trim() : null);
+          setAuthorised(false);
+        }),
+    blocked: !group
+      ? 'Choose the group to test first.'
+      : other && !typed.trim()
+        ? "Type the group's name to confirm it first."
+        : undefined,
+  };
+  const skip: FooterAction = { label: record?.result === 'passed' ? next : `${next} without the failover test`, onClick: onDone };
+  const primary = passed ? { label: next, onClick: onDone } : testing ? undefined : runTest;
+  // A test already passed: running it again goes back to choosing the group and authorising, never straight to the arrays.
+  const buttons = passed ? [runTest] : testing ? [] : [skip];
+
+  const columns = [
+    { property: 'seq', header: '#', render: (s: FailoverStepRecord) => <Text size="small">{s.seq}</Text> },
+    {
+      property: 'title',
+      header: 'Step',
+      render: (s: FailoverStepRecord) => (
+        <Box>
+          <Text size="small">{s.title}</Text>
+          {s.cli && <Text size="xsmall" color="text-weak" style={mono}>{s.cli}</Text>}
+        </Box>
+      ),
+    },
+    ...(wide
+      ? [
+          { property: 'where', header: 'On', render: (s: FailoverStepRecord) => <Text size="small">{s.where}</Text> },
+          { property: 'expected', header: 'Expected after', render: (s: FailoverStepRecord) => <Text size="small" color="text-weak">{s.expected}</Text> },
+        ]
+      : []),
+    { property: 'primary', header: 'P after', render: (s: FailoverStepRecord) => <Text size="small">{sideText(s.primary)}</Text> },
+    { property: 'peer', header: 'S after', render: (s: FailoverStepRecord) => <Text size="small">{sideText(s.peer)}</Text> },
+    {
+      property: 'seconds',
+      header: 'Took',
+      render: (s: FailoverStepRecord) => (
+        <Text size="small">
+          {s.seconds == null ? '--' : `${s.seconds} s`}
+          {s.started_at ? ` · ${when(s.started_at)}` : ''}
+        </Text>
+      ),
+    },
+    { property: 'outcome', header: 'Outcome', render: (s: FailoverStepRecord) => <StatusIndicator state={OUTCOME[s.outcome].state} label={OUTCOME[s.outcome].label} /> },
+  ];
 
   return (
     <StepShell
       title="Failover test"
-      description="Proves the DR copy can take over and production can come back: stop → fail over to the peer → recover → wait for the sync back → restore, on one Remote Copy group, over the array’s own disaster-recovery actions. Both arrays are read after every step; roles and timings go into the as-built."
-      stateDetail={record ? (record.result === 'passed' ? 'passed' : record.result === 'failed' ? `failed at step ${record.failed_step}` : 'not started') : undefined}
+      description="Proves the DR copy can take over and production can come back, on one Remote Copy group, using the array's own disaster-recovery actions. Both arrays are read after every step; roles and timings go into the as-built."
+      stateDetail={
+        testing
+          ? 'test running'
+          : shown
+            ? shown.result === 'passed'
+              ? 'passed'
+              : shown.result === 'failed'
+                ? `failed at step ${shown.failed_step}`
+                : 'not started'
+            : undefined
+      }
       error={error}
       onDismissError={() => setError(null)}
-      activityEmpty="Choose the group, tick the authorisation and run the test. Nothing is changed until then."
-      footerNote="Switchover (Peer Persistence) is not part of this test. If a step fails, the test stops, shows both arrays as read and the documented way back; it never changes roles further on its own."
-      gate={
-        !record && !running
-          ? {
-              title: 'This test changes roles on both arrays',
-              message: `For the duration of the test the chosen group is stopped, made primary on ${bName}, synced back and restored. Hosts running on its primary volumes lose access. The tool’s own 1 GiB test group exists for exactly this.`,
+      primary={primary}
+      buttons={buttons}
+      // Changes roles on both arrays: an explicit authorisation, not a click.
+      confirmation={
+        passed || testing
+          ? undefined
+          : {
+              label: `I understand this stops ${group || 'the group'}, fails it over to ${bName}, recovers and restores it, and I authorise the test on ${aName} and ${bName}.`,
+              checked: authorised,
+              onChange: setAuthorised,
             }
-          : null
       }
-      actions={
-        <>
-          <Button busy={running} label={record ? 'Run the failover test again' : 'Run failover test'} disabled={!canRun} onClick={call(() => failoverTest(runId, group, other ? typed.trim() : null))} />
-          <ContinueButton onClick={onDone} suffix={record?.result === 'passed' ? '' : 'without the failover test'} />
-        </>
+      guideOpen={!record}
+      guidance={
+        <Guidance
+          items={[
+            { title: 'The sequence', body: 'Stop the group, fail over to the peer, recover, wait for the sync back, restore the natural direction.' },
+            { title: 'Hosts lose access', body: `For the duration of the test the chosen group is stopped and made primary on ${bName}. The tool's own 1 GiB test group ${TEST_GROUP} exists for exactly this.` },
+            { title: 'If a step fails', body: 'The test stops, shows both arrays as read and the documented way back. It never changes roles further on its own.' },
+            { title: 'Not part of this test', body: 'Switchover (Peer Persistence).' },
+          ]}
+        />
       }
     >
-      <Surface title="Which group" description={`The test runs on one group. By default the tool’s own test group ${TEST_GROUP}; groups this run created can be chosen. Any other group needs its name typed back.`}>
-        <Box direction="row" gap="medium" wrap align="end">
-          <FormField label="Remote Copy group" margin="none">
-            <Select options={options} value={choice} onChange={({ option }) => setChoice(option)} disabled={running} />
-          </FormField>
-          {other && (
-            <FormField label="Type the group’s name to confirm" margin="none" help="Hosts on its primary volumes lose access for the duration of the test.">
-              <TextInput value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="group name" disabled={running} />
-            </FormField>
-          )}
-        </Box>
-        {knownMissing && (
-          <InlineNotification tone="warning" title={`${group} was not on ${aName} when the arrays were last read`} message="Read both arrays again on the Replication step if it has been created since; otherwise the test stops at step 0 without changing anything." />
-        )}
-        <CheckBox
-          label={`I understand this stops ${group || 'the group'}, fails it over to ${bName}, recovers and restores it, and I authorise the test on ${aName} and ${bName}.`}
-          checked={authorised}
-          disabled={running}
-          onChange={(event) => setAuthorised(event.target.checked)}
-        />
-      </Surface>
+      {testing && (
+        <StatusLine state="running" title="Failover test running">
+          Each step appears in Activity, below, as it happens. The sync back can take up to 15 minutes.
+        </StatusLine>
+      )}
+      {!running && !shown && (
+        <StatusLine state="action_required" title="This test changes roles on both arrays">
+          Choose the group, tick the authorisation and run the test. Nothing is changed until then.
+        </StatusLine>
+      )}
+      {passed && shown && (
+        <StatusLine state="complete" title={`Passed: ${shown.group} is back to Primary on ${shown.primary_array}, Secondary on ${shown.peer_array}`}>
+          {`${shown.time_to_failover_s != null ? `The peer took over ${shown.time_to_failover_s} s after the failover was issued` : 'The peer took over'}${shown.time_to_synced_s != null ? `; every volume was Synced again ${shown.time_to_synced_s} s after the recover` : ''}.${shown.data_loss_bound ? ` Data-loss bound (async): ${shown.data_loss_bound}.` : ''}`}
+        </StatusLine>
+      )}
+      {shown && shown.result !== 'passed' && (
+        <StatusLine state="failed" title={shown.result === 'aborted' ? 'Not started: the group was not in its normal state' : `Failed at step ${shown.failed_step}`}>
+          <Box gap="xsmall">
+            <Text size="small">{shown.error}</Text>
+            {shown.observed_state && <Text size="small">Observed: {shown.observed_state}</Text>}
+          </Box>
+        </StatusLine>
+      )}
+      {shown && shown.result !== 'passed' && shown.recovery_action && (
+        <Panel title="The documented way back" description="The tool does not run this. Run it on the array named, then read both arrays again on the Replication step.">
+          <CodeBlock label="The documented way back" lines={shown.recovery_action.split('\n')} />
+        </Panel>
+      )}
 
-      <Surface title="The sequence" description="P = this array, S = the peer. Every role change is one disaster-recovery action over WSAPI, issued on the array named in On; the array mirrors it to its partner.">
-        {record?.result === 'passed' && (
-          <InlineNotification
-            tone="ok"
-            title={`Passed — ${record.group} is back to Primary on ${record.primary_array}, Secondary on ${record.peer_array}`}
-            message={`${record.time_to_failover_s != null ? `The peer took over ${record.time_to_failover_s} s after the failover was issued` : ''}${record.time_to_synced_s != null ? `; every volume was Synced again ${record.time_to_synced_s} s after the recover` : ''}.${record.data_loss_bound ? ` Data-loss bound (async): ${record.data_loss_bound}.` : ''}`}
-          />
-        )}
-        {record && record.result !== 'passed' && (
-          <InlineNotification
-            tone="critical"
-            title={record.result === 'aborted' ? 'Not started — the group was not in its normal state' : `Failed at step ${record.failed_step}`}
-            message={
-              <Box gap="xsmall">
-                <Text size="small">{record.error}</Text>
-                {record.observed_state && <Text size="small">Observed: {record.observed_state}</Text>}
-                {record.recovery_action && (
-                  <Box gap="xxsmall">
-                    <Text size="small" weight={600}>The documented way back (the tool does not run this):</Text>
-                    <Text size="small" style={{ ...mono, whiteSpace: 'pre-wrap' }}>{record.recovery_action}</Text>
-                  </Box>
-                )}
-              </Box>
-            }
-          />
-        )}
-        {running && started && !record && <StatusIndicator state="running" label="Running — the activity log below shows each step as it happens." />}
+      {!passed && !testing && (
+        <Panel
+          title="Which group"
+          description={`The test runs on one group. By default the tool's own test group ${TEST_GROUP}; groups this run created can be chosen. Any other group needs its name typed back.`}
+        >
+          <Box direction="row" gap="medium" wrap align="end" flex={false}>
+            <FormField label="Remote Copy group" htmlFor="failover-group" margin="none">
+              <Select id="failover-group" options={options} value={choice} onChange={({ option }) => setChoice(option)} disabled={running} />
+            </FormField>
+            {other && (
+              <FormField label="Type the group's name to confirm" htmlFor="failover-typed" margin="none" help="Hosts on its primary volumes lose access for the duration of the test.">
+                <TextInput id="failover-typed" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="group name" disabled={running} />
+              </FormField>
+            )}
+          </Box>
+          {knownMissing && (
+            <InlineNotification
+              tone="warning"
+              title={`${group} was not on ${aName} when the arrays were last read`}
+              message="Read both arrays again on the Replication step if it has been created since; otherwise the test stops at step 0 without changing anything."
+            />
+          )}
+        </Panel>
+      )}
+
+      <Panel
+        title={shown ? 'What each step did' : 'The sequence'}
+        description="P = this array, S = the peer. Every role change is one disaster-recovery action over WSAPI, issued on the array named in On; the array mirrors it to its partner."
+      >
         <DataTable
-          columns={[
-            { property: 'seq', header: '#', render: (s: FailoverStepRecord) => <Text size="small">{s.seq}</Text> },
-            { property: 'title', header: 'Step', render: (s: FailoverStepRecord) => (
-              <Box>
-                <Text size="small">{s.title}</Text>
-                {s.cli && <Text size="xsmall" color="text-weak" style={mono}>{s.cli}</Text>}
-              </Box>
-            ) },
-            { property: 'where', header: 'On', render: (s: FailoverStepRecord) => <Text size="small">{s.where}</Text> },
-            { property: 'expected', header: 'Expected after', render: (s: FailoverStepRecord) => <Text size="small" color="text-weak">{s.expected}</Text> },
-            { property: 'primary', header: 'P after', render: (s: FailoverStepRecord) => <Text size="small">{sideText(s.primary)}</Text> },
-            { property: 'peer', header: 'S after', render: (s: FailoverStepRecord) => <Text size="small">{sideText(s.peer)}</Text> },
-            { property: 'seconds', header: 'Took', render: (s: FailoverStepRecord) => <Text size="small">{s.seconds == null ? '—' : `${s.seconds} s`}{s.started_at ? ` · ${when(s.started_at)}` : ''}</Text> },
-            { property: 'outcome', header: 'Outcome', render: (s: FailoverStepRecord) => <StatusIndicator state={OUTCOME[s.outcome].state} label={OUTCOME[s.outcome].label} /> },
-          ]}
+          columns={columns}
           data={rows}
           primaryKey="seq"
           a11yTitle="The failover test sequence: one row per step, with the expected state, what each array showed afterwards, the time it took and the outcome"
         />
-        {record?.steps.some((s) => s.detail) && (
-          <Box gap="xxsmall">
-            {record.steps.filter((s) => s.detail).map((s) => (
-              <Text key={s.seq} size="xsmall" color="text-weak">Step {s.seq}: {s.detail}</Text>
-            ))}
+        {shown?.steps.some((s) => s.detail) && (
+          <Box gap="xxsmall" flex={false}>
+            {shown.steps
+              .filter((s) => s.detail)
+              .map((s) => (
+                <Text key={s.seq} size="xsmall" color="text-weak">
+                  Step {s.seq}: {s.detail}
+                </Text>
+              ))}
           </Box>
         )}
-      </Surface>
+      </Panel>
     </StepShell>
   );
 }

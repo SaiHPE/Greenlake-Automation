@@ -1,4 +1,5 @@
 import { Box, Button, CheckBox, DataTable, Text } from 'grommet';
+import { Connect } from 'grommet-icons';
 import { useState } from 'react';
 import {
   GroupVerdict,
@@ -23,9 +24,11 @@ import {
   RunEvent,
   RunRecord,
 } from '../api';
-import { ContinueButton, InlineNotification, NotesList, Surface, TableSummary } from '../ui/primitives';
+import { CodeBlock, EmptyState, Guidance, Panel, PartsBar, Section, StatusLine } from '../ui/blocks';
+import { InlineNotification, NotesList } from '../ui/primitives';
 import { StatusIndicator, StepState } from '../ui/status';
-import { StepShell } from '../ui/StepShell';
+import { useStepContext } from '../ui/StepContext';
+import { FooterAction, StepShell } from '../ui/StepShell';
 
 interface Props {
   runId: string;
@@ -102,7 +105,7 @@ function RemovalSets({ result, runId, a, b }: { result: ReplicationResult; runId
   const total = result.removals_a.length + result.removals_b.length;
   return (
     <Box gap="xsmall" margin={{ top: 'small' }} flex={false}>
-      <Text size="small" weight={600}>Removal command set</Text>
+      <Text size="small" weight={500}>Removal command set</Text>
       {total === 0 ? (
         <Text size="small" color="text-weak">Nothing to remove — this apply created nothing.</Text>
       ) : (
@@ -241,6 +244,7 @@ function LinkLatency({ check, worstMs, overLimit, aName, bName }: {
 }
 
 export function ReplicationStep({ runId, run, events, onDone }: Props) {
+  const { nextTitle } = useStepContext();
   const [error, setError] = useState<string | null>(null);
   const [showCalls, setShowCalls] = useState(false);
   const [authorised, setAuthorised] = useState(false);
@@ -275,7 +279,6 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const measured = !!linkCheck && !linkCheck.error && linkCheck.results.some((r) => r.status === 'measured');
   const worstMs = measured ? Math.max(...linkCheck!.results.filter((r) => r.latency_ms !== null).map((r) => r.latency_ms as number)) : null;
   const overLimit = worstMs !== null && linkCheck ? linkCheck.modes.filter((m) => worstMs > (RTT_LIMIT_MS[m] ?? 0)) : [];
-  const linkOk = !rcip || (measured && (overLimit.length === 0 || acceptLatency));
   const canApply = !!plan && !plan.error && !blocked && toCreate > 0 && !result;
 
   const call = (action: () => Promise<unknown>) => async () => {
@@ -287,10 +290,55 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
     }
   };
 
+  const next = nextTitle ? `Continue to ${nextTitle}` : 'Continue';
+  const replicating = !!verification && !verification.error && verification.groups.length > 0 && verification.groups.every((g) => g.verdict === 'replicating');
+  const at = !report || plan?.error ? 0 : result ? 4 : rcip && !measured && canApply ? 1 : 2;
+  const partFailed = !!plan?.error || (!!result?.error) || (blocked && !result);
+  const linkIsPrimary = at === 1;
+
+  const read: FooterAction = { label: report ? 'Read both arrays again' : 'Read both arrays', busy: running, onClick: call(() => replicationPreview(runId)) };
+  const checkLink: FooterAction = { label: linkCheck ? 'Check the link again' : 'Check the link', busy: linkRunning, onClick: call(() => replicationLinkCheck(runId)) };
+  const verify: FooterAction = { label: verification ? 'Verify again' : 'Verify replication', busy: running, onClick: call(() => replicationVerify(runId)) };
+  const skip: FooterAction = { label: everApplied ? next : `${next} without configuring replication`, onClick: onDone };
+  const configure: FooterAction = {
+    label: 'Configure replication',
+    busy: running,
+    onClick: call(() => replicationApply(runId, acceptLatency)),
+    blocked:
+      rcip && !measured
+        ? 'Check the link first: HPE asks for the latency between the arrays before Remote Copy over RCIP.'
+        : rcip && overLimit.length > 0 && !acceptLatency
+          ? `The measured latency is ${worstMs} ms, over HPE's limit for ${overLimit.join(' and ')}. Tick Continue anyway in the Link panel to accept it.`
+          : undefined,
+  };
+
+  let primary: FooterAction;
+  let buttons: FooterAction[];
+  if (!report || plan?.error) {
+    primary = read;
+    buttons = [skip];
+  } else if (result) {
+    primary = verification ? { label: next, onClick: onDone } : verify;
+    buttons = verification ? [verify, read] : [read, skip];
+  } else if (linkIsPrimary) {
+    primary = checkLink;
+    buttons = [read, skip];
+  } else if (canApply) {
+    primary = configure;
+    buttons = [read, ...(rcip ? [checkLink] : []), skip];
+  } else if (blocked) {
+    primary = read;
+    buttons = [skip];
+  } else {
+    // nothing left to create: the plan's groups already exist
+    primary = { label: next, onClick: onDone };
+    buttons = [verify, read];
+  }
+
   return (
     <StepShell
       title="Replication"
-      description="Reads both arrays (read-only), finds the Remote Copy partnership between them, and plans one Remote Copy group per volume set on the Replication tab: created over WSAPI on this array, with the secondary volumes auto-created on the peer’s CPG. Nothing is written until the plan is approved."
+      description="Remote Copy of this run's volume sets to the peer array, over the partnership the two arrays already have. Nothing is written until you approve the plan."
       stateDetail={
         result
           ? result.error
@@ -306,97 +354,183 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
       }
       error={error}
       onDismissError={() => setError(null)}
-      activityEmpty="Read both arrays to see the partnership and what this run would configure. Nothing is written by the read."
-      footerNote="The partnership (RCIP ports, targets, links) has to exist already; this release reads and verifies it. Groups the run did not create are listed and never touched."
-      gate={
-        plan && !plan.error && !result
-          ? blocked
-            ? {
-                title: 'The plan cannot be applied yet',
-                message: <NotesList notes={plan.blockers} />,
-              }
-            : toCreate > 0
-              ? rcip && !measured
-                ? {
-                    title: 'Check the link before configuring replication',
-                    message:
-                      'HPE’s procedure before Remote Copy over RCIP: measure the latency between the two arrays with checkrclink. The tool runs it (server on the peer, client on this array), shows the latency against the limit for the mode on the tab, and stops the test. Nothing is configured by the check.',
-                  }
-                : rcip && overLimit.length > 0 && !acceptLatency
-                  ? {
-                      title: `The measured latency is ${worstMs} ms — over HPE’s limit for ${overLimit.join(' and ')}`,
-                      message: `${overLimit.map((m) => `${m} replication over RCIP needs ${RTT_LIMIT_MS[m]} ms or less`).join('; ')}. Replication can still be configured; tick “Continue anyway” in the Link latency panel to accept the measured latency.`,
-                    }
-                  : {
-                      title: 'Review the plan, then approve configuring replication',
-                      message:
-                        'No changes have been made to either array. Objects marked Exists are left alone. Approving creates the groups over WSAPI on this array; the secondary volumes are created on the peer by the array itself.',
-                    }
-              : null
-          : null
+      top={<PartsBar parts={['Read both arrays', 'Check the link', 'Review the plan', 'Configure', 'Verify']} at={at} doneAll={replicating} failed={partFailed} />}
+      primary={primary}
+      buttons={buttons}
+      // The only replication action that writes to the arrays: an explicit authorisation, not a click.
+      confirmation={
+        canApply && !linkIsPrimary
+          ? { label: `I have reviewed this plan and authorise configuring replication on ${aName} and ${bName}.`, checked: authorised, onChange: setAuthorised }
+          : undefined
       }
-      actions={
-        <>
-          <Button busy={running} label={report ? 'Read both arrays again' : 'Read both arrays'} onClick={call(() => replicationPreview(runId))} />
-          {canApply && (
-            <Button
-              busy={running}
-              label="Configure replication"
-              disabled={!authorised || !linkOk}
-              onClick={call(() => replicationApply(runId, acceptLatency))}
-            />
-          )}
-          <ContinueButton onClick={onDone} suffix={everApplied ? '' : 'without configuring replication'} />
-        </>
+      guideOpen={!report}
+      guidance={
+        <Guidance
+          items={[
+            {
+              title: 'What this step does',
+              body: 'One Remote Copy group per volume set on the Replication tab, created over WSAPI on this array. The peer creates the secondary volumes on its own CPG.',
+            },
+            { title: 'Nothing is written until you approve', body: 'Reading, the link check and the plan change nothing. Only Configure replication writes, and only what the plan shows.' },
+            { title: "HPE's limits over RCIP", body: 'Round-trip latency: sync 10 ms or less, async 200 ms or less (RCIP = Remote Copy over IP).' },
+            {
+              title: 'The partnership must exist',
+              body: 'RCIP ports, targets and links are set up beforehand; this step reads and checks them. Groups this run did not create are listed and never touched.',
+            },
+          ]}
+        />
       }
     >
-      {plan?.error && <InlineNotification tone="critical" title="The arrays could not be read" message={plan.error} />}
+      {linkRunning && (
+        <StatusLine state="running" title="Checking the link">
+          {linkProgress[linkProgress.length - 1] || 'Starting the link check.'}
+        </StatusLine>
+      )}
+      {running && !linkRunning && <StatusLine state="running">Working on the arrays. Each action appears in Activity, below.</StatusLine>}
+      {plan?.error && (
+        <StatusLine state="failed" title="The arrays could not be read">
+          {plan.error}
+        </StatusLine>
+      )}
+      {!running && !report && !plan?.error && (
+        <EmptyState icon={<Connect size="large" color="icon-weak" />} title="Not read yet">
+          Read both arrays to see the partnership, the links and the groups already there, and what this run would configure. Reading
+          changes nothing.
+        </EmptyState>
+      )}
+      {!running && plan && !plan.error && !result && blocked && (
+        <StatusLine state="failed" title="The plan cannot be applied yet">
+          <NotesList notes={plan.blockers} />
+        </StatusLine>
+      )}
+      {!running && plan && !plan.error && !result && !blocked && toCreate > 0 && (
+        rcip && !measured ? (
+          <StatusLine state="action_required" title="Check the link before configuring replication">
+            HPE&apos;s procedure before Remote Copy over RCIP: measure the latency between the two arrays with checkrclink. The tool runs it
+            (server on the peer, client on this array), shows the latency against the limit for the mode on the tab, and stops the test.
+            Nothing is configured by the check.
+          </StatusLine>
+        ) : rcip && overLimit.length > 0 && !acceptLatency ? (
+          <StatusLine state="action_required" title={`The measured latency is ${worstMs} ms, over HPE's limit for ${overLimit.join(' and ')}`}>
+            {overLimit.map((m) => `${m} replication over RCIP needs ${RTT_LIMIT_MS[m]} ms or less`).join('; ')}. Replication can still be
+            configured: tick Continue anyway in the Link panel to accept the measured latency.
+          </StatusLine>
+        ) : (
+          <StatusLine state="action_required" title="Review the plan, then approve configuring replication">
+            {toCreate} to create, {existing} already there. No changes have been made to either array. Tick the box next to the green button
+            when you have reviewed it.
+          </StatusLine>
+        )
+      )}
+      {!running && plan && !plan.error && !result && !blocked && toCreate === 0 && (
+        <StatusLine state="complete" title="Nothing to create">
+          Every group in the plan is already on the arrays. Verify replication reads them back.
+        </StatusLine>
+      )}
+      {!running && verification && !verification.error && (
+        <StatusLine
+          state={replicating ? 'complete' : 'action_required'}
+          title={
+            replicating
+              ? 'Replication verified: every group is replicating'
+              : `${verification.groups.filter((g) => g.verdict === 'replicating').length} of ${verification.groups.length} group${verification.groups.length === 1 ? '' : 's'} replicating`
+          }
+        >
+          {replicating
+            ? 'Both arrays report every group Started, with every volume Synced.'
+            : 'An initial sync still running is normal; verify again later. The detail for each group is under Verify replication.'}
+        </StatusLine>
+      )}
+      {!running && result && !(verification && !verification.error && !result.error) && (
+        <StatusLine
+          state={result.error ? 'failed' : 'complete'}
+          title={
+            result.error
+              ? 'Configuring replication stopped'
+              : result.groups_created.length
+                ? `${result.groups_created.join(', ')} created and started`
+                : 'Nothing new to create'
+          }
+        >
+          {result.error
+            ? `${result.error} The writes made before the stop, and the commands to undo them, are below.`
+            : `${result.outcomes.filter((o) => o.status === 'exists').length} already existed and were left untouched.${verification ? '' : ' Verify replication reads both arrays back.'}`}
+        </StatusLine>
+      )}
 
       {report && !report.error && (
-        <Surface title="What the arrays say" description="Read over SSH with the sheet’s credentials; nothing was changed.">
+        <Section
+          title="What the arrays say"
+          summary={
+            report.partnership
+              ? `${aName} and ${bName} partnered · ${report.partnership.links_primary_up}/${report.partnership.links_primary_total} links up`
+              : `No partnership between ${aName} and ${bName}`
+          }
+          open={!plan}
+        >
+          <Text size="small" color="text-weak">
+            Read over SSH with the sheet&apos;s credentials; nothing was changed.
+          </Text>
           <Box direction="row" gap="medium" flex={false} wrap>
             <ArrayCard label="A" view={report.primary} />
             <ArrayCard label="B" view={report.peer} />
           </Box>
-          <Box margin={{ top: 'small' }} flex={false}>
-            <PartnershipLine partnership={report.partnership} report={report} />
-          </Box>
-        </Surface>
+          <PartnershipLine partnership={report.partnership} report={report} />
+        </Section>
       )}
 
-      {report && !report.error && rcip && (
-        <Surface
-          title="Link latency"
-          description={`checkrclink between the arrays’ Remote Copy ports: a test server on ${bName}, a test client on ${aName}, stopped as soon as the latency is printed. HPE’s limits over RCIP: sync 10 ms, async 200 ms. No configuration is changed.`}
-          actions={<Button busy={linkRunning} disabled={running} label={linkCheck ? 'Check again' : 'Check the link'} onClick={call(() => replicationLinkCheck(runId))} />}
+      {report && !report.error && rcip && result && (
+        <Section
+          title="Check the link"
+          summary={linkCheck ? `Latency ${worstMs} ms${overLimit.length ? `, over the limit for ${overLimit.join(' and ')}` : ', within the limit'}` : 'Not measured'}
+        >
+          {linkCheck && <LinkLatency check={linkCheck} worstMs={worstMs} overLimit={overLimit} aName={aName} bName={bName} />}
+        </Section>
+      )}
+
+      {report && !report.error && rcip && !result && (
+        <Panel
+          title="Check the link"
+          description={`checkrclink between the arrays' Remote Copy ports: a test server on ${bName}, a test client on ${aName}, stopped as soon as the latency is printed. No configuration is changed.`}
+          right={linkIsPrimary ? undefined : <Button size="small" busy={linkRunning} label={linkCheck ? 'Check again' : 'Check the link'} onClick={call(() => replicationLinkCheck(runId))} />}
         >
           {linkRunning && (
             <Box gap="xxsmall" flex={false}>
-              <StatusIndicator state="running" label={linkProgress[linkProgress.length - 1] || 'Starting the link check…'} />
-              {linkProgress.slice(0, -1).map((line, i) => <Text key={i} size="xsmall" color="text-weak">{line}</Text>)}
+              <StatusIndicator state="running" label={linkProgress[linkProgress.length - 1] || 'Starting the link check'} />
+              {linkProgress.slice(0, -1).map((line, i) => (
+                <Text key={i} size="xsmall" color="text-weak">
+                  {line}
+                </Text>
+              ))}
             </Box>
           )}
-          {!linkCheck && !linkRunning && <Text size="small" color="text-weak">Not measured yet.</Text>}
-          {linkCheck && !linkRunning && (
-            <LinkLatency check={linkCheck} worstMs={worstMs} overLimit={overLimit} aName={aName} bName={bName} />
+          {!linkCheck && !linkRunning && (
+            <Text size="small" color="text-weak">
+              Not measured yet. About 10 seconds per link.
+            </Text>
           )}
+          {linkCheck && !linkRunning && <LinkLatency check={linkCheck} worstMs={worstMs} overLimit={overLimit} aName={aName} bName={bName} />}
           {linkCheck && !linkRunning && overLimit.length > 0 && canApply && (
             <CheckBox
-              label={`Continue anyway — I accept the measured latency of ${worstMs} ms for ${overLimit.join(' and ')} replication.`}
+              label={`Continue anyway: I accept the measured latency of ${worstMs} ms for ${overLimit.join(' and ')} replication.`}
               checked={acceptLatency}
               disabled={running}
               onChange={(event) => setAcceptLatency(event.target.checked)}
             />
           )}
-        </Surface>
+        </Panel>
       )}
 
       {plan && !plan.error && (
-        <Surface title="Plan" description="What approving this plan will do, object by object. A = this array, B = the peer.">
+        <Section
+          title={result ? 'The plan that was applied' : 'Review the plan'}
+          summary={`${toCreate} to create · ${existing} already there · ${conflicts} conflict${conflicts === 1 ? '' : 's'} · A = ${aName}, B = ${bName}`}
+          open={!result}
+        >
           {blocked && (
             <InlineNotification
               tone="critical"
-              title={`${plan.blockers.length} finding${plan.blockers.length === 1 ? '' : 's'} — the plan cannot be applied`}
+              title={`${plan.blockers.length} finding${plan.blockers.length === 1 ? '' : 's'}: the plan cannot be applied`}
               message={<NotesList notes={plan.blockers} />}
             />
           )}
@@ -408,13 +542,20 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
               {
                 property: 'state',
                 header: 'Action',
-                render: (a: ReplicationAction) => <StatusIndicator state={PLAN_STATE[a.state].state} label={PLAN_STATE[a.state].label} />,
+                render: (a: ReplicationAction) =>
+                  a.state === 'create' ? (
+                    <Text size="small" weight={500}>Create</Text>
+                  ) : (
+                    <StatusIndicator state={PLAN_STATE[a.state].state} label={PLAN_STATE[a.state].label} />
+                  ),
               },
               {
                 property: 'reason',
                 header: 'Detail',
                 render: (a: ReplicationAction) => (
-                  <Text size="small" color={a.state === 'conflict' ? 'status-critical' : 'text-weak'}>{a.reason || '—'}</Text>
+                  <Text size="small" color={a.state === 'conflict' ? 'status-critical' : 'text-weak'}>
+                    {a.reason || '--'}
+                  </Text>
                 ),
               },
             ]}
@@ -422,112 +563,113 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
             primaryKey={false}
             a11yTitle="Replication plan: one row per object, with the action apply will take and on which array"
           />
-          <TableSummary>
-            {toCreate} to create · {existing} already exist · {conflicts} conflict{conflicts === 1 ? '' : 's'}
-          </TableSummary>
           {plan.notes.length > 0 && <InlineNotification tone="info" title="Plan notes" message={<NotesList notes={plan.notes} />} />}
           {calls.length > 0 && (
-            <Box gap="xsmall" margin={{ top: 'small' }} flex={false}>
+            <Box gap="xsmall" flex={false}>
               <Box direction="row" gap="small" align="center">
-                <Text size="small" weight={600}>What will be run, in order</Text>
-                <Button size="small" label={showCalls ? 'Hide' : `Show ${calls.length} command${calls.length === 1 ? '' : 's'}`} onClick={() => setShowCalls((v) => !v)} />
+                <Text size="small" weight={500}>
+                  What will be run, in order
+                </Text>
+                <Button size="small" label={showCalls ? 'Hide the commands' : `Show ${calls.length} command${calls.length === 1 ? '' : 's'}`} onClick={() => setShowCalls((v) => !v)} aria-expanded={showCalls} />
               </Box>
               {showCalls && (
-                <Box background="background-contrast" round="xsmall" pad="small" tabIndex={0} style={{ overflowX: 'auto' }}>
-                  <Text size="xsmall" color="text-weak" style={mono}>
-                    # Each line is the WSAPI call the tool makes, shown as the array CLI command it is equivalent to.
-                  </Text>
-                  {calls.map((c, i) => (
-                    <Text key={i} size="small" style={{ ...mono, whiteSpace: 'pre-wrap' }}>
-                      {c.where}  {c.cli}
-                    </Text>
-                  ))}
-                </Box>
+                <CodeBlock
+                  label="The commands of the plan, in order"
+                  lines={['# Each line is the WSAPI call the tool makes, shown as the array CLI command it is equivalent to.', ...calls.map((c) => `${c.where}  ${c.cli}`)]}
+                />
               )}
             </Box>
           )}
-          {/* The only replication action that writes to the arrays: an explicit authorisation, not a click. */}
-          {canApply && (
-            <CheckBox
-              label={`I have reviewed this plan and authorise configuring replication on ${aName} and ${bName}.`}
-              checked={authorised}
-              disabled={running}
-              onChange={(event) => setAuthorised(event.target.checked)}
-            />
-          )}
-        </Surface>
+        </Section>
       )}
 
       {result && (
-        <Surface title="Result" description="What each array reported for every write, in the order they were made.">
-          {result.error ? (
-            <InlineNotification tone="critical" title="Configuring replication stopped" message={result.error} />
-          ) : (
-            <InlineNotification
-              tone="ok"
-              title={result.groups_created.length ? `${result.groups_created.join(', ')} created and started` : 'Nothing new to create'}
-              message={`${result.outcomes.filter((o) => o.status === 'exists').length} already existed and were left untouched. Verify replication reads both arrays back.`}
-            />
-          )}
+        <Section title="What each array answered" summary={`${result.outcomes.length} writes, in the order they were made, and the commands to undo them`} open={!!result.error}>
           <DataTable
             columns={[
               { property: 'kind', header: 'Kind', render: (o: ReplicationOutcome) => <Text size="small">{OUTCOME_KIND[o.kind]}</Text> },
               { property: 'name', header: 'Name', render: (o: ReplicationOutcome) => <Text size="small" style={mono}>{o.name}</Text> },
               { property: 'where', header: 'On', render: (o: ReplicationOutcome) => <Text size="small">{o.where}</Text> },
               { property: 'status', header: 'Result', render: (o: ReplicationOutcome) => <StatusIndicator state={OUTCOME[o.status].state} label={OUTCOME[o.status].label} /> },
-              { property: 'detail', header: 'Detail', render: (o: ReplicationOutcome) => <Text size="small" color="text-weak">{o.detail || '—'}</Text> },
+              { property: 'detail', header: 'Detail', render: (o: ReplicationOutcome) => <Text size="small" color="text-weak">{o.detail || '--'}</Text> },
             ]}
             data={result.outcomes}
             primaryKey={false}
             a11yTitle="Replication result: one row per write, with what the array reported"
           />
           <RemovalSets result={result} runId={runId} a={aName} b={bName} />
-        </Surface>
+        </Section>
       )}
 
-      <Surface
-        title="Verify replication"
-        description="Reads showrcopy on both arrays and judges each planned group: Started, Primary here and Secondary on the peer, every volume Synced. Read-only, report-only; an initial sync still running is reported, not failed."
-        actions={<Button busy={running} label="Verify replication" disabled={!plan} onClick={call(() => replicationVerify(runId))} />}
-      >
-        {!verification && <Text size="small" color="text-weak">Not verified yet.</Text>}
-        {verification?.error && <InlineNotification tone="critical" title="The arrays could not be read" message={verification.error} />}
-        {verification && !verification.error && (
-          <>
-            <StatusIndicator state={verification.links_ok ? 'complete' : 'action_required'} label={verification.links_detail || 'links'} />
-            {verification.groups.length === 0 ? (
-              <Text size="small" color="text-weak">No group in the plan to verify.</Text>
-            ) : (
-              <DataTable
-                columns={[
-                  { property: 'group', header: 'Group', render: (g: GroupVerification) => (
-                    <Box>
-                      <Text size="small" style={mono}>{g.group}</Text>
-                      {g.peer_group && <Text size="xsmall" color="text-weak" style={mono}>{g.peer_group} on the peer</Text>}
-                    </Box>
-                  ) },
-                  { property: 'verdict', header: 'Result', render: (g: GroupVerification) => <StatusIndicator state={VERDICT[g.verdict].state} label={VERDICT[g.verdict].label} /> },
-                  { property: 'detail', header: 'What the arrays say', render: (g: GroupVerification) => (
-                    <Box>
-                      <Text size="small" color="text-weak">{g.detail}</Text>
-                      {g.next_step && <Text size="xsmall" color="status-critical">{g.next_step}</Text>}
-                    </Box>
-                  ) },
-                ]}
-                data={verification.groups}
-                primaryKey="group"
-                a11yTitle="Replication verification: one row per group, the verdict and what both arrays report"
-              />
-            )}
-            {verification.notes.length > 0 && <NotesList notes={verification.notes} />}
-          </>
-        )}
-      </Surface>
+      {plan && (
+        <Section
+          title="Verify replication"
+          summary={
+            verification?.error
+              ? 'Could not read the arrays'
+              : verification
+                ? `${verification.groups.filter((g) => g.verdict === 'replicating').length} of ${verification.groups.length} group${verification.groups.length === 1 ? '' : 's'} replicating`
+                : 'Not verified yet. Read-only; a report, never a gate.'
+          }
+          open={!!verification}
+          right={result && !verification ? undefined : <Button size="small" busy={running} label={verification ? 'Verify again' : 'Verify replication'} onClick={call(() => replicationVerify(runId))} />}
+        >
+          <Text size="small" color="text-weak">
+            Reads showrcopy on both arrays and judges each planned group: Started, Primary here and Secondary on the peer, every volume Synced.
+            An initial sync still running is reported, not failed.
+          </Text>
+          {verification?.error && (
+            <StatusLine state="failed" title="The arrays could not be read">
+              {verification.error}
+            </StatusLine>
+          )}
+          {verification && !verification.error && (
+            <Box gap="small" flex={false}>
+              <StatusIndicator state={verification.links_ok ? 'complete' : 'action_required'} label={verification.links_detail || 'links'} />
+              {verification.groups.length === 0 ? (
+                <Text size="small" color="text-weak">
+                  No group in the plan to verify.
+                </Text>
+              ) : (
+                <DataTable
+                  columns={[
+                    {
+                      property: 'group',
+                      header: 'Group',
+                      render: (g: GroupVerification) => (
+                        <Box>
+                          <Text size="small" style={mono}>{g.group}</Text>
+                          {g.peer_group && <Text size="xsmall" color="text-weak" style={mono}>{g.peer_group} on the peer</Text>}
+                        </Box>
+                      ),
+                    },
+                    { property: 'verdict', header: 'Result', render: (g: GroupVerification) => <StatusIndicator state={VERDICT[g.verdict].state} label={VERDICT[g.verdict].label} /> },
+                    {
+                      property: 'detail',
+                      header: 'What the arrays say',
+                      render: (g: GroupVerification) => (
+                        <Box>
+                          <Text size="small" color="text-weak">{g.detail}</Text>
+                          {g.next_step && <Text size="xsmall" color="status-critical">{g.next_step}</Text>}
+                        </Box>
+                      ),
+                    },
+                  ]}
+                  data={verification.groups}
+                  primaryKey="group"
+                  a11yTitle="Replication verification: one row per group, the verdict and what both arrays report"
+                />
+              )}
+              {verification.notes.length > 0 && <NotesList notes={verification.notes} />}
+            </Box>
+          )}
+        </Section>
+      )}
 
       {report && existingGroups.length > 0 && (
-        <Surface
-          title={`Replication already present on ${report.primary.name || 'array A'}`}
-          description="Groups this run did not create. Shown so the partnership can be judged by what already works; never modified, stopped or removed."
+        <Section
+          title={`Replication already on ${report.primary.name || 'array A'}`}
+          summary={`${existingGroups.length} group${existingGroups.length === 1 ? '' : 's'} this run did not create; never changed, stopped or removed`}
         >
           <DataTable
             columns={[
@@ -543,17 +685,13 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
                   return <StatusIndicator state={ok ? 'complete' : 'action_required'} label={`${g.status} · ${synced}/${g.volumes.length} synced${g.last_sync ? ` · last sync ${g.last_sync}` : ''}`} />;
                 },
               },
-              {
-                property: 'options',
-                header: 'Policies',
-                render: (g: RcGroup) => <Text size="small" color="text-weak">{g.options.length ? g.options.join(', ') : '—'}</Text>,
-              },
+              { property: 'options', header: 'Policies', render: (g: RcGroup) => <Text size="small" color="text-weak">{g.options.length ? g.options.join(', ') : '--'}</Text> },
             ]}
             data={existingGroups}
             primaryKey="name"
             a11yTitle="Remote Copy groups already on the array, with mode, role, status and policies"
           />
-        </Surface>
+        </Section>
       )}
     </StepShell>
   );
