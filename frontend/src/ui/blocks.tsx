@@ -1,7 +1,7 @@
 // The redesign's content blocks (BL-43, draft 3 mockups in frontend/mockups/kit.tsx), built on the
 // HPE Design System parts. Rules they follow are in docs/UX-GUIDELINES.md.
 import { Box, Button, Collapsible, Heading, Notification, Paragraph, Spinner, Text } from 'grommet';
-import { Clock, FormDown, FormUp } from 'grommet-icons';
+import { Clock, FormDown, FormUp, Radial } from 'grommet-icons';
 import { ReactNode, useState } from 'react';
 import { StatusIcon, StepState } from './status';
 
@@ -35,6 +35,8 @@ export function StatusLine({
       <Spinner size="xsmall" message={{ start: 'Working', end: 'Finished' }} />
     ) : state === 'waiting' ? (
       <Clock color="icon-weak" />
+    ) : state === 'not_started' ? (
+      <Radial color="icon-weak" />
     ) : undefined;
   return (
     <Box flex={false}>

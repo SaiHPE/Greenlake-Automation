@@ -89,6 +89,7 @@ export function StepShell({
   const effective = state ?? derived.state;
   const size = useContext(ResponsiveContext);
   const stacked = size !== 'large' && size !== 'xlarge';
+  const padX = stacked ? 'medium' : 'large';
   const [showGuide, setShowGuide] = useState(false);
   const [guideOpen, setGuideOpen] = useState(guideInitiallyOpen);
   const [blockedMessage, setBlockedMessage] = useState<string | undefined>();
@@ -111,11 +112,11 @@ export function StepShell({
   const footer = hasFooter ? (
     <Box background="background-front" border={{ side: 'top', color: 'border-weak' }} flex={false}>
       {shownMessage && (
-        <Box pad={{ horizontal: 'medium', top: 'small' }}>
+        <Box pad={{ horizontal: padX, top: 'small' }}>
           <Notification status="warning" message={shownMessage} onClose={() => setBlockedMessage(undefined)} />
         </Box>
       )}
-      <Footer justify="end" gap="medium" pad={{ horizontal: 'medium', vertical: 'small' }}>
+      <Footer justify="end" gap="medium" pad={{ horizontal: padX, vertical: 'small' }}>
         {footerNote && (
           <Box flex>
             <Text size="small" color="text-weak">
@@ -174,9 +175,11 @@ export function StepShell({
       <Box gap="medium" flex={false}>
         <Box direction="row" justify="between" align="start" gap="medium" flex={false}>
           <Box gap="xxsmall">
-            <Text size="small" color="text-weak">
-              {`Step ${position.index} of ${position.total}`}
-            </Text>
+            {position.label !== '' && (
+              <Text size="small" color="text-weak">
+                {position.label ?? `Step ${position.index} of ${position.total}`}
+              </Text>
+            )}
             <Heading level={1} size="small" margin="none">
               {title}
             </Heading>

@@ -1,12 +1,13 @@
-import { Box, Button, Layer, Main, Text } from 'grommet';
-import { useEffect, useRef, useState } from 'react';
-import { createRunFromSheet, getAppProfile, getRun, InitSheetUploadResult, listRuns, RunRecord } from './api';
+import { Box, Button, Heading, Layer, Main, ResponsiveContext, Text } from 'grommet';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { createRunFromSheet, getAppProfile, getRun, InitSheetUploadResult } from './api';
 import { actionKeysFor, ActionKey, phaseToActionKey, RunMode, ServedStep, StepRegistry } from './modes';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
 import { AppHeader, RailItem, StepRail, WizardBar } from './ui/AppChrome';
 import { StepProvider } from './ui/StepContext';
 import { ConsolePane } from './ui/ConsolePane';
+import { Home, OverviewStep, RunOverview } from './ui/RunPages';
 import { StepState } from './ui/status';
 import { deriveStepHint, deriveStepState, runStatusToState, stepEvents } from './ui/useStepState';
 import { AsBuiltStep } from './steps/AsBuiltStep';
@@ -37,6 +38,7 @@ const PREREQ_STEP: WizardStep = { key: 'prereq', label: 'Prerequisites', group: 
 const SHEET_STEP: WizardStep = { key: 'sheet', label: 'Initialisation sheet', group: 'Prepare' };
 const MODE_STEP: WizardStep = { key: 'mode', label: 'Mode', group: 'Prepare' };
 const DONE_STEP: WizardStep = { key: 'done', label: 'Finish', group: 'Document' };
+const PREPARE_KEYS = ['prereq', 'sheet', 'mode'];
 const RUN_ID_KEY = 'alletra.runId';
 
 // Registry step kinds, mapped to the deployment stages the rail groups by.
@@ -52,6 +54,8 @@ function buildSteps(registry: StepRegistry | null, mode: RunMode, custom: Action
   return [PREREQ_STEP, SHEET_STEP, MODE_STEP, ...actions, DONE_STEP];
 }
 
+type View = 'wizard' | 'home' | 'overview';
+
 export default function App() {
   const storedRunId = localStorage.getItem(RUN_ID_KEY);
   const [mode, setMode] = useState<RunMode>('FULL_ONBOARDING');
@@ -60,29 +64,25 @@ export default function App() {
   const [maxStep, setMaxStep] = useState(0);
   const [form, setForm] = useState<WorkItemForm>(EMPTY_FORM);
   const [runId, setRunId] = useState<string | null>(storedRunId);
-  // The held-sheet token from the upload step; the Mode step mints the run from it. In memory only —
+  // The held-sheet token from the upload step; the Mode step mints the run from it. In memory only:
   // refreshing before a mode is chosen means re-uploading, which costs nothing because no run exists.
   const [sheetToken, setSheetToken] = useState<string | null>(null);
   // The parsed workbook lives here, not inside the sheet step: returning to that step must not lose
   // the upload and disable its own Continue button.
   const [sheetResult, setSheetResult] = useState<InitSheetUploadResult | null>(null);
   const [initOnly, setInitOnly] = useState(false);
-  const [appTitle, setAppTitle] = useState('Alletra MP B10000 Onboarding');
   const [registry, setRegistry] = useState<StepRegistry | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [footerHost, setFooterHost] = useState<HTMLDivElement | null>(null);
-  // X-9: the run picker. `undefined` = closed; `null` = loading; a list = open.
-  const [runList, setRunList] = useState<RunRecord[] | null | undefined>(undefined);
-  const openRunPicker = async () => {
-    setRunList(null);
-    try {
-      const { runs } = await listRuns();
-      setRunList([...runs].sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1)));
-    } catch {
-      setRunList([]);
-    }
-  };
+  const [view, setView] = useState<View>('wizard');
+  const size = useContext(ResponsiveContext);
+  const pad = size === 'large' || size === 'xlarge' ? 'large' : 'medium';
+
   const switchRun = (id: string) => {
+    if (id === runId) {
+      setView('wizard');
+      return;
+    }
     // The restore-on-load path already rebuilds mode, steps and position from the stored id; reuse it.
     localStorage.setItem(RUN_ID_KEY, id);
     window.location.reload();
@@ -104,7 +104,7 @@ export default function App() {
     getAppProfile()
       .then((profile) => {
         setInitOnly(profile.init_only);
-        setAppTitle(profile.title);
+        document.title = profile.title;
         setRegistry({ steps: profile.steps, modes: profile.modes });
         if (profile.init_only) setMode('FULL_ONBOARDING');
       })
@@ -143,9 +143,14 @@ export default function App() {
   const advance = (to: number) => {
     setStep(to);
     setMaxStep((previous) => Math.max(previous, to));
+    setView('wizard');
   };
   const next = () => advance(Math.min(stepIndex + 1, lastStep));
   const previous = () => setStep(Math.max(stepIndex - 1, 0));
+  const openStep = (key: string) => {
+    const index = steps.findIndex((item) => item.key === key);
+    if (index >= 0) advance(index);
+  };
 
   const discardRun = () => {
     setRunId(null);
@@ -157,6 +162,7 @@ export default function App() {
     setStep(0);
     setMaxStep(0);
     setConfirmCancel(false);
+    setView('wizard');
   };
 
   // Choosing a mode is what mints the run from the held sheet. If a run already exists the operator
@@ -174,7 +180,7 @@ export default function App() {
   };
 
   // The state of the steps that frame a run. One definition, used by the rail AND by the step
-  // itself — deriving it in both places is how a rail entry ends up disagreeing with its own header.
+  // itself: deriving it in both places is how a rail entry ends up disagreeing with its own header.
   const scaffoldState = (key: string): StepState => {
     if (key === 'prereq') return maxStep > 0 ? 'complete' : 'action_required';
     if (key === 'sheet') return sheetToken || runId ? 'complete' : maxStep >= 1 ? 'action_required' : 'not_started';
@@ -189,20 +195,49 @@ export default function App() {
     hint: item.served ? deriveStepHint(item.served, run, events) : undefined,
     reachable: index <= maxStep,
   }));
+  // Before a run exists the rail lists only Prepare; on the Mode step it previews the chosen mode's
+  // steps, so the count does not jump when the run is created.
+  const shownRail = runId
+    ? railItems
+    : railItems.filter((item) => PREPARE_KEYS.includes(item.key) || (current.key === 'mode' && item.key !== 'done'));
 
-  // One mapper for run status, shared with the step model — 'ready' is idle, not running, so the
+  // "Prepare · step 2 of 3" before the run; "Step 3 of 7" for the run's own steps; nothing on Finish.
+  const runSteps = steps.filter((item) => item.served);
+  const stepLabel = (key: string): string => {
+    const p = PREPARE_KEYS.indexOf(key);
+    if (p >= 0) return `Prepare · step ${p + 1} of ${PREPARE_KEYS.length}`;
+    const r = runSteps.findIndex((item) => item.key === key);
+    return r >= 0 ? `Step ${r + 1} of ${runSteps.length}` : '';
+  };
+
+  // One mapper for run status, shared with the step model: 'ready' is idle, not running, so the
   // header does not claim work is happening while the tool waits for the operator.
   const runState: StepState | undefined = run ? runStatusToState(run.status) : undefined;
   const runLabel = run
     ? {
         complete: 'Run complete',
         failed: 'Run needs attention',
-        action_required: 'Action required',
+        action_required: 'Waiting for you',
         waiting: 'Waiting on others',
         running: 'Run in progress',
         not_started: 'Run open',
       }[runState ?? 'not_started']
     : undefined;
+  const currentModeLabel = modeLabel(mode, initOnly);
+  const phaseLabel = (phase: string) => {
+    const key = registry ? phaseToActionKey(registry, phase) : null;
+    const served = registry?.steps.find((s) => s.key === key);
+    if (served) return served.label;
+    return phase === 'COMPLETE' ? 'Complete' : phase.replaceAll('_', ' ').toLowerCase();
+  };
+
+  const overviewSteps: OverviewStep[] = steps
+    .map((item, index) => ({ item, rail: railItems[index] }))
+    .filter(({ item }) => item.served)
+    .map(({ item, rail }) => {
+      const mine = stepEvents(item.served, events);
+      return { key: item.key, label: item.label, state: rail.state, hint: rail.hint, lastAt: mine[mine.length - 1]?.created_at };
+    });
 
   const needsRun = Boolean(current.served) && !runId;
   const stepValue = {
@@ -210,162 +245,147 @@ export default function App() {
     run,
     events,
     step: current.served,
-    position: { index: stepIndex + 1, total: steps.length },
+    position: { index: stepIndex + 1, total: steps.length, label: stepLabel(current.key) },
     nextTitle: steps[stepIndex + 1]?.label,
     onDone: next,
     footerHost,
   };
 
+  const finished = current.key === 'done';
+  const cancelControl =
+    finished || (!runId && maxStep === 0)
+      ? undefined
+      : { label: runId ? 'Cancel run' : 'Start over', onClick: () => setConfirmCancel(true) };
+
   return (
     <Box fill background="background-back">
       <AppHeader
-        title={appTitle}
+        appName={initOnly ? 'initialization' : 'onboarding'}
         serial={run?.serial_number}
-        mode={runId ? modeLabel(mode, initOnly) : undefined}
+        mode={runId ? currentModeLabel : undefined}
         runState={runState}
         runLabel={runLabel}
+        onHome={() => setView('home')}
+        onNewRun={discardRun}
       />
-      <Box direction="row" flex overflow="hidden">
-        <StepRail
-          items={railItems}
-          activeKey={current.key}
-          onSelect={(key) => {
-            const index = steps.findIndex((item) => item.key === key);
-            if (index >= 0) advance(index);
-          }}
+      {view === 'home' ? (
+        <Home
+          currentRunId={runId}
+          modeLabel={(m) => modeLabel(m as RunMode, initOnly)}
+          phaseLabel={phaseLabel}
+          onOpen={switchRun}
+          onNewRun={discardRun}
         />
-        {/* A real <main> landmark: assistive technology needs to skip the rail to the step content. */}
-        <Box flex direction="column" overflow="hidden">
-        <Main flex overflow="auto" background="background-back">
-          <WizardBar
-            onPrevious={previous}
-            canGoPrevious={stepIndex > 0}
-            onCancel={() => setConfirmCancel(true)}
-            canCancel={Boolean(runId)}
-            onOpenRun={openRunPicker}
+      ) : (
+        <Box direction="row" flex overflow="hidden">
+          <StepRail
+            items={shownRail}
+            activeKey={view === 'wizard' ? current.key : ''}
+            onSelect={openStep}
+            overview={runId ? { current: view === 'overview', onSelect: () => setView('overview') } : undefined}
+            note={!runId && current.key !== 'mode' ? 'The steps of your run appear here once you choose what to do (step 3).' : undefined}
           />
-          <Box pad="medium" width={{ max: 'xlarge' }} flex={false}>
-            <StepProvider value={stepValue}>
-              {current.key === 'prereq' && <PrereqStep onDone={next} state={scaffoldState('prereq')} />}
-              {current.key === 'sheet' && (
-                <InitSheetStep
-                  setForm={setForm}
-                  result={sheetResult}
-                  setResult={setSheetResult}
-                  state={scaffoldState('sheet')}
-                  onUploaded={(token) => {
-                    setSheetToken(token);
-                    next();
-                  }}
-                />
-              )}
-              {current.key === 'mode' && (
-                <ModeStep
-                  mode={mode}
-                  custom={customSteps}
-                  setMode={setMode}
-                  setCustom={setCustomSteps}
-                  onConfirm={confirmMode}
-                  locked={Boolean(runId)}
-                  initOnly={initOnly}
-                  catalog={registry?.steps ?? []}
-                  state={scaffoldState('mode')}
-                  hasReplicationTab={Boolean(sheetResult?.targets?.peer_host) || Boolean(runId)}
-                />
-              )}
-              {current.key === 'greenlake' && runId && <GreenLakeStep runId={runId} run={run} events={events} onDone={next} />}
-              {current.key === 'cloudinit' && runId && (
-                <CloudinitStep runId={runId} run={run} events={events} form={form} onDone={next} />
-              )}
-              {current.key === 'dscc' && runId && (
-                <DsccStep runId={runId} run={run} events={events} dsccRegion={form.dscc_region_code} onDone={next} />
-              )}
-              {current.key === 'discover' && runId && <DiscoveryStep runId={runId} run={run} events={events} onDone={next} />}
-              {current.key === 'zoning' && runId && <ZoningStep runId={runId} run={run} events={events} onDone={next} />}
-              {current.key === 'provision' && runId && <ProvisionStep runId={runId} run={run} events={events} onDone={next} />}
-              {current.key === 'replicate' && runId && <ReplicationStep runId={runId} run={run} events={events} onDone={next} />}
-              {current.key === 'failover_test' && runId && <FailoverTestStep runId={runId} run={run} events={events} onDone={next} />}
-              {current.key === 'verify' && runId && <VerifyStep runId={runId} run={run} events={events} onDone={next} />}
-              {current.key === 'asbuilt' && runId && <AsBuiltStep runId={runId} run={run} events={events} onDone={next} />}
-              {current.key === 'done' && (
-                <DoneStep runId={runId} run={run} events={events} onRestart={() => setConfirmCancel(true)} />
-              )}
-              {needsRun && <Text color="text-weak">Select a mode first — that creates the run.</Text>}
-            </StepProvider>
-          </Box>
-        </Main>
-        {/* the current step's footer is drawn here (StepShell portals into it) */}
-        <Box ref={setFooterHost} flex={false} />
-        {runId && <ConsolePane runId={runId} activity={current.served ? stepEvents(current.served, events) : events} />}
-        </Box>
-      </Box>
-
-      {/* X-9: open an earlier run - the runner's runs, or a run from another day - without the console. */}
-      {runList !== undefined && (
-        <Layer position="center" onEsc={() => setRunList(undefined)} onClickOutside={() => setRunList(undefined)} modal>
-          <Box pad="medium" gap="medium" width="large">
-            <Box gap="xsmall">
-              <Text size="xlarge" weight="bold" color="text-strong">Open another run</Text>
-              <Text size="small" color="text-weak">
-                Every run this tool holds, newest first. Opening one reloads the page on it; nothing on the array changes.
-              </Text>
-            </Box>
-            {runList === null && <Text size="small" color="text-weak">Reading runs…</Text>}
-            {runList !== null && runList.length === 0 && <Text size="small" color="text-weak">No runs yet.</Text>}
-            {runList !== null && runList.length > 0 && (
-              <Box gap="xsmall" overflow="auto" height={{ max: 'medium' }}>
-                {runList.map((r) => (
-                  <Box
-                    key={r.run_id}
-                    direction="row"
-                    justify="between"
-                    align="center"
-                    gap="small"
-                    pad={{ vertical: 'xsmall' }}
-                    border={{ side: 'bottom', color: 'border-weak' }}
-                    flex={false}
-                  >
-                    <Box gap="xxsmall">
-                      <Text size="small" weight={r.run_id === runId ? 'bold' : undefined}>
-                        {r.serial_number} · {modeLabel(r.mode as RunMode, initOnly)}{r.run_id === runId ? ' · open now' : ''}
-                      </Text>
-                      <Text size="xsmall" color="text-weak">
-                        {r.run_id.slice(0, 8)} · {r.current_phase.replaceAll('_', ' ').toLowerCase()} · last activity{' '}
-                        {new Date(r.updated_at).toLocaleString()}
-                      </Text>
-                    </Box>
-                    <Button size="small" label="Open" disabled={r.run_id === runId} onClick={() => switchRun(r.run_id)} />
-                  </Box>
-                ))}
-              </Box>
+          <Box flex direction="column" overflow="hidden">
+            {view === 'wizard' && (
+              <WizardBar
+                flow={runId ? `${currentModeLabel} on ${run?.serial_number ?? 'this array'}` : 'Prepare a run'}
+                previous={stepIndex > 0 ? { label: steps[stepIndex - 1].label, onClick: previous } : undefined}
+                cancel={cancelControl}
+              />
             )}
-            <Box direction="row" justify="end">
-              <Button label="Close" onClick={() => setRunList(undefined)} />
-            </Box>
+            {/* A real <main> landmark: assistive technology needs to skip the rail to the step content. */}
+            <Main flex overflow="auto" background="background-back">
+              {view === 'overview' && runId ? (
+                <RunOverview
+                  runId={runId}
+                  run={run}
+                  events={events}
+                  steps={overviewSteps}
+                  modeLabel={currentModeLabel}
+                  onOpenStep={openStep}
+                  onHome={() => setView('home')}
+                />
+              ) : (
+                <Box pad={{ horizontal: pad, vertical: 'medium' }} width={{ max: 'xxlarge' }} flex={false}>
+                  <StepProvider value={stepValue}>
+                    {current.key === 'prereq' && <PrereqStep onDone={next} state={scaffoldState('prereq')} />}
+                    {current.key === 'sheet' && (
+                      <InitSheetStep
+                        setForm={setForm}
+                        result={sheetResult}
+                        setResult={setSheetResult}
+                        state={scaffoldState('sheet')}
+                        onUploaded={(token) => {
+                          setSheetToken(token);
+                          next();
+                        }}
+                      />
+                    )}
+                    {current.key === 'mode' && (
+                      <ModeStep
+                        mode={mode}
+                        custom={customSteps}
+                        setMode={setMode}
+                        setCustom={setCustomSteps}
+                        onConfirm={confirmMode}
+                        locked={Boolean(runId)}
+                        initOnly={initOnly}
+                        catalog={registry?.steps ?? []}
+                        state={scaffoldState('mode')}
+                        hasReplicationTab={Boolean(sheetResult?.targets?.peer_host) || Boolean(runId)}
+                      />
+                    )}
+                    {current.key === 'greenlake' && runId && <GreenLakeStep runId={runId} run={run} events={events} onDone={next} />}
+                    {current.key === 'cloudinit' && runId && (
+                      <CloudinitStep runId={runId} run={run} events={events} form={form} onDone={next} />
+                    )}
+                    {current.key === 'dscc' && runId && (
+                      <DsccStep runId={runId} run={run} events={events} dsccRegion={form.dscc_region_code} onDone={next} />
+                    )}
+                    {current.key === 'discover' && runId && <DiscoveryStep runId={runId} run={run} events={events} onDone={next} />}
+                    {current.key === 'zoning' && runId && <ZoningStep runId={runId} run={run} events={events} onDone={next} />}
+                    {current.key === 'provision' && runId && <ProvisionStep runId={runId} run={run} events={events} onDone={next} />}
+                    {current.key === 'replicate' && runId && <ReplicationStep runId={runId} run={run} events={events} onDone={next} />}
+                    {current.key === 'failover_test' && runId && <FailoverTestStep runId={runId} run={run} events={events} onDone={next} />}
+                    {current.key === 'verify' && runId && <VerifyStep runId={runId} run={run} events={events} onDone={next} />}
+                    {current.key === 'asbuilt' && runId && <AsBuiltStep runId={runId} run={run} events={events} onDone={next} />}
+                    {current.key === 'done' && (
+                      <DoneStep runId={runId} run={run} events={events} onRestart={() => setConfirmCancel(true)} />
+                    )}
+                    {needsRun && <Text color="text-weak">Choose a mode first. That creates the run.</Text>}
+                  </StepProvider>
+                </Box>
+              )}
+            </Main>
+            {/* the current step's footer is drawn here (StepShell portals into it) */}
+            <Box ref={setFooterHost} flex={false} />
+            {runId && <ConsolePane runId={runId} activity={current.served && view === 'wizard' ? stepEvents(current.served, events) : events} />}
           </Box>
-        </Layer>
+        </Box>
       )}
 
-      {/* Discarding a run cannot be undone, so it is confirmed twice. */}
+      {/* Design System double confirmation: nothing is deleted, so say what does and does not happen. */}
       {confirmCancel && (
-        <Layer
-          position="center"
-          onEsc={() => setConfirmCancel(false)}
-          onClickOutside={() => setConfirmCancel(false)}
-          modal
-        >
-          <Box pad="medium" gap="medium" width="medium">
-            <Box gap="xsmall">
-              <Text size="xlarge" weight="bold" color="text-strong">
-                Discard this run?
-              </Text>
-              <Text>
-                Objects already created on the array are retained. This removes the run from this tool only.
-              </Text>
+        <Layer position="center" onEsc={() => setConfirmCancel(false)} onClickOutside={() => setConfirmCancel(false)} modal>
+          <Box pad="large" gap="medium" width="large">
+            <Box gap="xxsmall">
+              <Heading level={2} size="small" margin="none">
+                {finished ? 'Start a new run?' : runId ? 'Cancel this run?' : 'Start over?'}
+              </Heading>
+              <Text color="text-strong">{runId ? `${currentModeLabel} on ${run?.serial_number ?? 'this array'}` : 'Prepare a run'}</Text>
             </Box>
-            <Box direction="row" gap="small" justify="end">
-              <Button label="Keep run" onClick={() => setConfirmCancel(false)} />
-              <Button primary label="Discard run" onClick={discardRun} />
+            <Text>
+              {runId
+                ? 'You go back to the Prerequisites. This run stays in Your runs with everything it did, and you can open it again. Nothing on the array, vCenter or the switches changes.'
+                : 'The uploaded workbook and your choices on these screens are forgotten.'}
+            </Text>
+            <Box as="footer" direction="row" gap="small" justify="end">
+              <Button label="No, stay" secondary onClick={() => setConfirmCancel(false)} />
+              <Button
+                primary
+                label={finished ? 'Yes, start a new run' : runId ? 'Yes, cancel the run' : 'Yes, start over'}
+                onClick={discardRun}
+              />
             </Box>
           </Box>
         </Layer>
@@ -376,12 +396,14 @@ export default function App() {
 
 function modeLabel(mode: RunMode, initOnly: boolean): string {
   if (initOnly) return 'Initialization';
-  return {
-    FULL_ONBOARDING: 'Full onboarding',
-    PROVISION_ONLY: 'Provision storage only',
-    BOTH: 'Onboard, then provision',
-    REPLICATE: 'Provision, then replicate',
-    VERIFY_ONLY: 'Verify only',
-    CUSTOM: 'Custom',
-  }[mode];
+  return (
+    {
+      FULL_ONBOARDING: 'Full onboarding',
+      PROVISION_ONLY: 'Provision storage only',
+      BOTH: 'Onboard, then provision',
+      REPLICATE: 'Provision, then replicate',
+      VERIFY_ONLY: 'Verify only',
+      CUSTOM: 'Custom',
+    }[mode] ?? mode
+  );
 }

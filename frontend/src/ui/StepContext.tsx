@@ -14,7 +14,7 @@ export interface StepContextValue {
   events: RunEvent[];
   /** The registry entry for this step; absent for the scaffolding steps that frame every run. */
   step?: ServedStep;
-  position: { index: number; total: number };
+  position: { index: number; total: number; label?: string };
   /** The next wizard step's label, so Continue can name where it goes (SPEC-004 R1); absent on the last step. */
   nextTitle?: string;
   /** Advance to the next step in the wizard. */
