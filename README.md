@@ -308,7 +308,7 @@ It never writes to a switch and never issues a CLI command the tool did not gene
 
 **Run history** lives in `%LOCALAPPDATA%\AlletraOnboard\` (from rc.28), so a new zip in a new folder
 keeps every earlier run; the console banner prints the folder. An older `.alletra_onboard\state.db`
-beside the exe is still used when present. *Open another run* in the wizard bar lists every run.
+beside the exe is still used when present. *Runs, Your runs* (top right) lists every run, grouped by who has to act next.
 
 ---
 
