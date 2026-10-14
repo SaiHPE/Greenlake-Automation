@@ -116,24 +116,24 @@ export function StepShell({
           <Notification status="warning" message={shownMessage} onClose={() => setBlockedMessage(undefined)} />
         </Box>
       )}
+      {confirmation && (
+        <Box direction="row" justify="end" pad={{ horizontal: padX, top: 'small' }}>
+          <CheckBox
+            checked={confirmation.checked}
+            onChange={(e) => {
+              confirmation.onChange(e.target.checked);
+              if (e.target.checked) setBlockedMessage(undefined);
+            }}
+            label={<Text size="small">{confirmation.label}</Text>}
+          />
+        </Box>
+      )}
       <Footer justify="end" gap="medium" pad={{ horizontal: padX, vertical: 'small' }}>
         {footerNote && (
           <Box flex>
             <Text size="small" color="text-weak">
               {footerNote}
             </Text>
-          </Box>
-        )}
-        {confirmation && (
-          <Box flex direction="row" justify="end">
-            <CheckBox
-              checked={confirmation.checked}
-              onChange={(e) => {
-                confirmation.onChange(e.target.checked);
-                if (e.target.checked) setBlockedMessage(undefined);
-              }}
-              label={<Text size="small">{confirmation.label}</Text>}
-            />
           </Box>
         )}
         <Box direction="row" gap="small" align="center" justify="end" flex={false} wrap>

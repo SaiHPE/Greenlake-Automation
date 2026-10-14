@@ -1,4 +1,5 @@
-import { Box, Button, CheckBox, DataTable, Text } from 'grommet';
+import { Box, Button, DataTable, Text } from 'grommet';
+import { Storage as StorageIcon } from 'grommet-icons';
 import { useState } from 'react';
 import {
   ActionOutcome,
@@ -16,10 +17,12 @@ import {
   storagePreview,
   verifyPaths,
 } from '../api';
+import { EmptyState, Guidance, Panel, PartsBar, Section, StatusLine } from '../ui/blocks';
 import { DiscoveryFreshness } from '../ui/discoveryAge';
-import { ContinueButton, InlineNotification, NotesList, Surface, TableSummary } from '../ui/primitives';
+import { InlineNotification, NotesList } from '../ui/primitives';
 import { StatusIndicator, StepState } from '../ui/status';
-import { StepShell } from '../ui/StepShell';
+import { useStepContext } from '../ui/StepContext';
+import { FooterAction, StepShell } from '../ui/StepShell';
 import { ProvisioningBuilderView } from './ProvisioningBuilderView';
 
 const VERDICT: Record<PathVerdict, { state: StepState; label: string }> = {
@@ -75,9 +78,9 @@ function RemovalSet({ result, runId, serial }: { result: ProvisioningResult; run
   };
   return (
     <Box gap="xsmall" margin={{ top: 'small' }}>
-      <Text size="small" weight={600}>Removal command set</Text>
+      <Text size="small" weight={500}>Removal command set</Text>
       {lines.length === 0 ? (
-        <Text size="small" color="text-weak">Nothing to remove — this apply created nothing.</Text>
+        <Text size="small" color="text-weak">Nothing to remove: this apply created nothing.</Text>
       ) : (
         <>
           <Text size="small" color="text-weak">
@@ -116,6 +119,7 @@ function latestIndex(events: RunEvent[], type: string): number {
 }
 
 export function ProvisionStep({ runId, run, events, onDone }: Props) {
+  const { nextTitle } = useStepContext();
   const [error, setError] = useState<string | null>(null);
   const [authorised, setAuthorised] = useState(false);
   const running = run?.status === 'running';
@@ -158,10 +162,31 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
     }
   };
 
+  const at = !plan || plan.error ? 0 : !result ? 1 : 3;
+  const allDone = !!result && !!paths && !paths.error;
+  const next = nextTitle ? `Continue to ${nextTitle}` : 'Continue';
+  const build: FooterAction = { label: plan ? 'Rebuild plan' : 'Build plan', busy: running, onClick: call(() => storagePreview(runId)) };
+  const skip: FooterAction = { label: everApplied ? next : `${next} without provisioning`, onClick: onDone };
+  const verify: FooterAction = { label: paths ? 'Verify paths again' : 'Verify paths', busy: running, onClick: call(() => verifyPaths(runId)) };
+  const create: FooterAction = { label: 'Create storage objects', busy: running, onClick: call(() => storageApply(runId)) };
+
+  let primary: FooterAction;
+  let buttons: FooterAction[];
+  if (result) {
+    primary = paths ? { label: next, onClick: onDone } : verify;
+    buttons = paths ? [verify, build] : [build, skip];
+  } else if (plan && !plan.error && !blocked) {
+    primary = create;
+    buttons = [build, skip];
+  } else {
+    primary = build;
+    buttons = [skip];
+  }
+
   return (
     <StepShell
       title="Provision storage"
-      description="Creates the hosts, host sets, volumes and exports on the array. No writes occur until the plan is approved."
+      description="Creates the hosts, host sets, volumes and exports on the array. Nothing is written until you approve the plan."
       stateDetail={
         result
           ? 'objects created'
@@ -173,62 +198,94 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
       }
       error={error}
       onDismissError={() => setError(null)}
-      activityEmpty="No plan yet. Nothing is created until a plan is built and confirmed. Pick the host-set members and the exports in the Compose card below, then build the plan to see what will be created, what already exists and what conflicts."
-      footerNote="Re-running skips objects that already match the plan; an object that exists but differs blocks until it is resolved on the array."
-      gate={
-        plan && !plan.error && !result
-          ? blocked
-            ? conflictRows > 0
-              ? {
-                  title: 'The plan has conflicts',
-                  message:
-                    'Something on the array has the same name as an object in this plan but different attributes. Resolve it on the array (or change the plan), then rebuild.',
-                }
-              : {
-                  title: 'The plan cannot be applied yet',
-                  message: plan.blockers.join(' '),
-                }
-            : {
-                title: 'Review the plan, then approve creation',
-                message:
-                  'No changes have been made to the array. Objects marked Exists are left alone; Update adds to an existing object without removing anything.',
-              }
-          : null
+      top={<PartsBar parts={['Compose', 'Review the plan', 'Create', 'Verify paths']} at={at} doneAll={allDone} failed={blocked && !result} />}
+      primary={primary}
+      buttons={buttons}
+      // The only action in this tool that writes to a customer array, so it takes an explicit
+      // authorisation rather than a single click (LESSONS 7).
+      confirmation={
+        plan && !plan.error && !blocked && !result
+          ? { label: 'I have reviewed this plan and authorise creating these objects on the array.', checked: authorised, onChange: setAuthorised }
+          : undefined
       }
-      actions={
-        <>
-          <Button
-            busy={running}
-            label={plan ? 'Rebuild plan' : 'Build plan'}
-            onClick={call(() => storagePreview(runId))}
-          />
-          {plan && !plan.error && !result && (
-            <Button
-              busy={running}
-              label="Create storage objects"
-              disabled={!authorised || blocked}
-              onClick={call(() => storageApply(runId))}
-            />
-          )}
-          {/* Continue is always available: an operator may legitimately pass through this step
-              without creating anything - and the label says so (SPEC-012 R2, P-10). */}
-          <ContinueButton onClick={onDone} suffix={everApplied ? '' : 'without provisioning'} />
-        </>
+      guideOpen={false}
+      guidance={
+        <Guidance
+          items={[
+            {
+              title: 'What this step writes',
+              body: 'Only what the plan shows, and only after your tick. Objects marked Exists are left alone; Update adds to an existing object without removing anything.',
+            },
+            { title: 'Discovery feeds it', body: 'The hosts it creates come from Discovery. Run Discovery again if hosts, cabling or zoning have changed since.' },
+            {
+              title: 'If something has the same name',
+              body: 'An object on the array with the same name but different attributes is a conflict. The plan cannot be applied until it is resolved on the array or the plan is changed.',
+            },
+            {
+              title: 'Path verification',
+              body: "Reads the array back per host: LUNs, HBAs, paths and fabrics. For ESXi hosts also the host's own view from vCenter (a new LUN needs a storage rescan). A report, never a gate.",
+            },
+          ]}
+        />
       }
     >
       {/* The hosts this step creates come from the discovery snapshot, so its age matters here most. */}
       <DiscoveryFreshness events={events} action="creating objects on the array" />
 
-      <ProvisioningBuilderView runId={runId} disabled={running} readOnly={!!result} />
+      {running && <StatusLine state="running">Working on the array. Each action appears in Activity, below.</StatusLine>}
+      {!running && !plan && (
+        <EmptyState icon={<StorageIcon size="large" color="icon-weak" />} title="No plan yet">
+          Compose the host set members and the exports below, then Build plan to see what will be created, what is already on the array and
+          what conflicts. Nothing is created until you approve it.
+        </EmptyState>
+      )}
+      {plan?.error && (
+        <StatusLine state="failed" title="The plan could not be built">
+          {plan.error}
+        </StatusLine>
+      )}
+      {!running && plan && !plan.error && !result && blocked && (
+        <StatusLine state="failed" title={conflictRows > 0 ? 'The plan has conflicts' : 'The plan cannot be applied yet'}>
+          {conflictRows > 0
+            ? 'Something on the array has the same name as an object in this plan but different attributes. Resolve it on the array (or change the plan), then rebuild.'
+            : plan.blockers.join(' ')}
+        </StatusLine>
+      )}
+      {!running && plan && !plan.error && !result && !blocked && (
+        <StatusLine state="action_required" title="Review the plan, then approve creation">
+          {toCreate} to create, {toUpdate} to update, {existing} already there. No changes have been made to the array. Tick the box next to the
+          green button when you have reviewed it.
+        </StatusLine>
+      )}
+      {!running && result && (
+        <StatusLine
+          state={result.error || failed > 0 ? 'failed' : 'complete'}
+          title={
+            result.error
+              ? 'Creation reported an error'
+              : failed > 0
+                ? `${failed} export${failed === 1 ? '' : 's'} not found on read-back`
+                : `${created} created${updated ? `, ${updated} updated` : ''}`
+          }
+        >
+          {result.error
+            ? result.error
+            : failed > 0
+              ? "The array reported the export created, but it is not in the array's export list. Check `showvlun -t` on the array before continuing."
+              : `${result.outcomes.length - created - updated} already existed and were left untouched.${paths ? '' : ' Verify the paths next.'}`}
+        </StatusLine>
+      )}
 
-      {plan?.error && <InlineNotification tone="critical" title="The plan could not be built" message={plan.error} />}
+      <Section title={result ? 'Composition applied' : 'Compose'} summary="Host set members and exports" open={!plan}>
+        <ProvisioningBuilderView runId={runId} disabled={running} readOnly={!!result} />
+      </Section>
 
-      {plan && !plan.error && (
-        <Surface title="Plan" description="What approving this plan will do on the array, object by object.">
+      {plan && !plan.error && !result && (
+        <Panel title="Review the plan" right={<Text size="small" color="text-weak">{toCreate} to create · {toUpdate} to update · {existing} already there · {conflicts} conflict{conflicts === 1 ? '' : 's'}</Text>}>
           {blocked && (
             <InlineNotification
               tone="critical"
-              title={`${conflicts} conflict${conflicts === 1 ? '' : 's'} — the plan cannot be applied`}
+              title={`${conflicts} conflict${conflicts === 1 ? '' : 's'}: the plan cannot be applied`}
               message={<NotesList notes={plan.blockers} />}
             />
           )}
@@ -243,10 +300,12 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
                   const was = previousState.get(`${action.kind}|${action.name}`);
                   return (
                     <Box gap="xxsmall">
-                      <StatusIndicator state={PLAN_STATE[action.state].state} label={PLAN_STATE[action.state].label} />
-                      {was && was !== action.state && (
-                        <Text size="xsmall" color="text-weak">was {PLAN_STATE[was].label.toLowerCase()}</Text>
+                      {action.state === 'create' ? (
+                        <Text size="small" weight={500}>Create</Text>
+                      ) : (
+                        <StatusIndicator state={PLAN_STATE[action.state].state} label={PLAN_STATE[action.state].label} />
                       )}
+                      {was && was !== action.state && <Text size="xsmall" color="text-weak">was {PLAN_STATE[was].label.toLowerCase()}</Text>}
                     </Box>
                   );
                 },
@@ -271,44 +330,13 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             data={plan.actions}
             primaryKey={false}
             a11yTitle="Provisioning plan: one row per object, with the action apply will take"
-
           />
-          <TableSummary>
-            {toCreate} to create · {toUpdate} to update · {existing} already exist · {conflicts} conflict{conflicts === 1 ? '' : 's'}
-          </TableSummary>
-          {plan.notes.length > 0 && (
-            <InlineNotification tone="info" title="Plan notes" message={<NotesList notes={plan.notes} />} />
-          )}
-          {/* The only action in this tool that writes to a customer array, so it takes an explicit
-              authorisation rather than a single click. */}
-          {!result && (
-            <CheckBox
-              label="I have reviewed this plan and authorise creating these objects on the array."
-              checked={authorised}
-              disabled={running || blocked}
-              onChange={(event) => setAuthorised(event.target.checked)}
-            />
-          )}
-        </Surface>
+          {plan.notes.length > 0 && <InlineNotification tone="info" title="Plan notes" message={<NotesList notes={plan.notes} />} />}
+        </Panel>
       )}
 
       {result && (
-        <Surface title="Result">
-          {result.error ? (
-            <InlineNotification tone="critical" title="Creation reported an error" message={result.error} />
-          ) : failed > 0 ? (
-            <InlineNotification
-              tone="critical"
-              title={`${failed} export${failed === 1 ? '' : 's'} not found on read-back`}
-              message="The array reported the export created, but it is not in the array's export list. Check `showvlun -t` on the array before continuing."
-            />
-          ) : (
-            <InlineNotification
-              tone="ok"
-              title={`${created} created${updated ? ` · ${updated} updated` : ''}`}
-              message={`${result.outcomes.length - created - updated} already existed and were left untouched.`}
-            />
-          )}
+        <Section title="What the array answered" summary={`${result.outcomes.length} objects, one row each, and the commands to remove what was created`} open={!!result.error || failed > 0}>
           <DataTable
             columns={[
               { property: 'kind', header: 'Kind', render: (outcome: ActionOutcome) => <Text size="small">{outcome.kind}</Text> },
@@ -316,16 +344,14 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
               {
                 property: 'status',
                 header: 'Result',
-                render: (outcome: ActionOutcome) => (
-                  <StatusIndicator state={OUTCOME[outcome.status].state} label={OUTCOME[outcome.status].label} />
-                ),
+                render: (outcome: ActionOutcome) => <StatusIndicator state={OUTCOME[outcome.status].state} label={OUTCOME[outcome.status].label} />,
               },
               {
                 property: 'detail',
                 header: 'Detail',
                 render: (outcome: ActionOutcome) => (
                   <Text size="small" color="text-weak">
-                    {outcome.detail || '—'}
+                    {outcome.detail || '--'}
                   </Text>
                 ),
               },
@@ -333,18 +359,33 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             data={result.outcomes}
             primaryKey={false}
             a11yTitle="Provisioning result: one row per object, with what the array reported"
-
           />
           <RemovalSet result={result} runId={runId} serial={run?.serial_number} />
-        </Surface>
+        </Section>
       )}
 
-      <Surface
+      <Section
         title="Path verification"
-        description="Reads the array back after provisioning and reports, per host: how many LUNs are live, over how many HBAs, how many paths each LUN has, and on which fabrics. For ESXi hosts it also reads the host's own multipath view through vCenter (a new LUN needs a storage rescan before ESXi sees it). Report only — it never gates the run."
-        actions={<Button busy={running} label="Verify paths" onClick={call(() => verifyPaths(runId))} />}
+        summary={
+          paths?.error
+            ? 'Could not run'
+            : paths
+              ? `${paths.hosts.length} host${paths.hosts.length === 1 ? '' : 's'} read back`
+              : 'Not run yet. A report only; it never gates the run.'
+        }
+        open={!!paths}
+        right={result ? undefined : <Button size="small" busy={running} label={paths ? 'Verify paths again' : 'Verify paths'} onClick={call(() => verifyPaths(runId))} />}
       >
-        {paths?.error && <InlineNotification tone="critical" title="Path verification failed" message={paths.error} />}
+        <Text size="small" color="text-weak">
+          Reads the array back and reports, per host: how many LUNs are live, over how many HBAs, how many paths each LUN has, and on which
+          fabrics. For ESXi hosts it also reads the host&apos;s own multipath view through vCenter (a new LUN needs a storage rescan before
+          ESXi sees it).
+        </Text>
+        {paths?.error && (
+          <StatusLine state="failed" title="Path verification failed">
+            {paths.error}
+          </StatusLine>
+        )}
         {paths && !paths.error && paths.hosts.length === 0 && (
           <Text size="small" color="text-weak">
             No target hosts to verify.
@@ -357,9 +398,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
               {
                 property: 'verdict',
                 header: 'Result',
-                render: (host: HostPathStatus) => (
-                  <StatusIndicator state={VERDICT[host.verdict].state} label={VERDICT[host.verdict].label} />
-                ),
+                render: (host: HostPathStatus) => <StatusIndicator state={VERDICT[host.verdict].state} label={VERDICT[host.verdict].label} />,
               },
               {
                 property: 'detail',
@@ -379,7 +418,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
                   const state: StepState =
                     s === 'ok' ? 'complete' : s === 'degraded' || s === 'absent' ? 'action_required' : s === 'not_read' ? 'failed' : 'not_started';
                   const label =
-                    s === 'ok' ? 'Visible' : s === 'degraded' ? 'Degraded' : s === 'absent' ? 'Rescan needed' : s === 'not_read' ? 'Not read' : s === 'not_in_vcenter' ? 'n/a' : '—';
+                    s === 'ok' ? 'Visible' : s === 'degraded' ? 'Degraded' : s === 'absent' ? 'Rescan needed' : s === 'not_read' ? 'Not read' : s === 'not_in_vcenter' ? 'n/a' : '--';
                   return (
                     <Box gap="xxsmall">
                       <StatusIndicator state={state} label={label} />
@@ -405,7 +444,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             </Text>
           </Box>
         ) : null}
-      </Surface>
+      </Section>
     </StepShell>
   );
 }

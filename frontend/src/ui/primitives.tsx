@@ -1,6 +1,7 @@
 import { Box, Button, FormField, Heading, Notification, Text, TextInput } from 'grommet';
 import { ReactNode } from 'react';
 import { RunEvent } from '../api';
+import { Panel } from './blocks';
 import { StatusIcon, StepState } from './status';
 import { useStepContext } from './StepContext';
 
@@ -42,11 +43,7 @@ export function NotesList({ notes }: { notes: string[] }) {
   );
 }
 
-/**
- * A content surface. The Design System separates sections with background colour and spacing rather
- * than borders ("avoid excessive borders"), so this is background-front on the background-back page
- * — the layered approach, applied consistently across every screen.
- */
+/** A content surface with a heading: the redesign's Panel, kept under this name for the views that use it. */
 export function Surface({
   title,
   description,
@@ -59,30 +56,9 @@ export function Surface({
   children: ReactNode;
 }) {
   return (
-    <Box background="background-front" round="small" pad="medium" gap="small" flex={false}>
-      {(title || actions) && (
-        <Box direction="row" align="start" justify="between" gap="medium">
-          <Box gap="xxsmall">
-            {title && (
-              <Heading level={2} size="small" margin="none">
-                {title}
-              </Heading>
-            )}
-            {description && (
-              <Text size="small" color="text-weak">
-                {description}
-              </Text>
-            )}
-          </Box>
-          {actions && (
-            <Box direction="row" gap="xsmall" flex={false}>
-              {actions}
-            </Box>
-          )}
-        </Box>
-      )}
+    <Panel title={title} description={description} right={actions ? <Box direction="row" gap="xsmall" flex={false}>{actions}</Box> : undefined}>
       {children}
-    </Box>
+    </Panel>
   );
 }
 
