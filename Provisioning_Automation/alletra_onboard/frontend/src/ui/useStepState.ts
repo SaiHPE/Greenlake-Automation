@@ -198,6 +198,18 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
     }
     case 'replication.applied':
       return 'replication configured';
+    case 'replication.preview.failed':
+      return 'arrays could not be read';
+    case 'replication.apply.failed':
+      return 'stopped during configure';
+    case 'storage.preview.failed':
+      return 'plan could not be built';
+    case 'failover.failed':
+      return 'test failed';
+    case 'verify.failed':
+      return 'array not reached';
+    case 'asbuilt.failed':
+      return 'not generated';
     default:
       return '';
   }
