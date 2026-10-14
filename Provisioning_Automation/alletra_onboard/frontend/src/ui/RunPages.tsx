@@ -178,6 +178,52 @@ export function Home({
   );
 }
 
+/** The files a run produces, for Run overview and the Done page. */
+export function runDocuments(runId: string, run: RunRecord | null, events: RunEvent[]): DocItem[] {
+  const zoning = [...events].reverse().find((e) => e.event_type === 'zoning.rendered');
+  const zoningCommands = (zoning?.data?.commands ?? {}) as Record<string, string[]>;
+  const zoningLines = Object.values(zoningCommands).reduce((n, c) => n + c.length, 0);
+  const asbuilt = [...events].reverse().find((e) => e.event_type === 'asbuilt.generated');
+  return [
+    asbuilt
+      ? {
+          icon: <Document />,
+          name: 'As-built document',
+          detail: `Generated ${when(asbuilt.created_at)} · for the customer`,
+          action: <Button size="small" label="Download" href={asbuiltDownloadUrl(runId)} />,
+        }
+      : { icon: <Document />, name: 'As-built document', detail: 'Generated at the As-built step', pending: 'Not yet' },
+    {
+      icon: <Terminal />,
+      name: 'Command log',
+      detail: 'Every command this run sent, with what each device answered',
+      action: <Button size="small" label="Download" href={consoleLogTxtUrl(runId)} />,
+    },
+    zoning
+      ? {
+          icon: <Download />,
+          name: 'Zoning command set',
+          detail: `${zoningLines} line${zoningLines === 1 ? '' : 's'} for the SAN team · generated ${when(zoning.created_at)}`,
+          action: (
+            <Button
+              size="small"
+              label="Download"
+              onClick={() =>
+                saveText(
+                  `zoning_${run?.serial_number ?? 'array'}_${runId.slice(0, 8)}.txt`,
+                  Object.entries(zoningCommands)
+                    .filter(([, lines]) => lines.length)
+                    .flatMap(([fabric, lines]) => [`# ---- ${fabric}`, ...lines, ''])
+                    .join('\n'),
+                )
+              }
+            />
+          ),
+        }
+      : { icon: <Download />, name: 'Zoning command set', detail: 'Generated at the SAN zoning step', pending: 'Not yet' },
+  ];
+}
+
 export interface OverviewStep {
   key: string;
   label: string;
@@ -219,50 +265,7 @@ export function RunOverview({
   const todo = steps.filter((s) => s.state === 'not_started');
   const next = steps.find((s) => s.state !== 'complete');
   const created = events.find((e) => e.event_type === 'run.created');
-
-  const zoning = [...events].reverse().find((e) => e.event_type === 'zoning.rendered');
-  const zoningCommands = (zoning?.data?.commands ?? {}) as Record<string, string[]>;
-  const zoningLines = Object.values(zoningCommands).reduce((n, c) => n + c.length, 0);
-  const asbuilt = [...events].reverse().find((e) => e.event_type === 'asbuilt.generated');
-
-  const docs: DocItem[] = [
-    {
-      icon: <Terminal />,
-      name: 'Command log',
-      detail: 'Every command this run sent, with what each device answered',
-      action: <Button size="small" label="Download" href={consoleLogTxtUrl(runId)} />,
-    },
-    zoning
-      ? {
-          icon: <Download />,
-          name: 'Zoning command set',
-          detail: `${zoningLines} line${zoningLines === 1 ? '' : 's'} for the SAN team · generated ${when(zoning.created_at)}`,
-          action: (
-            <Button
-              size="small"
-              label="Download"
-              onClick={() =>
-                saveText(
-                  `zoning_${run?.serial_number ?? 'array'}_${runId.slice(0, 8)}.txt`,
-                  Object.entries(zoningCommands)
-                    .filter(([, lines]) => lines.length)
-                    .flatMap(([fabric, lines]) => [`# ---- ${fabric}`, ...lines, ''])
-                    .join('\n'),
-                )
-              }
-            />
-          ),
-        }
-      : { icon: <Download />, name: 'Zoning command set', detail: 'Generated at the SAN zoning step', pending: 'Not yet' },
-    asbuilt
-      ? {
-          icon: <Document />,
-          name: 'As-built document',
-          detail: `Generated ${when(asbuilt.created_at)}`,
-          action: <Button size="small" label="Download" href={asbuiltDownloadUrl(runId)} />,
-        }
-      : { icon: <Document />, name: 'As-built document', detail: 'Generated at the As-built step', pending: 'Not yet' },
-  ];
+  const docs = runDocuments(runId, run, events);
 
   return (
     <PlainPage

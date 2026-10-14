@@ -40,9 +40,6 @@ function ActionButton({ action, primary, onPress }: { action: FooterAction; prim
  * The chrome every step wears (Design System wizard template): "Step X of Y", the h1, one paragraph
  * and the status on the right; the step's content, with "About this step" beside it on wide screens;
  * a footer pinned under the page with the step's actions right-aligned and the one primary last.
- *
- * `actions` (a node) and `footerNote` are the pre-redesign footer; steps move to `primary` /
- * `buttons` / `confirmation` one at a time.
  */
 export function StepShell({
   title,
@@ -53,8 +50,6 @@ export function StepShell({
   gate,
   error,
   onDismissError,
-  footerNote,
-  actions,
   primary,
   buttons = [],
   confirmation,
@@ -72,10 +67,6 @@ export function StepShell({
   gate?: { title: string; message: ReactNode } | null;
   error?: string | null;
   onDismissError?: () => void;
-  showActivity?: boolean;
-  activityEmpty?: string;
-  footerNote?: ReactNode;
-  actions?: ReactNode;
   primary?: FooterAction;
   buttons?: FooterAction[];
   confirmation?: Confirmation;
@@ -107,7 +98,7 @@ export function StepShell({
   const shownMessage =
     blockedMessage && (blockedMessage === primaryBlocked || buttons.some((b) => b.blocked === blockedMessage)) ? blockedMessage : undefined;
   const ordered = [...buttons].sort((a, b) => Number(!!a.secondary) - Number(!!b.secondary));
-  const hasFooter = Boolean(actions || primary || buttons.length || confirmation);
+  const hasFooter = Boolean(primary || buttons.length || confirmation);
 
   const footer = hasFooter ? (
     <Box background="background-front" border={{ side: 'top', color: 'border-weak' }} flex={false}>
@@ -129,15 +120,7 @@ export function StepShell({
         </Box>
       )}
       <Footer justify="end" gap="medium" pad={{ horizontal: padX, vertical: 'small' }}>
-        {footerNote && (
-          <Box flex>
-            <Text size="small" color="text-weak">
-              {footerNote}
-            </Text>
-          </Box>
-        )}
         <Box direction="row" gap="small" align="center" justify="end" flex={false} wrap>
-          {actions}
           {ordered.map((b) => (
             <ActionButton key={b.label} action={b} onPress={press(b)} />
           ))}
