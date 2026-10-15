@@ -32,72 +32,122 @@ So the **jump box runs the entire flow (A + B + C) from the one web app** — no
 
 ---
 
-## Repositories & machines
+## Repositories, branches and machines
 
-The code is pushed to **two** GitHubs, kept identical:
+**One home: [github.hpe.com/g-sai-roopesh/greenlake-automation](https://github.hpe.com/g-sai-roopesh/greenlake-automation)**
+(HPE GitHub Enterprise, private). The git remote is `origin`. The old github.com mirror
+(`SaiHPE/Greenlake-Automation`) was retired on 2026-10-15: do not push to it.
 
-| Remote | URL | Role |
+| Branch | What is in it | Who pushes it |
 |---|---|---|
-| `origin` | `github.hpe.com/g-sai-roopesh/greenlake-automation` (HPE Enterprise, private) | canonical for HPE machines (jump box, laptop); releases published by hand with `scripts\publish_release.ps1` — Actions is disabled there |
-| `github-com` | `github.com/SaiHPE/Greenlake-Automation` (public) | mirror with **GitHub Actions on hosted Windows runners**: every `main` push refreshes the `latest` zip, every `v*` tag builds and attaches the `.exe` zips |
+| `main` | the full repo (the app is under `Provisioning_Automation/alletra_onboard/`) | the owner (Sai), by merging pull requests |
+| `feat/bl-NN-short-name` | one tracker item (`docs/TRACKER.md`), branched from `main` | the developer working on it |
+| `jumpbox-package` | the app folder only, at the branch root (`git subtree split` of `main`), for anyone who clones just the app (*Getting the app*, option 2) | the owner, after every merge to `main` |
+| `jumpbox-test` | the app folder from any commit, for a live lab run. Not on GitHub: it lives in each developer's own `~/lab-relay` folder | the developer with the lab booked, with `scripts/push_jumpbox_test.sh` |
 
-There are **two branches** that matter:
-
-| Branch | Contents | Used by |
-|---|---|---|
-| `main` | the **full repo** (`Provisioning_Automation/alletra_onboard/…` + other dirs) | the dev workstation, the **laptop** |
-| `jumpbox-package` | a **`git subtree split`** of just `Provisioning_Automation/alletra_onboard`, so the package sits at the branch **root** | the **jump box** (which has the package as a flat folder, not a full clone) |
-
-| Machine | Path | Pulls from | Role |
+| Machine | Folder | Pulls | Used for |
 |---|---|---|---|
-| Dev workstation | `…\Documents\Greenlake-Automation` (full clone) | `main` | builds/commits; has Node for the frontend |
-| Jump box | `C:\Users\Administrator\Downloads\alletra_onboard` (flat copy) | `jumpbox-package` | A + B + C (primary host) |
-| Laptop | `C:\Users\gsairoop\Downloads\storage automation` (full clone) | `main` | C (DSCC) fallback only |
+| Developer laptop | your clone of the full repo | `main` + your branch | code, tests, the UI dev server, mockups |
+| labrat jump box (Windows, 10.203.101.230) | `%USERPROFILE%\Downloads\alletra_onboard` | `jumpbox-test` from your laptop, through Remote Desktop | live runs against the lab arrays |
+| rack13arcus jump box (Windows) | the same layout | the same | live runs (onboarding, CRV) |
+| A Windows laptop on the HPE VPN | a full clone | the release tag | building and publishing the `.exe` release |
 
-**The built UI (`frontend/dist`) is committed to git**, so neither the jump box nor the laptop
-needs Node — they just pull and run.
+**The lab jump boxes cannot reach github.hpe.com.** Code gets to them through the Remote Desktop
+connection itself: your laptop keeps a small git store (`~/lab-relay`), Remote Desktop shares that
+folder into the session, and the jump box fetches from it. Nothing goes over the internet and no
+token or administrator right is needed on the jump box. **The built UI (`frontend/dist`) is
+committed**, so jump boxes need no Node.
 
-### Syncing (the important part)
+### One-time setup
 
-**Dev workstation → GitHub** (after changing the package). Push `main` and the tags to **both**
-remotes, refresh the subtree branch so the jump box can pull it, then publish the zip on GHES
-(github.com publishes itself through Actions):
-
-```powershell
-# from the repo root, after committing to main
-git push origin main --tags; git push github-com main --tags
-git branch -D jumpbox-package
-git subtree split --prefix=Provisioning_Automation/alletra_onboard -b jumpbox-package
-git push -f origin jumpbox-package; git push -f github-com jumpbox-package
-cd Provisioning_Automation\alletra_onboard; .\scripts\publish_release.ps1     # GHES: refresh /releases/latest
+**Developer laptop.** Install git, Python 3.12, Node 20 and the GitHub CLI (`gh`), then:
+```bash
+gh auth login --hostname github.hpe.com        # browser login with your HPE account
+gh auth setup-git --hostname github.hpe.com    # plain git uses the same login
+git clone https://github.hpe.com/g-sai-roopesh/greenlake-automation.git
+cd greenlake-automation/Provisioning_Automation/alletra_onboard
+python -m venv .venv && .venv/bin/pip install -e .[dev]    # Windows: .venv\Scripts\pip
+cd frontend && npm ci
 ```
-Do this **every time** a push to `main` touches the package, or the jump box will lag.
-If a UI source file changed, run `npm run build` in `frontend/` and commit the new `frontend/dist`
-**before** pushing (`publish_release.ps1` rebuilds it for the zip regardless).
+The repo was written on Windows and has no `.gitattributes`, so on macOS `git status` lists
+thousands of files that differ only in line endings. Review with `git diff -w` and never commit
+those files.
 
-Authentication on the workstation is the GitHub CLI, once per host: `gh auth login --hostname
-github.hpe.com` and `gh auth login --hostname github.com`, each followed by `gh auth setup-git
---hostname <host>` so plain `git push` uses the same token.
+**Remote Desktop to a jump box** (once per developer):
+1. On the laptop, run `scripts/push_jumpbox_test.sh` once (*A live run*, below). It creates
+   `~/lab-relay` (on Windows `C:\Users\<you>\lab-relay`).
+2. Share that folder into your jump box connection, then reconnect:
+   - Mac, Windows App: *Edit PC → Folders → Redirect folders*, add `~/lab-relay`. On the jump box
+     it appears as `\\tsclient\lab-relay`.
+   - Windows, Remote Desktop Connection (`mstsc`): *Show Options → Local Resources → More → Drives*,
+     tick the drive that holds your user folder. `lab\fetch.ps1` finds `\\tsclient\C\Users\<you>\lab-relay`.
+3. Check, on the jump box: `Test-Path \\tsclient\lab-relay` (Mac) or `Test-Path \\tsclient\C\Users` (Windows)
+   must say `True`.
 
-**Jump box ← GitHub** (flat copy, `jumpbox-package` branch):
+**Jump box** (once per machine, in PowerShell). The lab passwords go in the app's `.env`, which is
+never committed and survives every fetch; the lab scripts read them from there, so they never
+prompt and no password is ever in git:
 ```powershell
-cd C:\Users\Administrator\Downloads\alletra_onboard
-git fetch origin jumpbox-package
-git reset --hard origin/jumpbox-package
-git log -1 --oneline
+cd $env:USERPROFILE\Downloads\alletra_onboard
+Add-Content .env "`nLAB_ARRAY_PW=<the lab arrays' 3paradm password>"
+Add-Content .env "LAB_DEFAULT_PW=<the lab vCenter and switch password>"
 ```
-Preserves untracked `.env` / `.venv` / `config\arrays.csv`. If git prompts
-`Unlink of file … failed (y/n)` after the fetch, answer **`n`** — the fetch already landed;
-just run the `reset --hard`. If the reset itself errors, `Get-Process git | Stop-Process -Force`
-then retry.
-
-**Laptop ← GitHub** (full clone, `main`):
+The first time, before `lab\fetch.ps1` exists on the box, fetch by hand once:
 ```powershell
-cd "C:\Users\gsairoop\Downloads\storage automation"
-git fetch origin
-git reset --hard origin/main
-git log -1 --oneline
+cd $env:USERPROFILE\Downloads\alletra_onboard; git -c safe.directory=* fetch \\tsclient\lab-relay jumpbox-test; git reset --hard FETCH_HEAD
 ```
+
+### Day to day: developers
+
+1. `git switch main && git pull`, then `git switch -c feat/bl-NN-short-name`.
+2. Change the code. Before pushing: `pytest -q` and `ruff check src tests` (from the app folder).
+3. UI changes: edit `frontend/src`. Run `npm run build` and commit `frontend/dist` only in the
+   branch's last commit before the merge, or before a lab run. If `frontend/dist` conflicts, take
+   either side and run `npm run build` again.
+4. `git push -u origin feat/bl-NN-short-name` and open a pull request into `main` on github.hpe.com.
+   Close the tracker item in the commit that finishes it (`docs/TRACKER.md`).
+
+A feature verified only against captured output is *built, pending live run*, not done. Say so in
+the pull request and the tracker.
+
+### A live run on a jump box
+
+1. Book the lab with the team first: only one person at a time. Two runs collide on the app's
+   port (8765) and on the same arrays.
+2. Commit your work, then from anywhere in the full repo (Git Bash on Windows):
+   ```bash
+   Provisioning_Automation/alletra_onboard/scripts/push_jumpbox_test.sh
+   ```
+   It writes exactly your committed `HEAD` as `jumpbox-test` into `~/lab-relay`. It never checks
+   out, resets or commits anything in your clone.
+3. In your Remote Desktop session on the jump box, one paste (change the script name):
+   ```powershell
+   cd $env:USERPROFILE\Downloads\alletra_onboard; .\lab\fetch.ps1; .\.venv\Scripts\python.exe lab\ui_live_lab.py
+   ```
+   `lab\fetch.ps1` finds your shared `lab-relay`, fetches and resets the app folder to it, keeping
+   `.env` and `.venv`. Each lab script writes `~\Downloads\<name>.zip`; copy that back through the
+   shared folder or the clipboard, and read it.
+4. When done, leave the jump box on released code: on your laptop
+   `git switch main && git pull && Provisioning_Automation/alletra_onboard/scripts/push_jumpbox_test.sh`, then `.\lab\fetch.ps1` on the box.
+
+The lab scripts are in `lab/` (never in the release zip). Each one says
+at the top what it reads or changes, and the ones that create objects use a fixed `zz_*` prefix and
+remove everything with that prefix at the end. Read a script before running it against an array.
+
+### After a merge to main: the owner
+
+```bash
+git switch main && git pull
+git subtree split -q --prefix=Provisioning_Automation/alletra_onboard -b jbp-new
+git branch -f jumpbox-package jbp-new && git branch -D -q jbp-new
+git push -f origin jumpbox-package
+cd Provisioning_Automation/alletra_onboard && pwsh scripts/publish_release.ps1   # refresh the `latest` zip
+```
+`git subtree` ships with Git for Windows; on macOS Apple's git lacks it (use Homebrew git, or link
+`git-subtree` from git's `contrib/subtree`). The lab jump boxes get the new code the same way as a
+test run: `Provisioning_Automation/alletra_onboard/scripts/push_jumpbox_test.sh` from `main`, then `.\lab\fetch.ps1` on the box. If git on
+the box asks `Unlink of file … failed (y/n)`, answer **`n`** and run `.\lab\fetch.ps1` again; if it
+still errors, `Get-Process git | Stop-Process -Force` and retry.
 
 ---
 
@@ -106,8 +156,7 @@ git log -1 --oneline
 Three ways, easiest first. The full repo is deeply nested; you don't need to navigate it.
 
 **1. Release zip (operators — no git, no Node).** Download **`alletra-onboard-latest.zip`** from
-the latest release — [github.hpe.com](https://github.hpe.com/g-sai-roopesh/greenlake-automation/releases/latest)
-or [github.com](https://github.com/SaiHPE/Greenlake-Automation/releases/latest), same file —
+the [latest release on github.hpe.com](https://github.hpe.com/g-sai-roopesh/greenlake-automation/releases/latest) —
 extract, and **double-click `start.cmd`** (or run it from a terminal). It bypasses the PowerShell
 execution policy that blocks
 unsigned/downloaded scripts and self-elevates (so the in-app clock-sync works), then runs the
@@ -131,9 +180,8 @@ cd alletra-onboard; .\start.ps1
 `Provisioning_Automation/alletra_onboard/`.
 
 **4. Packaged `.exe` (customers — no Python, no git, no Node).** Three self-contained Windows builds
-are attached to a **tagged** GitHub Release. On github.com they are built automatically by
-`.github/workflows/exe.yml` when a `v*` tag is pushed (hosted Windows runner); on github.hpe.com
-build them on a Windows box with `scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe`:
+are attached to a **tagged** release on github.hpe.com, built on a Windows laptop on the HPE VPN
+with `scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe` (see *Releasing*):
 - **`alletra-onboard-win64.zip`** (~60 MB) — the **slim** build. It **drives an already-installed
   Chrome/Edge** (which almost every Windows box has) — no download. Only if *no* branded browser is
   present does it download Chromium (~150 MB) on first launch. Use this by default. (Force a choice
@@ -152,41 +200,51 @@ SmartScreen may warn (the build is unsigned) — click **More info → Run anywa
 
 ### Releasing
 
-One script does it — **`scripts\publish_release.ps1`** — and the two workflows in `.github/workflows/`
-just call it. It reads the host/owner/repo from a git remote (`-Remote`, default `origin`), so the
-same script targets whichever GitHub you point it at.
+Releases are built by the owner on their own machines and uploaded to github.hpe.com with
+**`scripts\publish_release.ps1`**. Actions cannot do it: GitHub Enterprise disables Actions for
+repositories owned by a person (`g-sai-roopesh`), and an enterprise policy locks that setting. The
+workflows in `.github/workflows/` stay in the repo for the day it moves into an organisation; until
+then they never run.
 
-| Where | How the rolling `latest` zip is refreshed | How a `vX.Y.Z` tag gets its `.exe` zips |
+| What | Built where | Command |
 |---|---|---|
-| **github.com** (`github-com`) | automatically: `release.yml` on every push to `main` that touches the app | automatically: `exe.yml` on tag push builds slim, offline and init-only on `windows-latest`, smoke-tests each, and attaches them (pre-release when the tag has a `-`) |
-| **github.hpe.com** (`origin`) | by hand: `.\scripts\publish_release.ps1` from any machine with Node + `gh` signed in | by hand on Windows: `.\scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe` |
+| Rolling `latest` zip (`alletra-onboard-latest.zip`, for operators) | any machine with Node 20, `gh` and PowerShell 7, after every merge that touches the app | `pwsh scripts/publish_release.ps1` |
+| Tagged release `vX.Y.Z` with the three `.exe` zips | a Windows laptop on the HPE VPN (PyInstaller builds for the OS it runs on; the lab jump boxes cannot reach github.hpe.com) | `.\scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe` |
 
-```powershell
-cd Provisioning_Automation\alletra_onboard
-.\scripts\publish_release.ps1                                 # origin: build the zip, refresh `latest`
-.\scripts\publish_release.ps1 -Remote github-com               # same, against github.com (normally Actions does this)
-.\scripts\publish_release.ps1 -Tag vX.Y.Z-rc.N -BuildExe         # Windows only: build the 3 .exe zips, upload to the tag
-```
-The rolling **`latest`** release is refreshed in place (assets clobbered, never deleted and
-recreated), so `/releases/latest` never points at nothing. A tag containing `-` (an `rc`) is
-published as a **pre-release**.
+**A tagged release, step by step:**
 
-**Why by hand on github.hpe.com?** It is GitHub Enterprise Server: there are no GitHub-hosted
-runners, and as of 2026-09-12 Actions is disabled by enterprise policy for this user-owned
-repository (enabling it via the API returns 204 and stays `false`; no runner packages are offered).
-The workflows select their runner from `github.server_url` — `windows-latest` on github.com, a
-`[self-hosted, windows, x64]` label set on GHES — so the day a runner can be registered there
-(Settings → Actions → Runners, on a Windows box with Node 20, Python 3.12 and `gh`), they take
-over untouched.
+1. Bump the version in `pyproject.toml`, `src/alletra_onboard/__init__.py` and
+   `frontend/package.json`; rebuild `frontend/dist`; merge to `main`.
+2. On the owner's laptop: publish `jumpbox-package` (*After a merge to main*, above), then tag the
+   same `main` commit and push the tag:
+   ```bash
+   git tag vX.Y.Z && git push origin vX.Y.Z      # a tag with '-' (v0.18.0-rc.1) is a pre-release
+   ```
+3. On a Windows laptop on the HPE VPN, with Python 3.12 and `gh` signed in to github.hpe.com:
+   ```powershell
+   git fetch origin --tags; git checkout vX.Y.Z
+   cd Provisioning_Automation\alletra_onboard
+   .\scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe
+   git checkout main
+   ```
+   The script refuses unless the tag is on github.hpe.com and the checkout holds exactly the tagged
+   code. It builds the slim, offline and init-only `.exe`, runs each one's self-test and the serve
+   smoke test (it boots the app with a system proxy set), and attaches the zips and their `.sha256`
+   to the tag's release. Expect it to take a while: the offline build bundles Chromium.
+   No Windows laptop? Build on labrat after `.\lab\fetch.ps1` of the tagged `main` (run
+   `scripts\build_exe.ps1`, `-Chromium` and `-Profile init-only`, each followed by
+   `dist\AlletraOnboard\AlletraOnboard.exe selftest`), copy the three `dist\*.zip` and `.sha256` back
+   through the shared folder into the laptop clone's `dist\`, check out the tag there and run
+   `pwsh scripts/publish_release.ps1 -Tag vX.Y.Z` (no `-BuildExe`).
+4. Record the release in `docs/TRACKER.md` (*Done* table).
 
-To build the zip without publishing (needs Node):
+The rolling `latest` release is refreshed in place (assets replaced, never deleted and recreated),
+so `/releases/latest` never points at nothing. To build the zip without publishing (needs Node):
 ```powershell
 .\scripts\build_release.ps1     # -> release\alletra-onboard-<version>.zip + .sha256
 ```
-The zip excludes `node_modules`, `.venv`, tests, and captures — just `src/`, the prebuilt
-`frontend/dist/`, `config/arrays.example.csv`, the scripts, and `start.ps1` (~5 MB with the
-prerequisite videos). Bump the version in `pyproject.toml` (and `src/alletra_onboard/__init__.py`,
-`frontend/package.json`) to change the versioned asset name.
+The zip excludes `node_modules`, `.venv`, tests, `lab/` and captures — just `src/`, the prebuilt
+`frontend/dist/`, `config/arrays.example.csv`, the operator scripts and `start.ps1`.
 
 ---
 
@@ -222,6 +280,8 @@ sheet (which carries the API Client ID/Secret/token URL), or the Configure scree
 The jump box runs the **entire flow from the web app**. Full procedure from a fresh login:
 
 #### 1. Get the latest build
+On a lab jump box: `.\lab\fetch.ps1` (*A live run on a jump box*). On a machine that reaches
+github.hpe.com:
 ```powershell
 cd C:\Users\Administrator\Downloads\alletra_onboard
 git fetch origin jumpbox-package

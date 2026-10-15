@@ -3,20 +3,22 @@
   Publish Alletra Onboard to a GitHub Release on whatever GitHub host `origin` points at.
 
 .DESCRIPTION
-  The ONE implementation of "publish a release". `.github/workflows/*.yml` call this script on
-  github.com (hosted Windows runners); on github.hpe.com, where Actions is disabled for user-owned
-  repos (2026-09-12), you run it by hand from the dev workstation or the jump box.
+  The ONE implementation of "publish a release", run by hand. github.hpe.com is the only home; Actions
+  is disabled there for user-owned repos (2026-09-12), so the release owner runs this: the rolling
+  zip from any machine with Node + gh, the tagged .exe build on a Windows box (the labrat jump box).
+  The steps, in order, are in README.md, *Releasing*.
 
   Two modes:
     (default)      Rolling "latest": build the release zip (scripts/build_release.ps1) and refresh the
                    single `latest` release in place - assets clobbered, never delete+recreate.
     -Tag vX.Y.Z    Tagged release: upload the packaged .exe zips from dist/ (build them first with
                    -BuildExe, Windows only) to the tag's release; a pre-release when the tag has a '-'.
+                   Refuses unless the tag is on the remote and this checkout holds exactly its code.
+                   -BuildExe runs the same self-test and serve smoke test as the old CI job.
 
-  Host, owner and repo are read from the git remote (-Remote, default `origin`), so the same script
-  publishes to github.hpe.com (origin) and to github.com (-Remote github-com). Authentication is `gh`
-  (gh auth login --hostname <host>); in Actions the workflow passes the job token via GH_TOKEN /
-  GH_ENTERPRISE_TOKEN.
+  Host, owner and repo are read from the git remote (-Remote, default `origin`). Authentication is
+  `gh` (gh auth login --hostname <host>); the workflows, if Actions is ever enabled, pass the job token
+  via GH_TOKEN / GH_ENTERPRISE_TOKEN.
 
 .EXAMPLE
   .\scripts\publish_release.ps1                       # build zip, refresh the rolling latest release
@@ -137,11 +139,38 @@ if (-not $Tag) {
 }
 
 # ---------------------------------------------------------------- tagged (.exe) release -----------
+# The tag must already be on the remote (gh would otherwise create it at the tip of main), and the
+# code built here must be the tag's: the jump box holds the app folder only (jumpbox-package), so
+# compare that folder's tree with the same folder in the tagged commit.
+$appPath = 'Provisioning_Automation/alletra_onboard'
+$ErrorActionPreference = "Continue"
+try {
+  # parsed here, not with --jq: Windows PowerShell 5.1 strips quotes inside native arguments
+  $tagTree = ((& gh api --hostname $ghHost "repos/$owner/$repo/commits/$Tag" 2>$null | Out-String) | ConvertFrom-Json -ErrorAction SilentlyContinue).commit.tree.sha
+  foreach ($seg in $appPath.Split('/')) {
+    if (-not $tagTree) { break }
+    $tree = (& gh api --hostname $ghHost "repos/$owner/$repo/git/trees/$tagTree" 2>$null | Out-String) | ConvertFrom-Json -ErrorAction SilentlyContinue
+    $tagTree = ($tree.tree | Where-Object { $_.path -eq $seg } | Select-Object -First 1).sha
+  }
+  $localTree = (& git rev-parse "HEAD:$appPath" 2>$null | Out-String).Trim()
+  if (-not $localTree) { $localTree = (& git rev-parse 'HEAD^{tree}' | Out-String).Trim() }
+} finally { $ErrorActionPreference = "Stop" }
+if (-not $tagTree) { throw "Tag $Tag is not on $target. Push it first from main: git tag $Tag; git push origin $Tag" }
+if ($tagTree -ne $localTree) {
+  throw ("This checkout is not the code tagged $Tag. Publish jumpbox-package from the tagged main commit, then here: " +
+         "git fetch origin jumpbox-package; git reset --hard origin/jumpbox-package")
+}
+
 if ($BuildExe) {
-  if (-not $IsWindows) { throw "-BuildExe needs Windows (PyInstaller builds the .exe for the platform it runs on)." }
+  if (-not ($IsWindows -or $env:OS -eq 'Windows_NT')) { throw "-BuildExe needs Windows (PyInstaller builds the .exe for the platform it runs on)." }
   foreach ($flags in @(@(), @('-Chromium'), @('-Profile', 'init-only'))) {
     & (Join-Path $PSScriptRoot 'build_exe.ps1') @flags
     if ($LASTEXITCODE -ne 0) { throw "build_exe.ps1 $flags failed" }
+    # each build replaces dist\AlletraOnboard, so test it before the next one
+    & (Join-Path $pkg 'dist\AlletraOnboard\AlletraOnboard.exe') selftest
+    if ($LASTEXITCODE -ne 0) { throw "selftest failed for build_exe.ps1 $flags" }
+    & (Join-Path $PSScriptRoot 'smoke_serve.ps1')
+    if ($LASTEXITCODE -ne 0) { throw "serve smoke test failed for build_exe.ps1 $flags" }
   }
 }
 $exeAssets = @(
