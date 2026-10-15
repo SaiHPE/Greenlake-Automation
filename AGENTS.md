@@ -21,7 +21,7 @@ Everything lives under `Provisioning_Automation/alletra_onboard/` (called "the a
 |---|---|
 | What is in scope, what is built, what is live-verified | `docs/SCOPE.md` |
 | Open work | github.hpe.com issues (one per item, `BL-NN` titles); history in `docs/TRACKER.md` |
-| How the code is laid out | `docs/ARCHITECTURE.md`; the guided tour is `docs/BACKEND-WALKTHROUGH.html` (open it in a browser) |
+| How the code is laid out | `docs/ARCHITECTURE.md`; the full guide for new developers is `docs/DEVELOPER-HANDBOOK.html` (open it in a browser) |
 | Domain words (array, run, fabric, VV set, ...) | `CONTEXT.md` |
 | Why things are the way they are | `docs/adr/` (0001 to 0015) and `docs/specs/` |
 | Mistakes we already made, and the rule each one left | `docs/LESSONS.md` (read before touching wizards, state or a refactor) |

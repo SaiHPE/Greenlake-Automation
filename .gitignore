@@ -44,6 +44,6 @@ desktop.ini
 # Design mockups: hand-authored, reviewed, and sanitised (documentation-range IPs only)
 !Provisioning_Automation/alletra_onboard/docs/ux/*.html
 # The backend walkthrough for new developers (hand-written, no lab data)
-!Provisioning_Automation/alletra_onboard/docs/BACKEND-WALKTHROUGH.html
+!Provisioning_Automation/alletra_onboard/docs/DEVELOPER-HANDBOOK.html
 
 script-logs/*   
