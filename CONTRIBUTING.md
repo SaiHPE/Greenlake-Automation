@@ -93,7 +93,7 @@ You cannot push to `main`; github.hpe.com refuses it. Everything arrives through
 | Rule | Why |
 |---|---|
 | Never write to a SAN switch. Zoning is a command set the SAN team pastes. | A wrong zone takes a customer's production hosts off their storage. The tool proposes; people with change control apply. (ADR 0012) |
-| Array SSH is read-only, through an allowlist. Writes go through WSAPI after the operator approves a plan on screen. Remote Copy has one write-scoped SSH client, also behind an approval. (ADR 0015) | Everything the tool does to an array must be something the operator saw and agreed to. |
+| Array SSH is read-only, through an allowlist. Writes go through WSAPI after the operator approves a plan on screen. Remote Copy groups and the failover test use WSAPI too. (ADR 0001; ADR 0015 plans one write-scoped SSH client for Remote Copy links, behind the same approval) | Everything the tool does to an array must be something the operator saw and agreed to. |
 | Discovery, verification and the as-built never change anything. | They are run on live customer systems to report, not to fix. |
 | One array per run. | Credentials, plans and documents belong to one array; mixing them is how the wrong array gets changed. |
 | Steps and modes come only from `domain/workflow.py`. | The UI renders the registry; a second list drifts from it (it happened). |

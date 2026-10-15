@@ -24,6 +24,6 @@ Closes #<!-- issue number -->
 - [ ] One tracker item (`BL-NN`) per pull request, branched from an up-to-date `main`
 - [ ] No change under `frontend/dist` (it is rebuilt after merge)
 - [ ] UI change: screenshots at 1366 x 768 attached below
-- [ ] A new array, switch or vCenter command: added to the read-only allowlist with a test, or this is a write that the operator approves first (ADR 0015)
+- [ ] A new array, switch or vCenter command: added to the read-only allowlist with a test, or this is a WSAPI write that the operator approves first
 - [ ] Docs that describe the changed behaviour are updated (README, SCOPE, an ADR or SPEC if it is a decision)
 - [ ] No password, token, customer name or customer address in code, fixtures or screenshots

@@ -34,9 +34,10 @@ Everything lives under `Provisioning_Automation/alletra_onboard/` (called "the a
    SAN team; `cfgenable` is shown separately. Do not add a switch write path.
 2. **Array SSH is read-only.** Every command goes through the allowlist in
    `adapters/array/cli_client.py` (`ALLOWED_COMMANDS`). Writes go through WSAPI, and only after the
-   operator approved a plan on screen. The one exception is Remote Copy (ADR 0015): a separate
-   write-scoped SSH client, used only after the operator approves; `checkrclink` has its own
-   allowlist.
+   operator approved a plan on screen; Remote Copy groups and the failover actions are WSAPI too.
+   The link check runs `checkrclink` through a separate diagnostic allowlist. ADR 0015 adds a
+   write-scoped SSH client for Remote Copy links and targets (BL-41, not built yet): until it
+   exists, nothing writes over SSH.
 3. **Verification, as-built and discovery never change anything** on an array, host, vCenter or
    switch.
 4. **One array per run.** Refuse a workbook that names two.
