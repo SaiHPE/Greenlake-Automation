@@ -36,10 +36,11 @@ So the **jump box runs the entire flow (A + B + C) from the one web app** — no
 
 **One home: [github.hpe.com/g-sai-roopesh/greenlake-automation](https://github.hpe.com/g-sai-roopesh/greenlake-automation)**
 (HPE GitHub Enterprise, private). The git remote is `origin`. All code, pull requests and releases
-live there. The lab jump boxes cannot reach it, so **live lab runs only** go through a private
+live there. The lab jump boxes cannot reach it, so **live lab runs only** go through a public
 github.com repo, [SaiHPE/Greenlake-Automation](https://github.com/SaiHPE/Greenlake-Automation), which
 carries the `jumpbox-test` branch and nothing else that matters: no releases, Actions off, never
-push `main` or tags there.
+push `main` or tags there. It is public so jump boxes fetch with no login: never put a password,
+token or customer data in anything you push there.
 
 | Branch | What is in it | Who pushes it |
 |---|---|---|
@@ -80,15 +81,12 @@ collaborator on `SaiHPE/Greenlake-Automation` (ask the owner), then on the lapto
 gh auth login --hostname github.com && gh auth setup-git --hostname github.com
 ```
 
-**Jump box** (once per machine, in PowerShell). Its clone fetches from the private github.com repo:
-create a fine-grained token on github.com with read-only *Contents* access to that one repo, and
-paste it when git first asks for a password (Git for Windows keeps it in the Windows Credential
-Manager). The lab passwords go in the app's `.env`, which is never committed and survives every
-fetch; the lab scripts read them from there, so they never prompt and no password is in git:
+**Jump box** (once per machine, in PowerShell). Its clone fetches from the public github.com repo,
+no login needed. The lab passwords go in the app's `.env`, which is never committed and survives
+every fetch; the lab scripts read them from there, so they never prompt and no password is in git:
 ```powershell
 cd $env:USERPROFILE\Downloads\alletra_onboard
 git remote set-url origin https://github.com/SaiHPE/Greenlake-Automation.git
-git fetch origin jumpbox-test                      # first time: sign in with the read-only token
 Add-Content .env "`nLAB_ARRAY_PW=<the lab arrays' 3paradm password>"
 Add-Content .env "LAB_DEFAULT_PW=<the lab vCenter and switch password>"
 ```
