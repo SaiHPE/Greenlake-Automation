@@ -35,28 +35,29 @@ So the **jump box runs the entire flow (A + B + C) from the one web app** — no
 ## Repositories, branches and machines
 
 **One home: [github.hpe.com/g-sai-roopesh/greenlake-automation](https://github.hpe.com/g-sai-roopesh/greenlake-automation)**
-(HPE GitHub Enterprise, private). The git remote is `origin`. The old github.com mirror
-(`SaiHPE/Greenlake-Automation`) was retired on 2026-10-15: do not push to it.
+(HPE GitHub Enterprise, private). The git remote is `origin`. All code, pull requests and releases
+live there. The lab jump boxes cannot reach it, so **live lab runs only** go through a private
+github.com repo, [SaiHPE/Greenlake-Automation](https://github.com/SaiHPE/Greenlake-Automation), which
+carries the `jumpbox-test` branch and nothing else that matters: no releases, Actions off, never
+push `main` or tags there.
 
 | Branch | What is in it | Who pushes it |
 |---|---|---|
 | `main` | the full repo (the app is under `Provisioning_Automation/alletra_onboard/`) | the owner (Sai), by merging pull requests |
 | `feat/bl-NN-short-name` | one tracker item (`docs/TRACKER.md`), branched from `main` | the developer working on it |
 | `jumpbox-package` | the app folder only, at the branch root (`git subtree split` of `main`), for anyone who clones just the app (*Getting the app*, option 2) | the owner, after every merge to `main` |
-| `jumpbox-test` | the app folder from any commit, for a live lab run. Not on GitHub: it lives in each developer's own `~/lab-relay` folder | the developer with the lab booked, with `scripts/push_jumpbox_test.sh` |
+| `jumpbox-test` (github.com only) | the app folder from any commit, for a live lab run; scratch, force-pushed | the developer with the lab booked, with `scripts/push_jumpbox_test.sh` |
 
 | Machine | Folder | Pulls | Used for |
 |---|---|---|---|
 | Developer laptop | your clone of the full repo | `main` + your branch | code, tests, the UI dev server, mockups |
-| labrat jump box (Windows, 10.203.101.230) | `%USERPROFILE%\Downloads\alletra_onboard` | `jumpbox-test` from your laptop, through Remote Desktop | live runs against the lab arrays |
+| labrat jump box (Windows, 10.203.101.230) | `%USERPROFILE%\Downloads\alletra_onboard` | `jumpbox-test` from github.com | live runs against the lab arrays |
 | rack13arcus jump box (Windows) | the same layout | the same | live runs (onboarding, CRV) |
 | A Windows laptop on the HPE VPN | a full clone | the release tag | building and publishing the `.exe` release |
 
-**The lab jump boxes cannot reach github.hpe.com.** Code gets to them through the Remote Desktop
-connection itself: your laptop keeps a small git store (`~/lab-relay`), Remote Desktop shares that
-folder into the session, and the jump box fetches from it. Nothing goes over the internet and no
-token or administrator right is needed on the jump box. **The built UI (`frontend/dist`) is
-committed**, so jump boxes need no Node.
+**The lab jump boxes cannot reach github.hpe.com**, hence github.com for lab runs and a laptop on
+the HPE VPN for the `.exe` release. **The built UI (`frontend/dist`) is committed**, so jump boxes
+need no Node.
 
 ### One-time setup
 
@@ -73,31 +74,23 @@ The repo was written on Windows and has no `.gitattributes`, so on macOS `git st
 thousands of files that differ only in line endings. Review with `git diff -w` and never commit
 those files.
 
-**Remote Desktop to a jump box** (once per developer):
-1. On the laptop, run `scripts/push_jumpbox_test.sh` once (*A live run*, below). It creates
-   `~/lab-relay` (on Windows `C:\Users\<you>\lab-relay`).
-2. Share that folder into your jump box connection, then reconnect:
-   - Mac, Windows App: *Edit PC → Folders → Redirect folders*, add `~/lab-relay`. On the jump box
-     it appears as `\\tsclient\lab-relay`.
-   - Windows, Remote Desktop Connection (`mstsc`): *Show Options → Local Resources → More → Drives*,
-     tick the drive that holds your user folder. `lab\fetch.ps1` finds `\\tsclient\C\Users\<you>\lab-relay`.
-   - A `.rdp` file (the LabRAT download): add the line `drivestoredirect:s:*` to it, or drag the file
-     into the Windows App window to save it as a PC and use *Folders* as above. `lab\fetch.ps1` looks
-     for `lab-relay` inside every share the session offers.
-3. Check, on the jump box: `Test-Path \\tsclient\lab-relay` (Mac) or `Test-Path \\tsclient\C\Users` (Windows)
-   must say `True`.
+**Lab runs** (once per developer who runs on the lab): a github.com account added as a
+collaborator on `SaiHPE/Greenlake-Automation` (ask the owner), then on the laptop:
+```bash
+gh auth login --hostname github.com && gh auth setup-git --hostname github.com
+```
 
-**Jump box** (once per machine, in PowerShell). The lab passwords go in the app's `.env`, which is
-never committed and survives every fetch; the lab scripts read them from there, so they never
-prompt and no password is ever in git:
+**Jump box** (once per machine, in PowerShell). Its clone fetches from the private github.com repo:
+create a fine-grained token on github.com with read-only *Contents* access to that one repo, and
+paste it when git first asks for a password (Git for Windows keeps it in the Windows Credential
+Manager). The lab passwords go in the app's `.env`, which is never committed and survives every
+fetch; the lab scripts read them from there, so they never prompt and no password is in git:
 ```powershell
 cd $env:USERPROFILE\Downloads\alletra_onboard
+git remote set-url origin https://github.com/SaiHPE/Greenlake-Automation.git
+git fetch origin jumpbox-test                      # first time: sign in with the read-only token
 Add-Content .env "`nLAB_ARRAY_PW=<the lab arrays' 3paradm password>"
 Add-Content .env "LAB_DEFAULT_PW=<the lab vCenter and switch password>"
-```
-The first time, before `lab\fetch.ps1` exists on the box, fetch by hand once:
-```powershell
-cd $env:USERPROFILE\Downloads\alletra_onboard; git -c safe.directory=* fetch \\tsclient\lab-relay jumpbox-test; git reset --hard FETCH_HEAD
 ```
 
 ### Day to day: developers
@@ -121,17 +114,17 @@ the pull request and the tracker.
    ```bash
    Provisioning_Automation/alletra_onboard/scripts/push_jumpbox_test.sh
    ```
-   It writes exactly your committed `HEAD` as `jumpbox-test` into `~/lab-relay`. It never checks
-   out, resets or commits anything in your clone.
-3. In your Remote Desktop session on the jump box, one paste (change the script name):
+   It pushes exactly your committed `HEAD` to `jumpbox-test` on github.com. It never checks out,
+   resets or commits anything in your clone.
+3. On the jump box, one paste (change the script name):
    ```powershell
-   cd $env:USERPROFILE\Downloads\alletra_onboard; .\lab\fetch.ps1; .\.venv\Scripts\python.exe lab\ui_live_lab.py
+   cd $env:USERPROFILE\Downloads\alletra_onboard; git fetch origin jumpbox-test; git reset --hard origin/jumpbox-test; .\.venv\Scripts\python.exe lab\ui_live_lab.py
    ```
-   `lab\fetch.ps1` finds your shared `lab-relay`, fetches and resets the app folder to it, keeping
-   `.env` and `.venv`. Each lab script writes `~\Downloads\<name>.zip`; copy that back through the
-   shared folder or the clipboard, and read it.
-4. When done, leave the jump box on released code: on your laptop
-   `git switch main && git pull && Provisioning_Automation/alletra_onboard/scripts/push_jumpbox_test.sh`, then `.\lab\fetch.ps1` on the box.
+   `.env` and `.venv` are kept. Each lab script writes `~\Downloads\<name>.zip`; that zip is the
+   result to read. If git asks `Unlink of file … failed (y/n)`, answer **`n`** and run the
+   `reset --hard` again; if it still errors, `Get-Process git | Stop-Process -Force` and retry.
+4. When done, leave the jump box on released code: run the push script from an up-to-date `main`,
+   then the same paste without the last command.
 
 The lab scripts are in `lab/` (never in the release zip). Each one says
 at the top what it reads or changes, and the ones that create objects use a fixed `zz_*` prefix and
@@ -148,9 +141,7 @@ cd Provisioning_Automation/alletra_onboard && pwsh scripts/publish_release.ps1  
 ```
 `git subtree` ships with Git for Windows; on macOS Apple's git lacks it (use Homebrew git, or link
 `git-subtree` from git's `contrib/subtree`). The lab jump boxes get the new code the same way as a
-test run: `Provisioning_Automation/alletra_onboard/scripts/push_jumpbox_test.sh` from `main`, then `.\lab\fetch.ps1` on the box. If git on
-the box asks `Unlink of file … failed (y/n)`, answer **`n`** and run `.\lab\fetch.ps1` again; if it
-still errors, `Get-Process git | Stop-Process -Force` and retry.
+test run: `Provisioning_Automation/alletra_onboard/scripts/push_jumpbox_test.sh` from `main`.
 
 ---
 
@@ -234,10 +225,10 @@ then they never run.
    code. It builds the slim, offline and init-only `.exe`, runs each one's self-test and the serve
    smoke test (it boots the app with a system proxy set), and attaches the zips and their `.sha256`
    to the tag's release. Expect it to take a while: the offline build bundles Chromium.
-   No Windows laptop? Build on labrat after `.\lab\fetch.ps1` of the tagged `main` (run
+   No Windows laptop? Build on labrat after the push script sends it the tagged `main` (run
    `scripts\build_exe.ps1`, `-Chromium` and `-Profile init-only`, each followed by
-   `dist\AlletraOnboard\AlletraOnboard.exe selftest`), copy the three `dist\*.zip` and `.sha256` back
-   through the shared folder into the laptop clone's `dist\`, check out the tag there and run
+   `dist\AlletraOnboard\AlletraOnboard.exe selftest`), copy the three `dist\*.zip` and `.sha256` to
+   the laptop clone's `dist\` (Remote Desktop clipboard), check out the tag there and run
    `pwsh scripts/publish_release.ps1 -Tag vX.Y.Z` (no `-BuildExe`).
 4. Record the release in `docs/TRACKER.md` (*Done* table).
 
@@ -283,7 +274,7 @@ sheet (which carries the API Client ID/Secret/token URL), or the Configure scree
 The jump box runs the **entire flow from the web app**. Full procedure from a fresh login:
 
 #### 1. Get the latest build
-On a lab jump box: `.\lab\fetch.ps1` (*A live run on a jump box*). On a machine that reaches
+On a lab jump box: the push script and paste in *A live run on a jump box*. On a machine that reaches
 github.hpe.com:
 ```powershell
 cd C:\Users\Administrator\Downloads\alletra_onboard
