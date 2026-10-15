@@ -1,0 +1,28 @@
+# Every text file is stored with LF. Windows and macOS clones see the same bytes, so a diff only
+# ever shows real changes. Windows batch files need CRLF to run.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary: never converted, never diffed as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mp4 binary
+*.webm binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pdf binary
+*.zip binary
+*.exe binary
+*.xlsx binary
+*.ods binary
+*.docx binary
+*.pptx binary
+*.db binary
+
+# Built output: reviewers skip it, GitHub collapses it in pull requests.
+Provisioning_Automation/alletra_onboard/frontend/dist/** linguist-generated=true -diff

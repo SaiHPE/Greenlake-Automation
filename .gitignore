@@ -1,3 +1,8 @@
+# READ THIS if git ignores a file you meant to commit. Lab dumps leaked passwords and addresses before
+# (docs/LESSONS.md 21), so whole file types are ignored everywhere below. If your new file is clean,
+# add an exception here in the same pull request (or `git add -f` it); scripts/check.sh lists any
+# ignored file under src/, tests/ or frontend/src/.
+
 # Sensitive / lab-specific — never commit (generated as-built docs, lab dumps)
 *.docx
 *.dotx
@@ -29,9 +34,6 @@ Thumbs.db
 desktop.ini
 *.swp
 *.bak
-
-# Local editor instructions
-.github/*instructions.md
 
 # UI capture output (console screenshots/HTML — may contain sensitive UI)
 .alletra_onboard/
