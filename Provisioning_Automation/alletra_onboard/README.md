@@ -45,7 +45,7 @@ token or customer data in anything you push there.
 | Branch | What is in it | Who pushes it |
 |---|---|---|
 | `main` | the full repo (the app is under `Provisioning_Automation/alletra_onboard/`) | the owner (Sai), by merging pull requests |
-| `feat/bl-NN-short-name` | one tracker item (`docs/TRACKER.md`), branched from `main` | the developer working on it |
+| `feat/bl-NN-short-name` | one issue (`BL-NN`), branched from `main` | the developer working on it |
 | `jumpbox-package` | the app folder only, at the branch root (`git subtree split` of `main`), for anyone who clones just the app (*Getting the app*, option 2) | the owner, after every merge to `main` |
 | `jumpbox-test` (github.com only) | the app folder from any commit, for a live lab run; scratch, force-pushed | the developer with the lab booked, with `scripts/push_jumpbox_test.sh` |
 
@@ -103,7 +103,7 @@ Add-Content .env "LAB_DEFAULT_PW=<the lab vCenter and switch password>"
    after each merge, and `scripts/push_jumpbox_test.sh` builds it for lab runs. The hook and
    `check.py` both refuse a branch that changes it.
 4. `git push -u origin feat/bl-NN-short-name` and open a pull request into `main` on github.hpe.com.
-   Close the tracker item in the commit that finishes it (`docs/TRACKER.md`).
+   Write `Closes #N` in the description; squash-merging closes the issue.
 
 A feature verified only against captured output is *built, pending live run*, not done. Say so in
 the pull request and the tracker.
@@ -238,7 +238,7 @@ then they never run.
    `dist\AlletraOnboard\AlletraOnboard.exe selftest`), copy the three `dist\*.zip` and `.sha256` to
    the laptop clone's `dist\` (Remote Desktop clipboard), check out the tag there and run
    `pwsh scripts/publish_release.ps1 -Tag vX.Y.Z` (no `-BuildExe`).
-4. Record the release in `docs/TRACKER.md` (*Done* table).
+4. Record the release in `docs/TRACKER.md` (*Closed* table).
 
 The rolling `latest` release is refreshed in place (assets replaced, never deleted and recreated),
 so `/releases/latest` never points at nothing. To build the zip without publishing (needs Node):

@@ -71,15 +71,16 @@ runs an engagement **hands-off** and gets the **as-built / HLD / LLD** for free.
 
 ## Where the tool is today
 
-Alletra MP **block**, areas 1–4 and the block half of 8–9, in one operator web app with five modes
-(Full onboarding / Provision only / Both / Verify only / Custom). Everything in the **file** column
-(6, 7) and all of **snapshots/replication** (5) is unbuilt. The two structural gaps under ADR 0006 are
-unchanged: the **DSCC cloud control plane** client (needed for 5 and for cloud-driven provisioning)
-and the **entire file column**.
+Alletra MP **block**, areas 1–4, replication in area 5, and the block half of 8–9, in one operator web
+app with six modes (Full onboarding / Provision only / Both / Provision, then replicate / Verify only
+/ Custom). Snapshots (5) and everything in the **file** column (6, 7) are unbuilt. The two
+structural gaps under ADR 0006 are unchanged: the **DSCC cloud control plane** client (needed for
+snapshots and for cloud-driven provisioning) and the **entire file column**.
 
 ## Open items and order of work
 
-In the order the scope owner set (2026-09-12); item-level status is in [TRACKER.md](TRACKER.md).
+In the order the scope owner set (2026-09-12); item-level status is in the github.hpe.com issues
+(history in [TRACKER.md](TRACKER.md)).
 
 1. **Live-test discovery, zoning and provisioning through the application** — done: session runner
    60/60 (2026-09-19, 2026-09-28), G-1 closed, zoning designer changes seen live 2026-09-29.

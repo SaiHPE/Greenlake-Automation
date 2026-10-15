@@ -1,0 +1,128 @@
+# AGENTS.md
+
+Instructions for people and coding agents (GitHub Copilot, Codex, Claude Code, Cursor) working in
+this repository. Read this first. Area rules live in `.github/instructions/`.
+
+## What this is
+
+`alletra_onboard`: a local web app that deploys an **HPE Alletra Storage MP B10000** array for HPE
+field engineers. It onboards the array into HPE GreenLake and DSCC, then discovers hosts and
+fabrics, writes a SAN-zoning command set, provisions block storage, sets up Remote Copy, verifies
+the result and writes the as-built document. FastAPI backend (127.0.0.1:8765), React + Grommet
+(HPE Design System) frontend, Typer CLI, shipped as a zip and a Windows `.exe`. It runs from a
+Windows jump box next to the array. **A run is one array.**
+
+Everything lives under `Provisioning_Automation/alletra_onboard/` (called "the app folder" below).
+
+## Read before changing anything
+
+| Question | File (in the app folder) |
+|---|---|
+| What is in scope, what is built, what is live-verified | `docs/SCOPE.md` |
+| Open work | github.hpe.com issues (one per item, `BL-NN` titles); history in `docs/TRACKER.md` |
+| How the code is laid out | `docs/ARCHITECTURE.md` |
+| Domain words (array, run, fabric, VV set, ...) | `CONTEXT.md` |
+| Why things are the way they are | `docs/adr/` (0001 to 0015) and `docs/specs/` |
+| Mistakes we already made, and the rule each one left | `docs/LESSONS.md` (read before touching wizards, state or a refactor) |
+| How the UI must look and read | `docs/UX-GUIDELINES.md` |
+| GreenLake API reference (offline mirror) | `reference/greenlake_api_docs/greenlake/` (repo root; start at `services.md` and `guides.md`) |
+
+## Hard rules
+
+1. **Never write to a SAN switch** (ADR 0012). Zoning is a copy-paste Brocade command set for the
+   SAN team; `cfgenable` is shown separately. Do not add a switch write path.
+2. **Array SSH is read-only.** Every command goes through the allowlist in
+   `adapters/array/cli_client.py` (`ALLOWED_COMMANDS`). Writes go through WSAPI, and only after the
+   operator approved a plan on screen. The one exception is Remote Copy (ADR 0015): a separate
+   write-scoped SSH client, used only after the operator approves; `checkrclink` has its own
+   allowlist.
+3. **Verification, as-built and discovery never change anything** on an array, host, vCenter or
+   switch.
+4. **One array per run.** Refuse a workbook that names two.
+5. **Steps and modes come from the step registry** in `domain/workflow.py`; the UI renders it from
+   `/app/profile`. Never hardcode a step list elsewhere.
+6. **Secrets never enter git**: GreenLake client credentials, array, vCenter and switch passwords
+   live in `.env` or the uploaded initialisation sheet. Lab passwords live in the jump box `.env`
+   (`LAB_ARRAY_PW`, `LAB_DEFAULT_PW`). No customer names or customer addresses in fixtures,
+   screenshots or docs.
+7. **"Done" means run live on lab hardware.** Passing tests against captured output is *built,
+   pending live run*: say so in the pull request, and keep the issue's `needs live run` label.
+8. **Never commit `frontend/dist`.** It is rebuilt from `frontend/src` after each merge. A hook,
+   `scripts/check.py` and review all refuse it.
+9. **Tests use fakes and real captures only**: no live GreenLake, array, vCenter or switch call in
+   the test suite. Parsers are pinned to captured command output in `tests/fixtures/`.
+
+## Layout (app folder)
+
+```
+src/alletra_onboard/
+  domain/        models, workflow (step registry), policies (rate limits, redact), ports. No I/O.
+  application/   one package per context: onboarding/, provisioning/, replication/, documents/,
+                 platform/ (sheet, proxy, TLS), runs/ (coordinator, events). service.py wires them.
+  adapters/      one package per outside system: greenlake/, browser/ (Playwright), array/
+                 (SSH + WSAPI), vcenter/, fabric/ (Brocade), hosts/ (Linux SSH, Windows WinRM),
+                 persistence/ (SQLite). command_log.py records every device command for the console.
+  api/app.py     FastAPI routes; cli/main.py the CLI.
+frontend/src/    React + Grommet. steps/ one file per step; ui/ the shared shell and blocks.
+tests/unit, tests/contract, tests/fixtures (captured device output)
+lab/             scripts that drive the app against the lab arrays (see lab/README.md)
+scripts/         check.py, push_jumpbox_test.sh, after_merge.sh, release and packaging scripts
+```
+
+## Commands (from the app folder)
+
+```bash
+python -m venv .venv && .venv/bin/pip install -e .[dev]   # Windows: .venv\Scripts\pip
+cd frontend && npm ci && cd ..
+.venv/bin/python scripts/check.py        # the pre-pull-request gate: tests, ruff, tsc, branch rules
+.venv/bin/python -m pytest -q            # tests only
+.venv/bin/python -m ruff check .         # lint (ruff is pinned in pyproject.toml)
+cd frontend && npm run typecheck         # TypeScript
+.venv/bin/onboard ui                     # run the app (http://127.0.0.1:8765)
+cd frontend && npm run dev               # UI dev server on :5173 against the running backend
+cd frontend && npm run mockups           # design mockups on :5175
+```
+
+## Making a change
+
+1. Work from an issue. Branch from an up-to-date `main`: `feat/bl-NN-short-name`.
+2. Keep the change to that one item. Update the docs that describe the behaviour you changed
+   (`SCOPE.md`, an ADR or spec if it is a decision, `README.md` for operator steps).
+3. Run `scripts/check.py` until it says PASS. There is no CI on github.hpe.com; this is the gate.
+4. Push and open a pull request on github.hpe.com. Fill in the template, paste the check block,
+   write `Closes #N`. The owner reviews and squash-merges; the title becomes the commit, so make it
+   `BL-NN: what changes, in plain words`.
+5. Lab runs: `scripts/push_jumpbox_test.sh` sends your committed branch to the jump box (README,
+   *A live run on a jump box*). Ask before running anything against lab hardware.
+
+## Things an agent must not do
+
+- Push to `main`, force-push, delete branches, create tags or publish releases.
+- Commit `frontend/dist`, `.env`, workbooks, generated documents or anything under `archive/`.
+- Run lab scripts, or call an array, switch, vCenter or GreenLake, without the user asking.
+- Add a command to an allowlist, or a write path, without a test and without saying so plainly.
+- Bypass checks (`--no-verify`, skipping `check.py`) or weaken a test to make it pass.
+
+## Domain facts that are easy to get wrong
+
+- **GreenLake device assignment is two PATCH calls**: application + region first, subscription
+  second. One call with both is rejected.
+- Service catalog: the id is `serviceManager.id` (nested), not `application_id`; the filter field is
+  `status` but the response field is `provisionStatus`.
+- GreenLake writes return `202 + Location`: always poll to `SUCCEEDED` / `FAILED` / `TIMEDOUT`.
+- Rate limits: one token bucket per endpoint family; sleep **outside** the lock.
+- DSCC region codes differ from GreenLake region ids (`ap-northeast` is `jp1`, `us-west` is `us1`,
+  `eu-central` is `eu1`, `eu-west` is `uk1`).
+- The array's setup wizard URL must start with `https://169.254.`. A `fail-prov-*` error there is a
+  GreenLake state problem (device or subscription), not a network one: fix GreenLake, do not retry.
+- The DSCC browser attaches over CDP to `localhost:9222` only; the operator signs in by hand. The
+  tool never handles DSCC passwords or MFA.
+- Browser selectors live in `adapters/browser/locators.py`; use role, label or visible text, never
+  CSS classes.
+- Shipped `.ps1` files must be pure ASCII (Windows PowerShell 5.1 reads them as ANSI).
+
+## Writing style (UI text, docs, commit and pull request messages)
+
+Plain English, short sentences, no internal jargon on screen (no ADR, SPEC or version numbers in
+operator messages). Say what happened, what it means and what to do next. Comments say only what
+the code cannot.

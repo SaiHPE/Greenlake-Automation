@@ -1,23 +1,18 @@
 # Greenlake-Automation
 
-Automation for onboarding **HPE Alletra MP B10000** storage arrays into **HPE GreenLake + DSCC**.
+Automation for deploying **HPE Alletra Storage MP B10000** arrays: onboarding into HPE GreenLake and
+DSCC, host and fabric discovery, SAN-zoning command sets, block provisioning, Remote Copy
+replication with a failover test, verification and the as-built document. Operators run it as a
+local web app on a Windows jump box next to the array.
 
-## 👉 The app lives here
+## Where things are
 
-**[`Provisioning_Automation/alletra_onboard/`](Provisioning_Automation/alletra_onboard/)** — the
-operator web app (`onboard ui`) and CLI that drive all three onboarding steps:
-
-- **A** — GreenLake REST (register device, assign to Data Services, subscribe, verify)
-- **B** — the on-array Cloud Connectivity Wizard (Playwright)
-- **C** — the DSCC "Set Up System" wizard (Playwright)
-
-Start with its **[README](Provisioning_Automation/alletra_onboard/README.md)** — it covers
-setup, the jump-box ↔ laptop sync model, how to run the web app, and the current open issues.
-
-## Other folders
-
-| Folder | What it is |
+| Path | What it is |
 |---|---|
-| `alletra-ui-capture-kit-extracted/` | recon tooling for capturing Playwright wizard locators (stale partial copy; the live capture scripts are under the app's `scripts/`) |
-| `docs and plans/` | GreenLake API docs and planning notes |
-| `webscraper/` | scraped GreenLake API reference |
+| [`Provisioning_Automation/alletra_onboard/`](Provisioning_Automation/alletra_onboard/) | **The app.** Its [README](Provisioning_Automation/alletra_onboard/README.md) covers setup, running it, the branch and pull request flow, lab runs and releases. |
+| [`AGENTS.md`](AGENTS.md) | Rules, layout and commands for everyone working here, people and coding agents alike. Read it first. |
+| [`reference/greenlake_api_docs/`](reference/greenlake_api_docs/) | Offline mirror of the GreenLake developer portal (start at `greenlake/services.md`). |
+| [`archive/`](archive/) | Old plans and tools kept for history; not used by the app. |
+| `.github/` | Pull request template, code owners, area rules for coding agents, dormant workflows. |
+
+Open work is tracked as [issues on github.hpe.com](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues).
