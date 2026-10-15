@@ -112,7 +112,7 @@ def _raid(sec: dict[str, str]) -> str:
     for line in sec.get("showcpg", "").splitlines():
         p = line.split()
         if len(p) >= 2 and p[0].isdigit() and p[1] != "total":
-            m = re.search(r"_r(\d+)", p[1], re.I)
+            m = re.search(r"_r(\d+)", p[1], re.IGNORECASE)
             out.append(f"RAID {m.group(1)} ({p[1]})" if m else p[1])
     return "; ".join(out)
 

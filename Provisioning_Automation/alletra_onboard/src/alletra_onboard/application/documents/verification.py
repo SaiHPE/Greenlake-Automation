@@ -21,7 +21,7 @@ so it is not verified here.
 from __future__ import annotations
 
 import re
-from typing import Callable
+from collections.abc import Callable
 
 from alletra_onboard.adapters.array.cli_client import ArrayCliClient, ArrayCliError
 from alletra_onboard.domain.models import (

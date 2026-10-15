@@ -10,6 +10,7 @@ in the Windows store) is invisible to the tool.
 from __future__ import annotations
 
 import ssl
+from pathlib import Path
 
 from alletra_onboard.application.platform.tls import (
     ca_bundle_override,
@@ -84,7 +85,7 @@ def test_ssl_cert_file_is_honoured(monkeypatch, tmp_path):
 
     _clear(monkeypatch)
     bundle = tmp_path / "zscaler-root-ca.pem"
-    bundle.write_bytes(open(certifi.where(), "rb").read())
+    bundle.write_bytes(Path(certifi.where()).read_bytes())
     monkeypatch.setenv("SSL_CERT_FILE", str(bundle))
     assert ca_bundle_override() == str(bundle)
     assert ssl_context().verify_mode == ssl.CERT_REQUIRED

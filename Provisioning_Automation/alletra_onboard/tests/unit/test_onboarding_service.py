@@ -4,9 +4,15 @@ import pytest
 from pydantic import SecretStr
 
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
+from alletra_onboard.application.onboarding.greenlake_provision import (
+    DONE,
+    FAILED,
+    WARNING,
+    PhaseOutcome,
+    ProvisionResult,
+)
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.service import OnboardingService, RunBusyError
-from alletra_onboard.application.onboarding.greenlake_provision import DONE, FAILED, WARNING, PhaseOutcome, ProvisionResult
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
@@ -99,6 +105,7 @@ async def test_create_run_records_mode_and_initial_phase(tmp_path):
 async def test_replication_steps_are_refused_without_the_replication_tab(tmp_path):
     # SPEC-015 R4: the steps exist only when the workbook carries the tab (intent.replication).
     import pytest
+
     from alletra_onboard.domain.replication import ProtectionRequest, ReplicationIntent
     from alletra_onboard.domain.shared import EndpointCreds
 
@@ -130,8 +137,15 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     from alletra_onboard.application.replication import read as replication_read
     from alletra_onboard.application.replication.steps import REPORT_ARTIFACT
     from alletra_onboard.domain.replication import (
-        ProtectionRequest, RcGroup, RcGroupVolume, RcLink, RcTarget, RcipPort, ReplicationArrayView,
-        ReplicationIntent, ReplicationReport,
+        ProtectionRequest,
+        RcGroup,
+        RcGroupVolume,
+        RcipPort,
+        RcLink,
+        RcTarget,
+        ReplicationArrayView,
+        ReplicationIntent,
+        ReplicationReport,
     )
     from alletra_onboard.domain.shared import EndpointCreds
 
@@ -182,12 +196,16 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
 
     # ---- R4/R7 through the service: apply the approved plan; the approval is then spent
     import pytest
+
     from alletra_onboard.application.replication import apply as replication_apply
     from alletra_onboard.application.replication import verify as replication_verify
     from alletra_onboard.application.replication.steps import RESULT_ARTIFACT
     from alletra_onboard.application.service import StepPreconditionError
     from alletra_onboard.domain.replication import (
-        GroupVerification, ReplicationOutcome, ReplicationResult, ReplicationVerification,
+        GroupVerification,
+        ReplicationOutcome,
+        ReplicationResult,
+        ReplicationVerification,
     )
 
     applied: list = []
@@ -351,13 +369,22 @@ async def test_provision_failure_is_retryable_and_warnings_collected(tmp_path):
 async def test_the_link_gate_refuses_over_the_limit_without_the_tick_and_records_the_choice_with_it(tmp_path, monkeypatch):
     # SPEC-020 R4: the operator's option to continue when the measured latency is over HPE's limit.
     import pytest
+
     from alletra_onboard.application.replication import apply as replication_apply
     from alletra_onboard.application.replication import link_check as replication_link
     from alletra_onboard.application.replication import read as replication_read
     from alletra_onboard.application.service import StepPreconditionError
     from alletra_onboard.domain.replication import (
-        LinkCheck, LinkCheckResult, LinkPair, ProtectionRequest, RcLink, RcTarget, RcipPort, ReplicationArrayView,
-        ReplicationIntent, ReplicationResult,
+        LinkCheck,
+        LinkCheckResult,
+        LinkPair,
+        ProtectionRequest,
+        RcipPort,
+        RcLink,
+        RcTarget,
+        ReplicationArrayView,
+        ReplicationIntent,
+        ReplicationResult,
     )
     from alletra_onboard.domain.shared import EndpointCreds
 
@@ -536,8 +563,8 @@ async def test_verify_exception_never_unsucceeds_the_run(tmp_path):
 
 
 def _prov_intent():
-    from alletra_onboard.domain.shared import EndpointCreds
     from alletra_onboard.domain.provisioning import ProvisioningIntent
+    from alletra_onboard.domain.shared import EndpointCreds
 
     def creds(host):
         return EndpointCreds(host=host, username="u", password=SecretStr("p"))
@@ -551,8 +578,8 @@ def _prov_intent():
 
 async def test_get_storage_objects_builds_the_dropdown_palette(tmp_path, monkeypatch):
     from alletra_onboard.application.provisioning import storage_provision as sp
-    from alletra_onboard.domain.shared import normalize_wwpn
     from alletra_onboard.domain.discovery import DiscoveryReport, HostHba
+    from alletra_onboard.domain.shared import normalize_wwpn
 
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())
@@ -572,7 +599,11 @@ async def test_get_storage_objects_builds_the_dropdown_palette(tmp_path, monkeyp
 
 
 async def test_set_provisioning_builder_persists_membership_vvsets_and_exports(tmp_path):
-    from alletra_onboard.domain.provisioning import ExportRequest, HostSetRequest, ProvisioningBuilder
+    from alletra_onboard.domain.provisioning import (
+        ExportRequest,
+        HostSetRequest,
+        ProvisioningBuilder,
+    )
 
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())
@@ -674,7 +705,11 @@ async def test_apply_is_gated_on_zoning(tmp_path, monkeypatch):
     host that then correctly reported no_path."""
     from alletra_onboard.application.provisioning import storage_provision as sp
     from alletra_onboard.domain.discovery import DiscoveryReport
-    from alletra_onboard.domain.provisioning import ActionOutcome, ProvisioningPlan, ProvisioningResult
+    from alletra_onboard.domain.provisioning import (
+        ActionOutcome,
+        ProvisioningPlan,
+        ProvisioningResult,
+    )
 
     monkeypatch.setattr(sp, "build_plan", lambda i, d, **kw: ProvisioningPlan(actions=[]))
     monkeypatch.setattr(sp, "apply_plan", lambda i, d, **kw: ProvisioningResult(
@@ -849,13 +884,13 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
     from alletra_onboard.application.provisioning import storage_provision as sp
     from alletra_onboard.application.provisioning import zoning as sz
     from alletra_onboard.domain.discovery import DiscoveryReport
-    from alletra_onboard.domain.zoning import ExpectedZone, ZoneRemediation, ZoningReport
     from alletra_onboard.domain.provisioning import (
         ActionOutcome,
         PlannedAction,
         ProvisioningPlan,
         ProvisioningResult,
     )
+    from alletra_onboard.domain.zoning import ExpectedZone, ZoneRemediation, ZoningReport
 
     monkeypatch.setattr(sd, "discover", lambda intent, progress=None: DiscoveryReport(notes=[]))
     zoning_report = ZoningReport(

@@ -39,7 +39,7 @@ dev = [
   "pytest>=8.3.0",
   "pytest-asyncio>=0.23.0",
   "respx>=0.21.0",
-  "ruff>=0.5.0",
+  "ruff==0.17.0",
 ]
 
 [project.scripts]
@@ -58,4 +58,14 @@ filterwarnings = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# The gate is the app and its tests; lab and packaging scripts are one-off tools, not linted.
+extend-exclude = ["docs", "lab", "scripts", "build", "ui-smoke", "tools", "cloudinit", "packaging", "playwright captures"]
+
+[tool.ruff.lint]
+# ruff is pinned in the dev extra so everyone gets the same rules; `ruff check src tests` must be clean.
+ignore = [
+  "S110", "S112",  # best-effort cleanup and optional reads swallow errors on purpose
+  "PYI034",        # the clients' __enter__ returns the concrete class; nothing subclasses them
+  "B023",          # zoning_plan's closures are called inside the loop iteration that defines them
+]
 

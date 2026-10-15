@@ -21,7 +21,10 @@ from typing import Any
 import httpx
 
 from alletra_onboard.adapters.greenlake.devices import DevicesClient
-from alletra_onboard.adapters.greenlake.http_client import GreenLakeAsyncOperationError, GreenLakeHttpClient
+from alletra_onboard.adapters.greenlake.http_client import (
+    GreenLakeAsyncOperationError,
+    GreenLakeHttpClient,
+)
 from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogClient
 from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
 from alletra_onboard.application.onboarding.clients import make_greenlake, missing_credentials  # noqa: F401 - missing_credentials re-exported

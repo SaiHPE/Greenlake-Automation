@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict
-from typing import Callable
+from collections.abc import Callable
 
 from alletra_onboard.adapters.hosts.linux_ssh import read_linux_host
 from alletra_onboard.adapters.hosts.windows_winrm import read_windows_host
@@ -25,7 +25,6 @@ from alletra_onboard.application.provisioning.clients import (
     make_windows_host,
 )
 from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
-from alletra_onboard.domain.shared import EndpointCreds, Fabric, normalize_wwpn
 from alletra_onboard.domain.discovery import (
     ArrayHost,
     ArrayPort,
@@ -39,6 +38,7 @@ from alletra_onboard.domain.discovery import (
     os_from_switch_string,
 )
 from alletra_onboard.domain.provisioning import ProvisioningIntent
+from alletra_onboard.domain.shared import EndpointCreds, Fabric, normalize_wwpn
 
 _LOGICAL_NAME_RE = re.compile(r"^\s*Logical Name:\s*(\S+)", re.IGNORECASE)
 
@@ -167,7 +167,7 @@ def parse_rcip_detail(showport_rcip: str) -> dict[str, dict[str, str]]:
             continue
         # "-" is the CLI's "unset" marker, normalised to "" exactly as parse_file_ports does — on LZ
         # the RCIP links carry no gateway and the raw "-" reached the UI as literal text.
-        clean = lambda v: "" if v in ("-", "") else v  # noqa: E731
+        clean = lambda v: "" if v in ("-", "") else v
         out[p[0]] = {
             "netmask": clean(p[4]), "gateway": clean(p[5]), "mtu": clean(p[6]), "rate": clean(p[7]),
             "duplex": clean(p[8]) if len(p) > 8 else "", "autoneg": clean(p[9]) if len(p) > 9 else "",
@@ -197,7 +197,7 @@ def parse_file_ports(showport_file: str) -> list[EthernetPort]:
             continue
         node, slot, card_port = nsp
         address, _, prefix = p[3].partition("/")
-        dash = lambda v: "" if v in ("-", "") else v  # noqa: E731 - the CLI's "unset" marker
+        dash = lambda v: "" if v in ("-", "") else v
         out.append(EthernetPort(
             node=node, slot=slot, card_port=card_port, role="file",
             mode=p[1], link_state=p[2], address=address, prefix_len=prefix,
@@ -226,7 +226,7 @@ def parse_showhost(showhost_d: str) -> list[ArrayHost]:
     reports `iqn.1991-05.com.microsoft:win-tn3n7rujk3v` at 10.132.30.87 and eight `HPE_VM_*` hosts.
     They stay out of `wwpns` because an IQN cannot be zoned and must never reach the fabric lookup.
     """
-    hosts: "OrderedDict[str, ArrayHost]" = OrderedDict()
+    hosts: OrderedDict[str, ArrayHost] = OrderedDict()
     for line in (showhost_d or "").splitlines():
         p = line.split()
         if len(p) < 6:
@@ -785,7 +785,7 @@ def discover(
     wwpn_fabric = fabric_by_wwpn(report.array_hosts, report.array_ports)
     for hba in report.host_hbas:
         fabrics = wwpn_fabric.get(normalize_wwpn(hba.wwpn))
-        hba.fabric = sorted(fabrics)[0] if fabrics else None
+        hba.fabric = min(fabrics) if fabrics else None
         if not fabrics:
             report.notes.append(
                 f"Host {hba.host_name} HBA {hba.wwpn} is not logged in on either fabric per the array "

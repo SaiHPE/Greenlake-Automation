@@ -126,7 +126,7 @@ class LinuxHostClient:
         if self._client is not None:
             try:
                 self._client.close()
-            except Exception:  # noqa: BLE001, S110 - closing a dead session
+            except Exception:  # noqa: BLE001 - closing a dead session
                 pass
             self._client = None
 

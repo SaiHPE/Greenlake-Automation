@@ -364,7 +364,9 @@ def _bold_para_after(anchor, caption: str, doc):
 def _add_inventory_after(heading, text: str, doc) -> None:
     """Render each ``showinventory`` sub-section as its own HPE-styled table under the heading; falls
     back to a monospace dump if nothing parsed."""
-    from alletra_onboard.application.documents.asbuilt_parse import parse_inventory  # local: avoid import cycle
+    from alletra_onboard.application.documents.asbuilt_parse import (
+        parse_inventory,  # local: avoid import cycle
+    )
 
     sections = parse_inventory(text)
     if not sections:
@@ -380,7 +382,9 @@ def _add_inventory_after(heading, text: str, doc) -> None:
 
 def _add_checkhealth_after(heading, text: str, doc) -> None:
     """Render checkhealth as two HPE-styled Word tables (Summary + Details); falls back to monospace."""
-    from alletra_onboard.application.documents.asbuilt_parse import parse_checkhealth  # local: avoid import cycle
+    from alletra_onboard.application.documents.asbuilt_parse import (
+        parse_checkhealth,  # local: avoid import cycle
+    )
 
     summary, detail = parse_checkhealth(text)
     if not summary and not detail:

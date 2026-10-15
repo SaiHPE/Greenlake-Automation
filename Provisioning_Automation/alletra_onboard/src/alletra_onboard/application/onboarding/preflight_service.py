@@ -8,7 +8,12 @@ from alletra_onboard.application.onboarding.greenlake_preflight import (
 )
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.cloudinit_url import EXAMPLE, normalize_cloudinit_url
-from alletra_onboard.domain.models import ArrayWorkItem, CheckStatus, PreflightCheck, PreflightReport
+from alletra_onboard.domain.models import (
+    ArrayWorkItem,
+    CheckStatus,
+    PreflightCheck,
+    PreflightReport,
+)
 
 
 class PreflightService:

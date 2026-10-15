@@ -303,7 +303,11 @@ def test_row_table_headers_match_on_their_leading_phrase_not_the_hint():
     Headers match on the phrase before " — " / " (" so hint text may change between templates."""
     from openpyxl import Workbook
 
-    from alletra_onboard.application.platform.init_sheet import HOSTSET_COLUMNS, VOLUME_COLUMNS, _read_table
+    from alletra_onboard.application.platform.init_sheet import (
+        HOSTSET_COLUMNS,
+        VOLUME_COLUMNS,
+        _read_table,
+    )
 
     wb = Workbook()
     ws = wb.active
@@ -358,7 +362,10 @@ def test_compose_replaces_row_tables_and_fills_kv_on_a_base_workbook():
 
 
 def test_compose_host_login_from_an_older_workbook_without_login_columns():
-    from alletra_onboard.application.platform.init_sheet import HOSTS_SHEET_NAME, compose_workbook_bytes
+    from alletra_onboard.application.platform.init_sheet import (
+        HOSTS_SHEET_NAME,
+        compose_workbook_bytes,
+    )
 
     base = _fill_tabs({"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.122.140"}, _PROV_COMPLETE)
     workbook = load_workbook(io.BytesIO(base))

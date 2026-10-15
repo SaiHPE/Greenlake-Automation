@@ -38,15 +38,15 @@ def _creds(host: str) -> EndpointCreds:
 def _intent(**over) -> ProvisioningIntent:
     """Two 20 GiB tpvv volumes in VV-set `vvs`, host set `hs` of every discovered host, exports composed
     explicitly so the test controls the source/target shape."""
-    data = dict(
-        array=_creds("10.0.0.5"), vcenter=_creds("vc"), switch_f1=_creds("f1"), switch_f2=_creds("f2"),
-        volumes=[
+    data = {
+        "array": _creds("10.0.0.5"), "vcenter": _creds("vc"), "switch_f1": _creds("f1"), "switch_f2": _creds("f2"),
+        "volumes": [
             VolumeRequest(name="vol01", size_gib=20, cpg="SSD_r6", vvset="vvs"),
             VolumeRequest(name="vol02", size_gib=20, cpg="SSD_r6", vvset="vvs"),
         ],
-        host_sets=[HostSetRequest(name="hs", members=["esx1"])],
-        exports=[ExportRequest(source_kind="vvset", source_name="vvs", target_kind="hostset", target_name="hs")],
-    )
+        "host_sets": [HostSetRequest(name="hs", members=["esx1"])],
+        "exports": [ExportRequest(source_kind="vvset", source_name="vvs", target_kind="hostset", target_name="hs")],
+    }
     data.update(over)
     return ProvisioningIntent(**data)
 

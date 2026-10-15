@@ -1,8 +1,8 @@
 from pydantic import SecretStr
 
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
-from alletra_onboard.domain.shared import EndpointCreds, normalize_wwpn, wwpn_colons
 from alletra_onboard.domain.provisioning import ProvisioningIntent
+from alletra_onboard.domain.shared import EndpointCreds, normalize_wwpn, wwpn_colons
 
 
 def test_normalize_wwpn_strips_separators_and_uppercases():

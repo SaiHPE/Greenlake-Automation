@@ -12,9 +12,10 @@ host in the cluster sees them down multiple paths (ALUA).
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Callable
+from collections.abc import Callable
 
 from alletra_onboard.application.provisioning.clients import make_wsapi
+from alletra_onboard.application.provisioning.hosts import declared_mismatches, union_hosts
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
     ActionOutcome,
@@ -32,7 +33,6 @@ from alletra_onboard.domain.provisioning import (
     VolumeRequest,
 )
 from alletra_onboard.domain.shared import normalize_wwpn
-from alletra_onboard.application.provisioning.hosts import declared_mismatches, union_hosts
 
 
 def _union(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None):
@@ -42,7 +42,7 @@ def _union(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: 
 
 def _hosts_by_name(
     discovery: DiscoveryReport, intent: ProvisioningIntent | None = None, zoning_plan: dict | None = None,
-) -> "OrderedDict[str, list[str]]":
+) -> OrderedDict[str, list[str]]:
     """host name -> FC WWPNs, for every host the run can name (vCenter, sheet, array, fabric).
 
     An iSCSI-only host is included only when it already exists on the array (it can join a set;
@@ -116,7 +116,7 @@ def planned_host_names(
     return intent.model_copy(update={"host_sets": host_sets, "exports": exports}), notes
 
 
-def _members_for(host_set, all_hosts: "OrderedDict[str, list[str]]") -> list[str]:
+def _members_for(host_set, all_hosts: OrderedDict[str, list[str]]) -> list[str]:
     """A host set's members: the operator's selection, intersected with the hosts the run can name, so
     a member that is not known — or that the zoning gate excluded — cannot reach the array as a set
     member with no host object behind it. An EMPTY selection selects nothing (SPEC-005): until
@@ -138,7 +138,7 @@ def _empty_set_blocker(name: str) -> str:
 
 def _selected_hosts(
     intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None = None,
-) -> "OrderedDict[str, list[str]]":
+) -> OrderedDict[str, list[str]]:
     """The hosts tier-1 will CREATE: only those the operator composed into a host set (ADR 0010's
     ideal subset) — never the whole inventory. On a shared vCenter, creating an array host object for
     every ESXi server in the inventory is pollution, not provisioning. No host sets, or host sets with
@@ -148,7 +148,7 @@ def _selected_hosts(
     return OrderedDict((n, w) for n, w in all_hosts.items() if n in wanted)
 
 
-def _vvsets(intent: ProvisioningIntent) -> "OrderedDict[str, list[str]]":
+def _vvsets(intent: ProvisioningIntent) -> OrderedDict[str, list[str]]:
     """Group volume names by the VV-set each volume asked to join (order preserved)."""
     sets: OrderedDict[str, list[str]] = OrderedDict()
     for v in intent.volumes:
@@ -262,7 +262,7 @@ def _resolve_exports(intent: ProvisioningIntent) -> list[ExportRequest]:
 def _reachable_targets(
     exports: list[ExportRequest],
     intent: ProvisioningIntent,
-    all_hosts: "OrderedDict[str, list[str]]",
+    all_hosts: OrderedDict[str, list[str]],
     reachable_hosts: set[str],
 ) -> tuple[list[ExportRequest], list[str]]:
     """Split the exports into (do now, skip) on whether the array can REACH the target.
@@ -304,7 +304,7 @@ def exported_volumes_by_host(
     discovery: DiscoveryReport,
     reachable_hosts: set[str],
     zoning_plan: dict | None = None,
-) -> "OrderedDict[str, set[str]]":
+) -> OrderedDict[str, set[str]]:
     """{host: the volumes actually exported to it} — the tier-2 verification target.
 
     Resolves host-set exports down to their members and expands a VV-set source to its volumes, so
@@ -314,7 +314,7 @@ def exported_volumes_by_host(
     """
     intent, _ = planned_host_names(intent, discovery, zoning_plan)
     hosts = _selected_hosts(intent, discovery, zoning_plan)
-    out: "OrderedDict[str, set[str]]" = OrderedDict((name, set()) for name in hosts)
+    out: OrderedDict[str, set[str]] = OrderedDict((name, set()) for name in hosts)
     try:
         exports = _resolve_exports(intent)
     except ExportDefaultError:
@@ -595,7 +595,7 @@ def apply_plan(
     except ExportDefaultError as exc:
         result.error = str(exc)
         return result
-    exports, held = _reachable_targets(exports, intent, hosts, reachable_hosts)
+    exports, _held = _reachable_targets(exports, intent, hosts, reachable_hosts)
 
     personas = _persona_by_host(discovery, intent, zoning_plan)
     try:

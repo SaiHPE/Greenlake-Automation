@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunRecord
@@ -212,7 +212,7 @@ class SqliteRunStore:
                 INSERT INTO pending_sheets (token, payload, created_at) VALUES (?, ?, ?)
                 ON CONFLICT(token) DO UPDATE SET payload = excluded.payload, created_at = excluded.created_at
                 """,
-                (token, payload, datetime.now(timezone.utc).isoformat()),
+                (token, payload, datetime.now(UTC).isoformat()),
             )
 
     def pop_pending_sheet(
@@ -243,7 +243,7 @@ class SqliteRunStore:
                 ON CONFLICT(run_id, kind) DO UPDATE SET
                     payload = excluded.payload, updated_at = excluded.updated_at
                 """,
-                (run_id, kind, payload, datetime.now(timezone.utc).isoformat()),
+                (run_id, kind, payload, datetime.now(UTC).isoformat()),
             )
             # Artifacts include the generated as-built document, hundreds of KB per run, and nothing
             # else ever deletes them. Keep the recent runs — enough to resume anything in flight —

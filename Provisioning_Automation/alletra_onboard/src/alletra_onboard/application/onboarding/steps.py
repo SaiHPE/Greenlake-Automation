@@ -7,7 +7,8 @@ operator-gated (B waits for the operator's Submit, C stops at the credential gat
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAdapter
 from alletra_onboard.adapters.browser.dscc_setup import DsccSetupAdapter

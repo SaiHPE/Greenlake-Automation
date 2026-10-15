@@ -14,7 +14,12 @@ from pydantic import SecretStr
 
 from alletra_onboard.adapters.greenlake.service_catalog import ServiceProvision
 from alletra_onboard.application.onboarding.greenlake_provision import GreenLakeProvisioningService
-from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, WorkflowPhase
+from alletra_onboard.domain.models import (
+    ArrayWorkItem,
+    DsccSetupConfig,
+    NetworkConfig,
+    WorkflowPhase,
+)
 
 DEVICE_ID = "e7986853-a980-5a82-90a5-9240b42ec07f"
 SERIAL = "CZ2D2K014S"

@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from alletra_onboard.adapters.browser.debug_browser import preferred_channel
 from alletra_onboard.adapters.browser.locators import CLOUDINIT, CLOUDINIT_TEXT

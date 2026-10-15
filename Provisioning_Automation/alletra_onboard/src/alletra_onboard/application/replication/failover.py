@@ -256,7 +256,7 @@ def run_failover_test(
         # was mirrored to P as Secondary-Rev and the array started the group from S within seconds; a
         # recover sent then is refused with 403 code 284 "Remote copy group not stopped".
         t = begin(s4)
-        recovered = lambda p, s: (p.role in ("Secondary-Rev", "Secondary") and s.role in ("Primary-Rev", "Primary")  # noqa: E731
+        recovered = lambda p, s: (p.role in ("Secondary-Rev", "Secondary") and s.role in ("Primary-Rev", "Primary")
                                   and s.status.lower() == "started")
         ok, p, s, _w = wait_for(recovered, lim["auto_start"])
         if ok:
@@ -291,9 +291,9 @@ def run_failover_test(
         # refused (HTTP 400 code 29, "was not previously switched"). So: restore while the roles still
         # carry -Rev; otherwise fail back the way the failover went, from the other side.
         t = begin(s6)
-        normal = lambda p, s: (p.role == "Primary" and s.role == "Secondary" and p.status.lower() == "started"  # noqa: E731
+        normal = lambda p, s: (p.role == "Primary" and s.role == "Secondary" and p.status.lower() == "started"
                                and s.status.lower() == "started" and p.volumes > 0 and p.synced == p.volumes)
-        flipped = lambda p, s: p.role == "Secondary" and s.role == "Primary"  # noqa: E731
+        flipped = lambda p, s: p.role == "Secondary" and s.role == "Primary"
         p, s = both()
         if not flipped(p, s) and p.role != "Secondary":
             _p(f"Restoring the natural direction: {group} Primary on {record.primary_array} again…")

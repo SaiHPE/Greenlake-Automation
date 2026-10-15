@@ -73,7 +73,7 @@ class BrocadeClient:
             )
         except paramiko.AuthenticationException as exc:
             raise BrocadeError(f"Login failed for {self.username}@{self.host} — check the switch credentials.") from exc
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise BrocadeError(
                 f"Could not reach the switch at {self.host}:{self.port} ({type(exc).__name__})."
             ) from exc
@@ -87,7 +87,7 @@ class BrocadeClient:
                 pass
             self._client = None
 
-    def __enter__(self) -> "BrocadeClient":
+    def __enter__(self) -> BrocadeClient:
         self.connect()
         return self
 
@@ -170,6 +170,6 @@ class BrocadeClient:
             chan.close()
         except BrocadeError:
             raise
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise BrocadeError(f"running '{command}' failed: {type(exc).__name__}") from exc
         return status, buf.decode("utf-8", "replace")

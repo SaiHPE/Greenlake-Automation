@@ -265,7 +265,7 @@ def test_an_async_row_on_a_target_with_no_groups_has_no_mode_finding():
 
 def test_each_finding_has_its_sentence():
     a, b = _views()
-    sync = dict(mode="sync", rpo_minutes=None)
+    sync = {"mode": "sync", "rpo_minutes": None}
     # a volume already in another group
     report = check(a, b, _intent([ProtectionRequest(vvset="300gb", peer_cpg="SSD_r6", **sync)]))
     assert any("Volume '300gb' (in set '300gb') is already in Remote Copy group '300gb'" in f for f in report.findings)

@@ -20,7 +20,6 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from alletra_onboard.application.platform import prereqs
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, RunMode
-from alletra_onboard.domain.shared import normalize_wwpn, EndpointCreds
 from alletra_onboard.domain.provisioning import (
     DeclaredHost,
     HostSetRequest,
@@ -34,6 +33,7 @@ from alletra_onboard.domain.replication import (
     ProtectionRequest,
     ReplicationIntent,
 )
+from alletra_onboard.domain.shared import EndpointCreds, normalize_wwpn
 from alletra_onboard.domain.workflow import enabled_steps
 
 SHEET_NAME = "Initialisation"

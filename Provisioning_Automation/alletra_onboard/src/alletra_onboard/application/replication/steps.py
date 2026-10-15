@@ -85,7 +85,7 @@ class ReplicationSteps:
         plan = replication_plan.build_plan(report, intent.replication, intent)
         try:
             coord.store.save_artifact(run.run_id, REPORT_ARTIFACT, report.model_dump_json().encode("utf-8"))
-        except Exception:  # noqa: BLE001, S110 - the read succeeded; failing to cache it must not fail the step
+        except Exception:  # noqa: BLE001 - the read succeeded; failing to cache it must not fail the step
             pass
         self._plan[run.run_id] = (plan, report)
 
@@ -147,7 +147,7 @@ class ReplicationSteps:
         ))
         try:
             coord.store.save_artifact(run.run_id, LINK_CHECK_ARTIFACT, check.model_dump_json().encode("utf-8"))
-        except Exception:  # noqa: BLE001, S110 - the test ran; failing to cache it must not fail the step
+        except Exception:  # noqa: BLE001 - the test ran; failing to cache it must not fail the step
             pass
         data = {"link_check": check.model_dump(mode="json")}
         failed = [r for r in check.results if r.status == "failed"]
@@ -237,7 +237,7 @@ class ReplicationSteps:
         self._plan.pop(run.run_id, None)
         try:
             coord.store.save_artifact(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
-        except Exception:  # noqa: BLE001, S110 - the writes happened; failing to cache the record must not fail the step
+        except Exception:  # noqa: BLE001 - the writes happened; failing to cache the record must not fail the step
             pass
         created = sum(1 for o in result.outcomes if o.status == "created")
         existed = sum(1 for o in result.outcomes if o.status == "exists")
@@ -347,7 +347,7 @@ class ReplicationSteps:
         record: FailoverRecord = await asyncio.to_thread(partial(replication_failover.run_failover_test, intent, group, progress=progress))
         try:
             coord.store.save_artifact(run.run_id, FAILOVER_ARTIFACT, record.model_dump_json().encode("utf-8"))
-        except Exception:  # noqa: BLE001, S110 - the test ran; failing to cache the record must not fail the step
+        except Exception:  # noqa: BLE001 - the test ran; failing to cache the record must not fail the step
             pass
         data = {"record": record.model_dump(mode="json")}
         if record.result == "passed":

@@ -9,9 +9,9 @@ from pydantic import SecretStr
 from alletra_onboard.application.provisioning import discovery as disc
 from alletra_onboard.application.provisioning import storage_provision as prov
 from alletra_onboard.application.provisioning import zoning
-from alletra_onboard.domain.shared import EndpointCreds, normalize_wwpn
 from alletra_onboard.domain.discovery import ArrayHost, ArrayPort, HostHba
 from alletra_onboard.domain.provisioning import ExportRequest, ProvisioningIntent
+from alletra_onboard.domain.shared import EndpointCreds, normalize_wwpn
 
 # Concrete WWPNs (colon form for switch output; normalized for the domain objects).
 ARR_O1 = "20:31:00:02:ac:02:f6:29"  # node0 slot3 port1 (odd)
@@ -27,15 +27,15 @@ def _creds(host: str) -> EndpointCreds:
 
 
 def _intent(**over) -> ProvisioningIntent:
-    data = dict(
-        host_set_name="CRVLZ_Hostset",
-        array=_creds("10.0.0.5"),
-        vcenter=_creds("vc"),
-        switch_f1=_creds("sw-odd"),
-        switch_f2=_creds("sw-even"),
-        name_prefix="CRV_Prod", size_gib=1024, count=2,
-        members=["esx1"],   # SPEC-005: blank members block; the default fixture selects its one host
-    )
+    data = {
+        "host_set_name": "CRVLZ_Hostset",
+        "array": _creds("10.0.0.5"),
+        "vcenter": _creds("vc"),
+        "switch_f1": _creds("sw-odd"),
+        "switch_f2": _creds("sw-even"),
+        "name_prefix": "CRV_Prod", "size_gib": 1024, "count": 2,
+        "members": ["esx1"],   # SPEC-005: blank members block; the default fixture selects its one host
+    }
     data.update(over)
     return ProvisioningIntent.from_simple(**data)
 
@@ -299,7 +299,7 @@ def _discovered():
     )
 
 
-def _disc_for_zoning(hbas: list[HostHba]) -> "disc.DiscoveryReport":
+def _disc_for_zoning(hbas: list[HostHba]) -> disc.DiscoveryReport:
     """A DiscoveryReport shaped like the array-side discover() output: FC ports + showhost logins.
     esx1 is logged in on both fabrics (A on 0:3:3=odd, B on 0:3:4=even); esx2 only on odd (C)."""
     ports = [
@@ -561,6 +561,7 @@ def test_ensure_host_accepts_an_existing_host_whose_persona_this_tool_cannot_cre
     # The union carries the array's own persona for a host it already has (e.g. 'Generic'); apply
     # must not refuse a host it is not going to create or change.
     import pytest
+
     from alletra_onboard.adapters.array.wsapi_client import WsapiError
 
     stub = _StubSdk(hosts={"legacy": {_WA}})
@@ -571,6 +572,7 @@ def test_ensure_host_accepts_an_existing_host_whose_persona_this_tool_cannot_cre
 
 def test_ensure_host_refuses_wwn_owned_by_another_host():
     import pytest
+
     from alletra_onboard.adapters.array.wsapi_client import WsapiError
 
     stub = _StubSdk(hosts={"other": {_WB}})
@@ -722,6 +724,7 @@ def test_export_lun_id_bounded_by_the_platform_range():
     # "obvious" 0..255 bound would be wrong in both directions.
     import pytest
     from pydantic import ValidationError
+
     from alletra_onboard.domain.provisioning import ExportRequest
 
     def _ex(lun):
@@ -966,7 +969,7 @@ def test_wsapi_volume_bodies_match_what_the_array_accepts():
         def __init__(self) -> None:
             self.calls: list[tuple] = []
 
-        def createVolume(self, name, cpg, size_mib, optional=None):  # noqa: N802 - SDK spelling
+        def createVolume(self, name, cpg, size_mib, optional=None):
             self.calls.append((name, cpg, size_mib, optional))
 
     client = WsapiClient(host="array", username="3paradm", password="x")
@@ -1162,7 +1165,10 @@ Lun VVName              HostName   -Host_WWN/iSCSI_Name/Host_NQN- Port  Type Sta
 def test_an_iscsi_export_is_verified_live_through_both_nodes():
     """E18U31 2026-10-05: the export was active on four iSCSI ports, but Verify paths said
     '0 live paths — the host is off or not zoned' because the parser dropped IQN rows."""
-    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
+    from alletra_onboard.application.provisioning.path_verify import (
+        parse_showvlun_active,
+        verify_paths,
+    )
 
     paths = parse_showvlun_active(_E18_SHOWVLUN_A)
     assert {p.protocol for p in paths} == {"iscsi"} and paths[0].host_wwpn == _E18_ISCSI_IQN
@@ -1177,7 +1183,10 @@ def test_an_iscsi_export_is_verified_live_through_both_nodes():
 
 
 def test_verify_paths_live_both_fabrics():
-    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
+    from alletra_onboard.application.provisioning.path_verify import (
+        parse_showvlun_active,
+        verify_paths,
+    )
 
     paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
     rep = verify_paths({"CRV_VZ_DL360G11D24U25": {"VZ_ESXi_Profile_bk"}}, paths)
@@ -1189,7 +1198,10 @@ def test_verify_paths_live_both_fabrics():
 
 
 def test_verify_paths_no_path_when_host_absent():
-    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
+    from alletra_onboard.application.provisioning.path_verify import (
+        parse_showvlun_active,
+        verify_paths,
+    )
 
     paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
     rep = verify_paths({"esx-offline": {"VZ_ESXi_Profile_bk"}}, paths)
@@ -1200,7 +1212,10 @@ def test_verify_paths_no_path_when_host_absent():
 
 
 def test_verify_paths_partial_single_fabric():
-    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
+    from alletra_onboard.application.provisioning.path_verify import (
+        parse_showvlun_active,
+        verify_paths,
+    )
 
     text = (
         "Lun VVName HostName -Host_WWN- Port Type Status ID\n"
@@ -1217,7 +1232,10 @@ def test_verify_paths_joins_by_wwpn_across_naming_namespaces():
     # array's host objects carry rack names (CRV_VZ_DL360G11D24U25) — zero exact-name matches across
     # three arrays, so an exact-name join reported no_path for every pre-existing host. The HBA WWPN
     # is the only key the two namespaces share.
-    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
+    from alletra_onboard.application.provisioning.path_verify import (
+        parse_showvlun_active,
+        verify_paths,
+    )
 
     paths = parse_showvlun_active(_VZ_SHOWVLUN_A)
     rep = verify_paths(
@@ -1239,7 +1257,10 @@ def test_verify_paths_uses_discovered_fabric_over_parity_on_miscabled_ports():
     # (odd) switch. A host with paths on 0:3:1 + 0:3:4 has both paths on ONE fabric — parity alone
     # would call it "live on both fabrics", a false redundancy claim. Discovery's switch-derived
     # fabric map must win; parity remains the fallback when no map is supplied.
-    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active, verify_paths
+    from alletra_onboard.application.provisioning.path_verify import (
+        parse_showvlun_active,
+        verify_paths,
+    )
 
     text = (
         "Lun VVName HostName -Host_WWN- Port Type Status ID\n"
@@ -1890,14 +1911,15 @@ def test_a_declared_host_carries_either_transport_or_both():
 
 
 def test_the_hosts_tab_is_optional_so_older_workbooks_still_parse():
-    from alletra_onboard.application.platform.init_sheet import parse_workbook_bytes
-    from alletra_onboard.domain.models import RunMode
-
     import io
 
     import openpyxl
 
-    from alletra_onboard.application.platform.init_sheet import HOSTS_SHEET_NAME
+    from alletra_onboard.application.platform.init_sheet import (
+        HOSTS_SHEET_NAME,
+        parse_workbook_bytes,
+    )
+    from alletra_onboard.domain.models import RunMode
 
     raw = _sheet_with_hosts([])
     wb = openpyxl.load_workbook(io.BytesIO(raw))
@@ -1934,7 +1956,10 @@ def test_an_incomplete_hosts_tab_login_is_refused(row, message):
 def test_passwords_survive_a_composed_sheet_exactly(password):
     """rack13 2026-09-28: WinRM refused a login through the app that worked typed directly - a composed
     '=...' value became an Excel formula (read back empty) and passwords were stripped of spaces."""
-    from alletra_onboard.application.platform.init_sheet import compose_workbook_bytes, parse_workbook_bytes
+    from alletra_onboard.application.platform.init_sheet import (
+        compose_workbook_bytes,
+        parse_workbook_bytes,
+    )
     from alletra_onboard.domain.models import RunMode
 
     raw = compose_workbook_bytes(

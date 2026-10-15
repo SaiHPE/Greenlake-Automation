@@ -150,7 +150,7 @@ class ProvisioningIntent(BaseModel):
         cpg: str = "SSD_r6",
         vvset: str | None = None,
         members: list[str] | None = None,
-    ) -> "ProvisioningIntent":
+    ) -> ProvisioningIntent:
         """Bulk shortcut: expand <prefix>NN + count into N identical volumes in one host set of the given
         `members` — the current flat-sheet case. The row-table sheet (Stage 2) will build the plural form
         directly. With no members the plan blocks (SPEC-005)."""
@@ -275,7 +275,7 @@ class PreflightReport(BaseModel):
     ready: bool = True          # False when any check failed
 
     @classmethod
-    def of(cls, checks: list[PreflightCheck]) -> "PreflightReport":
+    def of(cls, checks: list[PreflightCheck]) -> PreflightReport:
         return cls(checks=checks, ready=not any(c.status == "fail" for c in checks))
 
 

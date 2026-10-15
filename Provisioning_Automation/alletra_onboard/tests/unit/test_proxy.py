@@ -153,7 +153,7 @@ def test_status_reporting_never_echoes_the_override_as_detected(monkeypatch):
     from alletra_onboard.application.platform import proxy as mod
 
     monkeypatch.setattr(mod, "_win_system_proxy", lambda url: None)
-    monkeypatch.setattr(mod, "getproxies_registry", lambda: {})
+    monkeypatch.setattr(mod, "getproxies_registry", dict)
     monkeypatch.setenv("HTTPS_PROXY", "http://our-own-override:3128")
     assert mod.os_system_proxy("https://common.cloud.hpe.com") is None       # not the echo
     assert mod.detect_system_proxy("https://common.cloud.hpe.com") == "http://our-own-override:3128"

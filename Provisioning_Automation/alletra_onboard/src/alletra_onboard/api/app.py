@@ -388,7 +388,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                 parsed = parse_workbook_bytes(raw, mode=RunMode.FULL_ONBOARDING)
             else:
                 parsed = parse_workbook_bytes(raw, complete=True)
-        except Exception as exc:  # noqa: BLE001 - bad xlsx / missing fields -> a clear 422
+        except Exception as exc:
             raise HTTPException(status_code=422, detail=f"Initialisation sheet did not parse: {exc}") from exc
 
         # Workspace API credentials from the sheet land in the gitignored .env (no manual typing).
@@ -660,7 +660,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                 while True:
                     try:
                         event = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_S)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         yield ": heartbeat\n\n"  # keeps proxies/browsers from closing the stream
                         continue
                     yield f"data: {event.model_dump_json()}\n\n"

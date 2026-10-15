@@ -39,7 +39,7 @@ def _item(dscc_password: str | None = None) -> ArrayWorkItem:
 
 
 def _intent(host="10.132.30.121", user="3paradm", password="sheet-pw") -> ProvisioningIntent:
-    creds = lambda h, u, p: EndpointCreds(host=h, username=u, password=SecretStr(p))  # noqa: E731
+    creds = lambda h, u, p: EndpointCreds(host=h, username=u, password=SecretStr(p))
     return ProvisioningIntent(
         array=creds(host, user, password), vcenter=creds("vc", "a", "b"),
         switch_f1=creds("f1", "a", "b"), switch_f2=creds("f2", "a", "b"),

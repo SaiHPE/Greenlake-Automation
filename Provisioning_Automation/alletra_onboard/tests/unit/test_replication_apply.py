@@ -432,7 +432,7 @@ def test_verify_on_the_live_periodic_capture_says_replicating_with_the_last_sync
     a = read_array(_creds("10.64.122.99"), array_cli_factory=lambda c: _After("D22U27", showvv=_SHOWVV_A))
     b = read_array(_creds("10.64.154.190"), array_cli_factory=lambda c: _After("E18U31", showvv="Name VSize_MB\n"))
     plan = ReplicationPlan.model_validate_json((after / "plan.json").read_text(encoding="utf-8"))
-    assert [c.cli for x in plan.actions if x.name == "zz_rc_vvs_rcg" for c in x.calls][0].endswith("zz_rc_vvs_rcg AlletraMP_E18U31:periodic")
+    assert next(c.cli for x in plan.actions if x.name == "zz_rc_vvs_rcg" for c in x.calls).endswith("zz_rc_vvs_rcg AlletraMP_E18U31:periodic")
     reads = iter([a, b])
     out = verify(_prov(), plan, read_fn=lambda creds, progress=None: next(reads))
     assert out.error is None and out.links_ok

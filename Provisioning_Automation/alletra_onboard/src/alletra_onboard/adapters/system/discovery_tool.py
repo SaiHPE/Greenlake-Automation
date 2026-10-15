@@ -120,7 +120,7 @@ def launch_discovery_tool() -> dict:
             "if missing, put it on the Desktop or set DISCOVERY_TOOL_PATH in .env.",
         }
     try:
-        os.startfile(str(exe))  # type: ignore[attr-defined]  # noqa: S606 - open like a double-click
+        os.startfile(str(exe))  # type: ignore[attr-defined]
     except OSError as exc:
         return {"launched": False, "path": str(exe), "searched": searched, "error": f"Found it but could not launch: {exc}"}
     return {"launched": True, "path": str(exe), "searched": searched, "error": None}

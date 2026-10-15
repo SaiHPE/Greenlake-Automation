@@ -107,7 +107,7 @@ async def _check_one(host: str, port: int, timeout: float) -> ConnectivityResult
         except Exception:  # noqa: BLE001 - closing is best-effort
             pass
         return ConnectivityResult(host, port, True, "reachable")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return ConnectivityResult(host, port, False, "timed out - the port is filtered or blocked")
     except socket.gaierror:
         return ConnectivityResult(host, port, False, "DNS could not resolve the host")

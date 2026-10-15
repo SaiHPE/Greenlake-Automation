@@ -7,7 +7,13 @@ from alletra_onboard.application.onboarding.greenlake_preflight import (
 )
 from alletra_onboard.application.onboarding.preflight_service import PreflightService
 from alletra_onboard.config import Settings
-from alletra_onboard.domain.models import ArrayWorkItem, CheckStatus, DsccSetupConfig, NetworkConfig, PreflightCheck
+from alletra_onboard.domain.models import (
+    ArrayWorkItem,
+    CheckStatus,
+    DsccSetupConfig,
+    NetworkConfig,
+    PreflightCheck,
+)
 
 
 def _item(**overrides):
