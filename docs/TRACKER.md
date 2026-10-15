@@ -1,47 +1,37 @@
-# Pending work tracker
+# Work tracker
 
-The ONE list of open items. `SCOPE.md` says where each of the nine areas stands; this file says what is
-left, who has it, and what blocks it. The status workbook (`alletra mp init and prov status-updated.xlsx`)
-is the management view — its row is in the **Sheet** column.
+**Open work lives in [github.hpe.com issues](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues)** since 2026-10-15: one issue per item,
+labelled by SCOPE area (`area/...`) and state (`build`, `needs live run`, `blocked`, `in progress`).
+A pull request says `Closes #N`; squash-merging it closes the issue. `SCOPE.md` says where each of the
+nine areas stands. This file keeps the history: the BL IDs below and the *Closed* table.
 
 Rules:
-- Every open item has an ID here. New work gets a new ID before it starts.
-- Close an item in the same commit that finishes it: move it to *Closed* with the date and the evidence
-  (commit, validation file, report). Never delete a row.
-- "Done" means run live, not only tests passing (LESSONS). Built-but-not-run stays under *Test live*.
+- New work gets an issue before it starts. Its title starts with the next free `BL-NN`.
+- "Done" means run live, not only tests passing (`LESSONS.md`). Built but not run keeps the
+  `needs live run` label.
+- When an issue closes, add a row to *Closed* below in the same pull request: date and evidence
+  (validation file, run id, report). Never delete a row.
 
-Status: `todo` · `doing` · `blocked` · `done`
+## Moved to issues (2026-10-15)
 
-## Next up (in order)
-
-| ID | Item | Owner | Status | Sheet | Next step / notes |
-|---|---|---|---|---|---|
-| BL-37 | Submit and publish the two canned demos (needed for tenet approval, BL-30) | Sai | doing | B.9 | 2026-10-07: initialization-track demo — submission in progress; discovery → zoning → provisioning → as-built demo (edited 6:02 cut) — not yet submitted. Neither published. |
-| BL-06 | Status workbook refresh | dev | todo | — | Refreshed 2026-10-07 (A.4, B.1, B.4, B.5, B.6, B.9, B.10, replication B.1). Repeat after each closed item. |
-| BL-43 | UI redesign: a calmer screen per step | Sai + dev | doing | — | Operator feedback 2026-10-13: the UI needs a big improvement. Review of the app at 1366 × 768: pages of 760 to 830 words, main actions not styled as buttons, mode chosen after the GreenLake prerequisites, alarming status before anything happens, internal words in messages. **Rule: no behaviour changes; every prerequisite, check and button stays.** Draft 1 mockups built with the app's own HPE Design System parts in `frontend/mockups/` (`npm run mockups`, http://127.0.0.1:5175): Start, Prerequisites, Initialisation sheet, Mode, Run overview (new), Discovery (the step template), Replication. Each screen has numbered notes and a list of where every current control now lives. **Draft 2 (same day), the big picture:** the operator's day mapped to screens (arrive, prepare, work, hand off, come back, something stops, finish); a sixth status word *Waiting on others* (grey clock) so a run parked on the SAN team does not look like a problem; new screens Home (all runs grouped by who waits on whom), the zoning hand-off, the failure template, the hand-over page; one green button per page, confirmations in the footer next to the button, Prepare counted apart from the run. **Draft 3 (same day), aligned with the HPE Design System:** the Design System's documentation source was read in full (foundation, templates, components, tokens, brand plugin) and written up in `docs/UX-GUIDELINES.md` (replaces the July scrape). Changes: the wizard frame as the DS template (grey bar: previous step by name, the flow, Cancel with a double confirmation; "Step X of Y", h1, one paragraph); footer actions right-aligned, default buttons then the one primary; no disabled gate buttons (active, a warning says what is missing on click; buttons that do not apply are not shown); the status line is the DS inline Notification; not-started is an empty state; Home, Run overview and Done use PageHeader with the parent link and page actions; headings are real headings; mode cards are selector cards; product named HPE Alletra Storage MP; times right-aligned, "Today, 19:31". Operator approved the app name and the Prepare order 2026-10-14. **Every step is now mocked (2026-10-14):** M11 Provision storage (compose → plan → create → verify paths; the conflict case; removal set), M12 Failover test (choose, running, passed, failed with the way back), M13 Verify configuration (match, mismatch with array status), M14 As-built (cover form, ready, items to check), M15 Custom step picker (grouped by stage, Discovery rule). Next: the operator's feedback on M11 to M15; then build into the app step by step, kit first (`frontend/mockups/kit.tsx` becomes `src/ui`), no behaviour changes. **Built into the app (2026-10-14, seven commits e2f743f5 to 705f5709, local):** kit and shell, app frame with Home and Run overview, Prepare, onboarding, Discovery / SAN zoning / Provision storage, Replication / Failover test, Verify / As-built / Done; `frontend/dist` rebuilt. Clicked through on the dev server with faked array output (every step, the failure and hand-off states, 1366 and 1080 wide); 702 tests pass. Two progress-model fixes found on the way: a finished report no longer leaves its step showing Running; a group this run created is no longer reported missing. Still to do: a live run on the jump box (the new screens have only seen faked output). **Live on labrat 2026-10-14 (`scripts/ui_live_lab.py` on jumpbox-test, read-only):** 24 PASS, 0 FAIL on D22U27, every page at 1366 and 1080 wide with real discovery (8 ports, 4 hosts), zoning (1 of 4 hosts zoned), a provisioning plan, verify (5 mismatches, 195 status items) and the as-built; the peer E18U31 login failed, so the Replication failure screen was seen too; no write sent. Fixed from it: Verify counted status lines as issues (10, the array lists 195 items); Replication's header said "nothing to create" when the read failed; failed reads now have a rail hint. Not yet seen live: a provisioning apply, replication configure and the failover test on the new screens (need the replacement peer). **2026-10-14:** the replacement peer at 10.64.154.190 answers ping but refuses 3paradm with both lab passwords (`rc_peer_ready.py`), so replication configure and the failover test on the new screens stay **built, pending live run** (checked on the dev server against the rc_pair captures only). Provisioning apply needs no peer: `ui_provision_lab.py` (jumpbox-test) presses the Provision storage page's own buttons on D22U27 (plan, Create refused without the tick, Create, Verify paths, Continue) and removes what it created; dry run on the Mac against the 2026-10-11 lab capture 17/1 (the one FAIL is the write-log check, which has nothing to read offline). Fixed from the dry run: Compose now folds once a plan exists and Path verification opens when its result arrives. **Live on labrat 2026-10-14, 18 PASS / 0 FAIL:** the page's own buttons created 4 objects on D22U27 (host set, 1 GiB volume, volume set, export to ESX1 as LUN 44), Create without the tick was refused with nothing sent, the 4 writes all named `zz_ui_*` objects, paths live (4 per LUN, both fabrics), Continue, Run overview and Finish rendered, and the run's removal set left nothing behind. Still owed live: replication configure and the failover test (peer). |
-
-## Test live (built, not yet run on hardware)
-
-| ID | Item | Owner | Status | Sheet | Blocked by |
-|---|---|---|---|---|---|
-| BL-36 | Linux multipath summary (`multipath -ll` → *N Alletra/3PAR device(s), M path(s) each*) | Sai | todo | B.4 | A Linux host with dm-multipath enabled and an Alletra volume exported to it; the only lab Linux host (10.54.159.49) has neither. Parser pinned to captured output only. |
-| BL-42 | Link check before replication: `checkrclink` latency, operator's option to continue ([SPEC-020](specs/SPEC-020-link-check.md)) | Sai | todo | Replication B.1 | **Built 2026-10-12 from field feedback, checked on the Mac only** (dev server, faked arrays: both links measured, the gate before a check, the over-the-limit gate, the tick-box, the page). Server on B, client on A, read until the latency is printed, both stopped; on RCIP *Configure replication* needs the check, and a latency over HPE's limit needs *Continue anyway*; as-built paragraph; `checkrclink` on an allowlist of its own (ADR 0001 addendum), never from the console. Sheet RTT now optional for sync. **Blocked 2026-10-12:** the first live run found the peer AlletraMP_E18U31 (10.64.154.190) unreachable over SSH; the lab reports it degraded and is replacing it. Until the new peer: `rc_link_solo_lab.py` runs the real `checkrclink` sequence on D22U27 alone (server on its second RCIP port, client on its first) to pin the output format. **Done 2026-10-12, 8/0:** latency 0.044 ms printed in 4 s, the client stopped there (not the 600 s test), stops answer "Stopping Client/Server" with or without anything running; the real output has an MTU phase after the latency (fixtures `D22U27/checkrclink_*.txt`). Still owed on a pair: the gate and the page end to end. Then `rc_link_lab.py` and `rc_preset_lab.py` on the new pair (update `S_HOST` and the fixtures' names first). **2026-10-14:** the replacement peer (10.64.154.190) pings but refuses 3paradm with both lab passwords; waiting on the lab for its credential. `rc_peer_ready.py` (jumpbox-test, read-only) says whether it is usable once it can log in. |
-
-## Build (not started or partial)
-
-| ID | Item | Area | Status | Sheet | Notes |
-|---|---|---|---|---|---|
-| BL-41 | Replication links and targets set up by the tool (ADR 0015) | 5 | todo | Replication B.1 | Planned for v0.19, over the write-scoped SSH client. Needs a pair of arrays that can be partnered from scratch; the lab pair is already partnered. Split out of BL-20 when it closed. **2026-10-12: E18U31 is degraded and the lab is replacing it — the replacement array, before anyone partners it to D22U27 by hand, is the from-scratch pair this item needs.** Ask the lab team to leave the new array unpartnered and to cable/address its RCIP ports only. |
-| BL-21 | Snapshots + schedules | 5 | todo | — | DSCC protection policies, or `createsv` / `createsched`. |
-| BL-22 | HLD document | 9 | todo | — | |
-| BL-23 | LLD document | 9 | todo | — | |
-| BL-24 | Health / performance reporting (DSCC, Data Ops Manager, InfoSight) | 8 | todo | — | |
-| BL-25 | VLAN configuration (read-only today) | 3 | todo | — | |
-| BL-26 | Peer-port configuration (read-only today) | 3 | todo | — | |
-| BL-27 | Migration: source-array discovery, peer setup and zoning | 2, 3 | todo | — | |
-| BL-28 | Alletra MP Unified File | 6 | todo | — | Research first. |
-| BL-29 | GreenLake for File (GL4F) | 7 | todo | — | Research first; gated on file API entitlements. |
-| BL-30 | Tool approved as tenets | — | doing | B.11 | Management. Waits on the published canned demos (BL-37). |
+| ID | Issue | Item |
+|---|---|---|
+| BL-37 | [#1](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/1) | Submit and publish the two canned demos (needed for tenet approval, BL-30) |
+| BL-06 | [#2](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/2) | Status workbook refresh |
+| BL-43 | [#3](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/3) | UI redesign: a calmer screen per step |
+| BL-36 | [#4](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/4) | Linux multipath summary (`multipath -ll` → *N Alletra/3PAR device(s), M path(s) each*) |
+| BL-42 | [#5](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/5) | Link check before replication: `checkrclink` latency, operator's option to continue ([SPEC-020](specs/SPEC-020-link-check.md)) |
+| BL-41 | [#6](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/6) | Replication links and targets set up by the tool (ADR 0015) |
+| BL-21 | [#7](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/7) | Snapshots + schedules |
+| BL-22 | [#8](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/8) | HLD document |
+| BL-23 | [#9](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/9) | LLD document |
+| BL-24 | [#10](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/10) | Health / performance reporting (DSCC, Data Ops Manager, InfoSight) |
+| BL-25 | [#11](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/11) | VLAN configuration (read-only today) |
+| BL-26 | [#12](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/12) | Peer-port configuration (read-only today) |
+| BL-27 | [#13](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/13) | Migration: source-array discovery, peer setup and zoning |
+| BL-28 | [#14](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/14) | Alletra MP Unified File |
+| BL-29 | [#15](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/15) | GreenLake for File (GL4F) |
+| BL-30 | [#16](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/16) | Tool approved as tenets |
 
 ## Closed
 

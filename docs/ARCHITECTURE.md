@@ -1,5 +1,13 @@
 # Architecture — current state (HLD + LLD baseline)
 
+> **Snapshot from v0.12.0 (2026-09).** The layers, flows and seams below still hold. Added since,
+> on the same pattern (an application package per context, an adapter package per outside system):
+> `application/replication/` (read, plan, apply, verify, link check and failover test for Remote
+> Copy, v0.17); `adapters/hosts/` (Linux over SSH, Windows over WinRM, SPEC-014);
+> `adapters/command_log.py` and `application/runs/console.py` (every device command recorded for the
+> console, SPEC-019); the Remote Copy write-scoped SSH client (ADR 0015); and the redesigned UI shell
+> in `frontend/src/ui/` (BL-43). The current folder map is in `AGENTS.md` at the repository root.
+
 > **Purpose.** A snapshot of the system *as built today* (v0.12.0), written as the baseline for a
 > planned HLD/LLD-driven refactor. It records what exists, how the layers fit, the runtime flows, and —
 > most usefully for a refactor — the **seams and pain points**. It is descriptive, not aspirational:
