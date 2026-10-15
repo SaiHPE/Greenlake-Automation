@@ -29,7 +29,10 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   git status --short --untracked-files=no | head -10 >&2
   exit 1
 fi
-git subtree -h 2>&1 | grep -q "git subtree" || { echo "git subtree is missing (Apple git lacks it; use Homebrew git)." >&2; exit 1; }
+case "$(git subtree -h 2>&1 || true)" in
+  *"git subtree"*) ;;
+  *) echo "git subtree is missing (Apple git lacks it; use Homebrew git)." >&2; exit 1 ;;
+esac
 
 echo "== 1. main from origin"
 git pull -q --ff-only origin main
