@@ -21,7 +21,7 @@ class GreenLakeAsyncOperationError(RuntimeError):
 
 
 def default_rate_buckets() -> dict[str, TokenBucket]:
-    """Named rate budgets from AUTOMATION_PLAN section 2 / 7.
+    """Named rate budgets from archive/2026-06-planning/AUTOMATION_PLAN.md section 2 / 7.
 
     request() falls back to the ``default`` bucket for any unlisted name, so adding a
     new call site never crashes; it just shares the default budget until tuned here.

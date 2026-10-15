@@ -18,7 +18,7 @@ The ones this research rests on:
 | **Getting started** / **Troubleshooting** data replication (UI + CLI), **Recovering from disaster using Remote Copy** | RCGSUI-ED5, RCTSUI-ED4, RCTS-ED5, RCRE-ED6 | planning limits, verification, failure states, DR procedures |
 | **High Level Design — HPE Alletra MP Async Replication for \<Customer\>** v1.0, 2026-03-15 (DOC-1DOC-029) | — | **a real engagement**: RCIP async periodic, ports 0:4:3 + 1:4:3, DC → DRC, one RC group, failover/switchover test and failback as deliverables, alerts as operations |
 | Installing and configuring the field-/factory-integrated system | IFIC-ED15 / IFAC-ED12 | RCIP ports are slot-4 ports 3 and 4 (10/25 GbE), dedicated |
-| Block Storage public API (`docs and plans/greenlake_api_docs/…/block-storage/`) | v1alpha1 | `protection-policies` CRUD on application sets, `replication-partners` GET, `remote-protection/actions` |
+| Block Storage public API (`reference/greenlake_api_docs/…/block-storage/`) | v1alpha1 | `protection-policies` CRUD on application sets, `replication-partners` GET, `remote-protection/actions` |
 
 The GreenLake API mirror's *Initialization worksheet* (IWRKS-ED4) has **no** RCIP fields — HPE's own
 worksheet does not plan replication; that is a gap our sheet fills.

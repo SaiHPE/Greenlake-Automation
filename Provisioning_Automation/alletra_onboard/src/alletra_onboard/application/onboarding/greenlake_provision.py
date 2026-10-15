@@ -1,6 +1,6 @@
 """Component A — GreenLake REST provisioning orchestrator.
 
-Runs the per-array pipeline from AUTOMATION_PLAN section 3:
+Runs the per-array pipeline from archive/2026-06-planning/AUTOMATION_PLAN.md section 3:
 
     discover -> add subscription -> register device -> assign application
              -> apply subscription -> verify
