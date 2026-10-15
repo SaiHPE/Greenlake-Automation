@@ -9,8 +9,9 @@
 # (gh auth login --hostname github.com; gh auth setup-git --hostname github.com).
 #
 # It builds one commit whose root is Provisioning_Automation/alletra_onboard (the layout the jump
-# box expects). It never checks out, resets or commits anything locally, so it cannot touch your
-# branch. Only committed work goes: commit first, including frontend/dist if the UI changed.
+# box expects), with frontend/dist freshly built from the committed frontend/src (developers never
+# commit dist; needs `npm ci` in frontend/ once). It never checks out, resets or commits anything
+# locally, so it cannot touch your branch. Only committed work goes: commit first.
 set -euo pipefail
 
 APP=Provisioning_Automation/alletra_onboard
@@ -36,7 +37,26 @@ fi
 head=$(git log -1 --format='%h %s')
 branch=$(git rev-parse --abbrev-ref HEAD)
 who=$(git config user.name || echo unknown)
-commit=$(git commit-tree "$(git rev-parse "HEAD:$APP")" -m "jumpbox-test: $branch $head (pushed by $who)")
+
+stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT
+if [ ! -d "$APP/frontend/node_modules" ]; then
+  echo "Run 'npm ci' in $APP/frontend once: this script builds frontend/dist for the jump box." >&2
+  exit 1
+fi
+echo "Building frontend/dist from frontend/src ..."
+(cd "$APP/frontend" && npx --no-install vite build --outDir "$stage/frontend/dist" --emptyOutDir --logLevel error)
+
+# A throwaway index: HEAD's app folder with its frontend/dist swapped for the fresh build.
+gd=$(git rev-parse --absolute-git-dir)
+export GIT_INDEX_FILE="$stage/index"
+git --git-dir="$gd" --work-tree="$stage" -C "$stage" read-tree "HEAD:$APP"
+git --git-dir="$gd" --work-tree="$stage" -C "$stage" rm -r -q --cached --ignore-unmatch frontend/dist
+git --git-dir="$gd" --work-tree="$stage" -C "$stage" add -f frontend/dist
+tree=$(git --git-dir="$gd" write-tree)
+unset GIT_INDEX_FILE
+
+commit=$(git commit-tree "$tree" -m "jumpbox-test: $branch $head (pushed by $who)")
 git push -q -f "$LAB_GIT" "$commit:refs/heads/jumpbox-test"
 
 echo "jumpbox-test is now $branch @ ${head%% *} ($LAB_GIT)."

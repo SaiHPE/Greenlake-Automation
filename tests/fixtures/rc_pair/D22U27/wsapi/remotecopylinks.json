@@ -1,0 +1,99 @@
+{
+  "links": [
+    {
+      "href": "https://10.64.122.99/api/v1/remotecopylinks",
+      "rel": "self"
+    }
+  ],
+  "members": [
+    {
+      "IPC": "RCs023",
+      "address": "10.54.154.192",
+      "id": 23,
+      "links": [
+        {
+          "href": "https://10.64.122.99/api/v1/remotecopylinks/AlletraMP_E18U31_0_4_3",
+          "rel": "self"
+        }
+      ],
+      "name": "AlletraMP_E18U31_0_4_3",
+      "portPos": {
+        "cardPort": 3,
+        "node": 0,
+        "slot": 4
+      },
+      "state": 1,
+      "status": 3,
+      "targetName": "AlletraMP_E18U31",
+      "throughputKByteSec": 0,
+      "type": 1
+    },
+    {
+      "IPC": "RCs120",
+      "address": "10.54.154.193",
+      "id": 20,
+      "links": [
+        {
+          "href": "https://10.64.122.99/api/v1/remotecopylinks/AlletraMP_E18U31_1_4_3",
+          "rel": "self"
+        }
+      ],
+      "name": "AlletraMP_E18U31_1_4_3",
+      "portPos": {
+        "cardPort": 3,
+        "node": 1,
+        "slot": 4
+      },
+      "state": 1,
+      "status": 3,
+      "targetName": "AlletraMP_E18U31",
+      "throughputKByteSec": 0,
+      "type": 1
+    },
+    {
+      "IPC": "RCr024",
+      "address": "10.54.122.92",
+      "id": 24,
+      "links": [
+        {
+          "href": "https://10.64.122.99/api/v1/remotecopylinks/rcv_ip_043",
+          "rel": "self"
+        }
+      ],
+      "name": "rcv_ip_043",
+      "portPos": {
+        "cardPort": 3,
+        "node": 0,
+        "slot": 4
+      },
+      "state": 1,
+      "status": 3,
+      "targetName": "receive",
+      "throughputKByteSec": 0,
+      "type": 1
+    },
+    {
+      "IPC": "RCr122",
+      "address": "10.54.122.93",
+      "id": 22,
+      "links": [
+        {
+          "href": "https://10.64.122.99/api/v1/remotecopylinks/rcv_ip_143",
+          "rel": "self"
+        }
+      ],
+      "name": "rcv_ip_143",
+      "portPos": {
+        "cardPort": 3,
+        "node": 1,
+        "slot": 4
+      },
+      "state": 1,
+      "status": 3,
+      "targetName": "receive",
+      "throughputKByteSec": 0,
+      "type": 1
+    }
+  ],
+  "total": 4
+}

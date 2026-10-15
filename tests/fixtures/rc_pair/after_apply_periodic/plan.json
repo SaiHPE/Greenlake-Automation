@@ -1,0 +1,198 @@
+{
+  "actions": [
+    {
+      "kind": "test_volume",
+      "name": "zz_rc_test_v01",
+      "where": "A",
+      "state": "create",
+      "reason": "1 GiB tpvv for the failover test",
+      "calls": [
+        {
+          "where": "A",
+          "wsapi": "POST /volumes {name: zz_rc_test_v01, cpg: SSD_r6, sizeMiB: 1024, tpvv: true}",
+          "cli": "createvv -tpvv SSD_r6 zz_rc_test_v01 1g",
+          "seq": 1
+        }
+      ],
+      "detail": {
+        "cpg": "SSD_r6",
+        "size_gib": 1
+      }
+    },
+    {
+      "kind": "test_vvset",
+      "name": "zz_rc_test",
+      "where": "A",
+      "state": "create",
+      "reason": "holds zz_rc_test_v01",
+      "calls": [
+        {
+          "where": "A",
+          "wsapi": "POST /volumesets {name: zz_rc_test, setmembers: [zz_rc_test_v01]}",
+          "cli": "createvvset zz_rc_test zz_rc_test_v01",
+          "seq": 2
+        }
+      ],
+      "detail": {
+        "members": [
+          "zz_rc_test_v01"
+        ]
+      }
+    },
+    {
+      "kind": "group",
+      "name": "zz_rc_vvs_rcg",
+      "where": "A",
+      "state": "create",
+      "reason": "async, RPO 10 min (period 5 min) → AlletraMP_E18U31, 1 volume(s) from set 'zz_rc_vvs', secondaries on SSD_r6",
+      "calls": [
+        {
+          "where": "A",
+          "wsapi": "POST /remotecopygroups {name: zz_rc_vvs_rcg, targets: [{targetName: AlletraMP_E18U31, mode: 2, userCPG: SSD_r6}], localUserCPG: SSD_r6}",
+          "cli": "creatercopygroup -usr_cpg SSD_r6 AlletraMP_E18U31:SSD_r6 zz_rc_vvs_rcg AlletraMP_E18U31:periodic",
+          "seq": 3
+        },
+        {
+          "where": "A",
+          "wsapi": "PUT /remotecopygroups/zz_rc_vvs_rcg {targets: [{targetName: AlletraMP_E18U31, syncPeriod: 300, policies: {autoRecover: true, autoSynchronize: true}}]}",
+          "cli": "setrcopygroup period 5m AlletraMP_E18U31 zz_rc_vvs_rcg ; setrcopygroup pol auto_recover zz_rc_vvs_rcg ; setrcopygroup pol auto_synchronize zz_rc_vvs_rcg",
+          "seq": 4
+        },
+        {
+          "where": "A",
+          "wsapi": "PUT /remotecopygroups/zz_rc_vvs_rcg {action: admit, volumeName: zz_rc_vol01, targets: [{targetName: AlletraMP_E18U31, secVolumeName: zz_rc_vol01}], volumeAutoCreation: true}",
+          "cli": "admitrcopyvv -createvv zz_rc_vol01 zz_rc_vvs_rcg AlletraMP_E18U31:zz_rc_vol01",
+          "seq": 5
+        },
+        {
+          "where": "A",
+          "wsapi": "PUT /remotecopygroups/zz_rc_vvs_rcg {action: start}",
+          "cli": "startrcopygroup zz_rc_vvs_rcg",
+          "seq": 7
+        }
+      ],
+      "detail": {
+        "vvset": "zz_rc_vvs",
+        "mode": "async",
+        "volumes": [
+          "zz_rc_vol01"
+        ],
+        "target": "AlletraMP_E18U31",
+        "peer_cpg": "SSD_r6",
+        "local_cpg": "SSD_r6",
+        "period_seconds": 300,
+        "auto_recover": true,
+        "auto_synchronize": true,
+        "peer_vvset": "zz_rc_vvs_rc",
+        "start_where": "A",
+        "is_test": false
+      }
+    },
+    {
+      "kind": "peer_vvset",
+      "name": "zz_rc_vvs_rc",
+      "where": "B",
+      "state": "create",
+      "reason": "the secondary volumes on AlletraMP_E18U31, for the DR site's exports",
+      "calls": [
+        {
+          "where": "B",
+          "wsapi": "POST /volumesets {name: zz_rc_vvs_rc, setmembers: [zz_rc_vol01]}",
+          "cli": "createvvset zz_rc_vvs_rc zz_rc_vol01",
+          "seq": 6
+        }
+      ],
+      "detail": {
+        "members": [
+          "zz_rc_vol01"
+        ],
+        "group": "zz_rc_vvs_rcg"
+      }
+    },
+    {
+      "kind": "group",
+      "name": "zz_rc_test_rcg",
+      "where": "A",
+      "state": "create",
+      "reason": "async, RPO 10 min (period 5 min) → AlletraMP_E18U31, 1 volume(s) from set 'zz_rc_test', secondaries on SSD_r6",
+      "calls": [
+        {
+          "where": "A",
+          "wsapi": "POST /remotecopygroups {name: zz_rc_test_rcg, targets: [{targetName: AlletraMP_E18U31, mode: 2, userCPG: SSD_r6}], localUserCPG: SSD_r6}",
+          "cli": "creatercopygroup -usr_cpg SSD_r6 AlletraMP_E18U31:SSD_r6 zz_rc_test_rcg AlletraMP_E18U31:periodic",
+          "seq": 8
+        },
+        {
+          "where": "A",
+          "wsapi": "PUT /remotecopygroups/zz_rc_test_rcg {targets: [{targetName: AlletraMP_E18U31, syncPeriod: 300, policies: {autoRecover: true, autoSynchronize: true}}]}",
+          "cli": "setrcopygroup period 5m AlletraMP_E18U31 zz_rc_test_rcg ; setrcopygroup pol auto_recover zz_rc_test_rcg ; setrcopygroup pol auto_synchronize zz_rc_test_rcg",
+          "seq": 9
+        },
+        {
+          "where": "A",
+          "wsapi": "PUT /remotecopygroups/zz_rc_test_rcg {action: admit, volumeName: zz_rc_test_v01, targets: [{targetName: AlletraMP_E18U31, secVolumeName: zz_rc_test_v01}], volumeAutoCreation: true}",
+          "cli": "admitrcopyvv -createvv zz_rc_test_v01 zz_rc_test_rcg AlletraMP_E18U31:zz_rc_test_v01",
+          "seq": 10
+        },
+        {
+          "where": "A",
+          "wsapi": "PUT /remotecopygroups/zz_rc_test_rcg {action: start}",
+          "cli": "startrcopygroup zz_rc_test_rcg",
+          "seq": 12
+        }
+      ],
+      "detail": {
+        "vvset": "zz_rc_test",
+        "mode": "async",
+        "volumes": [
+          "zz_rc_test_v01"
+        ],
+        "target": "AlletraMP_E18U31",
+        "peer_cpg": "SSD_r6",
+        "local_cpg": "SSD_r6",
+        "period_seconds": 300,
+        "auto_recover": true,
+        "auto_synchronize": true,
+        "peer_vvset": "zz_rc_test_rc",
+        "start_where": "A",
+        "is_test": true
+      }
+    },
+    {
+      "kind": "peer_vvset",
+      "name": "zz_rc_test_rc",
+      "where": "B",
+      "state": "create",
+      "reason": "the secondary volumes on AlletraMP_E18U31, for the DR site's exports",
+      "calls": [
+        {
+          "where": "B",
+          "wsapi": "POST /volumesets {name: zz_rc_test_rc, setmembers: [zz_rc_test_v01]}",
+          "cli": "createvvset zz_rc_test_rc zz_rc_test_v01",
+          "seq": 11
+        }
+      ],
+      "detail": {
+        "members": [
+          "zz_rc_test_v01"
+        ],
+        "group": "zz_rc_test_rcg"
+      }
+    }
+  ],
+  "blockers": [],
+  "notes": [
+    "6 Remote Copy group(s) already on AlletraMP_D22U27 are not part of this plan and will not be touched: 300gb, APP_Test, Intern_Automation, Intern_Automation2, Test-RCG, Test-RCG2.",
+    "Partnership: AlletraMP_D22U27 → AlletraMP_E18U31 via target 'AlletraMP_E18U31' (2/2 links Up), AlletraMP_E18U31 → AlletraMP_D22U27 via 'AlletraMP_E18U31' (2/2 Up), policy mirror_config, carries 6 sync group(s).",
+    "On AlletraMP_E18U31 each new group will be named '<group>.r188150'."
+  ],
+  "existing_groups": [
+    "300gb",
+    "APP_Test",
+    "Intern_Automation",
+    "Intern_Automation2",
+    "Test-RCG",
+    "Test-RCG2"
+  ],
+  "error": null
+}
