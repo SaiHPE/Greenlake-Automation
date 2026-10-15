@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Refuses a commit that changes frontend/dist or adds a token or private key.
+# Installed once per clone with: git config core.hooksPath .githooks
+# frontend/dist is rebuilt by the owner after each merge (scripts/after_merge.sh sets ALLOW_DIST=1).
+set -euo pipefail
+
+DIST=Provisioning_Automation/alletra_onboard/frontend/dist/
+if [ "${ALLOW_DIST:-}" != "1" ] && git diff --cached --name-only | grep -q "^$DIST"; then
+  echo "pre-commit: frontend/dist is built after merge, not committed on a branch." >&2
+  echo "  Unstage it: git restore --staged $DIST && git checkout -- $DIST" >&2
+  exit 1
+fi
+
+if git diff --cached -U0 --no-color | grep -E '^\+' | grep -v -E '^\+\+\+ ' |
+   grep -q -E 'ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|gh[osu]_[A-Za-z0-9]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----'; then
+  echo "pre-commit: the staged changes contain what looks like a GitHub token or a private key." >&2
+  exit 1
+fi

@@ -67,13 +67,14 @@ need no Node.
 gh auth login --hostname github.hpe.com        # browser login with your HPE account
 gh auth setup-git --hostname github.hpe.com    # plain git uses the same login
 git clone https://github.hpe.com/g-sai-roopesh/greenlake-automation.git
-cd greenlake-automation/Provisioning_Automation/alletra_onboard
+cd greenlake-automation
+git config core.hooksPath .githooks                # refuses commits that touch frontend/dist or carry a token
+cd Provisioning_Automation/alletra_onboard
 python -m venv .venv && .venv/bin/pip install -e .[dev]    # Windows: .venv\Scripts\pip
 cd frontend && npm ci
 ```
-The repo was written on Windows and has no `.gitattributes`, so on macOS `git status` lists
-thousands of files that differ only in line endings. Review with `git diff -w` and never commit
-those files.
+Line endings are fixed by `.gitattributes`: every clone, Mac or Windows, gets the same bytes and a
+clean `git status`.
 
 **Lab runs** (once per developer who runs on the lab): a github.com account added as a
 collaborator on `SaiHPE/Greenlake-Automation` (ask the owner), then on the laptop:
@@ -94,10 +95,13 @@ Add-Content .env "LAB_DEFAULT_PW=<the lab vCenter and switch password>"
 ### Day to day: developers
 
 1. `git switch main && git pull`, then `git switch -c feat/bl-NN-short-name`.
-2. Change the code. Before pushing: `pytest -q` and `ruff check src tests` (from the app folder).
-3. UI changes: edit `frontend/src`. Run `npm run build` and commit `frontend/dist` only in the
-   branch's last commit before the merge, or before a lab run. If `frontend/dist` conflicts, take
-   either side and run `npm run build` again.
+2. Change the code. Before pushing, from the app folder: `.venv/bin/python scripts/check.py`
+   (Windows: `.venv\Scripts\python scripts\check.py`). It runs the tests, ruff, the TypeScript
+   check and the branch rules below, and ends with a block to paste into the pull request. There is
+   no CI on github.hpe.com, so this is the check the reviewer relies on.
+3. UI changes: edit `frontend/src` only. **Never commit `frontend/dist`**: the owner rebuilds it
+   after each merge, and `scripts/push_jumpbox_test.sh` builds it for lab runs. The hook and
+   `check.py` both refuse a branch that changes it.
 4. `git push -u origin feat/bl-NN-short-name` and open a pull request into `main` on github.hpe.com.
    Close the tracker item in the commit that finishes it (`docs/TRACKER.md`).
 
@@ -429,9 +433,9 @@ In short (as of **v0.16.0**, 2026-09-19 — the first non-pre-release):
 ## Development (workstation only)
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q          # backend tests
-.\.venv\Scripts\python.exe -m ruff check src tests
-cd frontend; npm install; npm run build          # rebuild the UI (commit frontend/dist)
+.\.venv\Scripts\python.exe scripts\check.py      # tests, ruff, TypeScript and branch rules in one go
+.\.venv\Scripts\python.exe -m pytest -q          # backend tests only
+cd frontend; npm ci; npm run build               # build the UI locally (never commit frontend/dist)
 ```
 `onboard api` binds `127.0.0.1:8765`; the Vite dev server (`npm run dev`) runs on `:5173` and
 the API allows it via CORS.
