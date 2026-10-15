@@ -218,7 +218,7 @@ described in the app folder's [README](Provisioning_Automation/alletra_onboard/R
 | Running, releasing, the jump boxes | [app README](Provisioning_Automation/alletra_onboard/README.md) |
 | What is built and proven | `docs/SCOPE.md` |
 | Why a decision was made | `docs/adr/`, `docs/specs/` |
-| How the code fits together | `docs/ARCHITECTURE.md` |
+| How the code fits together | `docs/BACKEND-WALKTHROUGH.html` (open in a browser; the tour), then `docs/ARCHITECTURE.md` |
 | Evidence from past lab runs | `docs/validation/` |
 | GreenLake API reference, offline | `reference/greenlake_api_docs/greenlake/` (repo root) |
 | Old plans and tools | `archive/` (read only) |
