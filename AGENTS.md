@@ -1,7 +1,8 @@
 # AGENTS.md
 
 Instructions for people and coding agents (GitHub Copilot, Codex, Claude Code, Cursor) working in
-this repository. Read this first. Area rules live in `.github/instructions/`.
+this repository. Read this first. Area rules live in `.github/instructions/`; the step-by-step guide
+for new people is `CONTRIBUTING.md`.
 
 ## What this is
 
