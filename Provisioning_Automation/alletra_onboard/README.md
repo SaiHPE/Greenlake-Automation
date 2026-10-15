@@ -132,18 +132,24 @@ The lab scripts are in `lab/` (never in the release zip). Each one says
 at the top what it reads or changes, and the ones that create objects use a fixed `zz_*` prefix and
 remove everything with that prefix at the end. Read a script before running it against an array.
 
-### After a merge to main: the owner
+### Reviewing and merging: the owner
 
-```bash
-git switch main && git pull
-git subtree split -q --prefix=Provisioning_Automation/alletra_onboard -b jbp-new
-git branch -f jumpbox-package jbp-new && git branch -D -q jbp-new
-git push -f origin jumpbox-package
-cd Provisioning_Automation/alletra_onboard && pwsh scripts/publish_release.ps1   # refresh the `latest` zip
-```
-`git subtree` ships with Git for Windows; on macOS Apple's git lacks it (use Homebrew git, or link
-`git-subtree` from git's `contrib/subtree`). The lab jump boxes get the new code the same way as a
-test run: `Provisioning_Automation/alletra_onboard/scripts/push_jumpbox_test.sh` from `main`.
+`main` is protected on github.hpe.com (ruleset *main: pull requests only*): no force-push, no
+deletion, and every change arrives by pull request with the code owner's approval
+(`.github/CODEOWNERS`). Only squash merge is allowed, so each pull request lands as one commit
+titled after the pull request, and its branch is deleted. The owner (repository admin) can bypass,
+which is how `after_merge.sh` pushes the rebuilt `frontend/dist`.
+
+1. Read the pull request: the template's check block must say PASS, and the live-run box must be
+   honest. To try it locally: `gh pr checkout <number>`, then `scripts/check.py`.
+2. Approve, then *Squash and merge*. Edit the commit title if it does not read `BL-NN: …`.
+3. On your laptop, once after one or more merges:
+   ```bash
+   Provisioning_Automation/alletra_onboard/scripts/after_merge.sh          # --lab also updates jumpbox-test
+   ```
+   It updates `main`, rebuilds `frontend/dist` and pushes it if it changed, refreshes
+   `jumpbox-package`, and refreshes the `latest` release zip (`--no-release` skips that). It needs
+   `git subtree` (Git for Windows has it; on macOS use Homebrew git), Node 20, `gh` and PowerShell 7.
 
 ---
 
@@ -210,8 +216,8 @@ then they never run.
 **A tagged release, step by step:**
 
 1. Bump the version in `pyproject.toml`, `src/alletra_onboard/__init__.py` and
-   `frontend/package.json`; rebuild `frontend/dist`; merge to `main`.
-2. On the owner's laptop: publish `jumpbox-package` (*After a merge to main*, above), then tag the
+   `frontend/package.json` in a pull request, and merge it.
+2. On the owner's laptop: `scripts/after_merge.sh` (*Reviewing and merging*, above), then tag the
    same `main` commit and push the tag:
    ```bash
    git tag vX.Y.Z && git push origin vX.Y.Z      # a tag with '-' (v0.18.0-rc.1) is a pre-release
