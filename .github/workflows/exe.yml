@@ -5,10 +5,9 @@ name: Build Windows EXE
 # (slim, offline, init-only accelerator), or run it manually from the Actions tab
 # (workflow_dispatch) to get the zips as build artifacts.
 #
-# RUNNER. On github.com this runs on GitHub's hosted `windows-latest` — the only place the .exe is
-# built automatically. On github.hpe.com (GHES, no hosted runners, Actions disabled by policy as of
-# 2026-09-12) it targets a self-hosted Windows runner that does not exist yet; there the same build
-# + publish runs by hand on any Windows box:
+# RUNNER. DORMANT since 2026-10-15: the github.com mirror, where this ran on hosted `windows-latest`,
+# is retired. On github.hpe.com (GHES, Actions disabled by policy for the user-owned repo) the same
+# build + smoke tests + publish run by hand on the labrat jump box (README *Releasing*):
 #     .\scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe
 # The .exe is a Windows artifact; it is never built on macOS or Linux.
 on:

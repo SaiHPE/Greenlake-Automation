@@ -5,13 +5,12 @@ name: Release (latest from main)
 # the app + this workflow so doc-only changes elsewhere don't trigger builds; workflow_dispatch lets
 # you run it by hand.
 #
-# RUNNER. The repo is pushed to two hosts. On github.com (SaiHPE/Greenlake-Automation) this runs on
-# GitHub's hosted `windows-latest`. On GitHub Enterprise Server (github.hpe.com) there are no hosted
-# runners and, as of 2026-09-12, Actions is disabled by enterprise policy for the user-owned repo
-# (the permissions PUT returns 204 and `enabled` stays false), so there the job targets a SELF-HOSTED
-# Windows runner that does not exist yet and the same publish step runs by hand:
+# RUNNER. DORMANT since 2026-10-15: the github.com mirror (SaiHPE/Greenlake-Automation), where this
+# ran on hosted `windows-latest`, is retired. On GitHub Enterprise Server (github.hpe.com) Actions is
+# disabled by enterprise policy for the user-owned repo (the permissions PUT returns 204 and
+# `enabled` stays false), so the same publish step runs by hand (README *Releasing*):
 #     .\scripts\publish_release.ps1
-# The runner is chosen from github.server_url so one file serves both hosts.
+# Kept for the day the repo moves into an organisation; the runner is chosen from github.server_url.
 on:
   push:
     branches: [main]
