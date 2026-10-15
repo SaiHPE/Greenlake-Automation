@@ -29,7 +29,7 @@ def apply_subscription_payload(subscription_id: str) -> dict[str, Any]:
 
 
 class DevicesClient:
-    def __init__(self, http: "GreenLakeHttpClient") -> None:
+    def __init__(self, http: GreenLakeHttpClient) -> None:
         self.http = http
 
     async def add_storage_device(

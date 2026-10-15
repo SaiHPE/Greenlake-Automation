@@ -11,7 +11,7 @@ def add_subscription_payload(subscription_key: str) -> dict:
 
 
 class SubscriptionsClient:
-    def __init__(self, http: "GreenLakeHttpClient") -> None:
+    def __init__(self, http: GreenLakeHttpClient) -> None:
         self.http = http
 
     async def add_subscription(self, subscription_key: str) -> str | None:

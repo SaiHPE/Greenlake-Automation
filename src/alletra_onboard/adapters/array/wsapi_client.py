@@ -41,9 +41,9 @@ except Exception as _exc:  # noqa: BLE001 - import may pull eventlet; keep impor
     # diagnose-by-rebuild loop. Served via /app/profile capabilities and appended to the error.
     SDK_IMPORT_ERROR = f"{type(_exc).__name__}: {_exc}"
 
-from alletra_onboard.domain.shared import normalize_wwpn
 from alletra_onboard.domain.discovery import ArrayPort
 from alletra_onboard.domain.provisioning import ArrayHostRecord, ArrayVolumeRecord, VlunTemplate
+from alletra_onboard.domain.shared import normalize_wwpn
 
 # WSAPI host-persona ids, resolved by NAME. The values are hpe3parclient's HOST_PERSONA_* constants —
 # the array's WSAPI persona enum: VMware=8, WindowsServer=11, Generic-ALUA=2. Verified 2026-07-22 against
@@ -184,7 +184,7 @@ def _record_calls(client, host: str, api_url: str, password: str) -> None:
     def timed(url, method, **kwargs):
         if not command_log.active():
             return inner(url, method, **kwargs)
-        path = url[len(api_url):] if url.startswith(api_url) else url
+        path = url.removeprefix(api_url)
         login = path.startswith("/credentials")
         if login and path != "/credentials":
             path = "/credentials/********"   # logout carries the session key in the URL
@@ -232,7 +232,7 @@ class WsapiClient:
             client = HPE3ParClient(self.api_url, secure=False, timeout=self.timeout, suppress_ssl_warnings=True)
             _record_calls(client, self.host, self.api_url, self.password)
             client.login(self.username, self.password)  # the readiness gate
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise self._translate(exc, where="login") from exc
         self._client = client
 
@@ -244,7 +244,7 @@ class WsapiClient:
                 pass
             self._client = None
 
-    def __enter__(self) -> "WsapiClient":
+    def __enter__(self) -> WsapiClient:
         self.connect()
         return self
 
@@ -390,7 +390,7 @@ class WsapiClient:
             try:
                 self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": persona_id})
                 return "created"
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not self._is_conflict(exc):
                     raise self._translate(exc, where=f"createHost {name}") from exc
                 # EXISTENT_HOST race: someone created the name since our read — fall through and add.
@@ -405,7 +405,7 @@ class WsapiClient:
                 {"pathOperation": getattr(HPE3ParClient, "HOST_EDIT_ADD", 1), "FCWWNs": missing},
             )
             return "updated"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # No conflict-swallow here: `missing` excludes WWNs already on this host, so a 409 now
             # means a real race or another owner — masking it as 'exists' is how the live bug hid.
             raise self._translate(exc, where=f"modifyHost {name} (add {len(missing)} WWN)") from exc
@@ -429,7 +429,7 @@ class WsapiClient:
             try:
                 self._require().createHostSet(name, setmembers=list(members))
                 return "created"
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not self._is_conflict(exc):
                     raise self._translate(exc, where=f"createHostSet {name}") from exc
                 existing = self._existing_set_members(self._require().getHostSet, name) or []
@@ -441,7 +441,7 @@ class WsapiClient:
                 name, action=getattr(HPE3ParClient, "SET_MEM_ADD", 1), setmembers=missing,
             )
             return "updated"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
             raise self._translate(exc, where=f"modifyHostSet {name} (add {len(missing)})") from exc
@@ -457,7 +457,7 @@ class WsapiClient:
         try:
             self._require().createVolume(name, cpg, size_mib, optional=optional)
             return "created"
-        except Exception as exc:  # noqa: BLE001 - EXISTENT_SV on a re-run
+        except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
             raise self._translate(exc, where=f"createVolume {name}") from exc
@@ -469,7 +469,7 @@ class WsapiClient:
             try:
                 self._require().createVolumeSet(name, setmembers=list(members))
                 return "created"
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 if not self._is_conflict(exc):
                     raise self._translate(exc, where=f"createVolumeSet {name}") from exc
                 existing = self._existing_set_members(self._require().getVolumeSet, name) or []
@@ -481,7 +481,7 @@ class WsapiClient:
                 name, action=getattr(HPE3ParClient, "SET_MEM_ADD", 1), setmembers=missing,
             )
             return "updated"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
             raise self._translate(exc, where=f"modifyVolumeSet {name} (add {len(missing)})") from exc
@@ -496,7 +496,7 @@ class WsapiClient:
             else:
                 self._require().createVLUN(volume_name, lun=lun, hostname=host_name, auto=False)
             return "created"
-        except Exception as exc:  # noqa: BLE001 - EXISTENT_VLUN on a re-run
+        except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
             raise self._translate(exc, where=f"createVLUN {volume_name}->{host_name}") from exc
@@ -510,14 +510,14 @@ class WsapiClient:
     def remote_copy_groups(self) -> list[dict]:
         try:
             return _members(self._require().getRemoteCopyGroups())
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise self._translate(exc, where="getRemoteCopyGroups") from exc
 
     def remote_copy_group(self, name: str) -> dict | None:
         try:
             body = self._require().getRemoteCopyGroup(name)
             return body if isinstance(body, dict) else None
-        except Exception as exc:  # noqa: BLE001 - 404 (code 187) is "does not exist"
+        except Exception as exc:
             if hpe_exc is not None and isinstance(exc, hpe_exc.HTTPNotFound):
                 return None
             raise self._translate(exc, where=f"getRemoteCopyGroup {name}") from exc
@@ -529,7 +529,7 @@ class WsapiClient:
         try:
             self._require().createRemoteCopyGroup(name, targets, optional=optional)
             return "created"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
             raise self._translate(exc, where=f"createRemoteCopyGroup {name}") from exc
@@ -544,19 +544,19 @@ class WsapiClient:
         if period_seconds:
             try:
                 self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "syncPeriod": period_seconds}]})
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 raise self._translate(exc, where=f"modifyRemoteCopyGroup {name} (period)") from exc
         policies = {"autoRecover": auto_recover, "autoSynchronize": auto_synchronize}
         try:
             self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": policies}]})
             return ""
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             detail = self._safe_str(exc).lower()
             if "autosynchronize" not in detail and "unrecognized" not in detail:
                 raise self._translate(exc, where=f"modifyRemoteCopyGroup {name} (policies)") from exc
         try:
             self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": {"autoRecover": auto_recover}}]})
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise self._translate(exc, where=f"modifyRemoteCopyGroup {name} (policies)") from exc
         return (f"The array did not accept 'autoSynchronize' over WSAPI for {name}; auto_recover and the "
                 f"period were set. Set it on the array: setrcopygroup pol {'auto_synchronize' if auto_synchronize else 'no_auto_synchronize'} {name}")
@@ -567,7 +567,7 @@ class WsapiClient:
         try:
             self._require().addVolumeToRemoteCopyGroup(group, volume, targets, optional={"volumeAutoCreation": True})
             return "created"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
             raise self._translate(exc, where=f"addVolumeToRemoteCopyGroup {group} {volume}") from exc
@@ -576,7 +576,7 @@ class WsapiClient:
         try:
             self._require().startRemoteCopy(name)
             return "started"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if self._is_conflict(exc) or "already" in self._safe_str(exc).lower():
                 return "exists"
             raise self._translate(exc, where=f"startRemoteCopy {name}") from exc
@@ -585,7 +585,7 @@ class WsapiClient:
         try:
             self._require().stopRemoteCopy(name)
             return "stopped"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if self._is_conflict(exc) or "already" in self._safe_str(exc).lower():
                 return "exists"
             raise self._translate(exc, where=f"stopRemoteCopy {name}") from exc
@@ -596,7 +596,7 @@ class WsapiClient:
         that name; the array mirrors the role change to its partner. SPEC-017."""
         try:
             self._require().recoverRemoteCopyGroupFromDisaster(name, action)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise self._translate(exc, where=f"recoverRemoteCopyGroupFromDisaster {name} action {action}") from exc
 
     # ------------------------------------------------------------------ internals

@@ -14,7 +14,12 @@ from alletra_onboard.application.onboarding.greenlake_provision import (
     WOULD_DO,
     GreenLakeProvisioningService,
 )
-from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, WorkflowPhase
+from alletra_onboard.domain.models import (
+    ArrayWorkItem,
+    DsccSetupConfig,
+    NetworkConfig,
+    WorkflowPhase,
+)
 
 BASE = "https://global.api.greenlake.hpe.com"
 

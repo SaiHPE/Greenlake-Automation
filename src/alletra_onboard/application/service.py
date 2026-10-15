@@ -14,16 +14,19 @@ fire-and-forget pipeline (see the step services for each step's contract).
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from alletra_onboard.application.documents.steps import DocumentSteps
-from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.application.onboarding.steps import (
     OnboardingSteps,
     default_cloudinit_factory,
     default_dscc_factory,
     default_provision_factory,
 )
+from alletra_onboard.application.provisioning.steps import DiscoveryZoningSteps, ProvisioningSteps
+from alletra_onboard.application.replication.steps import ReplicationSteps
+from alletra_onboard.application.runs.console import ConsoleService
 from alletra_onboard.application.runs.coordinator import (
     PendingSheetNotFoundError,
     RunBusyError,
@@ -31,10 +34,7 @@ from alletra_onboard.application.runs.coordinator import (
     RunNotFoundError,
     StepPreconditionError,
 )
-from alletra_onboard.application.provisioning.steps import DiscoveryZoningSteps, ProvisioningSteps
-from alletra_onboard.application.replication.steps import ReplicationSteps
-from alletra_onboard.application.runs.console import ConsoleService
-from alletra_onboard.application.documents.verification import verify
+from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import (
     ArrayCredentialInfo,
@@ -46,19 +46,19 @@ from alletra_onboard.domain.models import (
 )
 from alletra_onboard.domain.ports import RunStore
 from alletra_onboard.domain.provisioning import (
+    PreflightReport,
     ProvisioningBuilder,
     ProvisioningComposition,
-    PreflightReport,
     ProvisioningIntent,
     ProvisioningObjects,
 )
 
 __all__ = [
     "OnboardingService",
-    "RunNotFoundError",
-    "RunBusyError",
-    "StepPreconditionError",
     "PendingSheetNotFoundError",
+    "RunBusyError",
+    "RunNotFoundError",
+    "StepPreconditionError",
 ]
 
 

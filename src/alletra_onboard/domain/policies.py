@@ -5,7 +5,6 @@ import re
 import time
 from dataclasses import dataclass
 
-
 SECRET_PATTERNS = (
     re.compile(r"(Bearer\s+)[A-Za-z0-9._\-]+", re.IGNORECASE),
     re.compile(r"(client_secret\s*[=:]\s*)[^\s&]+", re.IGNORECASE),

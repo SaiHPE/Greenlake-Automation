@@ -19,8 +19,11 @@ from __future__ import annotations
 import re
 
 from alletra_onboard.application.provisioning import storage_provision
-from alletra_onboard.application.provisioning.clients import make_array_cli, make_vcenter, make_wsapi
-from alletra_onboard.domain.shared import normalize_wwpn
+from alletra_onboard.application.provisioning.clients import (
+    make_array_cli,
+    make_vcenter,
+    make_wsapi,
+)
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
     EsxiLun,
@@ -30,6 +33,7 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningIntent,
     VolumePath,
 )
+from alletra_onboard.domain.shared import normalize_wwpn
 
 _NSP = re.compile(r"^\d+:\d+:\d+$")
 # ALUA states that mean the path carries (or can carry) I/O — i.e. a LIVE path.

@@ -115,7 +115,7 @@ class ArrayCliClient:
                 f"Login failed for {self.username}@{self.host} — check the admin username/password "
                 "(the System Credential you set in DSCC)."
             ) from exc
-        except Exception as exc:  # noqa: BLE001 - socket/timeout/SSH errors
+        except Exception as exc:
             raise ArrayCliError(
                 f"Could not reach the array at {self.host}:{self.port} ({type(exc).__name__}) — check "
                 "it's powered on, on this subnet, and that SSH is enabled."
@@ -149,7 +149,7 @@ class ArrayCliClient:
             _stdin, stdout, stderr = self._client.exec_command(command, timeout=timeout or self.exec_timeout)
             out = stdout.read().decode("utf-8", "replace")
             err = stderr.read().decode("utf-8", "replace")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise ArrayCliError(f"running '{command}' failed: {type(exc).__name__}") from exc
         return out if out.strip() else err
 
@@ -205,7 +205,7 @@ class ArrayCliClient:
                         break
             finally:
                 channel.close()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise ArrayCliError(f"running '{command}' failed: {type(exc).__name__}") from exc
         return b"".join(chunks).decode("utf-8", "replace"), matched
 
@@ -217,7 +217,7 @@ class ArrayCliClient:
                 pass
             self._client = None
 
-    def __enter__(self) -> "ArrayCliClient":
+    def __enter__(self) -> ArrayCliClient:
         self.connect()
         return self
 

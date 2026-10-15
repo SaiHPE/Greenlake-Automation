@@ -15,7 +15,13 @@ import ipaddress
 import os
 import sys
 from urllib.parse import urlparse
-from urllib.request import getproxies_registry
+
+try:
+    from urllib.request import getproxies_registry
+except ImportError:  # Windows-only in the standard library; never called elsewhere (see _IS_WINDOWS)
+
+    def getproxies_registry() -> dict[str, str]:
+        return {}
 
 _IS_WINDOWS = sys.platform == "win32"
 

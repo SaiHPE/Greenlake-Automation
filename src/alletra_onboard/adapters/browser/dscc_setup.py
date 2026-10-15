@@ -23,7 +23,12 @@ import os
 from pathlib import Path
 
 from alletra_onboard.adapters.browser.locators import DSCC
-from alletra_onboard.domain.models import ArrayWorkItem, BrowserResultStatus, DsccSetupConfig, NetworkConfig
+from alletra_onboard.domain.models import (
+    ArrayWorkItem,
+    BrowserResultStatus,
+    DsccSetupConfig,
+    NetworkConfig,
+)
 
 try:
     from playwright.async_api import TimeoutError as PlaywrightTimeoutError

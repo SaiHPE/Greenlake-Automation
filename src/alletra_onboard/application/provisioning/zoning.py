@@ -22,10 +22,10 @@ from __future__ import annotations
 
 import re
 
-from alletra_onboard.domain.shared import Fabric, normalize_wwpn, wwpn_colons
 from alletra_onboard.domain.discovery import DiscoveryReport
-from alletra_onboard.domain.zoning import ExpectedZone, ZoneRemediation, ZoningReport
 from alletra_onboard.domain.provisioning import ProvisioningIntent
+from alletra_onboard.domain.shared import Fabric, normalize_wwpn, wwpn_colons
+from alletra_onboard.domain.zoning import ExpectedZone, ZoneRemediation, ZoningReport
 
 _WWPN_RE = re.compile(r"^(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}$")
 
@@ -154,7 +154,9 @@ def build_report(
 
     # Expected hosts: the provisioning union (see docstring). The array-only fallback below survives
     # for a run with no vCenter, no sheet hosts and no plan — it verifies whatever is logged in.
-    from alletra_onboard.application.provisioning.hosts import union_hosts  # local: avoid import cycle
+    from alletra_onboard.application.provisioning.hosts import (
+        union_hosts,  # local: avoid import cycle
+    )
 
     in_a_set = {m for hs in getattr(intent, "host_sets", []) for m in hs.members}
     host_wwpns: dict[str, set[str]] = {}

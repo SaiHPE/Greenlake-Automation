@@ -14,15 +14,18 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict, defaultdict
-from typing import Callable
+from collections.abc import Callable
 
 from alletra_onboard.application.provisioning.clients import make_brocade
-from alletra_onboard.application.provisioning.hosts import declared_mismatches, resolve_declared_hosts
+from alletra_onboard.application.provisioning.hosts import (
+    declared_mismatches,
+    resolve_declared_hosts,
+)
 from alletra_onboard.application.provisioning.zoning import parse_active_zones
-from alletra_onboard.domain.shared import normalize_wwpn, wwpn_colons
 from alletra_onboard.domain.discovery import DiscoveryReport
-from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, NsDevice, ZoningPlan
 from alletra_onboard.domain.provisioning import ProvisioningIntent
+from alletra_onboard.domain.shared import normalize_wwpn, wwpn_colons
+from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, NsDevice, ZoningPlan
 
 _WWPN_COLON = re.compile(r"(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}")
 
@@ -300,7 +303,7 @@ def build_zoning_plan(
     active_zones: dict[str, dict[str, set[str]]] = {}   # fabric -> {zone name: member WWPNs}
     defined: dict[str, set[str]] = {"F1": set(), "F2": set()}
     switch_host: dict[str, str] = {}
-    local_ns: dict[str, dict[str, "NsDevice"]] = {}   # nsshow ONLY: devices on the declared switch itself
+    local_ns: dict[str, dict[str, NsDevice]] = {}   # nsshow ONLY: devices on the declared switch itself
     switch_name: dict[str, str] = {}
     fabric_name: dict[str, str] = {}
     fabric_switches: dict[str, dict[int, str]] = {}    # fabric -> {domain: switch name} (fabricshow)
@@ -409,7 +412,7 @@ def build_zoning_plan(
     #    switches' name servers and the step could not zone any of them — the exact mixed-estate
     #    case (Windows/Linux beside a vCenter) the tool exists for. A first source names a WWPN; a
     #    later one only fills a name that is still empty. Array UNCLAIMED logins carry no name.
-    host_by_wwpn: "OrderedDict[str, str]" = OrderedDict()
+    host_by_wwpn: OrderedDict[str, str] = OrderedDict()
     host_source: dict[str, str] = {}
     host_os: dict[str, str] = {}
 

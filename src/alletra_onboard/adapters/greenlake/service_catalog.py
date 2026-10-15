@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -27,7 +26,7 @@ def parse_service_manager_provision(item: dict) -> ServiceProvision:
 
 
 class ServiceCatalogClient:
-    def __init__(self, http: "GreenLakeHttpClient") -> None:
+    def __init__(self, http: GreenLakeHttpClient) -> None:
         self.http = http
 
     async def per_region_service_managers(self) -> list[dict]:

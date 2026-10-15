@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 from pydantic import SecretStr
+from test_plan_truth import (  # sibling module (rootdir conftest, no packages)
+    REACHABLE,
+    TruthfulFakeWsapi,
+    _discovery,
+)
 
 from alletra_onboard.application.provisioning import storage_provision as prov
 from alletra_onboard.application.provisioning.storage_provision import render_removal_commands
@@ -18,7 +23,6 @@ from alletra_onboard.domain.provisioning import (
     VolumeRequest,
 )
 from alletra_onboard.domain.shared import EndpointCreds
-from test_plan_truth import REACHABLE, TruthfulFakeWsapi, _discovery  # sibling module (rootdir conftest, no packages)
 
 WWN_A, WWN_B = "10000000C9000001", "10000000C9000002"
 

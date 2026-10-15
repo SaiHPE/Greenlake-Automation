@@ -17,9 +17,9 @@ except Exception:  # noqa: BLE001 - bundled in the .exe; optional otherwise
     Disconnect = None
     vim = None
 
-from alletra_onboard.domain.shared import normalize_wwpn
 from alletra_onboard.domain.discovery import HostHba, HostIdentity
 from alletra_onboard.domain.provisioning import EsxiLun
+from alletra_onboard.domain.shared import normalize_wwpn
 
 
 class VCenterError(Exception):
@@ -116,7 +116,7 @@ class VCenterClient:
                 host=self.host, user=self.username, pwd=self.password,
                 port=self.port, sslContext=ctx, connectionPoolTimeout=int(self.timeout),
             )
-        except Exception as exc:  # noqa: BLE001 - auth / socket / TLS
+        except Exception as exc:
             # D-11 (S-3, 2026-09-17): str() of a vim fault is its whole property dump; `.msg` is the sentence.
             detail = str(getattr(exc, "msg", "") or exc).strip()[:200]
             if type(exc).__name__ == "InvalidLogin":
@@ -134,7 +134,7 @@ class VCenterClient:
                 pass
             self._si = None
 
-    def __enter__(self) -> "VCenterClient":
+    def __enter__(self) -> VCenterClient:
         self.connect()
         return self
 

@@ -89,7 +89,7 @@ class NetworkConfig(BaseModel):
     proxy_password_ref: str | None = None
 
     @model_validator(mode="after")
-    def _normalize_proxy_host(self) -> "NetworkConfig":
+    def _normalize_proxy_host(self) -> NetworkConfig:
         """Accept the natural URL form for the proxy and store a bare host.
 
         People copy the proxy from browser or environment settings, where it reads

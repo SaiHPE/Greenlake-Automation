@@ -28,7 +28,7 @@ _TCPR_ORDER = ["w:cnfStyle", "w:tcW", "w:gridSpan", "w:hMerge", "w:vMerge", "w:t
 
 def _reorder(elem, order: list[str]) -> None:
     idx = {qn(t): i for i, t in enumerate(order)}
-    for child in sorted(list(elem), key=lambda c: idx.get(c.tag, 999)):
+    for child in sorted(elem, key=lambda c: idx.get(c.tag, 999)):
         elem.append(child)
 
 

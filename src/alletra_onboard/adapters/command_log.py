@@ -80,5 +80,5 @@ def record(
     }
     try:
         sink(entry)
-    except Exception:  # noqa: BLE001, S110 - the log must never break the command it describes
+    except Exception:  # noqa: BLE001 - the log must never break the command it describes
         pass

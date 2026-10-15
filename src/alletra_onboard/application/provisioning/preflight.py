@@ -14,7 +14,7 @@ actually surfaces, in the apply step's error handling.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from alletra_onboard.application.provisioning.clients import make_vcenter, make_wsapi
 from alletra_onboard.domain.provisioning import PreflightCheck, PreflightReport, ProvisioningIntent
