@@ -8,8 +8,9 @@
   This finds it, fetches `jumpbox-test` and resets the app folder to it. Untracked files (.env,
   .venv, config\arrays.csv) are kept, as with any `git reset --hard`.
 
-  Looked for, in order: -Relay, \\tsclient\lab-relay (a shared folder, e.g. from the Mac Windows
-  App), \\tsclient\<drive>\Users\<name>\lab-relay (a shared drive, e.g. from mstsc on Windows).
+  Looked for, in order: -Relay, \\tsclient\lab-relay (the folder itself shared), then lab-relay inside
+  every share the client offers (`net view \\tsclient`: a Mac home folder or a Windows drive), also
+  under <share>\Users\<name>\ for a whole Windows drive.
 
 .EXAMPLE
   .\lab\fetch.ps1
@@ -26,16 +27,20 @@ function Test-Relay([string]$path) {
 
 if (-not $Relay) {
   $candidates = @('\\tsclient\lab-relay')
-  foreach ($drive in 'C', 'D', 'E', 'H') {
-    $users = "\\tsclient\$drive\Users"
-    if (Test-Path $users) {
-      $candidates += Get-ChildItem $users -Directory -ErrorAction SilentlyContinue | ForEach-Object { Join-Path $_.FullName 'lab-relay' }
+  $shares = @()
+  try { $shares = @(& net view \\tsclient 2>$null | ForEach-Object { if ($_ -match '^(\S.*?)\s{2,}Disk') { $Matches[1].Trim() } }) } catch { }
+  foreach ($share in $shares) {
+    $root = "\\tsclient\$share"
+    $candidates += Join-Path $root 'lab-relay'
+    if (Test-Path (Join-Path $root 'Users')) {
+      $candidates += Get-ChildItem (Join-Path $root 'Users') -Directory -ErrorAction SilentlyContinue | ForEach-Object { Join-Path $_.FullName 'lab-relay' }
     }
   }
   $Relay = $candidates | Where-Object { Test-Relay $_ } | Select-Object -First 1
 }
 if (-not (Test-Relay $Relay)) {
   Write-Host "No lab-relay found in this Remote Desktop session." -ForegroundColor Red
+  Write-Host ("Shares offered by your computer: " + $(if ($shares) { $shares -join ', ' } else { 'none (folder sharing is off)' }))
   Write-Host "On your laptop: run scripts/push_jumpbox_test.sh, then share its ~/lab-relay folder in the"
   Write-Host "Remote Desktop settings (Mac Windows App: Edit PC > Folders; Windows mstsc: Local Resources >"
   Write-Host "More > Drives) and reconnect. Or name it: .\lab\fetch.ps1 -Relay \\tsclient\..."

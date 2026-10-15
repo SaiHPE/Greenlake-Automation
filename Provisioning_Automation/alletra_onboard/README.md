@@ -81,6 +81,9 @@ those files.
      it appears as `\\tsclient\lab-relay`.
    - Windows, Remote Desktop Connection (`mstsc`): *Show Options → Local Resources → More → Drives*,
      tick the drive that holds your user folder. `lab\fetch.ps1` finds `\\tsclient\C\Users\<you>\lab-relay`.
+   - A `.rdp` file (the LabRAT download): add the line `drivestoredirect:s:*` to it, or drag the file
+     into the Windows App window to save it as a PC and use *Folders* as above. `lab\fetch.ps1` looks
+     for `lab-relay` inside every share the session offers.
 3. Check, on the jump box: `Test-Path \\tsclient\lab-relay` (Mac) or `Test-Path \\tsclient\C\Users` (Windows)
    must say `True`.
 
