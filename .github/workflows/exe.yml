@@ -5,8 +5,8 @@ name: Build Windows EXE
 # (slim, offline, init-only accelerator), or run it manually from the Actions tab
 # (workflow_dispatch) to get the zips as build artifacts.
 #
-# RUNNER. DORMANT since 2026-10-15: the github.com mirror, where this ran on hosted `windows-latest`,
-# is retired. On github.hpe.com (GHES, Actions disabled by policy for the user-owned repo) the same
+# RUNNER. DORMANT since 2026-10-15. github.com, where this ran on hosted `windows-latest`, now only
+# carries `jumpbox-test` for lab runs, with Actions turned off. On github.hpe.com (GHES, Actions disabled by policy for the user-owned repo) the same
 # build + smoke tests + publish run by hand on the labrat jump box (README *Releasing*):
 #     .\scripts\publish_release.ps1 -Tag vX.Y.Z -BuildExe
 # The .exe is a Windows artifact; it is never built on macOS or Linux.

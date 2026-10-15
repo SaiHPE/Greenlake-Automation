@@ -5,8 +5,8 @@ name: Release (latest from main)
 # the app + this workflow so doc-only changes elsewhere don't trigger builds; workflow_dispatch lets
 # you run it by hand.
 #
-# RUNNER. DORMANT since 2026-10-15: the github.com mirror (SaiHPE/Greenlake-Automation), where this
-# ran on hosted `windows-latest`, is retired. On GitHub Enterprise Server (github.hpe.com) Actions is
+# RUNNER. DORMANT since 2026-10-15. github.com (SaiHPE/Greenlake-Automation), where this ran on
+# hosted `windows-latest`, now only carries `jumpbox-test` for lab runs, with Actions turned off. On GitHub Enterprise Server (github.hpe.com) Actions is
 # disabled by enterprise policy for the user-owned repo (the permissions PUT returns 204 and
 # `enabled` stays false), so the same publish step runs by hand (README *Releasing*):
 #     .\scripts\publish_release.ps1
