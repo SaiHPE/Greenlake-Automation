@@ -82,7 +82,7 @@ one. Pinned by `test_verify_on_the_live_after_apply_capture_says_replicating_for
 
 The same reads on both arrays, plus the harness's `plan.json` / `result.json` / `verify.json`, with
 the tool's two **periodic** groups live (`zz_rc_vvs_rcg`, `zz_rc_test_rcg`; period 5m, RPO 10) and
-the six Sync groups **Stopped** for the window (`scripts/rc_option1.py stop` on the lab branch; the
+the six Sync groups **Stopped** for the window (`lab/rc_option1.py stop` on the lab branch; the
 six were restarted afterwards and `showrcopy groups` / `showrcopy -d groups` / `showvvset` /
 `showvlun` diffed **identical** to the baseline). Facts:
 

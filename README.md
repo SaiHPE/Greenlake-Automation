@@ -304,11 +304,17 @@ cd C:\Users\Administrator\Downloads\alletra_onboard
 old UI. (To confirm you're on the new build: step 4 shows an **Open Discovery Tool** button and a
 **Fill & connect** button.)
 
-#### 3. Walk the seven steps in the browser
-1. **Configure GreenLake** — enter the API client (Client ID / Secret + the **per-workspace token
-   URL**), click **Test connection** (expect Data Services *PROVISIONED* in `ap-northeast`).
-2. **Array details** — **Download CSV template** and fill it (or upload your prepared
-   `config\arrays.csv`) → values appear in an editable form → **Create run**.
+#### 3. Work through the run in the browser
+The rail on the left lists every step; the mode decides which ones a run has (the list comes from
+the app's step registry, so it is always current).
+
+1. **Prepare.** *Prerequisites* (the GreenLake connection, the proxy, the workstation clock, and the
+   workspace and DSCC set-up in GreenLake), then
+   *Initialisation sheet* (download the template, fill it for **one** array, upload it; it carries
+   the GreenLake client, the array and target credentials, hosts, volumes and replication rows),
+   then *Mode*: Full onboarding, Provision only, Both, Provision then replicate, Verify only, or
+   Custom.
+2. **Onboarding** (Full onboarding and Both) is steps 3 to 5.
 3. **GreenLake registration** — click **Run**; the live phase log streams in. A subscription-apply
    *warning* is non-fatal (register + assign are the success criteria).
 4. **Cloud Connectivity** —
@@ -326,15 +332,14 @@ old UI. (To confirm you're on the new build: step 4 shows an **Open Discovery To
    - In the browser: under **System Credentials** add the array admin secret, **Continue**, review,
      **Submit**.
    - Back in the app, click **mark complete**.
-6. **Verify config & health** *(optional, read-only)* — enter the array admin **username/password**
-   (the DSCC System Credential, e.g. `3paradm`) and click **Verify config & health**. The app SSHes
-   into the now-initialised array and reports two things: (a) **configuration** — per-field whether the
-   live settings (system name, mgmt IP/netmask/gateway, DNS, NTP, timezone, …) match what you onboarded;
-   and (b) **array health** — the `checkhealth -svc -detail` issue summary (cage/iLO/CDM/RC/security…)
-   plus inventory/capacity (`showinventory`, `showcpg`, `showpd`). It writes nothing and is safe to
-   skip; the password is used only for that SSH session and is never stored. *(The output parsers are
-   calibrated against the live array — see `docs/adr/0001`.)*
-7. **Finish** — summary of the run.
+6. **Storage steps** (Provision only, Both, Provision then replicate): *Discovery* reads the array,
+   vCenter, hosts and both fabrics; *SAN Zoning* checks zoning and writes the Brocade command set
+   for the SAN team (the tool never writes to a switch); *Provision storage* shows the plan and
+   creates hosts, sets, volumes and exports only after you tick the confirmation; *Replication* and
+   *Failover test* set up Remote Copy to the peer named on the sheet and prove a failover and back.
+7. **Verify configuration** and **As-built document** — read-only: the array's settings against
+   what was onboarded, its status check, and the Word document for the hand-over. **Finish**
+   collects the documents and the run's timeline.
 
 > Two reminders: run the app **as Administrator** (for the clock-sync button), and **hard-refresh**
 > the browser after every update.
@@ -374,65 +379,29 @@ beside the exe is still used when present. *Runs, Your runs* (top right) lists e
 
 ---
 
-## `arrays.csv`
+## Sheet fields that are easy to get wrong
 
-One row per array. Gitignored (`config/arrays.example.csv` is the committed template). Columns:
+The initialisation sheet replaced the older `arrays.csv` (its template is still served for scripts;
+`config/arrays.example.csv`). In either:
 
-```
-serial_number, part_number, subscription_key, service_catalog_region_id, dscc_region_code,
-cloudinit_url, mgmt_ipv4, mask, gateway, dns (semicolon-separated), ntp, timezone,
-proxy_host, proxy_port, dscc_system_name, dscc_country, contact_first_name, contact_last_name,
-contact_language, contact_company, contact_phone, contact_email, secret_name, secret_username,
-secret_password, blueprint_name, apply_blueprint
-```
-
-Gotchas:
-- **`part_number` must be the product SKU** (e.g. `S0B84A`), **not** the box FRU/assembly number (`R7C75-…`) — the FRU returns `HPE_GL_ERROR_NOT_FOUND`.
-- **`subscription_key`** is the GreenLake activation key (from the activation email's attachment), **not** the EON order number and **not** the AutoPass on-array `.dat` license keys.
-- **`cloudinit_url`** is a placeholder; paste the fresh `169.254.x` URL per boot in the UI.
-- **`secret_password`** is unused by automation (the operator enters the DSCC credential by hand); leave it blank.
+- **The part number must be the product SKU** (e.g. `S0B84A`), **not** the box FRU/assembly number
+  (`R7C75-…`); the FRU returns `HPE_GL_ERROR_NOT_FOUND`.
+- **The subscription key** is the GreenLake activation key (from the activation email's
+  attachment), **not** the EON order number and **not** the AutoPass on-array `.dat` license keys.
+- **The cloudinit URL** changes on every boot: paste the fresh `169.254.x` URL in the app.
 
 ---
 
 ## Status and open items
 
-The per-area status table and the order of work live in **[docs/SCOPE.md](docs/SCOPE.md)**; the
-incident→rule register is [docs/LESSONS.md](docs/LESSONS.md); the latest hardware run is
-[docs/validation/2026-09-12-rack13arcus-live-test-2.md](docs/validation/2026-09-12-rack13arcus-live-test-2.md).
-In short (as of **v0.16.0**, 2026-09-19 — the first non-pre-release):
+What is built and what is proven on hardware, area by area: **[docs/SCOPE.md](docs/SCOPE.md)**.
+Open work: the [issues on github.hpe.com](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues).
+The incident→rule register: [docs/LESSONS.md](docs/LESSONS.md). Evidence from lab runs:
+[docs/validation/](docs/validation/).
 
-1. **The provisioning track is live-verified** (FC, one array, rack13arcus): twice by hand across
-   2026-09-13/14 (S-1, S-2, S-4, S-8, S-11) and twice by the self-checking session runner
-   (`session.ps1`, SPEC-006 — 38 of 39 assertions on 2026-09-15, the one FAIL a runner fault). Every
-   defect and UX finding in [docs/ux/FINDINGS-2026-09-13.md](docs/ux/FINDINGS-2026-09-13.md) is closed
-   (SPEC-001…012). **Zoning apply proven 2026-09-17 (G-1)**: the tool's F1 command set, pasted as
-   generated, logged `localhost.localdomain` into array port 0:3:4. Failure paths (S-3) seen 2026-09-17
-   (found D-10/D-11/Z-7 → rc.27). Resume (S-5) seen live 2026-09-17. The session runner passed 58/58 app assertions on rc.28 (2026-09-19; SPEC-013's ESXi view read
-   live). Still owed live: iSCSI (S-9, scripted), the ESXi view's *Visible* state after a rescan.
-
-   **The initialization track (GreenLake → Cloud Connectivity → DSCC Set Up System) is built and
-   unit-tested but has NOT been run end to end on a factory-fresh array.** Its GreenLake REST
-   half was proven live in June 2026; the two browser wizards are built against captured UI and
-   need a real unit. Treat it as *built — pending live run* until `docs/validation/` says otherwise.
-
-2. **Windows/Linux hosts not in vCenter** are only inferred array-side or typed into the Hosts
-   tab. Agentless log-in discovery (OS / WWPN / multipathing) is the next feature.
-
-3. **Replication is live** on the lab pair (v0.17.0): Remote Copy groups on an existing partnership,
-   sync and periodic, the failover test, the as-built sections. Links and targets set up by the tool
-   are planned (BL-41). Snapshots are not started. v0.17.0 also adds the **Console** (SPEC-019): every
-   command the tool sends to an array or switch, with its output, under each step; live 2026-10-12.
-
-4. **Subscription key for the target lab array is unresolved.** The factory activation produced
-   AutoPass on-array licenses + an EON order number — **not** a GreenLake "Storage Central"
-   subscription. Until one is obtained, the apply-subscription phase warns (non-fatal; register +
-   assign still succeed). **Action:** get/confirm the array's own GreenLake subscription key.
-
-5. **DSCC credential entry is manual by design.** The "Create Secret" modal was never reliably
-   captured, and the array admin password is sensitive, so the operator enters it in the wizard.
-
-6. **The tool never writes to a SAN switch** (ADR 0012). Zoning is delivered as a copy-paste
-   command set for the consultant; this is scope, not a gap.
+Two things that are scope, not gaps: **the tool never writes to a SAN switch** (ADR 0012; zoning
+is a command set for the SAN team), and **the DSCC system credential is entered by the operator**
+in the wizard (the tool never handles it).
 
 ---
 
