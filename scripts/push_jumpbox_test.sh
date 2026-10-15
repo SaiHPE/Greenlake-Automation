@@ -3,8 +3,9 @@
 #
 #   Provisioning_Automation/alletra_onboard/scripts/push_jumpbox_test.sh   (Git Bash on Windows)
 #
-# The lab jump boxes cannot reach github.hpe.com, so lab runs go through the private github.com repo
-# below. It carries jumpbox-test only: no releases, no main. Needs push access to that repo
+# The lab jump boxes cannot reach github.hpe.com, so lab runs go through the PUBLIC github.com repo
+# below (public so jump boxes fetch with no login; never push secrets). It carries jumpbox-test only:
+# no releases, no main. Needs push access to that repo
 # (gh auth login --hostname github.com; gh auth setup-git --hostname github.com).
 #
 # It builds one commit whose root is Provisioning_Automation/alletra_onboard (the layout the jump
