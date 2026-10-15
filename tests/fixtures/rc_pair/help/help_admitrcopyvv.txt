@@ -1,0 +1,211 @@
+# help admitrcopyvv
+admitrcopyvv - Add one or more volumes to a remote copy volume group
+
+SYNTAX
+    admitrcopyvv [options] <VV_name>[:<snapname>][,<psnapname>] <group_name> <target_name>:<sec_VV_name>...
+    admitrcopyvv [options] <set:setname> <group_name> <target_name>:<sec_set>
+    admitrcopyvv [options] -pat [<set:setname>:]<VV_pattern> <group_name> <target_name>:<sec_set>:<sec_VV_pattern>...
+
+DESCRIPTION
+    The admitrcopyvv command adds an existing virtual volume to an existing remote copy
+    volume group.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopyvv_admit right
+
+OPTIONS
+    -pat
+        Specifies that the <VV_name> is treated as a glob-style pattern and that
+        all remote copy volumes matching the specified pattern are admitted to the
+        remote copy group. When this option is used the <sec_VV_name> and
+        <snapname> (if specified) are also treated as patterns. It is required
+        that the secondary volume names and snapshot names can be derived from the
+        local volume name by adding a prefix, suffix or both. <snapname> and
+        <sec_VV_name> should take the form prefix@vvname@suffix, where @vvname@
+        resolves to the name of each volume that matches the <VV_name> pattern.
+
+    -createvv
+        Specifies that the secondary volumes should be created automatically. This
+        specifier cannot be used when starting snapshots (<VV_name>:<snapname>) are
+        specified.
+        If primary volumes are of DECO(dedup and compr) type and the target CPG is not capable
+        of DECO(dedup and compr), then TPVV volumes will be created in secondary system.
+
+    -nowwn
+        When used with -createvv, it ensures a different WWN is
+        used on the secondary volume. Without this option -createvv will use the same
+        WWN for both primary and secondary volumes.
+
+    -nosync
+        Specifies that the volume should skip the initial sync. This is for the
+        admission of volumes that have been pre-synced with the target volume.
+        This specifier cannot be used when starting snapshots (<VV_name>:<snapname>)
+        are specified.
+
+SPECIFIERS
+    <set>
+       Name of the set of volumes admitted to the RC group.
+
+    <VV_name>
+        Specifies the name of the existing virtual volume to be admitted to an
+        existing remote copy volume group that was created with the
+        creatercopygroup command.
+
+    <snapname>
+        An optional read-only snapshot <snapname> can be specified along with
+        the virtual volume name <VV_name>. This snapshot is a starting snapshot.
+        When the group is started, a full sync is not performed. Instead, for
+        synchronous groups, the volume will synchronize deltas between <snapname>
+        and the base volume. For asynchronous periodic groups, the volume will
+        synchronize deltas between <snapname> and a snapshot of the base.
+
+    <psnapname>
+        Valid only for SLD/3DCPP configuration. An optional read-only snapshot
+        <psnapname> for periodic target can be specified along with <snapname>
+        separated by ",". <snapname> is considered as snapshot for the sync target.
+        Only automatically created snapshots are allowed.
+
+    <group_name>
+        Specifies the name of the existing remote copy volume group created with
+        the creatercopygroup command, to which the volume will be added.
+
+    <sec_vv_pattern>
+        Specifies the pattern that is used to create the secondary virtual
+        volume on the target system.
+
+    <target_name>:<sec_VV_name>
+        The target name associated with this group, as set with the
+        creatercopygroup command. The target is created with the
+        creatercopytarget command. <sec_VV_name> specifies the name of the
+        secondary volume on the target system.  One <target_name>:<sec_VV_name>
+        must be specified for each target of the group.
+
+    <target_name>:<sec_set_name>
+        The target name associated with this group, as set with the
+        creatercopygroup command. The target is created with the
+        creatercopytarget command. <sec_set> specifies the name of the
+        secondary set on the target system. One <target_name>:<sec_set>
+        must be specified for each target of the group.
+
+    <target_name>:<sec_set_name>:<sec_VV_name>
+        The target name associated with this group, as set with the
+        creatercopygroup command. The target is created with the
+        creatercopytarget command. <sec_set> specifies the name of the
+        secondary set and <sec_VV_name> specifies the name of the
+        secondary volume on the target system. One <target_name>:<sec_set>:<sec_VV_name>
+        must be specified for each target of the group.
+
+    <pattern>
+        Specifies a glob-style pattern. If this specifier is not used, the
+        <VV_name> specifier must be used. For more information, issue: clihelp
+        sub,globpat.
+
+NOTES
+    A secondary volume mapping must be provided for each target in the group.
+
+    The virtual volume and the remote copy group must be in the same domain or
+    both in no domain.
+
+    The -nosync option will skip the full synchronization of this volume once
+    the remote copy group is started. On the primary system the showrcopy
+    SyncStatus will appear as New-PreSynced. On the secondary the SyncStatus
+    will appear as "New".
+
+    When a starting snapshot is specified, the snapshot will not be automatically
+    deleted after the group is started and resynced.
+
+    When a starting snapshot is specified, any changes between the specified
+    snapshot and the point when the group is started will be resynced. This is
+    done instead of a full synchronization. On the primary system the showrcopy
+    SyncStatus will appear as New-SyncFromSnap. On the secondary the SyncStatus
+    will appear as New.
+
+    If the -nosync option is not used and a starting snapshot is not specified,
+    the volume will undergo a full synchronization when the group is started.
+    The showrcopy SyncStatus will appear as New on both primary and secondary
+    systems.
+
+    If a group's target has the mirror_config policy set and the group is a
+    primary group, then this command is mirrored to that target and the volume
+    is added to the secondary volume group. If the policy is set and the group
+    is a secondary, this command fails.
+
+    For multiple target remote copy groups, in addition to adding the
+    primary/secondary mapping on the target systems, the relevant mapping
+    between the target systems will be added to the backup groups.
+
+    For peer persistence groups, if the primary volume being admitted has an
+    associated VLUN template, then for the secondary volume also, a VLUN
+    template will be automatically created. This will have the same exported
+    LUN value as primary, if that value was available.
+
+EXAMPLES
+    In the following example, the admitrcopyvv command adds the volume vv1 to
+    the primary volume group Group1. At the same time, it adds the secondary
+    volume vv1_remote on the target system System2 to the corresponding secondary
+    volume group (Group1.r<sys_ID>), which was previously created when the
+    creatercopygroup command was issued:
+
+        cli% admitrcopyvv vv1 Group1 System2:vv1_remote
+
+    In the following example, the admitrcopyvv command adds all volumes beginning
+    with tpvv to the primary volume group (Group1). At the same time, it adds
+    the secondary volumes, which are named the same as the primary volumes
+    (as specified by @vvname@), on the target system System2 to the corresponding
+    secondary volume group (Group1.r<sys_ID>):
+
+        cli% admitrcopyvv -pat tpvv* Group1 System2:@vvname@
+
+    In the following example, the admitrcopyvv command adds the volume vv1 to
+    the primary volume group (Group1). At the same time, it creates and adds the
+    volume vv1.r on the target system storage1_in to the corresponding secondary
+    volume group that was previously created when the creatercopygroup command
+    was issued:
+
+        cli% admitrcopyvv -createvv vv1 Group1 storage1_in:vv1.r
+
+    In the following example, the admitrcopyvv command adds the volume vv1 to
+    the primary volume group (Group1). At the same time, it adds the volume vv1.r
+    on the target system storage1_in to the corresponding secondary volume group
+    that was previously created when the creatercopygroup command was issued.
+    It also specifies that the volume should not undergo an initial synchronization
+    when the group is started:
+
+        cli% admitrcopyvv -nosync vv1 Group1 storage1_in:vv1.r
+
+    In the following example, the admitrcopyvv command adds the volume vv1 to
+    the primary volume group (Group1). At the same time, it adds the volume vv1.r
+    on the target system storage1_in to the corresponding secondary volume group
+    that was previously created when the creatercopygroup command was issued.
+    It also specifies that the volume should be synced using rosv_vv1 as the
+    starting snapshot:
+
+        cli% admitrcopyvv vv1:rosv_vv1 Group1 storage1_in:vv1.r
+
+    In the following example, the admitrcopyvv command adds all the volumes that
+    start with the name testvv to the primary volume group (Group1). At the same
+    time, it adds all the volume testvv*.r on the target system storage1_in to the
+    corresponding secondary volume group that was previously created when
+    the creatercopygroup command was issued. It also specifies that each volume
+    should be synchronized using rosv_testvv* as the starting snapshot:
+
+        cli% admitrcopyvv -pat testvv*:rosv_@vvname@ Group1 storage1_in:@vvname@.r
+
+    In the following example, the admitrcopyvv command admits all volumes in the
+    set (vvset1) to the the primary volume group (Group1). At the same time,
+    it creates remote set (vvset1.r) and volumes (suffix with ".r") on the target
+    system storage1_in to the corresponding secondary volume group that was
+    previously created when the creatercopygroup command was issued:
+
+        cli% admitrcopyvv -createvv set:vvset1 Group1 storage1_in:vvset1.r
+
+    In the following example, the admitrcopyvv command adds all the volumes in set
+    that start with the name testvv to the primary volume group (Group1). At the same
+    time, it adds all the volumes in vvset matches testvv*.r on the target system
+    storage1_in to the corresponding secondary volume group that was previously created when
+    the creatercopygroup command was issued. It also specifies that each volume
+    should be synchronized using rosv_testvv* as the starting snapshot:
+
+        cli% admitrcopyvv -pat set:vvset1:testvv*:rosv_@vvname@ Group1 storage1_in:vvset1.r:@vvname@.r
+

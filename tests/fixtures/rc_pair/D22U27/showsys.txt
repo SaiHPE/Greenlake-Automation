@@ -1,0 +1,4 @@
+# showsys
+                                                                        ---------------(MiB)----------------
+     ID ------Name------ --------Model--------- --Serial-- Nodes Master TotalCap AllocCap  FreeCap FailedCap
+0x2DEF6 AlletraMP_D22U27 HPE Alletra Storage MP CZ2D320BT1     2      1 29278208   920848 24509168         0

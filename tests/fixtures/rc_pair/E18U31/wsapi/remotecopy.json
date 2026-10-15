@@ -1,0 +1,23 @@
+{
+  "asyncEnabled": false,
+  "links": [
+    {
+      "href": "https://10.64.154.190/api/v1/remotecopy",
+      "rel": "self"
+    },
+    {
+      "href": "https://10.64.154.190/api/v1/remotecopygroups",
+      "rel": "remotecopyGroups"
+    },
+    {
+      "href": "https://10.64.154.190/api/v1/remotecopytargets",
+      "rel": "remotecopyTargets"
+    },
+    {
+      "href": "https://10.64.154.190/api/v1/remotecopylinks",
+      "rel": "remotecopyLinks"
+    }
+  ],
+  "mode": 2,
+  "status": 1
+}

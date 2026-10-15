@@ -1,0 +1,46 @@
+# help removercopytarget
+removercopytarget - Remove a Remote Copy target
+
+SYNTAX
+    removercopytarget [options] <target_name>
+
+DESCRIPTION
+    The removercopytarget command removes target designation from a remote copy
+    system and removes all links affiliated with that target definition.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopytarget_remove right
+
+OPTIONS
+    -cleargroups
+        Remove all groups that have no other targets or dismiss this target from
+        groups with additional targets.  All groups that contain this target
+        must be stopped before the -cleargroups command can be issued.
+
+    -f
+        Do not ask for confirmation when -cleargroups is specified.
+
+    -keepalua
+        Used only with the -cleargroups option. Keeps the local volume's ALUA
+        state from changing. This option must be used during Peer Motion
+        migrations of Remote Copy Groups. Please refer to "Volume migration
+        in a Remote Copy Primary group" in the Peer Motion User Guide for
+        further details.
+
+SPECIFIERS
+    <target_name>
+        The target name for the target definition to be removed.
+
+NOTES
+    Access to all domains is required to run this command.
+
+    A target definition cannot be deleted if it is being used by any group.
+
+EXAMPLES
+    The following example removes targets System1 and System2 from the
+    primary and backup systems in a remote copy pair:
+
+        removercopytarget System1
+        removercopytarget System2
+

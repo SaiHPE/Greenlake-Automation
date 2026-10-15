@@ -1,0 +1,41 @@
+# showsys -d
+------------------------General------------------------
+System Name                  :         AlletraMP_D22U27
+System Model                 :   HPE Alletra Storage MP
+Serial Number                :               CZ2D320BT1
+Product Number               :                   S1R06A
+System ID                    :                  0x2DEF6
+Number of Nodes              :                        2
+Master Node                  :                        1
+Nodes Online                 :                      0,1
+Nodes in Cluster             :                      0,1
+Chunklet Size (MiB)          :                     1024
+Minimum PW length            :                        8
+Minimum PW character classes :                        1
+Subscription Status          :               Subscribed
+
+---Raw System Capacity (MiB)---
+Total Capacity     :   29278208
+Allocated Capacity :     920848
+Free Capacity      :   24509168
+Failed Capacity    :          0
+
+-Usable System Capacity (MiB)--
+Total Capacity     :   19915665
+Allocated Capacity :    1360006
+Free Capacity      :   18555659
+
+-----Remote_Syslog_Status------
+Active              :         1
+General Server      :   0.0.0.0
+General Connection  :      None
+RemoteSyslogProfile :      None
+Security Server     :   0.0.0.0
+Security Connection :      None
+
+--------System Descriptors--------
+Location    : 
+Owner       : 
+Contact     : Vikas Mishra, 120124, vikas.mishra@hpe.com
+Comment     : 
+

@@ -1,0 +1,4 @@
+ Id Name        Prov Type CPG    VSize_MB
+101 zz_t3_vol01 tpvv base SSD_r6    10240
+-----------------------------------------
+  1 total                           10240

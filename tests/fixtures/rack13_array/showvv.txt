@@ -1,0 +1,54 @@
+Id Name                                         Prov Compr Dedup Type  CopyOf BsId Rd -Detailed_State- Rsvd(MiB) VSize(MiB)
+ 2 .mgmtdata                                    full NA    NA    base  ---       2 RW normal              524288     524288
+47 .shared.SSD_r6_0                             dds  v2    NA    base  ---      47 RW normal                1050    4194304
+48 .shared.SSD_r6_1                             dds  v2    NA    base  ---      48 RW normal                1050    4194304
+49 .shared.SSD_r6_2                             dds  v2    NA    base  ---      49 RW normal                1050    4194304
+50 .shared.SSD_r6_3                             dds  v2    NA    base  ---      50 RW normal                1050    4194304
+51 .shared.SSD_r6_4                             dds  v2    NA    base  ---      51 RW normal                1050    4194304
+52 .shared.SSD_r6_5                             dds  v2    NA    base  ---      52 RW normal                1050    4194304
+53 .shared.SSD_r6_6                             dds  v2    NA    base  ---      53 RW normal                1050    4194304
+54 .shared.SSD_r6_7                             dds  v2    NA    base  ---      54 RW normal                1050    4194304
+55 .shared.SSD_r6_8                             dds  v2    NA    base  ---      55 RW normal                1050    4194304
+56 .shared.SSD_r6_9                             dds  v2    NA    base  ---      56 RW normal                1050    4194304
+57 .shared.SSD_r6_a                             dds  v2    NA    base  ---      57 RW normal                1050    4194304
+58 .shared.SSD_r6_b                             dds  v2    NA    base  ---      58 RW normal                1050    4194304
+59 .shared.SSD_r6_c                             dds  v2    NA    base  ---      59 RW normal                1050    4194304
+60 .shared.SSD_r6_d                             dds  v2    NA    base  ---      60 RW normal                1050    4194304
+61 .shared.SSD_r6_e                             dds  v2    NA    base  ---      61 RW normal                1050    4194304
+62 .shared.SSD_r6_f                             dds  v2    NA    base  ---      62 RW normal                1050    4194304
+63  vol1.0                                      tdvv v2    Yes   base  ---      63 RW normal                 525     102400
+79   vol1.0.260910000000                        snp  v2    Yes   vcopy vol1.0   63 RO normal                  --     102400
+83   vol1.0.260911000001                        snp  v2    Yes   vcopy vol1.0   63 RO normal                  --     102400
+86   vol1.0.260912000000                        snp  v2    Yes   vcopy vol1.0   63 RO normal                  --     102400
+89   vol1.0.260913000000                        snp  v2    Yes   vcopy vol1.0   63 RO normal                  --     102400
+64  vol1.1                                      tdvv v2    Yes   base  ---      64 RW normal                 525     102400
+80   vol1.1.260910000000                        snp  v2    Yes   vcopy vol1.1   64 RO normal                  --     102400
+84   vol1.1.260911000001                        snp  v2    Yes   vcopy vol1.1   64 RO normal                  --     102400
+87   vol1.1.260912000000                        snp  v2    Yes   vcopy vol1.1   64 RO normal                  --     102400
+90   vol1.1.260913000000                        snp  v2    Yes   vcopy vol1.1   64 RO normal                  --     102400
+65  vol1.2                                      tdvv v2    Yes   base  ---      65 RW normal                 525     102400
+81   vol1.2.260910000000                        snp  v2    Yes   vcopy vol1.2   65 RO normal                  --     102400
+85   vol1.2.260911000001                        snp  v2    Yes   vcopy vol1.2   65 RO normal                  --     102400
+88   vol1.2.260912000000                        snp  v2    Yes   vcopy vol1.2   65 RO normal                  --     102400
+91   vol1.2.260913000000                        snp  v2    Yes   vcopy vol1.2   65 RO normal                  --     102400
+66  HPE_VM_9ea4986e-1c17-4c7a-9bef-b8d89e3335dc tdvv v2    Yes   base  ---      66 RW normal                 525        256
+67  HPE_VM_7b8b1cf7-b65c-402b-b9c8-8e74ddfdcfc0 tdvv v2    Yes   base  ---      67 RW normal                 525     102400
+68  HPE_VM_bf8a9bfa-afdb-494f-845f-3251041b5adf tdvv v2    Yes   base  ---      68 RW normal                1050       1714
+69  HPE_VM_084a85f4-2c0d-498c-ad67-865e8d5983e6 tdvv v2    Yes   base  ---      69 RW normal                 525      81920
+70  HPE_VM_9b261c99-57af-495c-baf6-8cc2aa70300b tdvv v2    Yes   base  ---      70 RW normal                4200       6317
+71  HPE_VM_99efaade-4f1e-4275-ac7b-98ef8219a736 tdvv v2    Yes   base  ---      71 RW normal                 525       1714
+72  HPE_VM_b90f47ec-1af0-4001-b3be-eb5fcea34de3 tdvv v2    Yes   base  ---      72 RW normal                1050       6317
+73  HPE_VM_9a903517-2425-4cda-a477-61c501a0c6f8 tdvv v2    Yes   base  ---      73 RW normal                7350      81920
+74  HPE_VM_1bb79148-c7a2-487b-b6c8-1ad98bb80146 tdvv v2    Yes   base  ---      74 RW normal                 525       1714
+75  Vol1.0                                      tdvv v2    Yes   base  ---      75 RW normal                 525     288768
+76  Vol1.1                                      tdvv v2    Yes   base  ---      76 RW normal                 525     288768
+77  Vol1.2                                      tdvv v2    Yes   base  ---      77 RW normal                 525     288768
+78  vol2                                        tdvv v2    Yes   base  ---      78 RW normal                 525     102400
+82  root-KVx6                                   tdvv v2    Yes   base  ---      82 RW normal                 525      81920
+93  zz_t2_vol02                                 tdvv v2    Yes   base  ---      93 RW normal                 525       1024
+ 1 .srdata                                      full NA    NA    base  ---       1 RW normal              102400     102400
+ 0 admin                                        full NA    NA    base  ---       0 RW normal               10240      10240
+92 zz_t2_vol01                                  tpvv No    No    base  ---      92 RW normal                 525       1024
+94 zz_t2_vol03                                  tpvv No    No    base  ---      94 RW normal                 525       2048
+---------------------------------------------------------------------------------------------------------------------------
+51 total                                                                                                  675778   70620784

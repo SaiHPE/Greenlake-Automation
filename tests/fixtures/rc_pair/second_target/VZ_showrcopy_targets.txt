@@ -1,0 +1,9 @@
+# showrcopy targets
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name             ID Type Status Options Policy       
+MPB10K-E24U21-LZ  1 IP   failed -       mirror_config

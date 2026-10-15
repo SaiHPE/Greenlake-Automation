@@ -1,0 +1,265 @@
+"""DocumentSteps — the 'verify'-kind steps: post-init verification and the as-built document.
+
+Both are read-only SSH reads of the array and both run AFTER the run's outcome is decided, so
+neither ever changes the run status — a failure here cannot un-succeed an onboarding. The UI reacts
+to the emitted events instead.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable, Mapping
+from types import MappingProxyType
+
+from alletra_onboard.application.documents.asbuilt import generate_asbuilt
+from alletra_onboard.application.documents.asbuilt_parse import parse_asbuilt
+from alletra_onboard.application.documents.verification import verify
+from alletra_onboard.application.provisioning.clients import make_array_cli
+from alletra_onboard.application.replication import read as replication_read
+from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
+from alletra_onboard.domain.models import ArrayWorkItem, RunRecord, WorkflowPhase
+from alletra_onboard.domain.replication import ReplicationIntent
+from alletra_onboard.domain.shared import EndpointCreds
+
+
+class DocumentSteps:
+    # Read-only reads whose section markers `parse_asbuilt` expects (order is not significant).
+    _ASBUILT_COMMANDS: tuple[str, ...] = (
+        "shownode", "showcage", "showsys -d", "shownet", "showversion",
+        "showpd", "showcpg", "showport", "showport -par",
+        "showinventory -csvtable", "checkhealth -svc -detail",
+    )
+    # SPEC-002 array sections: AsBuiltData field -> the read that fills it. Each runs in its own
+    # try so one failing listing costs one section, not the document (R6).
+    _ASBUILT_LISTINGS: tuple[tuple[str, str], ...] = (
+        ("showhost_d", "showhost -d"),
+        ("showhostset", "showhostset"),
+        ("showvv", "showvv"),
+        # `showvv -listcols` on OS 10.5.55 (rack13arcus, 2026-09-13) names the column CPG; UsrCPG/SnpCPG
+        # are rejected ("Invalid columns specified"). Header-driven parsing accepts either spelling.
+        ("showvv_cpg", "showvv -showcols Id,Name,Prov,Type,CPG,VSize_MB"),
+        ("showvvset", "showvvset"),
+        ("showvlun_t", "showvlun -t"),
+        ("showvlun_a", "showvlun -a"),
+    )
+    # SPEC-002 run sections: event type -> (AsBuiltData field, payload key). The LATEST event of
+    # each type wins; the two zoning-check types share a field so whichever came last wins.
+    _ASBUILT_RECORDS: Mapping[str, tuple[str, str | None]] = MappingProxyType({
+        "zoning.plan": ("zoning_plan", "plan"),
+        "zoning.previewed": ("zoning_report", "report"),
+        "zoning.proper": ("zoning_report", "report"),
+        "zoning.rendered": ("zoning_rendered", None),
+        "storage.previewed": ("provisioning_plan", "plan"),
+        "storage.applied": ("provisioning_result", "result"),
+        "storage.paths.verified": ("path_verification", "verification"),
+        # SPEC-018: the replication plan and what the apply did (a failed apply also carries a result)
+        "replication.previewed": ("replication_plan", "plan"),
+        "replication.applied": ("replication_result", "result"),
+        "replication.apply.failed": ("replication_result", "result"),
+        # SPEC-020 R6: the measured latency
+        "replication.link_checked": ("link_check", "link_check"),
+        "replication.link_check.failed": ("link_check", "link_check"),
+        # SPEC-017 R6: the failover test's record, passed or not
+        "failover.completed": ("failover_record", "record"),
+        "failover.failed": ("failover_record", "record"),
+    })
+
+    def __init__(self, coord: RunCoordinator, *, verify_fn: Callable = verify,
+                 read_replication: Callable = replication_read.read_array) -> None:
+        self._coord = coord
+        self._verify_fn = verify_fn
+        self._read_replication = read_replication
+        self._asbuilt: dict[str, bytes] = {}  # generated as-built .docx bytes, per run
+
+    # ------------------------------------------------------------------ post-init verification
+
+    def resolve_credential(self, run_id: str, username: str | None, password: str | None) -> tuple[str, str]:
+        """SPEC-008 R2: an explicit pair overrides; otherwise the run's own credential (ADR 0013); with
+        neither the step refuses with the sentence the UI shows. A username alone is not a credential."""
+        if username and password:
+            return username, password
+        cred = self._coord.array_credential(run_id)
+        if cred.available and cred.secret is not None:
+            return cred.username, cred.secret.get_secret_value()
+        raise StepPreconditionError(
+            "This run holds no array credential — enter the array admin username and password."
+        )
+
+    def start_verify(self, run_id: str, *, username: str | None = None, password: str | None = None) -> RunRecord:
+        coord = self._coord
+        run, item = coord.get_run(run_id), coord.get_work_item(run_id)
+        username, password = self.resolve_credential(run_id, username, password)
+        coord.spawn(run_id, self._run_verify(run, item, username, password))
+        return run
+
+    async def _run_verify(self, run: RunRecord, item: ArrayWorkItem, username: str, password: str) -> None:
+        # The run is already COMPLETE; verification is a read-only confidence check and must NEVER
+        # change the run status — a failure here can't un-succeed the onboarding.
+        coord = self._coord
+        coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, "step.started", "Verifying the array configuration over SSH…")
+        try:
+            report = await asyncio.to_thread(self._verify_fn, item, username, password)
+        except Exception as exc:  # noqa: BLE001 - never propagate (the guard would mark the run failed)
+            coord.emit(
+                run.run_id,
+                WorkflowPhase.CONFIG_VERIFY,
+                "verify.failed",
+                f"Verification error: {type(exc).__name__}: {str(exc)[:200]}",
+            )
+            return
+        if not report.reachable:
+            coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, "verify.failed", report.error or "Could not reach the array over SSH.")
+            return
+        coord.emit(
+            run.run_id,
+            WorkflowPhase.CONFIG_VERIFY,
+            "verify.completed",
+            f"Verified the array — {report.passed} OK, {report.mismatches} mismatch(es), "
+            f"{report.health_total} health issue(s).",
+            data={"report": report.model_dump(mode="json")},
+        )
+
+    # ------------------------------------------------------------------ as-built document (last step)
+
+    def start_asbuilt(
+        self, run_id: str, *, username: str | None = None, password: str | None = None, customer: str = "",
+        site: str = "", application_workload: str = "", purpose: str = "",
+    ) -> RunRecord:
+        coord = self._coord
+        run, item = coord.get_run(run_id), coord.get_work_item(run_id)
+        # The run's array — the same one verify checks. Not chosen here; see RunCoordinator.array_host.
+        host = coord.array_host(run_id)
+        username, password = self.resolve_credential(run_id, username, password)
+        coord.spawn(run_id, self._run_asbuilt(
+            run, item, host, username, password, customer, site, application_workload, purpose,
+        ))
+        return run
+
+    async def _run_asbuilt(self, run: RunRecord, item: ArrayWorkItem, host: str, username: str,
+                           password: str, customer: str, site: str,
+                           application_workload: str = "", purpose: str = "") -> None:
+        # Read-only (SSH show*/checkhealth/showinventory -csvtable) -> the as-built .docx. Post-onboarding
+        # and read-only, so like verify it NEVER changes the run status; the UI reacts to the events.
+        coord = self._coord
+        coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.started",
+                   f"Reading {host} (read-only) and building the as-built document…")
+        try:
+            data = await asyncio.to_thread(self._collect_asbuilt, host, username, password)
+            self._run_records(run.run_id, data)
+            replication = self._replication_intent(run.run_id)
+            if replication is not None:
+                # SPEC-018 R3: the replication states are read from BOTH arrays now, not copied from the plan
+                data.replication_tab = self._replication_tab(replication)
+                data.replication_primary, data.replication_peer = await asyncio.to_thread(
+                    self._collect_replication, EndpointCreds(host=host, username=username, password=password), replication.peer,
+                )
+            # The step's own fields win over the workbook's — the operator is looking at the
+            # document about to be produced, and the sheet may have been filled weeks earlier.
+            data.customer = customer or item.customer_name or ""
+            data.site = site or item.site or ""
+            data.application_workload = application_workload or item.application_workload or ""
+            data.purpose = purpose or item.storage_purpose or ""
+            docx_bytes, warnings = await asyncio.to_thread(self._render_asbuilt, data)
+        except Exception as exc:  # noqa: BLE001 - report, never propagate (would mark the run failed)
+            coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.failed",
+                       f"As-built generation failed: {type(exc).__name__}: {str(exc)[:200]}")
+            return
+        self._asbuilt[run.run_id] = docx_bytes
+        try:
+            coord.store.save_artifact(run.run_id, "asbuilt_docx", docx_bytes)
+        except Exception:  # noqa: BLE001
+            # The document exists and is downloadable from memory. Failing to persist it must not
+            # escape: the guard around this task would mark a finished run failed, which this step
+            # is documented never to do.
+            pass
+        summary = f"As-built ready for {data.name or data.serial_no or host} — {len(docx_bytes) // 1024} KB."
+        if warnings:
+            # The document is produced regardless, so the warnings must travel WITH it — in the
+            # message and in the event data — or a rushed operator sends an incomplete as-built.
+            summary += f" {len(warnings)} item(s) need attention before sending."
+        coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.generated", summary,
+                   data={"serial": data.serial_no, "name": data.name, "customer": data.customer,
+                         "size": len(docx_bytes), "warnings": warnings})
+
+    def _collect_asbuilt(self, host: str, username: str, password: str):
+        creds = EndpointCreds(host=host, username=username, password=password)
+        lines: list[str] = []
+        with make_array_cli(creds) as cli:
+            for cmd in self._ASBUILT_COMMANDS:
+                lines.append(f"===== $ {cmd} =====")
+                lines.append(cli.run(cmd))
+            data = parse_asbuilt("\n".join(lines))
+            for attr, cmd in self._ASBUILT_LISTINGS:
+                try:
+                    setattr(data, attr, cli.run(cmd))
+                except Exception as exc:  # noqa: BLE001 - R6: name it, keep going
+                    data.read_errors[cmd] = f"{type(exc).__name__}: {exc}"
+        return data
+
+    def _run_records(self, run_id: str, data) -> None:
+        """Fill the run sections from the run's own events: the latest payload per event type, plus
+        the union of every apply's removal items (SPEC-007 — a run may apply more than once)."""
+        seen: dict[str, object] = {}
+        for event in self._coord.list_events(run_id):
+            if event.event_type == "storage.applied":
+                data.provisioning_removals.extend((event.data.get("result") or {}).get("removals") or [])
+            if event.event_type == "replication.previewed" and event.data.get("report") is not None:
+                data.replication_report = event.data["report"]
+            target = self._ASBUILT_RECORDS.get(event.event_type)
+            if target is None:
+                continue
+            attr, key = target
+            payload = event.data if key is None else event.data.get(key)
+            if payload is None:
+                continue
+            setattr(data, attr, payload)
+            seen[attr] = event.created_at
+        if "provisioning_result" in seen:
+            ts = seen["provisioning_result"]
+            data.provisioning_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        if "replication_result" in seen:
+            ts = seen["replication_result"]
+            data.replication_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        data.commands = [{k: v for k, v in c.items() if k != "output"} for c in self._coord.list_commands(run_id)]
+
+    def _replication_intent(self, run_id: str) -> ReplicationIntent | None:
+        intent = self._coord.store.get_provisioning_intent(run_id)
+        return intent.replication if intent is not None else None
+
+    @staticmethod
+    def _replication_tab(replication: ReplicationIntent) -> dict:
+        return {
+            "peer_host": replication.peer.host,
+            "rows": [{"vvset": r.vvset, "mode": r.mode, "rpo_minutes": r.rpo_minutes, "peer_cpg": r.peer_cpg}
+                     for r in replication.protections],
+            "failover_test": replication.failover_test,
+        }
+
+    def _collect_replication(self, primary: EndpointCreds, peer: EndpointCreds):
+        """Both arrays, read-only, at generation time. A read that fails is the view's `read_error`;
+        the renderer names it and the document is still produced (R3)."""
+        return self._read_replication(primary), self._read_replication(peer)
+
+    def _render_asbuilt(self, data) -> tuple[bytes, list[str]]:
+        import os
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix=".docx")
+        os.close(fd)
+        try:
+            _out, warnings = generate_asbuilt(data, path)
+            with open(path, "rb") as f:
+                return f.read(), warnings
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+    def get_asbuilt(self, run_id: str) -> bytes | None:
+        cached = self._asbuilt.get(run_id)
+        if cached is not None:
+            return cached
+        stored = self._coord.store.load_artifact(run_id, "asbuilt_docx")
+        if stored is not None:
+            self._asbuilt[run_id] = stored
+        return stored

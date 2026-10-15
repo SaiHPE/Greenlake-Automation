@@ -1,0 +1,81 @@
+switchName:	SAN6700R13U40
+switchType:	181.0
+switchState:	Online   
+switchMode:	Native
+switchRole:	Principal
+switchDomain:	2
+switchId:	fffc02
+switchWwn:	10:00:38:ba:b0:99:09:60
+zoning:		ON (jul2prabhu)
+switchBeacon:	OFF
+FC Router:	OFF
+Fabric Name:	Training_Lab_Rack11
+HIF Mode:	OFF
+Allow XISL Use:	OFF
+LS Attributes:	[FID: 128, Base Switch: No, Default Switch: Yes, Ficon Switch: No, Address Mode 0]
+Index Port Address  Media Speed   State       Proto
+==================================================
+   0   0   020000   id    N64	  Online      FC  F-Port  10:00:5c:ed:8c:53:12:94 
+   1   1   020100   id    N32	  Online      FC  F-Port  1 N Port + 1 NPIV public 
+   2   2   020200   id    N64	  No_Light    FC  
+   3   3   020300   id    N32	  Online      FC  F-Port  51:40:2e:c0:20:89:cc:1c 
+   4   4   020400   id    N64	  No_Light    FC  (Ports on Demand license not assigned or reserved yet) 
+   5   5   020500   id    N64	  No_Light    FC  (Ports on Demand license not assigned or reserved yet) 
+   6   6   020600   id    N64	  No_Light    FC  (Ports on Demand license not assigned or reserved yet) 
+   7   7   020700   id    N64	  No_Light    FC  (Ports on Demand license not assigned or reserved yet) 
+   8   8   020800   id    N64	  No_Light    FC  
+   9   9   020900   id    N64	  Online      FC  F-Port  10:00:5c:ed:8c:53:12:a8 
+  10  10   020a00   id    N64	  No_Light    FC  
+  11  11   020b00   id    N64	  Online      FC  F-Port  10:00:5c:ed:8c:53:12:a2 
+  12  12   020c00   id    N64	  No_Light    FC  (Ports on Demand license not assigned or reserved yet) 
+  13  13   020d00   id    N64	  No_Light    FC  (Ports on Demand license not assigned or reserved yet) 
+  14  14   020e00   id    N64	  No_Light    FC  (Ports on Demand license not assigned or reserved yet) 
+  15  15   020f00   id    N64	  No_Light    FC  (Ports on Demand license not assigned or reserved yet) 
+  16  16   021000   id    N32	  Online      FC  F-Port  51:40:2e:c0:20:89:cb:da 
+  17  17   021100   id    N32	  Online      FC  F-Port  1 N Port + 1 NPIV public 
+  18  18   021200   id    N64	  No_Light    FC  (Ports on Demand license not assigned or reserved yet) 
+  19  19   021300   id    N16	  Online      FC  E-Port  10:00:50:eb:1a:1a:5f:e4 "SAN1624ZR12U40" (downstream)(Trunk master)  
+  20  20   021400   id    N16	  Online      FC  F-Port  10:00:00:10:9b:50:7e:49 
+  21  21   021500   id    N64	  No_Light    FC  (Ports on Demand license not assigned or reserved yet) 
+  22  22   021600   id    N64	  Online      FC  F-Port  10:00:5c:ba:2c:ff:6b:d0 
+  23  23   021700   id    N64	  No_Light    FC  
+  24  24   021800   --    16G	  No_Module   FC  
+  25  25   021900   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  26  26   021a00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  27  27   021b00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  28  28   021c00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  29  29   021d00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  30  30   021e00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  31  31   021f00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  32  32   022000   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  33  33   022100   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  34  34   022200   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  35  35   022300   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  36  36   022400   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  37  37   022500   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  38  38   022600   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  39  39   022700   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  40  40   022800   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  41  41   022900   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  42  42   022a00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  43  43   022b00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  44  44   022c00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  45  45   022d00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  46  46   022e00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  47  47   022f00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  48  48   023000   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  49  49   023100   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  50  50   023200   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  51  51   023300   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  52  52   023400   --    N64	  No_Module   FC  
+  53  53   023500   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  54  54   023600   --    N64	  No_Module   FC  
+  55  55   023700   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  56  56   023800   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  57  57   023900   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  58  58   023a00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  59  59   023b00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  60  60   023c00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  61  61   023d00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  62  62   023e00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 
+  63  63   023f00   --    N64	  No_Module   FC  (Ports on Demand license not assigned or reserved yet) 

@@ -1,0 +1,2 @@
+# createvlun APP.test.vv 16 set:ESX1
+Error: Volume APP.test.vv is from active-active group APP_Test.r188150. Cannot export to host which is not admitted to the group.

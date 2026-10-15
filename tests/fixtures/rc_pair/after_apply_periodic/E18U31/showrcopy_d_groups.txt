@@ -1,0 +1,56 @@
+# showrcopy -d groups
+
+Remote Copy System Information
+Status: Started, Normal
+
+Group Information
+
+Name          ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                      
+300gb.r188150   22 AlletraMP_E18U31 Stopped  Secondary  Sync     SSD_r6       SSD_r6     auto_recover,auto_synchronize
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime            LocalSet RemoteSet
+  300gb        1521 300gb         269 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:20 IST 300gb    300gb    
+  Test         1522 Test         9342 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:20 IST 300gb    300gb    
+
+Name             ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                                    
+APP_Test.r188150   13 AlletraMP_E18U31 Stopped  Secondary  Sync     SSD_r6       SSD_r6     auto_recover,auto_synchronize,active_active
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime            LocalSet RemoteSet
+  APP.test.vv   531 APP.test.vv  4754 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:21 IST APP_Test APP_Test 
+
+Name                      ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Intern_Automation.r188150   17 AlletraMP_E18U31 Stopped  Secondary  Sync     SSD_r6       SSD_r6            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime            LocalSet RemoteSet
+  Automation1   687 Automation1  6199 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:21 IST NA       NA       
+  Automation2   688 Automation2  6200 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:21 IST NA       NA       
+  Automation3   689 Automation3  6201 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:21 IST NA       NA       
+  Automation4   690 Automation4  6202 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:21 IST NA       NA       
+
+Name                       ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Intern_Automation2.r188150   21 AlletraMP_E18U31 Stopped  Secondary  Sync     SSD_r6       SSD_r6            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime            LocalSet RemoteSet
+  Automation5  1313 Automation5  8288 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:21 IST NA       NA       
+  Automation6  1314 Automation6  8290 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:21 IST NA       NA       
+  Automation7  1315 Automation7  8291 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:21 IST NA       NA       
+  Automation8  1316 Automation8  8292 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:21 IST NA       NA       
+
+Name             ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Test-RCG.r188150   14 AlletraMP_E18U31 Stopped  Secondary  Sync                                    
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime            LocalSet RemoteSet
+  TestRC_VV1    554 TestRC_VV1   4838 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:22 IST NA       NA       
+  TestRC_VV2    555 TestRC_VV2   4839 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:22 IST NA       NA       
+
+Name              ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Test-RCG2.r188150   18 AlletraMP_E18U31 Stopped  Secondary  Sync                                    
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime            LocalSet RemoteSet
+  TestRC2_VV1  1000 TestRC2_VV1  6857 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:22 IST NA       NA       
+  TestRC2_VV2  1001 TestRC2_VV2  6858 Stopped       none      none     NA      NA     NA     2026-10-09 23:32:22 IST NA       NA       
+
+Name                   ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                                               
+zz_rc_test_rcg.r188150   28 AlletraMP_E18U31 Started  Secondary  Periodic SSD_r6       SSD_r6     Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV        ID   RemoteVV        ID   SyncStatus    Resync_ss Sync_ss  VV_iter  R_iter S_iter LastSyncTime            LocalSet      RemoteSet 
+  zz_rc_test_v01 1779 zz_rc_test_v01 12389 Synced        none      none     188150/1 NA     NA     2026-10-09 23:39:24 IST zz_rc_test_rc zz_rc_test
+
+Name                  ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                                               
+zz_rc_vvs_rcg.r188150   27 AlletraMP_E18U31 Started  Secondary  Periodic SSD_r6       SSD_r6     Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV      ID   RemoteVV      ID   SyncStatus    Resync_ss Sync_ss  VV_iter  R_iter S_iter LastSyncTime            LocalSet     RemoteSet
+  zz_rc_vol01  1778 zz_rc_vol01  12373 Synced        none      none     188150/1 NA     NA     2026-10-09 23:39:23 IST zz_rc_vvs_rc zz_rc_vvs
+

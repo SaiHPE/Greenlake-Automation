@@ -1,0 +1,385 @@
+# Lessons register
+
+What the v0.13.0 cycle (bounded-context refactor + HPE Design System redesign + live-array
+validation) taught us, written as rules so the same mistake is not made twice. Each entry states
+the rule, then the incident that earned it. Append new lessons; do not rewrite history.
+
+Related: [ARCHITECTURE.md](ARCHITECTURE.md) · [UX-GUIDELINES.md](UX-GUIDELINES.md) ·
+[adr/](adr/) · [ux/CHECKLIST.md](ux/CHECKLIST.md)
+
+---
+
+## Driving devices and their browsers
+
+**1. Wait FOR positive proof of readiness — never for the absence of a bad sign.**
+The rc.2 wizard fix waited for the "Initializing your system" spinner text to be *absent*. At goto
+time a single-page app has rendered *nothing*, and a blank page has no spinner text either — the
+wait concluded ready instantly and the run died on the same timeout it was meant to fix, confirmed
+on live retest. Blank ≈ absent. Readiness means a known screen's own text is visible
+(`CLOUDINIT_TEXT["ready"]`).
+
+**2. Budget for device boot states, and show liveness while waiting.**
+The array sits in "Initializing your system" for minutes on first boot — a state no release had
+ever handled, so every one of them failed ~42 seconds in while the array was working normally.
+Poll patiently (minutes, not seconds) and emit a progress line about once a minute so the operator
+sees a deliberate wait, not a hang.
+
+**3. A timeout must say what it was waiting for; an unknown screen must quote itself.**
+"Browser automation did not complete" left the operator with only a screenshot. The handler was
+*discarding* rich diagnostics: our own guard messages and Playwright's "waiting for <locator>"
+line. Once relayed, the very next live failure named its locator and the fix took minutes. The
+ready-wait timeout goes further and quotes the page text, so a screen we have never seen
+identifies itself in the Progress log.
+
+**4. Diagnose remote failures by matching event timestamps against the code's wait constants.**
+Start 10:00:39 → fail 10:01:21 = 42 s ≈ 5 s (welcome wait) + 30 s (EULA wait) + overhead. That
+arithmetic identified the exact code path with zero hardware access — twice. Operators' timelines
+are traces; read them as such.
+
+**5. Normalise the natural form of operator input at intake; never let a downstream validator
+reject what a person would reasonably type.**
+The wizard rejects `http://proxy…` ("Value must be valid IPv4 or domain name"), but a URL is
+exactly how proxies appear in browser settings and `HTTP_PROXY`. `NetworkConfig` now strips the
+scheme and relocates an embedded port. Because normalisation runs on model validation, records
+already stored heal themselves on load — prefer that placement over fixing it at the point of use.
+
+## State and safety
+
+**6. A result may be durable; an approval must not outlive its inputs or its process.**
+Making the previewed provisioning plan durable (C7) silently removed the gate on the ONLY step
+that writes to a customer array: a plan approved before a restart, a composition edit, or a
+re-discovery still authorised an apply — and `apply_plan` recomputes from current inputs, so what
+got created could differ from what was approved. The plan is now held with the exact discovery it
+was built from and withdrawn when any of the three change. Ask of every cached value: is this a
+*result* or an *authorisation*?
+
+**7. The one action that writes to customer equipment takes an explicit authorisation.**
+The redesign quietly reduced "create storage objects" to a single click while double-confirming
+the far less consequential "discard run". Confirmation weight must scale with consequence, not
+with how easy the dialog is to build.
+
+**8. A durable snapshot needs a visible age.**
+Discovery persisting across restarts is what lets an engagement resume — and also what lets a run
+reopened days later provision hosts from week-old WWPNs. The steps that act on the snapshot now
+state when the environment was last read and warn past twelve hours. If you persist it, date it
+where it is used.
+
+**9. Anything you persist needs bounded retention.** The as-built document (hundreds of KB per
+run) accumulated forever; artifacts now keep only the most recent runs. Decide the bound when you
+add the table, not when the disk fills.
+
+**10. An invariant must cover every statement inside it.** "This step never changes run status"
+was broken by a store write sitting *outside* the try/except that enforced it — a failure there
+would have flipped a finished run to failed via the crash guard. When you add a line to a guarded
+block, check it is actually inside the guard.
+
+## Verification
+
+**11. Passing tests + clean typecheck + your own probing is not a review.**
+Two independent reviewers over the final diff found one critical backend regression and five
+operator-trapping UI dead-ends that 184 green tests, tsc, and my own live DOM assertions had all
+missed. For code with no automated tests (this frontend, by decision), independent review of the
+diff *is* the safety net — schedule it before every merge, not as a favour.
+
+**12. Drive the running application; reading code lies by omission.**
+The forbidden word "health" surviving in the UI, the SSE-derived rail states, and the operator
+dead-ends were all found (or proven) by starting the app and asserting on the live DOM — not by
+reading the sources that "obviously" handled them.
+
+**13. Before trusting any UI observation, verify WHICH bundle the browser loaded.**
+Twice in one cycle: my own smoke test asserted against a stale cached bundle, and the operator
+reported bugs against the old UI while running the new executable. Compare the loaded script hash
+against what the server serves before believing anything the page shows.
+
+**14. Same-origin upgrades require an explicit cache policy.**
+Every release serves from `127.0.0.1:8765`; with no `Cache-Control`, browsers kept the previous
+`index.html` *and* its old hashed bundle indefinitely. Serve the entry document `no-cache` and the
+content-hashed assets `immutable`. Any locally-served SPA that upgrades in place needs this.
+
+**15. Validate on hardware via release candidates; keep the stable number clean.**
+Four RCs each surfaced a real defect no test or review had caught — one predating the refactor by
+months. Tag candidates as semver pre-releases (the workflow marks `-rc.N` `--prerelease`) so a
+review build never presents itself as the current stable download, and the final number lands on
+the commit that actually survived hardware.
+
+**16. After renaming packages, verify everything that references modules by STRING.**
+`collect_submodules` in the PyInstaller spec, `__file__`-relative resource paths (`parents[2]`),
+frozen-build lookups, and the `.github` guidance tree all bind by name at build/read time, not
+import time. Build and smoke-test the packaged executable locally before tagging — a rename that
+imports cleanly can still ship a broken exe.
+Addendum (v0.14.0-rc.1): **a guarded optional import is a packaging blind spot** — every exe ever
+shipped lacked a working WSAPI SDK because `try: import hpe3parclient` swallowed a frozen-only
+failure (`eventlet` dynamically imports dnspython; PyInstaller's analysis can't see it), and no
+packaged feature touched WSAPI until the preflight found it on hardware. Two rules follow: give
+every guarded optional import a **capability flag the API serves** (`/app/profile
+capabilities.wsapi_sdk` + the captured import error) so one localhost request proves any build,
+and check that flag on the locally built exe as part of cutting every release.
+
+## Refactoring discipline
+
+**17. One mechanical move per commit, with the test suite as referee.**
+The 733-line god-object, the domain split, and two package renames landed as eleven commits, each
+green. The one deliberate behaviour change (a served label) was called out as such in its commit.
+Mixing a move with a change is how refactors break things invisibly.
+
+**18. Prove "dead" before deleting, and protect deliberate differences from deduplication.**
+Every deleted module was grep-verified unreferenced first. And the near-duplicate credential gates
+were *deliberately* different (`GL_MEMBER_WORKSPACE_ID` vs `GL_TOKEN_URL`) — merging them for
+tidiness would have changed behaviour. Two similar functions are only duplicates if their
+differences are accidents; check before unifying, and comment the survivor.
+
+**19. A single source of truth pays for itself immediately.**
+When the design system's "never say health" rule surfaced, the step label had exactly one
+definition — served from `domain/workflow.py` — because Phase 2 had killed the hand-synced
+frontend mirror. One line fixed every surface. Every hand-maintained mirror is a future
+inconsistency with a deadline.
+
+## Working with the design system, and the repo
+
+**20. The shipped tokens are ground truth; the marketing site needs a real browser.**
+design-system.hpe.design is a client-rendered SPA — plain fetchers, raw HTML and the GitHub source
+all return an empty shell; only driving its client router in a browser read it. Meanwhile the
+authoritative *values* were already installed in `node_modules/hpe-design-tokens`. Read guidance
+from the site, values from the package — and expect real corrections (retired GreenLake badge,
+"never say health", primary buttons are `#008567` not brand green).
+
+**21. Sanitise lab data before anything reaches the public repository.**
+The mockups originally carried real lab management, switch and gateway IPs. The blanket `*.html`
+gitignore exists precisely because captured UI leaks; the committed copies use documentation-range
+`192.0.2.x` addresses, with a narrow gitignore exception rather than a force-add. Treat every
+screenshot, capture and mockup as containing secrets until checked.
+
+**22. Design on mockups, implement against sign-off.**
+Fifteen screens were iterated as throwaway HTML — including a full professional-register copy
+revision — before any component was written, and implementation then copied the approved wording
+verbatim. Changing a sentence in a mockup costs nothing; changing it across thirteen components
+does not. Where shipped behaviour forces a divergence from the mockup (Cloud Connectivity submits
+for a reason), record the divergence explicitly.
+
+## Diagnosing a system you can only see through someone else's terminal
+
+**23. Reproduce the reported symptom yourself — its error message is usually the diagnosis.**
+A lab array was reported as "SSD drives have old firmware, can't create a base VV", and days went
+into drive firmware, enclosure FRU data and a 3.4 GB OS upgrade. One command settled it:
+`createvv -tpvv SSD_r6 zz_test 1g` → *"Array has not yet completed the subscription process."* Not
+firmware, not the cage — a GreenLake subscription gate. Nobody had run the command the complaint was
+about. Before accepting anyone's diagnosis, execute the failing operation and read what the system
+says about itself.
+
+**24. Alerts persist; state does not. Check the timestamps before believing either.**
+`checkhealth` reported all twelve drives `Failed (Replace Drive, Unsupported Cage)`; `showpd -s`
+reported all twelve `normal`. `showalert -d` resolved it: every alert was timestamped four days
+earlier, from a fault that had been repaired and never cleared. A team had been working from that
+text ever since. An alert records an event; a state command records now. When they disagree the
+timestamps decide — and clearing alerts is part of finishing a repair.
+
+**25. When a transfer reports success but the artifact is wrong, split the path before theorising.**
+`scp` reported 3456 MB transferred; 204800 bytes landed — twice, at identical size, for a 3.4 GB and
+a 39 MB file. Two plausible hypotheses (a file-size `ulimit`, a full filesystem) were both wrong and
+both cost a round trip. What settled it was `dd if=/dev/zero of=… bs=1M count=50`: 52 MB written
+locally at 1.6 GB/s, no network involved, proving the destination innocent and the transport guilty
+in one step. Prefer the experiment that halves the problem over the hypothesis that explains it.
+
+**26. Quote what the tool printed; label what you concluded.**
+Arguing that a node's admin port was uncabled, I wrote "nobody has physically looked at the LED" —
+which no output supported and which asserted something about people I cannot observe. The defensible
+version was narrower and stronger: two checks four hours apart still failing, zero packets ever on
+that interface, `eth0 DOWN` holding a self-assigned link-local address. Findings get quoted;
+inferences get named as inferences. The narrow claim is the one that survives being challenged.
+
+**27. A liveness probe must treat any structured response as alive.**
+Our recon script declared WSAPI down because unauthenticated `GET /api` returned
+`403 {"code": 6, "desc": "invalid session key"}` — a service answering in its own protocol, which is
+proof of life. The array's own `showwsapi` said `Enabled Active`. Only a connection failure means
+dead. This is lesson 1 wearing different clothes: the probe asserted one specific success shape
+instead of distinguishing *answered* from *did not answer*.
+
+**28. An adapter that translates to a vendor API cannot be validated by a fake.**
+`ensure_volume` had sent `{"tdvv": true, "compression": true}` for data-reduction volumes since the
+day it was written, and every test passed — because every test used a fake WSAPI that accepted
+whatever it was handed. The real array rejects it twice over: `tdvv` is the legacy 3PAR spelling
+(`code 78 … required: tpvv,reduce`) and `compression` is not a field on that API at all
+(`code 42 unrecognized name`). Fakes prove our code calls what we think it calls; only the endpoint
+proves that is what it wants. Every vendor-API adapter needs one live probe, with the accepted body
+recorded in a test so nobody restores the plausible-looking wrong one.
+Corollary: the failure was identical at 1 GiB and 16 GiB, which refuted the "compressed volumes have
+a 16 GiB minimum" theory outright. When two very different inputs fail the same way, the input is not
+the variable — read the error text instead of pattern-matching it to a known constraint.
+
+**29. Read the SDK function you depend on; "find" may be spelled "create".**
+`ensure_host` leaned on python-3parclient's `findHost()` for WWN ownership — which does not query
+anything: it runs `createhost <uuid> <wwn>` over the SDK's *own* SSH channel (never configured by
+our client), parses "already used by host", and deletes its probe host. On our client it always
+raised; a broad `except → None` made every WWN look unowned; the reconcile path then re-added an
+already-present WWN, the array answered `EXISTENT_PATH` (it does so even against the *same* host),
+and a conflict-swallow reported `exists` while silently dropping the new WWN — three defects
+stacked so the failure looked like success. The unit stub had faithfully implemented `findHost` as
+a working query, so every test was green; only the live zz_probe lifecycle caught it. Fixes worth
+generalising: derive state from a read you already trust (`getHosts` → FCPaths), never from a
+helper you haven't read; make the stub model the vendor's real surface (the fixed stub has **no**
+`findHost`, so the trap cannot re-hide); and treat a conflict-swallow as a claim — it is only safe
+if the request provably contains nothing the server could legitimately conflict on.
+
+---
+
+## When a decision lives only in a code comment
+
+**30. A capability that no document authorises will still ship, and its own operator will not know it is there.**
+ADR 0004 decided the tool never writes to a SAN switch. `CONTEXT.md` said the same in the glossary.
+Neither was ever amended. A write path shipped anyway in v0.14.0/v0.15.0 on a verbal mandate recorded
+in a docstring (`zoning_stage.py:2`) and an assistant's memory file, and nowhere else: `ALLOWED_WRITE`
+came back to `brocade_client.py:47` while ADR 0004 line 98 still asserted it had been removed, and
+`POST /zoning/stage` was added ungated. On 2026-08-31 the operator drove it against a live production
+fabric and it created a zone and ran `cfgsave`. Two days later, reviewing that same session, **he
+stated the tool had not written anything and that he had pasted the commands himself** — his SSH
+transcript contains only `cfgshow`, `cfgtransshow` and `alishow`. His belief was consistent with every
+document in the repository; only the code disagreed, and the code is what ran. A verbal mandate is not
+a decision until it lands in the ADR and the glossary. Until then it is drift, and the person operating
+the tool is the last to find out.
+
+**31. "It never activates" is not the same promise as "it never writes" — say which one you mean.**
+The staging design was scrupulous about the first: `cfgenable` was stripped from the batch AND absent
+from the write allowlist, two independent guards, verified before the live run. It said nothing about
+the second, and the operator heard the safety language and concluded the tool could not touch the
+switch at all. The UI reinforced it by rendering `cfgenable <cfg>` in the same monospace block, weight
+and colour as the four commands that had just executed, so the screen showed no boundary between what
+the tool did and what a human must do. When a step both writes and withholds, the writing needs naming
+at least as loudly as the withholding.
+
+**32. A gate on intent-to-do is not a gate on done.**
+`ZONING_OK = ("verified-proper", "staged")` let a staged-but-unactivated zone unlock provisioning.
+Staging writes to the *defined* configuration; only `cfgenable` makes zoning real. On 2026-08-31 host
+`10.132.30.86` was staged, the gate opened, and path verification then correctly reported `no_path`
+for it, because that host still had no route to the array. The gate and the verifier disagreed and the
+verifier was right. Gate on the observable end state — the host is logged in — never on the fact that
+somebody asked for it.
+
+**33. A fallback source is not a second source. If the fabric can see it, the plan must list it.**
+The zoning plan took its host list from vCenter and consulted the switches' name servers only when
+vCenter returned nothing. On 2026-09-12, rack13arcus: vCenter answered with three ESXi hosts, so the
+plan showed three ESXi hosts — while the declared switches' own `nsshow` held a Windows server's
+unzoned HBA (`51:40:2e:c0:20:89:cc:1e`, the very host the test existed to zone) and a Linux server's
+two HBAs (`HN:localhost.localdomain OS:Linux`, one per fabric, unzoned on both). The Hosts-tab row the
+operator had typed for the Windows host never reached the plan either. The step could not zone any of
+them, and nothing on the screen said so: the hosts were simply absent. A mixed estate — Windows and
+Linux beside a vCenter — is the customer case, not the exception. Every source that can see an
+initiator contributes to the list (vCenter, the sheet, the array's logins, the declared switches'
+local name servers); the source is shown on each row, and a later source may only fill a name an
+earlier one left empty. `test_rack13_zoning_candidates_are_the_union_of_every_source` pins it to
+the live captures.
+
+**34. The data the operator asks for is usually already in the output you parsed and discarded.**
+"Zoned to which host? By which zone?" — the zone name was in the `cfgshow` the plan had read to decide
+`already_zoned`, and the plan kept only the boolean. "Why is `.86` offered on F2?" — `nscamshow`
+prints `Switch entry for 32` above the entry and `fabricshow` names domain 32; the plan kept only the
+WWPN. Each answer cost the operator a second SSH session and a paste into chat. When a parser reduces
+a rich record to a flag, keep the identifying field beside the flag (`zone_names`, `placed_on_switch`,
+`switch_name`, `fabric_name`): the screen can then show its evidence instead of asking to be trusted.
+
+**35. A post-mortem of a shared array must start with "who else touched it, and when".**
+The first provisioning check of 2026-09-13 found the VV-set missing and I named it a create
+defect, with a plausible mechanism (the SDK does not check its POST response). The set had been
+removed by hand minutes earlier — the operator had run the cleanup commands from an earlier message
+before the check. The array's event log (`showeventlog -oneline`) would have shown the
+`removevvset` in one line; instead the conclusion came from `show*` tables, which say what exists
+now and nothing about how it got that way. The repeat run, polled from before the click and
+followed by the event log, showed every command the tool sent was correct. Two rules: read the
+event log before naming a defect on a shared array, and keep `show*` (state) and the event log
+(history) as separate kinds of evidence — a wrong answer built on the first is usually a right
+answer about the wrong moment.
+
+**36. Widening a source list widens every default that says "all".**
+SPEC-003 taught provisioning to see every host the run can name — vCenter, the sheet, the array's
+own host objects, the fabric — so a Windows box declared on the sheet could finally be put in a
+host set. Nobody re-read the one place that said "all": a host set with blank *Members* meant
+"all discovered hosts", which had quietly meant "the vCenter inventory" and now meant "every host
+object on the shared array". The first live plan on rc.9 (S-1, 2026-09-13) proposed adding fifteen
+other teams' hosts to a set that already had this run's volumes exported to it. The plan said so
+in plain words and the operator stopped — SPEC-001 earned its keep — but the default should never
+have existed. Rules: when a set of inputs grows, grep for every consumer that treats "empty" as
+"everything" and make each one either explicit or a blocker; and never let a blank cell on a sheet
+stand for a decision that touches other people's objects.
+
+**37. Idempotency by conflict is only as good as the conflict; an auto-assigned identifier never conflicts.**
+Every `ensure_*` in the WSAPI client was idempotent by letting the array refuse a duplicate —
+EXISTENT_HOST, EXISTENT_SV, EXISTENT_VLUN. It worked for the four kinds whose identity is a name.
+It never worked for an export at an *auto* LUN, because the array does not see a duplicate: it is
+being asked for "the next free LUN", and it gives one. On 2026-09-14 the approved plan said an
+export existed at LUN 0 and 1 (SPEC-001 had read it correctly); apply re-sent it anyway and the
+array presented both volumes again at LUN 3 and 4. Two rules: a write is idempotent only if it
+reads first or its identity is fully specified — "let the array refuse it" is not a strategy when
+the array is choosing part of the identity; and apply must make the same judgement the plan made,
+from the same read, or the plan is a story and not an approval. The defect was visible only because
+path verification had learned to count LUNs the day before (6 LUNs for 4 volumes); a boolean
+"live on both fabrics" would have hidden it.
+
+**38. A script that ships to Windows PowerShell 5.1 is ASCII, or it is not a script.**
+The first `session.ps1` (rc.14, 2026-09-14) died with *Unexpected token* at line 69 before its
+first prompt. It had been parse-checked under pwsh 7, which reads files as UTF-8. Windows
+PowerShell 5.1 reads a BOM-less file as the ANSI code page: the em dash in `" — $detail"` became
+`â€”`, and `0x94` in Windows-1252 is `”`, a quotation mark PowerShell honours as a string
+delimiter — the string closed early and every quote after it was inverted. Rules: anything the
+jump box runs unchanged is pure ASCII (`tests/unit/test_session_runner.py` pins it — a test that
+reads bytes, not text, so an editor cannot hide the character); a parse check is run under the
+interpreter that will run the file, or the closest thing — decode the bytes as cp1252 before
+parsing; and a script's evidence of working is the operator's first run, not the author's parser.
+
+**39. A sort at the render is not a sort of the data, and "no error text" is not acceptance.**
+SPEC-007 R3 said the removal set is in dependency order; the UI sorted it, the as-built sorted it,
+the tests checked the sorted rendering. The list itself, in the `storage.applied` event, was in
+outcome order. The first consumer that was not a renderer — the session runner, 2026-09-14 — pasted
+it as it came, and the array refused `removehost` and `removevv -f` for objects still in their sets.
+Then the runner's check *"the removal lines were accepted"* passed, because it looked for *Error* and
+the 3PAR CLI refuses in prose: *is still a member of set*, *Attempt to delete vv … which is a member
+of vv set*. Two rules: an ordering the spec promises is a property of the data, applied where the
+data is built, so every consumer — including the ones not written yet — gets it; and acceptance of a
+CLI command is judged against the command's own refusal texts, pinned from a real transcript
+(`tests/fixtures/rack13_array/cleanup_refused_s12.txt`), never against the absence of a word.
+
+**40. A fix that removes the symptom on the author's machine is a hypothesis until the failing machine confirms it.**
+S-12's last FAIL was *The underlying connection was closed: An unexpected error occurred on a send*
+on a WSAPI read eight minutes after login. I called it a stale pooled connection and shipped
+`DisableKeepAlive` + a retry in rc.16. The next day the same text came back on the *first* read
+after login — the "fix" had made it worse. The cause that fits every observation is a Windows PowerShell 5.1
+trait: a script-block certificate callback (`{ $true }`) runs on the first TLS handshake and cannot
+run on the .NET thread that performs any later one, so a new handshake fails. Keep-alive had been
+hiding it; removing keep-alive exposed it on every request. The capture script and rc.15 "worked"
+only because one connection carried the session. And the rc.17 fix itself never ran: its `#pragma` made
+5.1's compiler fail, the script fell back to the old callback with a console warning nobody saw, and the
+next run "confirmed" a fix that was not in effect — a probe on the jump box (2026-09-15) found it. Rules: a diagnosis of a failure seen once, on a
+machine I cannot reproduce on, is recorded as a hypothesis with the fix that tests it, not as the
+cause; and PowerShell that must run on 5.1 compiles its callbacks (`Add-Type`) — a script block is a
+callback only on the thread that created it; and a fallback path that changes behaviour writes its
+choice into the evidence (the report header), never only to the console.
+*Confirmed 2026-09-16 (S-13): with the report header reading `TLS callback: compiled`, the read that had
+failed in three sessions passed.*
+
+**41. A fact decided in one layer is decided again, differently, in the next.**
+On 2026-09-28 one question — "what else is like that bug?" — found eight defects of a single shape in a
+day. Discovery knew a host was Linux; the plan never asked and gave it the VMware persona. The union
+renamed a found host to the array's name, but the planner still decided "exists on the array" by who
+named it first, and told the operator to create a host the array already had. `ensure_host` checked
+the persona before checking whether it would create anything. The zoning plan zoned a WWPN the
+provisioning plan would have blocked. Each layer was tested; the seams were not. Rule: when a bug is
+fixed, grep for every other place the same fact (name, OS, persona, transport, existence, a
+normalised ID) is derived, and make each derive it from the same source — a flag on the object
+(`on_array`) beats a rule re-inferred from provenance (`source == "array"`).
+
+**42. What a device says about itself is a claim, not an identity; and a test can pin the bug.**
+The fabric name server's `HN:` looked like a host name, and on rack13 it was — until the zoning screen
+showed two HBAs called `localhost.localdomain`. The captured fabrics already held 29 WWPNs under
+`localhost.bgl1…`; grouping by that name would have made one array host out of many servers. Two tests
+had pinned the placeholder as a name, and another pinned the silent dedupe of two ports given one
+alias — both passing, both wrong. Rules: a self-reported name joins nothing until something
+independent agrees with it (and defaults are refused outright); before pinning observed behaviour in a
+test, ask whether the behaviour is correct or merely current.
+
+**43. A security alert can be the price of a field requirement; write the trade-off where the alert will be fixed.**
+On 2026-10-11 the tool could not log in to a FOS 7.0.2c switch (`SW6505_D21U36_F1`): `paramiko>=3.4`
+had let the jump box take 5.0, which removed every SHA-1 key exchange and `ssh-rsa` host key (4.0 had
+already removed `ssh-dss`), and old FOS offers nothing else. Pinning `paramiko>=3.4.0,<4` fixed it live;
+the same push opened a Dependabot alert (*rsakey.py allows SHA-1*) with no 3.x fix. The alert was
+dismissed as tolerable risk (read-only switch logins) with the reason on the alert, at the pin in
+`pyproject.toml`, and in `test_dependencies.py`, which fails if the pin is loosened. Rule: when a
+dependency is held back for a device, say why in all three places a future "clear the alerts" pass
+will touch, and test the pin so that pass has to read the reason before it can undo it.

@@ -1,0 +1,65 @@
+# help creatercopygroup
+creatercopygroup - Create a Remote Copy volume group.
+
+SYNTAX
+    creatercopygroup [options] <group_name> <target_name>:<mode>
+        [<target_name>:<mode>...] 
+
+DESCRIPTION
+    The creatercopygroup command creates a remote copy volume group.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopygroup_create right
+
+OPTIONS
+    -domain <domain>
+        Creates the remote copy group in the specified domain. The volume group
+        must be created by a member of a particular domain with Super or Edit
+        privileges.
+
+    -usr_cpg <cpg name> <target_name>:<cpg_name>...
+        Specify the local user CPG and target user CPG that will be used for
+        volumes that are auto-created. The local CPG will only be used after
+        failover and recovery.
+
+SPECIFIERS
+    <group_name>
+        Specifies the name of the volume group, using up to 22 characters if the
+        mirror_config policy is set, or up to 31 characters otherwise. This name
+        is assigned with this command.
+
+    <target_name>
+        Specifies the target name associated with this group. This name should
+        already have been assigned using the creatercopytarget command. The
+        <target_name>:<mode> pair can be repeated to specify multiple targets.
+
+    <mode>
+        Specifies that the mode of the created group, the available modes are:
+            sync     - synchronous replication
+            periodic - periodic asynchronous replication
+        The <target_name>:<mode> pair can be repeated to specify multiple targets.
+        Please refer to the remote copy users guide for a detailed description
+        of each operating mode.
+
+NOTES
+    When a Remote Copy group is created, a VV set will also be created.  Its
+    name will be the remote copy group's name prepended with "RCP_", with
+    numbers appended if necessary to make the set name unique.  Volumes will
+    automatically be added to and removed from this set when volumes are
+    admitted to and dismissed from the group.
+
+EXAMPLES
+    The following example creates an asynchronous periodic mode volume group
+    named Group1 whose target system is System2 (target name System2_out):
+
+        creatercopygroup Group1 System2_out:periodic
+
+    If you are using domains, the syntax is as follows:
+
+        creatercopygroup -domain domain2 Group1 System2_out:periodic
+
+    If you are using volume auto-create:
+
+        creatercopygroup  -usr_cpg Localcpg target:Targetcpg groupname target:periodic
+

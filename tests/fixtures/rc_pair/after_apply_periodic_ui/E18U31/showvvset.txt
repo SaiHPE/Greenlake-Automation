@@ -1,0 +1,18 @@
+# showvvset
+Id Name                Members            
+ 3 Testcrv_volumeset   test_CRV           
+13 rcopy_async_test    rcopy_async_test_vv
+20 Oneview-vol-test    oneview-vol-test2  
+21 Oneview-vol-test2   Oneview-vol-test2  
+30 patchi              patchi             
+                       patchivolume       
+31 patchisched.Snapset --                 
+32 patchisnapshot      --                 
+33 APP_Test            APP.test.vv        
+39 Kiran_vv_Set        Kiran_VV           
+45 300gb               300gb              
+                       Test               
+46 zz_rc_vvs_rc        zz_rc_vol01        
+47 zz_rc_test_rc       zz_rc_test_v01     
+------------------------------------------
+12 total               12                 

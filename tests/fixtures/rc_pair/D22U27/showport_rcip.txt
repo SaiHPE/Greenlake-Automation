@@ -1,0 +1,6 @@
+# showport -rcip
+N:S:P State ---HwAddr---       IPAddr Netmask/PrefixLen       Gateway  MTU   Rate Duplex AutoNeg
+0:4:3 ready 40A6B7D8E6A2 10.54.122.92     255.255.248.0 10.54.127.254 1500 10Gbps   Full     Yes
+1:4:3 ready 40A6B7D900C2 10.54.122.93     255.255.248.0 10.54.127.254 1500 10Gbps   Full     Yes
+------------------------------------------------------------------------------------------------
+    2                                                                                           

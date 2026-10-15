@@ -1,0 +1,1015 @@
+import asyncio
+
+import pytest
+from pydantic import SecretStr
+
+from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
+from alletra_onboard.application.onboarding.greenlake_provision import (
+    DONE,
+    FAILED,
+    WARNING,
+    PhaseOutcome,
+    ProvisionResult,
+)
+from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+from alletra_onboard.application.service import OnboardingService, RunBusyError
+from alletra_onboard.config import Settings
+from alletra_onboard.domain.models import (
+    ArrayWorkItem,
+    BrowserResultStatus,
+    DsccSetupConfig,
+    FieldCheck,
+    FieldCheckStatus,
+    NetworkConfig,
+    RunMode,
+    RunStatus,
+    VerificationReport,
+    WorkflowPhase,
+)
+
+
+def _item(**overrides):
+    data = {
+        "serial_number": "SGHD45FF0Y",
+        "part_number": "S0B84A",
+        "subscription_key": SecretStr("secret"),
+        "service_catalog_region_id": "ap-northeast",
+        "dscc_region_code": "jp1",
+        "cloudinit_url": "https://169.254.239.27/cloudinit",
+        "network": NetworkConfig(
+            mgmt_ipv4="10.64.154.225",
+            mask="255.255.248.0",
+            gateway="10.64.159.254",
+            dns=["10.203.96.10"],
+            ntp="ntp.example.com",
+            timezone="Asia/Kolkata",
+        ),
+        "dscc_setup": DsccSetupConfig(system_name="array01", country="India"),
+    }
+    data.update(overrides)
+    return ArrayWorkItem(**data)
+
+
+def _service(tmp_path, *, settings: Settings | None = None, **factories) -> OnboardingService:
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    return OnboardingService(settings or Settings(), store, InMemoryEventBus(), **factories)
+
+
+def _provision_factory(result: ProvisionResult, *, emit_phase=None):
+    def factory(settings, progress):
+        class Service:
+            async def provision(self, item, *, dry_run=False):
+                if emit_phase is not None:
+                    progress(emit_phase, "DONE: registered")
+                return result
+
+        return Service()
+
+    return factory
+
+
+def _browser_factory(result: BrowserResultStatus, *, status_message: str | None = None):
+    def factory(settings, arg):
+        on_status = arg if callable(arg) else (lambda message: None)
+
+        class Adapter:
+            async def run(self, item, run_id, *, auto_submit=False):
+                if status_message:
+                    on_status(status_message)
+                return result
+
+        return Adapter()
+
+    return factory
+
+
+async def test_create_run_persists_work_item_and_event(tmp_path):
+    service = _service(tmp_path)
+    run = service.create_run(_item())
+    assert run.status == RunStatus.READY
+    assert service.get_work_item(run.run_id).serial_number == "SGHD45FF0Y"
+    assert [e.event_type for e in service.list_events(run.run_id)] == ["run.created"]
+
+
+async def test_create_run_records_mode_and_initial_phase(tmp_path):
+    service = _service(tmp_path)
+    run = service.create_run(_item(), mode=RunMode.PROVISION_ONLY)
+    assert run.mode == RunMode.PROVISION_ONLY
+    assert run.current_phase == WorkflowPhase.STORAGE_DISCOVER  # first enabled provision step
+
+    verify_run = service.create_run(_item(), mode=RunMode.VERIFY_ONLY)
+    assert verify_run.current_phase == WorkflowPhase.CONFIG_VERIFY
+
+
+async def test_replication_steps_are_refused_without_the_replication_tab(tmp_path):
+    # SPEC-015 R4: the steps exist only when the workbook carries the tab (intent.replication).
+    import pytest
+
+    from alletra_onboard.domain.replication import ProtectionRequest, ReplicationIntent
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    service = _service(tmp_path)
+    with pytest.raises(ValueError, match="need the workbook's 'Replication' tab"):
+        service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=_prov_intent())
+    with pytest.raises(ValueError, match="need the workbook's 'Replication' tab"):
+        service.create_run(_item(), mode=RunMode.CUSTOM, selected_steps=["provision", "replicate"])
+
+    intent = _prov_intent()
+    intent.replication = ReplicationIntent(
+        peer=EndpointCreds(host="10.64.154.190", username="3paradm", password=SecretStr("pw")),
+        protections=[ProtectionRequest(vvset="HS", peer_cpg="SSD_r6")],
+    )
+    run = service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=intent)
+    assert run.current_phase == WorkflowPhase.STORAGE_DISCOVER
+    assert service.get_provisioning_intent(run.run_id).replication.peer.host == "10.64.154.190"
+
+    # A replicate-only workbook (existing sets, Volumes tab empty): Provision has nothing to do.
+    only = intent.model_copy(update={"volumes": [], "host_sets": []})
+    with pytest.raises(ValueError, match="The Volumes tab is empty, so there is nothing to provision"):
+        service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=only)
+    run = service.create_run(_item(), mode=RunMode.CUSTOM, selected_steps=["replicate", "failover_test"], provisioning_intent=only)
+    assert run.current_phase == WorkflowPhase.STORAGE_REPLICATE
+
+
+async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path, monkeypatch):
+    # SPEC-016 R1-R3 through the step service: two faked reads, the stored report, the SSE payload.
+    from alletra_onboard.application.replication import read as replication_read
+    from alletra_onboard.application.replication.steps import REPORT_ARTIFACT
+    from alletra_onboard.domain.replication import (
+        ProtectionRequest,
+        RcGroup,
+        RcGroupVolume,
+        RcipPort,
+        RcLink,
+        RcTarget,
+        ReplicationArrayView,
+        ReplicationIntent,
+        ReplicationReport,
+    )
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    a = ReplicationArrayView(
+        host="a", name="ArrayA", serial="SA", system_id=100, os_version="10.5.0", rc_status="Started",
+        rcip_ports=[RcipPort(nsp="0:4:3", ip="10.1.0.1"), RcipPort(nsp="1:4:3", ip="10.1.0.2")],
+        targets=[RcTarget(name="ArrayB", status="ready", policy="mirror_config")],
+        links=[RcLink(target="ArrayB", nsp="0:4:3", address="10.2.0.1", status="Up"),
+               RcLink(target="ArrayB", nsp="1:4:3", address="10.2.0.2", status="Up")],
+        groups=[RcGroup(name="old_rcg", target="ArrayB", status="Started", role="Primary", mode="Sync",
+                        volumes=[RcGroupVolume(local_name="old")])],
+        cpg_free_mib={"SSD_r6": 10 ** 7}, vvsets={"HS": ["V01"]}, volume_size_mib={"V01": 10240},
+    )
+    b = ReplicationArrayView(
+        host="b", name="ArrayB", serial="SB", system_id=200, rc_status="Started",
+        rcip_ports=[RcipPort(nsp="0:4:3", ip="10.2.0.1"), RcipPort(nsp="1:4:3", ip="10.2.0.2")],
+        targets=[RcTarget(name="ArrayA", status="ready", policy="mirror_config")],
+        links=[RcLink(target="ArrayA", nsp="0:4:3", address="10.1.0.1", status="Up"),
+               RcLink(target="ArrayA", nsp="1:4:3", address="10.1.0.2", status="Up")],
+        cpg_free_mib={"SSD_r6": 10 ** 7},
+    )
+    reads = iter([a, b])
+    monkeypatch.setattr(replication_read, "read_array", lambda creds, progress=None: next(reads))
+
+    intent = _prov_intent()
+    intent.volumes[0].vvset = "HS"
+    intent.replication = ReplicationIntent(
+        peer=EndpointCreds(host="b", username="u", password=SecretStr("p")), failover_test=False,
+        protections=[ProtectionRequest(vvset="HS", peer_cpg="SSD_r6", mode="sync", rpo_minutes=None)],   # old_rcg on the target is Sync
+    )
+    service = _service(tmp_path)
+    run = service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=intent)
+    service.start_replication_preview(run.run_id)
+    await service.wait(run.run_id)
+
+    assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR
+    assert service.get_run(run.run_id).current_phase == WorkflowPhase.STORAGE_REPLICATE
+    event = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.previewed")
+    assert event.message == "Read ArrayA and ArrayB — plan ready: 2 to create, 0 already there. Review the plan."
+    plan = event.data["plan"]
+    assert [(x["kind"], x["name"], x["state"]) for x in plan["actions"]] == [("group", "HS_rcg", "create"), ("peer_vvset", "HS_rc", "create")]
+    assert plan["existing_groups"] == ["old_rcg"] and plan["blockers"] == []
+    assert event.data["report"]["partnership"]["target_on_primary"] == "ArrayB"
+    stored = ReplicationReport.model_validate_json(service.store.load_artifact(run.run_id, REPORT_ARTIFACT))
+    assert stored.primary.name == "ArrayA" and stored.peer.name == "ArrayB"
+    assert service.replication.previewed_plan(run.run_id).actions[0].name == "HS_rcg"
+    assert "password" not in str(event.data)          # the report carries addresses and names, never a credential
+
+    # ---- R4/R7 through the service: apply the approved plan; the approval is then spent
+    import pytest
+
+    from alletra_onboard.application.replication import apply as replication_apply
+    from alletra_onboard.application.replication import verify as replication_verify
+    from alletra_onboard.application.replication.steps import RESULT_ARTIFACT
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.replication import (
+        GroupVerification,
+        ReplicationOutcome,
+        ReplicationResult,
+        ReplicationVerification,
+    )
+
+    applied: list = []
+
+    def fake_apply(plan, provisioning, *, wsapi_factory=None, progress=None):
+        applied.append([a.name for a in plan.actions])
+        return ReplicationResult(
+            outcomes=[ReplicationOutcome(kind="group", name="HS_rcg", status="created", detail="async → ArrayB"),
+                      ReplicationOutcome(kind="peer_vvset", name="HS_rc", where="B", status="created")],
+            removals_a=["stoprcopygroup -f HS_rcg", "dismissrcopyvv -f -removevv V01 HS_rcg", "removercopygroup -f HS_rcg"],
+            removals_b=["removevvset -f HS_rc"], groups_created=["HS_rcg"],
+        )
+
+    monkeypatch.setattr(replication_apply, "apply_plan", fake_apply)
+
+    # ---- SPEC-020 R4: on RCIP the link must have been checked in this run before the apply
+    from alletra_onboard.application.replication import link_check as replication_link
+    from alletra_onboard.application.replication.steps import LINK_CHECK_ARTIFACT
+    from alletra_onboard.domain.replication import LinkCheck, LinkCheckResult, LinkPair
+
+    with pytest.raises(StepPreconditionError, match="Check the link first: the latency between the arrays has not been measured"):
+        service.start_replication_apply(run.run_id)
+    assert applied == []
+
+    said: list[str] = []
+
+    def fake_check(array, replication, report, *, duration_s, progress=None, **kw):
+        said.append(f"{array.host}->{replication.peer.host} {duration_s}s {report.partnership.target_on_primary}")
+        pair = LinkPair(nsp_a="0:4:3", ip_a="10.1.0.1", nsp_b="0:4:3", ip_b="10.2.0.1")
+        return LinkCheck(at="2026-10-12T07:00:00+00:00", duration_s=duration_s, modes=["sync"],
+                         results=[LinkCheckResult(pair=pair, latency_ms=0.4, pings_lost_pct=0.0)])
+
+    monkeypatch.setattr(replication_link, "run_link_check", fake_check)
+    service.start_link_check(run.run_id, duration_s=600)
+    await service.wait(run.run_id)
+    assert said == ["a->b 600s ArrayB"]
+    checked = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.link_checked")
+    assert checked.message == "Latency 0.4 ms on 1 link(s) (sync needs 10 ms or less) — within the limit."
+    assert checked.data["link_check"]["results"][0]["latency_ms"] == 0.4
+    assert LinkCheck.model_validate_json(service.store.load_artifact(run.run_id, LINK_CHECK_ARTIFACT)).worst_ms == 0.4
+    assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR
+
+    service.start_replication_apply(run.run_id)
+    await service.wait(run.run_id)
+    assert applied == [["HS_rcg", "HS_rc"]]
+    assert service.get_run(run.run_id).status == RunStatus.READY
+    done = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.applied")
+    assert done.message.startswith("Replication configured — HS_rcg; 2 write(s), 0 already there.")
+    assert done.data["result"]["removals_a"][0] == "stoprcopygroup -f HS_rcg"
+    assert done.data["result"]["notes"] == ["Link check 2026-10-12T07:00:00+00:00: latency 0.4 ms on 1 link(s); within the limit."]
+    assert ReplicationResult.model_validate_json(service.store.load_artifact(run.run_id, RESULT_ARTIFACT)).groups_created == ["HS_rcg"]
+    with pytest.raises(StepPreconditionError, match="read both arrays first"):
+        service.start_replication_apply(run.run_id)                 # spent: a second apply needs a fresh plan
+
+    # ---- R6: verify finds the plan in the run's events once the approval is spent
+    def fake_verify(provisioning, plan, *, read_fn=None, progress=None):
+        assert [a.name for a in plan.actions] == ["HS_rcg", "HS_rc"]
+        return ReplicationVerification(links_ok=True, links_detail="2/2 · 2/2",
+                                       groups=[GroupVerification(group="HS_rcg", peer_group="HS_rcg.r100", verdict="replicating",
+                                                                 detail="Started · Primary here, Secondary on the peer")])
+
+    monkeypatch.setattr(replication_verify, "verify", fake_verify)
+    service.start_replication_verify(run.run_id)
+    await service.wait(run.run_id)
+    verified = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.verified")
+    assert verified.message == "1 replicating · 0 syncing · 0 not replicating · links Up"
+    assert verified.data["verification"]["groups"][0]["peer_group"] == "HS_rcg.r100"
+
+    # ---- SPEC-017 R1/R4/R5 through the service: which group may be tested, the record, the events
+    from alletra_onboard.application.replication import failover as replication_failover
+    from alletra_onboard.application.replication.steps import FAILOVER_ARTIFACT
+    from alletra_onboard.domain.replication import FailoverRecord, FailoverSide, FailoverStepRecord
+
+    # a group this run did not create needs its name typed back; a blank choice is the tool's test group
+    with pytest.raises(StepPreconditionError, match="'old_rcg' was not created by this run"):
+        service.start_failover_test(run.run_id, group="old_rcg")
+    assert service.replication.failover_group_choice(run.run_id, None, None) == "zz_rc_test_rcg"
+    assert service.replication.failover_group_choice(run.run_id, "HS_rcg", None) == "HS_rcg"        # created by this run
+    assert service.replication.failover_group_choice(run.run_id, "old_rcg", "old_rcg") == "old_rcg"  # typed back
+
+    tested: list = []
+
+    def fake_failover(intent, group, *, progress=None, **kw):
+        tested.append(group)
+        side = FailoverSide(array="ArrayA", group=group, role="Primary", status="Started", volumes=1, synced=1)
+        return FailoverRecord(group=group, peer_group=f"{group}.r100", mode="async", primary_array="ArrayA", peer_array="ArrayB",
+                              result="passed", time_to_failover_s=4.0, time_to_synced_s=31.0,
+                              steps=[FailoverStepRecord(seq=0, title="Read both arrays", outcome="ok", primary=side)])
+
+    monkeypatch.setattr(replication_failover, "run_failover_test", fake_failover)
+    service.start_failover_test(run.run_id, group="HS_rcg")
+    await service.wait(run.run_id)
+    assert tested == ["HS_rcg"]
+    assert service.get_run(run.run_id).status == RunStatus.READY
+    assert service.get_run(run.run_id).current_phase == WorkflowPhase.STORAGE_FAILOVER_TEST
+    done = next(e for e in service.list_events(run.run_id) if e.event_type == "failover.completed")
+    assert done.message == ("Failover test passed on HS_rcg: the peer took over and the group is back to its normal state. "
+                            "Failover in 4 s, synced back in 31 s.")
+    assert done.data["record"]["steps"][0]["primary"]["role"] == "Primary"
+    assert FailoverRecord.model_validate_json(service.store.load_artifact(run.run_id, FAILOVER_ARTIFACT)).result == "passed"
+    assert service.replication.failover_record(run.run_id).time_to_synced_s == 31.0
+
+    def failed_failover(intent, group, *, progress=None, **kw):
+        return FailoverRecord(group=group, result="failed", failed_step=4, error="ArrayB refused the recover: ROLE_CONFLICT",
+                              observed_state="ArrayA: Primary/Stopped · ArrayB: Primary-Rev/Stopped",
+                              recovery_action="On ArrayB: setrcopygroup recover -f HS_rcg.r100 ; then setrcopygroup restore -f HS_rcg.r100")
+
+    monkeypatch.setattr(replication_failover, "run_failover_test", failed_failover)
+    service.start_failover_test(run.run_id, group="HS_rcg")
+    await service.wait(run.run_id)
+    assert service.get_run(run.run_id).status == RunStatus.RETRYABLE_FAILURE
+    failed = next(e for e in reversed(service.list_events(run.run_id)) if e.event_type == "failover.failed")
+    assert failed.message == ("Failover test failed at step 4: ArrayB refused the recover: ROLE_CONFLICT "
+                              "Way back: On ArrayB: setrcopygroup recover -f HS_rcg.r100 ; then setrcopygroup restore -f HS_rcg.r100")
+    assert failed.data["record"]["recovery_action"].startswith("On ArrayB:")
+
+
+async def test_provision_advance_is_selection_aware(tmp_path):
+    # A custom run that drops cloudinit: GreenLake should advance straight to DSCC.
+    result = ProvisionResult(serial="SGHD45FF0Y", succeeded=True)
+    result.phases.append(PhaseOutcome(WorkflowPhase.GL_REGISTER_DEVICE, DONE, "registered"))
+    service = _service(tmp_path, provision_factory=_provision_factory(result))
+    run = service.create_run(_item(), mode=RunMode.CUSTOM, selected_steps=["greenlake", "dscc"])
+    service.start_provision(run.run_id)
+    await service.wait(run.run_id)
+    assert service.get_run(run.run_id).current_phase == WorkflowPhase.DSCC_SETUP_SYSTEM
+
+
+async def test_provision_success_advances_to_cloudinit(tmp_path):
+    result = ProvisionResult(serial="SGHD45FF0Y", succeeded=True)
+    result.phases.append(PhaseOutcome(WorkflowPhase.GL_REGISTER_DEVICE, DONE, "registered"))
+    service = _service(
+        tmp_path,
+        provision_factory=_provision_factory(result, emit_phase=WorkflowPhase.GL_REGISTER_DEVICE),
+    )
+    run = service.create_run(_item())
+    service.start_provision(run.run_id)
+    await service.wait(run.run_id)
+
+    updated = service.get_run(run.run_id)
+    assert updated.status == RunStatus.READY
+    assert updated.current_phase == WorkflowPhase.CLOUDINIT_CONNECT
+    types = [e.event_type for e in service.list_events(run.run_id)]
+    assert "phase.progress" in types and "step.completed" in types
+
+
+async def test_provision_failure_is_retryable_and_warnings_collected(tmp_path):
+    result = ProvisionResult(serial="SGHD45FF0Y", error="HTTP 400 — boom")
+    result.phases.append(PhaseOutcome(WorkflowPhase.GL_APPLY_SUBSCRIPTION, WARNING, "no seat"))
+    result.phases.append(PhaseOutcome(WorkflowPhase.GL_REGISTER_DEVICE, FAILED, "boom"))
+    service = _service(tmp_path, provision_factory=_provision_factory(result))
+    run = service.create_run(_item())
+    service.start_provision(run.run_id)
+    await service.wait(run.run_id)
+
+    updated = service.get_run(run.run_id)
+    assert updated.status == RunStatus.RETRYABLE_FAILURE
+    assert any("no seat" in w for w in updated.warnings)
+
+
+async def test_the_link_gate_refuses_over_the_limit_without_the_tick_and_records_the_choice_with_it(tmp_path, monkeypatch):
+    # SPEC-020 R4: the operator's option to continue when the measured latency is over HPE's limit.
+    import pytest
+
+    from alletra_onboard.application.replication import apply as replication_apply
+    from alletra_onboard.application.replication import link_check as replication_link
+    from alletra_onboard.application.replication import read as replication_read
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.replication import (
+        LinkCheck,
+        LinkCheckResult,
+        LinkPair,
+        ProtectionRequest,
+        RcipPort,
+        RcLink,
+        RcTarget,
+        ReplicationArrayView,
+        ReplicationIntent,
+        ReplicationResult,
+    )
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    a = ReplicationArrayView(host="a", name="ArrayA", system_id=100, rc_status="Started",
+                             rcip_ports=[RcipPort(nsp="0:4:3", ip="10.1.0.1"), RcipPort(nsp="1:4:3", ip="10.1.0.2")],
+                             targets=[RcTarget(name="ArrayB", status="ready", policy="mirror_config")],
+                             links=[RcLink(target="ArrayB", nsp="0:4:3", address="10.2.0.1", status="Up"),
+                                    RcLink(target="ArrayB", nsp="1:4:3", address="10.2.0.2", status="Up")],
+                             cpg_free_mib={"SSD_r6": 10 ** 7}, vvsets={"HS": ["V01"]}, volume_size_mib={"V01": 10240})
+    b = ReplicationArrayView(host="b", name="ArrayB", system_id=200, rc_status="Started",
+                             rcip_ports=[RcipPort(nsp="0:4:3", ip="10.2.0.1"), RcipPort(nsp="1:4:3", ip="10.2.0.2")],
+                             targets=[RcTarget(name="ArrayA", status="ready", policy="mirror_config")],
+                             links=[RcLink(target="ArrayA", nsp="0:4:3", address="10.1.0.1", status="Up"),
+                                    RcLink(target="ArrayA", nsp="1:4:3", address="10.1.0.2", status="Up")],
+                             cpg_free_mib={"SSD_r6": 10 ** 7})
+    monkeypatch.setattr(replication_read, "read_array", lambda creds, progress=None: a if creds.host == "a" else b)
+    pair = LinkPair(nsp_a="0:4:3", ip_a="10.1.0.1", nsp_b="0:4:3", ip_b="10.2.0.1")
+    monkeypatch.setattr(replication_link, "run_link_check", lambda *args, duration_s, **kw: LinkCheck(
+        at="2026-10-12T07:00:00+00:00", duration_s=duration_s, modes=["sync"],
+        results=[LinkCheckResult(pair=pair, latency_ms=12.0, pings_lost_pct=1.0)]))
+    applied: list = []
+    monkeypatch.setattr(replication_apply, "apply_plan", lambda plan, prov, **kw: applied.append(1) or ReplicationResult(groups_created=["HS_rcg"]))
+
+    intent = _prov_intent()
+    intent.array = EndpointCreds(host="a", username="u", password=SecretStr("p"))
+    intent.volumes[0].vvset = "HS"
+    intent.replication = ReplicationIntent(peer=EndpointCreds(host="b", username="u", password=SecretStr("p")), failover_test=False,
+                                           protections=[ProtectionRequest(vvset="HS", peer_cpg="SSD_r6", mode="sync", rpo_minutes=None)])
+    service = _service(tmp_path)
+    run = service.create_run(_item(), mode=RunMode.REPLICATE, provisioning_intent=intent)
+    with pytest.raises(StepPreconditionError, match="read both arrays first"):
+        service.start_link_check(run.run_id, duration_s=600)       # the check needs the read's ports and links
+    service.start_replication_preview(run.run_id)
+    await service.wait(run.run_id)
+    service.start_link_check(run.run_id, duration_s=600)
+    await service.wait(run.run_id)
+    checked = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.link_checked")
+    assert checked.message == ("Latency 12 ms on 1 link(s) (sync needs 10 ms or less) — over the limit for sync; "
+                               "the operator decides whether to continue. Pings were lost on 0:4:3 (1 %).")
+
+    with pytest.raises(StepPreconditionError, match="The measured latency is 12 ms; sync replication over RCIP needs 10 ms or less. Tick 'Continue anyway'"):
+        service.start_replication_apply(run.run_id)
+    assert applied == []
+    service.start_replication_apply(run.run_id, accept_latency=True)
+    await service.wait(run.run_id)
+    assert applied == [1]
+    done = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.applied")
+    assert done.data["result"]["notes"] == [
+        "Link check 2026-10-12T07:00:00+00:00: latency 12 ms on 1 link(s); over the 10 ms limit for sync — the operator accepted it and chose to continue."
+    ]
+
+
+async def test_cloudinit_review_then_submit_succeeds(tmp_path):
+    service = _service(
+        tmp_path,
+        cloudinit_factory=_browser_factory(BrowserResultStatus.SUCCEEDED, status_message="review_ready"),
+    )
+    run = service.create_run(_item())
+    service.start_cloudinit(run.run_id, cloudinit_url="https://169.254.184.89/cloudinit")
+    await service.wait(run.run_id)
+
+    updated = service.get_run(run.run_id)
+    assert updated.status == RunStatus.READY
+    assert updated.current_phase == WorkflowPhase.DSCC_SETUP_SYSTEM
+    # the runtime URL override is persisted on the work item
+    assert service.get_work_item(run.run_id).cloudinit_url == "https://169.254.184.89/cloudinit"
+    types = [e.event_type for e in service.list_events(run.run_id)]
+    assert "operator.review_ready" in types
+
+
+async def test_cloudinit_browser_problem_is_retryable(tmp_path):
+    # WAITING without review_ready means the browser never got to Review -> retryable failure.
+    service = _service(tmp_path, cloudinit_factory=_browser_factory(BrowserResultStatus.WAITING_FOR_OPERATOR))
+    run = service.create_run(_item())
+    service.start_cloudinit(run.run_id)
+    await service.wait(run.run_id)
+    assert service.get_run(run.run_id).status == RunStatus.RETRYABLE_FAILURE
+
+
+async def test_cloudinit_refused_submit_is_retryable_with_clear_reason(tmp_path):
+    # The Review guard re-filled but the Network values kept decaying, so it never submitted.
+    # Nothing was applied -> retryable, with a message that says exactly that.
+    service = _service(
+        tmp_path,
+        cloudinit_factory=_browser_factory(BrowserResultStatus.FAILED_RETRYABLE, status_message="refused"),
+    )
+    run = service.create_run(_item())
+    service.start_cloudinit(run.run_id)
+    await service.wait(run.run_id)
+
+    updated = service.get_run(run.run_id)
+    assert updated.status == RunStatus.RETRYABLE_FAILURE
+    messages = [e.message for e in service.list_events(run.run_id)]
+    assert any("Refused to submit" in m and "nothing was applied" in m for m in messages)
+
+
+async def test_dscc_stops_at_credentials_gate(tmp_path):
+    service = _service(tmp_path, dscc_factory=_browser_factory(BrowserResultStatus.WAITING_FOR_OPERATOR))
+    run = service.create_run(_item())
+    service.start_dscc(run.run_id, cdp_url="http://localhost:9222")
+    await service.wait(run.run_id)
+
+    updated = service.get_run(run.run_id)
+    assert updated.status == RunStatus.WAITING_FOR_OPERATOR
+    assert any(e.event_type == "operator.credentials_ready" for e in service.list_events(run.run_id))
+
+    completed = service.mark_complete(run.run_id)
+    assert completed.status == RunStatus.SUCCEEDED
+    assert completed.current_phase == WorkflowPhase.COMPLETE
+
+
+async def test_dscc_attach_failure_is_retryable(tmp_path):
+    service = _service(tmp_path, dscc_factory=_browser_factory(BrowserResultStatus.FAILED_RETRYABLE))
+    run = service.create_run(_item())
+    service.start_dscc(run.run_id, cdp_url="http://localhost:9222")
+    await service.wait(run.run_id)
+    assert service.get_run(run.run_id).status == RunStatus.RETRYABLE_FAILURE
+
+
+async def _complete(service, run_id):
+    """Drive a run to COMPLETE the way DSCC does, so verification runs on a finished run."""
+    service.mark_complete(run_id)
+
+
+async def test_verify_success_emits_report_without_changing_run_status(tmp_path):
+    report = VerificationReport(
+        reachable=True,
+        checks=[
+            FieldCheck(
+                field="Gateway", expected="10.0.0.1", actual="10.0.0.1",
+                status=FieldCheckStatus.PASS, critical=True,
+            )
+        ],
+    )
+    service = _service(tmp_path, verify_fn=lambda item, username, password: report)
+    run = service.create_run(_item())
+    await _complete(service, run.run_id)
+
+    service.start_verify(run.run_id, username="3paradm", password="pw")
+    await service.wait(run.run_id)
+
+    updated = service.get_run(run.run_id)
+    assert updated.status == RunStatus.SUCCEEDED  # verification never changes the run outcome
+    assert updated.current_phase == WorkflowPhase.COMPLETE
+    done = [e for e in service.list_events(run.run_id) if e.event_type == "verify.completed"]
+    assert done and done[-1].data["report"]["checks"][0]["field"] == "Gateway"
+
+
+async def test_verify_unreachable_emits_failure_but_keeps_run_succeeded(tmp_path):
+    report = VerificationReport(reachable=False, error="Could not reach the array")
+    service = _service(tmp_path, verify_fn=lambda item, username, password: report)
+    run = service.create_run(_item())
+    await _complete(service, run.run_id)
+
+    service.start_verify(run.run_id, username="u", password="p")
+    await service.wait(run.run_id)
+
+    assert service.get_run(run.run_id).status == RunStatus.SUCCEEDED
+    assert any(e.event_type == "verify.failed" for e in service.list_events(run.run_id))
+
+
+async def test_verify_exception_never_unsucceeds_the_run(tmp_path):
+    def boom(item, username, password):
+        raise RuntimeError("ssh library blew up")
+
+    service = _service(tmp_path, verify_fn=boom)
+    run = service.create_run(_item())
+    await _complete(service, run.run_id)
+
+    service.start_verify(run.run_id, username="u", password="p")
+    await service.wait(run.run_id)
+
+    updated = service.get_run(run.run_id)
+    assert updated.status == RunStatus.SUCCEEDED  # the guard must not mark a finished run retryable
+    assert any(e.event_type == "verify.failed" for e in service.list_events(run.run_id))
+
+
+def _prov_intent():
+    from alletra_onboard.domain.provisioning import ProvisioningIntent
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    def creds(host):
+        return EndpointCreds(host=host, username="u", password=SecretStr("p"))
+
+    return ProvisioningIntent.from_simple(
+        host_set_name="HS", array=creds("a"), vcenter=creds("vc"),
+        switch_f1=creds("sw1"), switch_f2=creds("sw2"),
+        name_prefix="V", size_gib=10, count=1,
+    )
+
+
+async def test_get_storage_objects_builds_the_dropdown_palette(tmp_path, monkeypatch):
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.domain.discovery import DiscoveryReport, HostHba
+    from alletra_onboard.domain.shared import normalize_wwpn
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    # discovery is required for the palette (it supplies the membership hosts)
+    service._discovery[run.run_id] = DiscoveryReport(host_hbas=[
+        HostHba(host_name="esx1", wwpn=normalize_wwpn("10:00:00:00:00:00:00:a1"), fabric="odd"),
+        HostHba(host_name="esx1", wwpn=normalize_wwpn("10:00:00:00:00:00:00:b1"), fabric="even"),
+    ])
+    monkeypatch.setattr(sp, "read_array_objects", lambda intent: {
+        "cpgs": ["SSD_r6"], "hosts": ["existing_host"], "host_sets": ["existing_hs"],
+        "volumes": ["existing_vol"], "volume_sets": [], "error": None,
+    })
+    objs = service.get_storage_objects(run.run_id)
+    assert objs.existing_hosts == ["existing_host"] and objs.existing_cpgs == ["SSD_r6"]
+    assert objs.new_volumes == ["V"] and objs.new_host_sets == ["HS"]  # from _prov_intent
+    assert objs.discovered_hosts[0].name == "esx1" and "both fabrics" in objs.discovered_hosts[0].status
+
+
+async def test_set_provisioning_builder_persists_membership_vvsets_and_exports(tmp_path):
+    from alletra_onboard.domain.provisioning import (
+        ExportRequest,
+        HostSetRequest,
+        ProvisioningBuilder,
+    )
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    comp = service.set_provisioning_builder(run.run_id, ProvisioningBuilder(
+        host_sets=[HostSetRequest(name="HS", members=["esx1", "esx2"])],
+        exports=[ExportRequest(source_kind="volume", source_name="V", target_kind="hostset", target_name="HS", lun=5)],
+        vvsets={"myvvset": ["V"]},
+    ))
+    assert comp.host_sets[0].members == ["esx1", "esx2"] and comp.exports[0].lun == 5
+    # composed relationships are persisted onto the run's intent for preview/apply
+    saved = service.get_provisioning_intent(run.run_id)
+    assert saved.exports[0].source_name == "V"
+    assert saved.host_sets[0].members == ["esx1", "esx2"]
+    assert saved.volumes[0].vvset == "myvvset"
+
+
+async def _preview(service, run_id, monkeypatch, actions=("host",)):
+    """Drive a provisioning preview so the apply PREVIEW gate is satisfied, and record a zoned host —
+    zoning is a hard prerequisite for apply and these tests exercise the preview approval, not the
+    zoning gate (test_apply_is_gated_on_zoning covers that)."""
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.domain.provisioning import PlannedAction, ProvisioningPlan
+
+    monkeypatch.setattr(
+        sp, "build_plan",
+        lambda intent, discovery, **kw: ProvisioningPlan(
+            actions=[PlannedAction(kind=k, name="x", description="d") for k in actions]
+        ),
+    )
+    service.discovery_zoning._save_zoned_hosts(run_id, ["esx1"])
+    service.start_storage_preview(run_id)
+    await service.wait(run_id)
+
+
+async def test_apply_requires_a_preview_from_this_session(tmp_path, monkeypatch):
+    """The approval to write to the array must not survive a restart.
+
+    Discovery and the as-built document are durable on purpose; the previewed plan is NOT. It is an
+    approval, and a new process has not shown the operator anything.
+    """
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(Settings(), store, InMemoryEventBus())
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    await _preview(service, run.run_id, monkeypatch)
+
+    restarted = OnboardingService(Settings(), store, InMemoryEventBus())
+    restarted.discovery_zoning._discovery[run.run_id] = DiscoveryReport()  # discovery does survive
+    with pytest.raises(StepPreconditionError):
+        restarted.start_storage_apply(run.run_id)
+
+
+async def test_editing_the_composition_withdraws_the_approval(tmp_path, monkeypatch):
+    """Apply must never run against a plan approved for a different composition."""
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import HostSetRequest, ProvisioningBuilder
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    await _preview(service, run.run_id, monkeypatch)
+
+    service.set_provisioning_builder(
+        run.run_id, ProvisioningBuilder(host_sets=[HostSetRequest(name="TOTALLY_DIFFERENT", members=["esx9"])])
+    )
+    with pytest.raises(StepPreconditionError):
+        service.start_storage_apply(run.run_id)
+
+
+async def test_rerunning_discovery_withdraws_the_approval(tmp_path, monkeypatch):
+    """A fresh environment read invalidates a plan approved against the previous one."""
+    from alletra_onboard.application.provisioning import discovery as sd
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    await _preview(service, run.run_id, monkeypatch)
+
+    monkeypatch.setattr(sd, "discover", lambda intent, progress=None: DiscoveryReport(notes=["re-read"]))
+    service.start_discover(run.run_id)
+    await service.wait(run.run_id)
+
+    with pytest.raises(StepPreconditionError):
+        service.start_storage_apply(run.run_id)
+
+
+async def test_apply_is_gated_on_zoning(tmp_path, monkeypatch):
+    """Zoning is a HARD prerequisite for apply, enforced PER HOST (ADR 0012): apply needs at least
+    one host the last verify saw logged in on BOTH fabrics. The old gate also opened on a 'staged'
+    state, set when the tool wrote zones itself; the tool no longer writes to a switch, and staging
+    was the wrong signal anyway — on 2026-08-31 a staged-but-unactivated zone opened the gate for a
+    host that then correctly reported no_path."""
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import (
+        ActionOutcome,
+        ProvisioningPlan,
+        ProvisioningResult,
+    )
+
+    monkeypatch.setattr(sp, "build_plan", lambda i, d, **kw: ProvisioningPlan(actions=[]))
+    monkeypatch.setattr(sp, "apply_plan", lambda i, d, **kw: ProvisioningResult(
+        outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]
+    ))
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    service.start_storage_preview(run.run_id)
+    await service.wait(run.run_id)
+
+    service.discovery_zoning._save_zoned_hosts(run.run_id, ["esx1"])
+    service.start_storage_apply(run.run_id)
+    await service.wait(run.run_id)
+    assert any(e.event_type == "storage.applied" for e in service.list_events(run.run_id))
+
+
+async def test_apply_refuses_a_failed_preview(tmp_path, monkeypatch):
+    """A previewed-but-FAILED plan (e.g. the CPG hard gate) is not an approval."""
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import ProvisioningPlan
+
+    monkeypatch.setattr(sp, "build_plan", lambda i, d, **kw: ProvisioningPlan(error="CPG(s) not found: X"))
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    service.discovery_zoning._save_zoned_hosts(run.run_id, ["esx1"])
+    service.start_storage_preview(run.run_id)
+    await service.wait(run.run_id)
+
+    with pytest.raises(StepPreconditionError, match="blocking problem"):
+        service.start_storage_apply(run.run_id)
+
+
+async def test_verify_and_asbuilt_read_the_same_array(tmp_path, monkeypatch):
+    """MEASURED LIVE: verify passed against 10.132.30.121 (the array just onboarded) while the
+    as-built timed out against 10.64.186.90, in the SAME run — the two steps chose the array
+    independently. The sheet parser now refuses a workbook naming two arrays, but a run created
+    before that guard can still carry a divergent intent, so the steps must agree by construction.
+    """
+    from alletra_onboard.application.documents import steps as doc_steps
+    from alletra_onboard.domain.provisioning import ProvisioningIntent
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    service = _service(tmp_path)
+    item = _item()                                    # network.mgmt_ipv4 = the run's array
+    run = service.create_run(item)
+    # A run whose provisioning intent points somewhere else entirely (the pre-guard shape).
+    service.store.save_provisioning_intent(run.run_id, ProvisioningIntent.from_simple(
+        host_set_name="hs",
+        array=EndpointCreds(host="10.64.186.90", username="u", password="p"),
+        vcenter=EndpointCreds(host="vc", username="u", password="p"),
+        switch_f1=EndpointCreds(host="s1", username="u", password="p"),
+        switch_f2=EndpointCreds(host="s2", username="u", password="p"),
+        name_prefix="v", size_gib=1,
+    ))
+
+    assert service.coordinator.array_host(run.run_id) == item.network.mgmt_ipv4
+
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(doc_steps.DocumentSteps, "_collect_asbuilt",
+                        lambda self, host, u, p: seen.setdefault("host", host) and None)
+    service.start_asbuilt(run.run_id, username="u", password="p")
+    await service.wait(run.run_id)
+
+    assert seen["host"] == item.network.mgmt_ipv4, "the as-built read a different array than verify"
+    assert seen["host"] != "10.64.186.90"
+
+
+async def test_unreadable_discovery_artifact_asks_for_a_re_run(tmp_path):
+    """A stored report the current model cannot parse must not 500 every step forever."""
+    from alletra_onboard.application.service import StepPreconditionError
+
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(Settings(), store, InMemoryEventBus())
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    store.save_artifact(run.run_id, "discovery", b"{not valid json")
+
+    with pytest.raises(StepPreconditionError):
+        service.discovery_zoning.require_discovery(run.run_id)
+
+
+async def test_path_verify_emits_per_host_report(tmp_path, monkeypatch):
+    from alletra_onboard.application.provisioning import path_verify as pv
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import HostPathStatus, PathVerification
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()  # tier-2 needs discovery present
+    monkeypatch.setattr(pv, "verify_provisioned_paths", lambda intent, discovery, **kw: PathVerification(
+        hosts=[HostPathStatus(host="esx1", verdict="live", hbas_with_paths=2, fabrics=["odd", "even"], detail="ok")]))
+
+    service.start_path_verify(run.run_id)
+    await service.wait(run.run_id)
+    verified = next(e for e in service.list_events(run.run_id) if e.event_type == "storage.paths.verified")
+    assert verified.data["verification"]["hosts"][0]["verdict"] == "live"
+    # report-only: the run is not failed by a verdict
+    assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR
+
+
+async def test_start_asbuilt_reads_array_and_produces_downloadable_docx(tmp_path, monkeypatch):
+    from alletra_onboard.application.documents import steps as doc_steps
+
+    canned = {
+        "showsys -d": ("System Name : TEST-01\nSystem Model : HPE Alletra Storage MP\n"
+                       "Serial Number : SGH1\nNumber of Nodes : 2\n"
+                       "---Raw System Capacity (MiB)---\nTotal Capacity : 36608000\n"),
+        "shownet": ("IP Address Netmask\n10.0.0.10 255.255.255.0\n\n"
+                    "Default IPv4 route : 10.0.0.1\nNTP server : ntp.x\nDNS server : 10.1.1.1\n"),
+        "showversion": "Release version 10.5.51\n",
+        "shownode": "Node Name Encl Master InCluster Mem(MiB) Up\n0 SN-0 1:1 Yes Yes 257498 x\n",
+        "showcage": "Id Name Drives\n1 cage1 10\n",
+        "showpd": "Id CagePos Type RPM State Total Free Cap\n0 1:1 SSD N/A normal 1 1 3840\n",
+        "showcpg": "Id Name Warn VVs\n0 SSD_r6 - 8\n",
+        "showport": "N:S:P Mode State Node Port Type Protocol Label\n0:3:1 target ready X 2031 host FC -\n",
+        "showport -par": "N:S:P Connmode ConnType CfgRate MaxRate\n0:3:1 host point auto 32Gbps\n",
+        "showinventory -csvtable": "ID,Name\nx,TEST-01\n",
+        "checkhealth -svc -detail": "Checking alert\nComponent Summary Description Qty\nAlert New 1\n---\n1 total 1\n",
+    }
+
+    class FakeCli:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def run(self, cmd, timeout=None):
+            return canned.get(cmd, "")
+
+    monkeypatch.setattr(doc_steps, "make_array_cli", lambda creds: FakeCli())
+
+    service = _service(tmp_path)
+    run = service.create_run(_item())
+    service.start_asbuilt(run.run_id, username="3paradm", password="pw", customer="ACME Corp")
+    await service.wait(run.run_id)
+
+    ev = next(e for e in service.list_events(run.run_id) if e.event_type == "asbuilt.generated")
+    assert ev.data["customer"] == "ACME Corp" and ev.data["serial"] == "SGH1"
+    docx_bytes = service.get_asbuilt(run.run_id)
+    assert docx_bytes and docx_bytes[:2] == b"PK"  # a .docx is a zip
+
+
+async def test_pending_sheet_stash_mints_run_and_preserves_intent(tmp_path):
+    # ADR 0005 revision: the sheet is held server-side (with device passwords) until a mode is
+    # chosen; create_run_from_pending then mints the run and preserves the provisioning intent.
+    from alletra_onboard.application.service import PendingSheetNotFoundError
+
+    service = _service(tmp_path)
+    intent = _prov_intent()
+    token = service.stash_pending_sheet(_item(), intent)
+
+    run = service.create_run_from_pending(token, mode=RunMode.BOTH)
+    assert run.mode == RunMode.BOTH
+    assert run.current_phase == WorkflowPhase.PREFLIGHT  # BOTH starts at GreenLake/preflight
+    # the intent (with passwords) round-tripped through the durable stash into the run
+    restored = service.get_provisioning_intent(run.run_id)
+    assert restored.array.host == "a"
+    assert restored.array.password.get_secret_value() == "p"
+
+    # single-use: the hold is consumed, so a second mint fails cleanly
+    with pytest.raises(PendingSheetNotFoundError):
+        service.create_run_from_pending(token, mode=RunMode.BOTH)
+
+
+async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
+    from alletra_onboard.application.provisioning import discovery as sd
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.application.provisioning import zoning as sz
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import (
+        ActionOutcome,
+        PlannedAction,
+        ProvisioningPlan,
+        ProvisioningResult,
+    )
+    from alletra_onboard.domain.zoning import ExpectedZone, ZoneRemediation, ZoningReport
+
+    monkeypatch.setattr(sd, "discover", lambda intent, progress=None: DiscoveryReport(notes=[]))
+    zoning_report = ZoningReport(
+        expected=[ExpectedZone(fabric="odd", switch_host="sw1", name="z", host_wwpn="A", array_wwpn="B")],
+        remediations=[ZoneRemediation(fabric="odd", switch_host="sw1", cfg_name="CFG", commands=['cfgenable "CFG"'])],
+        proper=False,
+    )
+    monkeypatch.setattr(sz, "build_report", lambda intent, discovery, zoning_plan=None: zoning_report)
+    monkeypatch.setattr(sp, "build_plan", lambda intent, discovery, **kw: ProvisioningPlan(actions=[PlannedAction(kind="host", name="esx1", description="d")]))
+    monkeypatch.setattr(sp, "apply_plan", lambda intent, discovery, **kw: ProvisioningResult(outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]))
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+
+    service.start_discover(run.run_id)
+    await service.wait(run.run_id)
+    assert any(e.event_type == "discover.completed" for e in service.list_events(run.run_id))
+
+    service.start_zoning_preview(run.run_id)
+    await service.wait(run.run_id)
+    assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR  # remediation needs confirm
+    assert any(e.event_type == "zoning.previewed" for e in service.list_events(run.run_id))
+
+    service.start_storage_preview(run.run_id)
+    await service.wait(run.run_id)
+    assert any(e.event_type == "storage.previewed" for e in service.list_events(run.run_id))
+
+    # The SAN team applies the command set; the next verify sees the host logged in, which releases
+    # its export. Only a verify can do that (ADR 0012).
+    service.discovery_zoning._save_zoned_hosts(run.run_id, ["esx1"])
+
+    service.start_storage_apply(run.run_id)
+    await service.wait(run.run_id)
+    applied = [e for e in service.list_events(run.run_id) if e.event_type == "storage.applied"]
+    assert applied and applied[-1].data["result"]["outcomes"][0]["status"] == "created"
+
+
+async def test_discovery_survives_a_service_restart(tmp_path, monkeypatch):
+    # C7 (ADR 0011): step artifacts are durable — a new service over the SAME store (= app restart
+    # mid-engagement) reads discovery back from run_artifacts instead of forcing a re-run.
+    from alletra_onboard.application.provisioning import discovery as sd
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    monkeypatch.setattr(sd, "discover", lambda intent, progress=None: DiscoveryReport(notes=["from-run-1"]))
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(Settings(), store, InMemoryEventBus())
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service.start_discover(run.run_id)
+    await service.wait(run.run_id)
+
+    restarted = OnboardingService(Settings(), store, InMemoryEventBus())
+    assert restarted.discovery_zoning._discovery.get(run.run_id) is None  # nothing in memory...
+    report = restarted.discovery_zoning.require_discovery(run.run_id)     # ...read through the store
+    assert report.notes == ["from-run-1"]
+
+
+async def test_zoning_before_discovery_is_a_precondition_error(tmp_path):
+    from alletra_onboard.application.service import StepPreconditionError
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    with pytest.raises(StepPreconditionError):
+        service.start_zoning_preview(run.run_id)
+
+
+async def test_concurrent_step_rejected(tmp_path):
+    release = asyncio.Event()
+
+    def blocking_factory(settings, on_status):
+        class Adapter:
+            async def run(self, item, run_id):
+                await release.wait()
+                return BrowserResultStatus.SUCCEEDED
+
+        return Adapter()
+
+    service = _service(tmp_path, cloudinit_factory=blocking_factory)
+    run = service.create_run(_item())
+    service.start_cloudinit(run.run_id)
+    with pytest.raises(RunBusyError):
+        service.start_cloudinit(run.run_id)
+    release.set()
+    await service.wait(run.run_id)
+
+
+async def test_crash_in_step_marks_retryable(tmp_path):
+    def exploding_factory(settings, on_status):
+        class Adapter:
+            async def run(self, item, run_id):
+                raise RuntimeError("kaboom")
+
+        return Adapter()
+
+    service = _service(tmp_path, cloudinit_factory=exploding_factory)
+    run = service.create_run(_item())
+    service.start_cloudinit(run.run_id)
+    await service.wait(run.run_id)
+
+    assert service.get_run(run.run_id).status == RunStatus.RETRYABLE_FAILURE
+    assert any(e.event_type == "step.crashed" for e in service.list_events(run.run_id))
+
+
+def test_zoning_render_is_recorded_on_the_run_without_touching_its_status(tmp_path):
+    """SPEC-002 R4: the command set handed to the SAN team is a deliverable; the as-built reads it
+    back from the run's own record."""
+    from alletra_onboard.application.service import RunNotFoundError
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), mode=RunMode.PROVISION_ONLY)
+    before = service.get_run(run.run_id).status
+    service.record_zoning_render(
+        run.run_id, commands={"F1": ['cfgadd "mycfg", "z1"', "cfgsave"], "F2": []}, skipped={},
+        aliases={"10005CED8C5312A9": "esx136_hba1"}, selected_pairs=[("10005CED8C5312A9", "20340002AC02F629")],
+    )
+    event = next(e for e in service.list_events(run.run_id) if e.event_type == "zoning.rendered")
+    assert event.data["commands"]["F1"] == ['cfgadd "mycfg", "z1"', "cfgsave"]
+    assert event.data["selected_pairs"] == [["10005CED8C5312A9", "20340002AC02F629"]]
+    assert "2 command(s) for F1" in event.message
+    assert service.get_run(run.run_id).status == before
+    with pytest.raises(RunNotFoundError):
+        service.record_zoning_render("no-such-run", commands={}, skipped={}, aliases={}, selected_pairs=[])

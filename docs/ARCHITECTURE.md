@@ -1,0 +1,218 @@
+# Architecture — current state (HLD + LLD baseline)
+
+> **Purpose.** A snapshot of the system *as built today* (v0.12.0), written as the baseline for a
+> planned HLD/LLD-driven refactor. It records what exists, how the layers fit, the runtime flows, and —
+> most usefully for a refactor — the **seams and pain points**. It is descriptive, not aspirational:
+> the north-star scope lives in [SCOPE.md](SCOPE.md), the domain language in [CONTEXT.md](../CONTEXT.md),
+> and the *why* of individual decisions in [docs/adr/](adr/). This doc ties them to the real modules.
+
+---
+
+## 1. What it is
+
+A **local, single-operator desktop tool** that automates deploying an HPE Alletra Storage MP B10000:
+initialize into GreenLake/DSCC → discover → verify zoning → provision (host/volume/LUN) → verify → and
+now **document (as-built)**. Primary user = an HPE deployment/PS engineer, not a customer day-2 admin.
+Today's app is the top-left of the [SCOPE.md](SCOPE.md) matrix (Alletra MP **block**); the file column
+and the DSCC **cloud** control plane are the big unbuilt gaps.
+
+**Released increments:** v0.3–0.9 (onboarding A→B→C→D, modes, discovery, zoning-verify, proxy, fabric),
+v0.10 (zoning plan), **v0.11.0** (provisioning tiers + Stage-2 dropdown builder + tier-2 path verify),
+**v0.12.0** (as-built document generation).
+
+## 2. Runtime & deployment
+
+| Aspect | Detail |
+|---|---|
+| Shape | FastAPI backend + React 18/Vite/HPE-Grommet SPA, one process, **localhost 127.0.0.1:8765** |
+| Packaging | PyInstaller **onedir `.exe`** (Windows); the SPA `frontend/dist` + resources + Discovery Tool are bundled (`alletra_onboard.spec`, `sys._MEIPASS` at runtime) |
+| Build profiles | `ALLETRA_PROFILE` = `full` \| `init-only` (the "Initialization accelerator" — same codebase, baked flag; ADR 0007) |
+| Prod serving | API serves `frontend/dist` at `/` (same origin); vite dev talks to `:8765` with CORS |
+| Persistence | **SQLite** (`adapters/persistence/sqlite.py`) for runs/work-items/pending-sheets/provisioning-intent; gitignored `.env` for GreenLake creds/proxy |
+| Concurrency | async FastAPI; blocking device I/O (paramiko SSH, python-3parclient, pyvmomi) runs via `asyncio.to_thread`; eventlet is pulled in by the SDK but **never monkey-patched (dormant)** |
+| Live updates | per-run event bus → **SSE** (`/runs/{id}/stream`); the UI renders from the event stream, not step return values |
+
+## 3. Architecture style — ports & adapters (hexagonal-ish)
+
+Four layers, dependencies point inward (`api → application → domain`; `adapters` implement `domain/ports`):
+
+```
+ frontend/ (React SPA)  ──HTTP/SSE──►  api/ (FastAPI routes + schemas)
+                                           │
+                                           ▼
+                                    application/  (services: orchestration + use-cases)
+                                       │              │
+                                       ▼              ▼
+                                    domain/        adapters/  (device/cloud/persistence I/O)
+                                 (models, ports,   (array WSAPI+CLI, vCenter, brocade,
+                                  workflow, errors) greenlake, browser, persistence, system)
+```
+
+- **`domain/`** — pure models + contracts, no I/O. `models.py` (onboarding: `ArrayWorkItem`, `RunRecord`,
+  `WorkflowPhase`, `RunMode`); per-context storage models: `shared.py` (`EndpointCreds`, `Fabric`, WWPN
+  helpers), `discovery.py`, `zoning.py`, `provisioning.py` (intent/builder/plan/`PathVerification`);
+  `workflow.py` (the **step registry** + mode→steps), `ports.py` (`RunStore` interface),
+  `policies.py`, `errors.py`.
+- **`application/`** — services orchestrating domain + adapters, organized as bounded-context packages
+  (ADR 0011): `runs/` (coordinator + event bus), `onboarding/` (A–C steps, GreenLake clients/preflight/
+  health), `provisioning/` (discovery/zoning/provision/path-verify + their step services), `documents/`
+  (verify + as-built), `platform/` (intake, init sheet, config, proxy, prereqs). `service.py` is the
+  composition-root façade the API constructs.
+- **`adapters/`** — one subpackage per external system, each built from `EndpointCreds`/config via
+  factory functions (`storage/clients.py`, injectable so services unit-test with fakes).
+- **`api/`** — `app.py` (all routes as inline closures in `create_app(service)`), `schemas.py` (Pydantic
+  request/response models).
+
+## 4. HLD — control planes & lifecycle coverage
+
+**Control planes (ADR 0006, hybrid — only the direct plane is built):**
+- **Direct (built):** a single array's **WSAPI** (`:443`, python-3parclient) for provisioning writes +
+  structured reads; **SSH CLI** (`ArrayCliClient`, read-only allowlist) for config/health/inventory reads
+  and zoning-verify.
+- **Cloud (NOT built):** the DSCC/GreenLake multi-array REST plane — the intended *primary*. Onboarding
+  Component A touches the GreenLake *global* API (`adapters/greenlake/*`) and DSCC is driven via a
+  **browser wizard** (Component C, Playwright/CDP), but there is **no DSCC provisioning cloud client**.
+- **Remote Copy (planned, not built — ADR 0015, SPEC-015…018):** a Replication tab on the one-array
+  workbook; the peer array is a step credential like the switches. Groups, period, policies and DR
+  actions over **WSAPI** `/remotecopygroups` behind the existing plan → approve → apply gate (v0.17–0.18);
+  RCIP links and targets via a second, write-scoped SSH client (`ArrayRcCliClient`, link/target
+  commands only) in v0.19. Paired runs (ADR 0014) deferred.
+- **Switch (read-only, by decision):** Brocade FOS (`adapters/fabric/brocade_client.py`) — verify +
+  the zoning *plan* → an emitted **command set** the consultant applies. The tool **never writes to
+  the switch** (ADR 0012; the write path that shipped in v0.14–v0.15 was removed in v0.16).
+
+**Coverage against the nine scope areas** — see the status table in [SCOPE.md](SCOPE.md). In brief
+(v0.16.0-rc.5): Initialization ✅ · Host/array discovery ◐ (ESXi via vCenter + array-side; no agentless
+Win/Linux) · SAN/network ◐ (FC zoning as command set; no VLAN/peer-port) · Block provisioning 🟡
+(built, pending live run) · Snapshots/replication ◻︎ · Unified File ◻︎ · GL4F ◻︎ · Reports ◐ (config,
+inventory, checkhealth; no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
+
+## 5. LLD — module map (by layer)
+
+### 5.1 domain/
+| Module | Responsibility |
+|---|---|
+| `models.py` | Onboarding models + enums: `ArrayWorkItem` (per-array intake, now incl. `customer_name`/`site`), `RunRecord`/`RunStatus`, `WorkflowPhase`, `RunMode`, `NetworkConfig`, `DsccSetupConfig`, `VerificationReport` |
+| `shared.py` | Storage-context primitives: `EndpointCreds`, `Fabric`, `normalize_wwpn`/`wwpn_colons` |
+| `discovery.py` | Discovery context: `ArrayPort`/`HostHba`/`ArrayHost`/`DiscoveryReport` |
+| `zoning.py` | Zoning context: verify (`ZoningReport`) + read-only plan (`ZoningPlan`, `AliasedWwpn`) |
+| `provisioning.py` | Provisioning context: **plural intent** (`ProvisioningIntent` = `volumes[]`+`host_sets[]`+`exports[]`, `from_simple`); `persona_for_os`→name; builder palette (`ProvisioningObjects`/`ProvisioningBuilder`); plan+result; tier-2 (`PathVerification`). (As-built's `AsBuiltData` is a dataclass in `application/asbuilt.py`) |
+| `workflow.py` | **`STEP_REGISTRY`** (ordered `StepDef`s: greenlake, cloudinit, dscc, discover, zoning, provision, verify, **asbuilt**) + `_MODE_STEPS` (preset mode→steps) + `enabled_steps`/`initial_phase`/`next_enabled_phase` |
+| `ports.py` | `RunStore` interface (persistence contract) |
+| `policies.py`, `errors.py` | Domain rules + typed errors |
+
+### 5.2 application/ (bounded-context packages, ADR 0011)
+| Module | Responsibility |
+|---|---|
+| **`service.py`** | The **composition-root façade** (`OnboardingService`): wires the coordinator + four step services and delegates one-to-one; step logic lives in the services |
+| `runs/coordinator.py` | `RunCoordinator` — run lifecycle, pending-sheet stash, guarded background spawn, `set_state`/`emit` (store + SSE); owns the step exceptions |
+| `runs/event_bus.py` | `InMemoryEventBus` — per-run pub/sub feeding SSE |
+| `onboarding/steps.py` | `OnboardingSteps` — A GreenLake → B Cloud Connectivity → C DSCC (+ default adapter factories) |
+| `onboarding/greenlake_provision.py` | Component A — GreenLake registration orchestration (register/assign/subscribe) |
+| `onboarding/clients.py` | **`make_greenlake`** — the GreenLake client factory seam (the future ADR-0006 DSCC slot) |
+| `onboarding/greenlake_preflight.py`, `onboarding/preflight_service.py`, `onboarding/health.py` | GreenLake read preflight, local prereq checks, readiness check |
+| `documents/steps.py` | `DocumentSteps` — post-init verify + as-built (never touch run status) |
+| `documents/verification.py` | Read-only config+health verify (`verify(item, user, pw)` → `VerificationReport`) |
+| `documents/asbuilt.py`, `asbuilt_parse.py`, `asbuilt_docx.py` | As-built: fill the bundled HPE `.docx` / parse the CLI dump (CSV) / HPE house-style tables |
+| `platform/init_sheet.py` | The workbook: template build + `parse_workbook_bytes` → `ParsedInitSheet` |
+| `platform/intake.py`, `platform/configuring.py` | CSV intake, `.env` config I/O |
+| `platform/proxy.py`, `platform/prereqs.py` | `ProxyResolver` (ADR 0008), firewall rules + connectivity check |
+
+### 5.3 application/provisioning/ (storage-provisioning context)
+| Module | Responsibility |
+|---|---|
+| `steps.py` | `DiscoveryZoningSteps` (discover + zoning verify/plan; owns the durable discovery artifact behind `require_discovery`) and `ProvisioningSteps` (tier-1 preview/apply, Stage-2 builder, tier-2 path-verify) |
+| `clients.py` | Adapter **factories** (`make_wsapi`/`make_array_cli`/`make_vcenter`/`make_brocade`) — the injection seam for tests |
+| `discovery.py` | Read array ports + `showhost -d` + fabric resolution + vCenter HBAs → `DiscoveryReport` |
+| `zoning.py`, `zoning_plan.py` | Array-side zoning **verify** (report) + read-only zoning **plan** builder (ADR 0004) |
+| `storage_provision.py` | Tier-1 `build_plan`/`apply_plan` (plural/heterogeneous create; exports w/ default fallback) + builder palette reads (`read_array_objects`, `host_briefs`) |
+| `path_verify.py` | Tier-2 read-only path verification (`showvlun -a` → per-host live/partial/no_path) |
+
+### 5.4 adapters/
+| Subpackage | Responsibility |
+|---|---|
+| `array/wsapi_client.py` | WSAPI writes/reads via python-3parclient; persona-by-name→WSAPI enum (VMware=8); readiness gate; idempotent creates |
+| `array/cli_client.py` | Read-only SSH CLI, **command allowlist** (structurally read-only) — verify + as-built + discovery |
+| `vcenter/vcenter_client.py` | Read-only ESXi HBA/WWPN discovery (pyvmomi) |
+| `fabric/brocade_client.py` | Brocade FOS reads (nsshow/cfgshow/…); read-only (write path removed) |
+| `greenlake/*` | GreenLake global API: `auth`, `devices`, `subscriptions`, `service_catalog`, `http_client` (Component A) |
+| `browser/*` | Playwright/CDP browser automation: `cloudinit_wizard` (B), `dscc_setup` (C), `debug_browser`, `locators` |
+| `persistence/sqlite.py` | `SqliteRunStore` (implements `RunStore`) |
+| `system/clock.py`, `system/discovery_tool.py` | HTTPS-based clock sync (ADR 0008 note), bundled Discovery Tool launcher |
+
+### 5.5 api/ & frontend/
+- `api/app.py` — `create_app(service)` wires every route as an inline closure; helpers `_get_run_or_404`,
+  `_start_step` (maps `StepPreconditionError`→409, `RunNotFound`→404). Routes: config, prereqs/proxy,
+  init-sheet upload/template, runs CRUD, per-step `POST`s (`/greenlake`…/`verify`/**`/asbuilt`** +
+  `/asbuilt/download`), storage (`/discover`,`/zoning/*`,`/storage/{objects,builder,preview,apply,verify-paths}`),
+  events + SSE.
+- `frontend/src/` — `App.tsx` (wizard shell + step render switch), `modes.ts` (mirror of the step registry —
+  **kept in lockstep with `workflow.py` by hand**), `api.ts` (fetch client + all TS interfaces), `useRunEvents.ts`
+  (SSE hook), `steps/*` (one component per step: GreenLake/Cloudinit/Dscc/Discovery/Zoning(+ZoningPlanView)/
+  Provision(+ProvisioningBuilderView)/Verify/**AsBuilt**/Done/Mode/Prereq/InitSheet).
+
+## 6. Runtime flows (key sequences)
+
+1. **Intake → run:** download template → operator fills the workbook → `POST /init-sheet/upload` parses +
+   validates the *complete* superset, saves GL creds, and **holds the parsed sheet under a token** (device
+   passwords never round-trip to the browser). Picking a **mode** → `POST /runs/from-sheet` mints the run
+   from the token (ADR 0005). Mode → `enabled_steps` → the wizard's step list.
+2. **A step:** `POST /runs/{id}/<step>` → `service.start_*` spawns a background `asyncio` task → device I/O
+   on a thread → **emits events** → SSE streams them → the step component renders from events. Init steps
+   auto-advance the phase; provision/verify/asbuilt are operator-triggered and (verify/asbuilt) never change
+   run status.
+3. **Provisioning:** discover → (compose in the dropdown builder: `GET /storage/objects` palette +
+   `POST /storage/builder`) → `preview` (`build_plan`) → confirm → `apply` (`apply_plan`, idempotent WSAPI
+   writes) → `verify-paths` (tier-2, report-only).
+4. **As-built (last):** `POST /runs/{id}/asbuilt` → SSH read-only (`show*`/`checkhealth`/`showinventory
+   -csvtable`) → `parse_asbuilt` → `generate_asbuilt` → **.docx bytes (durable `run_artifacts`)** → `GET /asbuilt/download`.
+   With a Replication tab (SPEC-018) the step also reads both arrays with `replication.read.read_array`
+   and takes the plan/result from the run's `replication.*` events; two more sections follow the
+   provisioning record.
+
+## 7. State & persistence
+- **Durable (SQLite):** runs, work items, pending sheets (single-use token), provisioning intent.
+- **Durable step artifacts (SQLite `run_artifacts`, ADR 0011 C7):** discovery report, provisioning-plan
+  gate, as-built docx — the store is the truth (restart-proof), the step services keep an in-memory parse
+  cache. Also emitted in event data so the UI has them. Only `_tasks` (running asyncio tasks) is
+  inherently transient.
+- **Secrets:** GreenLake creds + proxy in gitignored `.env`; device passwords supplied per-run or held in the
+  pending-sheet/intent, never echoed to the browser.
+
+## 8. Refactoring seams & known pain points (read this first)
+
+Updated after the ADR-0011 Phase-1 refactor (2026-07-24). Of the five seams the original baseline
+named, three are RESOLVED; two remain, plus the standing invariants:
+
+- **RESOLVED — the god-object (C1):** the orchestrator is decomposed into `runs/coordinator.py` +
+  four per-context step services; `service.py` is a thin, permanent composition-root façade
+  (same public surface, pure delegation).
+- **RESOLVED — the domain grab-bag (C3) + flat application/ (C4):** models split into
+  `domain/{shared,discovery,zoning,provisioning}.py`; application modules live in context packages
+  (`runs/ onboarding/ provisioning/ documents/ platform/`); Component A renamed
+  `greenlake_provision` (the old `application/provisioning.py` name collided with the
+  storage-provisioning context).
+- **RESOLVED — in-memory-only step state (C7):** durable `run_artifacts` (discovery / plan gate /
+  as-built docx); store is the truth, the services keep a parse cache. Only `_tasks` is memory-only.
+- **REMAINING — the step registry is duplicated** across `domain/workflow.py` and
+  `frontend/src/modes.ts` (plus hand-mirrored types in `api.ts`, phase/status string literals across
+  the step components, and the `workItem.ts` shape mirror). ADR-0011 **Phase 2** serves the registry
+  via `GET /app/profile` and deletes the mirrors — the only planned API-contract change.
+- **REMAINING — the hybrid control plane is half-built** (ADR 0006): everything is
+  direct-WSAPI/SSH/browser; the DSCC *cloud* client does not exist. Its slot is now explicit:
+  `application/onboarding/clients.py` (`make_greenlake`) — add the DSCC client + capability routing
+  there when it is built. Deliberately NOT abstracted before then (ADR 0011).
+- **Async/sync boundary:** FastAPI async + `asyncio.to_thread` around blocking SDK clients; eventlet dormant.
+  Keep the "no monkey-patch" invariant if touching the SDK import path (a past heap-corruption class of bug
+  lived near packaging — see ADR 0008 pitfall).
+- **CLI text parsing** was the fragile spot; the as-built now uses **deterministic CSV** (`-csvtable`) and
+  `key:value` detail output, not fixed-width slicing. Prefer that pattern for any new device reads.
+
+## 9. Pointers
+- **Scope / north-star:** [SCOPE.md](SCOPE.md) — the 7-stage × block/file matrix.
+- **Glossary:** [CONTEXT.md](../CONTEXT.md) — canonical domain terms (incl. As-built, Provisioning intent,
+  Path verification, Ideal subset, control plane).
+- **Decisions:** [docs/adr/0001–0011](adr/) — post-init verify (0001), discovery-driven (0002), WSAPI
+  transport (0003), zoning verify+plan (0004), modes (0005), hybrid control plane (0006), init-only profile
+  (0007), proxy auto-detect (0008), fabric-from-switch (0009), provisioning builder consumes zoning (0010).
+- **Runbook:** [docs/runbooks/provisioning-esxi-fc.md](runbooks/provisioning-esxi-fc.md).

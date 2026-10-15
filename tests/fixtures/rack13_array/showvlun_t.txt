@@ -1,0 +1,6 @@
+Lun VVName      HostName      -Host_WWN/iSCSI_Name- Port     Type
+  2 zz_t2_vol03 10.132.30.136 ----------------       ---     host
+  0 zz_t2_vol01 set:zz_t2_hs  ----------------       --- host set
+  1 zz_t2_vol02 set:zz_t2_hs  ----------------       --- host set
+-----------------------------------------------------------------
+  3 total

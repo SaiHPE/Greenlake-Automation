@@ -1,0 +1,939 @@
+"""The operator's single input: ``Initialisation_sheet.xlsx``.
+
+It mirrors HPE's official "Initialization Worksheet" (so it's familiar to the engineer) and adds
+a GreenLake-API section, so one filled workbook carries BOTH the workspace API credentials and
+all per-array parameters. One workbook = one array.
+
+``build_template_bytes()`` produces the blank template to hand the customer; ``parse_workbook_bytes()``
+reads a filled one back into (GreenLake creds, ArrayWorkItem). The operator fills the **Value**
+column only — the **Field** column is the stable key the parser matches on, so it must not be renamed.
+"""
+
+from __future__ import annotations
+
+import io
+import zipfile
+from dataclasses import dataclass
+
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+from alletra_onboard.application.platform import prereqs
+from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, RunMode
+from alletra_onboard.domain.provisioning import (
+    DeclaredHost,
+    HostSetRequest,
+    ProvisioningIntent,
+    VolumeRequest,
+)
+from alletra_onboard.domain.replication import (
+    RPO_MINUTES_DEFAULT,
+    RPO_MINUTES_MIN,
+    RTT_LIMIT_MS,
+    ProtectionRequest,
+    ReplicationIntent,
+)
+from alletra_onboard.domain.shared import EndpointCreds, normalize_wwpn
+from alletra_onboard.domain.workflow import enabled_steps
+
+SHEET_NAME = "Initialisation"
+# The link-local cloudinit URL changes every boot, so it is NOT in the sheet — the operator pastes
+# the fresh one in the Cloud Connectivity step. This placeholder keeps the work item valid until then.
+DEFAULT_CLOUDINIT_URL = "https://169.254.0.0/cloudinit"
+_HPE_GREEN = "01A982"
+
+# section title -> list of (key, label, required, note). `key` is the stable identifier; `label`
+# is what appears in the Field column (the parser strips a trailing " *" required marker).
+SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
+    ("HPE GreenLake API access", [
+        ("gl_client_id", "API Client ID", True, "GreenLake > Manage > API clients (create one)"),
+        ("gl_client_secret", "API Client Secret", True, "shown once when you create the API client"),
+        ("gl_token_url", "API Token URL", True, "https://global.api.greenlake.hpe.com/authorization/v2/oauth2/<tenant>/token"),
+    ]),
+    ("Array (cloud enablement)", [
+        ("serial_number", "Storage system serial number", True, "e.g. SGHD45FF0Y"),
+        ("part_number", "Product number (SKU)", True, "product SKU e.g. S0B84A — NOT the box FRU"),
+        ("subscription_key", "Subscription key", True, "GreenLake activation key from the ESD receipt email"),
+        ("service_catalog_region_id", "Data Services region", True, "e.g. ap-northeast"),
+        ("dscc_region_code", "DSCC region code", True, "e.g. jp1"),
+    ]),
+    ("Network", [
+        ("mgmt_ipv4", "IP address", True, "array management IPv4 address"),
+        ("mask", "Netmask", True, "e.g. 255.255.248.0"),
+        ("gateway", "Gateway", True, ""),
+        ("dns1", "DNS server 1", True, ""),
+        ("dns2", "DNS server 2", False, "optional"),
+        ("dns3", "DNS server 3", False, "optional"),
+        ("ntp", "Time (NTP) server", True, "must keep array time within 2 minutes of correct"),
+        ("timezone", "Timezone", True, "e.g. Asia/Kolkata"),
+        ("proxy_host", "HTTP proxy server", False, "leave blank for no proxy"),
+        ("proxy_port", "HTTP proxy port", False, "e.g. 8080"),
+    ]),
+    ("DSCC Setup — Support Contact", [
+        ("contact_first_name", "First name", True, ""),
+        ("contact_last_name", "Last name", True, ""),
+        ("contact_language", "Preferred language", True, "e.g. English"),
+        ("contact_company", "Company", True, ""),
+        ("contact_phone", "Phone number", True, ""),
+        ("contact_email", "Contact email", True, ""),
+    ]),
+    ("DSCC Setup — System", [
+        ("dscc_system_name", "System name", True, "the name DSCC will show for this array"),
+        ("dscc_country", "System country location", True, "e.g. India"),
+    ]),
+    ("DSCC Setup — System Credentials", [
+        ("secret_name", "Credential name", True, "e.g. b10000-admin"),
+        ("secret_username", "Administrator name", True, "e.g. 3paradm — you enter the PASSWORD in the DSCC wizard, not here"),
+    ]),
+    ("As-built document", [
+        ("customer_name", "Customer name", False, "goes on the as-built cover page (the array doesn't store it)"),
+        ("site", "Site / location", False, "deployment site/location for the as-built (optional)"),
+        ("application_workload", "Application / workload", False, "e.g. VMware vSphere cluster — names the workload in the as-built (optional)"),
+        ("storage_purpose", "Purpose of using Block storage", False, "e.g. primary datastore for the vault zone (optional)"),
+    ]),
+]
+
+_LABEL_TO_KEY = {label: key for _, fields in SECTIONS for key, label, _, _ in fields}
+_KEY_TO_LABEL = {key: label for _, fields in SECTIONS for key, label, _, _ in fields}
+
+# Decoupling: which sheet fields each step actually needs. A run's mode -> enabled steps -> the
+# union of these is what we validate, so a verify-only / provision-only sheet isn't forced to carry
+# GreenLake creds or DSCC contact details. serial_number is always required (it names the run).
+_ALWAYS_REQUIRED: tuple[str, ...] = ("serial_number",)
+_STEP_REQUIRES: dict[str, tuple[str, ...]] = {
+    "greenlake": (
+        "gl_client_id", "gl_client_secret", "gl_token_url",
+        "part_number", "subscription_key", "service_catalog_region_id",
+    ),
+    "cloudinit": ("mgmt_ipv4", "mask", "gateway", "dns1", "ntp", "timezone"),
+    "dscc": (
+        "dscc_region_code",
+        "contact_first_name", "contact_last_name", "contact_language",
+        "contact_company", "contact_phone", "contact_email",
+        "dscc_system_name", "dscc_country", "secret_name", "secret_username",
+    ),
+    # Provisioning steps validate against the separate 'Provisioning' tab (parsed below), so they
+    # add no Initialisation-tab requirements beyond the always-required serial. Verify reuses the
+    # onboarded network values, so it needs the array IP from the Initialisation tab.
+    "discover": (),
+    "zoning": (),
+    "provision": (),
+    # Replication steps need the Replication tab (checked when the run is minted), nothing more here.
+    "replicate": (),
+    "failover_test": (),
+    "verify": ("mgmt_ipv4",),
+}
+
+# The provisioning input (Phase 2 / ADR 0010 Stage 2) spans THREE fillable tabs, parsed only when a
+# provisioning step is selected: 'Provisioning' carries the device targets (with passwords —
+# customer-supplied) + defaults; 'Volumes' and 'Host sets' are ROW-TABLES (one object per row) so a
+# run can create a plural/heterogeneous set of volumes and one or more host sets. The exports
+# (which source is presented to which target, at which LUN) are composed later in the operator's
+# dropdown builder over discovered + to-be-created objects — they are not in the sheet.
+PROVISIONING_SHEET_NAME = "Provisioning"
+VOLUMES_SHEET_NAME = "Volumes"
+HOSTSETS_SHEET_NAME = "Host sets"
+HOSTS_SHEET_NAME = "Hosts"
+
+PROVISIONING_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
+    ("Targets — array", [
+        ("prov_array_host", "Array management IP", True, "the B10000 mgmt IP (WSAPI + SSH)"),
+        ("prov_array_user", "Array admin username", True, "e.g. 3paradm"),
+        ("prov_array_password", "Array admin password", True, "used for WSAPI + SSH this run"),
+    ]),
+    ("Targets — vCenter", [
+        ("prov_vcenter_host", "vCenter host or IP", True, "for read-only ESXi HBA discovery"),
+        ("prov_vcenter_user", "vCenter username", True, "e.g. administrator@vsphere.local"),
+        ("prov_vcenter_password", "vCenter password", True, ""),
+    ]),
+    ("Targets — SAN switches (dual fabric) — needed for the SAN Zoning step (read-only)", [
+        ("prov_sw1_host", "Switch 1 — odd / F1 — IP", False, "read-only account is enough; required for SAN Zoning"),
+        ("prov_sw1_user", "Switch 1 username", False, "e.g. admin — the tool only READS the switch"),
+        ("prov_sw1_password", "Switch 1 password", False, ""),
+        ("prov_sw2_host", "Switch 2 — even / F2 — IP", False, "read-only account is enough; required for SAN Zoning"),
+        ("prov_sw2_user", "Switch 2 username", False, "e.g. admin — the tool only READS the switch"),
+        ("prov_sw2_password", "Switch 2 password", False, ""),
+    ]),
+    ("Defaults — used when a Volumes row leaves CPG / Type blank (optional)", [
+        ("prov_default_cpg", "Default CPG", False, "default SSD_r6"),
+        ("prov_default_type", "Default provisioning type", False, "tpvv (thin) or reduce (dedup+compress); default tpvv"),
+    ]),
+]
+
+# Row-table columns for the Volumes / Host sets tabs: (key, header, required).
+VOLUME_COLUMNS: list[tuple[str, str, bool]] = [
+    ("name", "Volume name", True),
+    ("size_gib", "Size (GiB)", True),
+    ("provisioning_type", "Type (tpvv / reduce)", False),
+    ("cpg", "CPG", False),
+    ("vvset", "VV-set (optional)", False),
+]
+HOSTSET_COLUMNS: list[tuple[str, str, bool]] = [
+    ("name", "Host set name", True),
+    ("members", "Members — comma-separated host names; blank = choose in the app's Compose step", False),
+]
+# The hosts the run is for. A row with only a name (and IP) is looked up by discovery (SPEC-014 R1);
+# WWPN/IQN are typed only for a server no source can see yet.
+HOSTS_COLUMNS: list[tuple[str, str, bool]] = [
+    ("name", "Host name", True),
+    ("os", "OS (esxi / windows / linux / vme)", False),
+    ("address", "IP address (optional)", False),
+    ("wwpns", "FC WWPN(s) — comma-separated; blank if none", False),
+    ("iqn", "iSCSI IQN — blank if none", False),
+    ("username", "Login username (optional) — Linux SSH / Windows WinRM, read-only", False),
+    ("password", "Login password (optional)", False),
+]
+
+_PROV_LABEL_TO_KEY = {label: key for _, fields in PROVISIONING_SECTIONS for key, label, _, _ in fields}
+_PROV_KEY_TO_LABEL = {key: label for _, fields in PROVISIONING_SECTIONS for key, label, _, _ in fields}
+_PROV_REQUIRED = [key for _, fields in PROVISIONING_SECTIONS for key, _, required, _ in fields if required]
+
+# The Replication tab (SPEC-015): ONE optional tab, key/value sections on top (the peer array, the
+# measured RTT, the failover test) and a Protection row-table beneath (one Remote Copy group per
+# row). Direction is always this run's array -> the peer.
+REPLICATION_SHEET_NAME = "Replication"
+REPLICATION_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
+    ("Peer array — the array this one replicates TO (an existing Remote Copy partnership is required)", [
+        ("peer_host", "Peer array management IP", True, "the other B10000's mgmt IP (WSAPI + SSH)"),
+        ("peer_user", "Peer array admin username", True, "e.g. 3paradm"),
+        ("peer_password", "Peer array admin password", True, "used for WSAPI + SSH on the peer this run"),
+    ]),
+    ("Replication network", [
+        ("rtt_ms", "Measured round-trip time (ms)", False,
+         "optional — the Replication step measures RCIP links itself (checkrclink); sync needs 10 ms or less, async over RCIP 200 ms"),
+    ]),
+    ("Failover test", [
+        ("failover_test", "Run the failover test (yes / no)", False, "default yes — on the tool's own 1 GiB test group"),
+        ("failover_group", "Failover test group", False, "blank = the tool's own test group; a production group needs a typed confirmation in the app"),
+    ]),
+]
+PROTECTION_COLUMNS: list[tuple[str, str, bool]] = [
+    ("vvset", "Volume set", True),
+    ("mode", "Mode (async / sync)", False),
+    ("rpo_minutes", "RPO (minutes, async only)", False),
+    ("peer_cpg", "Peer CPG", True),
+    ("peer_vvset", "Peer volume set (optional)", False),
+    ("auto_synchronize", "Auto synchronize (yes / no)", False),
+    ("auto_recover", "Auto recover (yes / no)", False),
+]
+_REPL_LABEL_TO_KEY = {label: key for _, fields in REPLICATION_SECTIONS for key, label, _, _ in fields}
+_REPL_KEY_TO_LABEL = {key: label for _, fields in REPLICATION_SECTIONS for key, label, _, _ in fields}
+_REPL_REQUIRED = [key for _, fields in REPLICATION_SECTIONS for key, _, required, _ in fields if required]
+_UNSUPPORTED_REPLICATION_TYPES = ("peer persistence", "active sync", "sld", "3dc", "streaming", "app")
+
+
+def required_keys_for(mode: RunMode, selected_steps: list[str] | None = None) -> set[str]:
+    """The sheet field keys a run of this mode must have filled."""
+    keys = set(_ALWAYS_REQUIRED)
+    for step in enabled_steps(mode, selected_steps):
+        keys.update(_STEP_REQUIRES.get(step.key, ()))
+    return keys
+
+
+def all_required_keys() -> set[str]:
+    """Every main-tab field a COMPLETE sheet must have — the union across all steps, mode-independent.
+    RunMode.BOTH enables the whole step registry, so its required set is the full superset. The upload
+    validates against this (see ADR 0005 revision): the sheet is filled once, in full, BEFORE a mode
+    is chosen, so an incomplete sheet is rejected regardless of the intent picked later."""
+    return required_keys_for(RunMode.BOTH)
+
+
+@dataclass
+class ParsedInitSheet:
+    work_item: ArrayWorkItem
+    gl_client_id: str
+    gl_client_secret: str
+    gl_token_url: str
+    provisioning_intent: ProvisioningIntent | None = None  # set when a provisioning step is selected
+    customer_name: str = ""  # for the as-built cover page (operator-supplied; not on the array)
+    site: str = ""
+
+
+def _provisioning_selected(mode: RunMode, selected_steps: list[str] | None) -> bool:
+    return any(step.kind in ("provision", "replicate") for step in enabled_steps(mode, selected_steps))
+
+
+def _replication_selected(mode: RunMode, selected_steps: list[str] | None) -> bool:
+    return any(step.kind == "replicate" for step in enabled_steps(mode, selected_steps))
+
+
+def _normalize_label(text: str) -> str:
+    return text.strip().removesuffix("*").strip()
+
+
+def _column_key(text: str) -> str:
+    """A row-table header reduced to its leading phrase: `Members — comma-separated …` -> `members`,
+    `Size (GiB) *` -> `size`. The explanatory tail after " — " or " (" is guidance for the operator
+    and changes between template revisions; matching on it silently dropped a whole column when it
+    did (P-17, 2026-09-14: rc.10 renamed the Members hint and every existing sheet lost its members)."""
+    head = _normalize_label(text)
+    for sep in (" — ", " - ", " ("):
+        if sep in head:
+            head = head.split(sep, 1)[0]
+    return " ".join(head.lower().split())
+
+
+def _write_fillable_tab(ws, sections: list[tuple[str, list[tuple[str, str, bool, str]]]]) -> None:
+    """Write a Field | Value | Notes tab grouped by section header (the operator fills Value)."""
+    ws.append(["Field", "Value", "Notes / example"])
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+
+    header_fill = PatternFill("solid", fgColor=_HPE_GREEN)
+    for section, fields in sections:
+        row = ws.max_row + 1
+        for col in (1, 2, 3):
+            cell = ws.cell(row=row, column=col, value=section if col == 1 else None)
+            cell.fill = header_fill
+            cell.font = Font(bold=True, color="FFFFFF")
+        for _key, label, required, note in fields:
+            display = f"{label} *" if required else label
+            ws.append([display, "", note])
+            ws.cell(row=ws.max_row, column=3).font = Font(italic=True, color="808080")
+
+    ws.column_dimensions["A"].width = 38
+    ws.column_dimensions["B"].width = 42
+    ws.column_dimensions["C"].width = 64
+    for row in ws.iter_rows():
+        row[1].alignment = Alignment(wrap_text=False)
+    ws.freeze_panes = "A2"
+
+
+def build_template_bytes(*, init_only: bool = False) -> bytes:
+    """A blank Initialisation_sheet.xlsx: Initialisation (fillable) + Prerequisites, plus the
+    Provisioning tab unless ``init_only`` (the Initialization accelerator ships an onboarding-only
+    sheet — no array/vCenter/switch credentials)."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = SHEET_NAME
+    _write_fillable_tab(ws, SECTIONS)
+
+    if not init_only:
+        _add_provisioning_sheet(wb)
+        _add_replication_sheet(wb)
+    _add_prereq_sheet(wb)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+def _write_table_tab(ws, columns: list[tuple[str, str, bool]], *, blank_rows: int, intro: str) -> None:
+    """Write a ROW-TABLE: an intro line, a bold header row (one column per field), then blank rows
+    the operator fills — one object per row (ADR 0010 Stage 2). Appends below whatever the sheet
+    already holds (the Replication tab puts it under its key/value sections)."""
+    ws.append([intro])
+    ws.cell(row=ws.max_row, column=1).font = Font(italic=True, color="808080")
+
+    header_fill = PatternFill("solid", fgColor=_HPE_GREEN)
+    header = [f"{label} *" if required else label for _key, label, required in columns]
+    ws.append(header)
+    header_row = ws.max_row
+    for cell in ws[header_row]:
+        cell.fill = header_fill
+        cell.font = Font(bold=True, color="FFFFFF")
+
+    # Materialise blank rows as a bordered, fillable grid (append([None,...]) creates no cells, so the
+    # operator would otherwise see just a header with nowhere obvious to type).
+    thin = Side(style="thin", color="D0D0D0")
+    grid = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for r in range(header_row + 1, header_row + 1 + blank_rows):
+        for c in range(1, len(columns) + 1):
+            ws.cell(row=r, column=c).border = grid
+
+    for i, (_key, label, _required) in enumerate(columns, start=1):
+        ws.column_dimensions[ws.cell(row=header_row, column=i).column_letter].width = max(20, len(label) + 4)
+    ws.freeze_panes = ws.cell(row=header_row + 1, column=1).coordinate
+
+
+def _add_provisioning_sheet(wb: Workbook) -> None:
+    """The fillable provisioning input — parsed only when a provisioning step is selected: the
+    'Provisioning' tab (targets + defaults) plus the 'Volumes' and 'Host sets' row-tables."""
+    _write_fillable_tab(wb.create_sheet(PROVISIONING_SHEET_NAME), PROVISIONING_SECTIONS)
+    _write_table_tab(
+        wb.create_sheet(VOLUMES_SHEET_NAME), VOLUME_COLUMNS, blank_rows=15,
+        intro="Volumes to create — one per row. Type/CPG blank = the Provisioning-tab defaults.",
+    )
+    _write_table_tab(
+        wb.create_sheet(HOSTS_SHEET_NAME), HOSTS_COLUMNS, blank_rows=10,
+        intro=(
+            "The hosts this run is for. Name + OS + IP is enough: discovery looks each one up (vCenter "
+            "by name/IP, the array by host name, iSCSI login IP or IQN) and fills in its serial, WWPNs "
+            "and IQN. For a Linux or Windows host, add a login and discovery reads them from the server "
+            "itself (read-only): Linux over SSH (serial and multipath need root or passwordless sudo), "
+            "Windows over WinRM 5985/5986 with a local administrator login. "
+            "Type the WWPN/IQN only for a server nothing can see yet: "
+            "Windows 'Get-InitiatorPort'; Linux 'cat /etc/iscsi/initiatorname.iscsi' for the IQN and "
+            "'cat /sys/class/fc_host/host*/port_name' for the WWPN; ESXi 'esxcli storage san fc list'."
+        ),
+    )
+    _write_table_tab(
+        wb.create_sheet(HOSTSETS_SHEET_NAME), HOSTSET_COLUMNS, blank_rows=8,
+        intro="Host sets to create — one per row. Leave Members blank to include all discovered hosts.",
+    )
+
+
+def _add_replication_sheet(wb: Workbook) -> None:
+    """The optional 'Replication' tab (SPEC-015 R1): key/value sections, then the Protection row-table
+    on the SAME tab. `_read_tab` matches the labels and ignores the table; `_read_table` finds the
+    header by its 'Volume set' column and ignores the sections above it."""
+    ws = wb.create_sheet(REPLICATION_SHEET_NAME)
+    _write_fillable_tab(ws, REPLICATION_SECTIONS)
+    ws.append([])
+    _write_table_tab(
+        ws, PROTECTION_COLUMNS, blank_rows=8,
+        intro=(
+            "Volume sets to protect — one Remote Copy group per row, from THIS array to the peer. "
+            "Mode blank = async; RPO blank = 10 minutes (the array period is RPO / 2); Peer volume set "
+            "blank = '<set>_rc'; policies blank = yes. Only async and sync are supported in this version."
+        ),
+    )
+    # _write_table_tab sized the first columns for the table; widen column A for the labels above it.
+    ws.column_dimensions["A"].width = 44
+    ws.freeze_panes = "A2"
+
+
+def _add_prereq_sheet(wb: Workbook) -> None:
+    """A reference 'Prerequisites' tab: firewall rules to open + a short readiness checklist.
+
+    The parser ignores this tab (it only reads the 'Initialisation' sheet), so it is documentation
+    only. The firewall list is the same single source used by the app and the downloadable .txt.
+    """
+    ws = wb.create_sheet("Prerequisites")
+    header_fill = PatternFill("solid", fgColor=_HPE_GREEN)
+
+    def band(text: str) -> None:
+        ws.append([text, None, None])
+        for col in (1, 2, 3):
+            cell = ws.cell(row=ws.max_row, column=col)
+            cell.fill = header_fill
+            cell.font = Font(bold=True, color="FFFFFF")
+
+    def note(text: str) -> None:
+        ws.append([text, None, None])
+        ws.cell(row=ws.max_row, column=1).font = Font(italic=True, color="808080")
+
+    ws.append(["Prerequisites — complete before onboarding"])
+    ws.cell(row=1, column=1).font = Font(bold=True, size=13)
+
+    band("Firewall — open these OUTBOUND rules (send to your network team)")
+    ws.append(["Destination (FQDN)", "Port", "Purpose"])
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True)
+    for fqdn, port, _initiator, purpose in prereqs.rules_for("<instance>"):
+        ws.append([fqdn, port, purpose])
+    note("<instance> = your DSCC region (e.g. jp1).  Also required: mDNS UDP 5353 for local discovery.")
+    note("Reserved — do NOT assign these: " + ", ".join(prereqs.RESERVED_IPS) + " (CDM link-local).")
+
+    band("Management-network cabling (each controller → management switch)")
+    for item in (
+        "Admin port — each controller → management LAN switch (cable ALL controllers; the shared IP fails over).",
+        "iLO port — each controller → the same management network (out-of-band management).",
+        "CDM Ethernet port — each controller chassis (OCuLink-to-Ethernet dongle) + at least one drive chassis per rack.",
+    ):
+        ws.append([item, None, None])
+
+    band("Account, network & time")
+    for item in (
+        "HPE GreenLake account + workspace; Data Services deployed; Administrator role assigned.",
+        "Personal API client created (Client ID / Secret / token URL) — enter these on the Initialisation tab.",
+        "Array DNS resolves the global names above; system time within 2 minutes of correct.",
+        "Onboarding jump box on the same subnet as the array (for the 169.254.x Cloud Connectivity URL).",
+    ):
+        ws.append([item, None, None])
+
+    band("Reference")
+    ws.append(["HPE Alletra Storage MP B10000 — Network requirement details (Planning / install guide, sd00002405)."])
+
+    ws.column_dimensions["A"].width = 64
+    ws.column_dimensions["B"].width = 12
+    ws.column_dimensions["C"].width = 44
+
+
+def parse_workbook_bytes(
+    data: bytes,
+    *,
+    mode: RunMode = RunMode.FULL_ONBOARDING,
+    selected_steps: list[str] | None = None,
+    complete: bool = False,
+) -> ParsedInitSheet:
+    """Read a filled Initialisation_sheet.xlsx back into (GreenLake creds, ArrayWorkItem).
+
+    ``complete=True`` (the upload path, ADR 0005 revision) validates the FULL superset and always
+    parses the Provisioning tab — the sheet is filled once, in full, before a mode is chosen. Passing
+    a ``mode`` instead scopes validation to that mode's fields (used where a mode is already known).
+    """
+    workbook = load_workbook(io.BytesIO(data), data_only=True)
+    sheet = workbook[SHEET_NAME] if SHEET_NAME in workbook.sheetnames else workbook.active
+
+    values = _read_tab(sheet, _LABEL_TO_KEY)
+    required = all_required_keys() if complete else required_keys_for(mode, selected_steps)
+    parsed = _build(values, required)
+
+    if complete or _provisioning_selected(mode, selected_steps):
+        parsed.provisioning_intent = _parse_provisioning_tab(workbook)
+        _reject_two_arrays(parsed)
+        replication = _parse_replication_tab(workbook)
+        if replication is None and _replication_selected(mode, selected_steps):
+            raise ValueError(
+                "The Replication and Failover test steps need the 'Replication' tab (peer array and the "
+                "volume sets to protect), and this workbook has none filled in."
+            )
+        parsed.provisioning_intent.replication = replication
+        _reject_peer_is_this_array(parsed)
+    return parsed
+
+
+def _reject_peer_is_this_array(parsed: ParsedInitSheet) -> None:
+    intent = parsed.provisioning_intent
+    if intent is None or intent.replication is None:
+        return
+    peer = intent.replication.peer.host.strip()
+    own = {ip for ip in ((intent.array.host or "").strip(), (parsed.work_item.network.mgmt_ipv4 or "").strip()) if ip}
+    if peer in own:
+        raise ValueError(
+            f"Replication tab — the peer array ({peer}) is this run's own array. Replication needs a second "
+            "array: enter the OTHER array's management IP."
+        )
+
+
+def _reject_two_arrays(parsed: ParsedInitSheet) -> None:
+    """A run is ONE array. Refuse a workbook that names two.
+
+    The array's management IP appears twice — 'IP address' on the Initialisation tab (what
+    cloudinit APPLIES to the array, and what verify reads) and 'Array management IP' on the
+    Provisioning tab (where discovery/zoning/provisioning connect). They are the same array by
+    definition, and the second field exists only because a PROVISION_ONLY run has no Initialisation
+    section to read.
+
+    Nothing used to tie them together, so a workbook could name two different arrays and the run
+    would half-work: verify checked one box while the as-built read the other and timed out
+    (measured live — init 10.132.30.121, provisioning 10.64.186.90, same run). Resolving that with
+    a precedence rule only hides which array each step actually touched. Refuse it here instead,
+    while there is still a human looking at the workbook, and say exactly which two values disagree.
+    """
+    intent = parsed.provisioning_intent
+    if intent is None:
+        return
+    init_ip = (parsed.work_item.network.mgmt_ipv4 or "").strip()
+    prov_ip = (intent.array.host or "").strip()
+    # Empty means "this run doesn't use that tab" (a PROVISION_ONLY sheet has no Network section),
+    # which is not a conflict — only two DIFFERENT stated addresses are.
+    if not init_ip or not prov_ip or init_ip == prov_ip:
+        return
+    raise ValueError(
+        f"This workbook names two different arrays: the Initialisation tab's 'IP address' is "
+        f"{init_ip} and the Provisioning tab's 'Array management IP' is {prov_ip}. A run covers one "
+        "array — every step (initialise, verify, provision, as-built) acts on it. Correct whichever "
+        "is wrong, or use a separate workbook/run for the other array."
+    )
+
+
+#: Credential fields are used exactly as typed; every other field is trimmed.
+_VERBATIM_KEYS = frozenset({
+    "gl_client_secret", "prov_array_password", "prov_vcenter_password",
+    "prov_sw1_password", "prov_sw2_password", "password", "peer_password",
+})
+
+
+def _cell_text(key: str | None, value) -> str:
+    text = str(value)
+    return text if key in _VERBATIM_KEYS else text.strip()
+
+
+def _read_tab(sheet, label_to_key: dict[str, str]) -> dict[str, str]:
+    """Collect Field->Value pairs from a fillable tab, matching labels to stable keys."""
+    values: dict[str, str] = {}
+    for row in sheet.iter_rows(min_row=1, max_col=2, values_only=True):
+        label = row[0]
+        value = row[1] if len(row) > 1 else None
+        if label is None or value is None:
+            continue
+        key = label_to_key.get(_normalize_label(str(label)))
+        text = _cell_text(key, value)
+        if key and text.strip():
+            values[key] = text
+    return values
+
+
+def _read_table(ws, columns: list[tuple[str, str, bool]]) -> list[dict[str, str]]:
+    """Read a row-table tab into a list of {key: value} dicts. Locates the header row as the first row
+    that carries the NAME column (tolerant of the intro line and of the operator's column order);
+    columns match on their leading phrase, never on the hint text after it (P-17). Then reads data
+    rows to the end, skipping any row whose name column is blank."""
+    header_to_key = {_column_key(label): key for key, label, _ in columns}
+    name_key = columns[0][0]
+    rows = list(ws.iter_rows(values_only=True))
+    header_idx: int | None = None
+    col_index: dict[int, str] = {}
+    for i, row in enumerate(rows):
+        mapping = {ci: header_to_key[_column_key(str(cell))]
+                   for ci, cell in enumerate(row)
+                   if cell is not None and _column_key(str(cell)) in header_to_key}
+        if name_key in mapping.values():
+            header_idx, col_index = i, mapping
+            break
+    if header_idx is None:
+        return []
+
+    records: list[dict[str, str]] = []
+    for row in rows[header_idx + 1:]:
+        record = {
+            key: _cell_text(key, row[ci])
+            for ci, key in col_index.items()
+            if ci < len(row) and row[ci] is not None and str(row[ci]).strip()
+        }
+        if record.get(name_key):
+            records.append(record)
+    return records
+
+
+def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
+    """Read the provisioning input (Provisioning targets + Volumes + Host sets row-tables) into a plural
+    ProvisioningIntent (passwords included — customer-supplied). Exports are composed later in the UI."""
+    for name in (PROVISIONING_SHEET_NAME, VOLUMES_SHEET_NAME, HOSTSETS_SHEET_NAME):
+        if name not in workbook.sheetnames:
+            raise ValueError(f"The '{name}' tab is required for provisioning but was not found in the workbook.")
+
+    targets = _read_tab(workbook[PROVISIONING_SHEET_NAME], _PROV_LABEL_TO_KEY)
+    missing = [_PROV_KEY_TO_LABEL[key] for key in _PROV_REQUIRED if not targets.get(key)]
+    if missing:
+        raise ValueError("Provisioning tab — missing required fields: " + ", ".join(sorted(missing)))
+
+    default_cpg = targets.get("prov_default_cpg") or "SSD_r6"
+    default_type = (targets.get("prov_default_type") or "tpvv").strip().lower()
+    if default_type not in ("tpvv", "reduce"):
+        raise ValueError("Default provisioning type must be 'tpvv' or 'reduce'.")
+
+    vol_rows = _read_table(workbook[VOLUMES_SHEET_NAME], VOLUME_COLUMNS)
+    # A workbook that only replicates sets already on the array may leave Volumes and Host sets
+    # empty; the run guard then refuses the Provision step (nothing to provision).
+    replicate_only = not vol_rows and _replication_rows_present(workbook)
+    if not vol_rows and not replicate_only:
+        raise ValueError(
+            "Volumes tab — add at least one volume (a name and a size). To replicate volume sets that "
+            "already exist on the array, leave Volumes and Host sets empty and fill the Replication tab."
+        )
+    volumes: list[VolumeRequest] = []
+    for r in vol_rows:
+        ptype = (r.get("provisioning_type") or default_type).strip().lower()
+        if ptype not in ("tpvv", "reduce"):
+            raise ValueError(f"Volume '{r['name']}' — Type must be 'tpvv' or 'reduce'.")
+        try:
+            size = float(r["size_gib"])
+        except (KeyError, ValueError) as exc:
+            raise ValueError(f"Volume '{r.get('name', '?')}' — Size (GiB) must be a number.") from exc
+        if size <= 0 or not size.is_integer():
+            raise ValueError(f"Volume '{r['name']}' — Size (GiB) must be a whole number above 0 (got {r['size_gib']}).")
+        size_gib = int(size)
+        volumes.append(VolumeRequest(
+            name=r["name"], size_gib=size_gib,
+            provisioning_type=ptype,  # type: ignore[arg-type]
+            cpg=r.get("cpg") or default_cpg, vvset=r.get("vvset") or None,
+        ))
+
+    hs_rows = _read_table(workbook[HOSTSETS_SHEET_NAME], HOSTSET_COLUMNS)
+    if not hs_rows and not replicate_only:
+        raise ValueError("Host sets tab — add at least one host set (a name).")
+    host_sets = [
+        HostSetRequest(name=r["name"], members=[m.strip() for m in (r.get("members") or "").split(",") if m.strip()])
+        for r in hs_rows
+    ]
+
+    # OPTIONAL tab: only servers nothing can discover yet. Absent on an older workbook, which must
+    # still parse — the tab adds capability, it is not a new requirement.
+    declared: list[DeclaredHost] = []
+    if HOSTS_SHEET_NAME in workbook.sheetnames:
+        for r in _read_table(workbook[HOSTS_SHEET_NAME], HOSTS_COLUMNS):
+            wwpns = [normalize_wwpn(w) for w in (r.get("wwpns") or "").replace(";", ",").split(",") if w.strip()]
+            iqn = (r.get("iqn") or "").strip()
+            bad = [w for w in wwpns if len(w) != 16]
+            if bad:
+                raise ValueError(
+                    f"Hosts tab — host '{r['name']}' has an FC WWPN that is not 16 hex digits: "
+                    + ", ".join(bad) + ". A mistyped WWPN produces a zone that matches nothing."
+                )
+            if iqn and not iqn.lower().startswith("iqn."):
+                raise ValueError(f"Hosts tab — host '{r['name']}' has an iSCSI IQN that does not start with 'iqn.': {iqn}")
+            # SPEC-014 R1: a row with neither id is a lookup request — discovery finds it by name/IP.
+            os_ = (r.get("os") or "").strip().lower()
+            if os_ and os_ not in ("esxi", "windows", "linux", "vme"):
+                raise ValueError(f"Hosts tab — host '{r['name']}' has an unrecognised OS '{os_}' (esxi / windows / linux / vme).")
+            username, password = (r.get("username") or "").strip(), r.get("password") or ""
+            address = (r.get("address") or "").strip()
+            if password and not username:
+                raise ValueError(f"Hosts tab — host '{r['name']}' has a login password but no login username.")
+            if username and not address:
+                raise ValueError(f"Hosts tab — host '{r['name']}' has a login but no IP address to log in to.")
+            declared.append(DeclaredHost(
+                name=r["name"], os=os_, address=address, wwpns=wwpns, iqn=iqn,
+                username=username, password=password or None,
+            ))
+
+    return ProvisioningIntent(
+        array=EndpointCreds(host=targets["prov_array_host"], username=targets["prov_array_user"], password=targets["prov_array_password"]),
+        vcenter=EndpointCreds(host=targets["prov_vcenter_host"], username=targets["prov_vcenter_user"], password=targets["prov_vcenter_password"]),
+        # Switches are OPTIONAL (verify is array-side; switches only needed to CREATE zones) -> default blank.
+        switch_f1=EndpointCreds(host=targets.get("prov_sw1_host", ""), username=targets.get("prov_sw1_user", ""), password=targets.get("prov_sw1_password", "")),
+        switch_f2=EndpointCreds(host=targets.get("prov_sw2_host", ""), username=targets.get("prov_sw2_user", ""), password=targets.get("prov_sw2_password", "")),
+        volumes=volumes,
+        host_sets=host_sets,
+        declared_hosts=declared,
+    )
+
+
+def _yes_no(text: str | None, *, default: bool, where: str) -> bool:
+    value = (text or "").strip().lower()
+    if not value:
+        return default
+    if value in ("yes", "y", "true", "1"):
+        return True
+    if value in ("no", "n", "false", "0"):
+        return False
+    raise ValueError(f"{where} must be 'yes' or 'no' (got '{text}').")
+
+
+def _replication_rows_present(workbook) -> bool:
+    return REPLICATION_SHEET_NAME in workbook.sheetnames and bool(
+        _read_table(workbook[REPLICATION_SHEET_NAME], PROTECTION_COLUMNS)
+    )
+
+
+def _parse_replication_tab(workbook) -> ReplicationIntent | None:
+    """The optional Replication tab (SPEC-015 R1/R2). Absent, or present but blank, -> None (an
+    older workbook parses exactly as before). Filled -> validated to one sentence per rule."""
+    if REPLICATION_SHEET_NAME not in workbook.sheetnames:
+        return None
+    ws = workbook[REPLICATION_SHEET_NAME]
+    fields = _read_tab(ws, _REPL_LABEL_TO_KEY)
+    rows = _read_table(ws, PROTECTION_COLUMNS)
+    if not any(fields.get(k) for k in _REPL_REQUIRED) and not rows:
+        return None
+
+    missing = [_REPL_KEY_TO_LABEL[key] for key in _REPL_REQUIRED if not fields.get(key)]
+    if missing:
+        raise ValueError("Replication tab — missing required fields: " + ", ".join(sorted(missing)))
+    if not rows:
+        raise ValueError("Replication tab — add at least one volume set to protect (a Volume set and a Peer CPG).")
+
+    rtt: float | None = None
+    if fields.get("rtt_ms"):
+        try:
+            rtt = float(fields["rtt_ms"])
+        except ValueError as exc:
+            raise ValueError(f"Replication tab — 'Measured round-trip time (ms)' must be a number (got '{fields['rtt_ms']}').") from exc
+        if rtt < 0:
+            raise ValueError("Replication tab — 'Measured round-trip time (ms)' cannot be negative.")
+
+    # A set not on the Volumes tab is an EXISTING set: the Replication preview reads the array and
+    # refuses it there if it is missing or empty (plan.check).
+    protections: list[ProtectionRequest] = []
+    seen: set[str] = set()
+    for r in rows:
+        vvset = r["vvset"]
+        where = f"Replication tab — row '{vvset}'"
+        if vvset in seen:
+            raise ValueError(f"{where} appears twice; one row per volume set.")
+        seen.add(vvset)
+        mode_text = (r.get("mode") or "async").strip().lower()
+        if mode_text in ("periodic", "asynchronous", "asynchronous periodic"):
+            mode_text = "async"
+        elif mode_text == "synchronous":
+            mode_text = "sync"
+        if mode_text not in ("async", "sync"):
+            unsupported = any(t in mode_text for t in _UNSUPPORTED_REPLICATION_TYPES)
+            raise ValueError(
+                f"{where}: Mode must be 'async' or 'sync' (got '{r.get('mode')}')"
+                + ("; Peer Persistence, Active Sync, SLD and 3DC are not supported in this version." if unsupported else ".")
+            )
+        rpo: int | None = None
+        if mode_text == "async":
+            raw = (r.get("rpo_minutes") or "").strip()
+            if not raw:
+                rpo = RPO_MINUTES_DEFAULT
+            else:
+                try:
+                    value = float(raw)
+                except ValueError as exc:
+                    raise ValueError(f"{where}: RPO must be a whole number of minutes, {RPO_MINUTES_MIN} or more (got '{raw}').") from exc
+                if not value.is_integer() or value < RPO_MINUTES_MIN:
+                    raise ValueError(f"{where}: RPO must be a whole number of minutes, {RPO_MINUTES_MIN} or more (got '{raw}').")
+                rpo = int(value)
+        limit = RTT_LIMIT_MS[mode_text]
+        # SPEC-020: a blank RTT is fine for every mode — the Replication step measures it (checkrclink).
+        if rtt is not None and rtt > limit:
+            raise ValueError(
+                f"{where}: the measured round-trip time is {rtt:g} ms; {mode_text} replication over RCIP needs "
+                f"{limit:g} ms or less (HPE Support Matrix)."
+            )
+        peer_cpg = (r.get("peer_cpg") or "").strip()
+        if not peer_cpg:
+            raise ValueError(f"{where}: Peer CPG is required (the CPG on the peer array for the secondary volumes).")
+        protections.append(ProtectionRequest(
+            vvset=vvset, mode=mode_text, rpo_minutes=rpo, peer_cpg=peer_cpg,  # type: ignore[arg-type]
+            peer_vvset=(r.get("peer_vvset") or "").strip(),
+            auto_synchronize=_yes_no(r.get("auto_synchronize"), default=True, where=f"{where}: Auto synchronize"),
+            auto_recover=_yes_no(r.get("auto_recover"), default=True, where=f"{where}: Auto recover"),
+        ))
+
+    return ReplicationIntent(
+        peer=EndpointCreds(host=fields["peer_host"], username=fields["peer_user"], password=fields["peer_password"]),
+        rtt_ms=rtt,
+        protections=protections,
+        failover_test=_yes_no(fields.get("failover_test"), default=True, where="Replication tab — 'Run the failover test'"),
+        failover_group=(fields.get("failover_group") or "").strip(),
+    )
+
+
+def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
+    missing = [_KEY_TO_LABEL[key] for key in required if not values.get(key)]
+    if missing:
+        raise ValueError("Missing required fields: " + ", ".join(sorted(missing)))
+
+    # Fields not required by this mode but still mandatory on the models get harmless placeholders
+    # (they are never used by the steps that didn't ask for them).
+    def get(key: str, default: str = "") -> str:
+        return values.get(key) or default
+
+    dns = [values[key] for key in ("dns1", "dns2", "dns3") if values.get(key)]
+    network = NetworkConfig(
+        mgmt_ipv4=get("mgmt_ipv4"),
+        mask=get("mask"),
+        gateway=get("gateway"),
+        dns=dns,
+        ntp=get("ntp"),
+        timezone=get("timezone"),
+        proxy_host=values.get("proxy_host") or None,
+        proxy_port=int(float(values["proxy_port"])) if values.get("proxy_port") else None,
+    )
+    dscc_setup = DsccSetupConfig(
+        system_name=get("dscc_system_name", get("serial_number", "array")),
+        country=get("dscc_country", "—"),
+        credential_name=values.get("secret_name") or "b10000-admin",
+        username=values.get("secret_username") or "3paradm",
+        password=values.get("secret_password") or None,
+        contact_first_name=values.get("contact_first_name"),
+        contact_last_name=values.get("contact_last_name"),
+        contact_language=values.get("contact_language") or "English",
+        contact_company=values.get("contact_company"),
+        contact_phone=values.get("contact_phone"),
+        contact_email=values.get("contact_email"),
+    )
+    work_item = ArrayWorkItem(
+        serial_number=values["serial_number"],  # always required
+        part_number=get("part_number", "—"),
+        subscription_key=get("subscription_key", "—"),
+        service_catalog_region_id=get("service_catalog_region_id", "—"),
+        dscc_region_code=get("dscc_region_code", "—"),
+        cloudinit_url=values.get("cloudinit_url") or DEFAULT_CLOUDINIT_URL,
+        network=network,
+        dscc_setup=dscc_setup,
+        customer_name=values.get("customer_name", ""),
+        site=values.get("site", ""),
+        application_workload=values.get("application_workload", ""),
+        storage_purpose=values.get("storage_purpose", ""),
+    )
+    return ParsedInitSheet(
+        work_item=work_item,
+        gl_client_id=get("gl_client_id"),
+        gl_client_secret=get("gl_client_secret"),
+        gl_token_url=get("gl_token_url"),
+        customer_name=values.get("customer_name", ""),
+        site=values.get("site", ""),
+    )
+
+
+# ------------------------------------------------------------------ SPEC-006 R3: compose a sheet from JSON
+
+def _fill_kv_tab(ws, label_to_key: dict[str, str], values: dict[str, str]) -> None:
+    """Write `values` into the Value column of a Field | Value | Notes tab, matched by label."""
+    for row in ws.iter_rows(min_row=2):
+        label = row[0].value
+        if label is None:
+            continue
+        key = label_to_key.get(_normalize_label(str(label)))
+        if key is not None and key in values:
+            _write_text(row[1], values[key])
+
+
+def _write_text(cell, value) -> None:
+    """Write a composed value as-is: a string starting with '=' is text (a password), never a formula."""
+    cell.value = value
+    if isinstance(value, str) and value.startswith("="):
+        cell.data_type = "s"
+
+
+def _replace_row_table(ws, columns: list[tuple[str, str, bool]], records: list[dict[str, str]]) -> None:
+    """Replace every data row of a row-table tab with `records`. The header is located the way
+    `_read_table` locates it (leading phrase, name column present); everything below it is cleared
+    first, so a scenario sheet never carries a stale row from the base workbook."""
+    header_to_key = {_column_key(label): key for key, label, _ in columns}
+    name_key = columns[0][0]
+    header_row: int | None = None
+    col_of_key: dict[str, int] = {}
+    for row in ws.iter_rows():
+        found = {header_to_key[_column_key(str(c.value))]: c.column
+                 for c in row if c.value is not None and _column_key(str(c.value)) in header_to_key}
+        if name_key in found:
+            header_row, col_of_key = row[0].row, found
+            break
+    if header_row is None:
+        raise ValueError(f"'{ws.title}' has no header row with a '{columns[0][1]}' column")
+    requested = {key for rec in records for key, value in rec.items() if value not in (None, "")}
+    for key, label, _ in columns:
+        if key in requested and key not in col_of_key:
+            column = ws.max_column + 1
+            ws.cell(row=header_row, column=column, value=label)
+            col_of_key[key] = column
+    for r in range(header_row + 1, ws.max_row + 1):
+        for c in range(1, ws.max_column + 1):
+            ws.cell(row=r, column=c).value = None
+    for i, rec in enumerate(records):
+        for key, val in rec.items():
+            if key in col_of_key and val not in (None, ""):
+                _write_text(ws.cell(row=header_row + 1 + i, column=col_of_key[key]), val)
+
+
+def compose_workbook_bytes(
+    *,
+    base: bytes | None,
+    init: dict[str, str] | None = None,
+    targets: dict[str, str] | None = None,
+    volumes: list[dict[str, str]] | None = None,
+    hostsets: list[dict[str, str]] | None = None,
+    hosts: list[dict[str, str]] | None = None,
+    replication: dict | None = None,
+) -> bytes:
+    """A filled Initialisation_sheet.xlsx from JSON (SPEC-006 R3): start from `base` (the operator's
+    working sheet) or the blank template; fill the key/value tabs given; REPLACE each row table given.
+    A table not given is left as it is. `replication` = {"fields": {...}, "rows": [...]} fills the
+    Replication tab (added to a base workbook that predates it). The result parses exactly as an
+    operator-edited sheet would."""
+    try:
+        wb = load_workbook(io.BytesIO(base)) if base else load_workbook(io.BytesIO(build_template_bytes()))
+    except (zipfile.BadZipFile, KeyError, OSError) as exc:
+        raise ValueError("The base is not an .xlsx workbook.") from exc
+    if init:
+        _fill_kv_tab(wb[wb.sheetnames[0]], _LABEL_TO_KEY, init)
+    if targets and PROVISIONING_SHEET_NAME in wb.sheetnames:
+        _fill_kv_tab(wb[PROVISIONING_SHEET_NAME], _PROV_LABEL_TO_KEY, targets)
+    for name, columns, records in (
+        (VOLUMES_SHEET_NAME, VOLUME_COLUMNS, volumes),
+        (HOSTSETS_SHEET_NAME, HOSTSET_COLUMNS, hostsets),
+        (HOSTS_SHEET_NAME, HOSTS_COLUMNS, hosts),
+    ):
+        if records is None:
+            continue
+        if name not in wb.sheetnames:
+            raise ValueError(f"The base workbook has no '{name}' tab.")
+        _replace_row_table(wb[name], columns, records)
+    if replication is not None:
+        if REPLICATION_SHEET_NAME not in wb.sheetnames:
+            _add_replication_sheet(wb)
+        ws = wb[REPLICATION_SHEET_NAME]
+        _fill_kv_tab(ws, _REPL_LABEL_TO_KEY, replication.get("fields") or {})
+        if replication.get("rows") is not None:
+            _replace_row_table(ws, PROTECTION_COLUMNS, replication["rows"])
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
