@@ -65,6 +65,9 @@
   .box.note { border-color: var(--info); background: var(--bg-info); }
   .box > strong:first-child { display: block; margin-bottom: 4px; }
   .where { font-size: 0.9375rem; color: var(--text-weak); margin: -4px 0 16px; }
+  .stamp { font-size: 0.875rem; color: var(--text-weak); margin-top: 10px; }
+  code a, a code { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--border-default); }
+  code a:hover { border-bottom-color: var(--brand); color: var(--brand); }
   .kv { display: grid; grid-template-columns: 220px 1fr; gap: 6px 16px; margin: 12px 0; max-width: 82ch; }
   .kv dt { font-weight: 500; color: var(--text-strong); } .kv dd { margin: 0; }
   figure { margin: 24px 0 32px; }
@@ -93,6 +96,7 @@
   <div class="brand"><span class="mark" aria-hidden="true"></span><span>Hewlett Packard Enterprise &middot; Alletra Storage MP onboarding</span></div>
   <h1>The developer handbook</h1>
   <p>Everything you need to work on this project, in one page: what the tool is for, how to set up, how a change gets from an idea to the array, how the code is built, and what to do when something does not work. Read the first part today. Come back to the rest when you need it.</p>
+  <p class="stamp">Last checked against <code>main</code> on 16 October 2026. File paths on this page are links to the code on github.hpe.com.</p>
 </header>
 
 <div class="wrap">
@@ -125,10 +129,11 @@
   <a href="#data">22. Where data lives</a>
   <a href="#api">23. The API</a>
   <a href="#tests">24. Tests</a>
+  <a href="#howto">25. How to make common changes</a>
   <h2>When you are stuck</h2>
-  <a href="#stuck">25. Problems and fixes</a>
-  <a href="#traps">26. Facts that are easy to get wrong</a>
-  <a href="#glossary">27. Glossary</a>
+  <a href="#stuck">26. Problems and fixes</a>
+  <a href="#traps">27. Facts that are easy to get wrong</a>
+  <a href="#glossary">28. Glossary</a>
 </nav>
 
 <main>
@@ -272,6 +277,7 @@ export PIP_CERT=~/hpe-ca.pem NODE_EXTRA_CA_CERTS=~/hpe-ca.pem</code></pre>
 <h3>Running the app on your laptop</h3>
 <p><code>.venv/bin/onboard ui</code> starts the backend and opens <a href="http://127.0.0.1:8765">http://127.0.0.1:8765</a>. For work on the screens, leave that running and also start <code>npm run dev</code> in <code>frontend/</code>; that gives you <a href="http://127.0.0.1:5173">http://127.0.0.1:5173</a> with instant reload when you save a file. Design mockups of screens that are not built yet are at <code>npm run mockups</code> (port 5175).</p>
 <p>Without lab access the app runs, but every step that talks to an array, a switch, vCenter or GreenLake will tell you it cannot reach it. That is expected. The test suite is how you exercise that code without a lab (section 24).</p>
+<p>The <code>onboard</code> command has three subcommands, all in <code>src/alletra_onboard/cli/main.py</code>: <code>ui</code> starts the backend and opens the browser; <code>api</code> starts the backend only, which is what you want next to <code>npm run dev</code>; <code>check</code> is a read-only GreenLake sign-in test that engineers run on a jump box to prove the credentials and the network before a run.</p>
 
 <h2 id="repo">6. The repository, folder by folder</h2>
 <p>The repository is called <code>greenlake-automation</code>. The app is in one folder inside it, and almost all of your work happens there.</p>
@@ -320,6 +326,18 @@ export PIP_CERT=~/hpe-ca.pem NODE_EXTRA_CA_CERTS=~/hpe-ca.pem</code></pre>
 <tr><td>The GreenLake API</td><td><code>reference/greenlake_api_docs/greenlake/</code> at the repository root; start at <code>services.md</code>.</td></tr>
 <tr><td>Open work</td><td>The <a href="https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues">issues on github.hpe.com</a>. Each has an area label and a state label.</td></tr>
 </table>
+
+<h3>Reading the code: your first afternoon</h3>
+<p>Six files, in this order, about two hours. Paths are under <code>src/alletra_onboard/</code>. Read sections 14 to 17 of this page alongside them.</p>
+<ol class="steps">
+  <li><code>domain/workflow.py</code> (100 lines). The ten steps, the five preset modes, and the three functions that pick steps for a run. Notice that nothing else in the code lists steps.</li>
+  <li><code>domain/models.py</code> (300 lines). <code>WorkflowPhase</code>, <code>RunMode</code>, <code>RunStatus</code>, then <code>ArrayWorkItem</code>, <code>RunEvent</code> and <code>RunRecord</code>. Notice that a step has one key but may pass through several phases; GreenLake registration has six.</li>
+  <li><code>application/runs/coordinator.py</code> (290 lines). Read <code>create_run</code>, then <code>spawn</code>, <code>_guarded</code>, <code>set_state</code> and <code>emit</code>. This is the whole run machinery. Notice <code>spawn</code> refuses a second task for the same run, and that <code>emit</code> writes to the store before it tells the browser.</li>
+  <li><code>application/provisioning/steps.py</code> (400 lines). Two step services. Read <code>start_discover</code> and <code>_run_discover</code> first; every other step has that shape. Then <code>start_storage_apply</code>, to see how an approval is checked and withdrawn.</li>
+  <li><code>application/provisioning/storage_provision.py</code> (760 lines). Skim. <code>build_plan</code> judges each object; <code>apply_plan</code> walks the <code>ensure_*</code> calls; <code>removal_set</code> renders the undo. Notice that these are plain functions over models, with the device clients passed in.</li>
+  <li><code>api/app.py</code> (780 lines). Skim the routes. Notice how little each one does, and how the four exceptions are mapped to 404 and 409 in one place.</li>
+</ol>
+<p>After that, follow one feature end to end with the frontend open: <code>frontend/src/steps/ProvisionStep.tsx</code> next to <code>ProvisioningSteps</code>. When you can say what each button sends, what event comes back and which component reads it, you can work on any step.</p>
 </section>
 
 <!-- ============================================================ HOW WE WORK -->
@@ -360,7 +378,7 @@ export PIP_CERT=~/hpe-ca.pem NODE_EXTRA_CA_CERTS=~/hpe-ca.pem</code></pre>
 <ol class="steps">
   <li><strong>Pick an issue.</strong> Labels show the area (<code>area/replication</code>, <code>area/docs</code>, …) and the state (<code>build</code>, <code>needs live run</code>, <code>blocked</code>, <code>in progress</code>). Assign it to yourself. For anything large, write a few lines in the issue about how you plan to do it before you start, so the owner can steer early. If there is no issue for what you want to do, open one; its title starts with the next free <code>BL-NN</code> number (the list is in <code>docs/TRACKER.md</code>).</li>
   <li><strong>Branch from an up-to-date <code>main</code>:</strong> <code>git switch main && git pull && git switch -c feat/bl-NN-short-name</code>. One issue per branch.</li>
-  <li><strong>Make the change.</strong> Code and tests together. Update any document that describes the behaviour you changed. Commit as often as you like; the merge squashes it to one commit.</li>
+  <li><strong>Make the change.</strong> Code and tests together. Update any document that describes the behaviour you changed, including this page: if a section here is now wrong, fix it in the same pull request. Commit as often as you like; the merge squashes it to one commit.</li>
   <li><strong>Run <code>scripts/check.py</code></strong> until it ends with PASS (section 9).</li>
   <li><strong>Push and open the pull request</strong> on github.hpe.com (section 10).</li>
   <li><strong>github.hpe.com checks the rules</strong>: the change must come through a pull request, and the owner must approve it. A push after approval needs approval again.</li>
@@ -381,7 +399,7 @@ export PIP_CERT=~/hpe-ca.pem NODE_EXTRA_CA_CERTS=~/hpe-ca.pem</code></pre>
 <tr><td><code>types</code></td><td>The TypeScript compiler on the frontend.</td><td>Fix the type error.</td></tr>
 <tr><td><code>dist</code></td><td>Nothing under <code>frontend/dist</code> changed on your branch.</td><td>It prints the command that drops those changes. The built screens are rebuilt after merge; you never commit them.</td></tr>
 <tr><td><code>secrets</code></td><td>No token, private key or lab password in the lines you added. It reads your lab passwords from your own <code>.env</code>, so they are never written into the repository.</td><td>Remove it. If it was ever pushed, tell the owner.</td></tr>
-<tr><td><code>ignored</code></td><td>A warning: files under <code>src/</code>, <code>tests/</code> or <code>frontend/src/</code> that git is ignoring.</td><td>See section 25, "git ignores my new file".</td></tr>
+<tr><td><code>ignored</code></td><td>A warning: files under <code>src/</code>, <code>tests/</code> or <code>frontend/src/</code> that git is ignoring.</td><td>See section 26, "git ignores my new file".</td></tr>
 </table>
 <p>It ends with a block of text. Paste that block into the pull request.</p>
 <p>The commit hook you turned on in setup is a smaller version of two of these checks. It refuses a commit that changes <code>frontend/dist</code> or that contains something that looks like a GitHub token or a private key. Do not bypass it with <code>--no-verify</code>.</p>
@@ -567,6 +585,18 @@ Add-Content .env "LAB_DEFAULT_PW=&lt;the lab vCenter and switch password&gt;"</c
   <dt>its events</dt><dd>Everything that happened, in order (section 17).</dd>
 </dl>
 
+<h3>What the status means</h3>
+<p>The status is one value for the whole run, not one per step. It answers "is anything happening, and is the engineer needed".</p>
+<table>
+<tr><th style="width:22%">Status</th><th>Meaning</th><th>What the engineer can do</th></tr>
+<tr><td><code>ready</code></td><td>Nothing is running. The last step finished and needs no decision.</td><td>Press the next button.</td></tr>
+<tr><td><code>running</code></td><td>A background task is working for this run.</td><td>Watch the progress lines. A second button press gets 409.</td></tr>
+<tr><td><code>waiting_for_operator</code></td><td>A step finished and put something on screen that needs a decision: a plan to approve, a zoning command set to hand over, a path report to read.</td><td>Read it, then approve, hand over, or re-run.</td></tr>
+<tr><td><code>retryable_failure</code></td><td>A step failed or crashed. The run is intact; the last event says what went wrong.</td><td>Fix the cause (sheet, network, GreenLake state) and run the step again, or start a new run if the sheet must change.</td></tr>
+<tr><td><code>succeeded</code></td><td>The engineer confirmed the end of the run.</td><td>Download the as-built.</td></tr>
+</table>
+<p>Keys and phases are different things, and events carry the phase. A step <em>key</em> (<code>greenlake</code>, <code>provision</code>) is what the engineer selects and what the screen renders. A <em>phase</em> (<code>GL_REGISTER_DEVICE</code>, <code>STORAGE_PROVISION</code>) is where the run is, and it is what <code>current_phase</code> and every event record. Most steps have one phase. GreenLake registration has six, one per sub-step, so its progress reads sensibly in the event list. The registry in <code>domain/workflow.py</code> says which phase a step lands on, and that is how a run that was closed mid-way reopens on the right screen.</p>
+
 <h2 id="button">16. What happens when you press a button</h2>
 <p class="where">Where this fits: inside any one step box in section 1.</p>
 <p>Every step works the same way, so this one sequence explains most of the application layer. Take "Create storage objects" on the Provision storage screen as the example.</p>
@@ -634,6 +664,15 @@ async def _run_storage_apply(self, run, intent, discovery):
 <p class="where">Where this fits: the "live events" arrow from the backend to the browser in section 2.</p>
 <p>Events are the record, not a side channel. Each one has the run id, the phase, a type such as <code>storage.applied</code>, a message written for the engineer, a data payload (the report, the plan, the result) and a time. When a step emits one, two things happen: it is appended to the <code>run_events</code> table in the local database, and it is pushed to every open browser tab over Server-Sent Events, a long-lived HTTP response on <code>GET /runs/{id}/stream</code> that the browser listens to.</p>
 <p>The screen is drawn from the events alone. The newest <code>storage.previewed</code> event is the plan on screen; a <code>storage.applied</code> newer than that preview is the result; a <code>step.crashed</code> or <code>*.failed</code> marks the step as failed. When you refresh the page, or restart the backend, the browser replays <code>GET /runs/{id}/events</code> and the screen is exactly as it was.</p>
+<p>One event, as the browser receives it on the stream. Each frame is one line starting with <code>data:</code> and a blank line; the backend sends <code>: heartbeat</code> on its own every few seconds so proxies keep the connection open.</p>
+<pre><code>data: {"event_id": "6f1c…", "run_id": "a9d2…", "phase": "STORAGE_PROVISION",
+       "event_type": "storage.applied",
+       "message": "Provisioning complete — 5 created, 0 updated, 2 already existed.",
+       "data": {"result": {"outcomes": [{"kind": "host", "name": "esx01", "status": "created"}, …],
+                           "removal": ["removevlun -f vol01 1 set:web", …], "error": null}},
+       "created_at": "2026-10-16T09:14:02+00:00"}
+</code></pre>
+<p>The model is <code>RunEvent</code> in <code>domain/models.py</code>; the frontend type that mirrors it is in <code>frontend/src/api.ts</code>. The <code>data</code> payload is whatever the step's result model dumps to JSON, so the TypeScript side reads the same field names you see in the Python model.</p>
 <table>
 <tr><th style="width:22%">Step</th><th>Events it emits</th></tr>
 <tr><td>Run lifecycle</td><td><code>run.created</code>, <code>run.completed</code>, <code>step.started</code>, <code>step.completed</code>, <code>step.failed</code>, <code>step.crashed</code>, <code>phase.progress</code></td></tr>
@@ -758,6 +797,21 @@ Decision record 0015 says the tool will one day set up Remote Copy links and tar
 <tr><td><code>run_commands</code></td><td>the Console: every device command and its output</td></tr>
 </table>
 <p>The application never imports SQLite directly. It uses the <code>RunStore</code> interface from <code>domain/ports.py</code>, and tests hand it a temporary database.</p>
+<h3>Looking inside a run</h3>
+<p>On your laptop the database is <code>.alletra_onboard/state.db</code> in the app folder, and screenshots and documents go to <code>.alletra_onboard/artifacts/</code>. On a packaged install (the zip or the .exe) both are under <code>%LOCALAPPDATA%\AlletraOnboard\</code>; <code>STATE_DATABASE_PATH</code> and <code>ARTIFACT_DIR</code> override them. Records are JSON in a <code>payload</code> column, so <code>sqlite3</code> and its <code>json_extract</code> are enough:</p>
+<pre><code># the runs, newest first
+sqlite3 .alletra_onboard/state.db "select run_id, serial_number, status, current_phase, updated_at
+  from runs order by updated_at desc limit 5;"
+
+# the last ten events of one run
+sqlite3 .alletra_onboard/state.db "select created_at, phase, event_type, json_extract(payload,'$.message')
+  from run_events where run_id='a9d2…' order by created_at desc limit 10;"
+
+# what a run sent to devices, and whether each command was a write
+sqlite3 .alletra_onboard/state.db "select json_extract(payload,'$.at'), json_extract(payload,'$.target'),
+  json_extract(payload,'$.command'), json_extract(payload,'$.write')
+  from run_commands where run_id='a9d2…' order by seq;"</code></pre>
+<p>A run stuck in <code>running</code> with no newer event is the thing to look for after a crash; it should not happen, and it is worth an issue with the last few events pasted in. Deleting the database file is the reset: the app recreates it empty on the next start.</p>
 </div>
 <div>
 <h3>Settings and secrets</h3>
@@ -767,6 +821,17 @@ Decision record 0015 says the tool will one day set up Remote Copy links and tar
   <li>One array address per run. The Initialisation tab's management address, or else the Provisioning tab's array host. The parser refuses a sheet where the two disagree. Before this rule, verify and the as-built once reached two different arrays in the same run.</li>
   <li>Passwords are <code>SecretStr</code> values. <code>domain/policies.redact()</code> and the command log blank them out of anything stored or shown.</li>
 </ul>
+<p>The <code>.env</code> keys you will meet, each the upper-case name of a field in <code>config.py</code>:</p>
+<table>
+<tr><th>Key</th><th>What it is</th></tr>
+<tr><td><code>GL_CLIENT_ID</code>, <code>GL_CLIENT_SECRET</code></td><td>the GreenLake API client; also entered on the Prerequisites screen</td></tr>
+<tr><td><code>GL_TOKEN_URL</code>, <code>GL_BASE_URL</code></td><td>the GreenLake sign-in and API addresses; the defaults are right for production</td></tr>
+<tr><td><code>ALLETRA_PROXY</code></td><td>a proxy override for GreenLake traffic; on-premises addresses never go through it</td></tr>
+<tr><td><code>BROWSER_CDP_URL</code>, <code>BROWSER_HEADLESS</code></td><td>where the signed-in Chrome is (<code>http://localhost:9222</code>), and whether the setup wizard's browser is visible</td></tr>
+<tr><td><code>STATE_DATABASE_PATH</code>, <code>ARTIFACT_DIR</code></td><td>where runs and files live, if not the defaults above</td></tr>
+<tr><td><code>API_HOST</code>, <code>API_PORT</code></td><td><code>127.0.0.1</code> and <code>8765</code>; the app only ever listens on the local machine</td></tr>
+<tr><td><code>LAB_ARRAY_PW</code>, <code>LAB_DEFAULT_PW</code></td><td>lab passwords, read by the lab scripts and by <code>check.py</code>'s secret scan; never on a customer machine</td></tr>
+</table>
 </div>
 </div>
 
@@ -792,12 +857,93 @@ Decision record 0015 says the tool will one day set up Remote Copy links and tar
 <strong>The rule that follows</strong>
 A test never calls GreenLake, an array, vCenter or a switch. If something needs the network, it is a lab script in <code>lab/</code>, run from the jump box, with its result attached to the pull request.
 </div>
+<p>Running less than everything, from the app folder:</p>
+<pre><code>.venv/bin/python -m pytest -q                                   # all 703, about ten seconds
+.venv/bin/python -m pytest -q tests/unit/test_workflow.py        # one file
+.venv/bin/python -m pytest -q -k "zoning and not plan"           # by name
+.venv/bin/python -m pytest -q -x --lf                            # stop at the first failure; only what failed last time
+.venv/bin/python -m ruff check . --fix                           # lint, fixing what it can
+cd frontend && npm run typecheck                                # TypeScript only</code></pre>
+<p>The test files are named after what they cover: <code>test_workflow.py</code> for the registry, <code>test_storage_services.py</code> for the step services with fake factories, <code>test_api.py</code> for routes through FastAPI's test client, <code>test_init_sheet.py</code> for the spreadsheet round trip, and one <code>test_replication_*.py</code> per replication module. When you add a module, add its test file next to these.</p>
+
+<h2 id="howto">25. How to make common changes</h2>
+<p class="where">Where this fits: the recipes behind sections 14 to 24. Each is a checklist of files, in the order you will touch them.</p>
+
+<h3>Add a step</h3>
+<ol class="steps">
+  <li><code>domain/models.py</code>: add a <code>WorkflowPhase</code> value for it.</li>
+  <li><code>domain/workflow.py</code>: add a <code>StepDef(key, label, phase, kind)</code> to <code>STEP_REGISTRY</code> at the position it runs, and add the key to each preset in <code>_MODE_STEPS</code> that should include it. The label is what the engineer sees in the rail. Extend <code>tests/unit/test_workflow.py</code>.</li>
+  <li>The work itself: a plain function in its own module under <code>application/&lt;context&gt;/</code>, taking the models it needs and the device clients as factory arguments with real defaults, returning a Pydantic result model. No <code>coordinator</code>, no HTTP in here.</li>
+  <li>The step service: <code>start_x()</code> and <code>async _run_x()</code> in <code>application/&lt;context&gt;/steps.py</code>, in the shape shown in section 16. Preconditions raise <code>StepPreconditionError</code> with a sentence for the engineer. Event names: <code>x.completed</code> and <code>x.failed</code>, or the <code>step.*</code> ones.</li>
+  <li><code>application/service.py</code>: one delegating method.</li>
+  <li><code>api/app.py</code>: <code>POST /runs/{run_id}/x</code> next to its group, returning <code>RunResponse</code>; a body model in <code>api/schemas.py</code> if it takes input. The error mapping is already there.</li>
+  <li>The screen: <code>frontend/src/steps/XStep.tsx</code>, reading its events through <code>useStepState</code>; import it in <code>App.tsx</code> and add the <code>current.key === 'x'</code> line beside the others. The rail picks the step up from <code>/app/profile</code> on its own. Add the call to <code>frontend/src/api.ts</code>.</li>
+  <li>Tests: the service with fake factories (pattern in <code>tests/unit/test_storage_services.py</code>) and the route (pattern in <code>tests/unit/test_api.py</code>).</li>
+  <li>Docs: the step tables in sections 15 and 17 of this page, <code>docs/SCOPE.md</code>, and a spec in <code>docs/specs/</code> if the behaviour is new. If it reaches hardware, a lab script in <code>lab/</code> and the <code>needs live run</code> label until it has run.</li>
+</ol>
+
+<h3>Add a field to the spreadsheet</h3>
+<ol class="steps">
+  <li><code>application/platform/init_sheet.py</code>: add a <code>(key, label, required, example)</code> tuple to <code>SECTIONS</code> (Initialisation tab), <code>PROVISIONING_SECTIONS</code> or <code>REPLICATION_SECTIONS</code>. For the table tabs, add a column to the <code>*_COLUMNS</code> list. The label is the text the parser matches on, so never rename an existing one; engineers have filled sheets with it.</li>
+  <li>Add the attribute to the model it belongs to: <code>NetworkConfig</code>, <code>DsccSetupConfig</code> or <code>ArrayWorkItem</code> in <code>domain/models.py</code>; <code>ProvisioningIntent</code>, <code>VolumeRequest</code>, <code>DeclaredHost</code> or <code>HostSetRequest</code> in <code>domain/provisioning.py</code>; the replication models in <code>domain/replication.py</code>. Then map it in <code>parse_workbook_bytes()</code>.</li>
+  <li>If it is required only for some modes, teach <code>required_keys_for()</code>; otherwise the <code>required</code> flag in the tuple is enough. <code>build_template_bytes()</code> reads the same table, so the blank template and the upload parser cannot drift apart.</li>
+  <li><code>tests/unit/test_init_sheet.py</code>: a round trip (compose a sheet, parse it, assert the value) and a case for the field missing.</li>
+  <li>The app folder's <code>README.md</code> describes the sheet for engineers; add the field there.</li>
+</ol>
+
+<h3>Add a parser for a device command</h3>
+<ol class="steps">
+  <li>Capture the real output on the lab first: run the command from the Console tab or a lab script and save the text. Remove passwords, customer names and anything that is not the command's output.</li>
+  <li>Save it under <code>tests/fixtures/&lt;set&gt;/</code> (an existing set such as <code>rc_pair</code> or <code>rack13_array</code>, or a new folder with a short <code>README.md</code> saying which system and date). That folder already has an exception in the root <code>.gitignore</code>.</li>
+  <li>Write the test first, pinned to the file: <code>_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "&lt;set&gt;"</code>, then assert the specific values you can read in the capture.</li>
+  <li>Write <code>parse_x(text) -> Model</code> as a pure function next to the models it fills, with no I/O. Column positions move between array versions; parse by header names where you can.</li>
+  <li>Only then wire the command in. If it goes over SSH it must be on the allowlist; see the next recipe.</li>
+</ol>
+
+<h3>Allow a new SSH command</h3>
+<ol class="steps">
+  <li>It must be a read. If it is not, stop: writes go through the REST API, or wait for the separate write client in decision record 0015.</li>
+  <li>Array: add the base command to <code>ALLOWED_COMMANDS</code> in <code>adapters/array/cli_client.py</code>. Options are allowed on the command line; shell characters never are. Switches: <code>ALLOWED_READ</code> in <code>adapters/fabric/brocade_client.py</code>.</li>
+  <li>A test that the command is allowed and that a write verb is still refused (there is one of each in <code>tests/unit/test_asbuilt_provisioned.py</code> to copy).</li>
+  <li>Say so in the pull request, on the checklist line about device commands. The owner has to agree to every allowlist change.</li>
+</ol>
+
+<h3>Add a route that only reads</h3>
+<ol class="steps">
+  <li><code>api/app.py</code>: a <code>GET</code> next to its group with a <code>response_model</code>. If it reads a device, run the read with <code>asyncio.to_thread</code> inside <code>with service.coordinator.recording(run_id):</code>, so the commands show in the Console like a step's do. <code>GET /runs/{id}/storage/objects</code> is the pattern.</li>
+  <li>The response model in <code>api/schemas.py</code>, or the domain model itself if it already fits.</li>
+  <li><code>tests/unit/test_api.py</code> with the test client and a fake service method.</li>
+  <li>The call in <code>frontend/src/api.ts</code>, and the table in section 23 of this page.</li>
+</ol>
+
+<h3>Add a setting</h3>
+<ol class="steps">
+  <li><code>config.py</code>: a field on <code>Settings</code> with a safe default. Its upper-case name is the environment variable and the <code>.env</code> key.</li>
+  <li>Read it through <code>coord.current_settings()</code> inside steps, not from a value captured at start-up, so a change made on the Prerequisites screen applies without a restart.</li>
+  <li>If engineers should set it on screen: the writer in <code>application/platform/configuring.py</code>, the <code>/config</code> route and its schema, and the Prerequisites screen.</li>
+  <li>Document it in the table above and in the app folder's <code>README.md</code>. Never give a secret a default.</li>
+</ol>
+
+<h3>Change a screen</h3>
+<ol class="steps">
+  <li>Edit under <code>frontend/src/</code> only. A step's file is in <code>steps/</code>; the shared frame, status line and console are in <code>ui/</code>. State comes from the run's events through <code>useStepState</code>; do not add a second store.</li>
+  <li>Run <code>onboard api</code> and <code>npm run dev</code> side by side for instant reload. Write the words to <code>docs/UX-GUIDELINES.md</code>: one heading per page, plain sentences, a confirmation tick before anything that writes.</li>
+  <li><code>npm run typecheck</code>, then <code>check.py</code>. Screenshots at 1366 x 768 in the pull request. Never commit <code>frontend/dist</code>; the hook and the check refuse it, and the owner rebuilds it after merge.</li>
+</ol>
+
+<h3>Change what a step produces</h3>
+<ol class="steps">
+  <li>Change the result model (the Pydantic class the work function returns). Old runs in the database carry the old shape; the step service already treats an artifact it cannot read as absent, so give new fields defaults rather than making them required.</li>
+  <li>Change the event's <code>data</code> if the screen needs the new field, and the message if the meaning changed. Then the component in <code>frontend/src/steps/</code> that reads it, and the TypeScript type in <code>api.ts</code>.</li>
+  <li>If the as-built shows it, <code>application/documents/asbuilt.py</code> reads the same events.</li>
+  <li>Update the fixture-pinned tests, and the step tables in section 17 of this page.</li>
+</ol>
 </section>
 
 <!-- ============================================================ WHEN YOU ARE STUCK -->
 <section class="part">
 <div class="label">When you are stuck</div>
-<h2 id="stuck">25. Problems and fixes</h2>
+<h2 id="stuck">26. Problems and fixes</h2>
 <table>
 <tr><th style="width:34%">What you see</th><th>What is going on, and what to do</th></tr>
 <tr><td>Git ignores my new file. <code>git add</code> says nothing, or <code>check.py</code> lists it under <code>ignored</code>.</td><td>The root <code>.gitignore</code> ignores whole file types everywhere (<code>*.json</code>, <code>*.txt</code>, <code>*.csv</code>, <code>*.yaml</code>, <code>*.html</code>, <code>*.docx</code>, …) because lab dumps once leaked passwords. If your file is clean, add an exception for its folder in the same pull request, the way <code>tests/fixtures/</code> has one. The file explains this at the top.</td></tr>
@@ -817,7 +963,7 @@ A test never calls GreenLake, an array, vCenter or a switch. If something needs 
 <tr><td>I am not sure whether something is allowed.</td><td>Ask in the issue. If it touches an allowlist, a write path, a switch or customer data, assume the answer is no until the owner says otherwise.</td></tr>
 </table>
 
-<h2 id="traps">26. Facts that are easy to get wrong</h2>
+<h2 id="traps">27. Facts that are easy to get wrong</h2>
 <ul>
   <li>GreenLake device assignment is two PATCH calls: application and region first, subscription second.</li>
   <li>In the GreenLake service catalog the id you need is <code>serviceManager.id</code> (nested), not <code>application_id</code>. You filter on <code>status</code>, but the field in the response is <code>provisionStatus</code>.</li>
@@ -832,7 +978,7 @@ A test never calls GreenLake, an array, vCenter or a switch. If something needs 
   <li>Shipped <code>.ps1</code> files must be pure ASCII.</li>
 </ul>
 
-<h2 id="glossary">27. Glossary</h2>
+<h2 id="glossary">28. Glossary</h2>
 <dl class="kv">
   <dt>Alletra Storage MP B10000</dt><dd>The HPE storage array this tool deploys. Block storage, Fibre Channel and iSCSI, managed through HPE GreenLake.</dd>
   <dt>GreenLake, DSCC</dt><dd>HPE's cloud platform, and the Data Services Cloud Console inside it that manages storage arrays.</dd>
@@ -860,10 +1006,53 @@ A test never calls GreenLake, an array, vCenter or a switch. If something needs 
   <dt>ADR, SPEC, BL-NN</dt><dd>A decision record in <code>docs/adr/</code>; a feature's requirements in <code>docs/specs/</code>; a work item's number, used in issue titles and branch names.</dd>
 </dl>
 
-<p style="margin-top:56px;color:var(--text-weak);font-size:0.9375rem">Written in October 2026 from the code as it was then. If the code and this page disagree, the code is right. Fix the page in the same pull request as the change that made it wrong.</p>
+<p style="margin-top:56px;color:var(--text-weak);font-size:0.9375rem">Written in October 2026 from the code as it was then. If the code and this page disagree, the code is right. Fix the page in the same pull request as the change that made it wrong, and move the date at the top.</p>
 </section>
 
 </main>
 </div>
+<script>
+// Turn file paths in <code> into links to the file on main. Paths under src/alletra_onboard
+// may be written relative to it (domain/workflow.py), the rest relative to the app folder or the repo root.
+(function () {
+  var repo = 'https://github.hpe.com/g-sai-roopesh/greenlake-automation/blob/main/';
+  var app = 'Provisioning_Automation/alletra_onboard/';
+  var root = ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md', '.github/', '.githooks/', 'reference/', 'archive/'];
+  var appTop = ['src/', 'frontend/', 'tests/', 'docs/', 'lab/', 'scripts/', 'config/', 'packaging/', 'tools/', 'README.md', 'CONTEXT.md', 'pyproject.toml'];
+  var pkg = ['domain/', 'application/', 'adapters/', 'api/', 'cli/', 'config.py'];
+  var ctx = ['onboarding/', 'provisioning/', 'replication/', 'documents/', 'platform/', 'runs/'];
+  var bare = {
+    'App.tsx': 'frontend/src/App.tsx', 'api.ts': 'frontend/src/api.ts', 'useRunEvents.ts': 'frontend/src/useRunEvents.ts',
+    'check.py': 'scripts/check.py', 'service.py': 'src/alletra_onboard/application/service.py',
+    'workflow.py': 'src/alletra_onboard/domain/workflow.py', 'ports.py': 'src/alletra_onboard/domain/ports.py',
+    'app.py': 'src/alletra_onboard/api/app.py', 'schemas.py': 'src/alletra_onboard/api/schemas.py',
+    'command_log.py': 'src/alletra_onboard/adapters/command_log.py',
+    'init_sheet.py': 'src/alletra_onboard/application/platform/init_sheet.py', 'configuring.py': 'src/alletra_onboard/application/platform/configuring.py',
+    'proxy.py': 'src/alletra_onboard/application/platform/proxy.py', 'tls.py': 'src/alletra_onboard/application/platform/tls.py',
+    'prereqs.py': 'src/alletra_onboard/application/platform/prereqs.py',
+    'asbuilt_parse.py': 'src/alletra_onboard/application/documents/asbuilt_parse.py', 'asbuilt_docx.py': 'src/alletra_onboard/application/documents/asbuilt_docx.py'
+  };
+  var pathLike = /^[A-Za-z0-9_.\/-]+\.(py|ts|tsx|md|toml|json|txt|html|ps1|cmd|sh|csv)$|^[A-Za-z0-9_.\/-]+\/$/;
+  var startsWith = function (s, list) { return list.some(function (p) { return s === p || s.indexOf(p) === 0; }); };
+  document.querySelectorAll('main code').forEach(function (el) {
+    if (el.closest('pre') || el.closest('a') || el.children.length) return;
+    var text = el.textContent.trim();
+    if (!pathLike.test(text) || text.indexOf(' ') !== -1) return;
+    var target = null;
+    if (bare[text]) target = app + bare[text];
+    else if (/^test_[a-z_]+\.py$/.test(text)) target = app + 'tests/unit/' + text;
+    else if (startsWith(text, root)) target = text;
+    else if (startsWith(text, appTop)) target = app + text;
+    else if (startsWith(text, pkg)) target = app + 'src/alletra_onboard/' + text;
+    else if (startsWith(text, ctx)) target = app + 'src/alletra_onboard/application/' + text;
+    else if (text.indexOf('steps/') === 0 || text.indexOf('ui/') === 0) target = app + 'frontend/src/' + text;
+    if (!target) return;
+    if (target.slice(-1) === '/') target = target.slice(0, -1);
+    var a = document.createElement('a');
+    a.href = repo + target; a.textContent = text; a.title = 'Open on github.hpe.com';
+    el.textContent = ''; el.appendChild(a);
+  });
+})();
+</script>
 </body>
 </html>
