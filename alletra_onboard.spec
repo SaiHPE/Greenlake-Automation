@@ -1,0 +1,123 @@
+# -*- mode: python ; coding: utf-8 -*-
+# Build: from the package dir, `pyinstaller --noconfirm --clean alletra_onboard.spec`
+# Set ALLETRA_BUNDLE_CHROMIUM=1 to also bundle Chromium (offline build); unset for the slim build
+# that downloads Chromium on first run. Prereq for the offline build: `playwright install chromium`.
+import os
+import tempfile
+
+from PyInstaller.building.datastruct import Tree
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+bundle_chromium = os.environ.get("ALLETRA_BUNDLE_CHROMIUM") == "1"
+
+datas = collect_data_files("playwright")  # the Playwright Node driver + package data (both builds)
+
+# Bake the app profile ("full" or "init-only") into the bundle. app_main._apply_build_profile reads
+# build_profile.txt at startup and exports ALLETRA_PROFILE, so the Initialization accelerator build
+# (ALLETRA_BUILD_PROFILE=init-only) restricts itself. Default "full" leaves the app unchanged.
+_profile_dir = tempfile.mkdtemp()
+_profile_file = os.path.join(_profile_dir, "build_profile.txt")
+with open(_profile_file, "w", encoding="utf-8") as _pf:
+    _pf.write(os.environ.get("ALLETRA_BUILD_PROFILE", "full").strip())
+datas.append((_profile_file, "."))
+
+# Chromium needs the MSVC runtime (vcruntime140*/msvcp140). Ship those DLLs app-local so the .exe
+# runs on a box without the VC++ Redistributable installed. Bundled under vcredist/ for the slim
+# build (copied next to the downloaded chrome.exe at runtime); the offline build also bakes them
+# straight into chrome-win64 below.
+_sys32 = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "System32")
+_VC_DLLS = ("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+for _dll in _VC_DLLS:
+    _src = os.path.join(_sys32, _dll)
+    if os.path.isfile(_src):
+        datas.append((_src, "vcredist"))
+
+hiddenimports = collect_submodules("uvicorn") + collect_submodules("alletra_onboard")
+hiddenimports += collect_submodules("paramiko")  # SSH client for post-init verification
+hiddenimports += collect_submodules("winrm") + collect_submodules("requests_ntlm") + collect_submodules("spnego")
+hiddenimports += ["anyio", "httptools", "websockets", "watchfiles", "h11"]
+# The WSAPI SDK chain. wsapi_client imports hpe3parclient in a guarded try/except, so if the
+# bundle misses any link (hpe3parclient -> requests, and its ssh module -> eventlet, whose hub
+# modules load dynamically by name), the frozen app degrades SILENTLY to "python-3parclient is
+# not available in this build" — which is exactly how v0.14.0-rc.1 shipped: the readiness
+# preflight was the first packaged feature ever to touch WSAPI, and its Array check failed on
+# hardware while every unpackaged code path passed. Collect the chain explicitly, and check
+# GET /app/profile capabilities.wsapi_sdk on any new build before tagging.
+hiddenimports += collect_submodules("hpe3parclient")
+hiddenimports += collect_submodules("eventlet")
+# eventlet's greendns imports dnspython ("dns") DYNAMICALLY, so analysis misses it — the frozen
+# import then dies with "No module named 'dns'" (measured via capabilities.wsapi_sdk_error).
+hiddenimports += collect_submodules("dns")
+hiddenimports += ["requests"]
+
+a = Analysis(
+    ["packaging/app_main.py"],
+    pathex=["src"],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    runtime_hooks=["packaging/rthook_playwright.py"],
+    excludes=["tkinter"],
+    noarchive=False,
+    optimize=0,
+)
+
+# Always bundle the built React UI and the Discovery Tool.
+a.datas += Tree("frontend/dist", prefix="frontend/dist")
+a.datas += Tree("tools/discovery", prefix="tools/discovery")
+# Bundle package resources (the HPE house-style as-built template) so the frozen app can render branded docs.
+a.datas += Tree("src/alletra_onboard/resources", prefix="alletra_onboard/resources")
+
+# Offline build only: bundle Chromium, minus the headless-shell + ffmpeg we never use (we launch
+# the full headed browser). Saves ~270 MB vs. the whole ms-playwright cache.
+if bundle_chromium:
+    pw_browsers = os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or os.path.join(
+        os.environ.get("LOCALAPPDATA", ""), "ms-playwright"
+    )
+    assert os.path.isdir(pw_browsers), (
+        f"Playwright browsers not found at {pw_browsers!r}. Run `playwright install chromium` first."
+    )
+    for entry in os.listdir(pw_browsers):
+        if entry.startswith(("chromium_headless_shell", "ffmpeg")):
+            continue  # unused — the cloudinit wizard launches the headed full Chromium
+        full = os.path.join(pw_browsers, entry)
+        if os.path.isdir(full):
+            a.datas += Tree(full, prefix=f"ms-playwright/{entry}")
+            # bake the VC++ runtime right next to chrome.exe so the offline build is fully portable
+            chrome_win = os.path.join(full, "chrome-win64")
+            if entry.startswith("chromium-") and os.path.isdir(chrome_win):
+                for _dll in _VC_DLLS:
+                    _src = os.path.join(_sys32, _dll)
+                    if os.path.isfile(_src):
+                        a.datas.append((f"ms-playwright/{entry}/chrome-win64/{_dll}", _src, "DATA"))
+
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name="AlletraOnboard",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name="AlletraOnboard",
+)

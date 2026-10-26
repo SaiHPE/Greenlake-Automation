@@ -1,0 +1,54 @@
+# Post-init verification reads the array's running config via SSH CLI
+
+> **Amended by [ADR 0013](0013-one-array-credential-per-run.md) (2026-09-15):** the credential rule below
+> ("supplied per-run and never stored") is superseded. The run holds one array credential from the
+> sheet and every step uses it; the prompt remains only for runs whose sheet supplied none.
+>
+> **Amended by [ADR 0015](0015-tool-configures-remote-copy-write-scoped-ssh.md) (2026-10-07, effective
+> from the release that ships Remote Copy links and targets, v0.19):** the client described here stays
+> read-only and stays the default. A second, write-scoped SSH client will exist for Remote Copy links
+> and targets only (its own allowlist), reachable only through an operator-approved replication plan.
+> Remote Copy groups and DR actions go over WSAPI, not SSH.
+
+After the operator confirms the array is initialized, the tool verifies the **on-array config**
+against the Initialisation-sheet values by logging into the array directly over **SSH** (port 22,
+the array admin account) and parsing the read-only `show*` commands. It never writes — it's a
+confidence check, not a gate, and a config mismatch never fails the onboarding.
+
+Calibrated against a live B10000 (OS 10.5.51), the verified config comes from three commands:
+`showsys -d` (name / serial / product number / contact), `shownet` (mgmt IP + netmask, gateway as
+`Default IPv4 route`, plus the `NTP server` and `DNS server` lines), and `showdate` (timezone).
+Two calibration findings: `showdns` / `showntp` do not exist on this platform (DNS/NTP are read from
+`shownet`), and the DSCC "System country" is **not** stored on the array (`Location` is empty) — it's
+a cloud-side attribute, so it isn't verified here.
+
+## Considered options
+
+- **DSCC / GreenLake cloud API** (reuses our token) — rejected: it verifies what the cloud
+  *recorded as applied*, not the array's actual state, so it can't catch "DSCC says applied but
+  the array didn't take it" — the exact failure this feature exists to catch.
+- **WSAPI v3 (REST, 443)** — rejected as the primary interface: HPE's own SDK confirms WSAPI is a
+  *storage-provisioning* API (volumes, hosts, capacity, system identity) with **no methods for
+  network / DNS / NTP / timezone** — which is most of what we configured. It also isn't guaranteed
+  enabled (`startwsapi`). It could verify identity (name/serial) only, so it wasn't worth a second
+  protocol; SSH reads identity too.
+- **Ansible** — rejected: its HPE storage modules wrap the same WSAPI (same blind spot), and using
+  Ansible merely to run SSH commands is a heavy dependency for what paramiko does directly.
+
+## Consequences
+
+- Adds **paramiko** (+ cryptography) as a dependency, bundled into the .exe.
+- Verification parses **CLI text output**, which is brittle to OS-version formatting changes — the
+  parsers are calibrated against the first live array and isolated so a format tweak is a one-line fix.
+- Requires **SSH (22) reachable** from the jump box to the array's mgmt IP, and the array admin
+  credentials (the DSCC System Credential). The password is supplied per-run and never stored.
+- Only an allowlist of `show*` commands is ever run — the path is structurally read-only.
+
+## Addendum 2026-10-12 (SPEC-020)
+
+One command that is not a `show` runs over this client: `checkrclink`, HPE's link test between two
+Remote Copy ports (a test server on one array, a test client on the other). It changes no
+configuration, but it starts and stops a process on the array, so it does not join the read allowlist.
+It has an allowlist of its own (`run_diagnostic`: exactly `startserver`, `stopserver`, `startclient`,
+`stopclient`, with the port, address and test length validated), is called only by the replication
+link check, and is never reachable from the Console prompt (SPEC-019), which keeps the read allowlist.

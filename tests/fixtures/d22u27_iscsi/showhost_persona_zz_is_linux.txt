@@ -1,0 +1,5 @@
+# showhost -persona zz_is_linux
+Id Name        Persona_Id Persona_Name Persona_Caps        
+ 8 zz_is_linux          2 Generic-ALUA UARepLun,SESLun,ALUA
+-----------------------------------------------------------
+ 1 total                                                   

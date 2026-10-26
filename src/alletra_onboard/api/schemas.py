@@ -1,0 +1,268 @@
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+from alletra_onboard.application.onboarding.health import GreenLakeCheckReport
+from alletra_onboard.domain.models import (
+    ArrayCredentialInfo,
+    ArrayWorkItem,
+    PreflightReport,
+    RunEvent,
+    RunMode,
+    RunRecord,
+)
+
+
+class HealthResponse(BaseModel):
+    status: str = "ok"
+    version: str = ""   # SPEC-006 R1: the session report names the build it tested
+
+
+# ------------------------------------------------------------------ config
+
+class ConfigureRequest(BaseModel):
+    gl_client_id: str | None = None
+    gl_client_secret: str | None = None
+    gl_token_url: str | None = None
+    gl_base_url: str | None = None
+    gl_member_workspace_id: str | None = None
+
+
+class ConfigStatusResponse(BaseModel):
+    configured: bool
+    values: dict[str, str]  # GL_* keys, secret masked
+
+
+class CheckResponse(BaseModel):
+    report: GreenLakeCheckReport
+
+
+# ------------------------------------------------------------------ runs
+
+class CreateRunRequest(BaseModel):
+    work_item: ArrayWorkItem
+    mode: RunMode = RunMode.FULL_ONBOARDING
+    selected_steps: list[str] = Field(default_factory=list)
+
+
+class RunResponse(BaseModel):
+    run: RunRecord
+
+
+class RunDetailResponse(BaseModel):
+    run: RunRecord
+    # SecretStr fields serialize masked ('**********') — safe to return to the UI.
+    work_item: ArrayWorkItem | None = None
+    # ADR 0013 / SPEC-008 R3: whether the run holds an array credential, and whose — never the password.
+    array_credential: ArrayCredentialInfo | None = None
+
+
+class RunListResponse(BaseModel):
+    runs: list[RunRecord]
+
+
+class EventListResponse(BaseModel):
+    events: list[RunEvent]
+
+
+# ------------------------------------------------------------------ steps
+
+class ProvisionStepRequest(BaseModel):
+    dry_run: bool = False
+
+
+class CloudinitStepRequest(BaseModel):
+    cloudinit_url: str | None = Field(
+        default=None,
+        description="Fresh https://169.254.x.x/cloudinit URL from the Discovery Tool; "
+        "overrides the work item's stored value (the link-local IP changes per boot).",
+    )
+    auto_submit: bool = Field(
+        default=True,
+        description="Product flow: the operator reviews the values in the web app, then the "
+        "automation fills + Submits in one motion (the on-array wizard decays typed Network "
+        "values on idle). A guard re-verifies the Review screen and refuses to submit a wrong IP.",
+    )
+
+
+class DsccStepRequest(BaseModel):
+    cdp_url: str = Field(
+        default="http://localhost:9222",
+        description="CDP URL of the operator's logged-in debug Chrome (see /browser/launch).",
+    )
+
+
+class VerifyStepRequest(BaseModel):
+    # SPEC-008 R2 (ADR 0013): both optional — given together they override the run's own array credential.
+    username: str | None = Field(default=None, description="Array admin username override (e.g. 3paradm).")
+    password: str | None = Field(default=None, description="Array admin password override — used for this SSH session only.")
+
+
+class AsBuiltStepRequest(BaseModel):
+    username: str | None = Field(default=None, description="Array admin username override (e.g. 3paradm).")
+    password: str | None = Field(default=None, description="Array admin password override — used for this SSH session only.")
+    customer: str = Field(default="", description="Customer name for the as-built cover page (overrides the sheet value).")
+    site: str = Field(default="", description="Deployment site/location (optional; the array doesn't store it).")
+    application_workload: str = Field(default="", description="Application/workload the array serves, e.g. 'VMware vSphere cluster' (overrides the sheet value).")
+    purpose: str = Field(default="", description="Why block storage is used here, e.g. 'primary datastore for the vault zone' (overrides the sheet value).")
+
+
+# ------------------------------------------------------------------ browser
+
+class BrowserLaunchRequest(BaseModel):
+    port: int = 9222
+    url: str | None = None  # e.g. the DSCC console URL or a cloudinit URL
+    proxy: str | None = None  # override; default applies BROWSER_PROXY / HTTPS_PROXY
+    no_proxy: bool = False  # force a direct connection
+
+
+class BrowserLaunchResponse(BaseModel):
+    cdp_url: str
+    profile_dir: str
+    executable: str
+    proxy: str = ""
+
+
+class DiscoveryToolResponse(BaseModel):
+    launched: bool
+    path: str | None = None
+    searched: list[str] = []
+    error: str | None = None
+
+
+# ------------------------------------------------------------------ initialisation sheet
+
+class InitSheetUploadRequest(BaseModel):
+    # The sheet is COMPLETE intake, uploaded BEFORE a mode is chosen (ADR 0005 revision), so no
+    # mode/steps here — the upload validates the full superset and holds the sheet server-side.
+    content_b64: str = Field(description="Base64-encoded Initialisation_sheet.xlsx contents.")
+
+
+class InitSheetComposeRequest(BaseModel):
+    """SPEC-006 R3: a filled sheet from JSON, so a script never writes xlsx. `base_b64` is the
+    operator's working sheet (credentials and init fields come from it); a row table given REPLACES
+    that tab's rows; one not given is left alone."""
+
+    base_b64: str | None = None
+    init: dict[str, str] = Field(default_factory=dict)
+    targets: dict[str, str] = Field(default_factory=dict)
+    volumes: list[dict[str, str]] | None = None
+    hostsets: list[dict[str, str]] | None = None
+    hosts: list[dict[str, str]] | None = None
+    # SPEC-015 R6: {"fields": {peer_host, peer_user, peer_password, rtt_ms, …}, "rows": [{vvset, mode, …}]}
+    replication: dict | None = None
+
+
+class InitSheetComposeResponse(BaseModel):
+    content_b64: str
+    filename: str = "Initialisation_sheet.xlsx"
+
+
+class InitSheetUploadResponse(BaseModel):
+    # A single-use token for the held sheet; the run is minted later from this token + the chosen mode.
+    token: str
+    # The parsed work item for review (subscription_key shown; admin password / device passwords never echoed).
+    work_item: dict
+    credentials_saved: bool = True
+    # SPEC-006 R1: the Provisioning tab's endpoints WITHOUT passwords (host + username per device), so a
+    # script driving the API learns the array from the sheet rather than from a parameter.
+    targets: dict[str, str] = Field(default_factory=dict)
+
+
+class RunFromSheetRequest(BaseModel):
+    token: str = Field(description="The token returned by /init-sheet/upload for the held sheet.")
+    mode: RunMode = Field(default=RunMode.FULL_ONBOARDING, description="The operator-selected slice.")
+    selected_steps: list[str] = Field(
+        default_factory=list,
+        description="Explicit step keys when mode is CUSTOM (else derived from the mode).",
+    )
+
+
+# ------------------------------------------------------------------ preflight (existing)
+
+class PreflightRequest(BaseModel):
+    work_item: ArrayWorkItem
+    live_greenlake: bool = False
+
+
+class PreflightResponse(BaseModel):
+    report: PreflightReport
+
+
+# ------------------------------------------------------------------ prerequisites
+
+class FirewallRule(BaseModel):
+    fqdn: str
+    port: str
+    initiator: str
+    purpose: str
+
+
+class FirewallRulesResponse(BaseModel):
+    region: str
+    rules: list[FirewallRule]
+
+
+class ConnectivityResultItem(BaseModel):
+    host: str
+    port: int
+    reachable: bool
+    detail: str
+    via: str = ""  # the proxy the test tunnelled through ("" = tested directly)
+
+
+class ConnectivityResponse(BaseModel):
+    region: str
+    results: list[ConnectivityResultItem]
+    all_reachable: bool
+    proxy: str | None = None  # the effective proxy these were tested through (None = direct)
+
+
+class ProxyStatusResponse(BaseModel):
+    detected: str | None = None   # the OS's OWN system proxy (WinINET/PAC/registry), if any
+    manual: str | None = None     # the operator's manual override, if set
+    effective: str | None = None  # what the tool will actually use (None = direct)
+    source: str = "direct"        # "manual" | "system" | "direct"
+    # True when the operator explicitly chose to ignore any detected proxy (saved "direct://").
+    # Distinct from source == "direct" meaning "nothing was detected".
+    forced_direct: bool = False
+
+
+class ProxySaveRequest(BaseModel):
+    # host:port (or user:pass@host:port) to force that proxy; "direct://" to force NO proxy;
+    # null/"" to go back to auto-detecting the OS setting.
+    proxy: str | None = None
+
+
+class ConsoleRequest(BaseModel):
+    """SPEC-019 R3: one read-only command on the run's array (`array`) or its Replication peer (`peer`)."""
+
+    command: str = Field(min_length=1, max_length=400)
+    target: Literal["array", "peer"] = "array"
+
+
+class ConsoleTerminalRequest(BaseModel):
+    target: Literal["array", "peer"] = "array"
+
+
+class FailoverTestRequest(BaseModel):
+    """SPEC-017 R1: blank group = the tool's own test group. A group this run did not create needs its
+    name typed back in `confirm`."""
+
+    group: str | None = None
+    confirm: str | None = None
+
+
+class LinkCheckRequest(BaseModel):
+    """SPEC-020 R2: the client's test length; the tool stops it once the latency is printed."""
+
+    duration_s: int = Field(default=600, ge=300, le=172800)
+
+
+class ReplicationApplyRequest(BaseModel):
+    """SPEC-020 R4: `accept_latency` is the operator's 'Continue anyway' when the measured latency is
+    over HPE's limit for a mode on the tab."""
+
+    accept_latency: bool = False

@@ -1,0 +1,245 @@
+import { Box, Button, Notification, Select, Text, TextInput } from 'grommet';
+import { useEffect, useState } from 'react';
+import {
+  DiscoveredHostBrief,
+  ExportRequest,
+  getStorageObjects,
+  ProvisioningBuilder,
+  ProvisioningObjects,
+  saveStorageBuilder,
+} from '../api';
+import { Surface } from '../ui/primitives';
+
+// The operator dropdown-builder (ADR 0010 Stage 2): compose host-set membership + the exports
+// (source volume/VV-set → target host/host-set → LUN) over discovered + to-be-created objects, and
+// save them onto the run's intent so the plan preview/apply act on them.
+
+type Opt = { label: string; value: string };
+// An export row's source/target are encoded "kind:name" so the Select value carries the kind.
+interface ExportRow { source: string; target: string; lun: string }
+
+function decode(v: string): [string, string] {
+  const i = v.indexOf(':');
+  return [v.slice(0, i), v.slice(i + 1)];
+}
+
+/** A LUN box holds nothing (auto) or a whole number 0–16383. Anything else is a typo, not "auto" (P-18: `z`). */
+function lunProblem(lun: string): string | null {
+  const t = lun.trim();
+  if (t === '') return null;
+  if (!/^\d+$/.test(t)) return `LUN "${t}" is not a number — leave it blank for auto or type a whole number`;
+  if (Number(t) > 16383) return `LUN ${t} is above the platform range (0–16383)`;
+  return null;
+}
+
+function rowToExport(r: ExportRow): ExportRequest | null {
+  if (!r.source || !r.target) return null;
+  const [sk, sn] = decode(r.source);
+  const [tk, tn] = decode(r.target);
+  const t = r.lun.trim();
+  return {
+    source_kind: sk as 'volume' | 'vvset', source_name: sn,
+    target_kind: tk as 'host' | 'hostset', target_name: tn,
+    lun: t === '' ? null : parseInt(t, 10),
+  };
+}
+
+function exportToRow(e: ExportRequest): ExportRow {
+  return { source: `${e.source_kind}:${e.source_name}`, target: `${e.target_kind}:${e.target_name}`, lun: e.lun == null ? '' : String(e.lun) };
+}
+
+const sourceOptions = (o: ProvisioningObjects): Opt[] => [
+  ...o.new_volumes.map((n) => ({ label: `${n} — new volume`, value: `volume:${n}` })),
+  ...o.new_vvsets.map((n) => ({ label: `${n} — new VV-set`, value: `vvset:${n}` })),
+  ...o.existing_volumes.map((n) => ({ label: `${n} — existing volume`, value: `volume:${n}` })),
+  ...o.existing_volume_sets.map((n) => ({ label: `${n} — existing VV-set`, value: `vvset:${n}` })),
+];
+
+// Where a host's identity came from, in the operator's words (SPEC-003 R5).
+const SOURCE: Record<string, string> = {
+  vcenter: 'from vCenter', sheet: 'from the sheet', array: 'on the array', switch: 'seen on the fabric',
+};
+const hostLabel = (h: DiscoveredHostBrief) =>
+  h.fc_capable === false
+    ? `${h.name} — iSCSI · ${SOURCE[h.source] ?? h.source} · no zoning needed`
+    : `${h.name} — ${h.status} · ${SOURCE[h.source] ?? h.source}`;
+
+const targetOptions = (o: ProvisioningObjects): Opt[] => [
+  ...o.new_host_sets.map((n) => ({ label: `${n} — new host-set`, value: `hostset:${n}` })),
+  ...o.existing_host_sets.map((n) => ({ label: `${n} — existing host-set`, value: `hostset:${n}` })),
+  ...o.discovered_hosts.filter((h) => h.fc_capable !== false).map((h) => ({ label: hostLabel(h), value: `host:${h.name}` })),
+  ...o.existing_hosts.filter((n) => !o.discovered_hosts.some((h) => h.name === n)).map((n) => ({ label: `${n} — existing host`, value: `host:${n}` })),
+  ...o.discovered_hosts.filter((h) => h.fc_capable === false).map((h) => ({ label: hostLabel(h), value: `host:${h.name}` })),
+];
+
+// FC-capable hosts first (the backend orders them so), then any array host the union did not
+// cover, then iSCSI-only hosts — selectable, never a silent peer of the FC hosts (P-3).
+const memberOptions = (o: ProvisioningObjects): Opt[] => {
+  const seen = new Set<string>();
+  const opts: Opt[] = [];
+  const push = (name: string, label: string) => { if (!seen.has(name)) { seen.add(name); opts.push({ label, value: name }); } };
+  o.discovered_hosts.filter((h) => h.fc_capable !== false).forEach((h) => push(h.name, hostLabel(h)));
+  o.existing_hosts.forEach((n) => { if (!o.discovered_hosts.some((h) => h.name === n)) push(n, `${n} — existing host`); });
+  o.discovered_hosts.filter((h) => h.fc_capable === false).forEach((h) => push(h.name, hostLabel(h)));
+  return opts;
+};
+
+// SPEC-008 R6 (P-20): what the closed multi-select shows — the names, "4 hosts: a, b, c, …" past three.
+export const memberLabel = (names: string[]): string | undefined => {
+  if (names.length === 0) return undefined;              // let the placeholder show
+  if (names.length <= 3) return names.join(', ');
+  return `${names.length} hosts: ${names.slice(0, 3).join(', ')}, …`;
+};
+
+function ExportRowView({ row, sourceOpts, targetOpts, disabled, onChange, onRemove }: {
+  row: ExportRow; sourceOpts: Opt[]; targetOpts: Opt[]; disabled: boolean;
+  onChange: (r: ExportRow) => void; onRemove: () => void;
+}) {
+  return (
+    <Box direction="row" gap="small" align="center" pad={{ vertical: 'xxsmall' }}>
+      <Box basis="medium" flex="shrink">
+        <Select size="small" placeholder="source — volume / VV-set" options={sourceOpts} labelKey="label"
+          valueKey={{ key: 'value', reduce: true }} value={row.source} disabled={disabled}
+          onChange={({ value }) => onChange({ ...row, source: value })} />
+      </Box>
+      <Text size="small">→</Text>
+      <Box basis="medium" flex="shrink">
+        <Select size="small" placeholder="target — host / host-set" options={targetOpts} labelKey="label"
+          valueKey={{ key: 'value', reduce: true }} value={row.target} disabled={disabled}
+          onChange={({ value }) => onChange({ ...row, target: value })} />
+      </Box>
+      <Box basis="xsmall" flex={false}>
+        <TextInput size="small" placeholder="LUN auto" value={row.lun} disabled={disabled}
+          onChange={(e) => onChange({ ...row, lun: e.target.value })} />
+      </Box>
+      <Button size="small" plain label="remove" disabled={disabled} onClick={onRemove} />
+    </Box>
+  );
+}
+
+export function ProvisioningBuilderView({ runId, disabled = false, readOnly = false }: {
+  runId: string; disabled?: boolean;
+  /** After apply: the composition that was used stays in view, nothing editable (SPEC-004 R4). */
+  readOnly?: boolean;
+}) {
+  const [objects, setObjects] = useState<ProvisioningObjects | null>(null);
+  const [members, setMembers] = useState<Record<string, string[]>>({});
+  const [rows, setRows] = useState<ExportRow[]>([]);
+  const [busy, setBusy] = useState<'' | 'load' | 'save'>('');
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  const load = async () => {
+    setError(null); setSaved(null); setBusy('load');
+    try {
+      const o = await getStorageObjects(runId);
+      setObjects(o);
+      const seed: Record<string, string[]> = {};
+      o.host_sets.forEach((hs) => { seed[hs.name] = hs.members; });
+      setMembers(seed);
+      setRows(o.exports.length ? o.exports.map(exportToRow) : []);
+    } catch (e: any) {
+      setError(String(e.message ?? e));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // Load on mount: the saved composition is what the operator expects to see, not a button.
+  useEffect(() => { void load(); }, [runId]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const save = async () => {
+    if (!objects) return;
+    const bad = rows.map((r) => lunProblem(r.lun)).filter((p): p is string => p !== null);
+    if (bad.length) { setSaved(null); setError(bad.join(' · ')); return; }
+    setError(null); setSaved(null); setBusy('save');
+    try {
+      const builder: ProvisioningBuilder = {
+        host_sets: objects.host_sets.map((hs) => ({ name: hs.name, members: members[hs.name] ?? [] })),
+        exports: rows.map(rowToExport).filter((x): x is ExportRequest => x !== null),
+        vvsets: {}, // VV-set membership stays as the sheet defined it (empty => keep)
+      };
+      const comp = await saveStorageBuilder(runId, builder);
+      const assigned = comp.host_sets.reduce((n, h) => n + h.members.length, 0);
+      setSaved(`Saved — ${comp.exports.length} export(s), ${assigned} host-set member(s). Build the plan below to preview.`);
+    } catch (e: any) {
+      setError(String(e.message ?? e));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  if (!objects) {
+    return (
+      <Surface title="Compose the provisioning (dropdowns)">
+        <Text size="small" color="text-weak">
+          Pick host-set members and the exports (which volume / VV-set is presented to which host /
+          host-set, at which LUN) from the discovered + to-be-created objects. With no exports composed
+          and exactly one host set, every volume is presented to that set at an auto LUN; with more than
+          one host set, the exports must be composed here.
+        </Text>
+        <Box direction="row" gap="small" align="center">
+          <Button size="small" busy={busy === 'load'} label={busy === 'load' ? 'Reading the array and the run' : 'Retry loading objects'} disabled={disabled} onClick={load} />
+        </Box>
+        {error && <Notification status="critical" title="Could not load objects" message={error} onClose={() => setError(null)} />}
+      </Surface>
+    );
+  }
+
+  const srcOpts = sourceOptions(objects);
+  const tgtOpts = targetOptions(objects);
+  const memOpts = memberOptions(objects);
+  const busyOrDisabled = disabled || busy !== '' || readOnly;
+
+  return (
+    <Surface
+      title={readOnly ? 'Composition applied' : 'Compose the provisioning (dropdowns)'}
+      description={readOnly ? 'The membership and exports below are what was created. Rebuild the plan to compose again.' : undefined}
+    >
+      {objects.array_error && (
+        <Notification status="warning" title="Array objects unavailable"
+          message={`Couldn't read existing objects from the array (${objects.array_error}). You can still compose over the to-be-created + discovered objects.`} />
+      )}
+
+      <Text size="small" weight="bold">Host-set membership</Text>
+      <Text size="xsmall" color="text-weak">Pick the members; an empty set blocks the plan. Status shows fabric-login so a half-zoned host isn't picked blind.</Text>
+      {objects.host_sets.length === 0 && <Text size="small" color="text-weak">No host sets in the sheet.</Text>}
+      {objects.host_sets.map((hs) => (
+        <Box key={hs.name} direction="row" gap="small" align="center" pad={{ vertical: 'xxsmall' }}>
+          <Box basis="small" flex={false}><Text size="small">{hs.name}</Text></Box>
+          <Box basis="medium" flex="grow">
+            <Select size="small" multiple closeOnChange={false} placeholder="choose members"
+              options={memOpts} labelKey="label" valueKey={{ key: 'value', reduce: true }}
+              value={members[hs.name] ?? []} disabled={busyOrDisabled}
+              // SPEC-008 R6 (P-20): the names, not Grommet's "multiple"
+              valueLabel={memberLabel(members[hs.name] ?? [])}
+              onChange={({ value }) => setMembers((m) => ({ ...m, [hs.name]: value }))} />
+          </Box>
+        </Box>
+      ))}
+
+      <Box margin={{ top: 'small' }}>
+        <Text size="small" weight="bold">Exports (presentation)</Text>
+        <Text size="xsmall" color="text-weak">LUN blank = auto-assign. No rows and one host set = every volume to that set; with several host sets, rows are required.</Text>
+      </Box>
+      {rows.map((row, i) => (
+        <ExportRowView key={i} row={row} sourceOpts={srcOpts} targetOpts={tgtOpts} disabled={busyOrDisabled}
+          onChange={(r) => setRows((rs) => rs.map((x, j) => (j === i ? r : x)))}
+          onRemove={() => setRows((rs) => rs.filter((_, j) => j !== i))} />
+      ))}
+      {!readOnly && (
+        <>
+          <Button size="small" label="+ Add export row" disabled={busyOrDisabled} alignSelf="start"
+            onClick={() => setRows((rs) => [...rs, { source: '', target: '', lun: '' }])} />
+
+          <Box direction="row" gap="small" align="center" margin={{ top: 'small' }}>
+            <Button primary size="small" busy={busy === 'save'} label={busy === 'save' ? 'Saving' : 'Save composition'} disabled={busyOrDisabled} onClick={save} />
+            <Button size="small" busy={busy === 'load'} label="Reload" disabled={busyOrDisabled} onClick={load} />
+          </Box>
+        </>
+      )}
+      {saved && <Notification status="normal" title="Composition saved" message={saved} onClose={() => setSaved(null)} />}
+      {error && <Notification status="critical" title="Save failed" message={error} onClose={() => setError(null)} />}
+    </Surface>
+  );
+}

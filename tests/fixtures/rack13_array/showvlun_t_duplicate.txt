@@ -1,0 +1,27 @@
+Lun VVName                                      HostName                                        -Host_WWN/iSCSI_Name- Port     Type
+  2 zz_t2_vol03                                 10.132.30.136                                   ----------------       ---     host
+  0 Vol1.0                                      set:grp3_alletra                                ----------------       --- host set
+  1 Vol1.1                                      set:grp3_alletra                                ----------------       --- host set
+  2 Vol1.2                                      set:grp3_alletra                                ----------------       --- host set
+  0 HPE_VM_084a85f4-2c0d-498c-ad67-865e8d5983e6 set:HPE_VM_29fc298e-d265-48bb-9011-aac8ded88302 ----------------       --- host set
+  1 HPE_VM_9b261c99-57af-495c-baf6-8cc2aa70300b set:HPE_VM_29fc298e-d265-48bb-9011-aac8ded88302 ----------------       --- host set
+  2 HPE_VM_99efaade-4f1e-4275-ac7b-98ef8219a736 set:HPE_VM_29fc298e-d265-48bb-9011-aac8ded88302 ----------------       --- host set
+  3 HPE_VM_b90f47ec-1af0-4001-b3be-eb5fcea34de3 set:HPE_VM_29fc298e-d265-48bb-9011-aac8ded88302 ----------------       --- host set
+  4 HPE_VM_9a903517-2425-4cda-a477-61c501a0c6f8 set:HPE_VM_29fc298e-d265-48bb-9011-aac8ded88302 ----------------       --- host set
+  5 HPE_VM_1bb79148-c7a2-487b-b6c8-1ad98bb80146 set:HPE_VM_29fc298e-d265-48bb-9011-aac8ded88302 ----------------       --- host set
+  3 root-KVx6                                   set:HPE_VM_27020f7d-74dc-421b-8557-c8a9d87fb3b6 ----------------       --- host set
+  0 HPE_VM_9ea4986e-1c17-4c7a-9bef-b8d89e3335dc set:HPE_VM_e6eab89d-bebb-459f-913d-93e579090c0c ----------------       --- host set
+  1 HPE_VM_7b8b1cf7-b65c-402b-b9c8-8e74ddfdcfc0 set:HPE_VM_e6eab89d-bebb-459f-913d-93e579090c0c ----------------       --- host set
+  2 HPE_VM_bf8a9bfa-afdb-494f-845f-3251041b5adf set:HPE_VM_e6eab89d-bebb-459f-913d-93e579090c0c ----------------       --- host set
+  0 vol1.0                                      set:vmetraining                                 ----------------       --- host set
+  1 vol1.1                                      set:vmetraining                                 ----------------       --- host set
+  2 vol1.2                                      set:vmetraining                                 ----------------       --- host set
+  3 vol2                                        set:vmetraining                                 ----------------       --- host set
+  0 zz_t2_vol01                                 set:zz_t2_hs                                    ----------------       --- host set
+  1 zz_t2_vol02                                 set:zz_t2_hs                                    ----------------       --- host set
+  3 zz_t2_vol01                                 set:zz_t2_hs                                    ----------------       --- host set
+  4 zz_t2_vol02                                 set:zz_t2_hs                                    ----------------       --- host set
+  5 zz_t3_vol01                                 set:zz_t3_hs                                    ----------------       --- host set
+  6 zz_t3_vol02                                 set:zz_t3_hs                                    ----------------       --- host set
+-----------------------------------------------------------------------------------------------------------------------------------
+ 24 total                                                                                                                          

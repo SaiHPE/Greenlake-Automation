@@ -1,0 +1,10 @@
+# showhost -listpersona
+Persona_Id Persona_Name  Persona_Caps                           
+         2 Generic-ALUA  UARepLun,SESLun,ALUA                   
+        11 VMware        UARepLun,SubLun,ALUA                   
+        13 HPUX          UARepLun,VolSetAddr,SESLun,ALUA,Lun0SCC
+        15 WindowsServer UARepLun,SESLun,ALUA,WSC               
+        16 AIX           UARepLun,NACA,ALUA                     
+        17 Solaris       UARepLun,SESLun,ALUA,SOL               
+----------------------------------------------------------------
+         6 total                                                

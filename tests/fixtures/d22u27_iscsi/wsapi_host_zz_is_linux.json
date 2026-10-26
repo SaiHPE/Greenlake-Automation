@@ -1,0 +1,22 @@
+{
+ "id": 8,
+ "name": "zz_is_linux",
+ "FCPaths": [],
+ "iSCSIPaths": [
+  {
+   "name": "iqn.1994-05.com.redhat:6e35c4a016a0",
+   "IPAddr": "f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff",
+   "hostSpeed": 0
+  }
+ ],
+ "NVMETCPPaths": [],
+ "persona": 2,
+ "links": [
+  {
+   "href": "https://10.64.122.99/api/v1/hostpersonas?query=\"wsapiAssignedId EQ 2\"",
+   "rel": "personaInfo"
+  }
+ ],
+ "initiatorChapEnabled": false,
+ "targetChapEnabled": false
+}

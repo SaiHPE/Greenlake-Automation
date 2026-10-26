@@ -1,0 +1,397 @@
+"""Step services for the storage-provisioning context, over the RunCoordinator.
+
+Two services: DiscoveryZoningSteps (discovery + zoning verify/plan — the shared read-only
+foundation) and ProvisioningSteps (tier-1 preview/apply, the Stage-2 builder, tier-2 path
+verification). Provisioning CONSUMES discovery/zoning (ADR 0010), so ProvisioningSteps depends on
+DiscoveryZoningSteps for the per-run discovery artifact.
+
+The storage functions are called through their modules (storage_discovery.discover, …) so tests can
+monkeypatch the modules themselves.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from functools import partial
+
+from alletra_onboard.application.provisioning import discovery as storage_discovery
+from alletra_onboard.application.provisioning import path_verify as storage_path_verify
+from alletra_onboard.application.provisioning import preflight as storage_preflight
+from alletra_onboard.application.provisioning import storage_provision
+from alletra_onboard.application.provisioning import zoning as storage_zoning
+from alletra_onboard.application.provisioning import zoning_plan as storage_zoning_plan
+from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
+from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
+from alletra_onboard.domain.provisioning import (
+    PreflightReport,
+    ProvisioningBuilder,
+    ProvisioningComposition,
+    ProvisioningObjects,
+    ProvisioningPlan,
+)
+
+
+class DiscoveryZoningSteps:
+    """Discovery + SAN-zoning verify/plan — read-only reads of array, vCenter and both switches."""
+
+    def __init__(self, coord: RunCoordinator) -> None:
+        self._coord = coord
+        # Per-run discovery cache over the durable run_artifacts store (C7): the store is the truth
+        # (a server restart mid-engagement must not force re-discovery), the dict avoids re-parsing.
+        self._discovery: dict[str, DiscoveryReport] = {}
+
+    def current_discovery(self, run_id: str) -> DiscoveryReport | None:
+        """The discovery in effect, or None. Unlike require_discovery this never raises — callers use
+        it to detect that discovery has been re-run since they last read it."""
+        try:
+            return self.require_discovery(run_id)
+        except StepPreconditionError:
+            return None
+
+    def require_discovery(self, run_id: str) -> DiscoveryReport:
+        report = self._discovery.get(run_id)
+        if report is None:
+            raw = self._coord.store.load_artifact(run_id, "discovery")
+            if raw is not None:
+                try:
+                    report = DiscoveryReport.model_validate_json(raw)
+                    self._discovery[run_id] = report
+                except Exception:  # noqa: BLE001
+                    # A stored report the current model can no longer read (an upgrade changed the
+                    # schema, or the row is damaged). Treat it as absent so the operator can simply
+                    # re-run discovery, instead of every step failing with a 500 and no way out.
+                    report = None
+        if report is None:
+            raise StepPreconditionError("run discovery first — it provides the ports/HBAs zoning and provisioning need")
+        return report
+
+    def start_discover(self, run_id: str) -> RunRecord:
+        coord = self._coord
+        run = coord.get_run(run_id)
+        intent = coord.get_provisioning_intent(run_id)
+        coord.spawn(run_id, self._run_discover(run, intent))
+        return run
+
+    async def _run_discover(self, run: RunRecord, intent) -> None:
+        coord = self._coord
+        coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_DISCOVER)
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_DISCOVER, "step.started", "Discovering array ports, ESXi HBAs and fabric logins…")
+        loop = asyncio.get_running_loop()
+
+        def progress(message: str) -> None:
+            # discover() runs in a worker thread; the SSE fan-out uses asyncio.Queues (not thread-safe),
+            # so marshal each progress event back onto the event loop.
+            loop.call_soon_threadsafe(
+                coord.emit, run.run_id, WorkflowPhase.STORAGE_DISCOVER, "phase.progress", message
+            )
+
+        report = await asyncio.to_thread(storage_discovery.discover, intent, progress=progress)
+        self._discovery[run.run_id] = report
+        try:
+            coord.store.save_artifact(run.run_id, "discovery", report.model_dump_json().encode("utf-8"))
+        except Exception:  # noqa: BLE001 - discovery succeeded; failing to cache it must not fail the step.
+            pass
+        if report.error:
+            # D-10: the event's own message says what failed and what to do; the UI marks the step failed
+            # from report.error. A run keeps its sheet's credential (ADR 0013), so the fix is a new run.
+            coord.set_state(run, RunStatus.RETRYABLE_FAILURE, WorkflowPhase.STORAGE_DISCOVER)
+            coord.emit(
+                run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.completed",
+                f"{report.error} Nothing downstream can run without the array: fix the address or "
+                "credential on the sheet and start a new run.",
+                data={"report": report.model_dump(mode="json")},
+            )
+            return
+        coord.set_state(run, RunStatus.READY, WorkflowPhase.STORAGE_DISCOVER)
+        vcenter_down = any(n.startswith("vCenter discovery failed") for n in report.notes)
+        coord.emit(
+            run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.completed",
+            f"Discovery complete — {len(report.array_ports)} array port(s), {len(report.host_hbas)} host HBA(s)"
+            + ("; vCenter was NOT reached — hosts come from the array and the sheet only" if vcenter_down else "")
+            + (f"; {len(report.notes)} note(s)" if report.notes else ""),
+            data={"report": report.model_dump(mode="json")},
+        )
+
+    def _latest_plan_payload(self, run_id: str) -> dict | None:
+        """The run's latest `zoning.plan` payload, or None — the fabric-named hosts reach the zoning
+        check (and provisioning) through it."""
+        latest = None
+        for event in self._coord.list_events(run_id):
+            if event.event_type == "zoning.plan" and event.data.get("plan"):
+                latest = event.data["plan"]
+        return latest
+
+    def zoned_hosts(self, run_id: str) -> set[str]:
+        """The hosts the last zoning verify confirmed on BOTH fabrics — the provisioning gate.
+
+        Per host, not one global flag (ADR 0012). The old gate also accepted a "staged" state, set
+        when the tool wrote zones to the switch itself; the tool no longer does that, and staging was
+        the wrong thing to gate on anyway: it recorded that somebody had asked for zoning, not that
+        zoning was live. On 2026-08-31 a staged-but-unactivated zone opened the gate for a host that
+        then correctly reported `no_path`, because writing the defined config is not activation.
+        """
+        raw = self._coord.store.load_artifact(run_id, "zoned_hosts")
+        if not raw:
+            return set()
+        return {h for h in raw.decode("utf-8", "replace").split("\n") if h}
+
+    def _save_zoned_hosts(self, run_id: str, hosts: list[str]) -> None:
+        try:
+            self._coord.store.save_artifact(run_id, "zoned_hosts", "\n".join(hosts).encode("utf-8"))
+        except Exception:  # noqa: BLE001 - the step succeeded; persisting the gate must not fail it
+            pass
+
+    def start_zoning_preview(self, run_id: str) -> RunRecord:
+        coord = self._coord
+        run = coord.get_run(run_id)
+        intent = coord.get_provisioning_intent(run_id)
+        discovery = self.require_discovery(run_id)
+        coord.spawn(run_id, self._run_zoning_preview(run, intent, discovery))
+        return run
+
+    async def _run_zoning_preview(self, run: RunRecord, intent, discovery) -> None:
+        coord = self._coord
+        coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "step.started", "Verifying SAN zoning on both fabrics…")
+        report = await asyncio.to_thread(
+            storage_zoning.build_report, intent, discovery, self._latest_plan_payload(run.run_id)
+        )
+        # Every verify OVERWRITES the gate. The verify is the ONLY thing that can open it, because a
+        # host is provisionable exactly when the array can see it logged in on both fabrics.
+        self._save_zoned_hosts(run.run_id, report.zoned_hosts)
+        if report.error:
+            # Z-7 (S-3, 2026-09-17): with no array ports the check said "Zoning needs 0 zone(s)" and
+            # "nothing can be provisioned" in one breath. The error is the whole message.
+            coord.set_state(run, RunStatus.RETRYABLE_FAILURE, WorkflowPhase.STORAGE_ZONING)
+            coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.previewed", report.error,
+                       data={"report": report.model_dump(mode="json")})
+            return
+        coord.set_state(run, RunStatus.READY if report.proper else RunStatus.WAITING_FOR_OPERATOR, WorkflowPhase.STORAGE_ZONING)
+        coord.emit(
+            run.run_id, WorkflowPhase.STORAGE_ZONING,
+            "zoning.proper" if report.proper else "zoning.previewed",
+            storage_zoning.summary(report),
+            data={"report": report.model_dump(mode="json")},
+        )
+
+    def start_zoning_plan(self, run_id: str) -> RunRecord:
+        coord = self._coord
+        run = coord.get_run(run_id)
+        intent = coord.get_provisioning_intent(run_id)
+        discovery = self.require_discovery(run_id)
+        coord.spawn(run_id, self._run_zoning_plan(run, intent, discovery))
+        return run
+
+    async def _run_zoning_plan(self, run: RunRecord, intent, discovery) -> None:
+        coord = self._coord
+        coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "step.started",
+                   "Reading both fabric switches (read-only) to build the zoning plan…")
+        plan = await asyncio.to_thread(storage_zoning_plan.build_zoning_plan, intent, discovery)
+        pairs = sum(len(f.pairs) for f in plan.fabrics)
+        coord.set_state(run, RunStatus.READY, WorkflowPhase.STORAGE_ZONING)
+        coord.emit(
+            run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.plan",
+            f"Zoning plan: {pairs} single-initiator-single-target zone(s) across the fabrics"
+            + (f"; {len(plan.offline_hosts)} host WWPN(s) offline (cable + power)" if plan.offline_hosts else "")
+            + (f"; {len(plan.notes)} note(s)" if plan.notes else ""),
+            data={"plan": plan.model_dump(mode="json")},
+        )
+
+
+class ProvisioningSteps:
+    """Tier-1 create (preview/apply), the Stage-2 dropdown builder, and tier-2 path verification."""
+
+    def __init__(self, coord: RunCoordinator, discovery_steps: DiscoveryZoningSteps) -> None:
+        self._coord = coord
+        self._discovery_steps = discovery_steps
+        # The previewed plan, per run — the gate that stops the only step which writes to the array
+        # running against something the operator never saw.
+        #
+        # Deliberately NOT durable, unlike the discovery report and the as-built document. This is an
+        # approval, not a result: it must not outlive the process, and it is discarded the moment its
+        # inputs change (a re-run of discovery, or an edit to the composition). Persisting it would
+        # let a plan approved before a restart authorise an apply of a different composition.
+        # Held with the exact discovery it was built from, so a re-run of discovery withdraws it too.
+        self._plan: dict[str, tuple[ProvisioningPlan, DiscoveryReport]] = {}
+
+    def invalidate_plan(self, run_id: str) -> None:
+        """Withdraw a previous approval. The operator must preview again before anything is created."""
+        self._plan.pop(run_id, None)
+
+    def _previewed_plan(self, run_id: str) -> ProvisioningPlan | None:
+        entry = self._plan.get(run_id)
+        if entry is None:
+            return None
+        plan, approved_against = entry
+        if self._discovery_steps.current_discovery(run_id) is not approved_against:
+            # Discovery was re-run: the environment the operator approved against no longer applies.
+            self.invalidate_plan(run_id)
+            return None
+        return plan
+
+    def start_storage_preview(self, run_id: str) -> RunRecord:
+        coord = self._coord
+        run = coord.get_run(run_id)
+        intent = coord.get_provisioning_intent(run_id)
+        discovery = self._discovery_steps.require_discovery(run_id)
+        coord.spawn(run_id, self._run_storage_preview(run, intent, discovery))
+        return run
+
+    async def _run_storage_preview(self, run: RunRecord, intent, discovery) -> None:
+        coord = self._coord
+        coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "step.started", "Building the provisioning plan…")
+        zoned = self._discovery_steps.zoned_hosts(run.run_id)
+        plan = await asyncio.to_thread(
+            partial(storage_provision.build_plan, intent, discovery, reachable_hosts=zoned,
+                    zoning_plan=self._zoning_plan_payload(run.run_id))
+        )
+        self._plan[run.run_id] = (plan, discovery)
+        status = RunStatus.RETRYABLE_FAILURE if plan.error else RunStatus.WAITING_FOR_OPERATOR
+        coord.set_state(run, status, WorkflowPhase.STORAGE_PROVISION)
+        coord.emit(
+            run.run_id, WorkflowPhase.STORAGE_PROVISION,
+            "storage.preview.failed" if plan.error else "storage.previewed",
+            plan.error or f"Plan ready — {len(plan.actions)} action(s). Review, then confirm to create.",
+            data={"plan": plan.model_dump(mode="json")},
+        )
+
+    def start_storage_apply(self, run_id: str) -> RunRecord:
+        coord = self._coord
+        run = coord.get_run(run_id)
+        intent = coord.get_provisioning_intent(run_id)
+        discovery = self._discovery_steps.require_discovery(run_id)
+        # Zoning gates the EXPORT, per host, not the whole run (ADR 0012 revised 2026-09-02). Host
+        # objects are created regardless: HPE's documented order is register-first, and a host object
+        # for a server that is not cabled yet is harmless and reversible. The exports for hosts the
+        # array cannot reach are held back and named in the plan the operator approves.
+        plan = self._previewed_plan(run_id)
+        if plan is None:
+            raise StepPreconditionError("no provisioning plan to apply — run the provisioning preview first")
+        if plan.error:
+            # A previewed-but-failed plan is not an approval (e.g. the CPG hard gate) — fix, re-preview.
+            raise StepPreconditionError(f"the provisioning preview reported a blocking problem: {plan.error}")
+        if plan.blockers:
+            # SPEC-001 R6: an object that exists and differs cannot be approved into existence.
+            raise StepPreconditionError(
+                "the plan has conflicts that must be resolved on the array first: " + "; ".join(plan.blockers)
+            )
+        coord.spawn(run_id, self._run_storage_apply(run, intent, discovery))
+        return run
+
+    async def _run_storage_apply(self, run: RunRecord, intent, discovery) -> None:
+        coord = self._coord
+        coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.apply.started", "Creating host, volumes and exports…")
+        zoned = self._discovery_steps.zoned_hosts(run.run_id)
+        result = await asyncio.to_thread(
+            partial(storage_provision.apply_plan, intent, discovery, reachable_hosts=zoned,
+                    zoning_plan=self._zoning_plan_payload(run.run_id))
+        )
+        created = sum(1 for o in result.outcomes if o.status == "created")
+        updated = sum(1 for o in result.outcomes if o.status == "updated")
+        failed = sum(1 for o in result.outcomes if o.status == "failed")
+        existed = len(result.outcomes) - created - updated - failed
+        summary = f"Provisioning complete — {created} created, {updated} updated, {existed} already existed"
+        if failed:
+            summary += f", {failed} failed read-back"
+        coord.set_state(run, RunStatus.RETRYABLE_FAILURE if result.error else RunStatus.READY, WorkflowPhase.STORAGE_PROVISION)
+        coord.emit(
+            run.run_id, WorkflowPhase.STORAGE_PROVISION,
+            "storage.apply.failed" if result.error else "storage.applied",
+            result.error or summary + ".",
+            data={"result": result.model_dump(mode="json")},
+        )
+
+    def start_path_verify(self, run_id: str) -> RunRecord:
+        coord = self._coord
+        run = coord.get_run(run_id)
+        intent = coord.get_provisioning_intent(run_id)
+        discovery = self._discovery_steps.require_discovery(run_id)
+        coord.spawn(run_id, self._run_path_verify(run, intent, discovery))
+        return run
+
+    async def _run_path_verify(self, run: RunRecord, intent, discovery) -> None:
+        # Tier-2: read `showvlun -a` (read-only SSH) and report per host whether the exported LUNs are
+        # actually live, over how many fabrics. Report-only — it never gates the run (ADR 0010).
+        coord = self._coord
+        coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.paths.checking",
+                   "Reading showvlun -a to verify the exported LUNs are live (read-only)…")
+        zoned = self._discovery_steps.zoned_hosts(run.run_id)
+        verification = await asyncio.to_thread(partial(
+            storage_path_verify.verify_provisioned_paths, intent, discovery, reachable_hosts=zoned,
+            zoning_plan=self._zoning_plan_payload(run.run_id),
+        ))
+        live = sum(1 for h in verification.hosts if h.verdict == "live")
+        status = RunStatus.RETRYABLE_FAILURE if verification.error else RunStatus.WAITING_FOR_OPERATOR
+        coord.set_state(run, status, WorkflowPhase.STORAGE_PROVISION)
+        coord.emit(
+            run.run_id, WorkflowPhase.STORAGE_PROVISION,
+            "storage.paths.failed" if verification.error else "storage.paths.verified",
+            verification.error or f"Path check: {live}/{len(verification.hosts)} host(s) live on both fabrics (report-only).",
+            data={"verification": verification.model_dump(mode="json")},
+        )
+
+    # ------------------------------------------------------------------ provisioning builder (Stage 2)
+
+    def get_storage_preflight(self, run_id: str) -> PreflightReport:
+        """Read-only readiness of the array + vCenter the sheet points at. Deliberately does NOT
+        require discovery — the point is to name the missing prerequisite *before* discovery runs.
+        Synchronous (network reads); the caller runs it off the event loop."""
+        intent = self._coord.get_provisioning_intent(run_id)
+        return storage_preflight.run_preflight(intent)
+
+    def get_storage_objects(self, run_id: str) -> ProvisioningObjects:
+        """The dropdown 'palette': array objects (WSAPI read) + to-be-created (sheet intent) + discovered
+        hosts + the currently-composed host sets/exports. Synchronous — the caller runs it off-loop."""
+        coord = self._coord
+        intent = coord.get_provisioning_intent(run_id)
+        discovery = self._discovery_steps.require_discovery(run_id)
+        existing = storage_provision.read_array_objects(intent)
+        zoning = self._zoning_plan_payload(run_id)
+        shown, _ = storage_provision.planned_host_names(intent, discovery, zoning)
+        return ProvisioningObjects(
+            existing_cpgs=existing["cpgs"],
+            existing_hosts=existing["hosts"],
+            existing_host_sets=existing["host_sets"],
+            existing_volumes=existing["volumes"],
+            existing_volume_sets=existing["volume_sets"],
+            array_error=existing["error"],
+            new_volumes=[v.name for v in intent.volumes],
+            new_host_sets=[hs.name for hs in intent.host_sets],
+            new_vvsets=sorted({v.vvset for v in intent.volumes if v.vvset}),
+            discovered_hosts=storage_provision.host_briefs(discovery, intent.declared_hosts, zoning),
+            host_sets=list(shown.host_sets),
+            exports=list(shown.exports),
+        )
+
+    def _zoning_plan_payload(self, run_id: str) -> dict | None:
+        """The run's latest `zoning.plan` payload, or None (SPEC-003 R1: the fabric-named hosts
+        reach provisioning through it). Read from the run's events, like the as-built does."""
+        latest = None
+        for event in self._coord.list_events(run_id):
+            if event.event_type == "zoning.plan" and event.data.get("plan"):
+                latest = event.data["plan"]
+        return latest
+
+    def set_provisioning_builder(self, run_id: str, builder: ProvisioningBuilder) -> ProvisioningComposition:
+        """Save the operator's composed host-set membership + VV-set membership + exports onto the run's
+        ProvisioningIntent, so the subsequent preview/apply act on them."""
+        coord = self._coord
+        intent = coord.get_provisioning_intent(run_id)
+        updated = intent.model_copy(deep=True, update={
+            "host_sets": builder.host_sets if builder.host_sets else intent.host_sets,
+            "exports": builder.exports,
+        })
+        if builder.vvsets:  # authoritative when provided: a volume in no set is un-set
+            vol_to_vvset = {vol: name for name, vols in builder.vvsets.items() for vol in vols}
+            for v in updated.volumes:
+                v.vvset = vol_to_vvset.get(v.name)
+        coord.store.save_provisioning_intent(run_id, updated)
+        # The composition just changed, so any plan the operator already approved described something
+        # else. Withdraw it — apply must not run against an approval for a different composition.
+        self.invalidate_plan(run_id)
+        return ProvisioningComposition(host_sets=updated.host_sets, exports=updated.exports, volumes=updated.volumes)

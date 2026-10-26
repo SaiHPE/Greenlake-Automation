@@ -1,0 +1,26 @@
+{
+  "links_ok": true,
+  "links_detail": "AlletraMP_D22U27 → AlletraMP_E18U31 via 'AlletraMP_E18U31' 2/2 links Up · AlletraMP_E18U31 → AlletraMP_D22U27 via 'AlletraMP_E18U31' 2/2 links Up",
+  "groups": [
+    {
+      "group": "zz_rc_vvs_rcg",
+      "peer_group": "zz_rc_vvs_rcg.r188150",
+      "verdict": "replicating",
+      "detail": "Started · Primary here, Secondary on the peer · Periodic · 1 volume(s) Synced · last sync 2026-10-09 23:39:23 IST",
+      "next_step": "",
+      "volumes_total": 1,
+      "volumes_synced": 1
+    },
+    {
+      "group": "zz_rc_test_rcg",
+      "peer_group": "zz_rc_test_rcg.r188150",
+      "verdict": "replicating",
+      "detail": "Started · Primary here, Secondary on the peer · Periodic · 1 volume(s) Synced · last sync 2026-10-09 23:39:24 IST",
+      "next_step": "",
+      "volumes_total": 1,
+      "volumes_synced": 1
+    }
+  ],
+  "notes": [],
+  "error": null
+}

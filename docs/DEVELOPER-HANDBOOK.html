@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alletra onboarding tool: the developer handbook</title>
+<style>
+  /* Colours and type are HPE Design System tokens (light mode) from the hpe-design-tokens package the
+     app's own UI uses. The token name is next to each value. */
+  @font-face { font-family: "Metric"; font-weight: 400; font-display: swap; src: url("https://www.hpe.com/content/dam/hpe/fonts/metric-hpe-web/MetricHPE-Web-Regular.woff2") format("woff2"); }
+  @font-face { font-family: "Metric"; font-weight: 500; font-display: swap; src: url("https://www.hpe.com/content/dam/hpe/fonts/metric-hpe-web/MetricHPE-Web-Medium.woff2") format("woff2"); }
+  @font-face { font-family: "Metric"; font-weight: 600; font-display: swap; src: url("https://www.hpe.com/content/dam/hpe/fonts/metric-hpe-web/MetricHPE-Web-Semibold.woff2") format("woff2"); }
+  :root {
+    --bg-back: #f7f7f7;                 /* background.back */
+    --bg-front: #ffffff;                /* background.front */
+    --bg-contrast: rgba(0,0,0,0.04);    /* background.contrast */
+    --bg-xstrong: #2e2e2e;              /* background.neutral.xstrong */
+    --primary: #008567;                 /* background.primary.strong */
+    --bg-ok: #e3fdf4;  --bg-warning: #fff3dd;  --bg-critical: #ffecec;  --bg-info: #e0f8ff;
+    --text: #555555;                    /* text.default */
+    --text-strong: #2e2e2e;             /* text.strong */
+    --text-weak: #676767;               /* text.weak */
+    --on-strong: #ffffff;               /* text.onStrong */
+    --border: rgba(0,0,0,0.36);         /* border.default */
+    --border-weak: rgba(0,0,0,0.12);    /* border.weak */
+    --brand: #01a982;                   /* decorative.brand */
+    --ok: #009a71; --warning: #d36d00; --critical: #ec3331; --info: #00567a;  /* icon.ok / warning / critical / info */
+    --mono: ui-monospace, "SF Mono", Consolas, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font-family: "Metric", "Segoe UI", -apple-system, Helvetica, Arial, sans-serif; font-size: 1.125rem; line-height: 1.5; color: var(--text); background: var(--bg-back); }
+  header.top { background: var(--bg-xstrong); color: var(--on-strong); padding: 36px 48px 40px; }
+  header.top .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; font-size: 0.875rem; color: rgba(255,255,255,0.72); }
+  header.top .brand .mark { width: 34px; height: 15px; border: 3px solid var(--brand); display: inline-block; }
+  header.top h1 { margin: 0 0 10px; font-size: 2.5rem; line-height: 1.1; font-weight: 500; color: var(--on-strong); }
+  header.top p { margin: 0; color: rgba(255,255,255,0.78); max-width: 72ch; }
+  .wrap { display: grid; grid-template-columns: 280px minmax(0, 1fr); }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow: auto; padding: 24px 16px 40px 24px; background: var(--bg-back); border-right: 1px solid var(--border-weak); font-size: 0.9375rem; }
+  nav.toc h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-weak); margin: 18px 0 6px; border: 0; padding: 0 8px; }
+  nav.toc h2:first-child { margin-top: 0; }
+  nav.toc a { display: block; color: var(--text-strong); text-decoration: none; padding: 4px 8px; border-radius: 4px; }
+  nav.toc a:hover { background: var(--bg-contrast); }
+  main { padding: 32px 56px 120px; max-width: 1080px; background: var(--bg-front); }
+  .part { margin-top: 72px; padding-top: 28px; border-top: 2px solid var(--brand); }
+  .part:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+  .part > .label { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: .08em; color: var(--primary); font-weight: 600; margin-bottom: 4px; }
+  h2 { font-size: 1.875rem; line-height: 1.2; margin: 40px 0 12px; font-weight: 500; color: var(--text-strong); }
+  .part > .label + h2 { margin-top: 0; }
+  h3 { font-size: 1.25rem; margin: 32px 0 8px; font-weight: 500; color: var(--text-strong); }
+  p, li { max-width: 76ch; }
+  li { margin: 4px 0; }
+  strong { color: var(--text-strong); font-weight: 600; }
+  a { color: var(--primary); }
+  code { font-family: var(--mono); font-size: .875em; background: var(--bg-contrast); color: var(--text-strong); padding: 1px 5px; border-radius: 4px; }
+  pre { font-family: var(--mono); font-size: 0.8125rem; line-height: 1.55; background: var(--bg-xstrong); color: var(--on-strong); padding: 16px 18px; border-radius: 6px; overflow: auto; max-width: 100%; }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 24px; font-size: 0.9375rem; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border-weak); }
+  th { background: var(--bg-contrast); font-weight: 600; color: var(--text-strong); }
+  td code { white-space: nowrap; }
+  .box { border-left: 4px solid var(--brand); background: var(--bg-ok); padding: 14px 18px; margin: 20px 0; max-width: 80ch; border-radius: 0 6px 6px 0; }
+  .box.warn { border-color: var(--warning); background: var(--bg-warning); }
+  .box.stop { border-color: var(--critical); background: var(--bg-critical); }
+  .box.note { border-color: var(--info); background: var(--bg-info); }
+  .box > strong:first-child { display: block; margin-bottom: 4px; }
+  .where { font-size: 0.9375rem; color: var(--text-weak); margin: -4px 0 16px; }
+  .stamp { font-size: 0.875rem; color: var(--text-weak); margin-top: 10px; }
+  code a, a code { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--border-default); }
+  code a:hover { border-bottom-color: var(--brand); color: var(--brand); }
+  .kv { display: grid; grid-template-columns: 220px 1fr; gap: 6px 16px; margin: 12px 0; max-width: 82ch; }
+  .kv dt { font-weight: 500; color: var(--text-strong); } .kv dd { margin: 0; }
+  figure { margin: 24px 0 32px; }
+  figure svg { max-width: 100%; height: auto; display: block; }
+  figcaption { font-size: 0.9375rem; color: var(--text-weak); margin-top: 10px; max-width: 80ch; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 16px 0; max-width: 80ch; }
+  .steps li { counter-increment: s; position: relative; padding: 0 0 14px 44px; margin: 0; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: var(--on-strong); font-weight: 600; font-size: 0.9375rem; display: flex; align-items: center; justify-content: center; }
+  /* SVG classes: the same tokens */
+  svg text { font-family: "Metric", "Segoe UI", Helvetica, Arial, sans-serif; fill: #2e2e2e; font-size: 14px; }
+  svg .t-weak { fill: #676767; } svg .t-on { fill: #ffffff; } svg .t-strong { font-weight: 600; } svg .t-small { font-size: 12.5px; }
+  svg .b { fill: #ffffff; stroke: #2e2e2e; stroke-width: 1.5; } svg .b-soft { fill: #f7f7f7; stroke: rgba(0,0,0,0.36); stroke-width: 1.2; }
+  svg .b-brand { fill: #e3fdf4; stroke: #01a982; stroke-width: 2; } svg .b-dark { fill: #2e2e2e; stroke: #2e2e2e; }
+  svg .b-warn { fill: #fff3dd; stroke: #d36d00; stroke-width: 2; } svg .b-info { fill: #e0f8ff; stroke: #00567a; stroke-width: 1.5; }
+  svg .ln { stroke: #676767; stroke-width: 1.6; fill: none; } svg .ln-dark { stroke: #2e2e2e; stroke-width: 1.6; fill: none; }
+  svg .ln-dash { stroke-dasharray: 5 4; } svg .ln-faint { stroke: rgba(0,0,0,0.2); stroke-width: 1; fill: none; }
+  svg .lane { fill: rgba(0,0,0,0.025); stroke: none; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } nav.toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border-weak); } .grid2 { grid-template-columns: 1fr; } main { padding: 20px; } header.top { padding: 24px 20px; } .kv { grid-template-columns: 1fr; } }
+  @media print { nav.toc { display: none; } .wrap { grid-template-columns: 1fr; } .part { page-break-before: always; } header.top, .box, pre, th, svg { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><span>Hewlett Packard Enterprise &middot; Alletra Storage MP onboarding</span></div>
+  <h1>The developer handbook</h1>
+  <p>Everything you need to work on this project, in one page: what the tool is for, how to set up, how a change gets from an idea to the array, how the code is built, and what to do when something does not work. Read the first part today. Come back to the rest when you need it.</p>
+  <p class="stamp">Last checked against <code>main</code> on 16 October 2026. File paths on this page are links to the code on github.hpe.com.</p>
+</header>
+
+<div class="wrap">
+<nav class="toc">
+  <h2>Start here</h2>
+  <a href="#story">1. The problem we solve</a>
+  <a href="#picture">2. The tool in one picture</a>
+  <a href="#never">3. What the tool never does</a>
+  <h2>Your first week</h2>
+  <a href="#access">4. Getting access</a>
+  <a href="#setup">5. Setting up your laptop</a>
+  <a href="#repo">6. The repository, folder by folder</a>
+  <a href="#reading">7. Where to read what</a>
+  <h2>How we work</h2>
+  <a href="#flow">8. From an issue to a merged change</a>
+  <a href="#check">9. The check command</a>
+  <a href="#pr">10. The pull request</a>
+  <a href="#branches">11. Branches, machines and the lab</a>
+  <a href="#lab">12. Running on the lab</a>
+  <a href="#owner">13. After a merge, and releases</a>
+  <h2>How the code works</h2>
+  <a href="#layers">14. The four layers</a>
+  <a href="#run">15. A run</a>
+  <a href="#button">16. What happens when you press a button</a>
+  <a href="#events">17. How the screen knows what happened</a>
+  <a href="#writes">18. Changing an array: plan, approve, apply</a>
+  <a href="#guards">19. Reading without changing</a>
+  <a href="#parts">20. The parts of the backend</a>
+  <a href="#frontend">21. The frontend, in brief</a>
+  <a href="#data">22. Where data lives</a>
+  <a href="#api">23. The API</a>
+  <a href="#tests">24. Tests</a>
+  <a href="#howto">25. How to make common changes</a>
+  <h2>When you are stuck</h2>
+  <a href="#stuck">26. Problems and fixes</a>
+  <a href="#traps">27. Facts that are easy to get wrong</a>
+  <a href="#glossary">28. Glossary</a>
+</nav>
+
+<main>
+
+<!-- ============================================================ START HERE -->
+<section class="part">
+<div class="label">Start here</div>
+<h2 id="story">1. The problem we solve</h2>
+
+<p>When a customer buys an HPE Alletra Storage MP B10000 array, an HPE field engineer goes to the customer's data centre to make it work. That takes a day or two and has many small steps, each on a different system: register the array in HPE GreenLake, connect it to the cloud through a setup page on the array itself, finish the setup in the Data Services Cloud Console (DSCC), find out which servers are cabled to which switch, write the zoning for the SAN team, create the volumes and present them to the servers, set up replication to a second array if the customer bought one, check that everything matches what was ordered, and write the hand-over document.</p>
+
+<p>Each of those steps is well understood, and each is easy to get slightly wrong by hand. A typo in a port address, a volume exported to the wrong host, a zoning command pasted into the wrong fabric. The engineer also has to write the as-built document afterwards, by hand, from memory and screenshots.</p>
+
+<p>This tool does that day for the engineer. It is a small web application that runs on the Windows "jump box", the laptop or server that sits next to the array in the customer's network. The engineer fills in one spreadsheet, uploads it, chooses what they want to do, and walks through the steps one at a time. The tool reads the real environment, shows the engineer exactly what it is about to change, waits for a yes, does it, checks the result, and writes the document.</p>
+
+<figure>
+<svg viewBox="0 0 1000 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The engineer's day with the tool, left to right">
+  <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#676767"/></marker></defs>
+  <rect class="b-soft" x="20" y="60" width="160" height="120" rx="8"/>
+  <text x="100" y="92" text-anchor="middle" class="t-strong">One spreadsheet</text>
+  <text x="100" y="114" text-anchor="middle" class="t-weak t-small">serial, network, GreenLake,</text>
+  <text x="100" y="131" text-anchor="middle" class="t-weak t-small">hosts, volumes, replication</text>
+  <text x="100" y="160" text-anchor="middle" class="t-weak t-small">filled in by the engineer</text>
+  <line class="ln" x1="180" y1="120" x2="208" y2="120" marker-end="url(#ar)"/>
+  <rect class="b-brand" x="210" y="30" width="580" height="180" rx="10"/>
+  <text x="500" y="58" text-anchor="middle" class="t-strong">The tool, on the jump box</text>
+  <g class="t-small">
+    <rect class="b" x="228" y="78" width="130" height="54" rx="6"/><text x="293" y="100" text-anchor="middle" class="t-strong">Onboard</text><text x="293" y="118" text-anchor="middle" class="t-weak">GreenLake, DSCC</text>
+    <rect class="b" x="368" y="78" width="130" height="54" rx="6"/><text x="433" y="100" text-anchor="middle" class="t-strong">Discover</text><text x="433" y="118" text-anchor="middle" class="t-weak">hosts, fabrics</text>
+    <rect class="b" x="508" y="78" width="130" height="54" rx="6"/><text x="573" y="100" text-anchor="middle" class="t-strong">Zone</text><text x="573" y="118" text-anchor="middle" class="t-weak">zoning commands</text>
+    <rect class="b" x="648" y="78" width="124" height="54" rx="6"/><text x="710" y="100" text-anchor="middle" class="t-strong">Provision</text><text x="710" y="118" text-anchor="middle" class="t-weak">volumes, exports</text>
+    <rect class="b" x="228" y="142" width="176" height="54" rx="6"/><text x="316" y="164" text-anchor="middle" class="t-strong">Replicate</text><text x="316" y="182" text-anchor="middle" class="t-weak">Remote Copy, failover test</text>
+    <rect class="b" x="414" y="142" width="176" height="54" rx="6"/><text x="502" y="164" text-anchor="middle" class="t-strong">Verify</text><text x="502" y="182" text-anchor="middle" class="t-weak">array vs. the sheet</text>
+    <rect class="b" x="600" y="142" width="172" height="54" rx="6"/><text x="686" y="164" text-anchor="middle" class="t-strong">Document</text><text x="686" y="182" text-anchor="middle" class="t-weak">the as-built Word file</text>
+  </g>
+  <line class="ln" x1="790" y1="120" x2="818" y2="120" marker-end="url(#ar)"/>
+  <rect class="b-soft" x="820" y="60" width="160" height="120" rx="8"/>
+  <text x="900" y="92" text-anchor="middle" class="t-strong">A working array</text>
+  <text x="900" y="114" text-anchor="middle" class="t-weak t-small">registered, zoned,</text>
+  <text x="900" y="131" text-anchor="middle" class="t-weak t-small">provisioned, replicating,</text>
+  <text x="900" y="148" text-anchor="middle" class="t-weak t-small">verified, and its</text>
+  <text x="900" y="165" text-anchor="middle" class="t-weak t-small">hand-over document</text>
+  <text x="500" y="250" text-anchor="middle" class="t-weak">Every step shows what it found or what it will do. Anything that changes the array waits for the engineer to say yes.</text>
+  <text x="500" y="272" text-anchor="middle" class="t-weak">The engineer picks which steps a run has: all of them, only the storage steps, only the checks, or a custom set.</text>
+</svg>
+<figcaption>The whole product on one line. Every part of the code belongs to one of these boxes.</figcaption>
+</figure>
+
+<p>Who uses it: HPE deployment engineers, on site, one array at a time. They are storage experts, not developers. The screens talk to them in plain words, and every screen says what the tool found, what it means, and what to do next.</p>
+
+<h2 id="picture">2. The tool in one picture</h2>
+
+<p>Technically the tool is one Python program (built with FastAPI) listening on <code>127.0.0.1:8765</code>. It serves a web page, built with React and HPE's design system, and an API that the page calls. The same program talks to the outside world on the engineer's behalf. Nothing else is involved: no server in the cloud, no database service, no login. The engineer is the only user, and the program runs only on their machine.</p>
+
+<figure>
+<svg viewBox="0 0 1000 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="One process in the middle, the browser on the left, six outside systems on the right">
+  <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#676767"/></marker></defs>
+  <rect class="b-soft" x="20" y="130" width="170" height="100" rx="8"/>
+  <text x="105" y="165" text-anchor="middle" class="t-strong">The engineer's browser</text>
+  <text x="105" y="186" text-anchor="middle" class="t-weak t-small">the React screens</text>
+  <text x="105" y="204" text-anchor="middle" class="t-weak t-small">frontend/</text>
+  <line class="ln" x1="190" y1="165" x2="268" y2="165" marker-end="url(#ar2)"/><text x="229" y="158" text-anchor="middle" class="t-weak t-small">requests</text>
+  <line class="ln" x1="268" y1="195" x2="192" y2="195" marker-end="url(#ar2)"/><text x="229" y="214" text-anchor="middle" class="t-weak t-small">live events</text>
+  <rect class="b-brand" x="270" y="100" width="260" height="160" rx="10"/>
+  <text x="400" y="135" text-anchor="middle" class="t-strong">The backend</text>
+  <text x="400" y="157" text-anchor="middle" class="t-weak t-small">one Python process, FastAPI</text>
+  <text x="400" y="175" text-anchor="middle" class="t-weak t-small">127.0.0.1:8765</text>
+  <text x="400" y="205" text-anchor="middle" class="t-weak t-small">serves the screens, runs the steps,</text>
+  <text x="400" y="223" text-anchor="middle" class="t-weak t-small">remembers every run in a local database</text>
+  <g class="t-small">
+    <rect class="b" x="640" y="20" width="340" height="44" rx="6"/><text x="656" y="39" class="t-strong">HPE GreenLake</text><text x="656" y="55" class="t-weak">the cloud; REST calls over HTTPS</text>
+    <rect class="b" x="640" y="74" width="340" height="44" rx="6"/><text x="656" y="93" class="t-strong">The array</text><text x="656" y="109" class="t-weak">SSH to read; WSAPI (its REST API) to write</text>
+    <rect class="b" x="640" y="128" width="340" height="44" rx="6"/><text x="656" y="147" class="t-strong">vCenter</text><text x="656" y="163" class="t-weak">which ESXi hosts have which adapters; read only</text>
+    <rect class="b" x="640" y="182" width="340" height="44" rx="6"/><text x="656" y="201" class="t-strong">The two Brocade SAN switches</text><text x="656" y="217" class="t-weak">SSH to read; the tool never writes to a switch</text>
+    <rect class="b" x="640" y="236" width="340" height="44" rx="6"/><text x="656" y="255" class="t-strong">Servers not in vCenter</text><text x="656" y="271" class="t-weak">Linux over SSH, Windows over WinRM; read only</text>
+    <rect class="b" x="640" y="290" width="340" height="44" rx="6"/><text x="656" y="309" class="t-strong">Two web wizards</text><text x="656" y="325" class="t-weak">the array's setup page and DSCC, via a browser</text>
+  </g>
+  <g class="ln" marker-end="url(#ar2)">
+    <path d="M530,140 C585,140 585,42 638,42"/><path d="M530,152 C585,152 585,96 638,96"/><path d="M530,164 C585,164 585,150 638,150"/>
+    <path d="M530,190 C585,190 585,204 638,204"/><path d="M530,202 C585,202 585,258 638,258"/><path d="M530,214 C585,214 585,312 638,312"/>
+  </g>
+</svg>
+<figcaption>The browser only ever talks to the backend. The backend talks to everything else, and writes to exactly one of them: the array, through its REST API, after the engineer approves.</figcaption>
+</figure>
+
+<p>Three words you will meet in every file:</p>
+<dl class="kv">
+  <dt>Run</dt><dd>One array, one chosen set of steps, and the full history of what happened. Everything the tool does is inside a run.</dd>
+  <dt>Step</dt><dd>One screen and one job: Discovery, SAN Zoning, Provision storage, and so on. The engineer presses a button; the step does its work and reports back.</dd>
+  <dt>Event</dt><dd>One line in a run's history: "discovery finished, here is the report". The screen is drawn from events, so a refresh or a restart loses nothing.</dd>
+</dl>
+
+<h2 id="never">3. What the tool never does</h2>
+<p>These are not preferences. Each came from a real risk or a real incident, and each is checked in code review. A change that breaks one of them will not be merged.</p>
+<table>
+<tr><th style="width:36%">Rule</th><th>Why</th></tr>
+<tr><td>It never writes to a SAN switch. It produces the Brocade commands as text for the SAN team to paste.</td><td>A wrong zone can cut a customer's production servers off from their storage. Zoning changes belong to the people who own the switches and the change window. (Decision record ADR 0012.)</td></tr>
+<tr><td>It reads the array over SSH with a fixed list of allowed commands, all of them "show" commands. It writes to the array only through the array's REST API, and only after the engineer has seen the plan and ticked a box.</td><td>Every change to a customer's array must be something the engineer saw and agreed to. The fixed list makes it impossible for a bug to send a destructive command. (ADR 0001.)</td></tr>
+<tr><td>Discovery, verification, the path check and the as-built document only read.</td><td>They run against live customer systems to report, so they must be safe to run at any time.</td></tr>
+<tr><td>One array per run. A spreadsheet that names two arrays is refused.</td><td>Credentials, plans and documents belong to one array. Mixing two is how the wrong array gets changed.</td></tr>
+<tr><td>No passwords, customer names or customer addresses in the repository, in test data or in screenshots. Lab addresses are fine.</td><td>The repository is shared across the team, and part of it is pushed to a public site for lab runs.</td></tr>
+<tr><td>Nothing is "done" until it has run on real lab hardware.</td><td>Most of our bugs passed every automated test and failed on a real array, because real devices answer differently from their documentation.</td></tr>
+</table>
+</section>
+
+<!-- ============================================================ FIRST WEEK -->
+<section class="part">
+<div class="label">Your first week</div>
+<h2 id="access">4. Getting access</h2>
+<p>Ask the project owner (Sai) for these on your first day. Nothing else on this page works without the first two.</p>
+<table>
+<tr><th style="width:40%">What</th><th>Why you need it</th></tr>
+<tr><td>Collaborator on <a href="https://github.hpe.com/g-sai-roopesh/greenlake-automation">github.hpe.com/g-sai-roopesh/greenlake-automation</a></td><td>This is where the code, the issues, the pull requests and the releases live. It is HPE's internal GitHub.</td></tr>
+<tr><td>The HPE VPN on your laptop</td><td>github.hpe.com is only reachable from inside HPE's network.</td></tr>
+<tr><td>A github.com account, added to <code>SaiHPE/Greenlake-Automation</code></td><td>Only if you will run code on the lab. The lab machines cannot reach github.hpe.com, so lab runs go through a public copy on github.com (section 11 explains why).</td></tr>
+<tr><td>Remote Desktop to the lab jump box, called labrat</td><td>Only for lab runs.</td></tr>
+</table>
+
+<h2 id="setup">5. Setting up your laptop</h2>
+<p>You need git, Python 3.12 or newer, Node 20 and GitHub's command line tool <code>gh</code>. On Windows, also Git Bash, which comes with Git for Windows. Then, in a terminal:</p>
+<pre><code>gh auth login --hostname github.hpe.com        # signs you in through the browser
+gh auth setup-git --hostname github.hpe.com    # git uses the same sign-in
+git clone https://github.hpe.com/g-sai-roopesh/greenlake-automation.git
+cd greenlake-automation
+git config core.hooksPath .githooks            # turns on a safety check that runs before each commit (section 9)
+cd Provisioning_Automation/alletra_onboard     # "the app folder"; almost everything happens here
+python -m venv .venv
+.venv/bin/pip install -e ".[dev]"              # Windows: .venv\Scripts\pip install -e ".[dev]"
+cd frontend && npm ci && cd ..
+.venv/bin/python scripts/check.py              # runs everything; it must end with PASS</code></pre>
+<p>On a Windows laptop, replace <code>.venv/bin/python</code> with <code>.venv\Scripts\python</code> everywhere on this page.</p>
+
+<div class="box warn">
+<strong>If pip or npm complain about certificates</strong>
+HPE's network inspects encrypted traffic, which confuses tools that ship their own certificate list. On a Mac, export the trusted certificates once and tell the tools where they are:
+<pre style="margin:10px 0 0"><code>security find-certificate -a -p /Library/Keychains/System.keychain \
+  /System/Library/Keychains/SystemRootCertificates.keychain > ~/hpe-ca.pem
+export PIP_CERT=~/hpe-ca.pem NODE_EXTRA_CA_CERTS=~/hpe-ca.pem</code></pre>
+</div>
+
+<h3>Running the app on your laptop</h3>
+<p><code>.venv/bin/onboard ui</code> starts the backend and opens <a href="http://127.0.0.1:8765">http://127.0.0.1:8765</a>. For work on the screens, leave that running and also start <code>npm run dev</code> in <code>frontend/</code>; that gives you <a href="http://127.0.0.1:5173">http://127.0.0.1:5173</a> with instant reload when you save a file. Design mockups of screens that are not built yet are at <code>npm run mockups</code> (port 5175).</p>
+<p>Without lab access the app runs, but every step that talks to an array, a switch, vCenter or GreenLake will tell you it cannot reach it. That is expected. The test suite is how you exercise that code without a lab (section 24).</p>
+<p>The <code>onboard</code> command has three subcommands, all in <code>src/alletra_onboard/cli/main.py</code>: <code>ui</code> starts the backend and opens the browser; <code>api</code> starts the backend only, which is what you want next to <code>npm run dev</code>; <code>check</code> is a read-only GreenLake sign-in test that engineers run on a jump box to prove the credentials and the network before a run.</p>
+
+<h2 id="repo">6. The repository, folder by folder</h2>
+<p>The repository is called <code>greenlake-automation</code>. The app is in one folder inside it, and almost all of your work happens there.</p>
+
+<figure>
+<svg viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The folder tree of the repository">
+  <g class="t-small">
+    <rect class="b-dark" x="20" y="16" width="300" height="34" rx="6"/><text x="36" y="38" class="t-on t-strong">greenlake-automation/</text>
+    <line class="ln-faint" x1="40" y1="50" x2="40" y2="540"/>
+    <line class="ln-faint" x1="40" y1="80" x2="56" y2="80"/><text x="62" y="84" class="t-strong">AGENTS.md</text><text x="330" y="84" class="t-weak">the rules, for people and for coding assistants; read first</text>
+    <line class="ln-faint" x1="40" y1="106" x2="56" y2="106"/><text x="62" y="110" class="t-strong">CONTRIBUTING.md</text><text x="330" y="110" class="t-weak">the step-by-step version of sections 4 to 13 of this page</text>
+    <line class="ln-faint" x1="40" y1="132" x2="56" y2="132"/><text x="62" y="136" class="t-strong">.github/</text><text x="330" y="136" class="t-weak">pull request template, code owners, rules for coding assistants by folder</text>
+    <line class="ln-faint" x1="40" y1="158" x2="56" y2="158"/><text x="62" y="162" class="t-strong">.githooks/</text><text x="330" y="162" class="t-weak">the pre-commit safety check</text>
+    <line class="ln-faint" x1="40" y1="184" x2="56" y2="184"/><text x="62" y="188" class="t-strong">reference/greenlake_api_docs/</text><text x="330" y="188" class="t-weak">an offline copy of the GreenLake API documentation</text>
+    <line class="ln-faint" x1="40" y1="210" x2="56" y2="210"/><text x="62" y="214" class="t-strong">archive/</text><text x="330" y="214" class="t-weak">old plans and tools, kept for history; nothing uses them</text>
+    <line class="ln-faint" x1="40" y1="246" x2="56" y2="246"/>
+    <rect class="b-brand" x="60" y="230" width="340" height="32" rx="6"/><text x="74" y="251" class="t-strong">Provisioning_Automation/alletra_onboard/</text><text x="420" y="251" class="t-weak">the app folder</text>
+    <line class="ln-faint" x1="82" y1="262" x2="82" y2="540"/>
+    <line class="ln-faint" x1="82" y1="290" x2="98" y2="290"/><text x="104" y="294" class="t-strong">src/alletra_onboard/</text><text x="330" y="294" class="t-weak">the Python backend (section 14 onwards)</text>
+    <line class="ln-faint" x1="82" y1="316" x2="98" y2="316"/><text x="104" y="320" class="t-strong">frontend/src/</text><text x="330" y="320" class="t-weak">the React screens; steps/ has one file per step, ui/ the shared pieces</text>
+    <line class="ln-faint" x1="82" y1="342" x2="98" y2="342"/><text x="104" y="346" class="t-strong">frontend/dist/</text><text x="330" y="346" class="t-weak">the built screens the backend serves; never edit or commit it yourself</text>
+    <line class="ln-faint" x1="82" y1="368" x2="98" y2="368"/><text x="104" y="372" class="t-strong">tests/</text><text x="330" y="372" class="t-weak">unit and contract tests; fixtures/ holds real device output the parsers are checked against</text>
+    <line class="ln-faint" x1="82" y1="394" x2="98" y2="394"/><text x="104" y="398" class="t-strong">docs/</text><text x="330" y="398" class="t-weak">SCOPE, LESSONS, ARCHITECTURE, decision records (adr/), specs, lab run records (validation/)</text>
+    <line class="ln-faint" x1="82" y1="420" x2="98" y2="420"/><text x="104" y="424" class="t-strong">lab/</text><text x="330" y="424" class="t-weak">scripts that drive the app against the real lab arrays, run from the jump box</text>
+    <line class="ln-faint" x1="82" y1="446" x2="98" y2="446"/><text x="104" y="450" class="t-strong">scripts/</text><text x="330" y="450" class="t-weak">check.py, the lab push script, the owner's after-merge and release scripts</text>
+    <line class="ln-faint" x1="82" y1="472" x2="98" y2="472"/><text x="104" y="476" class="t-strong">config/, packaging/, tools/</text><text x="330" y="476" class="t-weak">an example sheet, the .exe build recipe, HPE's Discovery Tool</text>
+    <line class="ln-faint" x1="82" y1="498" x2="98" y2="498"/><text x="104" y="502" class="t-strong">README, CONTEXT, pyproject</text><text x="330" y="502" class="t-weak">how to run it, the domain words, the Python project file</text>
+    <line class="ln-faint" x1="82" y1="524" x2="98" y2="524"/><text x="104" y="528" class="t-strong">.env</text><text x="330" y="528" class="t-weak">your own secrets (GreenLake credentials, lab passwords); never in git</text>
+  </g>
+</svg>
+<figcaption>Two levels: the repository root holds the rules and reference material; the app folder holds everything that runs.</figcaption>
+</figure>
+
+<h2 id="reading">7. Where to read what</h2>
+<table>
+<tr><th style="width:40%">You want to know</th><th>Open</th></tr>
+<tr><td>The rules, the folder layout, the commands</td><td><code>AGENTS.md</code> at the repository root. Short. Coding assistants read it too.</td></tr>
+<tr><td>What is built, what is proven on hardware, what is next</td><td><code>docs/SCOPE.md</code>: the product in nine areas with a status for each.</td></tr>
+<tr><td>What the words mean (array, run, fabric, VV set, export, …)</td><td><code>CONTEXT.md</code> in the app folder, and the glossary at the end of this page.</td></tr>
+<tr><td>Why a rule exists</td><td><code>docs/LESSONS.md</code>: every incident we had and the rule it left. Read it before touching the wizards, run state or anything large.</td></tr>
+<tr><td>Why a design decision was made</td><td><code>docs/adr/</code>: fifteen short decision records, 0001 to 0015. Each gives the situation, the decision and the consequences.</td></tr>
+<tr><td>What a feature must do</td><td><code>docs/specs/</code>: twenty specs, SPEC-001 to SPEC-020, one per feature, with numbered requirements the tests refer to.</td></tr>
+<tr><td>What happened on the lab</td><td><code>docs/validation/</code>: dated records of real runs, with what passed and what failed.</td></tr>
+<tr><td>How the screens must look and read</td><td><code>docs/UX-GUIDELINES.md</code>.</td></tr>
+<tr><td>How to run it as an engineer would</td><td>The app folder's <code>README.md</code>.</td></tr>
+<tr><td>The GreenLake API</td><td><code>reference/greenlake_api_docs/greenlake/</code> at the repository root; start at <code>services.md</code>.</td></tr>
+<tr><td>Open work</td><td>The <a href="https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues">issues on github.hpe.com</a>. Each has an area label and a state label.</td></tr>
+</table>
+
+<h3>Reading the code: your first afternoon</h3>
+<p>Six files, in this order, about two hours. Paths are under <code>src/alletra_onboard/</code>. Read sections 14 to 17 of this page alongside them.</p>
+<ol class="steps">
+  <li><code>domain/workflow.py</code> (100 lines). The ten steps, the five preset modes, and the three functions that pick steps for a run. Notice that nothing else in the code lists steps.</li>
+  <li><code>domain/models.py</code> (300 lines). <code>WorkflowPhase</code>, <code>RunMode</code>, <code>RunStatus</code>, then <code>ArrayWorkItem</code>, <code>RunEvent</code> and <code>RunRecord</code>. Notice that a step has one key but may pass through several phases; GreenLake registration has six.</li>
+  <li><code>application/runs/coordinator.py</code> (290 lines). Read <code>create_run</code>, then <code>spawn</code>, <code>_guarded</code>, <code>set_state</code> and <code>emit</code>. This is the whole run machinery. Notice <code>spawn</code> refuses a second task for the same run, and that <code>emit</code> writes to the store before it tells the browser.</li>
+  <li><code>application/provisioning/steps.py</code> (400 lines). Two step services. Read <code>start_discover</code> and <code>_run_discover</code> first; every other step has that shape. Then <code>start_storage_apply</code>, to see how an approval is checked and withdrawn.</li>
+  <li><code>application/provisioning/storage_provision.py</code> (760 lines). Skim. <code>build_plan</code> judges each object; <code>apply_plan</code> walks the <code>ensure_*</code> calls; <code>removal_set</code> renders the undo. Notice that these are plain functions over models, with the device clients passed in.</li>
+  <li><code>api/app.py</code> (780 lines). Skim the routes. Notice how little each one does, and how the four exceptions are mapped to 404 and 409 in one place.</li>
+</ol>
+<p>After that, follow one feature end to end with the frontend open: <code>frontend/src/steps/ProvisionStep.tsx</code> next to <code>ProvisioningSteps</code>. When you can say what each button sends, what event comes back and which component reads it, you can work on any step.</p>
+</section>
+
+<!-- ============================================================ HOW WE WORK -->
+<section class="part">
+<div class="label">How we work</div>
+<h2 id="flow">8. From an issue to a merged change</h2>
+<p>Every change follows the same path. Nothing goes straight to <code>main</code>; github.hpe.com refuses it. The path has three lanes: you, GitHub, and the owner.</p>
+
+<figure>
+<svg viewBox="0 0 1000 470" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The flow from an issue to a merged change, in three lanes">
+  <defs><marker id="ar3" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#676767"/></marker></defs>
+  <rect class="lane" x="130" y="20" width="860" height="150" rx="6"/><text x="20" y="100" class="t-strong">You</text>
+  <rect class="lane" x="130" y="180" width="860" height="100" rx="6"/><text x="20" y="235" class="t-strong">github.hpe.com</text>
+  <rect class="lane" x="130" y="290" width="860" height="160" rx="6"/><text x="20" y="375" class="t-strong">The owner</text>
+  <g class="t-small">
+    <rect class="b" x="150" y="48" width="140" height="92" rx="6"/><text x="220" y="76" text-anchor="middle" class="t-strong">1. Pick an issue</text><text x="220" y="96" text-anchor="middle" class="t-weak">assign yourself,</text><text x="220" y="112" text-anchor="middle" class="t-weak">say what you plan</text><text x="220" y="128" text-anchor="middle" class="t-weak">to do</text>
+    <rect class="b" x="310" y="48" width="140" height="92" rx="6"/><text x="380" y="76" text-anchor="middle" class="t-strong">2. Branch</text><text x="380" y="96" text-anchor="middle" class="t-weak">from a fresh main:</text><text x="380" y="112" text-anchor="middle" class="t-weak">feat/bl-NN-name</text>
+    <rect class="b" x="470" y="48" width="140" height="92" rx="6"/><text x="540" y="76" text-anchor="middle" class="t-strong">3. Change</text><text x="540" y="96" text-anchor="middle" class="t-weak">code and tests,</text><text x="540" y="112" text-anchor="middle" class="t-weak">and the docs the</text><text x="540" y="128" text-anchor="middle" class="t-weak">change touches</text>
+    <rect class="b-brand" x="630" y="48" width="140" height="92" rx="6"/><text x="700" y="76" text-anchor="middle" class="t-strong">4. check.py</text><text x="700" y="96" text-anchor="middle" class="t-weak">until it says PASS</text><text x="700" y="112" text-anchor="middle" class="t-weak">(section 9)</text>
+    <rect class="b" x="790" y="48" width="180" height="92" rx="6"/><text x="880" y="76" text-anchor="middle" class="t-strong">5. Open a pull request</text><text x="880" y="96" text-anchor="middle" class="t-weak">fill the template, paste</text><text x="880" y="112" text-anchor="middle" class="t-weak">the check block, write</text><text x="880" y="128" text-anchor="middle" class="t-weak">"Closes #N"</text>
+    <rect class="b" x="630" y="200" width="340" height="62" rx="6"/><text x="800" y="224" text-anchor="middle" class="t-strong">6. The rules on main check it</text><text x="800" y="244" text-anchor="middle" class="t-weak">pull requests only, the owner's approval, no force push</text>
+    <rect class="b" x="630" y="312" width="150" height="92" rx="6"/><text x="705" y="340" text-anchor="middle" class="t-strong">7. Review</text><text x="705" y="360" text-anchor="middle" class="t-weak">comments; you answer,</text><text x="705" y="376" text-anchor="middle" class="t-weak">push, ask again</text>
+    <rect class="b-brand" x="800" y="312" width="170" height="92" rx="6"/><text x="885" y="340" text-anchor="middle" class="t-strong">8. Squash and merge</text><text x="885" y="360" text-anchor="middle" class="t-weak">one commit on main, named</text><text x="885" y="376" text-anchor="middle" class="t-weak">after the pull request;</text><text x="885" y="392" text-anchor="middle" class="t-weak">the issue closes</text>
+    <rect class="b" x="150" y="312" width="440" height="92" rx="6"/><text x="370" y="340" text-anchor="middle" class="t-strong">9. after_merge.sh</text><text x="370" y="360" text-anchor="middle" class="t-weak">rebuilds the screens, refreshes the branch the jump boxes use</text><text x="370" y="376" text-anchor="middle" class="t-weak">and the download zip, so engineers and lab runs get your change</text>
+  </g>
+  <g class="ln" marker-end="url(#ar3)">
+    <line x1="290" y1="94" x2="308" y2="94"/><line x1="450" y1="94" x2="468" y2="94"/><line x1="610" y1="94" x2="628" y2="94"/><line x1="770" y1="94" x2="788" y2="94"/>
+    <line x1="880" y1="140" x2="880" y2="198"/><line x1="800" y1="262" x2="800" y2="310"/><line x1="780" y1="358" x2="798" y2="358"/>
+    <path d="M885,404 C885,432 370,432 370,406"/>
+  </g>
+  <path class="ln ln-dash" d="M630,358 C600,358 590,330 590,290 C590,250 560,175 540,142" marker-end="url(#ar3)"/>
+  <text x="575" y="250" class="t-weak t-small" text-anchor="end">"please change this":</text>
+  <text x="575" y="265" class="t-weak t-small" text-anchor="end">back to step 3</text>
+</svg>
+<figcaption>You own steps 1 to 5. The owner owns 7 to 9. GitHub enforces 6 and 8.</figcaption>
+</figure>
+
+<ol class="steps">
+  <li><strong>Pick an issue.</strong> Labels show the area (<code>area/replication</code>, <code>area/docs</code>, …) and the state (<code>build</code>, <code>needs live run</code>, <code>blocked</code>, <code>in progress</code>). Assign it to yourself. For anything large, write a few lines in the issue about how you plan to do it before you start, so the owner can steer early. If there is no issue for what you want to do, open one; its title starts with the next free <code>BL-NN</code> number (the list is in <code>docs/TRACKER.md</code>).</li>
+  <li><strong>Branch from an up-to-date <code>main</code>:</strong> <code>git switch main && git pull && git switch -c feat/bl-NN-short-name</code>. One issue per branch.</li>
+  <li><strong>Make the change.</strong> Code and tests together. Update any document that describes the behaviour you changed, including this page: if a section here is now wrong, fix it in the same pull request. Commit as often as you like; the merge squashes it to one commit.</li>
+  <li><strong>Run <code>scripts/check.py</code></strong> until it ends with PASS (section 9).</li>
+  <li><strong>Push and open the pull request</strong> on github.hpe.com (section 10).</li>
+  <li><strong>github.hpe.com checks the rules</strong>: the change must come through a pull request, and the owner must approve it. A push after approval needs approval again.</li>
+  <li><strong>Review.</strong> The owner reads it and comments. Answer each comment, push, and ask for another look.</li>
+  <li><strong>Squash and merge.</strong> The owner merges. Your commits become one commit on <code>main</code> with the pull request's title as its message, your branch is deleted, and <code>Closes #N</code> in the description closes the issue.</li>
+  <li><strong>After the merge</strong> the owner runs one script that rebuilds the screens and refreshes everything downstream (section 13).</li>
+</ol>
+<p>If your change reaches an array, a switch, vCenter or GreenLake, it also needs a run on the lab (section 12). Until then the issue keeps the <code>needs live run</code> label.</p>
+
+<h2 id="check">9. The check command</h2>
+<p>There is no automatic build server for this repository (GitHub Actions is turned off for it, and HPE's policy locks that setting). So one command on your laptop is the gate, and the owner trusts its output. From the app folder:</p>
+<pre><code>.venv/bin/python scripts/check.py          # the whole thing
+.venv/bin/python scripts/check.py --quick  # skips the tests, for a fast re-run after a small fix</code></pre>
+<table>
+<tr><th>Line</th><th>What it checks</th><th>If it fails</th></tr>
+<tr><td><code>tests</code></td><td>Every test in <code>tests/</code>.</td><td>Fix the code. If the behaviour changed on purpose, change the test and say so in the pull request.</td></tr>
+<tr><td><code>lint</code></td><td><code>ruff check .</code>, with ruff pinned to one version so everyone sees the same findings.</td><td><code>ruff check --fix .</code> fixes most of them.</td></tr>
+<tr><td><code>types</code></td><td>The TypeScript compiler on the frontend.</td><td>Fix the type error.</td></tr>
+<tr><td><code>dist</code></td><td>Nothing under <code>frontend/dist</code> changed on your branch.</td><td>It prints the command that drops those changes. The built screens are rebuilt after merge; you never commit them.</td></tr>
+<tr><td><code>secrets</code></td><td>No token, private key or lab password in the lines you added. It reads your lab passwords from your own <code>.env</code>, so they are never written into the repository.</td><td>Remove it. If it was ever pushed, tell the owner.</td></tr>
+<tr><td><code>ignored</code></td><td>A warning: files under <code>src/</code>, <code>tests/</code> or <code>frontend/src/</code> that git is ignoring.</td><td>See section 26, "git ignores my new file".</td></tr>
+</table>
+<p>It ends with a block of text. Paste that block into the pull request.</p>
+<p>The commit hook you turned on in setup is a smaller version of two of these checks. It refuses a commit that changes <code>frontend/dist</code> or that contains something that looks like a GitHub token or a private key. Do not bypass it with <code>--no-verify</code>.</p>
+
+<h2 id="pr">10. The pull request</h2>
+<p>Open it on github.hpe.com against <code>main</code>. The template asks for:</p>
+<dl class="kv">
+  <dt>Title</dt><dd><code>BL-NN: what changes, in plain words</code>. It becomes the commit message on <code>main</code>, so write it for someone reading the history a year from now.</dd>
+  <dt>What and why</dt><dd>Two or three sentences, and <code>Closes #N</code>.</dd>
+  <dt>Check output</dt><dd>The block from <code>check.py</code>, pasted.</dd>
+  <dt>Live run</dt><dd>Tick one. It ran on the lab (which script, which jump box, when, the result). It has not run yet, so it is "built, pending live run". Or it does not need one because nothing reaches hardware.</dd>
+  <dt>Checklist</dt><dd>No <code>frontend/dist</code>; screenshots at 1366 x 768 for a screen change; a new device command is on the allowlist with a test; docs updated; no secrets or customer data.</dd>
+</dl>
+<p>Keep pull requests small enough to read in one sitting. If you are unsure whether you are on the right track, open a draft pull request early and ask.</p>
+
+<h2 id="branches">11. Branches, machines and the lab</h2>
+<p>The code lives in one place, but it has to reach three kinds of machine, and one of them cannot reach the code's home. This picture is the whole story.</p>
+
+<figure>
+<svg viewBox="0 0 1000 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Where the code lives and how it reaches laptops, the lab jump box and engineers">
+  <defs><marker id="ar4" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#676767"/></marker></defs>
+  <rect class="b-brand" x="20" y="20" width="620" height="160" rx="10"/>
+  <text x="330" y="48" text-anchor="middle" class="t-strong">github.hpe.com, inside HPE's network</text>
+  <text x="330" y="68" text-anchor="middle" class="t-weak t-small">the home of the code, the issues, the pull requests and the releases</text>
+  <g class="t-small">
+    <rect class="b" x="40" y="86" width="180" height="76" rx="6"/><text x="130" y="110" text-anchor="middle" class="t-strong">main</text><text x="130" y="130" text-anchor="middle" class="t-weak">the whole repository;</text><text x="130" y="146" text-anchor="middle" class="t-weak">changed by pull request only</text>
+    <rect class="b" x="240" y="86" width="180" height="76" rx="6"/><text x="330" y="110" text-anchor="middle" class="t-strong">feat/bl-NN-name</text><text x="330" y="130" text-anchor="middle" class="t-weak">your branch, one issue;</text><text x="330" y="146" text-anchor="middle" class="t-weak">deleted after merge</text>
+    <rect class="b" x="440" y="86" width="180" height="76" rx="6"/><text x="530" y="110" text-anchor="middle" class="t-strong">jumpbox-package</text><text x="530" y="130" text-anchor="middle" class="t-weak">just the app folder, built;</text><text x="530" y="146" text-anchor="middle" class="t-weak">refreshed after each merge</text>
+  </g>
+  <rect class="b" x="680" y="20" width="300" height="160" rx="10"/>
+  <text x="830" y="48" text-anchor="middle" class="t-strong">github.com, public</text>
+  <text x="830" y="68" text-anchor="middle" class="t-weak t-small">SaiHPE/Greenlake-Automation</text>
+  <g class="t-small">
+    <rect class="b-warn" x="700" y="86" width="260" height="76" rx="6"/><text x="830" y="110" text-anchor="middle" class="t-strong">jumpbox-test</text><text x="830" y="130" text-anchor="middle" class="t-weak">one branch, for lab runs only;</text><text x="830" y="146" text-anchor="middle" class="t-weak">no main, no releases, nothing secret</text>
+  </g>
+  <rect class="b-soft" x="20" y="300" width="300" height="120" rx="8"/>
+  <text x="170" y="330" text-anchor="middle" class="t-strong">Your laptop</text>
+  <text x="170" y="352" text-anchor="middle" class="t-weak t-small">a full clone, on the HPE VPN</text>
+  <text x="170" y="370" text-anchor="middle" class="t-weak t-small">code, tests, pull requests</text>
+  <text x="170" y="388" text-anchor="middle" class="t-weak t-small">and the push script for lab runs</text>
+  <rect class="b-soft" x="360" y="300" width="300" height="120" rx="8"/>
+  <text x="510" y="330" text-anchor="middle" class="t-strong">An engineer's machine</text>
+  <text x="510" y="352" text-anchor="middle" class="t-weak t-small">downloads the release zip,</text>
+  <text x="510" y="370" text-anchor="middle" class="t-weak t-small">or clones jumpbox-package,</text>
+  <text x="510" y="388" text-anchor="middle" class="t-weak t-small">and runs start.cmd</text>
+  <rect class="b-soft" x="700" y="300" width="280" height="120" rx="8"/>
+  <text x="840" y="330" text-anchor="middle" class="t-strong">labrat, the lab jump box</text>
+  <text x="840" y="352" text-anchor="middle" class="t-weak t-small">Windows, next to the lab arrays;</text>
+  <text x="840" y="370" text-anchor="middle" class="t-weak t-small">cannot reach github.hpe.com,</text>
+  <text x="840" y="388" text-anchor="middle" class="t-weak t-small">so it fetches from github.com</text>
+  <g class="ln" marker-end="url(#ar4)">
+    <line x1="130" y1="162" x2="150" y2="298"/>
+    <line x1="190" y1="298" x2="330" y2="164"/>
+    <line x1="530" y1="162" x2="510" y2="298"/>
+    <path d="M300,300 C300,230 560,230 700,124"/>
+    <line x1="830" y1="162" x2="840" y2="298"/>
+  </g>
+  <text x="100" y="236" class="t-weak t-small" text-anchor="end">pull main</text>
+  <text x="300" y="236" class="t-weak t-small">push your branch</text>
+  <text x="560" y="236" class="t-weak t-small">release zip</text>
+  <text x="470" y="282" class="t-weak t-small">push_jumpbox_test.sh</text>
+  <text x="850" y="236" class="t-weak t-small">git fetch; git reset --hard</text>
+  <text x="500" y="445" text-anchor="middle" class="t-weak">The code's home is github.hpe.com. github.com is only a hand-off point for lab runs, because the lab cannot see inside HPE's network.</text>
+</svg>
+<figcaption>Four branches matter: <code>main</code>, your <code>feat/…</code> branch, <code>jumpbox-package</code> (what engineers run) and <code>jumpbox-test</code> (what the lab runs, on github.com only).</figcaption>
+</figure>
+
+<table>
+<tr><th>Branch</th><th>Where</th><th>What is on it</th><th>Who pushes it</th></tr>
+<tr><td><code>main</code></td><td>github.hpe.com</td><td>The whole repository. Protected: pull requests only, with the owner's approval; no force push, no deletion.</td><td>The owner, by merging.</td></tr>
+<tr><td><code>feat/bl-NN-short-name</code></td><td>github.hpe.com</td><td>One issue's work, branched from <code>main</code>. Deleted after merge.</td><td>You.</td></tr>
+<tr><td><code>jumpbox-package</code></td><td>github.hpe.com</td><td>Only the app folder, with the built screens, as a flat folder. Engineers and the release zip come from here.</td><td>The owner's <code>after_merge.sh</code>.</td></tr>
+<tr><td><code>jumpbox-test</code></td><td>github.com only</td><td>Any committed branch, for one lab run. Scratch; overwritten every time.</td><td>Whoever has the lab booked, with <code>scripts/push_jumpbox_test.sh</code>.</td></tr>
+</table>
+
+<div class="box warn">
+<strong>github.com is public</strong>
+Anything you send with the push script can be read by anyone. The hook and <code>check.py</code> stop tokens and lab passwords. Customer names and addresses are on you; they do not belong in the code in the first place.
+</div>
+
+<h2 id="lab">12. Running on the lab</h2>
+<p>Do this when your change reaches an array, a switch, vCenter, a host or GreenLake. Book the lab with the team first. Only one person can run at a time: two runs would fight over the same arrays and the same port on the jump box.</p>
+
+<ol class="steps">
+  <li><strong>Once per jump box.</strong> In PowerShell on labrat, put the lab passwords in the app's <code>.env</code>. The lab scripts read them from there, so they never prompt and the passwords are never in git.
+  <pre style="margin:8px 0 0"><code>cd $env:USERPROFILE\Downloads\alletra_onboard
+Add-Content .env "`nLAB_ARRAY_PW=&lt;the lab arrays' 3paradm password&gt;"
+Add-Content .env "LAB_DEFAULT_PW=&lt;the lab vCenter and switch password&gt;"</code></pre></li>
+  <li><strong>Once per laptop.</strong> <code>gh auth login --hostname github.com &amp;&amp; gh auth setup-git --hostname github.com</code>.</li>
+  <li><strong>Each run, on your laptop.</strong> Commit your work, then from the repository root (Git Bash on Windows):
+  <pre style="margin:8px 0 0"><code>Provisioning_Automation/alletra_onboard/scripts/push_jumpbox_test.sh</code></pre>
+  It builds the screens from your <code>frontend/src</code>, packs the app folder with them, and pushes that to <code>jumpbox-test</code> on github.com. It never changes your own branch.</li>
+  <li><strong>Each run, on labrat.</strong> One paste. Pick the script from <code>lab/README.md</code>:
+  <pre style="margin:8px 0 0"><code>cd $env:USERPROFILE\Downloads\alletra_onboard; git fetch origin jumpbox-test; git reset --hard origin/jumpbox-test; .\.venv\Scripts\python.exe lab\ui_live_lab.py</code></pre>
+  The script writes <code>~\Downloads\&lt;name&gt;.zip</code> with PASS and FAIL lines and the evidence. Attach that to the pull request.</li>
+  <li><strong>When you are done,</strong> put the jump box back on released code: run the push script from an up-to-date <code>main</code>, then the same paste without the last command.</li>
+</ol>
+<p>Read a lab script's header before you run it; it says what it changes on the arrays. Scripts that create things give them names starting with <code>zz_</code> and remove them at the end. If you write a new one, follow <code>lab/README.md</code>.</p>
+
+<h2 id="owner">13. After a merge, and releases</h2>
+<p>You do not need to do any of this, but you will see it happen.</p>
+<p>After merging, the owner runs <code>scripts/after_merge.sh</code>. It pulls <code>main</code>, rebuilds the screens from <code>frontend/src</code> and commits them if they changed, refreshes <code>jumpbox-package</code>, and refreshes the rolling "latest" download zip on github.hpe.com. That is how your change reaches the engineers.</p>
+<p>Numbered releases (<code>v0.17.0</code> and so on) are also made by hand. The owner tags <code>main</code>, and on a Windows laptop on the VPN runs <code>scripts/publish_release.ps1 -Tag vX.Y.Z -BuildExe</code>. It builds three Windows <code>.exe</code> bundles (one that uses the installed browser, one with a browser inside, one with only the onboarding steps), runs a self-test and a smoke test on each, and attaches them to the release. The script refuses if the tag is not on github.hpe.com or the checkout is not the tagged code.</p>
+</section>
+
+<!-- ============================================================ HOW THE CODE WORKS -->
+<section class="part">
+<div class="label">How the code works</div>
+<h2 id="layers">14. The four layers</h2>
+<p class="where">Where this fits: the backend box in section 2, opened up.</p>
+<p>The Python code under <code>src/alletra_onboard/</code> is in four folders, and each folder may only use the folders to its right in this picture. This is the first thing to learn, because it tells you where any piece of code belongs.</p>
+
+<figure>
+<svg viewBox="0 0 1000 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="The four layers and which may depend on which">
+  <defs><marker id="ar5" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#676767"/></marker></defs>
+  <g class="t-small">
+    <rect class="b" x="20" y="40" width="210" height="150" rx="8"/>
+    <text x="125" y="68" text-anchor="middle" class="t-strong" style="font-size:15px">api/</text>
+    <text x="125" y="92" text-anchor="middle" class="t-weak">the web routes (app.py),</text><text x="125" y="108" text-anchor="middle" class="t-weak">the request and response shapes</text>
+    <text x="125" y="140" text-anchor="middle">Thin. Checks the input, calls</text><text x="125" y="156" text-anchor="middle">the service, turns errors into</text><text x="125" y="172" text-anchor="middle">HTTP codes.</text>
+    <rect class="b" x="270" y="40" width="210" height="150" rx="8"/>
+    <text x="375" y="68" text-anchor="middle" class="t-strong" style="font-size:15px">application/</text>
+    <text x="375" y="92" text-anchor="middle" class="t-weak">the steps, the plans,</text><text x="375" y="108" text-anchor="middle" class="t-weak">the run coordinator</text>
+    <text x="375" y="140" text-anchor="middle">Knows what the tool does and</text><text x="375" y="156" text-anchor="middle">in what order. Talks to devices</text><text x="375" y="172" text-anchor="middle">only through adapters it is given.</text>
+    <rect class="b-brand" x="520" y="40" width="210" height="150" rx="8"/>
+    <text x="625" y="68" text-anchor="middle" class="t-strong" style="font-size:15px">domain/</text>
+    <text x="625" y="92" text-anchor="middle" class="t-weak">the data shapes, the list of steps,</text><text x="625" y="108" text-anchor="middle" class="t-weak">a few policies, the interfaces</text>
+    <text x="625" y="140" text-anchor="middle">Pure Python. No network, no files,</text><text x="625" y="156" text-anchor="middle">no database. Everything depends</text><text x="625" y="172" text-anchor="middle">on it; it depends on nothing.</text>
+    <rect class="b" x="770" y="40" width="210" height="150" rx="8"/>
+    <text x="875" y="68" text-anchor="middle" class="t-strong" style="font-size:15px">adapters/</text>
+    <text x="875" y="92" text-anchor="middle" class="t-weak">one folder per outside system</text><text x="875" y="108" text-anchor="middle" class="t-weak">(greenlake, array, vcenter, …)</text>
+    <text x="875" y="140" text-anchor="middle">The only code that opens a</text><text x="875" y="156" text-anchor="middle">connection. Each implements an</text><text x="875" y="172" text-anchor="middle">interface the domain declares.</text>
+  </g>
+  <g class="ln" marker-end="url(#ar5)"><line x1="230" y1="115" x2="268" y2="115"/><line x1="480" y1="115" x2="518" y2="115"/><line x1="770" y1="115" x2="732" y2="115"/></g>
+  <path class="ln ln-dash" d="M375,190 C375,250 875,250 875,192" marker-end="url(#ar5)"/>
+  <text x="625" y="262" text-anchor="middle" class="t-weak t-small">application uses adapters, but only through "factory" arguments, so a test can hand it a fake (section 24)</text>
+</svg>
+<figcaption>Arrows mean "may depend on". If you find yourself importing a network library inside <code>domain/</code>, you are in the wrong folder.</figcaption>
+</figure>
+
+<table>
+<tr><th style="width:18%">Folder</th><th>What is in it</th></tr>
+<tr><td><code>domain/</code></td><td>The data shapes as Pydantic models: a run, an event, the parsed spreadsheet, a discovery report, a provisioning plan, a replication view. The step registry in <code>workflow.py</code>, the one list of steps and modes. Small policies: rate limits for GreenLake and a function that blanks out passwords. And <code>ports.py</code>, the interfaces: what a "store" must be able to do, what a "wizard" must be able to do.</td></tr>
+<tr><td><code>application/</code></td><td>One subfolder per area of the product: <code>onboarding/</code> (GreenLake and the two wizards), <code>provisioning/</code> (discovery, zoning, storage), <code>replication/</code>, <code>documents/</code> (verify and the as-built), <code>platform/</code> (the spreadsheet, proxy and certificate handling), and <code>runs/</code> (the coordinator every step uses). <code>service.py</code> builds them all and hands them to the API.</td></tr>
+<tr><td><code>adapters/</code></td><td><code>greenlake/</code> (REST), <code>array/</code> (an SSH client that only reads, and a WSAPI client that writes), <code>vcenter/</code>, <code>fabric/</code> (the Brocade switch reader), <code>hosts/</code> (Linux over SSH, Windows over WinRM), <code>browser/</code> (the two Playwright wizards), <code>persistence/</code> (SQLite), <code>system/</code> (the clock and HPE's Discovery Tool), and <code>command_log.py</code>, which records every command sent to any device.</td></tr>
+<tr><td><code>api/</code>, <code>cli/</code></td><td>About fifty routes in <code>app.py</code>; the shapes in <code>schemas.py</code>; the command line in <code>cli/main.py</code> (<code>onboard ui</code>, <code>onboard api</code>, <code>onboard check</code>).</td></tr>
+</table>
+<p>For scale: the backend is about 20,000 lines. The biggest files are the ones with the most domain knowledge in them: the as-built writer (1,165 lines), the spreadsheet parser (939), discovery (815), the routes (778), storage provisioning (764), the zoning planner (709) and the WSAPI client (681). Everything else is under 500.</p>
+
+<h2 id="run">15. A run</h2>
+<p class="where">Where this fits: the spreadsheet and the arrow into the tool, in section 1.</p>
+<p>A run starts with the spreadsheet and ends with the hand-over document. Here is how it comes into being.</p>
+<ol class="steps">
+  <li><strong>The engineer uploads the spreadsheet.</strong> <code>platform/init_sheet.py</code> reads it. The workbook copies HPE's official initialisation worksheet so engineers recognise it, and has six tabs: Initialisation, Provisioning, Volumes, Host sets, Hosts and Replication. Parsing gives two objects. <code>ArrayWorkItem</code> holds the array's identity, its network settings and the GreenLake and DSCC details. <code>ProvisioningIntent</code> holds the array and target credentials (vCenter, the two switches), the hosts, volumes and host sets to create, and the replication rows (peer array, which volume sets, which mode). If the workbook names two different arrays in two places, it is refused.</li>
+  <li><strong>The parsed sheet waits on the server.</strong> It is stored under a one-time token, and the browser gets only the token and a summary with the passwords blanked. Device passwords never go back to the browser.</li>
+  <li><strong>The engineer picks a mode,</strong> and <code>POST /runs/from-sheet</code> turns the token into a run. The token is used up. From here on, every step reads what it needs from the run.</li>
+</ol>
+
+<h3>Modes and the step registry</h3>
+<p>The mode decides which steps the run has. The list of steps exists in exactly one place, <code>domain/workflow.py</code>. The screens read it from <code>GET /app/profile</code>, so the frontend never has its own copy. Adding a step means adding it there, then giving it a service method, a route and a screen.</p>
+<table>
+<tr><th>Key</th><th>On screen</th><th>Full onboarding</th><th>Provision only</th><th>Both</th><th>Provision, then replicate</th><th>Verify only</th></tr>
+<tr><td><code>greenlake</code></td><td>GreenLake registration</td><td>✓</td><td></td><td>✓</td><td></td><td></td></tr>
+<tr><td><code>cloudinit</code></td><td>Cloud Connectivity</td><td>✓</td><td></td><td>✓</td><td></td><td></td></tr>
+<tr><td><code>dscc</code></td><td>DSCC Setup</td><td>✓</td><td></td><td>✓</td><td></td><td></td></tr>
+<tr><td><code>discover</code></td><td>Discovery</td><td></td><td>✓</td><td>✓</td><td>✓</td><td></td></tr>
+<tr><td><code>zoning</code></td><td>SAN Zoning</td><td></td><td>✓</td><td>✓</td><td>✓</td><td></td></tr>
+<tr><td><code>provision</code></td><td>Provision storage</td><td></td><td>✓</td><td>✓</td><td>✓</td><td></td></tr>
+<tr><td><code>replicate</code></td><td>Replication</td><td></td><td></td><td></td><td>✓</td><td></td></tr>
+<tr><td><code>failover_test</code></td><td>Failover test</td><td></td><td></td><td></td><td>✓</td><td></td></tr>
+<tr><td><code>verify</code></td><td>Verify configuration</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>asbuilt</code></td><td>As-built document</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+</table>
+<p>A sixth mode, Custom, is whatever the engineer ticks. Creating a run refuses combinations that cannot work, with a sentence saying why: replication steps without a Replication tab, or a provisioning step with an empty Volumes tab.</p>
+
+<h3>What a run remembers</h3>
+<dl class="kv">
+  <dt><code>run_id</code></dt><dd>A random id. The browser remembers which one it is looking at.</dd>
+  <dt><code>serial_number</code></dt><dd>Which array.</dd>
+  <dt><code>mode</code>, <code>selected_steps</code></dt><dd>Which steps.</dd>
+  <dt><code>status</code></dt><dd>Is something happening right now, and is the engineer needed? Values such as <code>ready</code>, <code>running</code>, <code>waiting_for_operator</code>, <code>retryable_failure</code>, <code>succeeded</code>.</dd>
+  <dt><code>current_phase</code></dt><dd>Where in the workflow the run is.</dd>
+  <dt>its events</dt><dd>Everything that happened, in order (section 17).</dd>
+</dl>
+
+<h3>What the status means</h3>
+<p>The status is one value for the whole run, not one per step. It answers "is anything happening, and is the engineer needed".</p>
+<table>
+<tr><th style="width:22%">Status</th><th>Meaning</th><th>What the engineer can do</th></tr>
+<tr><td><code>ready</code></td><td>Nothing is running. The last step finished and needs no decision.</td><td>Press the next button.</td></tr>
+<tr><td><code>running</code></td><td>A background task is working for this run.</td><td>Watch the progress lines. A second button press gets 409.</td></tr>
+<tr><td><code>waiting_for_operator</code></td><td>A step finished and put something on screen that needs a decision: a plan to approve, a zoning command set to hand over, a path report to read.</td><td>Read it, then approve, hand over, or re-run.</td></tr>
+<tr><td><code>retryable_failure</code></td><td>A step failed or crashed. The run is intact; the last event says what went wrong.</td><td>Fix the cause (sheet, network, GreenLake state) and run the step again, or start a new run if the sheet must change.</td></tr>
+<tr><td><code>succeeded</code></td><td>The engineer confirmed the end of the run.</td><td>Download the as-built.</td></tr>
+</table>
+<p>Keys and phases are different things, and events carry the phase. A step <em>key</em> (<code>greenlake</code>, <code>provision</code>) is what the engineer selects and what the screen renders. A <em>phase</em> (<code>GL_REGISTER_DEVICE</code>, <code>STORAGE_PROVISION</code>) is where the run is, and it is what <code>current_phase</code> and every event record. Most steps have one phase. GreenLake registration has six, one per sub-step, so its progress reads sensibly in the event list. The registry in <code>domain/workflow.py</code> says which phase a step lands on, and that is how a run that was closed mid-way reopens on the right screen.</p>
+
+<h2 id="button">16. What happens when you press a button</h2>
+<p class="where">Where this fits: inside any one step box in section 1.</p>
+<p>Every step works the same way, so this one sequence explains most of the application layer. Take "Create storage objects" on the Provision storage screen as the example.</p>
+
+<figure>
+<svg viewBox="0 0 1000 470" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sequence of a button press: browser, routes, step service, coordinator, device">
+  <defs><marker id="ar6" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2e2e2e"/></marker></defs>
+  <g class="t-strong" text-anchor="middle"><text x="90" y="26">Browser</text><text x="290" y="26">api/app.py</text><text x="490" y="26">step service</text><text x="690" y="26">RunCoordinator</text><text x="890" y="26">adapter and device</text></g>
+  <g class="ln-faint" stroke-dasharray="4 4"><line x1="90" y1="38" x2="90" y2="440"/><line x1="290" y1="38" x2="290" y2="440"/><line x1="490" y1="38" x2="490" y2="440"/><line x1="690" y1="38" x2="690" y2="440"/><line x1="890" y1="38" x2="890" y2="440"/></g>
+  <g class="ln-dark" marker-end="url(#ar6)">
+    <line x1="90" y1="70" x2="288" y2="70"/><line x1="290" y1="106" x2="488" y2="106"/><line x1="490" y1="214" x2="688" y2="214"/><line x1="288" y1="250" x2="92" y2="250"/>
+    <line x1="690" y1="294" x2="888" y2="294"/><line x1="888" y1="330" x2="692" y2="330"/><line x1="688" y1="416" x2="92" y2="416"/>
+  </g>
+  <g class="t-small">
+    <text x="190" y="62" text-anchor="middle">POST /runs/{id}/storage/apply</text>
+    <text x="390" y="98" text-anchor="middle">service.start_storage_apply(run_id)</text>
+    <rect class="b-info" x="340" y="122" width="300" height="74" rx="6"/>
+    <text x="490" y="144" text-anchor="middle" class="t-strong">preconditions</text>
+    <text x="490" y="163" text-anchor="middle">is there a plan the engineer approved?</text>
+    <text x="490" y="180" text-anchor="middle">does it have blockers? did discovery run?</text>
+    <text x="590" y="206" text-anchor="middle">spawn(the work)</text>
+    <text x="190" y="242" text-anchor="middle">200 and the run record, straight away</text>
+    <text x="790" y="286" text-anchor="middle">the work, in a thread</text>
+    <text x="790" y="322" text-anchor="middle">every command recorded</text>
+    <rect class="b-brand" x="550" y="346" width="280" height="54" rx="6"/>
+    <text x="690" y="368" text-anchor="middle" class="t-strong">emit("storage.applied", result)</text><text x="690" y="387" text-anchor="middle">set_state(run, READY)</text>
+    <text x="390" y="408" text-anchor="middle">the event arrives over the open stream (SSE)</text>
+    <text x="500" y="458" text-anchor="middle" class="t-weak">The request returns in milliseconds. The screen updates when the event arrives, however long the array takes.</text>
+  </g>
+</svg>
+<figcaption>Four hand-offs: a route, a step service, the coordinator, an adapter. The result travels back as an event, never as the response to the original request.</figcaption>
+</figure>
+
+<ol class="steps">
+  <li><strong>The route calls one method on the service.</strong> <code>application/service.py</code> is a thin front door. It holds the <code>RunCoordinator</code> and five step services (<code>OnboardingSteps</code>, <code>DiscoveryZoningSteps</code>, <code>ProvisioningSteps</code>, <code>ReplicationSteps</code>, <code>DocumentSteps</code>) and passes each call to the right one.</li>
+  <li><strong>The step service checks its preconditions.</strong> If they fail it raises <code>StepPreconditionError</code> with a sentence an engineer can read, and the route returns HTTP 409 with that sentence. Examples: zoning before discovery; apply without a previewed plan; a plan with conflicts.</li>
+  <li><strong>The coordinator starts the work in the background</strong> (<code>spawn</code>). There is one background task per run at a time. A second button press while one is running gets <code>RunBusyError</code>, also a 409. That is why the screen never has two things running at once.</li>
+  <li><strong>The device work runs in a thread.</strong> The libraries that talk to the array, vCenter and the switches are blocking, so they are moved off the web server's event loop with <code>asyncio.to_thread</code>. The screen stays responsive.</li>
+  <li><strong>Results and progress are events.</strong> The step calls <code>coordinator.emit(run_id, phase, event_type, message, data)</code>. Long steps emit <code>phase.progress</code> lines as they go. The run's <code>status</code> is set separately with <code>set_state</code>: <code>RUNNING</code> at the start; <code>READY</code>, <code>WAITING_FOR_OPERATOR</code> or <code>RETRYABLE_FAILURE</code> at the end.</li>
+  <li><strong>A crash cannot leave a run stuck.</strong> The task runs inside a guard. An unexpected exception becomes a <code>step.crashed</code> event and a retryable failure, so the screen never shows "running" for ever.</li>
+  <li><strong>Every device command is recorded.</strong> When the task starts, the coordinator attaches a recorder to it. Each adapter calls <code>command_log.record(...)</code> after every command, with the secrets it knows about blanked. That log is the Console tab the engineer sees under each step.</li>
+</ol>
+
+<pre><code># application/provisioning/steps.py, shortened. Every step has this shape.
+def start_storage_apply(self, run_id):
+    run = coord.get_run(run_id)
+    plan = self._previewed_plan(run_id)                              # 2. preconditions
+    if plan is None:
+        raise StepPreconditionError("no provisioning plan to apply — run the preview first")
+    if plan.blockers:
+        raise StepPreconditionError("the plan has conflicts that must be resolved on the array first: ...")
+    coord.spawn(run_id, self._run_storage_apply(run, intent, discovery))   # 3. background
+    return run
+
+async def _run_storage_apply(self, run, intent, discovery):
+    coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
+    coord.emit(run.run_id, phase, "storage.apply.started", "Creating host, volumes and exports…")
+    result = await asyncio.to_thread(storage_provision.apply_plan, intent, discovery, ...)   # 4. thread
+    coord.set_state(run, RunStatus.RETRYABLE_FAILURE if result.error else RunStatus.READY, phase)
+    coord.emit(run.run_id, phase, "storage.apply.failed" if result.error else "storage.applied",
+               result.error or summary, data={"result": result.model_dump(mode="json")})   # 5. event
+</code></pre>
+
+<h2 id="events">17. How the screen knows what happened</h2>
+<p class="where">Where this fits: the "live events" arrow from the backend to the browser in section 2.</p>
+<p>Events are the record, not a side channel. Each one has the run id, the phase, a type such as <code>storage.applied</code>, a message written for the engineer, a data payload (the report, the plan, the result) and a time. When a step emits one, two things happen: it is appended to the <code>run_events</code> table in the local database, and it is pushed to every open browser tab over Server-Sent Events, a long-lived HTTP response on <code>GET /runs/{id}/stream</code> that the browser listens to.</p>
+<p>The screen is drawn from the events alone. The newest <code>storage.previewed</code> event is the plan on screen; a <code>storage.applied</code> newer than that preview is the result; a <code>step.crashed</code> or <code>*.failed</code> marks the step as failed. When you refresh the page, or restart the backend, the browser replays <code>GET /runs/{id}/events</code> and the screen is exactly as it was.</p>
+<p>One event, as the browser receives it on the stream. Each frame is one line starting with <code>data:</code> and a blank line; the backend sends <code>: heartbeat</code> on its own every few seconds so proxies keep the connection open.</p>
+<pre><code>data: {"event_id": "6f1c…", "run_id": "a9d2…", "phase": "STORAGE_PROVISION",
+       "event_type": "storage.applied",
+       "message": "Provisioning complete — 5 created, 0 updated, 2 already existed.",
+       "data": {"result": {"outcomes": [{"kind": "host", "name": "esx01", "status": "created"}, …],
+                           "removal": ["removevlun -f vol01 1 set:web", …], "error": null}},
+       "created_at": "2026-10-16T09:14:02+00:00"}
+</code></pre>
+<p>The model is <code>RunEvent</code> in <code>domain/models.py</code>; the frontend type that mirrors it is in <code>frontend/src/api.ts</code>. The <code>data</code> payload is whatever the step's result model dumps to JSON, so the TypeScript side reads the same field names you see in the Python model.</p>
+<table>
+<tr><th style="width:22%">Step</th><th>Events it emits</th></tr>
+<tr><td>Run lifecycle</td><td><code>run.created</code>, <code>run.completed</code>, <code>step.started</code>, <code>step.completed</code>, <code>step.failed</code>, <code>step.crashed</code>, <code>phase.progress</code></td></tr>
+<tr><td>Discovery</td><td><code>discover.completed</code>, with the report in its data (an error inside the report means the array could not be reached)</td></tr>
+<tr><td>SAN zoning</td><td><code>zoning.proper</code> or <code>zoning.previewed</code> (the check), <code>zoning.plan</code> (the switches were read), <code>zoning.rendered</code> (the engineer generated the command set)</td></tr>
+<tr><td>Provision storage</td><td><code>storage.previewed</code> / <code>storage.preview.failed</code>, <code>storage.apply.started</code>, <code>storage.applied</code> / <code>storage.apply.failed</code>, <code>storage.paths.checking</code>, <code>storage.paths.verified</code> / <code>storage.paths.failed</code></td></tr>
+<tr><td>Replication</td><td><code>replication.previewed</code>, <code>replication.link_checked</code>, <code>replication.applied</code>, <code>replication.verified</code>, each with a <code>.failed</code> twin</td></tr>
+<tr><td>Failover test</td><td><code>failover.started</code>, <code>failover.completed</code> / <code>failover.failed</code></td></tr>
+<tr><td>Verify, as-built</td><td><code>verify.completed</code> / <code>verify.failed</code>, <code>asbuilt.started</code>, <code>asbuilt.generated</code> / <code>asbuilt.failed</code></td></tr>
+</table>
+<div class="box note">
+<strong>What this means for your changes</strong>
+If you change what a step produces, you change the data of its event, then the component in <code>frontend/src/steps/</code> that reads it. The message is text for the engineer: what happened, what it means, what to do next, in plain words. No decision record numbers, spec numbers or version numbers on screen.
+</div>
+
+<h2 id="writes">18. Changing an array: plan, approve, apply</h2>
+<p class="where">Where this fits: the Provision and Replicate boxes in section 1, the only two that change the array.</p>
+<p>Both of them, and any write we add later, follow the same four stages.</p>
+
+<figure>
+<svg viewBox="0 0 1000 190" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan, approve, apply, removal set">
+  <defs><marker id="ar7" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#676767"/></marker></defs>
+  <g class="t-small">
+    <rect class="b" x="20" y="30" width="215" height="110" rx="8"/><text x="127" y="58" text-anchor="middle" class="t-strong" style="font-size:15px">1. Plan</text><text x="127" y="82" text-anchor="middle">read the array; mark each object</text><text x="127" y="98" text-anchor="middle">create, exists, update or conflict</text><text x="127" y="122" text-anchor="middle" class="t-weak">nothing is written</text>
+    <rect class="b-warn" x="265" y="30" width="215" height="110" rx="8"/><text x="372" y="58" text-anchor="middle" class="t-strong" style="font-size:15px">2. Approve</text><text x="372" y="82" text-anchor="middle">the engineer reads the plan</text><text x="372" y="98" text-anchor="middle">and ticks the confirmation</text><text x="372" y="122" text-anchor="middle" class="t-weak">the button does nothing without it</text>
+    <rect class="b" x="510" y="30" width="215" height="110" rx="8"/><text x="617" y="58" text-anchor="middle" class="t-strong" style="font-size:15px">3. Apply</text><text x="617" y="82" text-anchor="middle">check the approval still holds,</text><text x="617" y="98" text-anchor="middle">then write through the REST API</text><text x="617" y="122" text-anchor="middle" class="t-weak">safe to run twice</text>
+    <rect class="b" x="755" y="30" width="225" height="110" rx="8"/><text x="867" y="58" text-anchor="middle" class="t-strong" style="font-size:15px">4. Removal set</text><text x="867" y="82" text-anchor="middle">the exact commands that would</text><text x="867" y="98" text-anchor="middle">undo what was just created</text><text x="867" y="122" text-anchor="middle" class="t-weak">shown and documented, never run</text>
+  </g>
+  <g class="ln" marker-end="url(#ar7)"><line x1="235" y1="85" x2="263" y2="85"/><line x1="480" y1="85" x2="508" y2="85"/><line x1="725" y1="85" x2="753" y2="85"/></g>
+  <text x="500" y="172" text-anchor="middle" class="t-weak t-small">Change discovery or edit the plan's inputs between 2 and 3, and the approval is thrown away. The engineer must look again.</text>
+</svg>
+</figure>
+
+<ol class="steps">
+  <li><strong>Plan.</strong> <code>build_plan()</code> reads the array and compares it with what the spreadsheet asks for. Every object is marked <em>create</em> (not there), <em>exists</em> (there, and the same), <em>update</em> (there, apply will add to it) or <em>conflict</em> (same name, different attributes, which apply cannot fix). Conflicts become blockers. The plan goes out as a <code>storage.previewed</code> event.</li>
+  <li><strong>Approve.</strong> The screen shows the plan as a table and a tick box with the sentence "I have reviewed this plan and authorise creating these objects on the array." The Create button only works once the box is ticked.</li>
+  <li><strong>Apply checks the approval again.</strong> The previewed plan is kept in memory only, paired with the exact discovery it was built from. It is dropped if discovery is re-run or the composition is edited, and it never survives a restart, because an approval is a decision about one specific situation and must not outlive it. A plan with blockers is refused. Replication adds one more condition: the link check must have run first. Then the writes go through the array's REST API. Every create looks before it creates, or accepts the array's "already exists" answer, so running apply twice reports "exists" instead of failing.</li>
+  <li><strong>Apply returns a removal set.</strong> The exact commands that would undo what it created, in the right order: exports, then sets, then volumes, then host sets, then hosts. The tool never runs them. They are shown to the engineer with a copy button and written into the as-built document.</li>
+</ol>
+<p>The REST client is <code>adapters/array/wsapi_client.py</code>, a wrapper around HPE's <code>python-3parclient</code> library (version 4.2.14 or newer; older versions call the wrong login path on this array). Logging in is also the readiness check: an array that is still starting up answers 503, and the tool stops there instead of guessing.</p>
+
+<h2 id="guards">19. Reading without changing</h2>
+<p class="where">Where this fits: every other arrow out of the backend in section 2.</p>
+<table>
+<tr><th style="width:24%">Path</th><th>The guard</th><th>Where</th></tr>
+<tr><td>The array over SSH</td><td>A list of allowed commands, all of them show commands: <code>showsys</code>, <code>shownet</code>, <code>showport</code>, <code>showhost</code>, <code>showvv</code>, <code>showvlun</code>, <code>showrcopy</code>, <code>checkhealth</code> and a few more. Plus a ban on shell characters (<code>; | &amp; ` $ &gt; &lt;</code>), so nothing can chain a second command on. Anything else is refused before it is sent.</td><td><code>adapters/array/cli_client.py</code></td></tr>
+<tr><td>The one command that is not a show</td><td><code>checkrclink</code>, used by the replication link check to measure latency, has its own short allowlist.</td><td>same file</td></tr>
+<tr><td>The switches</td><td>A read-only allowlist (<code>switchshow</code>, <code>nsshow</code>, <code>alishow</code>, <code>zoneshow</code>, <code>cfgshow</code>). No write verb exists in the code.</td><td><code>adapters/fabric/brocade_client.py</code></td></tr>
+<tr><td>vCenter, Linux hosts, Windows hosts</td><td>The clients only have read methods.</td><td><code>adapters/vcenter/</code>, <code>adapters/hosts/</code></td></tr>
+<tr><td>The Console prompt</td><td>The engineer can type a command under any step. It goes through the same read-only SSH client. A write verb gets a refusal sentence and nothing is sent. "Open terminal" starts the engineer's own SSH session instead.</td><td><code>application/runs/console.py</code></td></tr>
+</table>
+<div class="box warn">
+<strong>Decided, not built yet</strong>
+Decision record 0015 says the tool will one day set up Remote Copy links and targets, which exist only as CLI commands, through a second SSH client that is allowed to write. That is issue BL-41. The code does not exist yet; today every write goes through the REST API.
+</div>
+
+<h2 id="parts">20. The parts of the backend</h2>
+<p class="where">Where this fits: the seven boxes inside the tool in section 1, each mapped to a folder under <code>application/</code>.</p>
+
+<h3>Onboarding: getting the array into GreenLake</h3>
+<p><code>application/onboarding/steps.py</code> drives three very different things in order. The engineer stays in the loop: the second step waits for them to press Submit, the third stops where a password is needed.</p>
+<table>
+<tr><th style="width:22%">Step</th><th>What happens</th><th>Code</th></tr>
+<tr><td>GreenLake registration</td><td>REST calls to GreenLake: find the Data Services entry in the catalog, add the customer's subscription, register the array by serial number, assign it to the service in a region, apply the subscription, check the result. GreenLake answers writes with "202, come back later", and the client polls until the job succeeds or fails. Requests are rate limited per group of endpoints. A warning on the subscription is not fatal; registering and assigning is the success.</td><td><code>onboarding/greenlake_provision.py</code>, <code>adapters/greenlake/</code></td></tr>
+<tr><td>Cloud Connectivity</td><td>The array has a setup web page on a link-local address (<code>https://169.254.x.x/cloudinit</code>) that only exists while it is unconfigured. The tool opens its own browser there with Playwright, fills the wizard with the sheet's network values and submits. It refuses to submit if the management address on the page is not the one on the sheet. Page elements are found by their label or role, never by CSS class, so a restyle does not break it.</td><td><code>adapters/browser/cloudinit_wizard.py</code></td></tr>
+<tr><td>DSCC setup</td><td>DSCC needs the engineer's own HPE sign-in, so the tool never logs in. It attaches to a Chrome window the engineer has already signed into (through Chrome's debugging port, 9222), finds the DSCC tab, and fills the "Set Up System" wizard up to the page that asks for the array password. The engineer types that and submits.</td><td><code>adapters/browser/dscc_setup.py</code></td></tr>
+</table>
+<p>Before any of this, the Prerequisites screen runs the checks in <code>platform/prereqs.py</code>, <code>proxy.py</code>, <code>tls.py</code> and <code>adapters/system/clock.py</code>: can we reach GreenLake, which proxy applies, does the operating system trust HPE's certificates, and is the workstation clock right (a wrong clock breaks the DSCC sign-in; the tool can correct it when run as Administrator).</p>
+
+<h3>Discovery, zoning and provisioning</h3>
+<p>Two services share this folder: <code>DiscoveryZoningSteps</code> only reads; <code>ProvisioningSteps</code> does the one write. Provisioning never looks at the environment itself; it uses what discovery found.</p>
+<table>
+<tr><th style="width:22%">Step</th><th>What happens</th><th>Code</th></tr>
+<tr><td>Discovery</td><td>One SSH session to the array reads every Fibre Channel and iSCSI port and the array's own list of hosts (<code>showhost -d</code>). That list is the truth about which host owns which port address; it can never confuse another array for a server. One <code>showportdev fcfabric</code> per fabric says which switch each array port is plugged into. vCenter adds the ESXi hosts and their adapters. Servers on the sheet that vCenter does not know are read directly: Linux over SSH, Windows over WinRM. The result is a <code>DiscoveryReport</code>, saved with the run so a restart does not need to discover again.</td><td><code>provisioning/discovery.py</code>, <code>provisioning/hosts.py</code>, <code>adapters/vcenter/</code>, <code>adapters/hosts/</code></td></tr>
+<tr><td>Zoning check</td><td>Computed from the discovery report, with no device read: for each host, is it logged in on both fabrics? The hosts that are become the export gate. Provisioning will create every host object, but will only export volumes to hosts the array can actually see on both fabrics.</td><td><code>provisioning/zoning.py</code></td></tr>
+<tr><td>Zoning plan</td><td>Reads both switches and proposes one zone per host port and array port pair that the engineer ticks, with alias and zone names checked against what the switch already has. The output is a Brocade command set for the SAN team, with the activation command shown separately.</td><td><code>provisioning/zoning_plan.py</code>, <code>adapters/fabric/brocade_client.py</code></td></tr>
+<tr><td>Provision storage</td><td>Host, host set, volumes, volume set, export, through plan, approve, apply (section 18). The engineer can adjust host set members and exports in a small builder before planning; editing it withdraws any earlier approval.</td><td><code>provisioning/storage_provision.py</code></td></tr>
+<tr><td>Path check</td><td>Reads back from the array which exported volumes are live on which paths, and for ESXi hosts, what the host itself sees through vCenter. A report for the engineer; it never blocks anything. (A new volume needs a storage rescan before ESXi sees it, and the screen says so.)</td><td><code>provisioning/path_verify.py</code></td></tr>
+</table>
+
+<h3>Replication and the failover test</h3>
+<p>Remote Copy is the array's replication feature. It has three layers: the network ports and addresses, the partnership between two arrays (targets and links), and the groups of volumes being replicated. Today the tool reads all three and writes the third.</p>
+<table>
+<tr><th style="width:24%">Module</th><th>What it does</th></tr>
+<tr><td><code>replication/read.py</code></td><td>Reads one array's Remote Copy state over SSH into a <code>ReplicationArrayView</code>. Every parser is checked against real captures from the lab pair in <code>tests/fixtures/rc_pair/</code>.</td></tr>
+<tr><td><code>replication/plan.py</code></td><td>From both arrays' views and the sheet's Replication tab: the blocking findings (no partnership, links down, a pool missing on the peer, a volume already in a group) and the plan (groups to create, volumes to add, what already exists).</td></tr>
+<tr><td><code>replication/link_check.py</code></td><td>Runs <code>checkrclink</code> between the two arrays and reads the latency. Synchronous replication has a latency limit; above it the engineer decides whether to go on. Apply is refused until this has run.</td></tr>
+<tr><td><code>replication/apply.py</code></td><td>Creates the group, sets its mode, adds each volume (which creates the copy on the peer), starts it. All through the REST API. Returns a removal set for each array.</td></tr>
+<tr><td><code>replication/verify.py</code></td><td>Reads both arrays again: links up, each group started with the right role on each side, volumes in sync. It never retries a write; it names the HPE procedure to follow instead.</td></tr>
+<tr><td><code>replication/failover.py</code></td><td>The failover test: stop the group, fail over to the peer, recover, restore, through the REST API's disaster-recovery actions, watching the roles and sync state and timing each leg. The record goes into the as-built.</td></tr>
+</table>
+
+<h3>Verify and the as-built document</h3>
+<p><code>DocumentSteps</code> runs the two read-only steps at the end of every mode. Both run after the outcome of the run is decided and never change the run's status: a failed check cannot undo a successful onboarding.</p>
+<ul>
+  <li><strong>Verify configuration</strong> (<code>documents/verification.py</code>) logs in over SSH and compares what the array runs (system name, management address, netmask, gateway, DNS, NTP, time zone, and so on) with what the sheet asked for, field by field. Then it adds the array's own status check (<code>checkhealth</code>) and inventory.</li>
+  <li><strong>As-built document</strong> (<code>documents/asbuilt.py</code>, <code>asbuilt_parse.py</code>, <code>asbuilt_docx.py</code>) reads the array, parses the tables, and fills HPE's Word template with <code>python-docx</code>, keeping the template's boilerplate: configuration and inventory, what this run created and how to remove it, the zoning command set, the replication groups, the link check and the failover test. The file is saved with the run and served by <code>GET /runs/{id}/asbuilt/download</code>.</li>
+</ul>
+
+<h3>Platform</h3>
+<p><code>application/platform/</code> is what every other part needs: the spreadsheet parser and the composer that lab scripts use (<code>init_sheet.py</code>); a <code>.env</code> writer that updates one key in place and never wipes a saved secret with a blank field (<code>configuring.py</code>); proxy resolution that takes the engineer's override first, then the environment, then the Windows system proxy, and never sends traffic for on-premises addresses through a proxy (<code>proxy.py</code>); a bridge to the operating system's trusted certificates (<code>tls.py</code>); and the GreenLake prerequisites with the firewall rules per region (<code>prereqs.py</code>).</p>
+
+<h2 id="frontend">21. The frontend, in brief</h2>
+<p class="where">Where this fits: the browser box in section 2.</p>
+<p>The screens are React with Grommet and HPE's theme, in <code>frontend/src/</code>. <code>App.tsx</code> is the shell: it reads the step registry from <code>/app/profile</code>, puts the three Prepare screens (Prerequisites, Initialisation sheet, Mode) in front, and renders the rail on the left and the current step on the right. <code>steps/</code> has one file per step. <code>ui/</code> has the shared pieces: <code>StepShell</code> (the page frame with the footer buttons and the confirmation tick), <code>StatusLine</code>, <code>Section</code>, the Console pane, and <code>useStepState</code>, which works out a step's state from the run's events.</p>
+<p><code>useRunEvents.ts</code> opens the event stream with the browser's <code>EventSource</code> and keeps the run's event list up to date. Each step component reads the events it cares about from that list. There is no other state store, so what you see is always what the backend recorded.</p>
+<p>Two rules for screen work. Edit <code>frontend/src</code> only; <code>frontend/dist</code> is built from it after merge, and you never commit it. And follow <code>docs/UX-GUIDELINES.md</code>: one heading per page, plain language, a confirmation tick before anything that writes to an array, and screenshots at 1366 x 768 in the pull request.</p>
+
+<h2 id="data">22. Where data lives</h2>
+<div class="grid2">
+<div>
+<h3>The local database</h3>
+<p>SQLite, in <code>adapters/persistence/sqlite.py</code>. One file per Windows user, under <code>%LOCALAPPDATA%\AlletraOnboard\</code>, so a new version of the app keeps every earlier run.</p>
+<table>
+<tr><th>Table</th><th>Holds</th></tr>
+<tr><td><code>runs</code></td><td>the run records</td></tr>
+<tr><td><code>run_events</code></td><td>every event, in order</td></tr>
+<tr><td><code>work_items</code></td><td>the parsed Initialisation tab, per run</td></tr>
+<tr><td><code>provisioning_intents</code></td><td>the parsed storage and replication tabs, per run, credentials included</td></tr>
+<tr><td><code>pending_sheets</code></td><td>uploaded sheets waiting for a mode, by token</td></tr>
+<tr><td><code>run_artifacts</code></td><td>larger results by kind: the discovery report, the export gate, the as-built file, replication results</td></tr>
+<tr><td><code>run_commands</code></td><td>the Console: every device command and its output</td></tr>
+</table>
+<p>The application never imports SQLite directly. It uses the <code>RunStore</code> interface from <code>domain/ports.py</code>, and tests hand it a temporary database.</p>
+<h3>Looking inside a run</h3>
+<p>On your laptop the database is <code>.alletra_onboard/state.db</code> in the app folder, and screenshots and documents go to <code>.alletra_onboard/artifacts/</code>. On a packaged install (the zip or the .exe) both are under <code>%LOCALAPPDATA%\AlletraOnboard\</code>; <code>STATE_DATABASE_PATH</code> and <code>ARTIFACT_DIR</code> override them. Records are JSON in a <code>payload</code> column, so <code>sqlite3</code> and its <code>json_extract</code> are enough:</p>
+<pre><code># the runs, newest first
+sqlite3 .alletra_onboard/state.db "select run_id, serial_number, status, current_phase, updated_at
+  from runs order by updated_at desc limit 5;"
+
+# the last ten events of one run
+sqlite3 .alletra_onboard/state.db "select created_at, phase, event_type, json_extract(payload,'$.message')
+  from run_events where run_id='a9d2…' order by created_at desc limit 10;"
+
+# what a run sent to devices, and whether each command was a write
+sqlite3 .alletra_onboard/state.db "select json_extract(payload,'$.at'), json_extract(payload,'$.target'),
+  json_extract(payload,'$.command'), json_extract(payload,'$.write')
+  from run_commands where run_id='a9d2…' order by seq;"</code></pre>
+<p>A run stuck in <code>running</code> with no newer event is the thing to look for after a crash; it should not happen, and it is worth an issue with the last few events pasted in. Deleting the database file is the reset: the app recreates it empty on the next start.</p>
+</div>
+<div>
+<h3>Settings and secrets</h3>
+<ul>
+  <li><code>config.py</code> loads settings from the environment and the app folder's <code>.env</code>: the GreenLake client id and secret, the token URL, a proxy override. The coordinator re-reads them at every step, so credentials typed into the Prerequisites screen work without a restart.</li>
+  <li>One array credential per run (ADR 0013). <code>coordinator.array_credential()</code> takes it from the sheet: the Provisioning tab's array admin if there is one, else the DSCC system credential. Every step uses that one. The screen only learns whether a credential is present and where it came from.</li>
+  <li>One array address per run. The Initialisation tab's management address, or else the Provisioning tab's array host. The parser refuses a sheet where the two disagree. Before this rule, verify and the as-built once reached two different arrays in the same run.</li>
+  <li>Passwords are <code>SecretStr</code> values. <code>domain/policies.redact()</code> and the command log blank them out of anything stored or shown.</li>
+</ul>
+<p>The <code>.env</code> keys you will meet, each the upper-case name of a field in <code>config.py</code>:</p>
+<table>
+<tr><th>Key</th><th>What it is</th></tr>
+<tr><td><code>GL_CLIENT_ID</code>, <code>GL_CLIENT_SECRET</code></td><td>the GreenLake API client; also entered on the Prerequisites screen</td></tr>
+<tr><td><code>GL_TOKEN_URL</code>, <code>GL_BASE_URL</code></td><td>the GreenLake sign-in and API addresses; the defaults are right for production</td></tr>
+<tr><td><code>ALLETRA_PROXY</code></td><td>a proxy override for GreenLake traffic; on-premises addresses never go through it</td></tr>
+<tr><td><code>BROWSER_CDP_URL</code>, <code>BROWSER_HEADLESS</code></td><td>where the signed-in Chrome is (<code>http://localhost:9222</code>), and whether the setup wizard's browser is visible</td></tr>
+<tr><td><code>STATE_DATABASE_PATH</code>, <code>ARTIFACT_DIR</code></td><td>where runs and files live, if not the defaults above</td></tr>
+<tr><td><code>API_HOST</code>, <code>API_PORT</code></td><td><code>127.0.0.1</code> and <code>8765</code>; the app only ever listens on the local machine</td></tr>
+<tr><td><code>LAB_ARRAY_PW</code>, <code>LAB_DEFAULT_PW</code></td><td>lab passwords, read by the lab scripts and by <code>check.py</code>'s secret scan; never on a customer machine</td></tr>
+</table>
+</div>
+</div>
+
+<h2 id="api">23. The API</h2>
+<p>About fifty routes in <code>api/app.py</code>, with the request and response shapes in <code>api/schemas.py</code>. A route validates the input, calls the service, and maps errors: an unknown run is 404; "busy" and "precondition not met" are 409 with the sentence as the body.</p>
+<table>
+<tr><th style="width:22%">Group</th><th>Routes</th></tr>
+<tr><td>App and prerequisites</td><td><code>GET /health</code>, <code>GET /app/profile</code> (the step registry), <code>GET|POST /config</code>, <code>POST /config/check</code>, <code>GET /prereqs/firewall</code>, <code>GET /prereqs/connectivity</code>, <code>GET|POST /prereqs/proxy</code>, <code>GET /system/clock</code>, <code>POST /system/clock/sync</code></td></tr>
+<tr><td>Sheet and runs</td><td><code>GET /init-sheet/template</code>, <code>POST /init-sheet/compose</code>, <code>POST /init-sheet/upload</code> (returns the token), <code>POST /runs/from-sheet</code>, <code>GET /runs</code>, <code>GET /runs/{id}</code>, <code>POST /runs/{id}/complete</code></td></tr>
+<tr><td>Onboarding</td><td><code>POST /runs/{id}/provision</code> (GreenLake), <code>/cloudinit</code>, <code>/dscc</code>, <code>POST /browser/launch</code>, <code>POST /tools/discovery/launch</code></td></tr>
+<tr><td>Storage</td><td><code>POST /runs/{id}/discover</code>, <code>/zoning/preview</code>, <code>/zoning/plan</code>, <code>POST /zoning/render</code>, <code>GET /runs/{id}/storage/preflight</code>, <code>/storage/objects</code>, <code>POST /storage/builder</code>, <code>/storage/preview</code>, <code>/storage/apply</code>, <code>/storage/verify-paths</code></td></tr>
+<tr><td>Replication</td><td><code>POST /runs/{id}/replication/preview</code>, <code>/link-check</code>, <code>/apply</code>, <code>/verify</code>, <code>/failover-test</code></td></tr>
+<tr><td>Documents</td><td><code>POST /runs/{id}/verify</code>, <code>POST /runs/{id}/asbuilt</code>, <code>GET /runs/{id}/asbuilt/download</code></td></tr>
+<tr><td>Events and console</td><td><code>GET /runs/{id}/events</code>, <code>GET /runs/{id}/stream</code> (the live stream), <code>GET /runs/{id}/console/log</code>, <code>/console/targets</code>, <code>POST /runs/{id}/console</code>, <code>/console/terminal</code>, <code>GET /runs/{id}/console/stream</code></td></tr>
+</table>
+<p>In production the backend also serves the built screens from <code>frontend/dist</code> at <code>/</code>. In development the Vite server on port 5173 calls the API on 8765, which allows it through CORS.</p>
+
+<h2 id="tests">24. Tests</h2>
+<p>703 tests run in about ten seconds with no lab, no network and no array. Two things make that possible.</p>
+<p><strong>Factories.</strong> Every function that touches a device takes the client as an argument with a real default: <code>array_cli_factory=make_array_cli</code>, <code>wsapi_factory=make_wsapi</code>, <code>vcenter_factory=make_vcenter</code>; the step services take <code>provision_factory</code>, <code>cloudinit_factory</code>, <code>dscc_factory</code>, <code>verify_fn</code>. A test passes a fake. The small "dev servers" developers use to see screens with realistic data use the same trick: they swap in fakes that answer from saved captures, then start the normal app.</p>
+<p><strong>Real output as fixtures.</strong> The parsers are checked against real command output saved under <code>tests/fixtures/</code> (<code>rack13_fabric</code>, <code>rack13_wsapi</code>, <code>rc_pair</code>, and others), captured on the lab and scrubbed of passwords and customer data. Device output never matches the documentation exactly; the captures are how the tests know the truth. When you need a new parser, capture the output on the lab first, save it, and write the parser against the file.</p>
+<div class="box stop">
+<strong>The rule that follows</strong>
+A test never calls GreenLake, an array, vCenter or a switch. If something needs the network, it is a lab script in <code>lab/</code>, run from the jump box, with its result attached to the pull request.
+</div>
+<p>Running less than everything, from the app folder:</p>
+<pre><code>.venv/bin/python -m pytest -q                                   # all 703, about ten seconds
+.venv/bin/python -m pytest -q tests/unit/test_workflow.py        # one file
+.venv/bin/python -m pytest -q -k "zoning and not plan"           # by name
+.venv/bin/python -m pytest -q -x --lf                            # stop at the first failure; only what failed last time
+.venv/bin/python -m ruff check . --fix                           # lint, fixing what it can
+cd frontend && npm run typecheck                                # TypeScript only</code></pre>
+<p>The test files are named after what they cover: <code>test_workflow.py</code> for the registry, <code>test_storage_services.py</code> for the step services with fake factories, <code>test_api.py</code> for routes through FastAPI's test client, <code>test_init_sheet.py</code> for the spreadsheet round trip, and one <code>test_replication_*.py</code> per replication module. When you add a module, add its test file next to these.</p>
+
+<h2 id="howto">25. How to make common changes</h2>
+<p class="where">Where this fits: the recipes behind sections 14 to 24. Each is a checklist of files, in the order you will touch them.</p>
+
+<h3>Add a step</h3>
+<ol class="steps">
+  <li><code>domain/models.py</code>: add a <code>WorkflowPhase</code> value for it.</li>
+  <li><code>domain/workflow.py</code>: add a <code>StepDef(key, label, phase, kind)</code> to <code>STEP_REGISTRY</code> at the position it runs, and add the key to each preset in <code>_MODE_STEPS</code> that should include it. The label is what the engineer sees in the rail. Extend <code>tests/unit/test_workflow.py</code>.</li>
+  <li>The work itself: a plain function in its own module under <code>application/&lt;context&gt;/</code>, taking the models it needs and the device clients as factory arguments with real defaults, returning a Pydantic result model. No <code>coordinator</code>, no HTTP in here.</li>
+  <li>The step service: <code>start_x()</code> and <code>async _run_x()</code> in <code>application/&lt;context&gt;/steps.py</code>, in the shape shown in section 16. Preconditions raise <code>StepPreconditionError</code> with a sentence for the engineer. Event names: <code>x.completed</code> and <code>x.failed</code>, or the <code>step.*</code> ones.</li>
+  <li><code>application/service.py</code>: one delegating method.</li>
+  <li><code>api/app.py</code>: <code>POST /runs/{run_id}/x</code> next to its group, returning <code>RunResponse</code>; a body model in <code>api/schemas.py</code> if it takes input. The error mapping is already there.</li>
+  <li>The screen: <code>frontend/src/steps/XStep.tsx</code>, reading its events through <code>useStepState</code>; import it in <code>App.tsx</code> and add the <code>current.key === 'x'</code> line beside the others. The rail picks the step up from <code>/app/profile</code> on its own. Add the call to <code>frontend/src/api.ts</code>.</li>
+  <li>Tests: the service with fake factories (pattern in <code>tests/unit/test_storage_services.py</code>) and the route (pattern in <code>tests/unit/test_api.py</code>).</li>
+  <li>Docs: the step tables in sections 15 and 17 of this page, <code>docs/SCOPE.md</code>, and a spec in <code>docs/specs/</code> if the behaviour is new. If it reaches hardware, a lab script in <code>lab/</code> and the <code>needs live run</code> label until it has run.</li>
+</ol>
+
+<h3>Add a field to the spreadsheet</h3>
+<ol class="steps">
+  <li><code>application/platform/init_sheet.py</code>: add a <code>(key, label, required, example)</code> tuple to <code>SECTIONS</code> (Initialisation tab), <code>PROVISIONING_SECTIONS</code> or <code>REPLICATION_SECTIONS</code>. For the table tabs, add a column to the <code>*_COLUMNS</code> list. The label is the text the parser matches on, so never rename an existing one; engineers have filled sheets with it.</li>
+  <li>Add the attribute to the model it belongs to: <code>NetworkConfig</code>, <code>DsccSetupConfig</code> or <code>ArrayWorkItem</code> in <code>domain/models.py</code>; <code>ProvisioningIntent</code>, <code>VolumeRequest</code>, <code>DeclaredHost</code> or <code>HostSetRequest</code> in <code>domain/provisioning.py</code>; the replication models in <code>domain/replication.py</code>. Then map it in <code>parse_workbook_bytes()</code>.</li>
+  <li>If it is required only for some modes, teach <code>required_keys_for()</code>; otherwise the <code>required</code> flag in the tuple is enough. <code>build_template_bytes()</code> reads the same table, so the blank template and the upload parser cannot drift apart.</li>
+  <li><code>tests/unit/test_init_sheet.py</code>: a round trip (compose a sheet, parse it, assert the value) and a case for the field missing.</li>
+  <li>The app folder's <code>README.md</code> describes the sheet for engineers; add the field there.</li>
+</ol>
+
+<h3>Add a parser for a device command</h3>
+<ol class="steps">
+  <li>Capture the real output on the lab first: run the command from the Console tab or a lab script and save the text. Remove passwords, customer names and anything that is not the command's output.</li>
+  <li>Save it under <code>tests/fixtures/&lt;set&gt;/</code> (an existing set such as <code>rc_pair</code> or <code>rack13_array</code>, or a new folder with a short <code>README.md</code> saying which system and date). That folder already has an exception in the root <code>.gitignore</code>.</li>
+  <li>Write the test first, pinned to the file: <code>_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "&lt;set&gt;"</code>, then assert the specific values you can read in the capture.</li>
+  <li>Write <code>parse_x(text) -> Model</code> as a pure function next to the models it fills, with no I/O. Column positions move between array versions; parse by header names where you can.</li>
+  <li>Only then wire the command in. If it goes over SSH it must be on the allowlist; see the next recipe.</li>
+</ol>
+
+<h3>Allow a new SSH command</h3>
+<ol class="steps">
+  <li>It must be a read. If it is not, stop: writes go through the REST API, or wait for the separate write client in decision record 0015.</li>
+  <li>Array: add the base command to <code>ALLOWED_COMMANDS</code> in <code>adapters/array/cli_client.py</code>. Options are allowed on the command line; shell characters never are. Switches: <code>ALLOWED_READ</code> in <code>adapters/fabric/brocade_client.py</code>.</li>
+  <li>A test that the command is allowed and that a write verb is still refused (there is one of each in <code>tests/unit/test_asbuilt_provisioned.py</code> to copy).</li>
+  <li>Say so in the pull request, on the checklist line about device commands. The owner has to agree to every allowlist change.</li>
+</ol>
+
+<h3>Add a route that only reads</h3>
+<ol class="steps">
+  <li><code>api/app.py</code>: a <code>GET</code> next to its group with a <code>response_model</code>. If it reads a device, run the read with <code>asyncio.to_thread</code> inside <code>with service.coordinator.recording(run_id):</code>, so the commands show in the Console like a step's do. <code>GET /runs/{id}/storage/objects</code> is the pattern.</li>
+  <li>The response model in <code>api/schemas.py</code>, or the domain model itself if it already fits.</li>
+  <li><code>tests/unit/test_api.py</code> with the test client and a fake service method.</li>
+  <li>The call in <code>frontend/src/api.ts</code>, and the table in section 23 of this page.</li>
+</ol>
+
+<h3>Add a setting</h3>
+<ol class="steps">
+  <li><code>config.py</code>: a field on <code>Settings</code> with a safe default. Its upper-case name is the environment variable and the <code>.env</code> key.</li>
+  <li>Read it through <code>coord.current_settings()</code> inside steps, not from a value captured at start-up, so a change made on the Prerequisites screen applies without a restart.</li>
+  <li>If engineers should set it on screen: the writer in <code>application/platform/configuring.py</code>, the <code>/config</code> route and its schema, and the Prerequisites screen.</li>
+  <li>Document it in the table above and in the app folder's <code>README.md</code>. Never give a secret a default.</li>
+</ol>
+
+<h3>Change a screen</h3>
+<ol class="steps">
+  <li>Edit under <code>frontend/src/</code> only. A step's file is in <code>steps/</code>; the shared frame, status line and console are in <code>ui/</code>. State comes from the run's events through <code>useStepState</code>; do not add a second store.</li>
+  <li>Run <code>onboard api</code> and <code>npm run dev</code> side by side for instant reload. Write the words to <code>docs/UX-GUIDELINES.md</code>: one heading per page, plain sentences, a confirmation tick before anything that writes.</li>
+  <li><code>npm run typecheck</code>, then <code>check.py</code>. Screenshots at 1366 x 768 in the pull request. Never commit <code>frontend/dist</code>; the hook and the check refuse it, and the owner rebuilds it after merge.</li>
+</ol>
+
+<h3>Change what a step produces</h3>
+<ol class="steps">
+  <li>Change the result model (the Pydantic class the work function returns). Old runs in the database carry the old shape; the step service already treats an artifact it cannot read as absent, so give new fields defaults rather than making them required.</li>
+  <li>Change the event's <code>data</code> if the screen needs the new field, and the message if the meaning changed. Then the component in <code>frontend/src/steps/</code> that reads it, and the TypeScript type in <code>api.ts</code>.</li>
+  <li>If the as-built shows it, <code>application/documents/asbuilt.py</code> reads the same events.</li>
+  <li>Update the fixture-pinned tests, and the step tables in section 17 of this page.</li>
+</ol>
+</section>
+
+<!-- ============================================================ WHEN YOU ARE STUCK -->
+<section class="part">
+<div class="label">When you are stuck</div>
+<h2 id="stuck">26. Problems and fixes</h2>
+<table>
+<tr><th style="width:34%">What you see</th><th>What is going on, and what to do</th></tr>
+<tr><td>Git ignores my new file. <code>git add</code> says nothing, or <code>check.py</code> lists it under <code>ignored</code>.</td><td>The root <code>.gitignore</code> ignores whole file types everywhere (<code>*.json</code>, <code>*.txt</code>, <code>*.csv</code>, <code>*.yaml</code>, <code>*.html</code>, <code>*.docx</code>, …) because lab dumps once leaked passwords. If your file is clean, add an exception for its folder in the same pull request, the way <code>tests/fixtures/</code> has one. The file explains this at the top.</td></tr>
+<tr><td><code>frontend/dist</code> shows as changed after I built the frontend, and the hook or <code>check.py</code> refuses.</td><td>Expected. You never commit it. Run <code>git checkout -- Provisioning_Automation/alletra_onboard/frontend/dist</code>. For lab runs the push script builds it for you; after merge the owner's script rebuilds it.</td></tr>
+<tr><td>Tests fail to import, with an error about <code>getproxies_registry</code>.</td><td>You are on an old checkout. That function exists only on Windows; <code>proxy.py</code> has had a fallback since October 2026. Pull <code>main</code>.</td></tr>
+<tr><td>One test about <code>wsapi_sdk</code> fails on my Mac.</td><td>The 3PAR client library is missing from your Python. It is a normal dependency; <code>pip install -e ".[dev]"</code> in a venv installs it. Check you are running the venv's Python.</td></tr>
+<tr><td>pip or npm fail with a certificate error.</td><td>HPE's network inspects TLS. See the box in section 5.</td></tr>
+<tr><td>I pushed to <code>main</code> and github.hpe.com refused.</td><td>By design. Open a pull request from a branch (section 8).</td></tr>
+<tr><td>I pushed after the owner approved and now it needs approval again.</td><td>Also by design: a new push after approval asks for review again, so nothing unseen lands on <code>main</code>. Ask for another look.</td></tr>
+<tr><td>The app runs, but every step says it cannot reach the array, vCenter or GreenLake.</td><td>Your laptop is not in the lab network. That is normal; use the tests, or run on the lab (section 12).</td></tr>
+<tr><td>The screen says a step is still running, but nothing is happening.</td><td>Refresh the page: the screen is drawn from events, and a reload replays them. If it still says running, look at the last event in <code>GET /runs/{id}/events</code>. A crash shows as <code>step.crashed</code>; a run stuck in <code>running</code> with no event after it is a bug worth an issue.</td></tr>
+<tr><td>A second button press returns 409 "already running".</td><td>One background task per run. Wait for the first to finish; the screen shows its progress.</td></tr>
+<tr><td>Apply returns 409 "no provisioning plan to apply".</td><td>The approval is in memory only. Re-running discovery, editing the builder or restarting the backend drops it. Build the plan again and approve it again.</td></tr>
+<tr><td>Something about the lab jump box and github.hpe.com.</td><td>labrat cannot reach github.hpe.com at all. Lab runs go through github.com; see sections 11 and 12.</td></tr>
+<tr><td>My <code>.ps1</code> script works on my machine and fails on the jump box with strange characters.</td><td>Windows PowerShell 5.1 reads scripts as ANSI. Shipped PowerShell files must be pure ASCII: no smart quotes, no special dashes.</td></tr>
+<tr><td>The GreenLake assignment fails with a validation error.</td><td>Assigning a device is two separate PATCH calls: application and region first, then the subscription. One call with both is rejected.</td></tr>
+<tr><td>I am not sure whether something is allowed.</td><td>Ask in the issue. If it touches an allowlist, a write path, a switch or customer data, assume the answer is no until the owner says otherwise.</td></tr>
+</table>
+
+<h2 id="traps">27. Facts that are easy to get wrong</h2>
+<ul>
+  <li>GreenLake device assignment is two PATCH calls: application and region first, subscription second.</li>
+  <li>In the GreenLake service catalog the id you need is <code>serviceManager.id</code> (nested), not <code>application_id</code>. You filter on <code>status</code>, but the field in the response is <code>provisionStatus</code>.</li>
+  <li>GreenLake writes return <code>202</code> and a <code>Location</code> header. Always poll until the job says <code>SUCCEEDED</code>, <code>FAILED</code> or <code>TIMEDOUT</code>.</li>
+  <li>DSCC region codes are not GreenLake region ids: <code>ap-northeast</code> is <code>jp1</code>, <code>us-west</code> is <code>us1</code>, <code>eu-central</code> is <code>eu1</code>, <code>eu-west</code> is <code>uk1</code>.</li>
+  <li>The array's setup page must be at <code>https://169.254.…</code>. A <code>fail-prov-*</code> error there is a GreenLake problem (the device or subscription is in the wrong state), not a network problem. Fix GreenLake; do not retry the wizard.</li>
+  <li>The array's own host list (<code>showhost -d</code>) is the truth about hosts. The switch's name server is filtered by zoning and can show another array's port as if it were a server.</li>
+  <li>A host set export appears in <code>showvlun</code> as a template row (<code>hostname: set:&lt;name&gt;</code>, <code>active: false</code>) plus one active row per member host and path. De-duplicate port addresses: the REST API repeats one once per array port it is logged in on.</li>
+  <li>Writing a zone into the switch's defined configuration does not activate it. Only the zoning check, which looks at real logins on both fabrics, opens the export gate.</li>
+  <li>A Remote Copy target carries one mode. The lab pair already has six synchronous groups, so a periodic group needs them paused, or a second target.</li>
+  <li><code>paramiko</code> is pinned below version 4. Version 4 dropped the old key exchange that the lab's FOS 7 switches still require.</li>
+  <li>Shipped <code>.ps1</code> files must be pure ASCII.</li>
+</ul>
+
+<h2 id="glossary">28. Glossary</h2>
+<dl class="kv">
+  <dt>Alletra Storage MP B10000</dt><dd>The HPE storage array this tool deploys. Block storage, Fibre Channel and iSCSI, managed through HPE GreenLake.</dd>
+  <dt>GreenLake, DSCC</dt><dd>HPE's cloud platform, and the Data Services Cloud Console inside it that manages storage arrays.</dd>
+  <dt>Jump box</dt><dd>A Windows machine in the customer's (or the lab's) network, next to the array. The tool runs there. The lab one is called labrat.</dd>
+  <dt>Initialisation sheet</dt><dd>The one spreadsheet the engineer fills in. Six tabs. One sheet, one array.</dd>
+  <dt>Run</dt><dd>One array, one set of steps, one event history.</dd>
+  <dt>Mode</dt><dd>Which steps a run has: a preset from the step registry, or Custom.</dd>
+  <dt>Step, step service</dt><dd>One screen and one job; and the class in <code>application/*/steps.py</code> that does it, with one <code>start_*</code> method per step.</dd>
+  <dt>Event</dt><dd>One record of what a step did, stored and streamed. The screen's only source of truth.</dd>
+  <dt>Artifact</dt><dd>A larger result saved with the run: the discovery report, the as-built file, replication results.</dd>
+  <dt>Plan</dt><dd>What apply will do, object by object: create, exists, update, conflict. Kept in memory until applied or dropped.</dd>
+  <dt>Removal set</dt><dd>The commands that would undo exactly what an apply created. Shown and documented, never run.</dd>
+  <dt>Export gate</dt><dd>The hosts the zoning check saw on both fabrics. Only they get volumes exported to them.</dd>
+  <dt>Allowlist</dt><dd>The commands an SSH client is willing to send. Anything else is refused before it leaves the process.</dd>
+  <dt>Console</dt><dd>Every command a run sent to a device, with its output, plus a read-only prompt.</dd>
+  <dt>Fixture</dt><dd>Real device output, scrubbed, saved under <code>tests/fixtures/</code>, that a parser is tested against.</dd>
+  <dt>WSAPI</dt><dd>The array's REST API. The only way the tool writes to an array.</dd>
+  <dt>WWPN, HBA</dt><dd>A Fibre Channel port's world-wide name, and the adapter card in a server that has such ports.</dd>
+  <dt>Fabric</dt><dd>One SAN switch network. Customers have two for redundancy; a host should be logged in on both.</dd>
+  <dt>Zone</dt><dd>A rule on a switch that lets one host port talk to one array port. The tool writes the commands; the SAN team applies them.</dd>
+  <dt>VV, VV set, host set, VLUN</dt><dd>A volume, a named group of volumes, a named group of hosts, and an export of a volume (or set) to a host (or set) with a LUN number.</dd>
+  <dt>CPG</dt><dd>A storage pool on the array that volumes are created in.</dd>
+  <dt>Remote Copy, RCIP, target, link, group</dt><dd>The array's replication feature; its IP ports; the partnership with another array; the connections of that partnership; a replicated set of volumes.</dd>
+  <dt>SSE</dt><dd>Server-Sent Events: one long HTTP response the browser listens to for live updates.</dd>
+  <dt>ADR, SPEC, BL-NN</dt><dd>A decision record in <code>docs/adr/</code>; a feature's requirements in <code>docs/specs/</code>; a work item's number, used in issue titles and branch names.</dd>
+</dl>
+
+<p style="margin-top:56px;color:var(--text-weak);font-size:0.9375rem">Written in October 2026 from the code as it was then. If the code and this page disagree, the code is right. Fix the page in the same pull request as the change that made it wrong, and move the date at the top.</p>
+</section>
+
+</main>
+</div>
+<script>
+// Turn file paths in <code> into links to the file on main. Paths under src/alletra_onboard
+// may be written relative to it (domain/workflow.py), the rest relative to the app folder or the repo root.
+(function () {
+  var repo = 'https://github.hpe.com/g-sai-roopesh/greenlake-automation/blob/main/';
+  var app = 'Provisioning_Automation/alletra_onboard/';
+  var root = ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md', '.github/', '.githooks/', 'reference/', 'archive/'];
+  var appTop = ['src/', 'frontend/', 'tests/', 'docs/', 'lab/', 'scripts/', 'config/', 'packaging/', 'tools/', 'README.md', 'CONTEXT.md', 'pyproject.toml'];
+  var pkg = ['domain/', 'application/', 'adapters/', 'api/', 'cli/', 'config.py'];
+  var ctx = ['onboarding/', 'provisioning/', 'replication/', 'documents/', 'platform/', 'runs/'];
+  var bare = {
+    'App.tsx': 'frontend/src/App.tsx', 'api.ts': 'frontend/src/api.ts', 'useRunEvents.ts': 'frontend/src/useRunEvents.ts',
+    'check.py': 'scripts/check.py', 'service.py': 'src/alletra_onboard/application/service.py',
+    'workflow.py': 'src/alletra_onboard/domain/workflow.py', 'ports.py': 'src/alletra_onboard/domain/ports.py',
+    'app.py': 'src/alletra_onboard/api/app.py', 'schemas.py': 'src/alletra_onboard/api/schemas.py',
+    'command_log.py': 'src/alletra_onboard/adapters/command_log.py',
+    'init_sheet.py': 'src/alletra_onboard/application/platform/init_sheet.py', 'configuring.py': 'src/alletra_onboard/application/platform/configuring.py',
+    'proxy.py': 'src/alletra_onboard/application/platform/proxy.py', 'tls.py': 'src/alletra_onboard/application/platform/tls.py',
+    'prereqs.py': 'src/alletra_onboard/application/platform/prereqs.py',
+    'asbuilt_parse.py': 'src/alletra_onboard/application/documents/asbuilt_parse.py', 'asbuilt_docx.py': 'src/alletra_onboard/application/documents/asbuilt_docx.py'
+  };
+  var pathLike = /^[A-Za-z0-9_.\/-]+\.(py|ts|tsx|md|toml|json|txt|html|ps1|cmd|sh|csv)$|^[A-Za-z0-9_.\/-]+\/$/;
+  var startsWith = function (s, list) { return list.some(function (p) { return s === p || s.indexOf(p) === 0; }); };
+  document.querySelectorAll('main code').forEach(function (el) {
+    if (el.closest('pre') || el.closest('a') || el.children.length) return;
+    var text = el.textContent.trim();
+    if (!pathLike.test(text) || text.indexOf(' ') !== -1) return;
+    var target = null;
+    if (bare[text]) target = app + bare[text];
+    else if (/^test_[a-z_]+\.py$/.test(text)) target = app + 'tests/unit/' + text;
+    else if (startsWith(text, root)) target = text;
+    else if (startsWith(text, appTop)) target = app + text;
+    else if (startsWith(text, pkg)) target = app + 'src/alletra_onboard/' + text;
+    else if (startsWith(text, ctx)) target = app + 'src/alletra_onboard/application/' + text;
+    else if (text.indexOf('steps/') === 0 || text.indexOf('ui/') === 0) target = app + 'frontend/src/' + text;
+    if (!target) return;
+    if (target.slice(-1) === '/') target = target.slice(0, -1);
+    var a = document.createElement('a');
+    a.href = repo + target; a.textContent = text; a.title = 'Open on github.hpe.com';
+    el.textContent = ''; el.appendChild(a);
+  });
+})();
+</script>
+</body>
+</html>

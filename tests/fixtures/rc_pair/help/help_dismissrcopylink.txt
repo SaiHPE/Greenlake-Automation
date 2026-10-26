@@ -1,0 +1,64 @@
+# help dismissrcopylink
+dismissrcopylink - Dismiss one or more connections to a target system.
+
+SYNTAX
+    Syntax for remote copy over IP (RCIP) is as follows:
+        dismissrcopylink <target_name> <node:slot:port:IP_address>...
+
+    Syntax for remote copy over FC (RCFC) is as follows:
+        dismissrcopylink <target_name> <node:slot:port:WWN>...
+
+DESCRIPTION
+    The dismissrcopylink command removes one or more links (connections)
+    created with the admitrcopylink command to a target system.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopylink_dismiss right
+
+OPTIONS
+    None.
+
+SPECIFIERS
+    <target_name>
+        The target name, as specified with the creatercopytarget command.
+
+    <node:slot:port:IP_address>...
+        Specifies the node, slot, and port of the Ethernet port on the local
+        system and an IP address of the peer port on the target system.
+
+    <node:slot:port:WWN>...
+        Specifies the node, slot, and port of the Fibre Channel port on the
+        local system and World Wide Name (WWN) of the peer port on the target
+        system.
+
+NOTES
+    Access to all domains is required to run this command.
+
+    This command should only be used to remove sending links.
+
+    This command cannot be used to remove the last link of a target system with
+    started groups.
+
+    This command terminates with a list of one or more links to be dismissed.
+
+    For IP targets, this list is made up of pairs composed of the node containing
+    the Ethernet port on the primary system and an IP address on the backup system.
+
+    For Fibre Channel targets, this list is made up of sets with the node, slot,
+    and port of the Fibre Channel adaptor port on the primary system and a WWN
+    address on the backup system.
+
+    IP targets are made up of pairs composed of the node, slot and port of the
+    ethernet port on the local system and an IP address of the peer port on the
+    target system.
+
+    FC targets are made up of sets with the node, slot, and port of the FC port
+    on the local system and WWN of the peer port on the target system.   
+
+EXAMPLES
+    The following example removes the link from the Ethernet port located at
+    2:2:2 of System2:
+
+        dismissrcopylink System2 2:2:2:193.1.2.11
+

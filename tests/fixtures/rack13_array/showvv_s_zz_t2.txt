@@ -1,0 +1,8 @@
+                                                                         --------Branch--------                    
+                                     --------(MiB)--------- -(% VSize)-- --(MiB)--- -(% VSize)- ----Efficiency-----
+Id Name        Prov Compr Dedup Type Used Rsvd HostWr VSize Used Wrn Lim Used VSize        Used Thin Compress Total
+92 zz_t2_vol01 tpvv No    No    base    0  525      0  1024  0.0   0   0    0  1024         0.0  >25     0.00   >25
+93 zz_t2_vol02 tdvv v2    Yes   base    0  525      0  1024  0.0   0   0    0  1024         0.0  >25     0.00   >25
+94 zz_t2_vol03 tpvv No    No    base    0  525      0  2048  0.0   0   0    0  2048         0.0  >25     0.00   >25
+-------------------------------------------------------------------------------------------------------------------
+ 3 total                                0 1575      0  4096

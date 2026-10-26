@@ -1,0 +1,4 @@
+# removercopygroup -f APP_Test
+Removing APP_Test
+Group APP_Test has been deleted.
+

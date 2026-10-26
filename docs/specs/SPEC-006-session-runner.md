@@ -1,0 +1,127 @@
+# SPEC-006 — The session runs itself
+
+**Status:** implemented 2026-09-14 (rc.14; rc.15 ASCII fix, LESSONS 38); **S-12 2026-09-14: 27/4 → 2026-09-15: 38/1** (see validation record); **rc.24 asserts rc.19–rc.23** (§4a) — pending its run (S-13) — **pending its own first live run** (S-12)
+**Findings addressed:** G-4 (breadth and failure evidence), the operator's cost of a live session
+(11 screenshots, 6 pasted scripts, ~3 hours on 2026-09-14)
+**Owner:** `scripts/session.ps1` (ships inside every release zip next to the exe), `api/app.py`
+`POST /init-sheet/compose`, `platform/init_sheet.py` `compose_workbook_bytes`
+
+## 1. Problem
+
+Everything the operator did on 2026-09-14 that was not *looking at a screen* was mechanical: click
+Discover, click Check, pick members, add export rows, click Build, tick, click Create, click Verify
+paths, download the docx, paste a `show*` script, paste a cleanup script. The judgements that found
+P-21 — "the plan said Exists, the result said Created", "6 LUNs for 4 volumes" — are comparisons a
+script makes better than a person. The looking (labels, layout, wording) is the smaller part and
+still needs a person, but once per release, not once per step.
+
+## 2. Scope
+
+In: one PowerShell 5.1 script that drives the exe over its own HTTP API, checks the array over
+WSAPI, runs a fixed set of scenarios against a **clean** array, asserts every outcome, cleans up
+with the tool's own removal set (SPEC-007), and writes a report plus an evidence folder. A small
+server endpoint that fills a workbook from JSON, so the script never writes xlsx itself.
+Out: UX judgement (stays a screenshot pass), the init track (needs a factory-fresh array), zoning
+apply (G-1, needs a switch write by a human), iSCSI (S-9).
+
+## 3. Requirements
+
+**R1 — One command, three passwords, one report.** `.\session.ps1 -BaseSheet <the operator's
+working Initialisation_sheet.xlsx>` — prompts for the array password (used for both the sheet and
+WSAPI checks), the vCenter password and the switch password; everything else comes from the base
+sheet. Writes `session-<stamp>\report.md` (one PASS/FAIL line per assertion, a summary, the exe
+version) and keeps every API response, every WSAPI read and the docx in that folder. Exit code 1
+on any FAIL.
+
+**R2 — Refuses a dirty array.** Before anything, WSAPI reads hosts / host sets / volumes / VV sets /
+VLUNs; if any object name begins with the runner's prefix (`zz_s6_`) it stops and prints the
+SPEC-007-shaped removal lines for them. Records the five counts as the baseline.
+
+**R3 — Sheets from JSON, server-side.** `POST /init-sheet/compose` takes `{base_b64, init, targets,
+volumes, hostsets, hosts}`; with `base_b64` it loads that workbook, otherwise the template; fills the
+key/value tabs given and **replaces** each row table given (existing data rows cleared first);
+returns `{content_b64}`. The runner composes every scenario sheet from the operator's base sheet
+and the scenario's rows, so credentials and init fields are never typed into the script.
+
+**R4 — Scenarios, in order, each a run of its own** (Provision only):
+
+| # | Scenario | Asserts |
+|---|---|---|
+| 1 | **Create** — `zz_s6_vol01` (1 GiB tpvv), `zz_s6_vol02` (1 GiB reduce) in `zz_s6_vvs`; host set `zz_s6_hs` = the base sheet's first vCenter host that Discovery reports logged in on both fabrics; export `zz_s6_vvs → zz_s6_hs` | discovery has ≥1 host on both fabrics · zoning check puts that host in `zoned_hosts` · plan: every `zz_s6_*` row `create`, the host row `exists`, 0 blockers · apply: **every planned `create` is `created`, every `exists` is `exists`, no `failed`** · read-back detail names two LUNs · WSAPI: exactly two new templates, both to `set:zz_s6_hs` · path verification: host `live`, `lun_count == 2`, `paths_per_lun ≥ 2` · removal set has 6 lines in R3 order |
+| 2 | **Rerun** — same sheet, new run | plan: every row `exists`, 0 to create, 0 blockers · apply: every outcome `exists`, **WSAPI template count unchanged** (P-21) · removal set empty |
+| 3 | **Conflict** — same sheet, `zz_s6_vol01` at 2 GiB | plan: that row `conflict`, `blockers` non-empty · `POST /storage/apply` is refused (HTTP 4xx) · WSAPI unchanged |
+| 4 | **Blank members** — same sheet, `zz_s6_hs` members blank, nothing composed | plan: blocker names the set, no `host` rows, no `vlun` rows (SPEC-005) |
+| 5 | **Documents** — on run 1: verify, as-built | verify: no mismatch · docx text contains `zz_s6_vol01`, `zz_s6_vvs`, `host set zz_s6_hs`, `To remove what this run created`, the two `removevlun` lines, and **not** "did not include the SAN zoning step" (A-3) |
+| 6 | **Cleanup** — paste run 1's removal set over SSH (one password prompt), then WSAPI | the six lines accepted · counts equal the R2 baseline · no `zz_s6_*` left |
+
+**R5 — Waiting is by state, not by sleep.** After each POST the runner polls `GET /runs/{id}` until
+`status` leaves `running` (1 s interval, 300 s ceiling) and then reads the latest event of the type
+it needs from `GET /runs/{id}/events`. A timeout is a FAIL with the last status.
+
+**R6 — Evidence is kept whole.** Every response body is written as `NN-<step>.json`; every WSAPI
+read as `wsapi-<what>-<when>.json`; the docx as `asbuilt.docx`; the SSH transcript as
+`NN-cleanup-attemptN.txt` (one per ssh attempt; one retry when the array drops the connection before its CLI prompt). The report links them. This folder is what the operator sends back — the same
+material fixtures were pinned from on 2026-09-13/14, gathered without a human.
+
+**R7 — Nothing the runner does is new capability.** It uses only endpoints the UI uses, WSAPI GETs,
+and — for cleanup only — the tool's own removal lines over SSH. It never writes to a switch, never
+issues a CLI command the tool did not generate.
+
+## 4. Acceptance
+
+Python (`tests/unit/test_init_sheet.py`): `test_compose_replaces_row_tables_and_fills_kv_on_a_base_workbook`,
+`test_compose_from_template_when_no_base`. Contract (`tests/unit/test_api.py`, Windows CI):
+`POST /init-sheet/compose` round-trips through `parse_workbook_bytes`.
+PowerShell: `session.ps1` parses under `[Parser]::ParseFile`; **S-12** is its first live run — the
+operator runs it once against rack13arcus and sends the folder.
+
+## 4a. Amendment — rc.24 (2026-09-15): the closed register becomes assertions
+
+The scenarios now also assert what rc.19–rc.23 exposed over the API, at the point where the evidence
+already exists; no new array writes, one additional read-only login per switch (the zoning *plan*
+step) and one read-only preflight (WSAPI + vCenter):
+
+| Where | Asserts | Proves |
+|---|---|---|
+| 1 after discovery | every `report.hosts` row carries `identified` + `in_run`; the picked host is in-run and identified, its initiators carry array ports; unidentified only when the name is the initiator id; `GET /storage/preflight` names check reads *4 object name(s) free: 2 volumes, 1 VV set, 1 host set.* | SPEC-009 R1/R2/R3/R5 |
+| 1 after the zoning check | `POST /zoning/plan` (read-only), first unzoned pair per fabric → `POST /zoning/render` (not recorded on the run): `cfgtransshow` first, `cfgsave` + `cfgenable` last; a second render with alias `bad name.1` is refused with *try 'bad_name_1'*. Nothing to render → a note, not a FAIL. | SPEC-010 R1/R3 |
+| 1 after apply | host outcome *id N · persona X · N WWNs*; volume *id N · WWN <32 hex> · 1024 MiB tpvv on <CPG>*; host set *1 member: <host>*; VV set *2 volumes: …* | SPEC-012 R1 |
+| 3 | the sheet carries `zz_s6_vol03` in no set and no export; the plan note reads *1 volume is not presented by this plan: zz_s6_vol03* | SPEC-008 R5 |
+| 5 | run detail `array_credential` (already); every check has `match` ∈ exact/contains/includes, DNS *includes*, Support contact *contains*; every status row has `details`; in the docx the zoning heading breaks the page and the provisioning heading does not | SPEC-008 R1–R3, SPEC-011 R1/R3, SPEC-012 R3 |
+
+The report ends with **Still needs eyes** — the six UI-only changes and the one screenshot each needs.
+
+## 4b. Amendment — 2026-10-07 (approved; built and run live 2026-10-11): scenario 7, replication
+
+**Live 2026-10-11, 32 PASS / 0 FAIL** on D22U27 → E18U31 with ESX1 as the host, through the
+*Provision, then replicate* preset. Built as the Python lab runner `rc_preset_lab.py` (lab branch
+`jumpbox-test`, drives the same API), not inside `session.ps1`. 7a–7d, 7f, 7g as below; **7e (async)
+is not in this runner**: the lab target carries six started Sync groups and the array allows one mode
+per target, so the async path was proven separately with the six removed and rebuilt
+(`rc_async_failover_lab.py`, SPEC-017 validation). 7c asserts the app's refusal (HTTP 409 *nothing to
+create*) rather than an empty apply.
+
+Runs only when the runner is given `-PeerHost <ip>` (the peer array; its password is prompted like
+the others) and composes a Replication tab (SPEC-015 R6) onto the base sheet; every single-array
+scenario is unchanged. Lab pair: D22U27 (primary) ↔ E18U31 (peer), already partnered with six Sync
+groups (`tests/fixtures/rc_pair/README.md`) — the runner's objects are `zz_rc_*` and nothing else on
+either array is touched.
+
+| # | Scenario | Asserts |
+|---|---|---|
+| 7a | **Read** — Replication step read + check on the existing partnership | peer name read from `showsys`; the partnership matched by link addresses on both arrays, every link `Up`; the six existing groups listed under *already present*, not in the plan |
+| 7b | **Protect async** — `zz_rc_test` (1 GiB) on A, row `async` RPO 10 → plan, approve, apply | plan: group *create*, peer set *create*, 0 conflicts; after apply `showrcopy groups zz_rc_test_rcg` on A: Primary/Started, on B: Secondary/Started; period 5 m; volumes Synced within 10 min; `zz_rc_test_rc` on B with 1 volume |
+| 7c | **Rerun** — same sheet, new run | plan: every row *exists*, 0 to create; apply changes nothing (`showrcopy groups` unchanged) |
+| 7d | **Failover test** on `zz_rc_test_rcg` (v0.18) | every SPEC-017 step reaches its expected state; the group ends Primary on A, Secondary on B, Synced |
+| 7e | **Sync** — 7b with `sync` (skipped with a note if the sheet's RTT is > 10 ms) | as 7b, Mode Sync |
+| 7f | **Documents** — as-built | docx has the *Replication* section with the group, the A and B removal blocks, and (v0.18) the failover table |
+| 7g | **Cleanup** — the run's removal set over SSH (A block, then B block) | no `zz_rc_*` group, volume or VV set on either array; `showrcopy groups` for the six existing groups read before 7b equals the read after |
+
+## 5. Limits, stated
+
+- The runner tests what it is told to expect; the assertions are today's register turned into
+  code. A new class of defect still needs a person the first time.
+- Scenario 1 needs one vCenter host logged in on both fabrics (as `.136` is). On an array with
+  none, the runner stops after Discovery with a clear message rather than inventing a host.
+- The SSH cleanup prompts for the array password once (the CLI has no token login). Everything
+  else is non-interactive after the three prompts at start.

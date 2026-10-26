@@ -1,0 +1,4 @@
+# The three WSAPI writes of run eba8f3a7 on D22U27, 2026-10-26 (from the run console log)
+POST /hosts { "name": "zz_is_linux", "iSCSINames": [ "iqn.1994-05.com.redhat:6e35c4a016a0" ], "persona": 2 }  ->  HTTP 201
+POST /hostsets { "name": "zz_is_hs", "setmembers": [ "zz_is_linux" ] }  ->  HTTP 201
+POST /volumes { "name": "zz_is_vol01", "cpg": "SSD_r6", "sizeMiB": 1024, "tpvv": true }  ->  HTTP 201

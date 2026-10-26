@@ -1,0 +1,163 @@
+nscam show for remote switches:
+Switch entry for 32
+  state  rev    owner  cap_available
+  known   v823  0xfffc02 1
+  Device list: count 9
+    Type Pid    COS     PortName                NodeName
+    N    200000;      3;51:40:2e:c0:20:89:cc:38;51:40:2e:c0:20:89:cc:39;
+        FC4s: FCP FC-NVMe Application-Services
+        NodeSymb: [33] "SN1610Q FW:v9.15.15 DVR:v5.4.83.1"
+        Fabric Port Name: 20:00:50:eb:1a:1a:5f:e4 
+        Permanent Port Name: 51:40:2e:c0:20:89:cc:38
+        Device type: Physical Initiator
+        Port Index: 0
+        Redirect: No 
+        Partial: No
+        Slow Drain Device: No
+        Device Link speed: 16G
+        Connected through AG: No
+        Real device behind AG: No
+        FCoE: No
+        Connected through FC-LAG: No
+        FC4 Features [FCP]: Initiator 
+        FC4 Features [FC-NVMe]: Initiator 
+    N    200100;      3;21:31:00:02:ac:02:ac:38;2f:f7:00:02:ac:02:ac:38;
+        FC4s: FCP
+        PortSymb: [33] "SGH339NK4C - 1:3:1 - LPE32004-32G"
+        NodeSymb: [37] "HPE_3PAR C630 - SGH339NK4C - fw:46200"
+        Fabric Port Name: 20:01:50:eb:1a:1a:5f:e4 
+        Permanent Port Name: 21:31:00:02:ac:02:ac:38
+        Device type: Physical Target
+        Port Index: 1
+        Redirect: No 
+        Partial: No
+        Slow Drain Device: No
+        Device Link speed: 16G
+        Connected through AG: No
+        Real device behind AG: No
+        FCoE: No
+        Connected through FC-LAG: No
+        FC4 Features [FCP]: Target 
+    N    200101;      3;20:31:00:02:ac:02:ac:38;2f:f7:00:02:ac:02:ac:38;
+        FC4s: FCP
+        PortSymb: [33] "SGH339NK4C - 1:3:1 - LPE32004-32G"
+        NodeSymb: [37] "HPE_3PAR C630 - SGH339NK4C - fw:46200"
+        Fabric Port Name: 20:01:50:eb:1a:1a:5f:e4 
+        Permanent Port Name: 21:31:00:02:ac:02:ac:38
+        Device type: NPIV Target
+        Port Index: 1
+        Redirect: No 
+        Partial: No
+        Slow Drain Device: No
+        Device Link speed: 16G
+        Connected through AG: No
+        Real device behind AG: No
+        FCoE: No
+        Connected through FC-LAG: No
+        FC4 Features [FCP]: Target 
+    N    200200;      3;51:40:2e:c0:20:89:cb:ec;51:40:2e:c0:20:89:cb:ed;
+        FC4s: FCP FC-NVMe
+        NodeSymb: [32] "SN1610Q FW:v9.12.01 DVR:v5.3.1.0"
+        Fabric Port Name: 20:02:50:eb:1a:1a:5f:e4 
+        Permanent Port Name: 51:40:2e:c0:20:89:cb:ec
+        Device type: Physical Initiator
+        Port Index: 2
+        Redirect: No 
+        Partial: No
+        Slow Drain Device: No
+        Device Link speed: 16G
+        Connected through AG: No
+        Real device behind AG: No
+        FCoE: No
+        Connected through FC-LAG: No
+        FC4 Features [FCP]: Initiator 
+        FC4 Features [FC-NVMe]: Initiator 
+    N    200300;      3;50:01:43:80:36:be:2f:f9;50:01:43:80:36:be:2f:f7;
+        FC4s: FCP
+        PortSymb: [44] "HPE Ultrium 8-SCSI HH Q387 8036BE2FF7 Port B"
+        NodeSymb: [37] "HPE Ultrium 8-SCSI HH Q387 8036BE2FF7"
+        Fabric Port Name: 20:03:50:eb:1a:1a:5f:e4 
+        Permanent Port Name: 50:01:43:80:36:be:2f:f9
+        Device type: Physical Target
+        Port Index: 3
+        Redirect: No 
+        Partial: No
+        Slow Drain Device: No
+        Device Link speed: 8G
+        Connected through AG: No
+        Real device behind AG: No
+        FCoE: No
+        Connected through FC-LAG: No
+        FC4 Features [FCP]: Target 
+    N    200700;      3;50:01:43:80:34:4b:88:19;50:01:43:80:34:4b:88:18;
+        FC4s: FCP
+        NodeSymb: [40] "HPE StoreOnce S/N-2M240714NF Initiator 1"
+        Fabric Port Name: 20:07:50:eb:1a:1a:5f:e4 
+        Permanent Port Name: 50:01:43:80:34:4b:88:19
+        Device type: Physical Initiator
+        Port Index: 7
+        Redirect: No 
+        Partial: No
+        Slow Drain Device: No
+        Device Link speed: 8G
+        Connected through AG: No
+        Real device behind AG: No
+        FCoE: No
+        Connected through FC-LAG: No
+        FC4 Features [FCP]: Initiator 
+    N    200701;      3;50:01:43:80:24:29:23:38;50:01:43:80:24:29:23:39;
+        FC4s: FCP
+        PortSymb: [72] "HPE StoreOnce S/N-2M240714NF Catalyst Over Fibre Channel Target 1 Port 1"
+        NodeSymb: [65] "HPE StoreOnce S/N-2M240714NF Catalyst Over Fibre Channel Target 1"
+        Fabric Port Name: 20:07:50:eb:1a:1a:5f:e4 
+        Permanent Port Name: 50:01:43:80:34:4b:88:19
+        Device type: NPIV Target
+        Port Index: 7
+        Redirect: No 
+        Partial: No
+        Slow Drain Device: No
+        Device Link speed: 8G
+        Connected through AG: No
+        Real device behind AG: No
+        FCoE: No
+        Connected through FC-LAG: No
+        FC4 Features [FCP]: Target 
+    N    200800;      3;50:01:43:80:04:c9:64:7a;50:01:43:80:04:c9:64:70;
+        FC4s: FCP 0x64 0x65 0x66 0x6a 0x6d 0x6e 0x70 0x73 0x76 0x77 0x7a 0xf4
+        PortSymb: [30] "HSV340 - EVA63ZR12U23 - CR2306"
+        Fabric Port Name: 20:08:50:eb:1a:1a:5f:e4 
+        Permanent Port Name: 50:01:43:80:04:c9:64:7a
+        Device type: Physical Target
+        Port Index: 8
+        Redirect: No 
+        Partial: No
+        Slow Drain Device: No
+        Device Link speed: 8G
+        Connected through AG: No
+        Real device behind AG: No
+        FCoE: No
+        Connected through FC-LAG: No
+        FC4 Features [FCP]: Target 
+    N    200f00;      3;10:00:08:f1:ea:c0:4d:5a;20:00:08:f1:ea:c0:4d:5a;
+        FC4s: FCP
+        PortSymb: [34] "Emulex PPN-10:00:08:F1:EA:C0:4D:5A"
+        NodeSymb: [81] "Emulex SN1200E2P FV11.4.334.10 DV12.6.165.8000 HN:WIN-TN3N7RUJK3V OS:Windows 2019"
+        Fabric Port Name: 20:0f:50:eb:1a:1a:5f:e4 
+        Permanent Port Name: 10:00:08:f1:ea:c0:4d:5a
+        Device type: Physical Initiator
+        Port Index: 15
+        Redirect: No 
+        Partial: No
+        Slow Drain Device: No
+        Device Link speed: 16G
+        Connected through AG: No
+        Real device behind AG: No
+        FCoE: No
+        Connected through FC-LAG: No
+        FC4 Features [FCP]: Initiator 
+
+{
+020000 020100 020101 020300 020900 020b00 021000 021100 
+021101 021400 021600 200000 200100 200101 200200 200300 
+200700 200701 200800 200f00 
+20 Nx_Ports in the Fabric }

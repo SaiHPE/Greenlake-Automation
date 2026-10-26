@@ -1,0 +1,24 @@
+# showhost -d
+Id Name                Persona       -WWN/iSCSI_Name/NQN- Port  IP/IP:Port
+ 5 DL380G10C12U29_58EX VMware        100028924AAF58EE     ---   n/a       
+ 5 DL380G10C12U29_58EX VMware        100028924AAF58EF     ---   n/a       
+ 7 DL380G10PQ8U17_655E WindowsServer 10009440C9CF655E     0:3:4 n/a       
+ 3 DL380G11D21U6_3D1X  WindowsServer 10005CBA2CFC3D15     ---   n/a       
+ 3 DL380G11D21U6_3D1X  WindowsServer 10005CBA2CFC3D16     ---   n/a       
+ 0 ESX1                VMware        1000D0BF9CB7A3C9     0:3:1 n/a       
+ 0 ESX1                VMware        1000D0BF9CB7A3C9     1:3:1 n/a       
+ 0 ESX1                VMware        1000D0BF9CB7A3D1     1:3:4 n/a       
+ 0 ESX1                VMware        1000D0BF9CB7A3D1     0:3:4 n/a       
+ 1 ESX2                VMware        100070106FE9A979     0:3:1 n/a       
+ 1 ESX2                VMware        100070106FE9A979     1:3:1 n/a       
+ 1 ESX2                VMware        100070106FE9A981     1:3:4 n/a       
+ 1 ESX2                VMware        100070106FE9A981     0:3:4 n/a       
+ 6 Host1-zerto         VMware        5001438037C6B290     ---   n/a       
+ 4 test2-alletra       Generic-ALUA  --                   --    --        
+ 2 winhost_CDS         WindowsServer 50060B0000C2EE2C     ---   n/a       
+ 2 winhost_CDS         WindowsServer 50060B0000C2EE2E     ---   n/a       
+-- --                  --            1000040973C52791     0:3:1 n/a       
+-- --                  --            1000040973C52799     1:3:2 n/a       
+-- --                  --            1000040973C52791     1:3:1 n/a       
+--------------------------------------------------------------------------
+20 total                                                                  
