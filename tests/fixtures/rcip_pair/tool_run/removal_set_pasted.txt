@@ -1,0 +1,42 @@
+[alletra] $ stoprcopygroup -f zz_rc_vvs_rcg
+
+[alletra] $ dismissrcopyvv -f -removevv zz_rc_vol01 zz_rc_vvs_rcg
+Dismissing volume zz_rc_vol01 from group zz_rc_vvs_rcg
+Volume zz_rc_vol01 has been dismissed from group zz_rc_vvs_rcg. However, target system PRIMERA630R11U22 has indicated that one or more volumes in the group could not be deleted. Manual cleanup required on target system.
+[alletra] $ removercopygroup -f zz_rc_vvs_rcg
+Removing zz_rc_vvs_rcg
+Group zz_rc_vvs_rcg has been deleted.
+[alletra] $ stoprcopygroup -f zz_rc_test_rcg
+
+[alletra] $ dismissrcopyvv -f -removevv zz_rc_test_v01 zz_rc_test_rcg
+Dismissing volume zz_rc_test_v01 from group zz_rc_test_rcg
+Volume zz_rc_test_v01 has been dismissed from group zz_rc_test_rcg. However, target system PRIMERA630R11U22 has indicated that one or more volumes in the group could not be deleted. Manual cleanup required on target system.
+[alletra] $ removercopygroup -f zz_rc_test_rcg
+Removing zz_rc_test_rcg
+Group zz_rc_test_rcg has been deleted.
+[alletra] $ removevvset -f zz_rc_test
+
+[alletra] $ removevv -f zz_rc_test_v01
+Removing vv zz_rc_test_v01
+[alletra] $ removercopytarget PRIMERA630R11U22
+
+[alletra] $ stoprcopy -f -stopgroups -clear
+
+[alletra] $ controlport rcip delete -f 0:4:4
+Remote Copy interface change successful.
+[alletra] $ controlport rcip delete -f 1:4:4
+Remote Copy interface change successful.
+[primera] $ removevvset -f zz_rc_vvs_rc
+
+[primera] $ removevvset -f zz_rc_test_rc
+
+[primera] $ removevv -f zz_rc_vol01
+Removing vv zz_rc_vol01
+[primera] $ removevv -f zz_rc_test_v01
+Removing vv zz_rc_test_v01
+[primera] $ removercopytarget rack13-ARCUS
+
+[alletra] $ removevvset -f zz_rc_vvs
+
+[alletra] $ removevv -f zz_rc_vol01
+Removing vv zz_rc_vol01

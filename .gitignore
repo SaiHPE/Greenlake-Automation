@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.alletra_onboard/
+dist/
+build/
+node_modules/
+# frontend/dist IS committed: the jump box has no Node, so the built UI ships via git.
+!frontend/dist/
+# The repo-root .gitignore drops *.json/*.html as research scratch — the frontend needs them
+# (node_modules stays out: the directory itself is excluded above, so nothing in it re-includes).
+!frontend/**/*.json
+!frontend/**/*.html
+ui-smoke/
+release/
+.env
+
+# Real work items contain a subscription key — keep the example only
+config/arrays.csv
+config/arrays*.csv
+!config/arrays.example.csv

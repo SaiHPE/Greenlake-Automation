@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "alletra-onboard"
+version = "0.17.0"
+description = "Local operator automation for HPE Alletra MP B10000 GreenLake and DSCC onboarding."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "typer>=0.12.0",
+  "rich>=13.7.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.4.0",
+  "tenacity>=8.5.0",
+  "structlog>=24.2.0",
+  "playwright>=1.45.0",
+  "openpyxl>=3.1.0",
+  "python-docx>=1.1.0",  # fills the as-built .docx template (Document step) preserving its boilerplate
+  # <4 ON PURPOSE (BL-40, LESSONS 43): 4.0 dropped ssh-dss and 5.0 every SHA-1 kex/host key; FOS 7.x
+  # switches offer only those. Dependabot flags 3.x for SHA-1 - dismissed as tolerable; do not bump to clear it.
+  "paramiko>=3.4.0,<4",
+  # Storage provisioning (Phase 2). 4.2.14 is the floor for the Alletra MP B10000: earlier
+  # releases POST to /credentials instead of /api/v1/credentials and fail to authenticate
+  # (verified by deep research, Launchpad bug #2128677).
+  "python-3parclient>=4.2.14",
+  "pyvmomi>=8.0.0",  # read-only ESXi HBA/WWPN discovery via vCenter
+  "pywinrm>=0.4.3",  # read-only Windows host discovery over WinRM (SPEC-014 R5)
+  "requests>=2.31.0",  # python-3parclient's HTTP transport for WSAPI
+  "eventlet>=0.33.0",  # imported (not declared) by python-3parclient's ssh module; dormant for us
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.23.0",
+  "respx>=0.21.0",
+  "ruff==0.17.0",
+]
+
+[project.scripts]
+onboard = "alletra_onboard.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/alletra_onboard"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = [
+  "ignore:.*Eventlet is deprecated.*",  # transitive via python-3parclient's ssh module; dormant for us
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# The gate is the app and its tests; lab and packaging scripts are one-off tools, not linted.
+extend-exclude = ["docs", "lab", "scripts", "build", "ui-smoke", "tools", "cloudinit", "packaging", "playwright captures"]
+
+[tool.ruff.lint]
+# ruff is pinned in the dev extra so everyone gets the same rules; `ruff check src tests` must be clean.
+ignore = [
+  "S110", "S112",  # best-effort cleanup and optional reads swallow errors on purpose
+  "PYI034",        # the clients' __enter__ returns the concrete class; nothing subclasses them
+  "B023",          # zoning_plan's closures are called inside the loop iteration that defines them
+]
+

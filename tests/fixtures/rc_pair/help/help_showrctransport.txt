@@ -1,0 +1,46 @@
+# help showrctransport
+showrctransport - Show information about end-to-end transport for remote
+copy in the system.
+
+SYNTAX
+    showrctransport [options]
+
+DESCRIPTION
+    The showrctransport command shows status and information about end-to-end
+    transport for Remote Copy in the system.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+    -rcip
+        Show information about Ethernet end-to-end transport.
+
+    -rcfc
+        Show information about Fibre Channel end-to-end transport.
+
+SPECIFIERS
+    None.
+
+NOTES
+    None.
+
+EXAMPLES
+    The following example displays status and information about the end-to-end
+    transport for all Remote Copy configured ports:
+
+        cli% showrctransport
+
+    The following example displays status and information about the end-to-end
+    transport for RCIP ports:
+
+        cli% showrctransport -rcip
+
+    The following example displays status and information about the end-to-end
+    transport for RCFC ports:
+
+        cli% showrctransport -rcfc
+
+    Use the following to get a description of each column in the above examples:
+        clihelp -col showrctransport
+

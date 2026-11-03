@@ -1,0 +1,312 @@
+"""Parse the read-only ``asbuilt_array.py`` dump (``show*`` + ``checkhealth``) into ``AsBuiltData``.
+
+Calibrated against a live HPE Alletra MP B10000 (OS 10.5.51) dump. The dump is a sequence of
+``===== $ <cmd> =====`` blocks; ``split_sections`` splits it, then per-field extractors read the
+relevant block. Extractors use ``str.split()`` (whitespace-agnostic) so they tolerate column spacing.
+"""
+
+from __future__ import annotations
+
+import csv
+import re
+from collections import OrderedDict
+
+from alletra_onboard.application.documents.asbuilt import AsBuiltData
+from alletra_onboard.domain.provisioning import VlunTemplate
+
+_NSP = re.compile(r"^\d+:\d+:\d+$")
+_IPV4 = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
+_TOTAL = re.compile(r"^\s*\d+\s+total\b")
+_RULE = re.compile(r"^\s*-{4,}\s*$")
+_NONE_LISTED = re.compile(r"^\s*No \S.* listed\s*$", re.IGNORECASE)
+
+
+def split_sections(dump: str) -> dict[str, str]:
+    """Split the dump into {command: output} on its ``===== $ <cmd> =====`` markers."""
+    sections: dict[str, str] = {}
+    current: str | None = None
+    buf: list[str] = []
+    for line in (dump or "").splitlines():
+        m = re.match(r"^=+\s*\$\s*(.+?)\s*=+\s*$", line)
+        if m:
+            if current is not None:
+                sections[current] = "\n".join(buf).strip("\n")
+            current, buf = m.group(1).strip(), []
+        elif current is not None:
+            buf.append(line)
+    if current is not None:
+        sections[current] = "\n".join(buf).strip("\n")
+    return sections
+
+
+def _kv(text: str, key: str) -> str:
+    """Value of a ``Key : Value`` line (first match where the line starts with ``key``)."""
+    for line in text.splitlines():
+        if line.strip().startswith(key) and ":" in line:
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
+def _net(sec: dict[str, str]) -> dict[str, str]:
+    net = sec.get("shownet", "")
+    ip = mask = ""
+    for line in net.splitlines():
+        p = line.split()
+        if p and _IPV4.match(p[0]):
+            ip, mask = p[0], (p[1] if len(p) > 1 else "")
+            break
+    return {
+        "ip": ip,
+        "mask": mask,
+        "gateway": _kv(net, "Default IPv4 route"),
+        "ntp": _kv(net, "NTP server"),
+        "dns": ", ".join(_kv(net, "DNS server").split()),
+    }
+
+
+def _cache(sec: dict[str, str]) -> str:
+    total = 0
+    for line in sec.get("shownode", "").splitlines():
+        p = line.split()
+        if len(p) >= 6 and p[0].isdigit():
+            try:
+                total += int(p[5])  # Mem(MiB) column
+            except ValueError:
+                pass
+    return f"{round(total / 1024)} GiB (node memory, all nodes)" if total else ""
+
+
+def _cages(sec: dict[str, str]) -> str:
+    names = [p[1] for line in sec.get("showcage", "").splitlines()
+             if (p := line.split()) and len(p) >= 2 and p[0].isdigit() and p[1] != "total"]
+    return f"{len(names)} ({', '.join(names)})" if names else ""
+
+
+def _disks(sec: dict[str, str]) -> str:
+    count, cap = 0, ""
+    for line in sec.get("showpd", "").splitlines():
+        p = line.split()
+        if len(p) >= 3 and p[0].isdigit() and p[1] != "total" and p[2] == "SSD":
+            count += 1
+            cap = p[-1]  # Capacity(GB)
+    if not count:
+        return ""
+    size = f"{int(cap) / 1000:.2f} TB" if cap.isdigit() else (f"{cap} GB" if cap else "")
+    return f"{count} x {size} NVMe SSD".replace("  ", " ").strip()
+
+
+def _raw_capacity(sec: dict[str, str]) -> str:
+    lines = sec.get("showsys -d", "").splitlines()
+    for i, line in enumerate(lines):
+        if "Raw System Capacity" in line:
+            for follow in lines[i:i + 6]:
+                if "Total Capacity" in follow and ":" in follow:
+                    mib = follow.split(":", 1)[1].strip()
+                    if mib.isdigit():
+                        return f"{int(mib) / 1024 / 1024:.1f} TiB ({int(mib):,} MiB)"
+    return ""
+
+
+def _raid(sec: dict[str, str]) -> str:
+    out = []
+    for line in sec.get("showcpg", "").splitlines():
+        p = line.split()
+        if len(p) >= 2 and p[0].isdigit() and p[1] != "total":
+            m = re.search(r"_r(\d+)", p[1], re.IGNORECASE)
+            out.append(f"RAID {m.group(1)} ({p[1]})" if m else p[1])
+    return "; ".join(out)
+
+
+def _host_ports(sec: dict[str, str]) -> str:
+    fc = []
+    for line in sec.get("showport", "").splitlines():
+        p = line.split()
+        if len(p) >= 7 and _NSP.match(p[0]) and p[1] == "target" and p[6] == "FC":
+            fc.append((p[0], p[2]))
+    if not fc:
+        return ""
+    speed = ""
+    m = re.search(r"(\d+Gbps)", sec.get("showport -par", ""))
+    if m:
+        speed = m.group(1)
+    ready = [nsp for nsp, st in fc if st == "ready"]
+    other = [nsp for nsp, st in fc if st != "ready"]
+    parts = [f"{len(fc)} x {speed or 'FC'} FC target"]
+    if ready:
+        parts.append(f"ready: {', '.join(ready)}")
+    if other:
+        parts.append(f"not-ready: {', '.join(other)}")
+    return "; ".join(parts)
+
+
+def _os_version(sec: dict[str, str]) -> str:
+    m = re.search(r"Release version\s+(\S+)", sec.get("showversion", ""))
+    return m.group(1) if m else ""
+
+
+def parse_checkhealth(text: str) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str, str]]]:
+    """Split `checkhealth -svc -detail` into two tables for the doc:
+    summary rows (Component, Description, Qty) and detail rows (Component, Identifier, Description,
+    Resolution). Anchored on the two header lines; the last token of a detail row is the Resolution,
+    the first two are Component + single-token Identifier."""
+    summary: list[tuple[str, str, str]] = []
+    detail: list[tuple[str, str, str, str]] = []
+    mode: str | None = None
+    for line in (text or "").splitlines():
+        if "Summary Description" in line and "Qty" in line:
+            mode = "sum"
+            continue
+        if "Identifier" in line and "Resolution" in line:
+            mode = "det"
+            continue
+        stripped = line.strip()
+        if not stripped or set(stripped) <= set("- "):  # blank / separator
+            continue
+        p = line.split()
+        if p[0].isdigit() and "total" in line:          # the "N total M" footer
+            mode = None
+            continue
+        if mode == "sum" and p[-1].isdigit() and not p[0].isdigit():
+            summary.append((p[0], " ".join(p[1:-1]), p[-1]))
+        elif mode == "det" and len(p) >= 4 and not p[0].isdigit():
+            detail.append((p[0], p[1], " ".join(p[2:-1]), p[-1]))
+    return summary, detail
+
+
+def _is_inv_footer(row: list[str]) -> bool:
+    """A `showinventory` footer row like ``2,total,,`` or ``20,,,,,`` — dropped from the table."""
+    cells = [c.strip() for c in row]
+    return (len(cells) >= 2 and cells[1] == "total") or bool(cells and cells[0].isdigit() and not any(cells[1:]))
+
+
+def parse_inventory(text: str) -> list[tuple[str, list[str], list[list[str]]]]:
+    """Split ``showinventory -csvtable`` output into [(title, headers, rows)] per sub-section.
+
+    Deterministic — each line is CSV (``csv.reader`` handles quoted commas and values with spaces, e.g.
+    ``"Advanced Micro Devices, Inc."`` or ``Iom[1]PROC 1 DIMM 1``). A line whose first field holds a run
+    of dashes is a section title/separator ("----Midplane----"); the next block's first row is the
+    header, the rest are data ("N total" footers dropped). Header names are stripped of their dashes.
+    """
+    out: list[tuple[str, list[str], list[list[str]]]] = []
+    title = ""
+    block: list[list[str]] = []
+
+    def flush() -> None:
+        nonlocal block
+        if not block:
+            return
+        headers = [c.strip().strip("-").strip() for c in block[0]]
+        rows = [
+            [(r[i].strip() if i < len(r) else "") for i in range(len(headers))]
+            for r in block[1:]
+            if not _is_inv_footer(r) and any(c.strip() for c in r)
+        ]
+        if rows and any(h for h in headers):
+            out.append((title, headers, rows))
+        block = []
+
+    for line in (text or "").splitlines():
+        row = next(csv.reader([line])) if line else [""]
+        if not any(c.strip() for c in row):  # blank line OR an all-empty CSV row (",,,,") -> separator
+            flush()
+            continue
+        if "---" in (row[0] or ""):          # a section title ("----Midplane----") or a plain separator
+            label = re.split(r"-{2,}", row[0].strip("-"))[0].strip()
+            if label:
+                title = label
+            flush()
+            continue
+        block.append(row)
+    flush()
+    return out
+
+
+def parse_asbuilt(dump: str) -> AsBuiltData:
+    """Parse a full ``asbuilt_array.py`` dump into ``AsBuiltData`` (inventory + checkhealth verbatim)."""
+    sec = split_sections(dump)
+    sysd = sec.get("showsys -d", "")
+    net = _net(sec)
+    return AsBuiltData(
+        name=_kv(sysd, "System Name"),
+        model=_kv(sysd, "System Model"),
+        serial_no=_kv(sysd, "Serial Number"),
+        controller_nodes=_kv(sysd, "Number of Nodes"),
+        os_version=_os_version(sec),
+        drive_cages=_cages(sec),
+        cache_gb=_cache(sec),
+        nvme_ssd_disks=_disks(sec),
+        raw_capacity=_raw_capacity(sec),
+        raid=_raid(sec),
+        host_ports=_host_ports(sec),
+        mgmt_ip=net["ip"],
+        netmask=net["mask"],
+        gateway=net["gateway"],
+        ntp=net["ntp"],
+        dns=net["dns"],
+        inventory=sec.get("showinventory -csvtable") or sec.get("showinventory", ""),
+        checkhealth=sec.get("checkhealth -svc -detail", ""),
+    )
+
+
+# ------------------------------------------------------------------ SPEC-002: array-state listings
+
+def _table_lines(text: str) -> list[str]:
+    """The data lines of a CLI listing: header first; rules, totals and blank lines dropped."""
+    out: list[str] = []
+    for line in (text or "").splitlines():
+        if not line.strip() or _RULE.match(line) or _TOTAL.match(line) or _NONE_LISTED.match(line):
+            continue
+        out.append(line.rstrip())
+    return out
+
+
+def parse_showvv(text: str) -> list[dict[str, str]]:
+    """``showvv`` (any ``-showcols`` form) -> one dict per row keyed by the header tokens.
+
+    Header-driven: columns are whatever the first line says (``VSize(MiB)`` on this OS,
+    ``VSize_MB`` when asked for by name), never fixed positions. Rows whose token count does not
+    match the header are dropped rather than mis-assigned. Snapshots are rows too (``Type ==
+    'vcopy'``, ``CopyOf`` = the base volume)."""
+    lines = _table_lines(text)
+    if not lines:
+        return []
+    header = lines[0].split()
+    rows: list[dict[str, str]] = []
+    for line in lines[1:]:
+        toks = line.split()
+        if len(toks) != len(header):
+            continue
+        rows.append(dict(zip(header, toks)))
+    return rows
+
+
+def parse_cli_sets(text: str) -> OrderedDict[str, list[str]]:
+    """``showhostset`` / ``showvvset`` -> ``{set name: [members]}`` in listing order.
+
+    Columns ``Id Name Members``; a set with several members continues on indented lines carrying
+    only the member; ``--`` is an empty set; "No … listed" is no sets at all."""
+    out: OrderedDict[str, list[str]] = OrderedDict()
+    lines = _table_lines(text)
+    current: str | None = None
+    for line in lines[1:]:
+        toks = line.split()
+        if toks[0].isdigit() and len(toks) >= 2 and not line.startswith(" " * 8):
+            current = toks[1]
+            members = toks[2:]
+            out[current] = [] if members == ["--"] else members
+        elif current is not None:
+            out[current].extend(t for t in toks if t != "--")
+    return out
+
+
+def parse_showvlun_templates_cli(text: str) -> list[VlunTemplate]:
+    """``showvlun -t`` -> the presentation templates. Columns ``Lun VVName HostName
+    -Host_WWN/iSCSI_Name- Port Type``; the target keeps the array's ``set:`` prefix, and ``Type``
+    may be two words (``host set``), so only the first three tokens are read."""
+    out: list[VlunTemplate] = []
+    for line in _table_lines(text)[1:]:
+        toks = line.split()
+        if len(toks) < 3 or not toks[0].isdigit():
+            continue
+        out.append(VlunTemplate(volume=toks[1], target=toks[2], lun=int(toks[0])))
+    return out

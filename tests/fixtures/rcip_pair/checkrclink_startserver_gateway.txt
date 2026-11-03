@@ -1,0 +1,12 @@
+# checkrclink startserver 0:1:1 10.93.18.11 (PRIMERA630R11U22, 2026-11-03, gateway 10.93.18.1 set)
+Starting Server
+Test length (secs):	 172800
+Time now (secs):	 1793726914
+Min run time (secs):	 1793899714
+Destination Addr:	 10.93.18.11
+Running link test on:	 0:1:1
+Adding route:            10.93.18.11 -> 10.93.18.1
+Local IP Addr:           10.93.18.19
+Local Device name:       eth1
+
+SIOCADDRT: File exists

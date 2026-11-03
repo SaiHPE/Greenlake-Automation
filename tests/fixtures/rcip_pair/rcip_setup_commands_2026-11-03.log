@@ -1,0 +1,167 @@
+[22:43:27] alletra 10.132.30.121 $ controlport rcip addr -f 10.93.18.11 255.255.254.0 0:4:4
+Remote Copy interface change successful.
+
+[22:43:28] alletra 10.132.30.121 $ showport -rcip
+N:S:P State ---HwAddr---      IPAddr Netmask/PrefixLen Gateway  MTU   Rate Duplex AutoNeg
+0:4:4 ready 40A6B7D7D1EB 10.93.18.11     255.255.254.0       - 1500 10Gbps   Full     Yes
+-----------------------------------------------------------------------------------------
+    1
+
+[22:43:28] alletra 10.132.30.121 $ controlport rcip addr -f 10.93.18.13 255.255.254.0 1:4:4
+Remote Copy interface change successful.
+
+[22:43:29] alletra 10.132.30.121 $ showport -rcip
+N:S:P State ---HwAddr---      IPAddr Netmask/PrefixLen Gateway  MTU   Rate Duplex AutoNeg
+0:4:4 ready 40A6B7D7D1EB 10.93.18.11     255.255.254.0       - 1500 10Gbps   Full     Yes
+1:4:4 ready 40A6B7D7C5C3 10.93.18.13     255.255.254.0       - 1500 10Gbps   Full     Yes
+-----------------------------------------------------------------------------------------
+    2
+
+[22:43:34] alletra 10.132.30.121 $ controlport rcip ping -c 3 10.93.18.19 0:4:4
+PING 10.93.18.19 (10.93.18.19) from 10.93.18.11 : 56(84) bytes of data.
+64 bytes from 10.93.18.19: icmp_seq=1 ttl=64 time=0.095 ms
+64 bytes from 10.93.18.19: icmp_seq=2 ttl=64 time=0.047 ms
+64 bytes from 10.93.18.19: icmp_seq=3 ttl=64 time=0.050 ms
+
+--- 10.93.18.19 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2035ms
+rtt min/avg/max/mdev = 0.047/0.064/0.095/0.021 ms
+
+[22:43:37] alletra 10.132.30.121 $ controlport rcip ping -c 3 10.93.18.20 1:4:4
+PING 10.93.18.20 (10.93.18.20) from 10.93.18.13 : 56(84) bytes of data.
+64 bytes from 10.93.18.20: icmp_seq=1 ttl=64 time=0.110 ms
+64 bytes from 10.93.18.20: icmp_seq=2 ttl=64 time=0.049 ms
+64 bytes from 10.93.18.20: icmp_seq=3 ttl=64 time=0.062 ms
+
+--- 10.93.18.20 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2049ms
+rtt min/avg/max/mdev = 0.049/0.073/0.110/0.026 ms
+
+[22:43:39] alletra 10.132.30.121 $ showrcopy
+Remote Copy is not configured on this system.
+
+[22:43:40] alletra 10.132.30.121 $ startrcopy
+
+
+[22:43:42] alletra 10.132.30.121 $ showrcopy
+
+Remote Copy System Information
+Status: Started, Normal
+
+[22:43:42] alletra 10.132.30.121 $ creatercopytarget PRIMERA630R11U22 IP 0:4:4:10.93.18.19 1:4:4:10.93.18.20
+
+
+[22:43:43] alletra 10.132.30.121 $ showrcopy targets
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name             ID Type Status Options Policy       
+PRIMERA630R11U22  1 IP   new    -       mirror_config
+
+[22:43:43] primera 10.132.30.28 $ creatercopytarget rack13-ARCUS IP 0:1:1:10.93.18.11 1:1:1:10.93.18.13
+
+
+[22:43:44] primera 10.132.30.28 $ showrcopy targets
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name                 ID Type Status Options          Policy       
+rack13-ARCUS         29 IP   ready  -                mirror_config
+rack13-ARCUS_PRIMERA 28 FC   failed 2FF70002AC02D495 mirror_config
+
+[22:43:44] alletra 10.132.30.121 $ showrcopy links
+
+Remote Copy System Information
+Status: Started, Normal
+
+Link Information
+
+Target           Node  Address     Status Options
+PRIMERA630R11U22 0:4:4 10.93.18.19 Down   -      
+PRIMERA630R11U22 1:4:4 10.93.18.20 Down   -      
+receive          0:4:4 10.93.18.11 Up     -      
+receive          1:4:4 10.93.18.13 Up     -
+
+[22:43:45] primera 10.132.30.28 $ showrcopy links
+
+Remote Copy System Information
+Status: Started, Normal
+
+Link Information
+
+Target               Node  Address          Status Options
+rack13-ARCUS         0:1:1 10.93.18.11      Up     -      
+rack13-ARCUS         1:1:1 10.93.18.13      Up     -      
+rack13-ARCUS_PRIMERA 0:3:2 20330002AC02D495 Down   -      
+rack13-ARCUS_PRIMERA 1:3:2 21340002AC02D495 Down   -      
+receive              0:3:2 20330002AC02D495 Up     -      
+receive              1:3:2 21340002AC02D495 Up     -      
+receive              0:1:1 10.93.18.19      Up     -      
+receive              1:1:1 10.93.18.20      Up     -
+
+[22:44:00] alletra 10.132.30.121 $ showrcopy links
+
+Remote Copy System Information
+Status: Started, Normal
+
+Link Information
+
+Target           Node  Address     Status Options
+PRIMERA630R11U22 0:4:4 10.93.18.19 Up     -      
+PRIMERA630R11U22 1:4:4 10.93.18.20 Up     -      
+receive          0:4:4 10.93.18.11 Up     -      
+receive          1:4:4 10.93.18.13 Up     -
+
+[22:44:01] primera 10.132.30.28 $ showrcopy links
+
+Remote Copy System Information
+Status: Started, Normal
+
+Link Information
+
+Target               Node  Address          Status Options
+rack13-ARCUS         0:1:1 10.93.18.11      Up     -      
+rack13-ARCUS         1:1:1 10.93.18.13      Up     -      
+rack13-ARCUS_PRIMERA 0:3:2 20330002AC02D495 Down   -      
+rack13-ARCUS_PRIMERA 1:3:2 21340002AC02D495 Down   -      
+receive              0:3:2 20330002AC02D495 Up     -      
+receive              1:3:2 21340002AC02D495 Up     -      
+receive              0:1:1 10.93.18.19      Up     -      
+receive              1:1:1 10.93.18.20      Up     -
+
+[22:44:01] alletra 10.132.30.121 $ showrcopy targets
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name             ID Type Status Options Policy       
+PRIMERA630R11U22  1 IP   ready  -       mirror_config
+
+[22:44:01] alletra 10.132.30.121 $ showrctransport -rcip
+N:S:P State HwAddr       IPAddress   PeerIPAddress Netmask/PrefixLen Gateway  MTU   Rate Duplex
+0:4:4 ready 40A6B7D7D1EB 10.93.18.11 10.93.18.19   255.255.254.0     -       1500 10Gbps Full  
+1:4:4 ready 40A6B7D7C5C3 10.93.18.13 10.93.18.20   255.255.254.0     -       1500 10Gbps Full
+
+[22:44:02] primera 10.132.30.28 $ showrcopy targets
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name                 ID Type Status Options          Policy       
+rack13-ARCUS         29 IP   ready  -                mirror_config
+rack13-ARCUS_PRIMERA 28 FC   failed 2FF70002AC02D495 mirror_config
+
+[22:44:02] primera 10.132.30.28 $ showrctransport -rcip
+N:S:P State HwAddr       IPAddress   PeerIPAddress Netmask/PrefixLen Gateway     MTU   Rate Duplex
+0:1:1 ready 5CBA2CD416D1 10.93.18.19 10.93.18.11   255.255.254.0     10.93.18.1 1500 10Gbps Full  
+1:1:1 ready 5CBA2CD41635 10.93.18.20 10.93.18.13   255.255.254.0     10.93.18.1 1500 10Gbps Full

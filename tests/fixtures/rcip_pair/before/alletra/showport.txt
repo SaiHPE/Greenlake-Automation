@@ -1,0 +1,31 @@
+N:S:P      Mode               State --Node_WWN/IP--- -Port_WWN/HW_Addr-    Type Protocol Label
+0:1:1 initiator               ready       16.1.14.90       88E9A4D8391A    disk     NVMe  DP-1
+0:1:2 initiator               ready       16.1.15.90       88E9A4D8391B    disk     NVMe  DP-2
+0:2:1 initiator               ready         16.1.8.1       88E9A4D889F6    disk     NVMe  DP-1
+0:2:2 initiator               ready         16.1.9.1       88E9A4D889F7    disk     NVMe  DP-2
+0:3:1    target           loss_sync 2FF70002AC02D495   20310002AC02D495    free       FC     -
+0:3:2    target           loss_sync 2FF70002AC02D495   20320002AC02D495    free       FC     -
+0:3:3    target               ready 2FF70002AC02D495   20330002AC02D495    host       FC     -
+0:3:4    target               ready 2FF70002AC02D495   20340002AC02D495    host       FC     -
+0:4:1    target               ready      10.93.18.10       40A6B7D7D1E8    host    iSCSI     -
+0:4:2    target             offline          0.0.0.0       40A6B7D7D1E9    free    iSCSI     -
+0:4:3      peer             offline                -       40A6B7D7D1EA    free       IP     -
+0:4:4      peer             offline                -       40A6B7D7D1EB    free       IP     -
+0:5:1      peer link_idle_for_reset                -        202AC000103 cluster       IP     -
+0:5:2      peer link_idle_for_reset                -        202AC000104 cluster       IP     -
+1:1:1 initiator               ready       16.1.14.91       88E9A4D8A96A    disk     NVMe  DP-1
+1:1:2 initiator               ready       16.1.15.91       88E9A4D8A96B    disk     NVMe  DP-2
+1:2:1 initiator               ready         16.1.8.2       88E9A4D8995C    disk     NVMe  DP-1
+1:2:2 initiator               ready         16.1.9.2       88E9A4D8995D    disk     NVMe  DP-2
+1:3:1    target           loss_sync 2FF70002AC02D495   21310002AC02D495    free       FC     -
+1:3:2    target           loss_sync 2FF70002AC02D495   21320002AC02D495    free       FC     -
+1:3:3    target               ready 2FF70002AC02D495   21330002AC02D495    host       FC     -
+1:3:4    target               ready 2FF70002AC02D495   21340002AC02D495    host       FC     -
+1:4:1    target               ready      10.93.18.12       40A6B7D7C5C0    host    iSCSI     -
+1:4:2    target             offline          0.0.0.0       40A6B7D7C5C1    free    iSCSI     -
+1:4:3      peer             offline                -       40A6B7D7C5C2    free       IP     -
+1:4:4      peer             offline                -       40A6B7D7C5C3    free       IP     -
+1:5:1      peer link_idle_for_reset                -        202AC000105 cluster       IP     -
+1:5:2      peer link_idle_for_reset                -        202AC000106 cluster       IP     -
+----------------------------------------------------------------------------------------------
+   28                                                                                         

@@ -1,0 +1,11 @@
+Starting Server
+Test length (secs):	 172800
+Time now (secs):	 1791821959
+Min run time (secs):	 1791994759
+Destination Addr:	 10.54.122.92
+Running link test on:	 1:4:3
+Adding route:            10.54.122.92 -> 10.54.127.254
+Local IP Addr:           10.54.122.93
+Local Device name:       eth11
+
+

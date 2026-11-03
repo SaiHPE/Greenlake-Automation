@@ -1,0 +1,12 @@
+Release version 10.5.55
+Release Type: Standard Support Release
+
+Component Name                   Version                         
+CLI Server                       10.5.55                         
+CLI Client                       10.5.55                         
+System Manager                   10.5.55                         
+Kernel                           10.5.0                          
+IO Stack                         10.5.55                         
+Drive Firmware                   10.5.55                         
+Enclosure Firmware               10.5.55                         
+Upgrade Tool                     91 (261005)                     

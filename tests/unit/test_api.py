@@ -1,0 +1,565 @@
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+
+from alletra_onboard import __version__
+from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
+from alletra_onboard.api.app import create_app
+from alletra_onboard.application.platform.intake import csv_template
+from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+from alletra_onboard.application.service import OnboardingService
+from alletra_onboard.config import Settings
+from alletra_onboard.domain.models import (
+    ArrayWorkItem,
+    DsccSetupConfig,
+    NetworkConfig,
+    VerificationReport,
+)
+
+
+def _client(tmp_path) -> TestClient:
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(Settings(), store, InMemoryEventBus())
+    return TestClient(create_app(service))
+
+
+def _work_item_payload() -> dict:
+    item = ArrayWorkItem(
+        serial_number="SGHD45FF0Y",
+        part_number="S0B84A",
+        subscription_key=SecretStr("REALKEY123"),
+        service_catalog_region_id="ap-northeast",
+        dscc_region_code="jp1",
+        cloudinit_url="https://169.254.239.27/cloudinit",
+        network=NetworkConfig(
+            mgmt_ipv4="10.64.154.225",
+            mask="255.255.248.0",
+            gateway="10.64.159.254",
+            dns=["10.203.96.10"],
+            ntp="ntp.example.com",
+            timezone="Asia/Kolkata",
+        ),
+        dscc_setup=DsccSetupConfig(system_name="array01", country="India"),
+    )
+    payload = item.model_dump(mode="json")
+    payload["subscription_key"] = "REALKEY123"  # model_dump masks; the client sends the real key
+    return payload
+
+
+def test_health(tmp_path):
+    body = _client(tmp_path).get("/health").json()
+    assert body["status"] == "ok"
+    assert body["version"] == __version__  # SPEC-006 R1: the session report names the build
+
+
+def test_index_is_revalidated_while_hashed_assets_cache_forever(tmp_path):
+    # The UI is served from the same origin every release; without this policy the browser keeps
+    # showing the PREVIOUS interface after an upgrade until a hard refresh (seen live on 0.13.0).
+    client = _client(tmp_path)
+    index = client.get("/")
+    assert index.status_code == 200
+    assert index.headers.get("cache-control") == "no-cache"
+    asset = client.get("/assets/anything.js")  # policy applies to the path, whatever the status
+    assert asset.headers.get("cache-control") == "public, max-age=31536000, immutable"
+
+
+def test_app_profile_serves_the_step_registry(tmp_path):
+    # ADR 0011 Phase 2: the wizard renders from the SERVED registry — this payload IS the contract
+    # that replaced the hand-synced frontend mirror (modes.ts).
+    body = _client(tmp_path).get("/app/profile").json()
+    assert [s["key"] for s in body["steps"]] == [
+        "greenlake", "cloudinit", "dscc", "discover", "zoning", "provision",
+        "replicate", "failover_test", "verify", "asbuilt",
+    ]
+    assert all(s["label"] and s["kind"] in ("init", "provision", "replicate", "verify") and s["phase"] for s in body["steps"])
+    assert body["modes"]["VERIFY_ONLY"] == ["verify", "asbuilt"]
+    assert body["modes"]["FULL_ONBOARDING"] == ["greenlake", "cloudinit", "dscc", "verify", "asbuilt"]
+    assert body["modes"]["PROVISION_ONLY"] == ["discover", "zoning", "provision", "verify", "asbuilt"]
+    # BOTH is every step EXCEPT the replication pair, which needs the Replication tab (SPEC-015 R4).
+    assert body["modes"]["BOTH"] == [s["key"] for s in body["steps"] if s["kind"] != "replicate"]
+    assert body["modes"]["REPLICATE"] == ["discover", "zoning", "provision", "replicate", "failover_test", "verify", "asbuilt"]
+    # Optional-dependency capability: a frozen build that fails to bundle the 3PAR SDK degrades
+    # silently until WSAPI is first touched (how v0.14.0-rc.1 shipped broken). In the dev env the
+    # SDK is installed so this must be True; on a packaged build, this one field is the smoke test.
+    assert body["capabilities"]["wsapi_sdk"] is True
+
+
+def test_create_get_and_list_runs_masks_secret(tmp_path):
+    client = _client(tmp_path)
+    created = client.post("/runs", json={"work_item": _work_item_payload()})
+    assert created.status_code == 200
+    run_id = created.json()["run"]["run_id"]
+
+    detail = client.get(f"/runs/{run_id}")
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["run"]["serial_number"] == "SGHD45FF0Y"
+    # the API must never echo the subscription key
+    assert "REALKEY123" not in detail.text
+
+    assert any(r["run_id"] == run_id for r in client.get("/runs").json()["runs"])
+    events = client.get(f"/runs/{run_id}/events").json()["events"]
+    assert events and events[0]["event_type"] == "run.created"
+
+
+def test_run_not_found_is_404(tmp_path):
+    client = _client(tmp_path)
+    assert client.get("/runs/nope").status_code == 404
+    assert client.post("/runs/nope/provision", json={}).status_code == 404
+
+
+def test_mark_complete(tmp_path):
+    client = _client(tmp_path)
+    run_id = client.post("/runs", json={"work_item": _work_item_payload()}).json()["run"]["run_id"]
+    done = client.post(f"/runs/{run_id}/complete")
+    assert done.json()["run"]["status"] == "succeeded"
+
+
+def test_prereq_firewall_and_connectivity(tmp_path, monkeypatch):
+    client = _client(tmp_path)
+
+    fw = client.get("/prereqs/firewall?region=jp1")
+    assert fw.status_code == 200
+    rules = fw.json()["rules"]
+    fqdns = [r["fqdn"] for r in rules]
+    assert "console.greenlake.hpe.com" in fqdns
+    assert "jp1.data.cloud.hpe.com" in fqdns  # <instance> substituted for the region
+    assert all(r["port"] == "TCP 443" for r in rules)
+
+    txt = client.get("/prereqs/firewall.txt?region=jp1")
+    assert txt.status_code == 200
+    assert "attachment" in txt.headers["content-disposition"]
+    assert "console.greenlake.hpe.com" in txt.text
+
+    # Connectivity does real network I/O — stub it so the test stays hermetic.
+    from alletra_onboard.application.platform import prereqs
+
+    async def fake_check(region="jp1", timeout=5.0, manual_proxy=None):
+        return [
+            prereqs.ConnectivityResult("console.greenlake.hpe.com", 443, True, "reachable"),
+            prereqs.ConnectivityResult("device.cloud.hpe.com", 443, False, "blocked (ConnectionRefusedError)"),
+        ]
+
+    monkeypatch.setattr(prereqs, "check_connectivity", fake_check)
+    conn = client.get("/prereqs/connectivity?region=jp1").json()
+    assert conn["all_reachable"] is False
+    assert {c["host"] for c in conn["results"]} == {"console.greenlake.hpe.com", "device.cloud.hpe.com"}
+
+
+def test_init_sheet_template_has_prerequisites_tab(tmp_path):
+    import io
+
+    from openpyxl import load_workbook
+
+    resp = _client(tmp_path).get("/init-sheet/template")
+    assert resp.status_code == 200
+    wb = load_workbook(io.BytesIO(resp.content))
+    assert wb.sheetnames[0] == "Initialisation"  # the fillable tab stays first (the parser reads it)
+    assert "Prerequisites" in wb.sheetnames
+
+
+def test_verify_endpoint_accepts_credentials_and_validates(tmp_path):
+    # Inject a stub verify_fn so the endpoint never attempts a real SSH connection.
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(
+        Settings(), store, InMemoryEventBus(),
+        verify_fn=lambda item, username, password: VerificationReport(reachable=True),
+    )
+    client = TestClient(create_app(service))
+    run_id = client.post("/runs", json={"work_item": _work_item_payload()}).json()["run"]["run_id"]
+    client.post(f"/runs/{run_id}/complete")
+
+    ok = client.post(f"/runs/{run_id}/verify", json={"username": "3paradm", "password": "pw"})
+    assert ok.status_code == 200
+
+    # SPEC-008 R2 (ADR 0013): this run came from a bare work item — no sheet credential — so a request
+    # without a full pair is refused with the operator sentence, not a schema error
+    refused = client.post(f"/runs/{run_id}/verify", json={"username": "3paradm"})
+    assert refused.status_code == 409 and "holds no array credential" in refused.json()["detail"]
+    assert client.post(f"/runs/{run_id}/verify", json={}).status_code == 409
+    # R3: the run detail says so, and never carries a password
+    detail = client.get(f"/runs/{run_id}").json()
+    assert detail["array_credential"] == {"available": False, "source": "none", "username": "", "host": "10.64.154.225"}
+    # unknown run -> 404
+    assert client.post("/runs/nope/verify", json={"username": "u", "password": "p"}).status_code == 404
+
+
+def test_template_and_parse_round_trip(tmp_path):
+    client = _client(tmp_path)
+    template = client.get("/work-items/template")
+    assert template.status_code == 200
+    assert template.text == csv_template()
+
+    parsed = client.post("/work-items/parse", json={"csv_text": template.text})
+    assert parsed.status_code == 200
+    items = parsed.json()["work_items"]
+    assert len(items) == 1 and items[0]["serial_number"] == "SGHD00EXAMPLE"
+    # parse echoes back what the operator uploaded (for the editable form) — NOT masked...
+    assert items[0]["subscription_key"] == "EXAMPLEKEY1234567890"
+    # ...except passwords, which are never echoed.
+    assert "password" not in items[0]["dscc_setup"]
+
+    bad = client.post("/work-items/parse", json={"csv_text": "not,a,real\nheader,row,x"})
+    assert bad.status_code == 422
+
+
+# A COMPLETE sheet: every main-tab required field + the Provisioning tab (ADR 0005 revision — the
+# sheet is filled in full BEFORE a mode is chosen, and the upload validates the whole superset).
+_COMPLETE_MAIN = {
+    "gl_client_id": "client-123", "gl_client_secret": "secret-xyz",
+    "gl_token_url": "https://global.api.greenlake.hpe.com/authorization/v2/oauth2/t/token",
+    "serial_number": "SGHD45FF0Y", "part_number": "S0B84A", "subscription_key": "YHHDKEY123",
+    "service_catalog_region_id": "ap-northeast", "dscc_region_code": "jp1",
+    "mgmt_ipv4": "10.64.154.225", "mask": "255.255.248.0", "gateway": "10.64.159.254",
+    "dns1": "10.203.96.10", "ntp": "ntp1.example.net", "timezone": "Asia/Kolkata",
+    "contact_first_name": "Jane", "contact_last_name": "Doe", "contact_language": "English",
+    "contact_company": "HPE", "contact_phone": "8000000000", "contact_email": "jane@example.com",
+    "dscc_system_name": "MPB10K-TEST", "dscc_country": "India",
+    "secret_name": "b10000-admin", "secret_username": "3paradm",
+}
+_COMPLETE_PROV = {
+    "targets": {
+        "prov_array_host": "10.64.154.225", "prov_array_user": "3paradm", "prov_array_password": "arraypw",
+        "prov_vcenter_host": "vc.example.com", "prov_vcenter_user": "administrator@vsphere.local",
+        "prov_vcenter_password": "vcpw",
+    },
+    "volumes": [{"name": "CRV_Prod01", "size_gib": "1024"}],
+    "hostsets": [{"name": "CRVLZ_Hostset"}],
+}
+
+
+def _fill_template(template_bytes: bytes, values: dict[str, str], prov: dict | None = None) -> str:
+    """Fill the Value column of the Initialisation tab (and optionally the Provisioning + Volumes +
+    Host sets tabs) -> base64 xlsx."""
+    import base64
+    import io
+
+    from openpyxl import load_workbook
+
+    from alletra_onboard.application.platform.init_sheet import (
+        HOSTSET_COLUMNS,
+        HOSTSETS_SHEET_NAME,
+        PROVISIONING_SECTIONS,
+        PROVISIONING_SHEET_NAME,
+        SECTIONS,
+        VOLUME_COLUMNS,
+        VOLUMES_SHEET_NAME,
+    )
+
+    def _norm(s):
+        return str(s).strip().removesuffix("*").strip()
+
+    def fill_kv(ws, sections, data):
+        label_to_key = {label: key for _, fields in sections for key, label, _, _ in fields}
+        for row in ws.iter_rows(min_row=2):
+            if row[0].value is None:
+                continue
+            key = label_to_key.get(_norm(row[0].value))
+            if key in data:
+                row[1].value = data[key]
+
+    def fill_table(ws, columns, records):
+        header_to_key = {_norm(label): key for key, label, _ in columns}
+        header_row, col_of = None, {}
+        for r in ws.iter_rows():
+            found = {header_to_key[_norm(c.value)]: c.column for c in r if c.value is not None and _norm(c.value) in header_to_key}
+            if found:
+                header_row, col_of = r[0].row, found
+                break
+        for i, rec in enumerate(records):
+            for key, val in rec.items():
+                ws.cell(row=header_row + 1 + i, column=col_of[key], value=val)
+
+    wb = load_workbook(io.BytesIO(template_bytes))
+    fill_kv(wb.active, SECTIONS, values)
+    if prov is not None and PROVISIONING_SHEET_NAME in wb.sheetnames:
+        fill_kv(wb[PROVISIONING_SHEET_NAME], PROVISIONING_SECTIONS, prov.get("targets", {}))
+        fill_table(wb[VOLUMES_SHEET_NAME], VOLUME_COLUMNS, prov.get("volumes", []))
+        fill_table(wb[HOSTSETS_SHEET_NAME], HOSTSET_COLUMNS, prov.get("hostsets", []))
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return base64.b64encode(buffer.getvalue()).decode()
+
+
+def _upload_complete(client) -> str:
+    """Upload a complete sheet and return the hold token."""
+    template = client.get("/init-sheet/template").content
+    b64 = _fill_template(template, _COMPLETE_MAIN, _COMPLETE_PROV)
+    resp = client.post("/init-sheet/upload", json={"content_b64": b64})
+    assert resp.status_code == 200, resp.text
+    return resp.json()["token"]
+
+
+def test_init_sheet_upload_holds_complete_sheet_and_saves_creds(tmp_path, monkeypatch):
+    import base64
+
+    from alletra_onboard.application.platform.configuring import read_env
+
+    monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
+    client = _client(tmp_path)
+
+    template = client.get("/init-sheet/template")
+    assert template.status_code == 200
+    assert "spreadsheetml" in template.headers["content-type"]
+
+    b64 = _fill_template(template.content, _COMPLETE_MAIN, _COMPLETE_PROV)
+    resp = client.post("/init-sheet/upload", json={"content_b64": b64})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    # A complete sheet is HELD (token), not turned into a run yet — the mode step mints the run.
+    assert body["token"] and "run" not in body
+    assert body["credentials_saved"] is True
+    assert body["work_item"]["serial_number"] == "SGHD45FF0Y"
+    # the admin password is not in the sheet at all, and is never echoed to the UI
+    assert "password" not in body["work_item"]["dscc_setup"]
+    # GreenLake credentials from the sheet were written to .env
+    env = read_env(tmp_path / ".env")
+    assert env["GL_CLIENT_ID"] == "client-123"
+    assert env["GL_CLIENT_SECRET"] == "secret-xyz"
+
+    # a non-xlsx upload is a clean 422
+    bad = client.post("/init-sheet/upload", json={"content_b64": base64.b64encode(b"nope").decode()})
+    assert bad.status_code == 422
+
+
+def test_incomplete_sheet_is_rejected_regardless_of_mode(tmp_path, monkeypatch):
+    # The sheet must be COMPLETE at upload (no mode is chosen yet) — a sparse sheet is a clean 422.
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    template = client.get("/init-sheet/template").content
+    b64 = _fill_template(template, {"serial_number": "SGHD45FF0Y", "mgmt_ipv4": "10.64.154.225"})
+    resp = client.post("/init-sheet/upload", json={"content_b64": b64})
+    assert resp.status_code == 422
+    assert "API Client" in resp.text  # missing GreenLake creds reported
+
+
+def test_run_from_sheet_creates_run_with_chosen_mode(tmp_path, monkeypatch):
+    # The mode is chosen AFTER the sheet: /runs/from-sheet mints the run from the held sheet + mode.
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    token = _upload_complete(client)
+
+    resp = client.post("/runs/from-sheet", json={"token": token, "mode": "VERIFY_ONLY"})
+    assert resp.status_code == 200, resp.text
+    run = resp.json()["run"]
+    assert run["mode"] == "VERIFY_ONLY"
+    assert run["current_phase"] == "CONFIG_VERIFY"  # resumes straight to the SSH check
+    assert run["serial_number"] == "SGHD45FF0Y"
+
+    # the hold is single-use — a second attempt with the same token is a clean 410
+    again = client.post("/runs/from-sheet", json={"token": token, "mode": "BOTH"})
+    assert again.status_code == 410
+
+
+def test_run_from_sheet_unknown_token_is_410(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    resp = client.post("/runs/from-sheet", json={"token": "does-not-exist", "mode": "FULL_ONBOARDING"})
+    assert resp.status_code == 410
+
+
+def test_proxy_status_and_manual_override(tmp_path, monkeypatch):
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    for v in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        monkeypatch.delenv(v, raising=False)
+    try:
+        client = _client(tmp_path)
+        saved = client.post("/prereqs/proxy", json={"proxy": "myproxy:3128"}).json()
+        assert saved["manual"] == "myproxy:3128"
+        assert saved["effective"] == "http://myproxy:3128" and saved["source"] == "manual"
+        got = client.get("/prereqs/proxy").json()
+        assert got["source"] == "manual" and got["effective"] == "http://myproxy:3128"
+        cleared = client.post("/prereqs/proxy", json={"proxy": ""}).json()
+        assert not cleared["manual"]  # override removed -> falls back to auto-detect
+    finally:
+        for v in ("ALLETRA_PROXY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy"):
+            os.environ.pop(v, None)
+
+
+def test_proxy_can_be_forced_direct_and_the_choice_persists(tmp_path, monkeypatch):
+    """REPORTED FROM THE UI: a detected proxy could not be removed — an empty override means
+    "auto-detect", so there was no way to say "this machine has no proxy". Saving the direct
+    sentinel must: report forced_direct, resolve to no proxy, clear the published env, and land in
+    .env so it survives a restart (an empty value cannot — set_env_values ignores empties by design
+    so a blank field never wipes a saved secret)."""
+    import os
+
+    from alletra_onboard.application.platform import proxy as proxymod
+
+    monkeypatch.chdir(tmp_path)
+    for v in ("ALLETRA_PROXY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        monkeypatch.delenv(v, raising=False)
+    # A machine WITH a system proxy, so forcing direct has something to override.
+    monkeypatch.setattr(proxymod, "_win_system_proxy", lambda url: "http://detected:8080")
+    try:
+        client = _client(tmp_path)
+        auto = client.get("/prereqs/proxy").json()
+        assert auto["source"] == "system" and auto["detected"] == "http://detected:8080"
+
+        forced = client.post("/prereqs/proxy", json={"proxy": "direct"}).json()   # any accepted word
+        assert forced["forced_direct"] is True
+        assert forced["effective"] is None and forced["source"] == "direct"
+        assert forced["detected"] == "http://detected:8080"    # still reported, just not used
+        assert "HTTPS_PROXY" not in os.environ                 # and nothing left routing traffic
+
+        assert "ALLETRA_PROXY=direct://" in (tmp_path / ".env").read_text(encoding="utf-8")
+
+        back = client.post("/prereqs/proxy", json={"proxy": ""}).json()           # -> auto-detect
+        assert back["forced_direct"] is False and back["effective"] == "http://detected:8080"
+    finally:
+        for v in ("ALLETRA_PROXY", "HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy"):
+            os.environ.pop(v, None)
+
+
+def test_app_profile_defaults_to_full(tmp_path, monkeypatch):
+    monkeypatch.delenv("ALLETRA_PROFILE", raising=False)
+    prof = _client(tmp_path).get("/app/profile").json()
+    assert prof["profile"] == "full" and prof["init_only"] is False and "Onboarding" in prof["title"]
+
+
+def test_init_only_profile_template_has_no_provisioning_and_uploads(tmp_path, monkeypatch):
+    import io
+
+    from openpyxl import load_workbook
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ALLETRA_PROFILE", "init-only")
+    client = _client(tmp_path)
+
+    prof = client.get("/app/profile").json()
+    assert prof["init_only"] is True and prof["title"] == "Alletra MP Initialization"
+
+    # the init-only template ships an onboarding-only sheet — no Provisioning tab
+    tpl = client.get("/init-sheet/template").content
+    wb = load_workbook(io.BytesIO(tpl))
+    assert "Initialisation" in wb.sheetnames and "Provisioning" not in wb.sheetnames
+
+    # an onboarding-only sheet (no Provisioning creds) uploads fine under the init-only profile
+    resp = client.post("/init-sheet/upload", json={"content_b64": _fill_template(tpl, _COMPLETE_MAIN)})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["token"]
+    # and it mints an onboarding run
+    run = client.post("/runs/from-sheet", json={"token": resp.json()["token"], "mode": "FULL_ONBOARDING"}).json()["run"]
+    assert run["mode"] == "FULL_ONBOARDING"
+
+
+def test_storage_builder_saves_composition_and_objects_needs_discovery(tmp_path):
+    client = _client(tmp_path)
+    token = _upload_complete(client)
+    run = client.post("/runs/from-sheet", json={"token": token, "mode": "BOTH"}).json()["run"]
+    rid = run["run_id"]
+
+    # the dropdown palette needs discovery first -> 409
+    assert client.get(f"/runs/{rid}/storage/objects").status_code == 409
+
+    # the builder saves the composed host-set membership + exports onto the intent (no discovery needed)
+    builder = {
+        "host_sets": [{"name": "CRVLZ_Hostset", "members": ["esx1", "esx2"]}],
+        "exports": [{"source_kind": "volume", "source_name": "CRV_Prod01",
+                     "target_kind": "hostset", "target_name": "CRVLZ_Hostset", "lun": 10}],
+        "vvsets": {},
+    }
+    resp = client.post(f"/runs/{rid}/storage/builder", json=builder)
+    assert resp.status_code == 200, resp.text
+    comp = resp.json()
+    assert comp["exports"][0]["lun"] == 10
+    assert comp["host_sets"][0]["members"] == ["esx1", "esx2"]
+
+    # tier-2 path verify is registered and also needs discovery first -> 409
+    assert client.post(f"/runs/{rid}/storage/verify-paths").status_code == 409
+
+    # SPEC-016: the replication preview is registered; a workbook without the Replication tab -> 409
+    refused = client.post(f"/runs/{rid}/replication/preview")
+    assert refused.status_code == 409 and "no Replication tab" in refused.json()["detail"]
+    # SPEC-017: so is the failover test, with and without a body
+    assert client.post(f"/runs/{rid}/replication/failover-test").status_code == 409
+    refused = client.post(f"/runs/{rid}/replication/failover-test", json={"group": "zz_rc_test_rcg", "confirm": None})
+    assert refused.status_code == 409 and "no Replication tab" in refused.json()["detail"]
+    # and REPLICATE mode cannot even be minted from such a workbook -> 422 with the sentence
+    token = _upload_complete(client)
+    minted = client.post("/runs/from-sheet", json={"token": token, "mode": "REPLICATE"})
+    assert minted.status_code == 422 and "'Replication' tab" in minted.json()["detail"]
+
+
+def test_config_roundtrip_masks_secret(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # the API writes .env in the working directory
+    client = _client(tmp_path)
+    saved = client.post(
+        "/config",
+        json={"gl_client_id": "abc", "gl_client_secret": "supersecret", "gl_token_url": "https://t"},
+    )
+    assert saved.status_code == 200
+    body = saved.json()
+    assert body["configured"] is True
+    assert body["values"]["GL_CLIENT_ID"] == "abc"
+    assert body["values"]["GL_CLIENT_SECRET"] == "****"
+    assert "supersecret" not in saved.text
+
+
+def test_init_sheet_compose_round_trips_through_upload(tmp_path, monkeypatch):
+    """SPEC-006 R3: the session runner sends the operator's sheet + scenario rows and uploads what comes
+    back; the run's intent must carry the scenario rows and nothing from the base's row tables."""
+    import base64
+
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    template = client.get("/init-sheet/template").content
+    base_b64 = _fill_template(template, _COMPLETE_MAIN, _COMPLETE_PROV)
+    resp = client.post("/init-sheet/compose", json={
+        "base_b64": base_b64,
+        "volumes": [{"name": "zz_s6_vol01", "size_gib": "1", "vvset": "zz_s6_vvs"}],
+        "hostsets": [{"name": "zz_s6_hs", "members": "esx1"}],
+    })
+    assert resp.status_code == 200, resp.text
+    composed = resp.json()["content_b64"]
+    assert base64.b64decode(composed)[:2] == b"PK"
+    up = client.post("/init-sheet/upload", json={"content_b64": composed})
+    assert up.status_code == 200, up.text
+    # SPEC-006 R1: the runner learns the array from the sheet — hosts and users, never a password
+    targets = up.json()["targets"]
+    assert targets["array_host"] == _COMPLETE_PROV["targets"]["prov_array_host"]
+    assert targets["array_user"] == "3paradm"
+    assert not any("password" in k for k in targets)
+    run = client.post("/runs/from-sheet", json={"token": up.json()["token"], "mode": "PROVISION_ONLY"})
+    assert run.status_code == 200, run.text
+    intent = client.get(f"/runs/{run.json()['run']['run_id']}").json()
+    # the intent is not echoed with passwords; check through the objects palette shape instead
+    assert intent["run"]["run_id"]
+    bad = client.post("/init-sheet/compose", json={"base_b64": base64.b64encode(b"not a workbook").decode()})
+    assert bad.status_code in (400, 422)
+
+
+def test_verify_and_asbuilt_use_the_sheets_array_credential(tmp_path, monkeypatch):
+    """SPEC-008 R2/R3 through the API: a run minted from a complete sheet holds the Provisioning tab's
+    array admin; Verify with `{}` uses it (the fake verify_fn sees the sheet's user/password) and
+    GET /runs/{id} names the account without the password."""
+    monkeypatch.chdir(tmp_path)
+    seen: list[tuple[str, str]] = []
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(
+        Settings(), store, InMemoryEventBus(),
+        verify_fn=lambda item, u, p: (seen.append((u, p)), VerificationReport(reachable=True))[1],
+    )
+    client = TestClient(create_app(service))
+    token = _upload_complete(client)
+    run_id = client.post("/runs/from-sheet", json={"token": token, "mode": "PROVISION_ONLY"}).json()["run"]["run_id"]
+
+    detail = client.get(f"/runs/{run_id}").json()
+    assert detail["array_credential"]["available"] is True
+    assert detail["array_credential"]["source"] == "provisioning"
+    assert detail["array_credential"]["username"] == "3paradm"
+    assert detail["array_credential"]["host"] == "10.64.154.225"
+    assert "arraypw" not in client.get(f"/runs/{run_id}").text
+
+    assert client.post(f"/runs/{run_id}/verify", json={}).status_code == 200
+    assert seen == [("3paradm", "arraypw")]
+    # an explicit pair overrides
+    client.post(f"/runs/{run_id}/verify", json={"username": "other", "password": "rotated"})
+    assert seen[-1] == ("other", "rotated")
+    # the credential is in no event
+    events = client.get(f"/runs/{run_id}/events").text
+    assert "arraypw" not in events and "rotated" not in events
