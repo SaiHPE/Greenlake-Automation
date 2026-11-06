@@ -197,6 +197,17 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
                   <Value>{targets[`${key}_host`] ? `${targets[`${key}_user`] ?? ''}@${targets[`${key}_host`]}` : null}</Value>
                 </NameValuePair>
               ))}
+              {!!result?.replication_ports?.length && (
+                <NameValuePair name="Replication ports to set up">
+                  <Box>
+                    {result.replication_ports.map((line) => (
+                      <Text key={line} size="small" style={{ whiteSpace: 'nowrap' }}>
+                        {line}
+                      </Text>
+                    ))}
+                  </Box>
+                </NameValuePair>
+              )}
             </NameValueList>
           </Box>
         </Panel>

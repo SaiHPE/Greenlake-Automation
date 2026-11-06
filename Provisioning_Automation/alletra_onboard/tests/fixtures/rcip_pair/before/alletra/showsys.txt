@@ -1,0 +1,3 @@
+                                                                    ---------------(MiB)----------------
+     ID ----Name---- --------Model--------- --Serial-- Nodes Master TotalCap AllocCap  FreeCap FailedCap
+0x2D495 rack13-ARCUS HPE Alletra Storage MP CZ2D2K014S     2      0 21958656   128009 19385335         0

@@ -7,8 +7,8 @@ flow. Area rules are in `.github/instructions/*.instructions.md` and apply by fi
 The rules that matter most, in short:
 
 - The tool never writes to a SAN switch. Array SSH is read-only through an allowlist; writes go
-  through WSAPI after the operator approves a plan. (ADR 0015 plans a write-scoped SSH client for
-  Remote Copy links and targets; it is not built yet.)
+  through WSAPI after the operator approves a plan. The one SSH write path is ADR 0015's
+  `ArrayRcCliClient`, for Remote Copy ports, targets and links, behind the same approval.
 - A run is one array. Steps and modes come from `domain/workflow.py` only.
 - No secrets, customer names or customer addresses in git. Never commit `frontend/dist`.
 - Tests use fakes and captured output only. "Done" means run live on lab hardware.

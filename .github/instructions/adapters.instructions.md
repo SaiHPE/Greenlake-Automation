@@ -6,8 +6,9 @@ applyTo: "Provisioning_Automation/alletra_onboard/src/alletra_onboard/adapters/*
 - An adapter talks to one outside system and nothing else; the domain never imports it.
 - Array SSH commands must be in `ALLOWED_COMMANDS` (`adapters/array/cli_client.py`); switch commands
   in the Brocade client's allowlist. Adding one needs a unit test and a sentence in the pull request.
-  Writes go through WSAPI after the operator approves a plan. The Remote Copy write-scoped SSH
-  client of ADR 0015 is planned (BL-41), not built. Never a switch write (ADR 0012).
+  Writes go through WSAPI after the operator approves a plan. The one SSH write path is ADR 0015's
+  `ArrayRcCliClient` (`RC_WRITE_FORMS` in `adapters/array/rc_cli_client.py`): a new form needs a test
+  pinned to the array's own help or a live answer. Never a switch write (ADR 0012).
 - Every command sent to a device is recorded with `command_log.record(...)`, with the client's
   secrets passed in so they are redacted.
 - Parse real output: capture it read-only on the lab, scrub it (no passwords, no customer data),

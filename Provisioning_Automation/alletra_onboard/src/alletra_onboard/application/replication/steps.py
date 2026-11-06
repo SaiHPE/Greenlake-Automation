@@ -13,6 +13,7 @@ from functools import partial
 from alletra_onboard.application.replication import apply as replication_apply
 from alletra_onboard.application.replication import failover as replication_failover
 from alletra_onboard.application.replication import link_check as replication_link
+from alletra_onboard.application.replication import partnership as replication_partnership
 from alletra_onboard.application.replication import plan as replication_plan
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.replication import verify as replication_verify
@@ -225,13 +226,17 @@ class ReplicationSteps:
         coord = self._coord
         phase = WorkflowPhase.STORAGE_REPLICATE
         coord.set_state(run, RunStatus.RUNNING, phase)
-        coord.emit(run.run_id, phase, "replication.apply.started", "Configuring replication over WSAPI…")
+        coord.emit(run.run_id, phase, "replication.apply.started",
+                   "Setting up the replication ports and the partnership over SSH…" if plan.sets_up_partnership
+                   else "Configuring replication over WSAPI…")
         loop = asyncio.get_running_loop()
 
         def progress(message: str) -> None:
             loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
 
-        result = await asyncio.to_thread(partial(replication_apply.apply_plan, plan, intent, progress=progress))
+        result = await asyncio.to_thread(partial(
+            replication_partnership.apply_partnership if plan.sets_up_partnership else replication_apply.apply_plan,
+            plan, intent, progress=progress))
         result.notes.extend(notes or [])
         # the approval is spent: a second apply needs a fresh read and plan
         self._plan.pop(run.run_id, None)
@@ -247,9 +252,10 @@ class ReplicationSteps:
             return
         coord.set_state(run, RunStatus.READY, phase)
         groups = ", ".join(result.groups_created) or "no new group"
-        coord.emit(run.run_id, phase, "replication.applied",
-                   f"Replication configured — {groups}; {created} write(s), {existed} already there. Verify replication to read it back.",
-                   data={"result": result.model_dump(mode="json")})
+        message = (f"Ports and partnership set up — {created} step(s), every link Up. Read both arrays again, "
+                   "check the link, then configure the groups." if plan.sets_up_partnership else
+                   f"Replication configured — {groups}; {created} write(s), {existed} already there. Verify replication to read it back.")
+        coord.emit(run.run_id, phase, "replication.applied", message, data={"result": result.model_dump(mode="json")})
 
     # ------------------------------------------------------------------ R6: verify (read-only)
 

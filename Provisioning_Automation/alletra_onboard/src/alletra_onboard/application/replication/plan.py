@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from alletra_onboard.application.replication.partnership import plan_partnership
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     RTT_LIMIT_MS,
@@ -122,17 +123,18 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
     row_modes = {row.mode for row in intent.protections}
     planned = {row.group_name for row in intent.protections} | {TEST_GROUP}
     report.partnership = find_partnership(primary, peer, modes=row_modes, own_groups=planned)
-    if report.partnership is None:
+    sets_up = bool(intent.network) and report.partnership is None   # SPEC-021: the tool makes it
+    if report.partnership is None and not sets_up:
         f.append(
             f"No Remote Copy partnership between {a} and {b}: neither array has a target whose links point at "
-            f"the other's RCIP addresses. Set up the partnership on the arrays first; this tool does not create "
-            "partnerships yet."
+            f"the other's RCIP addresses. Name the replication ports on the Replication network tab and the tool "
+            "sets it up, or set it up on the arrays first."
         )
         fc = [t.name for v in (primary, peer) for t in v.targets if t.type.upper() == "FC"]
         if fc:
             f.append(f"Remote Copy over Fibre Channel target(s) found ({', '.join(sorted(set(fc)))}); this tool "
                      "supports Remote Copy over IP only.")
-    else:
+    elif report.partnership is not None:
         p = report.partnership
         used = [p.target_for(m) for m in sorted(row_modes)]
         for t in [t for t in used if t is not None] or p.targets[:1]:
@@ -142,8 +144,16 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                     f"{t.links_up} of {t.links_total} Up, {b} → {a} via '{t.peer_name}' has {t.peer_links_up} of "
                     f"{t.peer_links_total} Up."
                 )
+    if sets_up and len(row_modes) > 1:
+        # SPEC-021 makes one target per pair, and every group on a target must replicate in one mode: say
+        # so before the partnership is set up, not after.
+        f.append(
+            f"The Replication tab mixes sync and async rows, and the partnership the tool sets up between {a} and "
+            f"{b} has one target; every group on one target must replicate in the same mode (HPE Support Matrix). "
+            "Make all rows one mode, or set up a second target over spare RCIP ports on the arrays first."
+        )
     for view, label in ((primary, a), (peer, b)):
-        if not view.rc_started:
+        if not view.rc_started and not sets_up:
             f.append(f"Remote Copy is not started on {label} (showrcopy says '{view.rc_status or 'unknown'}'); "
                      "it has to be started before groups can be created.")
 
@@ -158,7 +168,7 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
             if mode in p.target_by_mode:
                 continue
             tail = ("Use {have} on the Replication tab, or a second target over spare RCIP ports (a link belongs "
-                    "to one target; set it up on the arrays, this tool does not create targets yet).")
+                    "to one target; set it up on the arrays, the tool makes only the first target of a pair).")
             if len(p.targets) == 1 and p.targets[0].modes:
                 t = p.targets[0]
                 have = t.modes[0]
@@ -183,7 +193,7 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                     f"The Replication tab mixes sync and async rows and {a} → {b} has one target ('{p.targets[0].name}'); "
                     "every group on one target must replicate in the same mode (HPE Support Matrix). Make all rows one "
                     "mode, or add a second target over spare RCIP ports (a link belongs to one target; set it up on "
-                    "the arrays, this tool does not create targets yet)."
+                    "the arrays, the tool makes only the first target of a pair)."
                 )
             else:
                 other = next((m for m, n in p.target_by_mode.items() if m != mode), None)
@@ -199,7 +209,7 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                     f"None of the {len(p.targets)} targets from {a} to {b} can carry a {mode} group ({'; '.join(parts)}); "
                     "every group on one target must replicate in the same mode (HPE Support Matrix). Use that mode on "
                     "the Replication tab, or a target of its own over spare RCIP ports (a link belongs to one target; "
-                    "set it up on the arrays, this tool does not create targets yet)."
+                    "set it up on the arrays, the tool makes only the first target of a pair)."
                 )
     for row in intent.protections:
         limit = RTT_LIMIT_MS[row.mode]
@@ -296,6 +306,19 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
     primary, peer = report.primary, report.peer
     partnership = report.partnership
     a, b = primary.name or primary.host, peer.name or peer.host
+    # SPEC-021 R3: the partnership rows come first; when any is to create, the groups wait for a second
+    # preview (the link check needs the partnership, and the groups need the link check).
+    p_actions, p_blockers, p_notes = plan_partnership(report, intent)
+    plan.actions += p_actions
+    plan.blockers += p_blockers
+    plan.notes += p_notes
+    if plan.sets_up_partnership or (intent.network and partnership is None):
+        for seq, call in enumerate((c for x in p_actions for c in x.calls), start=1):
+            call.seq = seq
+        plan.notes.append(f"This configures the replication ports and the partnership between {a} and {b} first. "
+                          "The Remote Copy groups are planned after it: read both arrays again, check the link, "
+                          "then configure the groups.")
+        return plan
 
     def target_for(mode: str) -> tuple[str, bool]:
         """(target name, mirror_config) for a row's mode — the per-mode choice, else the first target."""
@@ -307,7 +330,13 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
     rows: list[tuple[ProtectionRequest, list[str], str]] = []
     for row in intent.protections:
         members = primary.vvsets.get(row.vvset) or [v.name for v in provisioning.volumes if v.vvset == row.vvset]
-        local_cpg = next((v.cpg for v in provisioning.volumes if v.vvset == row.vvset), "")
+        # WSAPI refuses a group with a target userCPG and no localUserCPG (live 2026-11-03, HTTP 400 code 40).
+        local_cpg = next((v.cpg for v in provisioning.volumes if v.vvset == row.vvset), "") or provisioning.default_cpg
+        if primary.cpg_free_mib and local_cpg not in primary.cpg_free_mib:
+            plan.blockers.append(
+                f"Remote Copy group for '{row.vvset}' needs a local CPG on {a}; '{local_cpg}' is not one of its CPGs "
+                f"({', '.join(sorted(primary.cpg_free_mib))}). Set 'Default CPG' on the Provisioning tab."
+            )
         rows.append((row, members, local_cpg))
     seq = 0
 
@@ -322,7 +351,12 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
         lead = intent.protections[0] if intent.protections else ProtectionRequest(vvset=TEST_VVSET, peer_cpg="")
         test_row = ProtectionRequest(vvset=TEST_VVSET, mode=lead.mode, rpo_minutes=lead.rpo_minutes, peer_cpg=lead.peer_cpg,
                                      peer_vvset=TEST_PEER_VVSET)
-        test_cpg = next((v.cpg for v in provisioning.volumes), "")
+        test_cpg = next((v.cpg for v in provisioning.volumes), "") or provisioning.default_cpg
+        if TEST_VOLUME not in primary.volume_size_mib and primary.cpg_free_mib and test_cpg not in primary.cpg_free_mib:
+            plan.blockers.append(
+                f"The failover test volume {TEST_VOLUME} goes in CPG '{test_cpg}' on {a}, which has no CPG of that name "
+                f"(it has: {', '.join(sorted(primary.cpg_free_mib))}). Set 'Default CPG' on the Provisioning tab."
+            )
         if TEST_VOLUME not in primary.volume_size_mib:
             create_vv = PlannedCall(where="A", wsapi=f"POST /volumes {{name: {TEST_VOLUME}, cpg: {test_cpg}, sizeMiB: {TEST_VOLUME_GIB * 1024}, tpvv: true}}",
                                     cli=f"createvv -tpvv {test_cpg} {TEST_VOLUME} {TEST_VOLUME_GIB}g")

@@ -1,0 +1,12 @@
+# showrcopy links (rack13-ARCUS, 2026-11-03 22:57, after the failed link check; was Up before it)
+
+Remote Copy System Information
+Status: Started, Normal
+
+Link Information
+
+Target           Node  Address     Status Options
+PRIMERA630R11U22 0:4:4 10.93.18.19 Down   -      
+PRIMERA630R11U22 1:4:4 10.93.18.20 Down   -      
+receive          0:4:4 10.93.18.11 Up     -      
+receive          1:4:4 10.93.18.13 Up     -      

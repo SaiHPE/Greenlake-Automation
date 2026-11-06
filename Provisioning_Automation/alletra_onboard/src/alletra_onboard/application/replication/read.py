@@ -12,6 +12,7 @@ from collections.abc import Callable
 from alletra_onboard.application.documents.asbuilt_parse import parse_cli_sets
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.domain.replication import (
+    PortRole,
     RcGroup,
     RcGroupVolume,
     RcipPort,
@@ -25,7 +26,8 @@ from alletra_onboard.domain.shared import EndpointCreds
 _NSP = re.compile(r"^\d+:\d+:\d+$")
 _SHOWSYS_ROW = re.compile(
     r"^(?P<id>0x[0-9A-Fa-f]+)\s+(?P<name>\S+)\s+(?P<model>.*?)\s+(?P<serial>[A-Z0-9]{6,})"
-    r"\s+(?P<nodes>\d+)\s+(?P<master>\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s*$"
+    # A Primera (OS 4.6.20, 2026-11-03) prints a ClusterLED column ("Green") between Master and TotalCap.
+    r"\s+(?P<nodes>\d+)\s+(?P<master>\d+)(?:\s+[A-Za-z]+)?\s+\d+\s+\d+\s+\d+\s+\d+\s*$"
 )
 
 
@@ -212,6 +214,24 @@ def parse_showvv_sizes(text: str) -> dict[str, int]:
     return out
 
 
+def parse_showport_roles(text: str) -> tuple[dict[str, PortRole], str]:
+    """`showport`: N:S:P Mode State Node_WWN/IP Port_WWN/HW_Addr Type Protocol Label [Partner FailoverState]
+    -> ({n:s:p: role}, the array's FC node WWN). Columns are fixed on both lab arrays (Alletra MP OS
+    10.5.55, Primera OS 4.6.20, 2026-11-03); a row with fewer than 7 columns is not a port."""
+    roles: dict[str, PortRole] = {}
+    node_wwn = ""
+    for line in (text or "").splitlines():
+        p = line.split()
+        if len(p) < 7 or not re.fullmatch(r"\d+:\d+:\d+", p[0]):
+            continue
+        role = PortRole(nsp=p[0], mode=p[1], state=p[2], type=p[5], protocol=p[6])
+        if role.protocol.upper() == "FC" and re.fullmatch(r"[0-9A-Fa-f]{16}", p[3]):
+            role.node_wwn = p[3].upper()
+            node_wwn = node_wwn or role.node_wwn
+        roles[p[0]] = role
+    return roles, node_wwn
+
+
 def read_array(
     creds: EndpointCreds, *, array_cli_factory: Callable = make_array_cli,
     progress: Callable[[str], None] | None = None,
@@ -230,6 +250,7 @@ def read_array(
             sysinfo = parse_showsys(cli.run("showsys"))
             view.name, view.serial, view.system_id = sysinfo.get("name", ""), sysinfo.get("serial", ""), sysinfo.get("id")
             view.os_version = parse_showversion(cli.run("showversion"))
+            view.ports, view.fc_node_wwn = parse_showport_roles(cli.run("showport"))
             view.rcip_ports = parse_showport_rcip(cli.run("showport -rcip"))
             view.transports = parse_showrctransport_rcip(cli.run("showrctransport -rcip"))
             rc = parse_showrcopy(cli.run("showrcopy"))

@@ -1,0 +1,34 @@
+# checkrclink startclient 0:4:4 10.93.18.19 600
+Running Client Side
+Running link test on:  0:4:4
+Test length (secs):    600
+Destination Addr:      10.93.18.19
+Adding route:            10.93.18.19 -> 10.93.18.1
+Local IP Addr:           10.93.18.11
+Local Device name:       eth12
+
+------------------------------------------------------------
+Measuring link latency
+------------------------------------------------------------
+ 
+Average measured latency: min ms
+Pings Lost:               0 %
+ 
+------------------------------------------------------------
+Starting max MTU test, from 0:4:4 -> 10.93.18.19
+------------------------------------------------------------
+ 
+MTU: 1500
+ 
+------------------------------------------------------------
+Starting throughput test, from 0:4:4 -> 10.93.18.19
+------------------------------------------------------------
+------------------------------------------------------------
+Client connecting to 10.93.18.19, TCP port 5001
+MSS req size 1460 bytes (per TCP_MAXSEG)
+TCP window size: 64.0 KByte (default)
+------------------------------------------------------------
+[  4] local 10.93.18.11 port 35668 connected with 10.93.18.19 port 5001 (icwnd/mss/irtt=14/1448/54)
+[  1] local 10.93.18.11 port 35658 connected with 10.93.18.19 port 5001 (icwnd/mss/irtt=14/1448/64)
+[  3] local 10.93.18.11 port 35656 connected with 10.93.18.19 port 5001 (icwnd/mss/irtt=14/1448/62)
+[  2] local 10.93.18.11 port 35650 connected with 10.93.18.19 port 5001 (icwnd/mss/irtt=14/1448/63)

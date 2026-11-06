@@ -113,6 +113,12 @@ class AsBuiltData:
     replication_report: dict | None = None         # replication.previewed -> report (JSON)
     replication_plan: dict | None = None           # replication.previewed -> plan (JSON)
     replication_result: dict | None = None         # replication.applied / .apply.failed -> result (JSON)
+    # SPEC-021: every apply's removal lines, newest apply first (its groups go before the partnership a
+    # first apply set up: removercopytarget refuses while a group still uses the target)
+    replication_removals_a: list[str] = field(default_factory=list)
+    replication_removals_b: list[str] = field(default_factory=list)
+    # SPEC-021: every apply in run order, each with the plan previewed before it: {"plan", "result"}
+    replication_applies: list[dict] = field(default_factory=list)
     replication_applied_at: str = ""
     replication_primary: object | None = None      # ReplicationArrayView read when the document is made (R3)
     replication_peer: object | None = None         # ReplicationArrayView of the peer, same moment
@@ -855,7 +861,8 @@ _RC_OUTCOME_LABEL = {"created": "Done", "exists": "Already existed", "failed": "
 _RC_KIND_LABEL = {
     "group": "Remote Copy group", "peer_vvset": "Peer volume set", "test_volume": "Test volume",
     "test_vvset": "Test volume set", "volume_admit": "Volume admitted", "start": "Group started",
-    "policy": "Policies and period",
+    "policy": "Policies and period", "rcip_port": "Replication port", "rc_service": "Remote Copy service",
+    "target": "Remote Copy target", "ping": "Ping between the ports", "links": "Links Up",
 }
 
 
@@ -906,6 +913,7 @@ def _rc_rpo_text(row: dict, tab: dict, period_read: str = "") -> str:
 def _add_link_check(doc, data: AsBuiltData) -> None:
     """SPEC-020 R6: what `checkrclink` measured, the limit for each configured mode, and whether the
     operator accepted a latency over it (the apply's note says so)."""
+    from alletra_onboard.application.replication.link_check import PING_COUNT
     from alletra_onboard.domain.replication import RTT_LIMIT_MS
 
     check = data.link_check or {}
@@ -926,15 +934,21 @@ def _add_link_check(doc, data: AsBuiltData) -> None:
                f"once the latency was printed): worst latency {worst:g} ms on {len(measured)} link(s); {limits}. "
                f"The latency is {verdict}")
     rows = []
+    by_ping = False
     for r in results:
         pair = r.get("pair", {})
         link = f"A {pair.get('nsp_a', '')} ({pair.get('ip_a', '')}) → B {pair.get('nsp_b', '')} ({pair.get('ip_b', '')})"
         if r.get("status") == "measured":
             lost = r.get("pings_lost_pct")
-            rows.append([link, f"{r.get('latency_ms'):g} ms", f"{lost:g} %" if lost is not None else "—"])
+            ping = (r.get("detail") or "").startswith("Measured with ping")
+            by_ping = by_ping or ping
+            rows.append([link, f"{r.get('latency_ms'):g} ms" + (" (ping)" if ping else ""), f"{lost:g} %" if lost is not None else "—"])
         else:
             rows.append([link, "not measured", r.get("detail") or "—"])
     _table(doc, ["Link", "Latency", "Pings lost"], rows, widths=[0.56, 0.18, 0.26])
+    if by_ping:
+        _para(doc, "(ping): the array's link test printed its latency line with no number on that link, so the tool "
+                   f"measured the average round trip with {PING_COUNT} pings from the same port to the same address.")
     for line in check.get("unchecked", []):
         _para(doc, f"Not checked: {line}")
 
@@ -1055,13 +1069,16 @@ def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> Non
     # -- what was run and how to undo it
     result = data.replication_result
     if result:
-        calls = sorted(((c.get("seq", 0), c.get("where", "A"), c.get("cli", "")) for act in (data.replication_plan or {}).get("actions", [])
-                        for c in act.get("calls", [])), key=lambda t: t[0])
+        applies = data.replication_applies or [{"plan": data.replication_plan, "result": result}]
+        calls = [(where, cli) for x in applies for _seq, where, cli in sorted(
+            ((c.get("seq", 0), c.get("where", "A"), c.get("cli", "")) for act in (x.get("plan") or {}).get("actions", [])
+             for c in act.get("calls", [])), key=lambda t: t[0])]
         if calls:
             _para(doc, "What was run, in order", bold=True)
-            _para(doc, "Each WSAPI call the tool made, shown as the array CLI command it is equivalent to. A = this array, B = the peer.")
-            _mono(doc, [f"{where}  {cli}" for _seq, where, cli in calls])
-        outcomes = result.get("outcomes", [])
+            _para(doc, "Each call the tool made, shown as the array CLI command (a WSAPI call as the command it is "
+                       "equivalent to). A = this array, B = the peer.")
+            _mono(doc, [f"{where}  {cli}" for where, cli in calls])
+        outcomes = [o for x in applies for o in (x.get("result") or {}).get("outcomes", [])]
         if outcomes:
             _para(doc, "What each array reported", bold=True)
             _table(doc, ["Kind", "Name", "On", "Result", "Detail"],
@@ -1071,10 +1088,12 @@ def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> Non
         if result.get("error"):
             _para(doc, f"Replication stopped with an error: {result['error']}")
         _para(doc, "To remove what this run created", bold=True)
-        rem_a, rem_b = result.get("removals_a") or [], result.get("removals_b") or []
+        rem_a = data.replication_removals_a or result.get("removals_a") or []
+        rem_b = data.replication_removals_b or result.get("removals_b") or []
         if rem_a or rem_b:
-            _para(doc, "Paste the A block on this array first, then the B block on the peer. The array removes a "
-                       "started group's peer volume set itself, so a B line may answer 'does not exist'. "
+            _para(doc, "Paste the A block on this array first, then the B block on the peer. Depending on the "
+                       "peer, the array may already have removed a peer volume set or a secondary volume, so a "
+                       "B line may answer 'does not exist'. "
                        "Objects that existed before the run are not listed. The tool never runs these.")
             lines = []
             if rem_a:

@@ -68,6 +68,36 @@ class ProtectionRequest(BaseModel):
         return self.rpo_minutes * 30 if self.mode == "async" and self.rpo_minutes else None
 
 
+class RcipPortRequest(BaseModel):
+    """One row of the Replication network tab (SPEC-021 R1): an RCIP port the run uses, on this array
+    (`A`) or the peer (`B`)."""
+
+    side: Literal["A", "B"]
+    nsp: str
+    ip: str
+    netmask: str
+    gateway: str = ""
+
+    @property
+    def node(self) -> str:
+        return self.nsp.split(":")[0]
+
+
+def pair_ports(network: list[RcipPortRequest]) -> list[tuple[RcipPortRequest, RcipPortRequest]]:
+    """(this array's port, the peer's port) node to node, in sheet order (SPEC-021 R1). A row without a
+    partner on the same node is left out; the sheet parser refuses such a sheet before it gets here."""
+    a_rows = [r for r in network if r.side == "A"]
+    b_by_node: dict[str, list[RcipPortRequest]] = {}
+    for r in network:
+        if r.side == "B":
+            b_by_node.setdefault(r.node, []).append(r)
+    pairs = []
+    for a in a_rows:
+        if b_by_node.get(a.node):
+            pairs.append((a, b_by_node[a.node].pop(0)))
+    return pairs
+
+
 class ReplicationIntent(BaseModel):
     """The Replication tab, parsed. Absent on a run whose workbook has no such tab."""
 
@@ -76,6 +106,8 @@ class ReplicationIntent(BaseModel):
     protections: list[ProtectionRequest] = Field(default_factory=list)
     failover_test: bool = True
     failover_group: str = ""        # blank -> the tool's own test group (TEST_GROUP)
+    # SPEC-021: the RCIP ports to set up. Empty = the partnership must exist already (SPEC-016).
+    network: list[RcipPortRequest] = Field(default_factory=list)
 
     @property
     def failover_group_name(self) -> str:
@@ -172,6 +204,22 @@ class RcGroup(BaseModel):
         return [v.local_name for v in self.volumes]
 
 
+class PortRole(BaseModel):
+    """One row of `showport`: what a port is (SPEC-021 R2)."""
+
+    nsp: str
+    mode: str = ""              # target | initiator | peer
+    state: str = ""             # ready | offline | loss_sync | …
+    type: str = ""              # host | disk | free | rcip | file | cluster | …
+    protocol: str = ""          # FC | iSCSI | IP | NVMe | …
+    node_wwn: str = ""          # FC rows: the array's node WWN
+
+    @property
+    def rcip_capable(self) -> bool:
+        """An Ethernet peer port that is free or already RCIP — the only kind the tool addresses."""
+        return self.protocol.upper() == "IP" and self.mode == "peer" and self.type in ("free", "rcip")
+
+
 class ReplicationArrayView(BaseModel):
     """Everything the Replication step read from ONE array, read-only."""
 
@@ -180,8 +228,10 @@ class ReplicationArrayView(BaseModel):
     serial: str = ""
     system_id: int | None = None        # `showsys` ID, decimal — the peer names our groups `<g>.r<id>`
     os_version: str = ""
-    rc_status: str = ""                 # Started | Stopped | ""
+    rc_status: str = ""                 # Started | Stopped | "" (Remote Copy not configured)
     rc_health: str = ""                 # Normal | …
+    ports: dict[str, PortRole] = Field(default_factory=dict)   # SPEC-021 R2, from `showport`
+    fc_node_wwn: str = ""
     rcip_ports: list[RcipPort] = Field(default_factory=list)
     transports: list[RcTransport] = Field(default_factory=list)
     targets: list[RcTarget] = Field(default_factory=list)
@@ -334,13 +384,17 @@ class PlannedCall(BaseModel):
 
 
 class ReplicationAction(BaseModel):
-    kind: Literal["group", "peer_vvset", "test_volume", "test_vvset"]
+    kind: Literal["group", "peer_vvset", "test_volume", "test_vvset", "rcip_port", "rc_service", "target"]
     name: str
     where: Literal["A", "B"] = "A"
     state: Literal["create", "exists", "conflict"] = "create"
     reason: str = ""
     calls: list[PlannedCall] = Field(default_factory=list)
     detail: dict = Field(default_factory=dict)
+
+
+#: SPEC-021: the action kinds that set up the partnership (over SSH, ADR 0015).
+PARTNERSHIP_KINDS = ("rcip_port", "rc_service", "target")
 
 
 class ReplicationPlan(BaseModel):
@@ -350,13 +404,19 @@ class ReplicationPlan(BaseModel):
     existing_groups: list[str] = Field(default_factory=list)   # R9: present, never touched
     error: str | None = None
 
+    @property
+    def sets_up_partnership(self) -> bool:
+        """SPEC-021 R3: the plan creates ports, Remote Copy or targets; its apply does only that."""
+        return any(a.kind in PARTNERSHIP_KINDS and a.state == "create" for a in self.actions)
+
 
 # ------------------------------------------------------------------ apply (R4) and its removal set (R7)
 
 class ReplicationOutcome(BaseModel):
     """What the array said for one planned write."""
 
-    kind: Literal["group", "peer_vvset", "test_volume", "test_vvset", "volume_admit", "start", "policy"]
+    kind: Literal["group", "peer_vvset", "test_volume", "test_vvset", "volume_admit", "start", "policy",
+                  "rcip_port", "rc_service", "target", "ping", "links"]
     name: str
     where: Literal["A", "B"] = "A"
     status: Literal["created", "exists", "failed", "skipped"] = "created"

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { RunEvent, RunRecord } from '../api';
+import { isPartnershipResult, RunEvent, RunRecord } from '../api';
 import { ServedStep } from '../modes';
 import { StepState } from './status';
 
@@ -114,6 +114,8 @@ export function deriveStepState(step: ServedStep, run: RunRecord | null, events:
     // is in the payload, and the step component surfaces it. Z-7: a zoning check with no array ports.
     if ((signals.complete.includes(type) || signals.gate.includes(type)) && event.data?.report?.error) return 'failed';
     if (signals.complete.includes(type)) {
+      // SPEC-021: setting up the partnership is half the step; the groups are planned after it.
+      if (type === 'replication.applied' && isPartnershipResult(event.data?.result)) return 'action_required';
       // A GreenLake dry run reports step.completed too, but nothing was written, so the step is not
       // done. The live run emits from GL_VERIFY_DEVICE; the dry run stays on PREFLIGHT.
       if (step.key === 'greenlake' && event.phase === 'PREFLIGHT') return 'not_started';
@@ -197,7 +199,7 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       return blockers ? `${blockers} finding${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
     }
     case 'replication.applied':
-      return 'replication configured';
+      return isPartnershipResult(deciding.data?.result) ? 'partnership set up' : 'replication configured';
     case 'replication.preview.failed':
       return 'arrays could not be read';
     case 'replication.apply.failed':

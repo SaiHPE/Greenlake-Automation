@@ -56,9 +56,15 @@ def apply_plan(
     group_lines: list[str] = []
     test_set_lines: list[str] = []
     test_vol_lines: list[str] = []
+    # On B, after A: the peer volume sets, then the secondaries the admits auto-created. A Primera
+    # (OS 4.6.20, live 2026-11-03) keeps a secondary that is in a set when A's `dismissrcopyvv
+    # -removevv` asks it to delete it ("Manual cleanup required on target system").
+    peer_set_lines: list[str] = []
+    secondary_lines: list[str] = []
 
     def compose_removals() -> None:
         result.removals_a = [*group_lines, *test_set_lines, *test_vol_lines]
+        result.removals_b = [*peer_set_lines, *secondary_lines]
 
     try:
         with wsapi_factory(provisioning.array) as a, wsapi_factory(intent.peer) as b:
@@ -105,6 +111,8 @@ def apply_plan(
                     if status == "created" and created_group:
                         # between this group's stop and remove lines
                         group_lines.insert(group_lines.index(f"removercopygroup -f {g}"), f"dismissrcopyvv -f -removevv {volume} {g}")
+                        # the admit auto-created the secondary on B under the same name
+                        secondary_lines.append(f"removevv -f {volume}")
                         compose_removals()
                 peer_set = _peer_set_action(plan, g)
                 if peer_set is not None:
@@ -113,7 +121,8 @@ def apply_plan(
                     record("peer_vvset", peer_set.name, "B", "created" if status in ("created", "updated") else status,
                            f"{len(peer_set.detail['members'])} member(s)")
                     if status == "created":
-                        result.removals_b.append(f"removevvset -f {peer_set.name}")
+                        peer_set_lines.append(f"removevvset -f {peer_set.name}")
+                        compose_removals()
                 _p(f"Starting {g}…")
                 starter = b if d.get("start_where") == "B" else a
                 status = starter.start_remote_copy_group(g)

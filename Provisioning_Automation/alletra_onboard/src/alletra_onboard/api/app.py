@@ -407,6 +407,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         data["subscription_key"] = parsed.work_item.subscription_key.get_secret_value()
         data["dscc_setup"].pop("password", None)  # never echo the admin password to the UI
         targets: dict[str, str] = {}
+        ports: list[str] = []
         if parsed.provisioning_intent is not None:
             intent = parsed.provisioning_intent
             for key, ep in (("array", intent.array), ("vcenter", intent.vcenter),
@@ -414,8 +415,9 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                 targets[f"{key}_host"], targets[f"{key}_user"] = ep.host, ep.username
             if intent.replication is not None:
                 targets["peer_host"], targets["peer_user"] = intent.replication.peer.host, intent.replication.peer.username
+                ports = [f"{'this array' if r.side == 'A' else 'peer'} {r.nsp} {r.ip}" for r in intent.replication.network]
         return InitSheetUploadResponse(
-            token=token, work_item=data, credentials_saved=credentials_saved, targets=targets,
+            token=token, work_item=data, credentials_saved=credentials_saved, targets=targets, replication_ports=ports,
         )
 
     # ------------------------------------------------------------------ runs + steps

@@ -11,7 +11,10 @@ column only — the **Field** column is the stable key the parser matches on, so
 
 from __future__ import annotations
 
+import datetime
 import io
+import ipaddress
+import re
 import zipfile
 from dataclasses import dataclass
 
@@ -31,7 +34,9 @@ from alletra_onboard.domain.replication import (
     RPO_MINUTES_MIN,
     RTT_LIMIT_MS,
     ProtectionRequest,
+    RcipPortRequest,
     ReplicationIntent,
+    pair_ports,
 )
 from alletra_onboard.domain.shared import EndpointCreds, normalize_wwpn
 from alletra_onboard.domain.workflow import enabled_steps
@@ -193,7 +198,7 @@ _PROV_REQUIRED = [key for _, fields in PROVISIONING_SECTIONS for key, _, require
 # row). Direction is always this run's array -> the peer.
 REPLICATION_SHEET_NAME = "Replication"
 REPLICATION_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
-    ("Peer array — the array this one replicates TO (an existing Remote Copy partnership is required)", [
+    ("Peer array — the array this one replicates TO (the Replication network tab sets up the partnership; leave it blank if one exists)", [
         ("peer_host", "Peer array management IP", True, "the other B10000's mgmt IP (WSAPI + SSH)"),
         ("peer_user", "Peer array admin username", True, "e.g. 3paradm"),
         ("peer_password", "Peer array admin password", True, "used for WSAPI + SSH on the peer this run"),
@@ -215,6 +220,15 @@ PROTECTION_COLUMNS: list[tuple[str, str, bool]] = [
     ("peer_vvset", "Peer volume set (optional)", False),
     ("auto_synchronize", "Auto synchronize (yes / no)", False),
     ("auto_recover", "Auto recover (yes / no)", False),
+]
+# SPEC-021 R1: the RCIP ports the tool sets up, one row per port, on this array or the peer.
+REPLICATION_NETWORK_SHEET_NAME = "Replication network"
+NETWORK_COLUMNS: list[tuple[str, str, bool]] = [
+    ("array", "Array (this / peer)", True),
+    ("port", "Port (N:S:P)", True),
+    ("ip", "RCIP address", True),
+    ("netmask", "Netmask", True),
+    ("gateway", "Gateway (optional)", False),
 ]
 _REPL_LABEL_TO_KEY = {label: key for _, fields in REPLICATION_SECTIONS for key, label, _, _ in fields}
 _REPL_KEY_TO_LABEL = {key: label for _, fields in REPLICATION_SECTIONS for key, label, _, _ in fields}
@@ -311,6 +325,7 @@ def build_template_bytes(*, init_only: bool = False) -> bytes:
     if not init_only:
         _add_provisioning_sheet(wb)
         _add_replication_sheet(wb)
+        _add_replication_network_sheet(wb)
     _add_prereq_sheet(wb)
 
     buffer = io.BytesIO()
@@ -391,6 +406,22 @@ def _add_replication_sheet(wb: Workbook) -> None:
     # _write_table_tab sized the first columns for the table; widen column A for the labels above it.
     ws.column_dimensions["A"].width = 44
     ws.freeze_panes = "A2"
+
+
+def _add_replication_network_sheet(wb: Workbook) -> None:
+    """SPEC-021 R1: the optional 'Replication network' tab. Blank -> the partnership must exist already."""
+    ws = wb.create_sheet(REPLICATION_NETWORK_SHEET_NAME)
+    _write_table_tab(
+        ws, NETWORK_COLUMNS, blank_rows=8,
+        intro=(
+            "Fill this only when the tool should set up the replication ports and the partnership. One row per "
+            "RCIP port: Array 'this' (the array of this run) or 'peer'. Ports pair node to node (this array's "
+            "node-0 port with the peer's node-0 port). Leave Gateway blank when both arrays are on one network."
+        ),
+    )
+    for row in ws.iter_rows(min_row=ws.max_row - 8, max_row=ws.max_row, min_col=2, max_col=2):
+        for cell in row:
+            cell.number_format = "@"          # text: Excel would turn 0:4:4 into a time
 
 
 def _add_prereq_sheet(wb: Workbook) -> None:
@@ -537,6 +568,9 @@ _VERBATIM_KEYS = frozenset({
 
 
 def _cell_text(key: str | None, value) -> str:
+    if isinstance(value, datetime.time) and key == "port":
+        # Excel stores 0:4:4 typed in a General cell as a time; a port N:S:P reads back as H:M:S.
+        return f"{value.hour}:{value.minute}:{value.second}"
     text = str(value)
     return text if key in _VERBATIM_KEYS else text.strip()
 
@@ -679,6 +713,7 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
         volumes=volumes,
         host_sets=host_sets,
         declared_hosts=declared,
+        default_cpg=default_cpg,
     )
 
 
@@ -776,13 +811,78 @@ def _parse_replication_tab(workbook) -> ReplicationIntent | None:
             auto_recover=_yes_no(r.get("auto_recover"), default=True, where=f"{where}: Auto recover"),
         ))
 
+    network = _parse_network_tab(workbook)
     return ReplicationIntent(
         peer=EndpointCreds(host=fields["peer_host"], username=fields["peer_user"], password=fields["peer_password"]),
         rtt_ms=rtt,
         protections=protections,
         failover_test=_yes_no(fields.get("failover_test"), default=True, where="Replication tab — 'Run the failover test'"),
         failover_group=(fields.get("failover_group") or "").strip(),
+        network=network,
     )
+
+
+def _ipv4(text: str) -> bool:
+    try:
+        ipaddress.IPv4Address(text)
+        return True
+    except ValueError:
+        return False
+
+
+def _netmask(text: str) -> bool:
+    """A dotted netmask with at least one bit (255.255.254.0), never a host mask (0.0.0.255) or /0."""
+    if not _ipv4(text):
+        return False
+    bits = int(ipaddress.IPv4Address(text))
+    return bits != 0 and (bits | (bits - 1)) & 0xFFFFFFFF == 0xFFFFFFFF and str(
+        ipaddress.ip_network(f"0.0.0.0/{text}").netmask) == text
+
+
+def _parse_network_tab(workbook) -> list[RcipPortRequest]:
+    """SPEC-021 R1, one sentence per rule. No tab, or a blank one -> [] (the partnership must exist)."""
+    if REPLICATION_NETWORK_SHEET_NAME not in workbook.sheetnames:
+        return []
+    rows = _read_table(workbook[REPLICATION_NETWORK_SHEET_NAME], NETWORK_COLUMNS)
+    out: list[RcipPortRequest] = []
+    seen_ports: set[tuple[str, str]] = set()
+    seen_ips: set[str] = set()
+    for r in rows:
+        where = f"Replication network tab — row '{r.get('array')} {r.get('port', '')}'"
+        side = {"this": "A", "peer": "B"}.get((r.get("array") or "").strip().lower())
+        if side is None:
+            raise ValueError(f"{where}: Array must be 'this' or 'peer' (got '{r.get('array')}').")
+        missing = [label for key, label, required in NETWORK_COLUMNS if required and not (r.get(key) or "").strip()]
+        if missing:
+            raise ValueError(f"{where}: missing {', '.join(missing)}.")
+        port, ip, mask, gw = (r.get(k, "").strip() for k in ("port", "ip", "netmask", "gateway"))
+        if not re.fullmatch(r"(?:0|[1-9]\d?):(?:0|[1-9]\d?):(?:0|[1-9]\d?)", port):
+            raise ValueError(f"{where}: Port must be N:S:P, like 0:4:4 (got '{port}').")
+        if not _ipv4(ip):
+            raise ValueError(f"{where}: RCIP address '{ip}' is not an IPv4 address.")
+        if not _netmask(mask):
+            raise ValueError(f"{where}: Netmask '{mask}' is not a netmask (like 255.255.254.0).")
+        if gw and not _ipv4(gw):
+            raise ValueError(f"{where}: Gateway '{gw}' is not an IPv4 address.")
+        if (side, port) in seen_ports:
+            raise ValueError(f"{where}: port {port} is named twice on the same array.")
+        if ip in seen_ips:
+            raise ValueError(f"{where}: address {ip} is used twice.")
+        seen_ports.add((side, port))
+        seen_ips.add(ip)
+        out.append(RcipPortRequest(side=side, nsp=port, ip=ip, netmask=mask, gateway=gw))  # type: ignore[arg-type]
+    if not out:
+        return []
+    pairs = pair_ports(out)
+    paired = {(p.side, p.nsp) for pair in pairs for p in pair}
+    lonely = [f"{'this' if r.side == 'A' else 'peer'} {r.nsp}" for r in out if (r.side, r.nsp) not in paired]
+    if lonely:
+        raise ValueError("Replication network tab — ports pair node to node, and these have no partner on the other "
+                         "array's same node: " + ", ".join(lonely) + ".")
+    if len(pairs) < 2:
+        raise ValueError("Replication network tab — the partnership needs at least 2 links: name two ports on this "
+                         "array and two on the peer, one per node.")
+    return out
 
 
 def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
@@ -934,6 +1034,10 @@ def compose_workbook_bytes(
         _fill_kv_tab(ws, _REPL_LABEL_TO_KEY, replication.get("fields") or {})
         if replication.get("rows") is not None:
             _replace_row_table(ws, PROTECTION_COLUMNS, replication["rows"])
+        if replication.get("network") is not None:
+            if REPLICATION_NETWORK_SHEET_NAME not in wb.sheetnames:
+                _add_replication_network_sheet(wb)
+            _replace_row_table(wb[REPLICATION_NETWORK_SHEET_NAME], NETWORK_COLUMNS, replication["network"])
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()

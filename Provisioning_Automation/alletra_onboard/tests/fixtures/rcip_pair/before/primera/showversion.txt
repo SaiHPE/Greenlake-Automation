@@ -1,0 +1,12 @@
+Release version 4.6.20
+Release Type: Extended Support Release
+
+Component Name                   Version                         
+CLI Server                       4.6.20                          
+CLI Client                       4.6.20                          
+System Manager                   4.6.20                          
+Kernel                           4.6.5                           
+IO Stack                         4.6.20                          
+Drive Firmware                   4.6.15                          
+Enclosure Firmware               4.6.0                           
+Upgrade Tool                     82 (260916)                     
