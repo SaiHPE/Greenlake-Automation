@@ -337,6 +337,11 @@ the app's step registry, so it is always current).
    for the SAN team (the tool never writes to a switch); *Provision storage* shows the plan and
    creates hosts, sets, volumes and exports only after you tick the confirmation; *Replication* and
    *Failover test* set up Remote Copy to the peer named on the sheet and prove a failover and back.
+   When the sheet's *Replication network* tab names the replication ports (one row per port: this
+   array or the peer, N:S:P, address, netmask, gateway only when the arrays are on different
+   networks), *Replication* first sets those addresses, starts Remote Copy and pairs the two arrays,
+   as its own plan with its own confirmation; then *Read both arrays again*, *Check the link* and
+   configure the groups. Leave the tab empty when the arrays are already paired.
 7. **Verify configuration** and **As-built document** — read-only: the array's settings against
    what was onboarded, its status check, and the Word document for the hand-over. **Finish**
    collects the documents and the run's timeline.
