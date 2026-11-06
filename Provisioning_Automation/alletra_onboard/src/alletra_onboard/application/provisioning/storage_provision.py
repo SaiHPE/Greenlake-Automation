@@ -43,20 +43,30 @@ def _union(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: 
 def _hosts_by_name(
     discovery: DiscoveryReport, intent: ProvisioningIntent | None = None, zoning_plan: dict | None = None,
 ) -> OrderedDict[str, list[str]]:
-    """host name -> FC WWPNs, for every host the run can name (vCenter, sheet, array, fabric).
-
-    An iSCSI-only host is included only when it already exists on the array (it can join a set;
-    nothing has to be created for it). One that does not exist yet is left out: the WSAPI client
-    registers FC WWNs only, and a host object created without its IQN would be a lie of omission."""
+    """host name -> FC WWPNs, for every host the run can name (vCenter, sheet, array, fabric). An
+    iSCSI-only host maps to an empty list: it is made from its iSCSI names (`_iqns_by_host`). A host
+    with neither (an NVMe/TCP host, its NQN filed with the IQNs) is kept only when the array has it."""
     hosts, _ = _union(intent, discovery, zoning_plan)
     return OrderedDict(
-        (n, list(h.wwpns)) for n, h in hosts.items() if h.wwpns or (h.iqns and h.on_array)
+        (n, list(h.wwpns)) for n, h in hosts.items() if h.wwpns or _iscsi(h.iqns) or (h.iqns and h.on_array)
     )
+
+
+def _iscsi(names: list[str]) -> list[str]:
+    """The iSCSI names among a host's `iqns`: discovery files NVMe NQNs there too (`showhost -d`)."""
+    return [n for n in names if not n.lower().startswith("nqn.")]
+
+
+def _iqns_by_host(
+    discovery: DiscoveryReport, intent: ProvisioningIntent | None = None, zoning_plan: dict | None = None,
+) -> dict[str, list[str]]:
+    hosts, _ = _union(intent, discovery, zoning_plan)
+    return {n: _iscsi(h.iqns) for n, h in hosts.items()}
 
 
 def _host_notes(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None,
                 selected: OrderedDict[str, list[str]]) -> list[str]:
-    """SPEC-003 R3/R5/R6 notes: nameless initiators, iSCSI-only members, hosts that cannot be created."""
+    """SPEC-003 R3/R5/R6 notes: nameless initiators, iSCSI-only members, hosts with both transports."""
     hosts, notes = _union(intent, discovery, zoning_plan)
     iscsi_members = [n for n in selected if not selected[n] and hosts[n].iqns]
     if iscsi_members:
@@ -64,11 +74,12 @@ def _host_notes(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_p
             "iSCSI-only member(s) in a host set: " + ", ".join(iscsi_members)
             + ". iSCSI needs no SAN zoning; Verify paths reads their iSCSI paths per controller node."
         )
-    uncreatable = [n for n, h in hosts.items() if not h.wwpns and h.iqns and not h.on_array]
-    if uncreatable:
+    # WSAPI refuses FC and iSCSI names in one request, and no lab array has a host with both.
+    both = [n for n in selected if selected[n] and _iscsi(hosts[n].iqns) and not hosts[n].on_array]
+    if both:
         notes.append(
-            "Not planned — iSCSI host creation is not supported by this tool yet: " + ", ".join(uncreatable)
-            + ". Create them on the array first; they can then be set members."
+            "FC and iSCSI both found for " + ", ".join(both) + " — the host is made with its FC WWPNs "
+            "only; its iSCSI name is not added (this tool does not put both on one host)."
         )
     guessed = [n for n in selected if n in hosts and not hosts[n].os and not hosts[n].on_array
                and hosts[n].source != "vcenter"]
@@ -202,8 +213,7 @@ def host_briefs(
 ) -> list[DiscoveredHostBrief]:
     """Summarise each host in the union for the membership dropdown — the 'status text so a
     half-zoned host isn't picked blind' of ADR 0010, plus source and transport (SPEC-003 R5).
-    FC-capable hosts first; iSCSI-only hosts last, saying that this tool does not zone or
-    path-verify them."""
+    FC-capable hosts first; iSCSI-only hosts last, saying they need no zone."""
     hosts, _ = union_hosts(discovery, declared_hosts or [], zoning_plan)
     logins = _fabric_logins(discovery, zoning_plan)
     fc: list[DiscoveredHostBrief] = []
@@ -213,7 +223,7 @@ def host_briefs(
             continue
         if not h.wwpns:
             iscsi.append(DiscoveredHostBrief(
-                name=name, status="iSCSI only · not zoned or path-verified by this tool", wwpns=[],
+                name=name, status="iSCSI only · no zoning needed", wwpns=[],
                 source=h.source, transport=h.transport, persona=h.persona, fc_capable=False,
             ))
             continue
@@ -364,11 +374,21 @@ def build_plan(
         plan.notes.append("No host is selected for any host set — nothing to provision until members are chosen.")
     plan.blockers.extend(declared_mismatches(intent.declared_hosts, discovery))
     if unreachable:
-        plan.notes.append(
-            "Not yet reachable (no login on both fabrics): " + ", ".join(unreachable)
-            + " — host objects are made or kept now; their exports wait until zoning is applied and "
-            "re-checked."
-        )
+        iscsi_of = _iqns_by_host(discovery, intent, zoning_plan)
+        fc_wait = [n for n in unreachable if hosts[n] or not iscsi_of.get(n)]
+        iscsi_wait = [n for n in unreachable if n not in fc_wait]
+        if fc_wait:
+            plan.notes.append(
+                "Not yet reachable (no login on both fabrics): " + ", ".join(fc_wait)
+                + " — host objects are made or kept now; their exports wait until zoning is applied and "
+                "re-checked."
+            )
+        if iscsi_wait:
+            plan.notes.append(
+                "Not yet reachable over iSCSI (IQN not logged in on the array): " + ", ".join(iscsi_wait)
+                + " — host objects are made or kept now; their exports wait until the server logs in to the "
+                "array's iSCSI ports and the zoning check is run again."
+            )
     plan.notes.extend(_host_notes(intent, discovery, zoning_plan, hosts))
     plan.notes.extend(name_notes)
 
@@ -408,12 +428,25 @@ def build_plan(
             plan.blockers.append(f"{kind} {name}: {reason}")
 
     personas = _persona_by_host(discovery, intent, zoning_plan)
+    iqns_of = _iqns_by_host(discovery, intent, zoning_plan)
     sources = {n: h.source for n, h in _union(intent, discovery, zoning_plan)[0].items()}
     for host_name, wwns in hosts.items():
         persona = personas.get(host_name, "VMware")
-        add("host", host_name, f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona}",
-            _judge_host(host_name, wwns, persona, state.hosts),
-            {"wwns": wwns, "persona": persona, "source": sources.get(host_name, "")})
+        if wwns:
+            add("host", host_name, f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona}",
+                _judge_host(host_name, wwns, persona, state.hosts),
+                {"wwns": wwns, "persona": persona, "source": sources.get(host_name, "")})
+            continue
+        iqns = iqns_of.get(host_name, [])
+        if not iqns:
+            # An array host with only an NVMe NQN: it joins sets as it is, never changed.
+            add("host", host_name, f"Host {host_name} — on the array, persona {persona}",
+                ("exists", "exists on the array (NVMe initiator; not changed by this tool)"),
+                {"wwns": [], "persona": persona, "source": sources.get(host_name, "")})
+            continue
+        add("host", host_name, f"Host {host_name} — iSCSI {', '.join(iqns)}, persona {persona}",
+            _judge_iscsi_host(host_name, iqns, persona, state.hosts),
+            {"wwns": [], "iqns": iqns, "persona": persona, "source": sources.get(host_name, "")})
 
     for hs in intent.host_sets:
         members = _members_for(hs, hosts)
@@ -501,15 +534,37 @@ def _judge_host(name: str, wwns: list[str], persona: str, on_array: list[ArrayHo
         return "create", ""
     carried = {normalize_wwpn(w) for w in mine.wwns}
     missing = [wanted[w] for w in wanted if w not in carried]
-    persona_note = (
-        f" · persona on the array: {mine.persona}, intent {persona} — left unchanged"
-        if mine.persona and mine.persona != persona else ""
-    )
+    persona_note = _persona_note(mine, persona)
     if missing:
         return "update", f"adds {len(missing)} WWN: {', '.join(missing)}" + persona_note
-    if not wwns:
-        return "exists", "exists on the array (iSCSI initiators; not changed by this tool)" + persona_note
     return "exists", f"carries all {len(wwns)} WWN(s)" + persona_note
+
+
+def _persona_note(mine: ArrayHostRecord, persona: str) -> str:
+    if mine.persona and mine.persona != persona:
+        return f" · persona on the array: {mine.persona}, intent {persona} — left unchanged"
+    return ""
+
+
+def _judge_iscsi_host(name: str, iqns: list[str], persona: str, on_array: list[ArrayHostRecord]) -> tuple[PlanState, str]:
+    """R3 for an iSCSI-only host, by iSCSI name (case-insensitive): create / exists / update (adds the
+    missing names) / conflict (a name is another host's, or the host of that name carries FC WWNs —
+    `ensure_iscsi_host` refuses both)."""
+    owners = {i.lower(): h.name for h in on_array for i in h.iqns}
+    others = sorted({f"{i} belongs to host {owners[i.lower()]}" for i in iqns if owners.get(i.lower(), name) != name})
+    if others:
+        return "conflict", "; ".join(others) + " — resolve on the array before provisioning"
+    mine = next((h for h in on_array if h.name == name), None)
+    if mine is None:
+        return "create", ""
+    if mine.wwns:
+        return "conflict", (f"exists on the array with {len(mine.wwns)} FC WWN(s); this tool does not add an "
+                            "iSCSI name to an FC host — use another host name, or add the IQN on the array")
+    carried = {i.lower() for i in mine.iqns}
+    missing = [i for i in iqns if i.lower() not in carried]
+    if missing:
+        return "update", f"adds {len(missing)} iSCSI name: {', '.join(missing)}" + _persona_note(mine, persona)
+    return "exists", f"carries its iSCSI name{'s' if len(iqns) > 1 else ''} ({', '.join(iqns)})" + _persona_note(mine, persona)
 
 
 def _judge_set(name: str, members: list[str], on_array: dict[str, list[str]], noun: str) -> tuple[PlanState, str]:
@@ -598,10 +653,16 @@ def apply_plan(
     exports, _held = _reachable_targets(exports, intent, hosts, reachable_hosts)
 
     personas = _persona_by_host(discovery, intent, zoning_plan)
+    iqns_of = _iqns_by_host(discovery, intent, zoning_plan)
     try:
         with wsapi_factory(intent.array) as array:
             for host_name, wwns in hosts.items():
-                status = array.ensure_host(host_name, wwns, persona=personas.get(host_name, "VMware"))
+                persona = personas.get(host_name, "VMware")
+                if wwns or not iqns_of.get(host_name):
+                    # FC, or an array host with only an NVMe NQN (ensure_host with no WWN = exists, no write)
+                    status = array.ensure_host(host_name, wwns, persona=persona)
+                else:
+                    status = array.ensure_iscsi_host(host_name, iqns_of[host_name], persona=persona)
                 result.outcomes.append(ActionOutcome(kind="host", name=host_name, status=status))
 
             for hs in intent.host_sets:
@@ -685,7 +746,8 @@ def _describe_outcomes(
             continue
         if o.kind == "host" and o.name in host_by:
             h = host_by[o.name]
-            parts = [f"id {h.id}" if h.id is not None else "", f"persona {h.persona}" if h.persona else "", plural(len(h.wwns), "WWN")]
+            initiators = plural(len(h.wwns), "WWN") if h.wwns or not h.iqns else plural(len(h.iqns), "iSCSI name")
+            parts = [f"id {h.id}" if h.id is not None else "", f"persona {h.persona}" if h.persona else "", initiators]
             o.detail = " · ".join(p for p in parts if p)
         elif o.kind == "volume" and o.name in vol_by:
             v = vol_by[o.name]
@@ -718,7 +780,7 @@ def removal_set(
         if o.status == "created" and o.kind in cmd:
             items.append(RemovalItem(kind=o.kind, name=o.name, command=cmd[o.kind].format(n=o.name)))
     touched = [f"{o.kind} {o.name}" for o in outcomes if o.status == "updated"]
-    notes = ["Not reverted — members or WWNs were added to: " + ", ".join(touched) + ". They existed before this run."] if touched else []
+    notes = ["Not reverted — members, WWNs or iSCSI names were added to: " + ", ".join(touched) + ". They existed before this run."] if touched else []
     # S-12 (2026-09-14): the runner pasted the raw list and removed hosts before their set. The LIST
     # is in paste order, not only the rendering.
     items.sort(key=lambda i: _REMOVAL_ORDER.get(i.kind, 9))

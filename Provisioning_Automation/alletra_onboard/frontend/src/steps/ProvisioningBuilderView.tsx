@@ -61,7 +61,7 @@ const SOURCE: Record<string, string> = {
 };
 const hostLabel = (h: DiscoveredHostBrief) =>
   h.fc_capable === false
-    ? `${h.name} — iSCSI only · ${SOURCE[h.source] ?? h.source} · not zoned or path-verified by this tool`
+    ? `${h.name} — iSCSI · ${SOURCE[h.source] ?? h.source} · no zoning needed`
     : `${h.name} — ${h.status} · ${SOURCE[h.source] ?? h.source}`;
 
 const targetOptions = (o: ProvisioningObjects): Opt[] => [

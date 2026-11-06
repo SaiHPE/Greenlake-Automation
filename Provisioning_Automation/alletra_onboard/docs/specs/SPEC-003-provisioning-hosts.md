@@ -21,7 +21,7 @@ with no hint that this tool neither zones nor path-verifies iSCSI (P-3).
 In: one host union for provisioning (plan, apply, path-verification targets, the Compose
 dropdown), with source, transport and persona per host; the dropdown label and order. Out: iSCSI
 host *creation* over WSAPI (the client takes FC WWNs only — a separate spec when G-4's iSCSI export
-is scheduled); any change to the zoning step's own union (it stays inline in `zoning_plan.py`,
+is scheduled; **built 2026-10-26, BL-44**, see R6); any change to the zoning step's own union (it stays inline in `zoning_plan.py`,
 live-proven rc.6/rc.7).
 
 ## 3. Requirements
@@ -55,12 +55,21 @@ the operator was offered is what apply creates and what the verifier checks.
 `transport`, `persona`, `fc_capable`. In the Compose dropdown FC-capable hosts come first, labelled
 `name — status · source`; iSCSI-only hosts follow, labelled `name — iSCSI only · not zoned or
 path-verified by this tool`. They remain selectable (a mixed-transport set is legal on the array).
-When a composed host set contains one, the plan carries a note naming it.
+When a composed host set contains one, the plan carries a note naming it. *(2026-10-26, BL-44: the
+label is now `name — iSCSI · source · no zoning needed`; Verify paths has counted iSCSI paths
+since BL-34.)*
 
 **R6 — Nothing is created for a host with no FC initiator.** An iSCSI-only host is planned only
 when it already exists on the array (it joins a set; nothing is created). One that does not exist
 yet is not planned and is named in a note: the WSAPI client registers FC WWNs only, and a host
 object created without its IQN would be a lie of omission.
+
+*Superseded 2026-10-26 (BL-44):* an iSCSI-only host is created from its iSCSI name
+(`ensure_iscsi_host`, WSAPI `POST /hosts` with `iSCSINames`, the CLI's `createhost -iscsi`), at the
+persona its OS gives. A host that exists with some of its IQNs gains the missing ones; an IQN that
+belongs to another host, or a host of that name that carries FC WWNs, is a plan conflict. A host
+with both FC and iSCSI is still made from its FC WWPNs only, with a note: WSAPI refuses both in one
+request and no lab array has such a host. The export still waits for the IQN to be logged in.
 
 **R7 — Existing behaviour holds.** With vCenter as the only source, the list, personas, selected
 hosts and exports are exactly what they were (the existing tests in `test_storage_services.py`

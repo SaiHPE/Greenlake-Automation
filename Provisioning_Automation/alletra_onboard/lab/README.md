@@ -17,6 +17,9 @@ prefix, and remove all of it at the end.
 | `ui_live_lab.py` | Every page of the app at 1366 and 1080 wide, on a run with real discovery, zoning, plans, verify and as-built (BL-43) | No |
 | `ui_provision_lab.py` | The Provision storage page creates objects through its own buttons, then removes them (BL-43) | Yes, `zz_ui_*` on D22U27, removed at the end |
 | `rc_peer_ready.py` | Whether the peer array can be the replication partner of D22U27 | No |
+| `iscsi_capture.py` | What D22U27 holds for iSCSI hosts: ports, sessions, hosts with an IQN, personas, `createhost` help (BL-44) | No |
+| `iscsi_host_lab.py` | The app creates an iSCSI host from its IQN (lab Linux host), plans again, then removes it (BL-44) | Yes, `zz_is_*` on D22U27, removed at the end |
+| `iscsi_port_probe.py` | Which lab array (D22U27, the CRV VZ array; LZ pinged only) has iSCSI ports with a link, and which lab networks this workspace reaches (BL-44) | No |
 | `rc_find_fabric.py` | Which vCenter and FC switches a lab host uses | No |
 | `rc_console_lab.py` | The command console and its refusal of write commands (SPEC-019) | No |
 | `rc_link_lab.py` | The replication link check between the pair (SPEC-020) | No |

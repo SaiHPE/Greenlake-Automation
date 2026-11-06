@@ -127,11 +127,17 @@ def build_report(
     Array hosts NOT in any set are other teams' objects and stay out of the table."""
     report = ZoningReport()
     fc_ports = [p for p in discovery.array_ports if p.protocol == "fc" and p.fabric]
+    host_wwpns, iscsi_only = _hosts_in_scope(intent, discovery, zoning_plan)
     if not fc_ports:
-        report.error = (
-            "The discovery has no array FC target ports, so zoning cannot be checked — re-run Discovery "
-            "and make sure it reached the array."
-        )
+        # An array with iSCSI host ports only still has a gate: the IQN logins (BL-44). FC hosts in
+        # the same run cannot be checked, and a run with no iSCSI host keeps the old answer.
+        _judge_iscsi(report, iscsi_only, discovery)
+        if host_wwpns or not iscsi_only:
+            report.error = (
+                "The discovery has no array FC target ports, so zoning cannot be checked — re-run Discovery "
+                "and make sure it reached the array."
+            )
+        report.proper = not report.error and all(report.iscsi_hosts.values())
         return report
 
     # Which host WWPNs the ARRAY sees LOGGED IN, by fabric — from showhost. This INCLUDES the
@@ -152,22 +158,8 @@ def build_report(
     for port in fc_ports:
         arr_by_fabric[port.fabric].append(port.wwpn)
 
-    # Expected hosts: the provisioning union (see docstring). The array-only fallback below survives
-    # for a run with no vCenter, no sheet hosts and no plan — it verifies whatever is logged in.
-    from alletra_onboard.application.provisioning.hosts import (
-        union_hosts,  # local: avoid import cycle
-    )
-
-    in_a_set = {m for hs in getattr(intent, "host_sets", []) for m in hs.members}
-    host_wwpns: dict[str, set[str]] = {}
-    iscsi_only: dict[str, list[str]] = {}
-    for name, h in union_hosts(discovery, getattr(intent, "declared_hosts", None) or [], zoning_plan)[0].items():
-        if h.source == "array" and name not in in_a_set and not in_a_set.intersection(h.aliases):
-            continue
-        if h.wwpns:
-            host_wwpns[name] = {normalize_wwpn(w) for w in h.wwpns}
-        elif h.iqns:
-            iscsi_only[name] = h.iqns
+    # The array-only fallback below survives for a run with no vCenter, no sheet hosts and no plan —
+    # it verifies whatever is logged in.
     if not host_wwpns and not iscsi_only:
         for host in discovery.array_hosts:
             if not host.name:      # the array's UNCLAIMED logins — real WWPNs, but not a named host
@@ -203,7 +195,68 @@ def build_report(
         elif not on["odd"] or not on["even"]:
             report.notes.append(f"{host}: zoned on one fabric only — missing {'even/F2' if on['odd'] else 'odd/F1'}.")
 
-    # An iSCSI host needs no zone: it can take an export once the array sees its IQN logged in.
+    _judge_iscsi(report, iscsi_only, discovery)
+    report.proper = (
+        bool(report.expected or report.iscsi_hosts)
+        and all(z.present for z in report.expected) and not report.unverified_hosts
+        and all(report.iscsi_hosts.values())
+    )
+    report.remediations = _remediations(host_wwpns, union, arr_by_fabric, switch_by_fabric)
+    return report
+
+
+def summary(report: ZoningReport) -> str:
+    """The zoning step's one-line result. A run with no iSCSI host reads exactly as before BL-44."""
+    missing = sum(1 for z in report.expected if not z.present)
+    ready = len(report.zoned_hosts)
+    if not report.iscsi_hosts:
+        if report.proper:
+            return "Zoning is correct on both fabrics."
+        return (f"Zoning needs {missing} zone(s). Build the plan, select the pairs and hand the command set "
+                "to the SAN team to apply, then re-verify. "
+                + (f"{ready} host(s) are already zoned and can be provisioned now."
+                   if ready else "No host is zoned on both fabrics yet, so nothing can be provisioned."))
+    if report.proper:
+        return ("Zoning is correct on both fabrics, and every iSCSI host is logged in to the array."
+                if report.expected else "Every iSCSI host is logged in to the array; no zoning is needed.")
+    parts = []
+    if missing or report.unverified_hosts:
+        parts.append(f"Zoning needs {missing} zone(s). Build the plan, select the pairs and hand the command "
+                     "set to the SAN team to apply, then re-verify.")
+    waiting = sorted(h for h, ports in report.iscsi_hosts.items() if not ports)
+    if waiting:
+        parts.append(f"iSCSI not logged in: {', '.join(waiting)}. Connect the server to the array's iSCSI "
+                     "ports, then re-verify.")
+    parts.append(f"{ready} host(s) can take exports now." if ready else
+                 "No host can take an export yet. Hosts, host sets and volumes can still be created; "
+                 "the exports wait.")
+    return " ".join(parts)
+
+
+def _hosts_in_scope(
+    intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None,
+) -> tuple[dict[str, set[str]], dict[str, list[str]]]:
+    """Expected hosts: the provisioning union (see build_report), as (FC host -> WWPNs, iSCSI-only
+    host -> IQNs). Array hosts in no host set are other teams' objects and are left out."""
+    from alletra_onboard.application.provisioning.hosts import (
+        union_hosts,  # local: avoid import cycle
+    )
+
+    in_a_set = {m for hs in getattr(intent, "host_sets", []) for m in hs.members}
+    host_wwpns: dict[str, set[str]] = {}
+    iscsi_only: dict[str, list[str]] = {}
+    for name, h in union_hosts(discovery, getattr(intent, "declared_hosts", None) or [], zoning_plan)[0].items():
+        if h.source == "array" and name not in in_a_set and not in_a_set.intersection(h.aliases):
+            continue
+        if h.wwpns:
+            host_wwpns[name] = {normalize_wwpn(w) for w in h.wwpns}
+        elif h.iqns:
+            iscsi_only[name] = h.iqns
+    return host_wwpns, iscsi_only
+
+
+def _judge_iscsi(report: ZoningReport, iscsi_only: dict[str, list[str]], discovery: DiscoveryReport) -> None:
+    """An iSCSI host needs no zone: it can take an export once the array sees its IQN logged in."""
     iqn_ports = {iqn.lower(): ports for ah in discovery.array_hosts for iqn, ports in ah.iqns.items()}
     for host in sorted(iscsi_only):
         ports = sorted({p for iqn in iscsi_only[host] for p in iqn_ports.get(iqn.lower(), [])})
@@ -213,13 +266,6 @@ def build_report(
             report.notes.append(f"{host}: iSCSI, logged in on {', '.join(ports)} — no zoning needed; exports allowed.")
         else:
             report.notes.append(f"{host}: iSCSI, IQN not logged in on the array — exports to it are held back.")
-    report.proper = (
-        bool(report.expected or report.iscsi_hosts)
-        and all(z.present for z in report.expected) and not report.unverified_hosts
-        and all(report.iscsi_hosts.values())
-    )
-    report.remediations = _remediations(host_wwpns, union, arr_by_fabric, switch_by_fabric)
-    return report
 
 
 def _remediations(

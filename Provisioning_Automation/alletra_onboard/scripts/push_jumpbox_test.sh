@@ -51,7 +51,8 @@ echo "Building frontend/dist from frontend/src ..."
 gd=$(git rev-parse --absolute-git-dir)
 export GIT_INDEX_FILE="$stage/index"
 git --git-dir="$gd" --work-tree="$stage" -C "$stage" read-tree "HEAD:$APP"
-git --git-dir="$gd" --work-tree="$stage" -C "$stage" rm -r -q --cached --ignore-unmatch frontend/dist
+# -f: the fresh build differs from the committed dist whenever frontend/src changed; --cached keeps files.
+git --git-dir="$gd" --work-tree="$stage" -C "$stage" rm -r -q -f --cached --ignore-unmatch frontend/dist
 git --git-dir="$gd" --work-tree="$stage" -C "$stage" add -f frontend/dist
 tree=$(git --git-dir="$gd" write-tree)
 unset GIT_INDEX_FILE
