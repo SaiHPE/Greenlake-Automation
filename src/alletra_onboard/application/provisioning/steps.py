@@ -168,16 +168,10 @@ class DiscoveryZoningSteps:
                        data={"report": report.model_dump(mode="json")})
             return
         coord.set_state(run, RunStatus.READY if report.proper else RunStatus.WAITING_FOR_OPERATOR, WorkflowPhase.STORAGE_ZONING)
-        missing = sum(1 for z in report.expected if not z.present)
-        ready = len(report.zoned_hosts)
         coord.emit(
             run.run_id, WorkflowPhase.STORAGE_ZONING,
             "zoning.proper" if report.proper else "zoning.previewed",
-            "Zoning is correct on both fabrics." if report.proper
-            else f"Zoning needs {missing} zone(s). Build the plan, select the pairs and hand the "
-            "command set to the SAN team to apply, then re-verify. "
-            + (f"{ready} host(s) are already zoned and can be provisioned now."
-               if ready else "No host is zoned on both fabrics yet, so nothing can be provisioned."),
+            storage_zoning.summary(report),
             data={"report": report.model_dump(mode="json")},
         )
 

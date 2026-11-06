@@ -333,11 +333,13 @@ ArrayProvisioningType = Literal["full", "tpvv", "snp", "peer", "unknown", "reduc
 
 
 class ArrayHostRecord(BaseModel):
-    """One host object as the array holds it: persona by NAME, FC WWNs normalised."""
+    """One host object as the array holds it: persona by NAME, FC WWNs normalised, iSCSI names as the
+    array reports them (compare them case-insensitively)."""
 
     name: str
     persona: str = ""
     wwns: list[str] = Field(default_factory=list)
+    iqns: list[str] = Field(default_factory=list)
     id: int | None = None          # SPEC-012 R1: the array's host id, for the Result row
 
 

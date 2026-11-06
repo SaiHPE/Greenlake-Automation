@@ -463,7 +463,8 @@ def test_iscsi_only_existing_host_reason_and_reachability_note_wording():
 
     iscsi = ArrayHost(name="grp3_vmenode1", persona="Generic-ALUA", iqns={"iqn.x": ["0:4:1"]})
     discovery = _discovery().model_copy(update={"array_hosts": [iscsi]})
-    fake = TruthfulFakeWsapi(hosts=[ArrayHostRecord(name="grp3_vmenode1", persona="Generic-ALUA", wwns=[])])
+    # BL-44: the WSAPI record carries the host's iSCSI name, as `iSCSIPaths` does on a real array.
+    fake = TruthfulFakeWsapi(hosts=[ArrayHostRecord(name="grp3_vmenode1", persona="Generic-ALUA", wwns=[], iqns=["iqn.x"])])
     intent = _intent(host_sets=[HostSetRequest(name="hs", members=["esx1", "grp3_vmenode1"])])
     plan = prov.build_plan(intent, discovery, reachable_hosts={"esx1"}, wsapi_factory=lambda c: fake)
     row = _row(plan, "host", "grp3_vmenode1")

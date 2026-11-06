@@ -768,7 +768,7 @@ def _add_provisioning_section(doc, data: AsBuiltData) -> None:
         return
     when = f" at {_when(data.provisioning_applied_at)}" if data.provisioning_applied_at else ""
     _para(doc, f"Objects the tool created or found on the array{when}. 'Already existed' means the object "
-               "was there and matched; 'Updated' means members or WWNs were added, nothing removed.")
+               "was there and matched; 'Updated' means members, WWNs or iSCSI names were added, nothing removed.")
     outcomes = result.get("outcomes", [])
     if outcomes:
         _table(doc, ["Kind", "Name", "Result", "Detail"],

@@ -1,0 +1,71 @@
+# help removehost
+removehost - remove a host or path(s) to a host.
+
+SYNTAX
+    removehost [options] <hostname|pattern> [<WWN>... | <iscsi_name> ...]
+
+DESCRIPTION
+    The removehost command removes a system host or paths to a host. If one or
+    more paths are specified, the command removes only those paths, otherwise
+    the entire host definition is removed. For an NVMe host, only the entire
+    host definition can be removed, path removal is not allowed.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the host_remove right
+
+OPTIONS
+    -rvl
+        Remove WWN(s) or iSCSI name(s) even if there are VLUNs exported to the
+        host. This option cannot be used if the entire host definition is being
+        removed.
+
+    -iscsi
+        Specifies that the paths are iSCSI names. If this option is not
+        specified, the paths are WWNs.
+    -pat
+        Specifies that host name will be treated as a glob-style pattern and
+        that all hosts matching the specified pattern are removed. This
+        option cannot be used if the WWN or ISCSI_name specifiers are used.
+
+SPECIFIERS
+    <hostname|pattern>
+        Specifies the host name, using up to 31 characters. If the -pat
+        option is specified the hostname will be treated as a glob-style
+        pattern, and multiple hosts will be considered.
+
+    <WWN>
+        Only the specified WWN(s) path to the specified host is removed. This
+        specifier is not required on the command line. If a WWN is not
+        specified, the entire host definition is removed.
+
+    <ISCSI_name>
+        Specifies the host iSCSI name to be removed from the specified host. If
+        no ISCSI name is specified, the entire host definition is removed.
+
+NOTES
+    Access to all domains is required to run this command.
+
+    A host that has one or more VLUNs exported on it cannot be removed.
+
+    Removing an entire host definition by issuing the removehost <hostname>
+    command is not equivalent to removing all of the paths associated with a
+    host. The latter leaves a host definition with no paths associated to it,
+    whereas the former removes the entire host definition.
+
+    Verify the removal of hosts by issuing the showhost command.
+
+    The patterns are glob-style (shell-style) patterns (see help on sub,globpat).
+
+    Issuing the removehost command with invalid host names causes the
+    command to exit without removing any hosts.
+
+EXAMPLES
+    The following example removes host test01:
+
+        cli% removehost test01
+
+    The following example removes the hosts that start with test:
+
+        cli% removehost -pat test*
+

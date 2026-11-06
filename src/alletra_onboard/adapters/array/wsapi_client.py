@@ -87,9 +87,10 @@ _VLUN_TYPE_HOST_SET = 5
 
 
 def parse_hosts(body: object) -> list[ArrayHostRecord]:
-    """getHosts -> records. Persona by name (unknown ids pass through as their number); FC WWNs only,
+    """getHosts -> records. Persona by name (unknown ids pass through as their number); FC WWNs
     de-duplicated — `FCPaths` carries one entry per (WWN, array port), so a dual-fabric HBA appears
-    twice (rack13arcus capture, 2026-09-13)."""
+    twice (rack13arcus capture, 2026-09-13). iSCSI names come from `iSCSIPaths[].name`, de-duplicated
+    case-insensitively (rack13arcus 2026-09-13, D22U27 2026-10-26)."""
     out: list[ArrayHostRecord] = []
     for m in _members(body):
         name = m.get("name", "")
@@ -105,8 +106,18 @@ def parse_hosts(body: object) -> list[ArrayHostRecord]:
             name=name,
             persona=_PERSONA_NAME.get(persona_id, str(persona_id) if persona_id is not None else ""),
             wwns=wwns,
+            iqns=_iscsi_names(m),
             id=int(m["id"]) if str(m.get("id", "")).isdigit() else None,
         ))
+    return out
+
+
+def _iscsi_names(host: dict) -> list[str]:
+    out: list[str] = []
+    for p in host.get("iSCSIPaths") or []:
+        iqn = str(p.get("name", "")).strip()
+        if iqn and iqn.lower() not in {i.lower() for i in out}:
+            out.append(iqn)
     return out
 
 
@@ -353,6 +364,15 @@ class WsapiClient:
                     owners[wwn] = name
         return owners
 
+    def iqn_owners(self) -> dict[str, str]:
+        """{lower-case iSCSI name: owning host name} for every host on the array, from one getHosts()
+        read — for the same reason as wwn_owners (never the SDK's findHost)."""
+        return {
+            iqn.lower(): member.get("name", "")
+            for member in _members(self._require().getHosts()) if member.get("name")
+            for iqn in _iscsi_names(member)
+        }
+
     def find_host_by_wwn(self, wwn: str) -> str | None:
         """Return the name of the host owning this FC WWN, or None. Backed by wwn_owners(), never
         by the SDK's findHost (see wwn_owners for why)."""
@@ -409,6 +429,53 @@ class WsapiClient:
             # No conflict-swallow here: `missing` excludes WWNs already on this host, so a 409 now
             # means a real race or another owner — masking it as 'exists' is how the live bug hid.
             raise self._translate(exc, where=f"modifyHost {name} (add {len(missing)} WWN)") from exc
+
+    def ensure_iscsi_host(self, name: str, iqns: list[str], persona: str = "VMware") -> str:
+        """The iSCSI twin of ensure_host: ONE host carrying these iSCSI names (`createhost -iscsi`).
+        Returns 'created', 'updated' (the IQNs it lacked were added) or 'exists'. The array takes an
+        IQN it has never seen a session from, so this does not wait for a login.
+
+        Raises WsapiError when an IQN belongs to a different host, or when the host of that name
+        carries FC WWNs: WSAPI refuses FC and iSCSI names in one request, and this tool does not put
+        both on one host (not proven on the array)."""
+        if not iqns:
+            raise WsapiError(f"no iSCSI name given for host '{name}'")
+        members = {m.get("name", ""): m for m in _members(self._require().getHosts()) if m.get("name")}
+        owners = {i.lower(): n for n, m in members.items() for i in _iscsi_names(m)}
+        other = sorted({owners[i.lower()] for i in iqns if owners.get(i.lower(), name) != name})
+        if other:
+            raise WsapiError(
+                f"iSCSI name(s) for host '{name}' already belong to another host definition: {other}. "
+                "Resolve this on the array before provisioning."
+            )
+        existing = members.get(name)
+        if existing is not None and any(p.get("wwn") for p in existing.get("FCPaths") or []):
+            raise WsapiError(
+                f"host '{name}' exists with FC WWNs; this tool does not add iSCSI names to an FC host. "
+                "Use another host name, or add the IQN on the array."
+            )
+        missing = [i for i in iqns if owners.get(i.lower()) != name]
+        if existing is not None and not missing:
+            return "exists"
+        if existing is None:
+            persona_id = _WSAPI_PERSONA.get(persona)
+            if persona_id is None:
+                raise WsapiError(f"unknown host persona '{persona}' (expected one of {sorted(_WSAPI_PERSONA)})")
+            try:
+                self._require().createHost(name, iscsiNames=list(iqns), optional={"persona": persona_id})
+                return "created"
+            except Exception as exc:
+                if not self._is_conflict(exc):
+                    raise self._translate(exc, where=f"createHost -iscsi {name}") from exc
+                # EXISTENT_HOST race, as in ensure_host: add the names to the host someone just made.
+        try:
+            self._require().modifyHost(
+                name,
+                {"pathOperation": getattr(HPE3ParClient, "HOST_EDIT_ADD", 1), "iSCSINames": missing},
+            )
+            return "updated"
+        except Exception as exc:
+            raise self._translate(exc, where=f"modifyHost {name} (add {len(missing)} iSCSI name)") from exc
 
     def _existing_set_members(self, getter, name: str) -> list[str] | None:
         """The set's current members, or None if the set does not exist. Sets share ensure_host's
