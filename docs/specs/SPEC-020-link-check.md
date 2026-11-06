@@ -49,10 +49,31 @@ Steps 3 and 4 run whatever happened in 1 and 2 (a failure to start the client st
 server). `<time>` is 600 s unless the request says otherwise; the array accepts 300 to 172800
 (CLI reference). The throughput part of the test is not waited for (non-goal §3).
 
+5. After the last pair, on A and on B: `showrcopy links`. A link that was Up in the preview's read
+   and is not Up again within 60 s (read every 10 s) makes the check an error, never a pass. *Added
+   2026-11-03:* on PRIMERA630R11U22 (OS 4.6.20) the server's route to A's address
+   (`Adding route: 10.93.18.11 -> 10.93.18.1`, through the RCIP gateway) stayed after `stopserver`
+   (a second `startserver` answered `SIOCADDRT: File exists`), and every RCIP link went Down. The
+   error names the links and the way back: on B, `controlport rcip state down -f` then `up -f` on
+   the port (it keeps its address), which removed the route live.
+
+A gateway on a B port whose A address is on the port's own network is a note before the test: the
+server routes through the gateway anyway. When a pair loses every ping and the server routed
+through a gateway, the pair's detail says so and that the gateway is not needed on one network.
+
+**R2a — No number in the latency line.** *Added 2026-11-06:* with this array's ports on a /28 behind
+the lab router 10.93.18.1, the client lost no ping and passed its MTU test, but printed `Average
+measured latency: min ms`. The router answers every ping twice and sends an ICMP redirect, and the
+array's test cannot work out a number from that. Then, after steps 3 and 4: on A,
+`controlport rcip ping -c 10 <B's address> <A port>`; with no reply lost, the pair's latency is the
+ping's average round trip, and its detail says it was measured with ping and why. Any lost reply
+leaves the pair unmeasured, with both outputs. The as-built marks such a latency *(ping)*.
+
 `checkrclink` is not a `show` command and never goes on ADR 0001's read allowlist. The SSH client
 gets `run_diagnostic()`: a second allowlist of exactly `checkrclink startserver|stopserver|startclient|stopclient`
 with the port as `N:S:P`, the address as a dotted IPv4 and the time as an integer in the array's
-range; anything else is refused with a sentence. The Console prompt (SPEC-019 R3) keeps using the
+range, and `controlport rcip ping -c <1 to 20> <IPv4> <N:S:P>` (ICMP echo only, it changes nothing;
+every other `controlport` form stays out); anything else is refused with a sentence. The Console prompt (SPEC-019 R3) keeps using the
 read allowlist and cannot reach it. Every command is recorded in the command log like any other.
 
 **R3 — The result.** Per pair: the latency in ms, the pings lost in %, and the client's output up

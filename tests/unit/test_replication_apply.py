@@ -167,7 +167,10 @@ def test_apply_writes_in_the_fixed_order_and_builds_both_removal_blocks():
         "removevvset -f zz_rc_test",
         "removevv -f zz_rc_test_v01",
     ]
-    assert result.removals_b == ["removevvset -f zz_rc_vvs_rc", "removevvset -f zz_rc_test_rc"]
+    # R7 on B (2026-11-03): the peer sets, then the secondaries the admits created — a Primera peer keeps
+    # a secondary that sits in a set when A's dismissrcopyvv -removevv asks for it.
+    assert result.removals_b == ["removevvset -f zz_rc_vvs_rc", "removevvset -f zz_rc_test_rc",
+                                 "removevv -f zz_rc_vol01", "removevv -f zz_rc_vol02", "removevv -f zz_rc_test_v01"]
     assert [o.status for o in result.outcomes].count("created") == len(result.outcomes)
 
 
@@ -211,7 +214,8 @@ def test_a_failure_mid_way_stops_and_the_removal_set_covers_only_what_was_create
         "dismissrcopyvv -f -removevv zz_rc_vol01 zz_rc_vvs_rcg",
         "removercopygroup -f zz_rc_vvs_rcg",
     ]
-    assert result.removals_b == []
+    # zz_rc_vol01's admit auto-created its secondary on B before the failure; the peer set was never made.
+    assert result.removals_b == ["removevv -f zz_rc_vol01"]
     assert result.outcomes[-1].status == "failed"
 
 
@@ -475,3 +479,17 @@ def test_verify_on_the_ui_periodic_capture_shows_the_five_minute_cycle_ran():
         ("replicating", "Started · Primary here, Secondary on the peer · Periodic · 1 volume(s) Synced · last sync 2026-10-10 15:42:48 IST"),
     ]
     assert a.group("zz_rc_vvs_rcg").period == "5m" and b.vvsets["zz_rc_vvs_rc"] == ["zz_rc_vol01"]
+
+
+def test_the_b_block_removes_what_a_primera_peer_kept_after_the_a_block():
+    """Live 2026-11-03 (rack13-ARCUS -> PRIMERA630R11U22): A's `dismissrcopyvv -f -removevv` left both
+    secondaries on the Primera ("Manual cleanup required on target system"); removing the peer sets and
+    then the volumes by name on B cleared them. The new B block is exactly those lines, in that order."""
+    log_text = (Path(__file__).resolve().parents[1] / "fixtures" / "rcip_pair" / "cleanup_2026-11-03.txt").read_text()
+    assert log_text.count("Manual cleanup required on target system") == 2
+    prov = _prov()
+    result = apply_plan(_plan(prov), prov, wsapi_factory=_factory([]))
+    b = result.removals_b
+    assert [line.split()[0] for line in b] == ["removevvset"] * 2 + ["removevv"] * 3       # sets before volumes
+    for line in b:
+        assert line.split()[-1].startswith("zz_rc")

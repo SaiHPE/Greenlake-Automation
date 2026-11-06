@@ -169,6 +169,8 @@ class InitSheetUploadResponse(BaseModel):
     # SPEC-006 R1: the Provisioning tab's endpoints WITHOUT passwords (host + username per device), so a
     # script driving the API learns the array from the sheet rather than from a parameter.
     targets: dict[str, str] = Field(default_factory=dict)
+    # SPEC-021 R1: the Replication network tab's rows, one line each ("this array 0:4:4 10.93.18.11"), for review.
+    replication_ports: list[str] = Field(default_factory=list)
 
 
 class RunFromSheetRequest(BaseModel):

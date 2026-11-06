@@ -383,3 +383,13 @@ dismissed as tolerable risk (read-only switch logins) with the reason on the ale
 `pyproject.toml`, and in `test_dependencies.py`, which fails if the pin is loosened. Rule: when a
 dependency is held back for a device, say why in all three places a future "clear the alerts" pass
 will touch, and test the pin so that pass has to read the reason before it can undo it.
+
+**44. A check can change the array, and an old object can block a new one without an error.**
+On 2026-11-03, on the Alletra MP → Primera pair, `checkrclink` measured the link and then left every
+link Down: the Primera's RCIP ports had a gateway, the test routed through it, and the Primera kept the
+route after `stopserver`. The check had passed. Two runs later every group create failed with *Failed
+to send message to target*: an old, failed Fibre Channel target for the same Alletra stopped the new IP
+target from learning who it was (`showrcopy -d targets`: SysName None), and nothing said so. Rules: a
+check that sends anything re-reads afterwards and fails if it left the device worse than it found it;
+before creating something, look for an older object of the same kind between the same two systems and
+block on it with the command that removes it.

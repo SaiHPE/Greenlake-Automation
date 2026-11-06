@@ -532,6 +532,28 @@ def test_init_sheet_compose_round_trips_through_upload(tmp_path, monkeypatch):
     assert bad.status_code in (400, 422)
 
 
+def test_upload_lists_the_replication_ports_to_set_up(tmp_path, monkeypatch):
+    """SPEC-021 R1, seen live 2026-11-05: the review after upload named the peer but not the four port rows."""
+    import base64
+
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    base_b64 = _fill_template(client.get("/init-sheet/template").content, _COMPLETE_MAIN, _COMPLETE_PROV)
+    rows = [{"array": a, "port": p, "ip": ip, "netmask": "255.255.254.0"}
+            for a, p, ip in (("this", "0:4:4", "10.93.18.11"), ("this", "1:4:4", "10.93.18.13"),
+                             ("peer", "0:1:1", "10.93.18.19"), ("peer", "1:1:1", "10.93.18.20"))]
+    replication = {"fields": {"peer_host": "10.132.30.28", "peer_user": "3paradm", "peer_password": "pw"},
+                   "rows": [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "mode": "sync"}]}
+    for network, want in ((rows, ["this array 0:4:4 10.93.18.11", "this array 1:4:4 10.93.18.13",
+                                  "peer 0:1:1 10.93.18.19", "peer 1:1:1 10.93.18.20"]), (None, [])):
+        body = {"base_b64": base_b64, "replication": {**replication, **({"network": network} if network else {})}}
+        composed = client.post("/init-sheet/compose", json=body).json()["content_b64"]
+        up = client.post("/init-sheet/upload", json={"content_b64": composed})
+        assert up.status_code == 200, up.text
+        assert up.json()["replication_ports"] == want
+        assert base64.b64decode(composed)[:2] == b"PK"
+
+
 def test_verify_and_asbuilt_use_the_sheets_array_credential(tmp_path, monkeypatch):
     """SPEC-008 R2/R3 through the API: a run minted from a complete sheet holds the Provisioning tab's
     array admin; Verify with `{}` uses it (the fake verify_fn sees the sheet's user/password) and

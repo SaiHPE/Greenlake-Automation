@@ -264,6 +264,59 @@ def test_run_records_take_the_replication_plan_report_and_result():
     assert data.replication_applied_at == "t4"
 
 
+def test_run_records_merge_the_removal_sets_of_every_apply_newest_first():
+    """SPEC-021: the partnership apply comes first and the groups apply second; the removal set lists
+    the groups first (removercopytarget refuses while a group still uses the target), each line once."""
+    from types import SimpleNamespace
+
+    from alletra_onboard.application.documents import steps as st
+
+    def ev(t, result):
+        return SimpleNamespace(event_type=t, data={"result": result}, created_at="t")
+
+    partnership = {"outcomes": [], "removals_a": ["removercopytarget PRIMERA630R11U22", "stoprcopy -f -stopgroups -clear",
+                                                  "controlport rcip delete -f 0:4:4"],
+                   "removals_b": ["removercopytarget rack13-ARCUS"]}
+    groups = {"outcomes": [], "removals_a": ["stoprcopygroup -f g", "removercopygroup -f g"],
+              "removals_b": ["removevvset -f g_rc", "removevv -f v1"]}
+    events = [ev("replication.applied", partnership), ev("replication.applied", groups)]
+    data = AsBuiltData()
+    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events, list_commands=lambda run_id, since=0: []))._run_records("r1", data)
+    assert data.replication_removals_a == ["stoprcopygroup -f g", "removercopygroup -f g", "removercopytarget PRIMERA630R11U22",
+                                           "stoprcopy -f -stopgroups -clear", "controlport rcip delete -f 0:4:4"]
+    assert data.replication_removals_b == ["removevvset -f g_rc", "removevv -f v1", "removercopytarget rack13-ARCUS"]
+
+
+def test_the_as_built_lists_every_apply_of_the_run_in_order(tmp_path):
+    """SPEC-021, live 2026-11-03 (run 58da7c29): the partnership apply, then the groups apply. The
+    document showed only the groups apply, so the ports and targets the tool set up were missing."""
+    from types import SimpleNamespace
+
+    from alletra_onboard.application.documents import steps as st
+
+    raw = json.loads((Path(__file__).resolve().parents[1] / "fixtures" / "rcip_pair" / "tool_run" / "replication_events.json")
+                     .read_text(encoding="utf-8"))
+    events = [SimpleNamespace(**e) for e in raw]
+    data = _data(replication_tab=_tab("sync"))
+    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events, list_commands=lambda run_id, since=0: []))._run_records("r1", data)
+    assert [x["result"]["outcomes"][0]["kind"] for x in data.replication_applies] == ["rcip_port", "test_volume"]
+    a, b = _views("after_apply")
+    data.replication_primary, data.replication_peer = a, b
+    out, _ = generate_asbuilt(data, tmp_path / "two_applies.docx")
+    doc, text = _read(out)
+    i = text.index("What was run, in order")
+    assert (i < text.index("A  controlport rcip addr -f 10.93.18.11 255.255.254.0 0:4:4")
+            < text.index("B  creatercopytarget rack13-ARCUS IP 0:1:1:10.93.18.11 1:1:1:10.93.18.13")
+            < text.index("A  creatercopygroup"))
+    outcomes = _tables(doc)[("Kind", "Name", "On", "Result", "Detail")]
+    assert outcomes[0] == ["Replication port", "0:4:4", "A", "Done", "10.93.18.11 255.255.254.0, ready"]
+    assert ["Remote Copy target", "rack13-ARCUS", "B", "Done", "2 link(s): 0:1:1:10.93.18.11, 1:1:1:10.93.18.13"] in outcomes
+    assert [r[0] for r in outcomes].index("Links Up") < [r[0] for r in outcomes].index("Remote Copy group")
+    j = text.index("To remove what this run created", i)
+    assert j < text.index("stoprcopygroup -f zz_rc_vvs_rcg", j) < text.index("removercopytarget PRIMERA630R11U22", j) \
+        < text.index("controlport rcip delete -f 1:4:4", j) < text.index("removercopytarget rack13-ARCUS", j)
+
+
 def test_collect_replication_reads_both_arrays_with_the_runs_credentials():
     from alletra_onboard.application.documents import steps as st
     from alletra_onboard.domain.replication import ProtectionRequest, ReplicationIntent

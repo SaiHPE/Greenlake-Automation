@@ -143,6 +143,8 @@ export interface InitSheetUploadResult {
   credentials_saved: boolean;
   // The sheet's device endpoints without passwords (array/vcenter/switch/peer _host and _user); SPEC-006 R1.
   targets?: Record<string, string>;
+  // SPEC-021: the Replication network tab, one line per port ("this array 0:4:4 10.93.18.11"); empty without the tab.
+  replication_ports?: string[];
 }
 // Upload the filled Initialisation_sheet.xlsx (base64). The server validates it is COMPLETE, writes
 // the GreenLake API creds to .env, and HOLDS the parsed sheet server-side — returning a token. No run
@@ -441,19 +443,27 @@ export interface ReplicationReport {
 export interface PlannedCall { where: 'A' | 'B'; wsapi: string; cli: string; seq: number; }
 export type ReplicationActionState = 'create' | 'exists' | 'conflict';
 export interface ReplicationAction {
-  kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset'; name: string; where: 'A' | 'B';
+  kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset' | 'rcip_port' | 'rc_service' | 'target'; name: string; where: 'A' | 'B';
   state: ReplicationActionState; reason: string; calls: PlannedCall[]; detail: Record<string, any>;
 }
 export interface ReplicationPlan { actions: ReplicationAction[]; blockers: string[]; notes: string[]; existing_groups: string[]; error: string | null; }
 export const replicationPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/preview`);
 // R4/R7: what the arrays said per write, and the removal lines per array (the operator pastes; the tool never runs them).
 export interface ReplicationOutcome {
-  kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset' | 'volume_admit' | 'start' | 'policy';
+  kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset' | 'volume_admit' | 'start' | 'policy'
+    | 'rcip_port' | 'rc_service' | 'target' | 'ping' | 'links';
   name: string; where: 'A' | 'B'; status: 'created' | 'exists' | 'failed' | 'skipped'; detail: string;
 }
 export interface ReplicationResult {
   outcomes: ReplicationOutcome[]; removals_a: string[]; removals_b: string[]; notes: string[]; groups_created: string[]; error: string | null;
 }
+// SPEC-021: a plan that sets up the ports and the partnership holds only these kinds (its apply adds the pings
+// and the links). That apply is half the step: the groups are planned after it, from a fresh read.
+const PARTNERSHIP_KINDS: string[] = ['rcip_port', 'rc_service', 'target', 'ping', 'links'];
+export const setsUpPartnership = (plan: ReplicationPlan | null | undefined) =>
+  !!plan && plan.actions.some((a) => a.state === 'create' && PARTNERSHIP_KINDS.includes(a.kind));
+export const isPartnershipResult = (result: ReplicationResult | null | undefined) =>
+  !!result && result.outcomes.length > 0 && result.outcomes.every((o) => PARTNERSHIP_KINDS.includes(o.kind));
 export const replicationApply = (runId: string, acceptLatency = false) =>
   request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/apply`, { accept_latency: acceptLatency });
 // SPEC-020: the latency between the arrays measured with checkrclink (server on B, client on A, read until

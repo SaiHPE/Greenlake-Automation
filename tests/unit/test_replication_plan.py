@@ -94,7 +94,7 @@ def test_no_partnership_when_the_links_point_elsewhere():
     assert find_partnership(a, b) is None
     report = check(a, b, _intent())
     assert any("No Remote Copy partnership between AlletraMP_D22U27 and AlletraMP_E18U31" in f
-               and "Set up the partnership on the arrays first" in f for f in report.findings)
+               and "Name the replication ports on the Replication network tab" in f for f in report.findings)
     # operator-facing text carries no internal version or document number
     assert not any("v0." in f or "ADR" in f or "SPEC-" in f for f in report.findings)
 
@@ -117,7 +117,7 @@ def test_an_async_row_on_a_target_that_carries_sync_groups_is_a_finding():
         "Target 'AlletraMP_E18U31' already carries 6 sync group(s) (300gb, APP_Test, Intern_Automation, Intern_Automation2…); "
         "every group on one target must replicate in the same mode (HPE Support Matrix), so async groups cannot be started "
         "there. Use sync on the Replication tab, or a second target over spare RCIP ports (a link belongs "
-        "to one target; set it up on the arrays, this tool does not create targets yet)."
+        "to one target; set it up on the arrays, the tool makes only the first target of a pair)."
     )
 
 
@@ -131,7 +131,7 @@ def test_mixed_modes_on_the_tab_with_one_target_is_a_finding():
         "The Replication tab mixes sync and async rows and AlletraMP_D22U27 → AlletraMP_E18U31 has one target "
         "('AlletraMP_E18U31'); every group on one target must replicate in the same mode (HPE Support Matrix). Make all "
         "rows one mode, or add a second target over spare RCIP ports (a link belongs to one target; set it up on the "
-        "arrays, this tool does not create targets yet)."
+        "arrays, the tool makes only the first target of a pair)."
     )
     assert report.partnership.target_by_mode == {"sync": "AlletraMP_E18U31"}
 
@@ -153,8 +153,8 @@ def test_stopped_groups_of_the_other_mode_are_still_a_finding_with_the_honest_se
         "Target 'AlletraMP_E18U31' already carries 6 sync group(s) (300gb, APP_Test, Intern_Automation, Intern_Automation2…), "
         "all stopped. The array would start async groups beside them, but every group on one target must replicate in the "
         "same mode (HPE Support Matrix), so the tool will not put their restart at risk. Use sync on the Replication tab, or "
-        "a second target over spare RCIP ports (a link belongs to one target; set it up on the arrays, this tool does not "
-        "create targets yet)."
+        "a second target over spare RCIP ports (a link belongs to one target; set it up on the arrays, the tool makes only "
+        "the first target of a pair)."
     )
 
 
@@ -311,7 +311,9 @@ def test_a_failed_read_is_the_report_error():
 
 def test_an_existing_set_not_on_the_volumes_tab_is_replicated_from_what_the_array_holds():
     # v0.17.0: the Replication tab may name a set the array already has. Members come from the
-    # array's showvvset; no local CPG is known, so the group is created without -usr_cpg.
+    # array's showvvset. Changed 2026-11-03 on purpose: the group used to go out with no local CPG,
+    # and the live array (rack13-ARCUS -> Primera) refused that with HTTP 400 "localUserCPG missing";
+    # the local CPG is now the Provisioning tab's Default CPG.
     a, b = _views(a_overrides={"showrcopy": _RC_A_NO_GROUPS})
     intent = _intent([_ASYNC_ROW], failover=False)
     report = check(a, b, intent)
@@ -319,8 +321,9 @@ def test_an_existing_set_not_on_the_volumes_tab_is_replicated_from_what_the_arra
     plan = build_plan(report, intent, _prov().model_copy(update={"volumes": []}))
     g = next(x for x in plan.actions if (x.kind, x.name) == ("group", "zz_rc_vvs_rcg"))
     assert g.state == "create" and "2 volume(s) from set 'zz_rc_vvs'" in g.reason
-    assert g.calls[0].cli == "creatercopygroup zz_rc_vvs_rcg AlletraMP_E18U31:periodic"
-    assert "localUserCPG" not in g.calls[0].wsapi
+    assert g.calls[0].cli == "creatercopygroup -usr_cpg SSD_r6 AlletraMP_E18U31:SSD_r6 zz_rc_vvs_rcg AlletraMP_E18U31:periodic"
+    assert "localUserCPG: SSD_r6" in g.calls[0].wsapi
+    assert not plan.blockers
     assert [c.cli for c in g.calls if c.cli.startswith("admitrcopyvv")] == [
         "admitrcopyvv -createvv zz_rc_vol01 zz_rc_vvs_rcg AlletraMP_E18U31:zz_rc_vol01",
         "admitrcopyvv -createvv zz_rc_vol02 zz_rc_vvs_rcg AlletraMP_E18U31:zz_rc_vol02",
@@ -427,3 +430,46 @@ def test_no_mirror_config_starts_on_the_peer_first():
     [g] = [x for x in plan.actions if x.kind == "group"]
     start = g.calls[-1]
     assert start.where == "B" and "on the peer first" in start.wsapi and start.cli == "startrcopygroup zz_rc_vvs_rcg"
+
+
+# ------------------------------------------------------------------ the failover test volume's CPG
+
+def _no_test_volume_views():
+    """D22U27 without zz_rc_test_v01, so the plan has to create it."""
+    a = read_array(_creds("10.64.122.99"), array_cli_factory=lambda c: _Cli(
+        "D22U27", showvv=_SHOWVV_A.replace("zz_rc_test_v01 1024\n", ""), overrides={"showvvset": _VVSET_A_EXTRA}))
+    b = read_array(_creds("10.64.154.190"), array_cli_factory=lambda c: _Cli("E18U31", showvv="Name VSize_MB\n"))
+    return a, b
+
+
+def test_the_test_volume_takes_the_default_cpg_when_the_volumes_tab_is_empty():
+    """Live 2026-11-03 (rack13-ARCUS -> Primera): a Replication row naming a set already on the array,
+    Volumes tab empty, and the test volume went out as `cpg: ""` — WSAPI 400 "invalid input: empty string"."""
+    a, b = _no_test_volume_views()
+    intent = _intent()
+    plan = build_plan(check(a, b, intent), intent, _prov().model_copy(update={"volumes": [], "default_cpg": "SSD_r6"}))
+    tv = next(x for x in plan.actions if x.kind == "test_volume")
+    assert tv.state == "create" and tv.detail["cpg"] == "SSD_r6"
+    assert tv.calls[0].cli == "createvv -tpvv SSD_r6 zz_rc_test_v01 1g"
+    assert not any("failover test volume" in x for x in plan.blockers)
+
+
+def test_a_default_cpg_the_array_does_not_have_blocks_the_plan():
+    a, b = _no_test_volume_views()
+    intent = _intent()
+    plan = build_plan(check(a, b, intent), intent, _prov().model_copy(update={"volumes": [], "default_cpg": "NoSuchCPG"}))
+    assert any("goes in CPG 'NoSuchCPG'" in x and "Set 'Default CPG'" in x for x in plan.blockers)
+
+
+def test_the_sheet_keeps_its_default_cpg_on_the_intent():
+    from alletra_onboard.application.platform import init_sheet
+
+    data = init_sheet.compose_workbook_bytes(
+        base=None, init={"serial_number": "S1", "mgmt_ipv4": "10.0.0.5"},
+        targets={"prov_array_host": "10.0.0.5", "prov_array_user": "u", "prov_array_password": "p",
+                 "prov_vcenter_host": "vc", "prov_vcenter_user": "u", "prov_vcenter_password": "p", "prov_default_cpg": "FC_r6"},
+        volumes=[], hostsets=[], hosts=[],
+        replication={"fields": {"peer_host": "10.0.0.6", "peer_user": "u", "peer_password": "p"},
+                     "rows": [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "mode": "sync"}]})
+    intent = init_sheet.parse_workbook_bytes(data, mode=init_sheet.RunMode.CUSTOM, selected_steps=["replicate"]).provisioning_intent
+    assert intent.volumes == [] and intent.default_cpg == "FC_r6"

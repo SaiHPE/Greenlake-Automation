@@ -2,7 +2,7 @@
 
 **Status:** accepted 2026-10-07 (operator decision); **sequenced the same day** — § *Sequencing* ·
 **Amends:** ADR 0001 (SSH is read-only) from the release that ships links and targets ·
-**Keeps:** ADR 0012 (no switch writes) · **Specs:** SPEC-016, SPEC-017
+**Keeps:** ADR 0012 (no switch writes) · **Specs:** SPEC-016, SPEC-017, SPEC-021 · **Layers 1–2 built 2026-11-04** (`ArrayRcCliClient`, SPEC-021), first on an Alletra MP → Primera pair; pending live run
 
 ## Sequencing (2026-10-07)
 

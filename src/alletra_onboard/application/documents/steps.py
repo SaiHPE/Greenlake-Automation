@@ -200,11 +200,18 @@ class DocumentSteps:
         """Fill the run sections from the run's own events: the latest payload per event type, plus
         the union of every apply's removal items (SPEC-007 — a run may apply more than once)."""
         seen: dict[str, object] = {}
+        rc_applies: list[dict] = []
+        last_rc_plan: dict | None = None
         for event in self._coord.list_events(run_id):
             if event.event_type == "storage.applied":
                 data.provisioning_removals.extend((event.data.get("result") or {}).get("removals") or [])
-            if event.event_type == "replication.previewed" and event.data.get("report") is not None:
-                data.replication_report = event.data["report"]
+            if event.event_type in ("replication.applied", "replication.apply.failed"):
+                rc_applies.append(event.data.get("result") or {})
+                data.replication_applies.append({"plan": last_rc_plan, "result": rc_applies[-1]})
+            if event.event_type == "replication.previewed":
+                last_rc_plan = event.data.get("plan")
+                if event.data.get("report") is not None:
+                    data.replication_report = event.data["report"]
             target = self._ASBUILT_RECORDS.get(event.event_type)
             if target is None:
                 continue
@@ -214,6 +221,9 @@ class DocumentSteps:
                 continue
             setattr(data, attr, payload)
             seen[attr] = event.created_at
+        for result in reversed(rc_applies):          # SPEC-021: newest apply first, each line once
+            for key, merged in (("removals_a", data.replication_removals_a), ("removals_b", data.replication_removals_b)):
+                merged.extend(line for line in result.get(key) or [] if line not in merged)
         if "provisioning_result" in seen:
             ts = seen["provisioning_result"]
             data.provisioning_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)

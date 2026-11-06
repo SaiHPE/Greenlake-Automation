@@ -1,9 +1,10 @@
 import { Box, Button, CheckBox, DataTable, Text } from 'grommet';
 import { Connect } from 'grommet-icons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   GroupVerdict,
   GroupVerification,
+  isPartnershipResult,
   LinkCheck,
   LinkCheckResult,
   Partnership,
@@ -23,6 +24,7 @@ import {
   RTT_LIMIT_MS,
   RunEvent,
   RunRecord,
+  setsUpPartnership,
 } from '../api';
 import { CodeBlock, EmptyState, Guidance, Panel, PartsBar, Section, StatusLine } from '../ui/blocks';
 import { InlineNotification, NotesList } from '../ui/primitives';
@@ -47,12 +49,17 @@ const KIND_LABEL: Record<ReplicationAction['kind'], string> = {
   peer_vvset: 'Peer volume set',
   test_volume: 'Test volume',
   test_vvset: 'Test volume set',
+  rcip_port: 'Replication port',
+  rc_service: 'Remote Copy service',
+  target: 'Remote Copy target',
 };
 const OUTCOME_KIND: Record<ReplicationOutcome['kind'], string> = {
   ...KIND_LABEL,
   volume_admit: 'Volume admitted',
   start: 'Group started',
   policy: 'Policies and period',
+  ping: 'Ping between the ports',
+  links: 'Links Up',
 };
 const OUTCOME: Record<ReplicationOutcome['status'], { state: StepState; label: string }> = {
   created: { state: 'complete', label: 'Done' },
@@ -86,8 +93,17 @@ function download(filename: string, text: string) {
 }
 
 /** SPEC-007 pattern, two blocks, A then B. Seen live 2026-10-09: while the group exists the peer refuses
- *  `removevvset` ("Set … is currently admitted to Remote Copy Group"); after A's dismiss/remove it goes. */
-function RemovalSets({ result, runId, a, b }: { result: ReplicationResult; runId: string; a: string; b: string }) {
+ *  `removevvset` ("Set … is currently admitted to Remote Copy Group"); after A's dismiss/remove it goes.
+ *  Live 2026-11-03: a Primera peer keeps secondaries in a set, so B also removes them by name. */
+/** Every apply's removal lines, newest apply first: a second apply's groups go before the partnership the first
+ *  set up (removercopytarget refuses while a group still uses the target). Each line once. */
+export function mergedRemovals(results: ReplicationResult[]): { removals_a: string[]; removals_b: string[] } {
+  const merge = (pick: (r: ReplicationResult) => string[]) =>
+    [...results].reverse().flatMap(pick).filter((line, i, all) => all.indexOf(line) === i);
+  return { removals_a: merge((r) => r.removals_a), removals_b: merge((r) => r.removals_b) };
+}
+
+function RemovalSets({ result, runId, a, b }: { result: { removals_a: string[]; removals_b: string[] }; runId: string; a: string; b: string }) {
   const [copied, setCopied] = useState(false);
   const blocks: [string, string, string[]][] = [
     [a, 'A', result.removals_a],
@@ -111,9 +127,10 @@ function RemovalSets({ result, runId, a, b }: { result: ReplicationResult; runId
       ) : (
         <>
           <Text size="small" color="text-weak">
-            Undoes exactly what this apply created, in dependency order: on A each group is stopped, its volumes dismissed
-            (which removes the secondaries on B), then removed; then B’s peer volume sets — the array usually removes
-            them with the group, so those lines may answer “does not exist”. Objects that already existed are not touched.
+            Undoes exactly what this run created, newest first: on A each group is stopped, its volumes dismissed, then
+            removed; then the target, Remote Copy and the port addresses the run set up. On B the peer volume sets, the
+            secondaries, then B’s target. A line may answer “does not exist” when the array already removed it. Objects that
+            already existed are not touched.
           </Text>
           <Box background="background-contrast" round="xsmall" pad="small" tabIndex={0} style={{ overflowX: 'auto' }}>
             {blocks.map(([name, label, lines]) =>
@@ -131,7 +148,6 @@ function RemovalSets({ result, runId, a, b }: { result: ReplicationResult; runId
           </Box>
         </>
       )}
-      {result.notes.length > 0 && <NotesList notes={result.notes} />}
     </Box>
   );
 }
@@ -202,7 +218,11 @@ function LinkLatency({ check, worstMs, overLimit, aName, bName }: {
   return (
     <Box gap="small" flex={false}>
       {check.error ? (
-        <InlineNotification tone="critical" title="The link could not be measured" message={check.error} />
+        <InlineNotification
+          tone="critical"
+          title={measured.length ? 'The Remote Copy links are down after the check' : 'The link could not be measured'}
+          message={check.error}
+        />
       ) : worstMs === null ? (
         <InlineNotification tone="critical" title="No link was measured" message={check.results.map((r) => r.detail).filter(Boolean).join(' ') || 'The client printed no latency.'} />
       ) : (
@@ -235,6 +255,7 @@ function LinkLatency({ check, worstMs, overLimit, aName, bName }: {
         />
       )}
       {check.unchecked.length > 0 && <InlineNotification tone="info" title="Not checked" message={<NotesList notes={check.unchecked} />} />}
+      {check.notes.length > 0 && <InlineNotification tone="warning" title="Gateway in the test path" message={<NotesList notes={check.notes} />} />}
       <Text size="xsmall" color="text-weak">
         Measured {check.at.replace('T', ' ').slice(0, 19)} UTC with a {check.duration_s} s test, stopped after the latency phase. The full throughput test is
         the operator’s to run from Open terminal.
@@ -265,7 +286,15 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const linkDone = latestIndex(events, ['replication.link_checked', 'replication.link_check.failed']);
   const linkRunning = running && linkStarted > linkDone;
   const linkProgress = linkRunning ? events.slice(linkStarted + 1).filter((e) => e.event_type === 'phase.progress').map((e) => e.message) : [];
-  const everApplied = events.some((e) => e.event_type === 'replication.applied');
+  // SPEC-021: the partnership apply is half the step; Continue only drops the word "without" once groups were configured
+  const everApplied = events.some((e) => e.event_type === 'replication.applied' && !isPartnershipResult(e.data?.result as ReplicationResult));
+  const partnershipPlan = setsUpPartnership(plan);
+  const partnershipDone = !!result && !result.error && isPartnershipResult(result);
+  // An approval is for the plan on screen: a new read or an apply spends it.
+  useEffect(() => setAuthorised(false), [previewed, applied]);
+  const allRemovals = mergedRemovals(events
+    .filter((e) => ['replication.applied', 'replication.apply.failed'].includes(e.event_type) && e.data?.result)
+    .map((e) => e.data!.result as ReplicationResult));
   const blocked = !!plan && plan.blockers.length > 0;
   const count = (state: ReplicationActionState) => (plan ? plan.actions.filter((a) => a.state === state).length : 0);
   const toCreate = count('create');
@@ -292,7 +321,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
 
   const next = nextTitle ? `Continue to ${nextTitle}` : 'Continue';
   const replicating = !!verification && !verification.error && verification.groups.length > 0 && verification.groups.every((g) => g.verdict === 'replicating');
-  const at = !report || plan?.error ? 0 : result ? 4 : rcip && !measured && canApply ? 1 : 2;
+  const at = !report || plan?.error || partnershipDone ? 0 : result ? 4 : rcip && !measured && canApply ? 1 : 2;
   const partFailed = !!plan?.error || (!!result?.error) || (blocked && !result);
   const linkIsPrimary = at === 1;
 
@@ -301,7 +330,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const verify: FooterAction = { label: verification ? 'Verify again' : 'Verify replication', busy: running, onClick: call(() => replicationVerify(runId)) };
   const skip: FooterAction = { label: everApplied ? next : `${next} without configuring replication`, onClick: onDone };
   const configure: FooterAction = {
-    label: 'Configure replication',
+    label: partnershipPlan ? 'Set up the partnership' : 'Configure replication',
     busy: running,
     onClick: call(() => replicationApply(runId, acceptLatency)),
     blocked:
@@ -315,6 +344,9 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   let primary: FooterAction;
   let buttons: FooterAction[];
   if (!report || plan?.error) {
+    primary = read;
+    buttons = [skip];
+  } else if (partnershipDone) {
     primary = read;
     buttons = [skip];
   } else if (result) {
@@ -338,12 +370,14 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   return (
     <StepShell
       title="Replication"
-      description="Remote Copy of this run's volume sets to the peer array, over the partnership the two arrays already have. Nothing is written until you approve the plan."
+      description="Remote Copy of this run's volume sets to the peer array. When the workbook names the replication ports, the ports and the partnership are set up first, as their own plan. Nothing is written until you approve a plan."
       stateDetail={
         result
           ? result.error
             ? `stopped after ${result.outcomes.filter((o) => o.status === 'created').length} write(s)`
-            : 'replication configured'
+            : partnershipDone
+              ? 'partnership set up'
+              : 'replication configured'
           : plan
             ? plan.error
               ? 'the arrays could not be read'
@@ -362,8 +396,8 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
           at={at}
           doneAll={replicating}
           failed={partFailed}
-          // a blocked plan is reviewed before the link is measured
-          notDone={rcip && !measured && !result ? [1] : []}
+          // a blocked plan is reviewed before the link is measured; a partnership is planned before there is a link
+          notDone={(rcip && !measured && !result) || (partnershipPlan && !result) ? [1] : []}
         />
       }
       primary={primary}
@@ -371,7 +405,13 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
       // The only replication action that writes to the arrays: an explicit authorisation, not a click.
       confirmation={
         canApply && !linkIsPrimary
-          ? { label: `I have reviewed this plan and authorise configuring replication on ${aName} and ${bName}.`, checked: authorised, onChange: setAuthorised }
+          ? {
+              label: partnershipPlan
+                ? `I have reviewed this plan and authorise setting up the replication ports and the partnership on ${aName} and ${bName}.`
+                : `I have reviewed this plan and authorise configuring replication on ${aName} and ${bName}.`,
+              checked: authorised,
+              onChange: setAuthorised,
+            }
           : undefined
       }
       guideOpen={!report}
@@ -382,11 +422,11 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
               title: 'What this step does',
               body: 'One Remote Copy group per volume set on the Replication tab, created over WSAPI on this array. The peer creates the secondary volumes on its own CPG.',
             },
-            { title: 'Nothing is written until you approve', body: 'Reading, the link check and the plan change nothing. Only Configure replication writes, and only what the plan shows.' },
+            { title: 'Nothing is written until you approve', body: 'Reading, the link check and the plan change nothing. Only the green button under an approved plan writes, and only what the plan shows.' },
             { title: "HPE's limits over RCIP", body: 'Round-trip latency: sync 10 ms or less, async 200 ms or less (RCIP = Remote Copy over IP).' },
             {
-              title: 'The partnership must exist',
-              body: 'RCIP ports, targets and links are set up beforehand; this step reads and checks them. Groups this run did not create are listed and never touched.',
+              title: 'The partnership',
+              body: "When the workbook's Replication network tab names the ports, the first plan sets the RCIP addresses, starts Remote Copy and creates a target on each array; then read both arrays again, check the link and configure the groups. Without that tab the partnership must exist, and this step reads and checks it. Groups this run did not create are listed and never touched.",
             },
           ]}
         />
@@ -427,7 +467,10 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
             configured: tick Continue anyway in the Link panel to accept the measured latency.
           </StatusLine>
         ) : (
-          <StatusLine state="action_required" title="Review the plan, then approve configuring replication">
+          <StatusLine
+            state="action_required"
+            title={partnershipPlan ? 'Review the plan, then approve setting up the partnership' : 'Review the plan, then approve configuring replication'}
+          >
             {toCreate} to create, {existing} already there. No changes have been made to either array. Tick the box next to the green button
             when you have reviewed it.
           </StatusLine>
@@ -452,7 +495,13 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
             : 'An initial sync still running is normal; verify again later. The detail for each group is under Verify replication.'}
         </StatusLine>
       )}
-      {!running && result && !(verification && !verification.error && !result.error) && (
+      {!running && partnershipDone && (
+        <StatusLine state="action_required" title="Ports and partnership set up">
+          {result!.outcomes.filter((o) => o.status === 'created').length} step(s) done and every link is Up. Nothing is replicated yet: read
+          both arrays again to plan the groups, check the link, then configure them.
+        </StatusLine>
+      )}
+      {!running && result && !partnershipDone && !(verification && !verification.error && !result.error) && (
         <StatusLine
           state={result.error ? 'failed' : 'complete'}
           title={
@@ -608,7 +657,13 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
             primaryKey={false}
             a11yTitle="Replication result: one row per write, with what the array reported"
           />
-          <RemovalSets result={result} runId={runId} a={aName} b={bName} />
+          {result.notes.length > 0 && <NotesList notes={result.notes} />}
+        </Section>
+      )}
+
+      {allRemovals.removals_a.length + allRemovals.removals_b.length > 0 && (
+        <Section title="Removal command set" summary="Every line that undoes what this run configured for replication">
+          <RemovalSets result={allRemovals} runId={runId} a={aName} b={bName} />
         </Section>
       )}
 
