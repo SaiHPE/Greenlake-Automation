@@ -1,0 +1,479 @@
+{
+  "links": [
+    {
+      "href": "https://10.64.154.190/api/v1/remotecopygroups",
+      "rel": "self"
+    }
+  ],
+  "members": [
+    {
+      "id": 22,
+      "localUserCPG": "SSD_r6",
+      "name": "300gb.r188150",
+      "remoteGroupName": "300gb",
+      "role": 2,
+      "targets": [
+        {
+          "mode": 1,
+          "policies": {
+            "activeActive": false,
+            "autoFailover": false,
+            "autoRecover": true,
+            "autoSynchronize": true,
+            "multiTargetPeerPersistence": false,
+            "overPeriodAlert": false,
+            "pathManagement": false
+          },
+          "remoteUserCPG": "SSD_r6",
+          "roleReversed": false,
+          "state": 3,
+          "target": "AlletraMP_E18U31",
+          "targetName": "AlletraMP_E18U31"
+        }
+      ],
+      "volumes": [
+        {
+          "localVolumeID": 1521,
+          "localVolumeName": "300gb",
+          "remoteVolumes": [
+            {
+              "localVolumeSetName": "300gb",
+              "remoteVolumeID": 269,
+              "remoteVolumeName": "300gb",
+              "remoteVolumeSetName": "300gb",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-08-22T02:59:27+05:30",
+              "volumeLastSyncTimeSec": 1787347767
+            }
+          ]
+        },
+        {
+          "localVolumeID": 1522,
+          "localVolumeName": "Test",
+          "remoteVolumes": [
+            {
+              "localVolumeSetName": "300gb",
+              "remoteVolumeID": 9342,
+              "remoteVolumeName": "Test",
+              "remoteVolumeSetName": "300gb",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-08-22T02:59:27+05:30",
+              "volumeLastSyncTimeSec": 1787347767
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "localUserCPG": "SSD_r6",
+      "name": "APP_Test.r188150",
+      "remoteGroupName": "APP_Test",
+      "role": 2,
+      "targets": [
+        {
+          "mode": 1,
+          "policies": {
+            "activeActive": true,
+            "autoFailover": false,
+            "autoRecover": true,
+            "autoSynchronize": true,
+            "multiTargetPeerPersistence": false,
+            "overPeriodAlert": false,
+            "pathManagement": false
+          },
+          "remoteUserCPG": "SSD_r6",
+          "roleReversed": false,
+          "state": 3,
+          "target": "AlletraMP_E18U31",
+          "targetName": "AlletraMP_E18U31"
+        }
+      ],
+      "volumes": [
+        {
+          "localVolumeID": 531,
+          "localVolumeName": "APP.test.vv",
+          "remoteVolumes": [
+            {
+              "localVolumeSetName": "APP_Test",
+              "remoteVolumeID": 4754,
+              "remoteVolumeName": "APP.test.vv",
+              "remoteVolumeSetName": "APP_Test",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-10-08T16:32:06+05:30",
+              "volumeLastSyncTimeSec": 1791457326
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "localUserCPG": "SSD_r6",
+      "name": "Intern_Automation.r188150",
+      "remoteGroupName": "Intern_Automation",
+      "role": 2,
+      "targets": [
+        {
+          "mode": 1,
+          "policies": {
+            "activeActive": false,
+            "autoFailover": false,
+            "autoRecover": false,
+            "autoSynchronize": false,
+            "multiTargetPeerPersistence": false,
+            "overPeriodAlert": false,
+            "pathManagement": false
+          },
+          "remoteUserCPG": "SSD_r6",
+          "roleReversed": false,
+          "state": 3,
+          "target": "AlletraMP_E18U31",
+          "targetName": "AlletraMP_E18U31"
+        }
+      ],
+      "volumes": [
+        {
+          "localVolumeID": 687,
+          "localVolumeName": "Automation1",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 6199,
+              "remoteVolumeName": "Automation1",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-09-11T14:22:21+05:30",
+              "volumeLastSyncTimeSec": 1789116741
+            }
+          ]
+        },
+        {
+          "localVolumeID": 688,
+          "localVolumeName": "Automation2",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 6200,
+              "remoteVolumeName": "Automation2",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-09-11T14:22:21+05:30",
+              "volumeLastSyncTimeSec": 1789116741
+            }
+          ]
+        },
+        {
+          "localVolumeID": 689,
+          "localVolumeName": "Automation3",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 6201,
+              "remoteVolumeName": "Automation3",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-09-11T14:22:21+05:30",
+              "volumeLastSyncTimeSec": 1789116741
+            }
+          ]
+        },
+        {
+          "localVolumeID": 690,
+          "localVolumeName": "Automation4",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 6202,
+              "remoteVolumeName": "Automation4",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-09-11T14:22:21+05:30",
+              "volumeLastSyncTimeSec": 1789116741
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "localUserCPG": "SSD_r6",
+      "name": "Intern_Automation2.r188150",
+      "remoteGroupName": "Intern_Automation2",
+      "role": 2,
+      "targets": [
+        {
+          "mode": 1,
+          "policies": {
+            "activeActive": false,
+            "autoFailover": false,
+            "autoRecover": false,
+            "autoSynchronize": false,
+            "multiTargetPeerPersistence": false,
+            "overPeriodAlert": false,
+            "pathManagement": false
+          },
+          "remoteUserCPG": "SSD_r6",
+          "roleReversed": false,
+          "state": 3,
+          "target": "AlletraMP_E18U31",
+          "targetName": "AlletraMP_E18U31"
+        }
+      ],
+      "volumes": [
+        {
+          "localVolumeID": 1313,
+          "localVolumeName": "Automation5",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 8288,
+              "remoteVolumeName": "Automation5",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-08-22T02:59:57+05:30",
+              "volumeLastSyncTimeSec": 1787347797
+            }
+          ]
+        },
+        {
+          "localVolumeID": 1314,
+          "localVolumeName": "Automation6",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 8290,
+              "remoteVolumeName": "Automation6",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-08-22T02:59:56+05:30",
+              "volumeLastSyncTimeSec": 1787347796
+            }
+          ]
+        },
+        {
+          "localVolumeID": 1315,
+          "localVolumeName": "Automation7",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 8291,
+              "remoteVolumeName": "Automation7",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-08-22T02:59:57+05:30",
+              "volumeLastSyncTimeSec": 1787347797
+            }
+          ]
+        },
+        {
+          "localVolumeID": 1316,
+          "localVolumeName": "Automation8",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 8292,
+              "remoteVolumeName": "Automation8",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-08-22T02:59:56+05:30",
+              "volumeLastSyncTimeSec": 1787347796
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Test-RCG.r188150",
+      "remoteGroupName": "Test-RCG",
+      "role": 2,
+      "targets": [
+        {
+          "mode": 1,
+          "policies": {
+            "activeActive": false,
+            "autoFailover": false,
+            "autoRecover": false,
+            "autoSynchronize": false,
+            "multiTargetPeerPersistence": false,
+            "overPeriodAlert": false,
+            "pathManagement": false
+          },
+          "roleReversed": false,
+          "state": 3,
+          "target": "AlletraMP_E18U31",
+          "targetName": "AlletraMP_E18U31"
+        }
+      ],
+      "volumes": [
+        {
+          "localVolumeID": 554,
+          "localVolumeName": "TestRC_VV1",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 4838,
+              "remoteVolumeName": "TestRC_VV1",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-08-22T03:00:10+05:30",
+              "volumeLastSyncTimeSec": 1787347810
+            }
+          ]
+        },
+        {
+          "localVolumeID": 555,
+          "localVolumeName": "TestRC_VV2",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 4839,
+              "remoteVolumeName": "TestRC_VV2",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-08-22T03:00:10+05:30",
+              "volumeLastSyncTimeSec": 1787347810
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Test-RCG2.r188150",
+      "remoteGroupName": "Test-RCG2",
+      "role": 2,
+      "targets": [
+        {
+          "mode": 1,
+          "policies": {
+            "activeActive": false,
+            "autoFailover": false,
+            "autoRecover": false,
+            "autoSynchronize": false,
+            "multiTargetPeerPersistence": false,
+            "overPeriodAlert": false,
+            "pathManagement": false
+          },
+          "roleReversed": false,
+          "state": 3,
+          "target": "AlletraMP_E18U31",
+          "targetName": "AlletraMP_E18U31"
+        }
+      ],
+      "volumes": [
+        {
+          "localVolumeID": 1000,
+          "localVolumeName": "TestRC2_VV1",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 6857,
+              "remoteVolumeName": "TestRC2_VV1",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-08-22T03:00:18+05:30",
+              "volumeLastSyncTimeSec": 1787347818
+            }
+          ]
+        },
+        {
+          "localVolumeID": 1001,
+          "localVolumeName": "TestRC2_VV2",
+          "remoteVolumes": [
+            {
+              "remoteVolumeID": 6858,
+              "remoteVolumeName": "TestRC2_VV2",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-08-22T03:00:18+05:30",
+              "volumeLastSyncTimeSec": 1787347818
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "localUserCPG": "SSD_r6",
+      "name": "zz_rc_test_rcg.r188150",
+      "remoteGroupName": "zz_rc_test_rcg",
+      "role": 2,
+      "targets": [
+        {
+          "mode": 1,
+          "policies": {
+            "activeActive": false,
+            "autoFailover": false,
+            "autoRecover": true,
+            "autoSynchronize": true,
+            "multiTargetPeerPersistence": false,
+            "overPeriodAlert": false,
+            "pathManagement": false
+          },
+          "remoteUserCPG": "SSD_r6",
+          "roleReversed": false,
+          "state": 3,
+          "target": "AlletraMP_E18U31",
+          "targetName": "AlletraMP_E18U31"
+        }
+      ],
+      "volumes": [
+        {
+          "localVolumeID": 1773,
+          "localVolumeName": "zz_rc_test_v01",
+          "remoteVolumes": [
+            {
+              "localVolumeSetName": "zz_rc_test_rc",
+              "remoteVolumeID": 12370,
+              "remoteVolumeName": "zz_rc_test_v01",
+              "remoteVolumeSetName": "zz_rc_test",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-10-09T22:07:08+05:30",
+              "volumeLastSyncTimeSec": 1791563828
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "localUserCPG": "SSD_r6",
+      "name": "zz_rc_vvs_rcg.r188150",
+      "remoteGroupName": "zz_rc_vvs_rcg",
+      "role": 2,
+      "targets": [
+        {
+          "mode": 1,
+          "policies": {
+            "activeActive": false,
+            "autoFailover": false,
+            "autoRecover": true,
+            "autoSynchronize": true,
+            "multiTargetPeerPersistence": false,
+            "overPeriodAlert": false,
+            "pathManagement": false
+          },
+          "remoteUserCPG": "SSD_r6",
+          "roleReversed": false,
+          "state": 3,
+          "target": "AlletraMP_E18U31",
+          "targetName": "AlletraMP_E18U31"
+        }
+      ],
+      "volumes": [
+        {
+          "localVolumeID": 1772,
+          "localVolumeName": "zz_rc_vol01",
+          "remoteVolumes": [
+            {
+              "localVolumeSetName": "zz_rc_vvs_rc",
+              "remoteVolumeID": 12367,
+              "remoteVolumeName": "zz_rc_vol01",
+              "remoteVolumeSetName": "zz_rc_vvs",
+              "syncStatus": 3,
+              "targetName": "AlletraMP_E18U31",
+              "volumeLastSyncTime": "2026-10-09T22:07:07+05:30",
+              "volumeLastSyncTimeSec": 1791563827
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "total": 8
+}

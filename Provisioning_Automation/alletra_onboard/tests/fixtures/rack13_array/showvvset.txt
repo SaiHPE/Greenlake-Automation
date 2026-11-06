@@ -1,0 +1,33 @@
+Id Name                                        Members                                    
+17 vol1                                        vol1.0                                     
+                                               vol1.1                                     
+                                               vol1.2                                     
+18 vol11788928808342783376                     vol1.0.260910000000                        
+                                               vol1.1.260910000000                        
+                                               vol1.2.260910000000                        
+                                               vol1.0.260911000001                        
+                                               vol1.1.260911000001                        
+                                               vol1.2.260911000001                        
+                                               vol1.0.260912000000                        
+                                               vol1.1.260912000000                        
+                                               vol1.2.260912000000                        
+                                               vol1.0.260913000000                        
+                                               vol1.1.260913000000                        
+                                               vol1.2.260913000000                        
+21 HPE_VM_7973ded8-8b39-4edd-b080-d6379e98d6e9 HPE_VM_9ea4986e-1c17-4c7a-9bef-b8d89e3335dc
+                                               HPE_VM_7b8b1cf7-b65c-402b-b9c8-8e74ddfdcfc0
+                                               HPE_VM_bf8a9bfa-afdb-494f-845f-3251041b5adf
+22 HPE_VM_a3d435d8-c347-4999-9215-d451260951b5 HPE_VM_084a85f4-2c0d-498c-ad67-865e8d5983e6
+                                               HPE_VM_9b261c99-57af-495c-baf6-8cc2aa70300b
+                                               HPE_VM_1bb79148-c7a2-487b-b6c8-1ad98bb80146
+23 HPE_VM_1192e201-6ed3-496e-970c-9f65cf4e75cb HPE_VM_99efaade-4f1e-4275-ac7b-98ef8219a736
+                                               HPE_VM_b90f47ec-1af0-4001-b3be-eb5fcea34de3
+                                               HPE_VM_9a903517-2425-4cda-a477-61c501a0c6f8
+25 grp3_vol                                    Vol1.0                                     
+                                               Vol1.1                                     
+                                               Vol1.2                                     
+26 vol2                                        vol2                                       
+27 test.Snapset                                --                                         
+29 VortexTestinstanc-3IUw                      root-KVx6                                  
+------------------------------------------------------------------------------------------
+ 9 total                                       29

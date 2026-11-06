@@ -1,0 +1,3 @@
+N:S:P State HwAddr       IPAddress   PeerIPAddress Netmask/PrefixLen Gateway     MTU   Rate Duplex
+0:1:1 new   5CBA2CD416D1 10.93.18.19 -             255.255.254.0     10.93.18.1 1500 10Gbps Full  
+1:1:1 new   5CBA2CD41635 10.93.18.20 -             255.255.254.0     10.93.18.1 1500 10Gbps Full  

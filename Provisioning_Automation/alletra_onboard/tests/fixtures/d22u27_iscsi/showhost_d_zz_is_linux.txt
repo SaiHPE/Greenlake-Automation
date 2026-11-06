@@ -1,0 +1,5 @@
+# showhost -d zz_is_linux
+Id Name        Persona      --------WWN/iSCSI_Name/NQN--------- Port IP/IP:Port                             
+ 8 zz_is_linux Generic-ALUA iqn.1994-05.com.redhat:6e35c4a016a0 ---  f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff
+------------------------------------------------------------------------------------------------------------
+ 1 total                                                                                                    

@@ -1,0 +1,5 @@
+N:S:P State ---HwAddr---      IPAddr Netmask/PrefixLen    Gateway  MTU   Rate Duplex AutoNeg
+0:1:1 ready 5CBA2CD416D1 10.93.18.19     255.255.254.0 10.93.18.1 1500 10Gbps   Full     Yes
+1:1:1 ready 5CBA2CD41635 10.93.18.20     255.255.254.0 10.93.18.1 1500 10Gbps   Full     Yes
+--------------------------------------------------------------------------------------------
+    2                                                                                       

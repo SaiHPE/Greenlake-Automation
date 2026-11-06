@@ -1,0 +1,75 @@
+# help syncrcopy
+syncrcopy - Synchronize Remote Copy groups.
+
+SYNTAX
+    syncrcopy [options] [<group_name> | <pattern>...]
+
+DESCRIPTION
+    The syncrcopy command manually synchronizes remote copy volume groups.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopy_sync right
+
+OPTIONS
+    -w
+        Wait for synchronization to complete before returning to a command
+        prompt.
+
+        -w option is not supported if the group is a secondary group.
+        If syncrcopy command is run on secondary group with -w specified,
+        the command will fail.
+
+    -n
+        Do not save resynchronization snapshot. This option is only relevant for
+        asynchronous periodic mode groups.
+
+    -ovrd
+        Force full synchronization without prompting for confirmation, even if
+        volumes are already synchronized. This option is only relevant for synchronous
+        mode volume groups and can be used to re-synchronize volumes that have become
+        inconsistent.
+
+    -t <targetname>
+        Indicates that only the group on the specified target is synchronized. If
+        this option is not used, by default, the syncrcopy command will affect all
+        of a group's targets.
+
+    -pat
+        Specifies that the patterns specified are treated as glob-style patterns
+        and all remote copy groups matching the specified pattern will be
+        synced. The -pat option can specify a list of patterns. This option must be
+        used if the <pattern> specifier is used.
+
+SPECIFIERS
+    <group_name>
+        Specifies the name of the remote copy volume group to be synchronized.
+        This name can be obtained using the showrcopy command.
+
+     <pattern>
+        Specifies a glob-style pattern. This specifier can be repeated to sync
+        multiple groups. If the <pattern> specifier is not used, the <group_name>
+        specifier must be used.
+
+NOTES
+    Mode (synchronous or asynchronous periodic) is set using the
+    creatercopygroup command. For information about modes and creating Remote Copy
+    volume groups, see creatercopygroup.
+
+    For information about setting targets, see creatercopytarget.
+
+    Using the -n option requires a full synchronization at the next sync.
+
+EXAMPLES
+    The following example specifies that remote copy volume group Group1 should
+    be synchronized with its corresponding secondary volume group:
+
+        syncrcopy Group1
+	Synchronization request issued for group Group1
+
+     The following example specifies that all remote copy volume groups that
+     start with the name testgroup should be synchronized with their corresponding
+     secondary volume group:
+
+         syncrcopy  -pat testgroup* 
+

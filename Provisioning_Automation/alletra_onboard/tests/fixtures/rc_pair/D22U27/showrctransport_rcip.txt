@@ -1,0 +1,4 @@
+# showrctransport -rcip
+N:S:P State HwAddr       IPAddress    PeerIPAddress Netmask/PrefixLen Gateway        MTU   Rate Duplex
+0:4:3 ready 40A6B7D8E6A2 10.54.122.92 10.54.154.192 255.255.248.0     10.54.127.254 1500 10Gbps Full  
+1:4:3 ready 40A6B7D900C2 10.54.122.93 10.54.154.193 255.255.248.0     10.54.127.254 1500 10Gbps Full  

@@ -1,0 +1,39 @@
+# showvlun -t
+Lun VVName                 HostName            -Host_WWN/iSCSI_Name- Port     Type
+ 11 devvm-ds-DL380G10P6U23 DL380G10P6U23       ----------------       ---     host
+ 12 devwinvm-basic         lab-msdns           ----------------       ---     host
+ 16 APP.test.vv            set:ESX1            ----------------       --- host set
+  1 rcopy_async_test_vv    set:esx2            ----------------       --- host set
+  2 IBK-test-v1            set:esx2            ----------------       --- host set
+210 TPIPoc-RHEL-LK-07      set:ESXi_cl1        ----------------       --- host set
+213 TPIPoc-RHEL-LK-09      set:ESXi_cl1        ----------------       --- host set
+215 TPIPoc-RHEL-LK-11      set:ESXi_cl1        ----------------       --- host set
+ 11 devvm-ds-dl580g8d12u21 set:h1              ----------------       --- host set
+ 21 devwinvm-datastore     set:h1              ----------------       --- host set
+ 11 test22                 set:ravi-test       ----------------       --- host set
+ 55 may7th8PM-alletra      set:ravi-test       ----------------       --- host set
+ 58 may7th9PM-alletra      set:ravi-test       ----------------       --- host set
+110 testFCPM-DB            set:ravi-test       ----------------       --- host set
+111 testFCPM-log           set:ravi-test       ----------------       --- host set
+112 testFCPM-backup        set:ravi-test       ----------------       --- host set
+141 test-MS-Alletra        set:ravi-test       ----------------       --- host set
+142 test-MS-1-Alletra      set:ravi-test       ----------------       --- host set
+211 win-logs-A             set:ravi-test       ----------------       --- host set
+212 win-DB-Alletra         set:ravi-test       ----------------       --- host set
+213 win-backup             set:ravi-test       ----------------       --- host set
+  0 Kiran_VV               set:sampletest_sets ----------------       --- host set
+214 TPIPoc-RHEL-LK-10      set:TPIPoc-esxi2-hs ----------------       --- host set
+204 TPIPoc-Win-01          set:Win_cl1         ----------------       --- host set
+211 TPIPoc-Win-LK-02       set:Win_cl1         ----------------       --- host set
+216 TPIPoc-Win-LK-03       set:Win_cl1         ----------------       --- host set
+217 TPIPoc-Win-LK-04       set:Win_cl1         ----------------       --- host set
+218 TPIPoc-Win-LK-05       set:Win_cl1         ----------------       --- host set
+ 17 S-test22_2026071317    test1-alletra       ----------------       ---     host
+ 22 S-test999_2026062411   test1-alletra       ----------------       ---     host
+ 23 S-test999_2026062516   test1-alletra       ----------------       ---     host
+121 S-test22_2026072117    test1-alletra       ----------------       ---     host
+233 TPIPoc-NEW-RH-LK-04    TPIPoc-esxi1        ----------------       ---     host
+234 TPIPoc-NEW-RH-LK-05    TPIPoc-esxi1        ----------------       ---     host
+235 TPIPoc-NEW-RH-LK-06    TPIPoc-esxi1        ----------------       ---     host
+----------------------------------------------------------------------------------
+ 35 total                                                                         

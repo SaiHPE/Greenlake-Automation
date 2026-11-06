@@ -1,0 +1,442 @@
+# help setrcopygroup
+setrcopygroup - set the volume group's policy for dealing with I/O failure and
+    error handling, or switch the direction of transfer of a volume group.
+
+SYNTAX
+    The syntax for the setrcopygroup command can be one of the following:
+        setrcopygroup pol [option] [<pattern>] <policy> [<group_name>]
+        setrcopygroup period [option] [<pattern>] <period_value> <target_name> [<group_name>]
+        setrcopygroup mode  [option] [<pattern>]<mode_value> <target_name> [<group_name>]
+        setrcopygroup <dr_operation> [options] [<pattern>] [<target_name|group_name>...]
+        setrcopygroup cpg -usr_cpg <cpg_name> <target_name>:<cpg_name>...
+                                   <group_name>
+        setrcopygroup cpg -usr_cpg_unset <group_name>
+        setrcopygroup vvol -removetest <group_name>
+
+SUBCOMMANDS
+    pol
+        Sets the policy of the Remote Copy volume groups for dealing with I/O
+        failure and error handling.
+
+    period
+        Specifies that groups that are in asynchronous periodic mode should
+        be periodically synchronized in accordance with the specified
+        <period_value>.
+
+    mode
+        Specifies the mode to which the volume group is set.
+
+    cpg
+        Specifies the local and target cpg
+
+    <dr_operation>
+        Specifies the operation of the group(s). Valid operations are:
+
+        reverse
+            Changes the natural and current direction of all specified groups.
+            The operation is mirrored resulting in a direction change on both
+            systems. This option is very flexible depending on the options that
+            are provided, however it should not be used as a part of the normal
+            disaster recovery process. It should be used only to reverse
+            direction on consistent copies.
+
+        failover
+            Changes secondary volume groups to primary volume groups on the
+            active system in the event of a server failure. If the group has
+            multiple targets it will also attempt to pull more recent data from
+            other targets and start Remote Copy to those targets when complete.
+
+        switchover
+            Migrates the remote copy group from primary to secondary without
+            impacting the host IO. This command requires that associated hosts
+            are connected to both the primary and secondary arrays. The WWNs
+            of primary and secondary volumes are consistent and the host persona
+            of the host must support RTPG.
+
+        recover
+            Used for groups on which the failover operation has already been
+            run. Changes matching primary volume groups on the backup system to
+            secondary volume groups and then starts and synchronizes all groups.
+
+        restore
+            Used for groups on which the failover operation has already been
+            run. The restore command will implicitly execute the recover
+            operation on any group after a failover, which has not yet been
+            recovered, prior to performing the restore. It identifies and
+            differentiates between those groups requiring a simple restore and
+            those requiring both a recover and then a restore, and orchestrates
+            the execution of the required tasks to returns all groups to their
+            natural direction and starts them. In addition to being context
+            specific, the execution of the restore operation now takes a best
+            effort approach. If one or more groups in the list of groups passed
+            to the operation is not in the correct state for a restore or a
+            combined recover and restore, it will return to the user with an
+            error code. However, it will process those groups that are deemed
+            eligible for the simple or combined operation before returning.
+
+            If a primary AA/PP group is in Failsafe mode, restore can be called
+            on the secondary instead of calling recover, then reverse -natural,
+            then switchover.
+
+        override
+            This command overrides the failsafe state which is applied to
+            remote copy group allowing the associated volumes to be exported to
+            attached hosts.
+
+    vvol
+        This command specifies a VMware vVol specific operation on the
+        remote copy group. Valid operations are:
+
+        -removetest
+            Specifies that the INTEST state of this VMware vVol group be cleaned up.
+
+DESCRIPTION
+    The setrcopygroup command performs the following actions:
+
+        Sets the policy of the remote copy volume group for dealing with I/O
+        failure and error handling.
+
+        Switches the direction of transfer between volume groups.
+
+        Sets a resynchronization period for volume groups in asynchronous
+        periodic mode.
+
+        Sets the group's mode.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopygroup_set right
+
+OPTIONS
+    -t <tname>
+        When used with <dr_operation> subcommands, specifies the target to which
+        the <dr_operation> command applies to.  This is optional for single
+        target groups, but is required for multi-target groups. If no groups are
+        specified, it applies to all relevant groups. When used with the pol subcommand,
+        specified for a group with multiple targets then the command only applies to
+        that target, otherwise it will be applied to all targets.
+
+        NOTE: The -t option without the groups listed in the command, will only work
+        in a unidirectional configuration. For bidirectional configurations, the -t
+        option must be used along with the groups listed in the command.
+
+    -f
+        Does not ask for confirmation for disaster recovery commands.
+
+    -nostart
+        Specifies that groups are not started after role reversal is completed.
+        This option can be used for failover, recover and restore subcommands.
+
+    -nosync
+        Specifies that groups are not synced after role reversal is completed
+        through the recover, restore and failover specifiers.
+
+    -discard
+        Specifies not to check a group's other targets to see if newer data
+        should be pushed from them if the group has multiple targets. The use
+        of this option can result in the loss of the most recent changes to
+        the group's volumes and should be used carefully. This option is only
+        valid for the failover specifier.
+
+    -nopromote
+        This option is only valid for the failover and reverse specifiers.  When
+        used with the reverse specifier, specifies that the synchronized snapshots
+        of groups that are switched from primary to secondary not be promoted to
+        the base volume. When used with the failover specifier, it indicates that
+        snapshots of groups that are switched from secondary to primary should not
+        be promoted to the base volume in the case where all volumes of the group
+        were not synchronized to the same time point.
+        The incorrect use of this option can lead to the primary secondary volumes
+        not being consistent.
+
+    -nosnap
+        Specifies that snapshots are not taken of groups that are switched from
+        secondary to primary. Additionally, existing snapshots are deleted
+        if groups are switched from primary to secondary. The use of this option
+        may result in a full synchronization of the secondary volumes. This
+        option can be used for failover, restore, reverse, and switchover
+        subcommands.
+
+    -stopgroups
+        Specifies that groups are stopped before running the reverse subcommand.
+
+    -local
+        The -local option only applies to the "reverse" operation and then
+        only when the -natural or -current options to the "reverse" operation
+        are specified. Specifying -local with the "reverse" operation and an
+        associated -natural or -current option will only affect the array
+        where the command is issued and will not be mirrored to any other
+        arrays in the Remote Copy configuration.
+
+    -natural
+        Specifying the -natural option with the "reverse" operation changes
+        the role of the groups but not the direction of data flow between the
+        groups on the arrays. For example, if the role of the groups are
+        "primary" and "secondary", issuing the -natural option with the
+        "reverse" operation will result in the role of the groups becoming
+        "primary-rev" and "secondary-rev" respectively. The direction of data
+        flow between the groups is not affected only the roles. Since the
+        -natural option does not change the direction of data flow between
+        groups it does not require the groups be stopped.
+
+    -current
+        Specifying the -current option with the "reverse" operation changes
+        both the role and the direction of data flow between the groups. For
+        example, if the roles of the groups are "primary" and "secondary",
+        issuing the -current option to the "reverse" operation will result in
+        the roles of the group becoming "secondary-rev" and "primary-rev"
+        respectively and the direction data flow between the groups is
+        reversed. Since the -current option actually reverses the direction of
+        data replication it requires the group be stopped.
+
+        Both the -natural and -current options must be used with care to
+        ensure the Remote Copy groups do not end up in a non-deterministic
+        state (like "secondary", "secondary-rev" for example) and to ensure
+        data loss does not occur by inadvertently changing the direction of
+        data flow and re-syncing old data on top of newer data.
+
+    -waittask
+        Wait for all tasks created by this command to complete before returning.
+        This option applies to the failover, recover, restore, and reverse subcommands.
+
+    -pat
+        Specifies that specified patterns are treated as glob-style patterns
+        and all remote copy groups matching the specified pattern will be
+        set. The -pat option can specify a list of patterns. This option must be used
+        if <pattern> specifier is used.
+
+    -usr_cpg <cpg name> <target_name>:<cpg_name>
+        Specifies the local user CPG and target user CPG that will be used for
+        volumes that are auto-created. The local CPG will only be used after failover
+        and recover.
+
+    -usr_cpg_unset
+        Unset all user CPGs that are associated with this group.
+
+    -forceppfailover
+        Specifies that the Peer Persistence failover operation is forced
+        overriding data inconsistency warnings. All I/O to the existing
+        primary volumes should be quiesced when using this option.
+
+SPECIFIERS
+    <pattern>
+        Specifies a glob-style pattern(see help on sub,globpat). If this specifier
+        is not used, the <group_name> or <target_name> specifier must be used.
+
+    <policy>
+        Specifies the policy to assign to the group. This specifier can only be
+        used with the pol subcommand.
+
+        Valid policies are:
+
+        auto_failover
+            Configure automatic failover on a remote copy group. This feature
+            will perform an automatic failover on a remote copy group when used
+            in conjunction with the Quorum Witness functionality.
+            Secondary volumes will be subject to a remote copy failover
+            operation. Any of the secondary volumes that are exported to
+            attached hosts will become accessible.
+            If a network fails and prompts a failover, any primary volumes will
+            be placed into a failsafe state to prevent data corruption and
+            inconsistency between primary and secondary volumes.
+
+        no_auto_failover
+            Remote-copy groups will not be subject to automatic failover
+            (default).
+
+        auto_failover_ext
+            Configure extended automatic failover on a remote copy group.
+            This feature will perform an automatic failover any time the
+            primary system becomes isolated from the quorum witness and
+            communication between arrays subsequently goes down (for example,
+            during a rolling network failure that is outside the fail_timeout
+            window where the quorum witness link fails before the remote copy
+            links fail). The remote/secondary system initiates a failover when
+            the remote copy links are down and information from the quorum
+            witness indicates that the primary is not communicating with the
+            quorum witness.
+            The auto_failover policy is a prerequisite and is automatically set
+            when the auto_failover_ext policy is enabled. Clearing the
+            auto_failover policy also clears this policy setting.
+
+        no_auto_failover_ext
+            Remote-copy groups will not be subject to extended automatic
+            failover (default).
+
+        auto_recover
+            Specifies that if the remote copy group is stopped as a result of the remote
+            copy links going down, the group is restarted automatically after the links come
+            back up. If this policy is enabled for a group while the group is stopped
+            after link failures it will only be started when the links come up for the
+            failed target. If the links are already up at the time the policy is set then
+            the group will not be restarted at that time.
+
+        no_auto_recover
+            Specifies that if the remote copy is stopped as a result of the remote copy
+            links going down, the group must be restarted manually after the links come
+            back up (default).
+
+        auto_synchronize
+            Remote Copy system automatically recovers and synchronizes all
+            volumes in the group after a system failover, for either automatic
+            or manual failover scenarios. Synchronization occurs after system
+            recovery completes and the Remote Copy links recover.
+            This policy also allows the failover command to be used when
+            synchronous groups are started and online. It is no longer necessary
+            to stop the synchronous groups before initiating a failover command
+            to the secondary system.
+
+        no_auto_synchronize
+            Remote Copy groups will not be subject to automatic synchronization
+            after failover (default).
+
+        over_per_alert
+            If a synchronization of a periodic remote copy group takes longer to complete
+            than its synchronization period then an alert will be generated. This is
+            the default behavior.
+
+        no_over_per_alert
+            If a synchronization of a periodic remote copy group takes longer to complete
+            than its synchronization period then an alert will not be generated.
+
+        path_management
+            Volumes in the specified group will be enabled to support ALUA. The Target Port
+            Group states of the volumes will be presented as ACTIVE on the primary and as
+            STANDBY on the secondary.
+
+        no_path_management
+            ALUA behavior will be disabled for volumes in the group. The Target Port Group
+            state of the volumes will be presented as ACTIVE (default).
+
+        mt_pp
+            Specifies that the group is participating in a multi-target Peer Persistence
+            configuration. The group must have two targets, one of which must be
+            synchronous.  The path_management and auto_failover policies will also be
+            set for the synchronous group target.
+
+        no_mt_pp
+            Disables the multi-target Peer Persistence configuration. This will also remove
+            the path_management and auto_failover policies.
+
+        active_active
+            Volumes in the specified group will be enabled for host reads and
+            writes from both the primary and the secondary.
+            This policy will also set the auto_synchronize and auto_recover
+            policies to the group.
+
+        no_active_active
+            Disable the the active_active policy, allowing host writes only to
+            the primary. Host reads from secondary, would depend on if
+            path_management is still set. Disabling the active_active policy,
+            does not disable auto_synchronize and auto_recover policies.
+            (default).
+
+    <group_name>
+        Specifies the name of the volume group whose policy is set, or whose target
+        direction is switched.
+
+    <target_name>
+        Specifies the target name for the target definition created with the
+        creatercopytarget command.
+
+    <mode_value>
+        Specifies the mode, sync or periodic to which the group is set. This
+        specifier can only be used with the mode subcommand.
+
+    <period_value>s|m|h|d
+        Specifies the time period in units of seconds (s), minutes (m), hours
+        (h), or days (d), for automatic resynchronization (eg. 14h for 14 hours).
+        The time can be a minimum of 15 seconds (for asynchronous periodic groups)
+        and up to a maximum of one year, or set to zero. This specifier can only be
+        used with the period subcommand.
+
+        For asynchronous periodic mode, this value is used to specify the time period for
+        automatic resynchronization. A <period_value> of 0 will prevent automatic
+        resynchronization.
+
+NOTES
+    When issuing the setrcopygroup <dr_operation> command, either the
+    <group_name> specifier, the <target_name> specifier, or the <pattern>
+    specifier must be specified.
+
+    Do not use the reverse value of the <dr_operation> as part of the normal
+    disaster recovery process.
+
+    The period can be set only for groups whose mode is asynchronous periodic
+    (see creatercopygroup).
+
+    Reversing the direction of primary volumes will result in the loss of any
+    data changed after the group was stopped.
+
+    There is no default resynchronization period. For groups whose mode is
+    asynchronous periodic, you must specify a resynchronization period using
+    setrcopygroup period <value> or resynchronizations will not automatically
+    take place.
+
+    The minimum interval for periodic resynchronizations is 15 seconds.
+
+    If the mirror_config policy is set for this group's target and the group is
+    a primary group, then the setrcopygroup command is mirrored to the target
+    when the period and pol subcommands are used.
+
+    Use the -nosnap option when the primary server has failed or where the disks
+    are ruined or in an unknown state. For example, an uncontrolled shutdown can
+    result in loss of data. If you suspect that the primary volumes are not in a
+    known good state, you should use this option to force a FULL RESYNC when the
+    primary system is restored.
+
+    The -nosnap option can be used when making a secondary group take over as
+    the primary after a disaster takes down the primary (setrcopygroup failover
+    -nosnap...). This option indicates that no incremental resynchronization of
+    the primary group is possible while the primary system is coming back
+    online. Without this option, a snapshot is taken when the secondary server
+    takes over as the primary. That snapshot is used to do an INCREMENTAL
+    synchronization of the primary after it is restored. This assumes that there
+    was no loss of data in the primary volumes when the primary server went
+    down.
+
+    The switchover command is only supported for synchronous remote copy
+    groups that are started and synced. The command must be issued on
+    the primary array and upon completion of the command the remote copy
+    group will be restarted in the reverse direction.
+
+EXAMPLES
+    The following example sets the group policy for Group1:
+
+        setrcopygroup pol auto_recover Group1
+
+     The following example sets the group policy for all the groups  that
+     start with the name testgroup:
+
+        setrcopygroup pol  -pat testgroup* auto_recover
+
+    The following example reverses the current direction of secondary group
+     (Group1) so that I/O might be applied to the group after disaster recovery:
+
+        setrcopygroup failover Group1.r121
+
+    The following example reverses the current direction of all secondary groups
+     that start with the name testgroup so that I/O can be applied to the groups
+     during disaster recovery:
+
+        setrcopygroup failover  -pat testgroup*
+
+     The following example sets Group1 to be automatically synchronized every 30
+     minutes to System2:
+
+        setrcopygroup period 30m System2 Group1
+
+    The following example sets volume groups that start with the name testgroup to synchronize
+    to its asynchronous periodic mode target array2 every 30 minutes:
+
+       setrcopygroup period  -pat testgroup* 30m array2
+
+    The following example sets the local user CPG for the group testgroup:
+
+       setrcopygroup cpg -usr_cpg u_cpg RC603:remote_u_cpg testgroup
+
+    The following example will unset the local user CPG for the group
+    testgroup:
+
+       setrcopygroup cpg -usr_cpg_unset testgroup
+

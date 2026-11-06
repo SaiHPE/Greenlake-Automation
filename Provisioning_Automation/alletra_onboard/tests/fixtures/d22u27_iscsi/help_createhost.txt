@@ -1,0 +1,143 @@
+# help createhost
+createhost - create or add paths to a system host.
+
+SYNTAX
+    createhost [options] <hostname> [<WWN>...]
+    createhost -iscsi [options] <hostname> [<iscsi_name>...]
+    createhost -nvme [options] <hostname> <NQN>
+
+DESCRIPTION
+    The createhost command defines a new system host and provides the
+    option of assigning one or more paths to that host. Paths can be either
+    Fibre Channel WWNs or iSCSI names or NVMe NQN. The command also provides
+    options to annotate the host with descriptor information such as physical
+    location, IP Address, Operating System, Model, etc.
+
+    iscsi/nvme syntax is used to perform the following:
+    -iscsi <hostname> <iSCSI_name> Create a new iSCSI host with the specified iSCSI name.
+    -nvme <hostname> <NQN>         Create a new NVMe host with the specified NQN.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the host_create right
+
+OPTIONS
+    -add
+        Add the specified WWN(s) or iscsi_name(s) to an existing host (at least
+        one WWN or iscsi_name must be specified). Do not specify host persona.
+        This option cannot be used with an NVMe host.
+
+    -domain <domain | domain_set>
+        Create the host in the specified domain or domain set. The default is to
+        create it in the current domain, or no domain if the current domain is
+        not set. The domain set name must start with "set:".
+
+    -f
+        Forces the tear down of lower priority VLUN exports if necessary.
+
+    -persona <hostpersonaval>
+        Sets the host persona that specifies the personality for all ports
+        which are part of the host set.  This selects certain variations in
+        scsi command behavior which certain operating systems expect.
+        <hostpersonaval> is the host persona id number with the desired
+        capabilities.  These can be seen with showhost -listpersona. This
+        option cannot be used with the -nvme option.
+
+    -loc <location>
+        Specifies the host's location.
+
+    -ip <IP address>
+        Specifies the host's IP address.
+
+    -os <OS>
+        Specifies the operating system running on the host.
+
+    -model <model>
+        Specifies the host's model.
+
+    -contact <contact>
+        Specifies the host's owner and contact information.
+
+    -comment <comment>
+        Specifies any additional information for the host.
+
+    -transport <transport>
+        Specifies the NVMe host transport type, default: FC.
+
+    -vvol
+        The host is a VMware vVol host and will only allow
+        exposure to volumes in a vVol storage container.
+        This option can only be used with the -nvme option.
+
+SPECIFIERS
+    <hostname>
+        Specifies the name of the host using up to 31 characters.
+
+    <WWN>
+        Specifies the World Wide Name(WWN) to be assigned or added to an
+        existing host. This specifier can be repeated to specify multiple WWNs.
+        This specifier is optional.
+
+    <iscsi_name>
+        Host iSCSI name to be assigned or added to a host. This specifier is
+        optional.
+
+    <NQN>
+        NVMe Qualified Name (NQN) to be assigned or added to a host. This
+        specifier is mandatory with the -nvme option.
+
+    <transport>
+        The NVMe transport specifier refers to the suffix of NVMe/FC which
+        is "FC" or NVMe/TCP which is "TCP", etc. This specifier is
+        mandatory with the -transport option.
+
+NOTES
+    Access to all domains is required to run this command.
+
+    If the host is running the HPE Host Explorer then createhost may be called
+    with no paths and the hostname reported by the explorer to create the host
+    with all reported paths. If no agent is running then createhost with no
+    paths creates a host without assigning a host path.   The -add option
+    modifies an existing host by associating a host path with that host.   If
+    the -add option is not used, the createhost command defines a new host.
+
+    If assigning paths to a host being created, specify the -f option to
+    remove any existing VLUNs associated with those paths to avoid any
+    conflicting VLUNs.
+
+    Verify the creation of a host by issuing the showhost command.
+
+    The options that allow for adding descriptive information are for annotation
+    purposes only; the information provided here is not actively used by the
+    storage server.
+
+    Although it is optional to specify a host persona, a host must have one.
+    If one is not specified, it will default to 1 (Generic).  This will not
+    operate correctly with all types of hosts.  The host persona can be
+    changed with sethost -persona.
+
+    Host personas should not be specified with the -add argument.
+
+    A port's FC parameters should be set with controlport config.
+
+EXAMPLES
+    The following example creates system host test01:
+
+        cli% createhost test01 2000000087041F72
+
+    The following example creates an iSCSI host test02:
+
+	cli% createhost -iscsi test02 iqn.1991-06.com.microsoft:dt-391-xp.example.com
+
+    The following example creates host ESX520-13 with a VMware host persona:
+
+        cli% createhost -persona 11 ESX520-13 10000000C97B142E
+
+    The following examples create an NVMe/FC host test03:
+        cli% createhost -nvme test03 host1-nqn:nvme.host.sys.xyz
+            or
+        cli% createhost -nvme -transport FC test03 host1-nqn:nvme.host.sys.xyz
+
+    The following example creates an NVMe/TCP host test03:
+        cli% createhost -nvme -transport TCP test03 host1-nqn:nvme.host.sys.xyz
+

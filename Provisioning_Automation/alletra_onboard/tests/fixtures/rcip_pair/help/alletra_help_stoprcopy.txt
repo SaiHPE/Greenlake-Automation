@@ -1,0 +1,55 @@
+# help stoprcopy
+stoprcopy - Disable Remote Copy.
+
+SYNTAX
+    stoprcopy [options]
+
+DESCRIPTION
+    The stoprcopy command stops the Remote Copy service and optionally stops any
+    started Remote Copy volume groups.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopy_stop right
+
+OPTIONS
+    -f
+       Specifies that any started copy will not ask for confirmation
+       for either the -clear or -stopgroups options.
+
+    -stopgroups
+        Specifies that any started Remote Copy volume groups are stopped.
+
+    -clear
+        Specifies that configuration entries affiliated with the stopped mode
+        are deleted.
+
+    -keepalua
+        Used only with the -clear option. Keeps the local volume's ALUA
+        state from changing. This option must be used during Peer Motion
+        migrations of Remote Copy Groups. Please refer to "Volume migration
+        in a Remote Copy Primary group" in the Peer Motion User Guide for
+        further details.
+
+SPECIFIERS
+    None.
+
+NOTES
+    Access to all domains is required to run this command.
+
+    If the -stopgroups option is not used, all groups must already be stopped.
+
+    Unless the -stopgroups option is used, the command will fail if there are
+    any Remote Copy groups that are started. If the -clear option has been used,
+    the configuration is completely erased. Consequently, Remote Copy operations
+    cannot be restarted using only the startrcopy command. The configuration
+    must be rebuilt. Therefore, the -clear and -stopgroups  option requires
+    confirmation with the -f option, the TPDFORCE environment variable, or by
+    interactively typing y.
+
+EXAMPLES
+    The following example disables the Remote Copy functionality of all primary
+    Remote Copy volume groups:
+
+        cli% stoprcopy -stopgroups
+

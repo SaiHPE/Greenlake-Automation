@@ -1,0 +1,651 @@
+[
+ {
+  "event_type": "replication.previewed",
+  "created_at": "2026-11-03T18:48:07.329470Z",
+  "data": {
+   "plan": {
+    "actions": [
+     {
+      "kind": "rcip_port",
+      "name": "0:4:4",
+      "where": "A",
+      "state": "create",
+      "reason": "RCIP address 10.93.18.11 255.255.254.0 on 0:4:4 (offline)",
+      "calls": [
+       {
+        "where": "A",
+        "wsapi": "— (no WSAPI call; over SSH)",
+        "cli": "controlport rcip addr -f 10.93.18.11 255.255.254.0 0:4:4",
+        "seq": 1
+       }
+      ],
+      "detail": {
+       "ip": "10.93.18.11",
+       "netmask": "255.255.254.0",
+       "gateway": ""
+      }
+     },
+     {
+      "kind": "rcip_port",
+      "name": "1:4:4",
+      "where": "A",
+      "state": "create",
+      "reason": "RCIP address 10.93.18.13 255.255.254.0 on 1:4:4 (offline)",
+      "calls": [
+       {
+        "where": "A",
+        "wsapi": "— (no WSAPI call; over SSH)",
+        "cli": "controlport rcip addr -f 10.93.18.13 255.255.254.0 1:4:4",
+        "seq": 2
+       }
+      ],
+      "detail": {
+       "ip": "10.93.18.13",
+       "netmask": "255.255.254.0",
+       "gateway": ""
+      }
+     },
+     {
+      "kind": "rcip_port",
+      "name": "0:1:1",
+      "where": "B",
+      "state": "exists",
+      "reason": "10.93.18.19 255.255.254.0 already set",
+      "calls": [],
+      "detail": {
+       "ip": "10.93.18.19",
+       "netmask": "255.255.254.0",
+       "gateway": ""
+      }
+     },
+     {
+      "kind": "rcip_port",
+      "name": "1:1:1",
+      "where": "B",
+      "state": "exists",
+      "reason": "10.93.18.20 255.255.254.0 already set",
+      "calls": [],
+      "detail": {
+       "ip": "10.93.18.20",
+       "netmask": "255.255.254.0",
+       "gateway": ""
+      }
+     },
+     {
+      "kind": "rc_service",
+      "name": "Remote Copy",
+      "where": "A",
+      "state": "create",
+      "reason": "not configured on rack13-ARCUS",
+      "calls": [
+       {
+        "where": "A",
+        "wsapi": "— (no WSAPI call; over SSH)",
+        "cli": "startrcopy",
+        "seq": 3
+       }
+      ],
+      "detail": {
+       "was_configured": false
+      }
+     },
+     {
+      "kind": "rc_service",
+      "name": "Remote Copy",
+      "where": "B",
+      "state": "exists",
+      "reason": "started",
+      "calls": [],
+      "detail": {
+       "was_configured": true
+      }
+     },
+     {
+      "kind": "target",
+      "name": "PRIMERA630R11U22",
+      "where": "A",
+      "state": "create",
+      "reason": "target 'PRIMERA630R11U22' with 2 link(s): 0:4:4:10.93.18.19, 1:4:4:10.93.18.20",
+      "calls": [
+       {
+        "where": "A",
+        "wsapi": "— (no WSAPI call; over SSH)",
+        "cli": "creatercopytarget PRIMERA630R11U22 IP 0:4:4:10.93.18.19 1:4:4:10.93.18.20",
+        "seq": 4
+       }
+      ],
+      "detail": {
+       "links": [
+        "0:4:4:10.93.18.19",
+        "1:4:4:10.93.18.20"
+       ]
+      }
+     },
+     {
+      "kind": "target",
+      "name": "rack13-ARCUS",
+      "where": "B",
+      "state": "create",
+      "reason": "target 'rack13-ARCUS' with 2 link(s): 0:1:1:10.93.18.11, 1:1:1:10.93.18.13",
+      "calls": [
+       {
+        "where": "B",
+        "wsapi": "— (no WSAPI call; over SSH)",
+        "cli": "creatercopytarget rack13-ARCUS IP 0:1:1:10.93.18.11 1:1:1:10.93.18.13",
+        "seq": 5
+       }
+      ],
+      "detail": {
+       "links": [
+        "0:1:1:10.93.18.11",
+        "1:1:1:10.93.18.13"
+       ]
+      }
+     }
+    ],
+    "blockers": [],
+    "notes": [
+     "This configures the replication ports and the partnership between rack13-ARCUS and PRIMERA630R11U22 first. The Remote Copy groups are planned after it: read both arrays again, check the link, then configure the groups."
+    ],
+    "existing_groups": [],
+    "error": null
+   }
+  }
+ },
+ {
+  "event_type": "replication.applied",
+  "created_at": "2026-11-03T18:48:34.378006Z",
+  "data": {
+   "result": {
+    "outcomes": [
+     {
+      "kind": "rcip_port",
+      "name": "0:4:4",
+      "where": "A",
+      "status": "created",
+      "detail": "10.93.18.11 255.255.254.0, ready"
+     },
+     {
+      "kind": "rcip_port",
+      "name": "1:4:4",
+      "where": "A",
+      "status": "created",
+      "detail": "10.93.18.13 255.255.254.0, ready"
+     },
+     {
+      "kind": "ping",
+      "name": "0:4:4 → 10.93.18.19",
+      "where": "A",
+      "status": "created",
+      "detail": "3 packets transmitted, 3 received, 0% packet loss, time 2045ms"
+     },
+     {
+      "kind": "ping",
+      "name": "1:4:4 → 10.93.18.20",
+      "where": "A",
+      "status": "created",
+      "detail": "3 packets transmitted, 3 received, 0% packet loss, time 2073ms"
+     },
+     {
+      "kind": "rc_service",
+      "name": "Remote Copy",
+      "where": "A",
+      "status": "created",
+      "detail": "started"
+     },
+     {
+      "kind": "target",
+      "name": "PRIMERA630R11U22",
+      "where": "A",
+      "status": "created",
+      "detail": "2 link(s): 0:4:4:10.93.18.19, 1:4:4:10.93.18.20"
+     },
+     {
+      "kind": "target",
+      "name": "rack13-ARCUS",
+      "where": "B",
+      "status": "created",
+      "detail": "2 link(s): 0:1:1:10.93.18.11, 1:1:1:10.93.18.13"
+     },
+     {
+      "kind": "links",
+      "name": "Remote Copy links",
+      "where": "A",
+      "status": "created",
+      "detail": "every planned link Up on both arrays"
+     }
+    ],
+    "removals_a": [
+     "removercopytarget PRIMERA630R11U22",
+     "stoprcopy -f -stopgroups -clear",
+     "controlport rcip delete -f 0:4:4",
+     "controlport rcip delete -f 1:4:4"
+    ],
+    "removals_b": [
+     "removercopytarget rack13-ARCUS"
+    ],
+    "notes": [],
+    "groups_created": [],
+    "error": null
+   }
+  }
+ },
+ {
+  "event_type": "replication.previewed",
+  "created_at": "2026-11-03T18:48:46.622588Z",
+  "data": {
+   "plan": {
+    "actions": [
+     {
+      "kind": "rcip_port",
+      "name": "0:4:4",
+      "where": "A",
+      "state": "exists",
+      "reason": "10.93.18.11 255.255.254.0 already set",
+      "calls": [],
+      "detail": {
+       "ip": "10.93.18.11",
+       "netmask": "255.255.254.0",
+       "gateway": ""
+      }
+     },
+     {
+      "kind": "rcip_port",
+      "name": "1:4:4",
+      "where": "A",
+      "state": "exists",
+      "reason": "10.93.18.13 255.255.254.0 already set",
+      "calls": [],
+      "detail": {
+       "ip": "10.93.18.13",
+       "netmask": "255.255.254.0",
+       "gateway": ""
+      }
+     },
+     {
+      "kind": "rcip_port",
+      "name": "0:1:1",
+      "where": "B",
+      "state": "exists",
+      "reason": "10.93.18.19 255.255.254.0 already set",
+      "calls": [],
+      "detail": {
+       "ip": "10.93.18.19",
+       "netmask": "255.255.254.0",
+       "gateway": ""
+      }
+     },
+     {
+      "kind": "rcip_port",
+      "name": "1:1:1",
+      "where": "B",
+      "state": "exists",
+      "reason": "10.93.18.20 255.255.254.0 already set",
+      "calls": [],
+      "detail": {
+       "ip": "10.93.18.20",
+       "netmask": "255.255.254.0",
+       "gateway": ""
+      }
+     },
+     {
+      "kind": "rc_service",
+      "name": "Remote Copy",
+      "where": "A",
+      "state": "exists",
+      "reason": "started",
+      "calls": [],
+      "detail": {
+       "was_configured": true
+      }
+     },
+     {
+      "kind": "rc_service",
+      "name": "Remote Copy",
+      "where": "B",
+      "state": "exists",
+      "reason": "started",
+      "calls": [],
+      "detail": {
+       "was_configured": true
+      }
+     },
+     {
+      "kind": "target",
+      "name": "PRIMERA630R11U22",
+      "where": "A",
+      "state": "exists",
+      "reason": "target 'PRIMERA630R11U22' already has these links",
+      "calls": [],
+      "detail": {
+       "links": [
+        "0:4:4:10.93.18.19",
+        "1:4:4:10.93.18.20"
+       ],
+       "existing": "PRIMERA630R11U22"
+      }
+     },
+     {
+      "kind": "target",
+      "name": "rack13-ARCUS",
+      "where": "B",
+      "state": "exists",
+      "reason": "target 'rack13-ARCUS' already has these links",
+      "calls": [],
+      "detail": {
+       "links": [
+        "0:1:1:10.93.18.11",
+        "1:1:1:10.93.18.13"
+       ],
+       "existing": "rack13-ARCUS"
+      }
+     },
+     {
+      "kind": "test_volume",
+      "name": "zz_rc_test_v01",
+      "where": "A",
+      "state": "create",
+      "reason": "1 GiB tpvv for the failover test",
+      "calls": [
+       {
+        "where": "A",
+        "wsapi": "POST /volumes {name: zz_rc_test_v01, cpg: SSD_r6, sizeMiB: 1024, tpvv: true}",
+        "cli": "createvv -tpvv SSD_r6 zz_rc_test_v01 1g",
+        "seq": 1
+       }
+      ],
+      "detail": {
+       "cpg": "SSD_r6",
+       "size_gib": 1
+      }
+     },
+     {
+      "kind": "test_vvset",
+      "name": "zz_rc_test",
+      "where": "A",
+      "state": "create",
+      "reason": "holds zz_rc_test_v01",
+      "calls": [
+       {
+        "where": "A",
+        "wsapi": "POST /volumesets {name: zz_rc_test, setmembers: [zz_rc_test_v01]}",
+        "cli": "createvvset zz_rc_test zz_rc_test_v01",
+        "seq": 2
+       }
+      ],
+      "detail": {
+       "members": [
+        "zz_rc_test_v01"
+       ]
+      }
+     },
+     {
+      "kind": "group",
+      "name": "zz_rc_vvs_rcg",
+      "where": "A",
+      "state": "create",
+      "reason": "sync → PRIMERA630R11U22, 1 volume(s) from set 'zz_rc_vvs', secondaries on SSD_r6",
+      "calls": [
+       {
+        "where": "A",
+        "wsapi": "POST /remotecopygroups {name: zz_rc_vvs_rcg, targets: [{targetName: PRIMERA630R11U22, mode: 1, userCPG: SSD_r6}], localUserCPG: SSD_r6}",
+        "cli": "creatercopygroup -usr_cpg SSD_r6 PRIMERA630R11U22:SSD_r6 zz_rc_vvs_rcg PRIMERA630R11U22:sync",
+        "seq": 3
+       },
+       {
+        "where": "A",
+        "wsapi": "PUT /remotecopygroups/zz_rc_vvs_rcg {targets: [{targetName: PRIMERA630R11U22, policies: {autoRecover: true, autoSynchronize: true}}]}",
+        "cli": "setrcopygroup pol auto_recover zz_rc_vvs_rcg ; setrcopygroup pol auto_synchronize zz_rc_vvs_rcg",
+        "seq": 4
+       },
+       {
+        "where": "A",
+        "wsapi": "PUT /remotecopygroups/zz_rc_vvs_rcg {action: admit, volumeName: zz_rc_vol01, targets: [{targetName: PRIMERA630R11U22, secVolumeName: zz_rc_vol01}], volumeAutoCreation: true}",
+        "cli": "admitrcopyvv -createvv zz_rc_vol01 zz_rc_vvs_rcg PRIMERA630R11U22:zz_rc_vol01",
+        "seq": 5
+       },
+       {
+        "where": "A",
+        "wsapi": "PUT /remotecopygroups/zz_rc_vvs_rcg {action: start}",
+        "cli": "startrcopygroup zz_rc_vvs_rcg",
+        "seq": 7
+       }
+      ],
+      "detail": {
+       "vvset": "zz_rc_vvs",
+       "mode": "sync",
+       "volumes": [
+        "zz_rc_vol01"
+       ],
+       "target": "PRIMERA630R11U22",
+       "peer_cpg": "SSD_r6",
+       "local_cpg": "SSD_r6",
+       "period_seconds": null,
+       "auto_recover": true,
+       "auto_synchronize": true,
+       "peer_vvset": "zz_rc_vvs_rc",
+       "start_where": "A",
+       "is_test": false
+      }
+     },
+     {
+      "kind": "peer_vvset",
+      "name": "zz_rc_vvs_rc",
+      "where": "B",
+      "state": "create",
+      "reason": "the secondary volumes on PRIMERA630R11U22, for the DR site's exports",
+      "calls": [
+       {
+        "where": "B",
+        "wsapi": "POST /volumesets {name: zz_rc_vvs_rc, setmembers: [zz_rc_vol01]}",
+        "cli": "createvvset zz_rc_vvs_rc zz_rc_vol01",
+        "seq": 6
+       }
+      ],
+      "detail": {
+       "members": [
+        "zz_rc_vol01"
+       ],
+       "group": "zz_rc_vvs_rcg"
+      }
+     },
+     {
+      "kind": "group",
+      "name": "zz_rc_test_rcg",
+      "where": "A",
+      "state": "create",
+      "reason": "sync → PRIMERA630R11U22, 1 volume(s) from set 'zz_rc_test', secondaries on SSD_r6",
+      "calls": [
+       {
+        "where": "A",
+        "wsapi": "POST /remotecopygroups {name: zz_rc_test_rcg, targets: [{targetName: PRIMERA630R11U22, mode: 1, userCPG: SSD_r6}], localUserCPG: SSD_r6}",
+        "cli": "creatercopygroup -usr_cpg SSD_r6 PRIMERA630R11U22:SSD_r6 zz_rc_test_rcg PRIMERA630R11U22:sync",
+        "seq": 8
+       },
+       {
+        "where": "A",
+        "wsapi": "PUT /remotecopygroups/zz_rc_test_rcg {targets: [{targetName: PRIMERA630R11U22, policies: {autoRecover: true, autoSynchronize: true}}]}",
+        "cli": "setrcopygroup pol auto_recover zz_rc_test_rcg ; setrcopygroup pol auto_synchronize zz_rc_test_rcg",
+        "seq": 9
+       },
+       {
+        "where": "A",
+        "wsapi": "PUT /remotecopygroups/zz_rc_test_rcg {action: admit, volumeName: zz_rc_test_v01, targets: [{targetName: PRIMERA630R11U22, secVolumeName: zz_rc_test_v01}], volumeAutoCreation: true}",
+        "cli": "admitrcopyvv -createvv zz_rc_test_v01 zz_rc_test_rcg PRIMERA630R11U22:zz_rc_test_v01",
+        "seq": 10
+       },
+       {
+        "where": "A",
+        "wsapi": "PUT /remotecopygroups/zz_rc_test_rcg {action: start}",
+        "cli": "startrcopygroup zz_rc_test_rcg",
+        "seq": 12
+       }
+      ],
+      "detail": {
+       "vvset": "zz_rc_test",
+       "mode": "sync",
+       "volumes": [
+        "zz_rc_test_v01"
+       ],
+       "target": "PRIMERA630R11U22",
+       "peer_cpg": "SSD_r6",
+       "local_cpg": "SSD_r6",
+       "period_seconds": null,
+       "auto_recover": true,
+       "auto_synchronize": true,
+       "peer_vvset": "zz_rc_test_rc",
+       "start_where": "A",
+       "is_test": true
+      }
+     },
+     {
+      "kind": "peer_vvset",
+      "name": "zz_rc_test_rc",
+      "where": "B",
+      "state": "create",
+      "reason": "the secondary volumes on PRIMERA630R11U22, for the DR site's exports",
+      "calls": [
+       {
+        "where": "B",
+        "wsapi": "POST /volumesets {name: zz_rc_test_rc, setmembers: [zz_rc_test_v01]}",
+        "cli": "createvvset zz_rc_test_rc zz_rc_test_v01",
+        "seq": 11
+       }
+      ],
+      "detail": {
+       "members": [
+        "zz_rc_test_v01"
+       ],
+       "group": "zz_rc_test_rcg"
+      }
+     }
+    ],
+    "blockers": [],
+    "notes": [
+     "Partnership: rack13-ARCUS → PRIMERA630R11U22 via target 'PRIMERA630R11U22' (2/2 links Up), PRIMERA630R11U22 → rack13-ARCUS via 'rack13-ARCUS' (2/2 Up), policy mirror_config.",
+     "On PRIMERA630R11U22 each new group will be named '<group>.r185493'."
+    ],
+    "existing_groups": [],
+    "error": null
+   }
+  }
+ },
+ {
+  "event_type": "replication.applied",
+  "created_at": "2026-11-03T18:49:21.871332Z",
+  "data": {
+   "result": {
+    "outcomes": [
+     {
+      "kind": "test_volume",
+      "name": "zz_rc_test_v01",
+      "where": "A",
+      "status": "created",
+      "detail": "1 GiB tpvv on SSD_r6"
+     },
+     {
+      "kind": "test_vvset",
+      "name": "zz_rc_test",
+      "where": "A",
+      "status": "created",
+      "detail": "1 member(s)"
+     },
+     {
+      "kind": "group",
+      "name": "zz_rc_vvs_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "sync → PRIMERA630R11U22"
+     },
+     {
+      "kind": "policy",
+      "name": "zz_rc_vvs_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "auto_recover=true, auto_synchronize=true"
+     },
+     {
+      "kind": "volume_admit",
+      "name": "zz_rc_vol01",
+      "where": "A",
+      "status": "created",
+      "detail": "→ zz_rc_vvs_rcg, secondary zz_rc_vol01 on SSD_r6"
+     },
+     {
+      "kind": "peer_vvset",
+      "name": "zz_rc_vvs_rc",
+      "where": "B",
+      "status": "created",
+      "detail": "1 member(s)"
+     },
+     {
+      "kind": "start",
+      "name": "zz_rc_vvs_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "started"
+     },
+     {
+      "kind": "group",
+      "name": "zz_rc_test_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "sync → PRIMERA630R11U22"
+     },
+     {
+      "kind": "policy",
+      "name": "zz_rc_test_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "auto_recover=true, auto_synchronize=true"
+     },
+     {
+      "kind": "volume_admit",
+      "name": "zz_rc_test_v01",
+      "where": "A",
+      "status": "created",
+      "detail": "→ zz_rc_test_rcg, secondary zz_rc_test_v01 on SSD_r6"
+     },
+     {
+      "kind": "peer_vvset",
+      "name": "zz_rc_test_rc",
+      "where": "B",
+      "status": "created",
+      "detail": "1 member(s)"
+     },
+     {
+      "kind": "start",
+      "name": "zz_rc_test_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "started"
+     }
+    ],
+    "removals_a": [
+     "stoprcopygroup -f zz_rc_vvs_rcg",
+     "dismissrcopyvv -f -removevv zz_rc_vol01 zz_rc_vvs_rcg",
+     "removercopygroup -f zz_rc_vvs_rcg",
+     "stoprcopygroup -f zz_rc_test_rcg",
+     "dismissrcopyvv -f -removevv zz_rc_test_v01 zz_rc_test_rcg",
+     "removercopygroup -f zz_rc_test_rcg",
+     "removevvset -f zz_rc_test",
+     "removevv -f zz_rc_test_v01"
+    ],
+    "removals_b": [
+     "removevvset -f zz_rc_vvs_rc",
+     "removevvset -f zz_rc_test_rc",
+     "removevv -f zz_rc_vol01",
+     "removevv -f zz_rc_test_v01"
+    ],
+    "notes": [
+     "Link check 2026-11-03T18:48:48+00:00: latency 0.019 ms on 2 link(s); within the limit."
+    ],
+    "groups_created": [
+     "zz_rc_vvs_rcg",
+     "zz_rc_test_rcg"
+    ],
+    "error": null
+   }
+  }
+ }
+]

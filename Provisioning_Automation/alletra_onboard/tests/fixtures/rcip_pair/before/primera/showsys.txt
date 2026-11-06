@@ -1,0 +1,3 @@
+                                                                          ---------------(MiB)----------------
+     ID ------Name------ ----Model---- --Serial-- Nodes Master ClusterLED TotalCap AllocCap  FreeCap FailedCap
+0x2AC38 PRIMERA630R11U22 HPE_3PAR C630 SGH339NK4C     2      0 Green      21958656  5954560 16004096         0

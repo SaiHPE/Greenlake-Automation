@@ -1,0 +1,137 @@
+{
+ "total": 6,
+ "members": [
+  {
+   "id": 2,
+   "wsapiAssignedId": 2,
+   "name": "Generic-ALUA",
+   "OS": [
+    "Citrix Hypervisor(XenServer)",
+    "OE Linux UEK",
+    "Oracle VM x86",
+    "RHE Linux",
+    "RHE Virtualization",
+    "SuSE Linux",
+    "SuSE Virtualization",
+    "Ubuntu"
+   ],
+   "capabilities": [
+    "Unit Attention Report LUNs",
+    "Enable SES device",
+    "Asymmetric Logical Unit Access"
+   ],
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas/2",
+     "rel": "self"
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "wsapiAssignedId": 8,
+   "name": "VMware",
+   "OS": [
+    "VMware (ESXi)"
+   ],
+   "capabilities": [
+    "Unit Attention Report LUNs",
+    "Enable Sub-LUN Addressing",
+    "Asymmetric Logical Unit Access"
+   ],
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas/11",
+     "rel": "self"
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "wsapiAssignedId": 10,
+   "name": "HPUX",
+   "OS": [
+    "HP-UX"
+   ],
+   "capabilities": [
+    "Unit Attention Report LUNs",
+    "Volume Set Addressing",
+    "Enable SES device",
+    "Asymmetric Logical Unit Access",
+    "LUN 0: Storage Controller Component"
+   ],
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas/13",
+     "rel": "self"
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "wsapiAssignedId": 11,
+   "name": "WindowsServer",
+   "OS": [
+    "Windows Server"
+   ],
+   "capabilities": [
+    "Unit Attention Report LUNs",
+    "Enable SES device",
+    "Asymmetric Logical Unit Access",
+    "Windows Server Capability"
+   ],
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas/15",
+     "rel": "self"
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "wsapiAssignedId": 12,
+   "name": "AIX",
+   "OS": [
+    "AIX",
+    "IBM VIO Server"
+   ],
+   "capabilities": [
+    "Unit Attention Report LUNs",
+    "Normal Auto Contingent Allegiance",
+    "Asymmetric Logical Unit Access"
+   ],
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas/16",
+     "rel": "self"
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "wsapiAssignedId": 17,
+   "name": "Solaris",
+   "OS": [
+    "Solaris"
+   ],
+   "capabilities": [
+    "Unit Attention Report LUNs",
+    "Enable SES device",
+    "Asymmetric Logical Unit Access",
+    "Solaris Capability"
+   ],
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas/17",
+     "rel": "self"
+    }
+   ]
+  }
+ ],
+ "links": [
+  {
+   "href": "https://10.64.122.99/api/v1/hostpersonas",
+   "rel": "self"
+  }
+ ]
+}

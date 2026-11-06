@@ -1,0 +1,64 @@
+name: Build Windows EXE (one-off, v0.18.0)
+
+# One-off build of the tagged code for the github.hpe.com release: the .exe is a Windows artifact and
+# github.hpe.com has no Actions. Artifacts only, kept 3 days; nothing is published here.
+on:
+  push:
+    branches: [exe-build]
+
+permissions:
+  contents: read
+
+jobs:
+  build-exe:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: Provisioning_Automation/alletra_onboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies + Chromium
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller
+          python -m playwright install chromium
+      - name: Build slim
+        run: .\scripts\build_exe.ps1 -SkipInstall
+      - name: Self-test slim
+        run: |
+          dist\AlletraOnboard\AlletraOnboard.exe selftest
+          if ($LASTEXITCODE -ne 0) { throw "slim selftest failed" }
+      - name: Serve smoke test slim
+        run: .\scripts\smoke_serve.ps1
+      - name: Build offline (Chromium bundled)
+        run: .\scripts\build_exe.ps1 -SkipInstall -Chromium
+      - name: Self-test offline
+        run: |
+          dist\AlletraOnboard\AlletraOnboard.exe selftest
+          if ($LASTEXITCODE -ne 0) { throw "offline selftest failed" }
+      - name: Serve smoke test offline
+        run: .\scripts\smoke_serve.ps1
+      - name: Build init-only accelerator
+        run: .\scripts\build_exe.ps1 -SkipInstall -Profile init-only
+      - name: Self-test init-only
+        run: |
+          dist\AlletraOnboard\AlletraOnboard.exe selftest
+          if ($LASTEXITCODE -ne 0) { throw "init-only selftest failed" }
+      - name: Serve smoke test init-only
+        run: .\scripts\smoke_serve.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: alletra-onboard-exe-win64
+          retention-days: 3
+          path: |
+            Provisioning_Automation/alletra_onboard/dist/alletra-onboard-win64.zip
+            Provisioning_Automation/alletra_onboard/dist/alletra-onboard-win64.zip.sha256
+            Provisioning_Automation/alletra_onboard/dist/alletra-onboard-offline-win64.zip
+            Provisioning_Automation/alletra_onboard/dist/alletra-onboard-offline-win64.zip.sha256
+            Provisioning_Automation/alletra_onboard/dist/alletra-mp-initialization-win64.zip
+            Provisioning_Automation/alletra_onboard/dist/alletra-mp-initialization-win64.zip.sha256

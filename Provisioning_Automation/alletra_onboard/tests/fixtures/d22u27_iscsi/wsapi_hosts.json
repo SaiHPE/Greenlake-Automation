@@ -1,0 +1,251 @@
+{
+ "total": 8,
+ "members": [
+  {
+   "id": 0,
+   "name": "ESX1",
+   "descriptors": {
+    "os": "VMware (ESXi)"
+   },
+   "FCPaths": [
+    {
+     "wwn": "1000D0BF9CB7A3C9",
+     "portPos": {
+      "node": 0,
+      "slot": 3,
+      "cardPort": 1
+     }
+    },
+    {
+     "wwn": "1000D0BF9CB7A3C9",
+     "portPos": {
+      "node": 1,
+      "slot": 3,
+      "cardPort": 1
+     }
+    },
+    {
+     "wwn": "1000D0BF9CB7A3D1",
+     "portPos": {
+      "node": 1,
+      "slot": 3,
+      "cardPort": 4
+     }
+    },
+    {
+     "wwn": "1000D0BF9CB7A3D1",
+     "portPos": {
+      "node": 0,
+      "slot": 3,
+      "cardPort": 4
+     }
+    }
+   ],
+   "iSCSIPaths": [],
+   "NVMETCPPaths": [],
+   "persona": 8,
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas?query=\"wsapiAssignedId EQ 8\"",
+     "rel": "personaInfo"
+    }
+   ],
+   "initiatorChapEnabled": false,
+   "targetChapEnabled": false
+  },
+  {
+   "id": 1,
+   "name": "ESX2",
+   "descriptors": {
+    "os": "VMware (ESXi)"
+   },
+   "FCPaths": [
+    {
+     "wwn": "100070106FE9A979",
+     "portPos": {
+      "node": 0,
+      "slot": 3,
+      "cardPort": 1
+     }
+    },
+    {
+     "wwn": "100070106FE9A979",
+     "portPos": {
+      "node": 1,
+      "slot": 3,
+      "cardPort": 1
+     }
+    },
+    {
+     "wwn": "100070106FE9A981",
+     "portPos": {
+      "node": 1,
+      "slot": 3,
+      "cardPort": 4
+     }
+    },
+    {
+     "wwn": "100070106FE9A981",
+     "portPos": {
+      "node": 0,
+      "slot": 3,
+      "cardPort": 4
+     }
+    }
+   ],
+   "iSCSIPaths": [],
+   "NVMETCPPaths": [],
+   "persona": 8,
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas?query=\"wsapiAssignedId EQ 8\"",
+     "rel": "personaInfo"
+    }
+   ],
+   "initiatorChapEnabled": false,
+   "targetChapEnabled": false
+  },
+  {
+   "id": 2,
+   "name": "winhost_CDS",
+   "FCPaths": [
+    {
+     "wwn": "50060B0000C2EE2C"
+    },
+    {
+     "wwn": "50060B0000C2EE2E"
+    }
+   ],
+   "iSCSIPaths": [],
+   "NVMETCPPaths": [],
+   "persona": 11,
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas?query=\"wsapiAssignedId EQ 11\"",
+     "rel": "personaInfo"
+    }
+   ],
+   "initiatorChapEnabled": false,
+   "targetChapEnabled": false
+  },
+  {
+   "id": 3,
+   "name": "DL380G11D21U6_3D1X",
+   "descriptors": {
+    "os": "Windows Server"
+   },
+   "FCPaths": [
+    {
+     "wwn": "10005CBA2CFC3D15"
+    },
+    {
+     "wwn": "10005CBA2CFC3D16"
+    }
+   ],
+   "iSCSIPaths": [],
+   "NVMETCPPaths": [],
+   "persona": 11,
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas?query=\"wsapiAssignedId EQ 11\"",
+     "rel": "personaInfo"
+    }
+   ],
+   "initiatorChapEnabled": false,
+   "targetChapEnabled": false
+  },
+  {
+   "id": 4,
+   "name": "test2-alletra",
+   "FCPaths": [],
+   "iSCSIPaths": [],
+   "NVMETCPPaths": [],
+   "persona": 2,
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas?query=\"wsapiAssignedId EQ 2\"",
+     "rel": "personaInfo"
+    }
+   ],
+   "initiatorChapEnabled": false,
+   "targetChapEnabled": false
+  },
+  {
+   "id": 5,
+   "name": "DL380G10C12U29_58EX",
+   "descriptors": {
+    "os": "VMware (ESXi)"
+   },
+   "FCPaths": [
+    {
+     "wwn": "100028924AAF58EE"
+    },
+    {
+     "wwn": "100028924AAF58EF"
+    }
+   ],
+   "iSCSIPaths": [],
+   "NVMETCPPaths": [],
+   "persona": 8,
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas?query=\"wsapiAssignedId EQ 8\"",
+     "rel": "personaInfo"
+    }
+   ],
+   "initiatorChapEnabled": false,
+   "targetChapEnabled": false
+  },
+  {
+   "id": 6,
+   "name": "Host1-zerto",
+   "descriptors": {
+    "os": "VMware (ESXi)"
+   },
+   "FCPaths": [
+    {
+     "wwn": "5001438037C6B290"
+    }
+   ],
+   "iSCSIPaths": [],
+   "NVMETCPPaths": [],
+   "persona": 8,
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas?query=\"wsapiAssignedId EQ 8\"",
+     "rel": "personaInfo"
+    }
+   ],
+   "initiatorChapEnabled": false,
+   "targetChapEnabled": false
+  },
+  {
+   "id": 7,
+   "name": "DL380G10PQ8U17_655E",
+   "descriptors": {
+    "os": "Windows Server"
+   },
+   "FCPaths": [
+    {
+     "wwn": "10009440C9CF655E",
+     "portPos": {
+      "node": 0,
+      "slot": 3,
+      "cardPort": 4
+     }
+    }
+   ],
+   "iSCSIPaths": [],
+   "NVMETCPPaths": [],
+   "persona": 11,
+   "links": [
+    {
+     "href": "https://10.64.122.99/api/v1/hostpersonas?query=\"wsapiAssignedId EQ 11\"",
+     "rel": "personaInfo"
+    }
+   ],
+   "initiatorChapEnabled": false,
+   "targetChapEnabled": false
+  }
+ ]
+}

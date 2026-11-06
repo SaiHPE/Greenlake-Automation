@@ -1,0 +1,15 @@
+Lun VVName      HostName      -Host_WWN/iSCSI_Name/Host_NQN-  Port     Type Status ID
+  0 zz_t2_vol01 10.132.30.136 10005CED8C5312A8               0:3:3 host set nonopt 10
+  1 zz_t2_vol02 10.132.30.136 10005CED8C5312A8               0:3:3 host set active 10
+  2 zz_t2_vol03 10.132.30.136 10005CED8C5312A8               0:3:3     host nonopt 10
+  0 zz_t2_vol01 10.132.30.136 10005CED8C5312A9               0:3:4 host set nonopt 10
+  1 zz_t2_vol02 10.132.30.136 10005CED8C5312A9               0:3:4 host set active 10
+  2 zz_t2_vol03 10.132.30.136 10005CED8C5312A9               0:3:4     host nonopt 10
+  0 zz_t2_vol01 10.132.30.136 10005CED8C5312A9               1:3:3 host set active 11
+  1 zz_t2_vol02 10.132.30.136 10005CED8C5312A9               1:3:3 host set nonopt 11
+  2 zz_t2_vol03 10.132.30.136 10005CED8C5312A9               1:3:3     host active 11
+  0 zz_t2_vol01 10.132.30.136 10005CED8C5312A8               1:3:4 host set active 11
+  1 zz_t2_vol02 10.132.30.136 10005CED8C5312A8               1:3:4 host set nonopt 11
+  2 zz_t2_vol03 10.132.30.136 10005CED8C5312A8               1:3:4     host active 11
+-------------------------------------------------------------------------------------
+ 12 total

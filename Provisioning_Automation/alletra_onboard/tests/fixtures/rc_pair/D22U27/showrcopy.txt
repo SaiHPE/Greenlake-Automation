@@ -1,0 +1,59 @@
+# showrcopy
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name             ID Type Status Options Policy       
+AlletraMP_E18U31  5 IP   ready  -       mirror_config
+
+Link Information
+
+Target           Node  Address       Status Options
+AlletraMP_E18U31 0:4:3 10.54.154.192 Up     -      
+AlletraMP_E18U31 1:4:3 10.54.154.193 Up     -      
+receive          0:4:3 10.54.122.92  Up     -      
+receive          1:4:3 10.54.122.93  Up     -      
+
+Group Information
+
+Name         Target           Status   Role       Mode     Options                      
+300gb        AlletraMP_E18U31 Started  Primary    Sync     auto_recover,auto_synchronize
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime
+  300gb         269 300gb        1521 Synced        NA          
+  Test         9342 Test         1522 Synced        NA          
+
+Name         Target           Status   Role       Mode     Options                                    
+APP_Test     AlletraMP_E18U31 Started  Secondary  Sync     auto_recover,auto_synchronize,active_active
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime
+  APP.test.vv  4754 APP.test.vv   531 Synced        NA          
+
+Name              Target           Status   Role       Mode     Options
+Intern_Automation AlletraMP_E18U31 Started  Primary    Sync            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime
+  Automation1  6199 Automation1   687 Synced        NA          
+  Automation2  6200 Automation2   688 Synced        NA          
+  Automation3  6201 Automation3   689 Synced        NA          
+  Automation4  6202 Automation4   690 Synced        NA          
+
+Name               Target           Status   Role       Mode     Options
+Intern_Automation2 AlletraMP_E18U31 Started  Primary    Sync            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime
+  Automation5  8288 Automation5  1313 Synced        NA          
+  Automation6  8290 Automation6  1314 Synced        NA          
+  Automation7  8291 Automation7  1315 Synced        NA          
+  Automation8  8292 Automation8  1316 Synced        NA          
+
+Name         Target           Status   Role       Mode     Options
+Test-RCG     AlletraMP_E18U31 Started  Primary    Sync            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime
+  TestRC_VV1   4838 TestRC_VV1    554 Synced        NA          
+  TestRC_VV2   4839 TestRC_VV2    555 Synced        NA          
+
+Name         Target           Status   Role       Mode     Options
+Test-RCG2    AlletraMP_E18U31 Started  Primary    Sync            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime
+  TestRC2_VV1  6857 TestRC2_VV1  1000 Synced        NA          
+  TestRC2_VV2  6858 TestRC2_VV2  1001 Synced        NA          
+
