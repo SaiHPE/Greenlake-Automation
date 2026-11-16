@@ -1,0 +1,113 @@
+# help dismissrcopyvv
+dismissrcopyvv - Dismiss one or more virtual volumes from a remote copy group.
+
+SYNTAX
+    dismissrcopyvv [options] {<pattern> | <VV_name>} <group_name>
+    dismissrcopyvv [options] {<set> | <pattern> } <group_name>
+
+DESCRIPTION
+    The dismissrcopyvv command removes a virtual volume from a remote copy volume
+    group.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopyvv_dismiss right
+
+OPTIONS
+    -f
+        Does not ask for confirmation for the dismissrcopyvv command.
+
+    -pat
+        Specifies that specified patterns are treated as glob-style patterns
+        and all remote copy volumes matching the specified pattern will be
+        dismissed from the remote copy group. This option must be used
+        if the <pattern> specifier is used.
+
+    -keepsnap
+        Specifies that the Primary volume's resync snapshot should be retained
+        after the volumes are dismissed from the remote copy group.
+        This snapshot will reflect the state of the secondary volume and can be
+        used as the resync starting point if the volumes are re-admitted to a
+        remote copy group. The snapshot's name will begin with "sv.rcpy.".
+        For example, when dismissing a volume from a synchronous remote copy
+        group, snaps are created for each volume (sv.rcpy.<volume-name>) of
+        the set in the primary. Secondary volumes are still left intact in
+        the secondary set but the secondary set is disassociated from the
+        secondary RC group. This snapshot will be deleted automatically
+        after the delta synchronization completes.
+
+    -removevv
+        secondary volumes are removed from secondary set and deleted.
+        The secondary set is also removed when the last volume in the set
+        is removed.
+
+    -keepalua
+        Keeps the local volume's ALUA state from changing. This option
+        must be used during Peer Motion migrations of Remote Copy Groups.
+        Please refer to "Volume migration in a Remote Copy Primary group"
+        in the Peer Motion User Guide for further details.
+
+SPECIFIERS
+    <set>
+       Name of the set of volumes dismissed from the RC group.
+
+    <VV_name>
+       The name of the volume to be removed. Volumes are added to a group
+       with the admitrcopyvv command.
+
+    <pattern>
+       Specifies a glob-style pattern. This specifier can be repeated to dismiss
+       multiple remote copy volumes. If this specifier is not used, the <VV_name>
+       specifier must be used.
+
+    <group_name>
+        The name of the group that currently includes the virtual volume.
+
+NOTES
+    Access to all domains is required to run this command.
+
+    The -keepsnap and -removevv options are mutually exclusive.
+
+    The dismissrcopyvv command removes any Remote Copy synchronization snapshots
+    affiliated with the removed volume.
+
+    If a group's target has the mirror_config policy set and the group is
+    a primary group, this command is mirrored to that target and the volume
+    is removed from the corresponding secondary group. If the policy is set
+    and the group is a secondary, this command fails.
+
+    If the group's automatically created volume set was specified when its
+    virtual volumes were created, i.e., "createvlun set:<RCP_group_name>...",
+    then, when a volume is dismissed from the group, its VLUN will
+    also be removed.
+
+EXAMPLES
+    The following example dismisses virtual volume vv1 from Group1:
+
+        cli% dismissrcopyvv vv1 Group1
+
+    The following example dismisses all virtual volumes that start with
+    the name testvv from Group1:
+
+        cli% dismissrcopyvv -pat testvv* Group1
+
+    The following example dismisses volume vv1 from Group1 and removes the
+    corresponding volumes of vv1 on all the target systems of Group1.
+
+        cli% dismissrcopyvv -removevv vv1 Group1
+
+    The following example dismisses volume vv2 from Group2 and retains the
+    resync snapshot associated with vv2 for this group.
+
+        cli% dismissrcopyvv -keepsnap vv2 Group2
+
+    The following example dismisses all virtual volumes that are part of
+    set (vvset1) from Group1.
+
+        cli% dismissrcopyvv set:vvset1 Group1
+
+    The following example dismisses all virtual volumes that start with
+    the name testvv which are part of set (vvset1) from Group1:
+
+        cli% dismissrcopyvv -pat set:vvset1:testvv* Group1
+

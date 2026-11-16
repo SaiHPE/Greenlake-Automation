@@ -1,0 +1,39 @@
+showsys                                            3 lines
+showsys -d                                        40 lines
+showversion                                       12 lines
+showversion -a                                    40 lines
+shownet                                            8 lines
+showport                                          27 lines
+showport -rcip                                     5 lines
+showport -iscsi                                    7 lines
+showrctransport -rcip                              3 lines
+showrcopy                                         58 lines
+showrcopy -d                                      58 lines
+showrcopy links                                   11 lines
+showrcopy targets                                  8 lines
+showrcopy groups                                  45 lines
+showrcopy -d groups                               45 lines
+showrcopy groups rcopy_async_test                  6 lines  (stderr)
+showrcopy -qw targets                              8 lines
+showvvset                                         15 lines
+showcpg                                            5 lines
+showsched                                          5 lines
+showtask                                           4 lines
+srstatrcvv -hourly                               172 lines
+help startrcopy                                   28 lines
+help controlport                                 494 lines
+help creatercopytarget                            75 lines
+help admitrcopylink                               72 lines
+help dismissrcopylink                             63 lines
+help removercopytarget                            45 lines
+help creatercopygroup                             64 lines
+help setrcopygroup                               441 lines
+help admitrcopyvv                                210 lines
+help startrcopygroup                              94 lines
+help stoprcopygroup                               78 lines
+help dismissrcopyvv                              112 lines
+help removercopygroup                             92 lines
+help syncrcopy                                    74 lines
+help showrcopy                                    85 lines
+help showrctransport                              45 lines
+help srstatrcvv                                  193 lines

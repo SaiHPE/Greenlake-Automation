@@ -1,0 +1,5 @@
+# showtask
+   Id Type            Name                           Status Phase Step -------StartTime------- ------FinishTime------- -Priority- --User---
+24316 scheduled_task  patchisched                    done     ---  --- 2026-10-06 23:00:00 IST 2026-10-06 23:00:00 IST n/a        3paradm  
+24459 controlinsplore start_20261007.161543060228551 done     ---  --- 2026-10-07 16:15:43 IST 2026-10-07 16:20:35 IST n/a        telemetry
+24460 controlinsplore remove                         done     ---  --- 2026-10-07 16:20:41 IST 2026-10-07 16:20:41 IST n/a        telemetry

@@ -1,0 +1,217 @@
+{
+ Type Pid    COS     PortName                NodeName                 SCR
+ N    020000;      3;10:00:5c:ed:8c:53:12:94;20:00:5c:ed:8c:53:12:94; 0x00000003
+    SCR: Fabric-Detected Nx-Port-Detected
+    FC4s: FCP FC-NVMe
+    PortSymb: [1] "1"
+    NodeSymb: [70] "Emulex SN1720E2P FV14.4.473.14 DV14.2.0.17 HN:dl385g10pr13u27 OS:Linux"
+    Fabric Port Name: 20:00:38:ba:b0:99:09:60 
+    Permanent Port Name: 10:00:5c:ed:8c:53:12:94
+    Device type: Physical Initiator
+    Port Index: 0
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 64G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FCP]: Initiator 
+    FC4 Features [FC-NVMe]: Initiator 
+ N    020100;      3;20:33:00:02:ac:02:d4:95;2f:f7:00:02:ac:02:d4:95; 0x0000000b
+    SCR: Fabric-Detected Nx-Port-Detected Peer-Zone
+    FC4s: FCP
+    PortSymb: [31] "CZ2D2K014S - 0:3:3 - HPE64004-B"
+    NodeSymb: [47] "HPE Alletra Storage MP - CZ2D2K014S - fw:105550"
+    Fabric Port Name: 20:01:38:ba:b0:99:09:60 
+    Permanent Port Name: 20:33:00:02:ac:02:d4:95
+    Device type: Physical Target
+    Port Index: 1
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 32G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FCP]: Target 
+ N    020101;      3;20:33:01:02:ad:f2:d4:95;2f:f7:01:02:ac:02:d4:95; 0x0000000b
+    SCR: Fabric-Detected Nx-Port-Detected Peer-Zone
+    FC4s: FC-NVMe
+    PortSymb: [31] "CZ2D2K014S - 0:3:3 - HPE64004-B"
+    NodeSymb: [47] "HPE Alletra Storage MP - CZ2D2K014S - fw:105550"
+    Fabric Port Name: 20:01:38:ba:b0:99:09:60 
+    Permanent Port Name: 20:33:00:02:ac:02:d4:95
+    Device type: NPIV Target
+    Port Index: 1
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 32G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FC-NVMe]: Target Discovery_Service 
+ N    020300;      3;51:40:2e:c0:20:89:cc:1c;51:40:2e:c0:20:89:cc:1d; 0x00000003
+    SCR: Fabric-Detected Nx-Port-Detected
+    FC4s: FC-NVMe
+    PortSymb: [64] "QLogic Port0 WWPN 51:40:2e:c0:20:89:cc:1c......................."
+    NodeSymb: [34] "SN1610Q FW:v9.12.01 DVR:v9.4.2.103"
+    Fabric Port Name: 20:03:38:ba:b0:99:09:60 
+    Permanent Port Name: 51:40:2e:c0:20:89:cc:1c
+    Device type: Physical Initiator
+    Port Index: 3
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 32G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FC-NVMe]: Initiator 
+ N    020900;      3;10:00:5c:ed:8c:53:12:a8;20:00:5c:ed:8c:53:12:a8; 0x00000003
+    SCR: Fabric-Detected Nx-Port-Detected
+    FC4s: FCP FC-NVMe
+    PortSymb: [34] "Emulex PPN-10:00:5c:ed:8c:53:12:a8"
+    NodeSymb: [107] "Emulex SN1720E2P FV14.4.473.14 DV14.2.641.5 HN:DL380G10R13U25.btl.grsbtelab.ap.hpecorp.net OS:VMware ESXi 8"
+    Fabric Port Name: 20:09:38:ba:b0:99:09:60 
+    Permanent Port Name: 10:00:5c:ed:8c:53:12:a8
+    Device type: Physical Initiator
+    Port Index: 9
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 64G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FCP]: Initiator 
+    FC4 Features [FC-NVMe]: Initiator 
+ N    020b00;      3;10:00:5c:ed:8c:53:12:a2;20:00:5c:ed:8c:53:12:a2; 0x00000003
+    SCR: Fabric-Detected Nx-Port-Detected
+    FC4s: FCP FC-NVMe
+    PortSymb: [1] "0"
+    NodeSymb: [75] "Emulex SN1720E2P FV14.4.473.14 DV14.4.0.6 HN:localhost.localdomain OS:Linux"
+    Fabric Port Name: 20:0b:38:ba:b0:99:09:60 
+    Permanent Port Name: 10:00:5c:ed:8c:53:12:a2
+    Device type: Physical Initiator
+    Port Index: 11
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 64G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FCP]: Initiator 
+    FC4 Features [FC-NVMe]: Initiator 
+ N    021000;      3;51:40:2e:c0:20:89:cb:da;51:40:2e:c0:20:89:cb:db; 0x00000003
+    SCR: Fabric-Detected Nx-Port-Detected
+    FC4s: FCP FC-NVMe
+    NodeSymb: [39] "SN1610Q FW:v9.15.05 DVR:v10.02.09.100-k"
+    Fabric Port Name: 20:10:38:ba:b0:99:09:60 
+    Permanent Port Name: 51:40:2e:c0:20:89:cb:da
+    Device type: Physical Initiator
+    Port Index: 16
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 32G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FCP]: Initiator 
+    FC4 Features [FC-NVMe]: Initiator 
+ N    021100;      3;21:34:00:02:ac:02:d4:95;2f:f7:00:02:ac:02:d4:95; 0x0000000b
+    SCR: Fabric-Detected Nx-Port-Detected Peer-Zone
+    FC4s: FCP
+    PortSymb: [31] "CZ2D2K014S - 1:3:4 - HPE64004-B"
+    NodeSymb: [47] "HPE Alletra Storage MP - CZ2D2K014S - fw:105550"
+    Fabric Port Name: 20:11:38:ba:b0:99:09:60 
+    Permanent Port Name: 21:34:00:02:ac:02:d4:95
+    Device type: Physical Target
+    Port Index: 17
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 32G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FCP]: Target 
+ N    021101;      3;21:34:01:02:ad:f2:d4:95;2f:f7:01:02:ac:02:d4:95; 0x0000000b
+    SCR: Fabric-Detected Nx-Port-Detected Peer-Zone
+    FC4s: FC-NVMe
+    PortSymb: [31] "CZ2D2K014S - 1:3:4 - HPE64004-B"
+    NodeSymb: [47] "HPE Alletra Storage MP - CZ2D2K014S - fw:105550"
+    Fabric Port Name: 20:11:38:ba:b0:99:09:60 
+    Permanent Port Name: 21:34:00:02:ac:02:d4:95
+    Device type: NPIV Target
+    Port Index: 17
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 32G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FC-NVMe]: Target Discovery_Service 
+ N    021400;      3;10:00:00:10:9b:50:7e:49;20:00:00:10:9b:50:7e:49; 0x00000003
+    SCR: Fabric-Detected Nx-Port-Detected
+    FC4s: FCP FC-NVMe
+    PortSymb: [1] "1"
+    NodeSymb: [67] "Emulex LPe31002-M6-D FV11.4.258.15 DV14.2.0.17 HN:vmenode3 OS:Linux"
+    Fabric Port Name: 20:14:38:ba:b0:99:09:60 
+    Permanent Port Name: 10:00:00:10:9b:50:7e:49
+    Device type: Physical Initiator
+    Port Index: 20
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 16G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FCP]: Initiator 
+    FC4 Features [FC-NVMe]: Initiator 
+ N    021600;      3;10:00:5c:ba:2c:ff:6b:d0;20:00:5c:ba:2c:ff:6b:d0; 0x00000003
+    SCR: Fabric-Detected Nx-Port-Detected
+    FC4s: FCP FC-NVMe
+    PortSymb: [1] "1"
+    NodeSymb: [63] "Emulex SN1720E2P FV14.4.473.14 DV14.2.0.17 HN:vmenode1 OS:Linux"
+    Fabric Port Name: 20:16:38:ba:b0:99:09:60 
+    Permanent Port Name: 10:00:5c:ba:2c:ff:6b:d0
+    Device type: Physical Initiator
+    Port Index: 22
+    Redirect: No 
+    Partial: No
+    LSAN: No
+    Slow Drain Device: No
+    Device link speed: 64G
+    Connected through AG: No
+    Real device behind AG: No
+    FCoE: No
+    Connected through FC-LAG: No
+    FC4 Features [FCP]: Initiator 
+    FC4 Features [FC-NVMe]: Initiator 
+The Local Name Server has 11 entries }

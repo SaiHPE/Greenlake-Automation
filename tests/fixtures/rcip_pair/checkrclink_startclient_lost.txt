@@ -1,0 +1,28 @@
+# checkrclink startclient 0:4:4 10.93.18.19 600 (rack13-ARCUS, 2026-11-03, Primera gateway 10.93.18.1 set)
+Running Client Side
+Running link test on:  0:4:4
+Test length (secs):    600
+Destination Addr:      10.93.18.19
+Local Device name:       eth12
+Adding route:            10.93.18.19 -> eth12
+Local IP Addr:           10.93.18.11
+Local Device name:       eth12
+
+------------------------------------------------------------
+Measuring link latency
+------------------------------------------------------------
+ 
+Pings Lost:               100 %
+ 
+============================================================
+TEST SUMMARY from 0:4:4 -> 10.93.18.19
+Test Started:     Tue Nov  3 22:53:23 IST 2026
+Test Finished:    Tue Nov  3 22:53:35 IST 2026
+============================================================
+
+No connection with remote side, check IP Address
+ 
+Link 0:4:4 is NOT SUITABLE for Remote Copy Use
+ 
+============================================================
+ 

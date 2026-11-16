@@ -1,0 +1,157 @@
+"""Zoning-context models: the array-side zoning VERIFY report and the read-only assisted zoning
+PLAN (ADR 0004 — the tool never writes to the switch).
+"""
+
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+from alletra_onboard.domain.shared import Fabric
+
+
+class ExpectedZone(BaseModel):
+    fabric: Fabric
+    switch_host: str
+    name: str               # computed zone name
+    host_wwpn: str          # normalized
+    array_wwpn: str         # normalized
+    present: bool = False    # already in the switch's active config?
+
+
+class ZoneRemediation(BaseModel):
+    """The exact, additive commands to create the missing zones on one fabric (preview before apply)."""
+
+    fabric: Fabric
+    switch_host: str
+    cfg_name: str           # the active config the zones are added to
+    commands: list[str]     # alicreate / zonecreate / cfgadd / cfgenable (never cfgsave-alone)
+
+
+class ZoningReport(BaseModel):
+    expected: list[ExpectedZone] = Field(default_factory=list)
+    remediations: list[ZoneRemediation] = Field(default_factory=list)
+    proper: bool = False     # every expected host zoned on both fabrics, none unverified
+    # Hosts confirmed zoned on BOTH fabrics. This is the provisioning gate (ADR 0012): the run
+    # proceeds for these and excludes the rest by name, rather than one global pass/fail. A partly
+    # racked cluster is the normal case — on 2026-08-31, .136 was zoned and provisionable while .47
+    # and .86 were not, and a global gate blocked the whole run.
+    zoned_hosts: list[str] = Field(default_factory=list)
+    # Expected hosts the array could NOT confirm on EITHER fabric — could be "not zoned" OR the host
+    # is simply offline/not logged in (the array can't tell the two apart). Surfaced, never silently
+    # passed; confirm the host is up, or cross-check the switch/ESXi.
+    unverified_hosts: list[str] = Field(default_factory=list)
+    # iSCSI-only hosts -> the array ports their IQN is logged in on ([] = not logged in). No zone needed.
+    iscsi_hosts: dict[str, list[str]] = Field(default_factory=dict)
+    source: str = "array"    # 'array' (showportdev ns) — verification needs no switch
+    notes: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class NsDevice(BaseModel):
+    """One device from the fabric name server (`nsshow` local / `nscamshow` remote) — the ONLY view
+    that sees unzoned-but-online devices, and richer than we first assumed. Measured on live VZ
+    switches (tests/fixtures/vz_fabric): NodeSymb carries the HOST's own name and OS
+    (``HN:DL360G11D24U25 OS:VMware ESXi 8.0.3``), an array port's PortSymb carries its serial and
+    n:s:p (``SGHD44LQLS - 0:3:1 - HPE64004-B``), and Device type classifies initiator vs target
+    outright — so the zoning builder can identify hosts from the switch alone, without vCenter
+    (which on a vault network is routinely unreachable, and names hosts by IP anyway).
+
+    TRAP the model exists to make unmissable: every FC-NVMe-capable array port registers TWICE —
+    the physical FCP entry plus an ``NPIV Target`` shadow with its own WWPN. Zones must pair
+    physical ports only; use the ``is_physical_*`` properties, never bare membership."""
+
+    wwpn: str                   # normalized (16 hex)
+    device_type: str = ""       # raw: "Physical Initiator" | "Physical Target" | "NPIV Target" | ...
+    port_symb: str = ""
+    node_symb: str = ""
+    permanent_wwpn: str = ""    # an NPIV entry points at its physical port here (normalized)
+    host_name: str = ""         # from NodeSymb "HN:<name>" ("" when not advertised)
+    os: str = ""                # from NodeSymb "OS:<text>"
+    array_serial: str = ""      # from an array port's PortSymb ("" for hosts)
+    array_nsp: str = ""         # n:s:p from the same ("" for hosts)
+
+    @property
+    def is_npiv(self) -> bool:
+        return "npiv" in self.device_type.lower()
+
+    @property
+    def is_physical_initiator(self) -> bool:
+        return "initiator" in self.device_type.lower() and not self.is_npiv
+
+    @property
+    def is_physical_target(self) -> bool:
+        return "target" in self.device_type.lower() and not self.is_npiv
+
+
+class AliasedWwpn(BaseModel):
+    """One WWPN in the zoning plan — a host HBA port or an array target port — with the alias(es) the
+    switch already has for it (there can be several on a shared fabric) and a suggested alias to
+    pre-fill (the convention-matching existing one, else empty for the operator to type). See ADR 0004."""
+
+    wwpn: str                                   # normalized (16 hex)
+    display: str                                # colon-lowercase (Brocade form)
+    role: Literal["host", "array"]
+    fabric: str = ""                            # "F1" | "F2" | "" (offline / on neither fabric)
+    nsp: str = ""                               # array target port n:s:p ("" for a host)
+    node: int | None = None                     # array controller node (from n:s:p); None for a host
+    host_name: str = ""                         # owning host ("" for an array port, or a host that
+    #                                             advertises no name — QLogic HBAs publish no HN:)
+    host_source: str = ""                       # where the host identity came from:
+    #                                             "vcenter" | "sheet" (Hosts tab) | "array" (showhost -d)
+    #                                             | "switch" (declared switch's local NS) | "" (array port)
+    os: str = ""                                # host OS where a source reports one ("" otherwise)
+    placed_on_switch: str = ""                  # a host reached via nscamshow: the REMOTE switch in this
+    #                                             fabric it is plugged into ("" = the declared switch)
+    existing_aliases: list[str] = Field(default_factory=list)  # every alias the switch has for this WWPN
+    suggested_alias: str = ""                   # pre-fill: the convention match among EXISTING aliases,
+    #                                             else "" — the render fallback, so an unnamed pair is
+    #                                             reported, never invented
+    proposed_alias: str = ""                    # UI pre-fill ONLY when no alias exists: a name built from
+    #                                             the HPE convention (<host>_hba<n> / <serial>_N<n>S<s>P<p>),
+    #                                             FOS-safe. Never used by render_commands as a fallback.
+    caution: str = ""                           # non-empty = select knowingly (e.g. an RCFC/Peer-labelled
+    #                                             array port: usually replication, but proven live to
+    #                                             carry host logins — flagged, never hard-dropped)
+
+
+class FabricZonePlan(BaseModel):
+    """The plan for one fabric: the host + array WWPNs present on it, and the SIST pairs to zone.
+
+    `pairs` is every CANDIDATE (host, array) pair; `already_zoned` is the subset the fabric's
+    effective configuration already permits (both WWPNs share a zone). The DELTA — what the
+    command preview may create — is pairs minus already_zoned. On a fully-zoned bed (VZ) that
+    delta is empty and the preview must emit NOTHING: proposing zones that already exist against
+    a production config is the failure mode this field exists to prevent (ADR 0004)."""
+
+    fabric: str                                 # "F1" | "F2"
+    switch_host: str
+    active_cfg: str = ""                        # e.g. F1_CFG (from cfgshow Effective)
+    switch_name: str = ""                       # switchshow switchName of the declared switch
+    fabric_name: str = ""                       # fabricshow "Fabric Name" ("" when unnamed / unread)
+    switch_count: int = 0                       # switches in this fabric per fabricshow (0 = unread)
+    hosts: list[AliasedWwpn] = Field(default_factory=list)        # host HBA ports on this fabric
+    array_ports: list[AliasedWwpn] = Field(default_factory=list)  # array target ports online on this fabric
+    pairs: list[tuple[str, str]] = Field(default_factory=list)    # (host_wwpn, array_wwpn) single-init-single-target
+    already_zoned: list[tuple[str, str]] = Field(default_factory=list)  # subset of pairs the active cfg covers
+    # "<host_wwpn>|<array_wwpn>" -> the effective zone name(s) that cover that pair. The operator's
+    # first question on the live screen was "zoned by which zone?" — the answer was in the cfgshow we
+    # had already read and thrown away.
+    zone_names: dict[str, list[str]] = Field(default_factory=dict)
+    defined_names: list[str] = Field(default_factory=list)  # every alias/zone/cfg name the switch defines
+
+
+class ZoningPlan(BaseModel):
+    """The read-only assisted zoning plan (ADR 0004): per-fabric host↔array SIST pairs + aliases, for
+    the operator to name and the SAN team to apply. The tool never writes to the switch."""
+
+    fabrics: list[FabricZonePlan] = Field(default_factory=list)
+    offline_hosts: list[str] = Field(default_factory=list)  # host "name (wwpn)" on no fabric -> cable+power
+    notes: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+# FabricStageResult / ZoningStageResult lived here until 2026-09-02. They modelled the outcome of
+# the tool writing zones to a switch, which it no longer does — the command set is handed to a
+# consultant instead, so there is no tool-side outcome to model. See ADR 0012.

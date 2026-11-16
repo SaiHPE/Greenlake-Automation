@@ -1,0 +1,342 @@
+"""Tier-2 path verification (ADR 0010): after the array-side export, read `showvlun -a` back and
+report, per host, whether the exported LUN is actually LIVE — over how many HBAs and which fabrics —
+or "0 paths (host off / not zoned)". Strictly read-only; it *reports*, it never gates provisioning
+(a `no_path` host is fine — the VLUN exists and activates the moment the host is on + zoned).
+
+Calibrated against a live Alletra MP (OS 10.5.51) `showvlun -a`:
+
+    Lun VVName                HostName              -Host_WWN/iSCSI_Name/Host_NQN- Port  Type     Status ID
+      4 2nd_..._CRV_LZ_Infra  CRV_VZ_DL360G11D24U25 10009440C9D01212              0:3:1 host set active 10
+
+`showvlun -a` lists only ACTIVE VLUNs, so a row here == a live path. Status is the ALUA path state:
+`active` (active-optimized) and `nonopt` (active-non-optimized) both carry / can carry I/O — both count
+as a live path. `Type` is one or two words (`host` / `host set`), so we anchor parsing on the unambiguous
+`n:s:p` port token rather than fixed column offsets (tolerates a spaced volume name).
+"""
+
+from __future__ import annotations
+
+import re
+
+from alletra_onboard.application.provisioning import storage_provision
+from alletra_onboard.application.provisioning.clients import (
+    make_array_cli,
+    make_vcenter,
+    make_wsapi,
+)
+from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.provisioning import (
+    EsxiLun,
+    EsxiLunPaths,
+    HostPathStatus,
+    PathVerification,
+    ProvisioningIntent,
+    VolumePath,
+)
+from alletra_onboard.domain.shared import normalize_wwpn
+
+_NSP = re.compile(r"^\d+:\d+:\d+$")
+# ALUA states that mean the path carries (or can carry) I/O — i.e. a LIVE path.
+_LIVE_STATUS = {"active", "nonopt"}
+
+
+def _fabric(port: str, fabric_by_port: dict[str, str] | None = None) -> str:
+    """The fabric a path's array port sits on: the DISCOVERED (switch-derived) fabric when we have
+    it, card-port parity only as the fallback (ADR 0009). Parity alone is a measured hazard: on
+    4UW0004497 port 0:3:4 is even-parity but cabled to the F1 switch, so parity would count a
+    0:3:1 + 0:3:4 host as redundant across both fabrics when both its paths are on F1 — a false
+    redundancy claim, which is the one wrong answer a path VERIFIER must not produce."""
+    if fabric_by_port and port in fabric_by_port:
+        return fabric_by_port[port]
+    try:
+        return "odd" if int(port.split(":")[2]) % 2 == 1 else "even"
+    except (ValueError, IndexError):
+        return "?"
+
+
+def parse_showvlun_active(text: str) -> list[VolumePath]:
+    """`showvlun -a` -> [VolumePath] (one per active path). Columns:
+    Lun VVName HostName Host_WWN Port Type[ set] Status ID. Anchored on the n:s:p port token."""
+    out: list[VolumePath] = []
+    for line in (text or "").splitlines():
+        p = line.split()
+        if len(p) < 7 or not p[0].isdigit():
+            continue
+        port_idx = next((i for i, tok in enumerate(p) if _NSP.match(tok)), None)
+        if port_idx is None or port_idx < 3:
+            continue  # header / not a data row
+        host_wwn = normalize_wwpn(p[port_idx - 1])
+        protocol = "fc"
+        if len(host_wwn) != 16:
+            if not p[port_idx - 1].lower().startswith(("iqn.", "eui.")):
+                continue  # NVMe NQN — not verified here
+            host_wwn, protocol = p[port_idx - 1].lower(), "iscsi"
+        out.append(VolumePath(
+            lun=int(p[0]),
+            volume=" ".join(p[1 : port_idx - 2]),  # VVName may be multi-token; HostName is p[port_idx-2]
+            host=p[port_idx - 2],
+            host_wwpn=host_wwn,
+            port=p[port_idx],
+            status=p[-2].lower(),
+            protocol=protocol,
+        ))
+    return out
+
+
+def verify_paths(
+    expected_by_host: dict[str, set[str]],
+    vlun_paths: list[VolumePath],
+    fabric_by_port: dict[str, str] | None = None,
+    wwpns_by_host: dict[str, set[str]] | None = None,
+    switch_by_fabric: dict[str, str] | None = None,
+) -> PathVerification:
+    """Per host, classify the live paths to the volumes EXPORTED TO THAT HOST (from `showvlun -a`).
+
+    `expected_by_host` is {host: volumes exported to it}, so the verifier reports on what was
+    actually presented rather than on the intent as a whole. It replaces a (target_hosts,
+    target_volumes) pair that crossed every host with every volume: on 2026-08-31 that told `.47`
+    and `.86` they had a dead export of a volume only ever destined for `.136`. An empty volume set
+    means "this host is a target but nothing is exported to it yet", which is a real state now that
+    exports can be held back while host objects are created (ADR 0012 revised).
+
+    verdict: `live` (paths on BOTH fabrics), `partial` (one fabric only), `no_path` (none — host off
+    or not zoned). `fabric_by_port` (n:s:p -> odd/even, from discovery's switch-derived resolution)
+    corrects the parity fallback on non-standard cabling — see _fabric.
+
+    `wwpns_by_host` maps a target host to its HBA WWPNs, and a path whose Host_WWN is one of them
+    counts for that host EVEN when the array's host-object name differs. The two names come from
+    different namespaces — vCenter reports bare IPs/FQDNs while array host objects carry names like
+    `CRV_VZ_DL360G11D24U25` (measured live: zero exact-name matches across three arrays) — so an
+    exact-name join would report `no_path` for every pre-existing host, the one wrong answer a path
+    verifier must not produce. The name match remains as the secondary key for hosts with no
+    discovered HBAs.
+
+    `switch_by_fabric` (odd/even -> switch logical name, from discovery) lets the sentence name the
+    fabrics the way the SAN team does (SPEC-004 R5); without it the slot labels are shown.
+    """
+    report = PathVerification()
+    if not expected_by_host:
+        report.notes.append("No exports to verify.")
+        return report
+    names = switch_by_fabric or {}
+
+    def label(fabric: str) -> str:
+        return names.get(fabric) or fabric
+
+    for host in sorted(expected_by_host):
+        expected = expected_by_host[host]
+        hba_wwpns = (wwpns_by_host or {}).get(host, set())
+        paths = [
+            vp for vp in vlun_paths
+            if (vp.host == host or vp.host_wwpn in hba_wwpns)
+            and vp.status in _LIVE_STATUS
+            and (not expected or vp.volume in expected)
+        ]
+        live_vols = sorted({vp.volume for vp in paths})
+        # PER HOST, from what was actually exported TO THIS HOST. Until 2026-09-02 this was
+        # "every intent volume minus the live ones" for every host verified, so a host in no export
+        # row at all was reported as having an export with no path — measured on 2026-08-31, where
+        # .47 and .86 were both told they had a dead export of a volume destined only for .136.
+        dead_vols = sorted(expected - set(live_vols))
+        fc_paths = [vp for vp in paths if vp.protocol == "fc"]
+        iscsi_ports = sorted({vp.port for vp in paths if vp.protocol == "iscsi"})
+        fabrics = sorted({_fabric(vp.port, fabric_by_port) for vp in fc_paths} - {"?"})
+        fabric_names = [names[f] for f in fabrics if f in names] if all(f in names for f in fabrics) else []
+        hbas = len({vp.host_wwpn for vp in paths})
+        per_lun: dict[int, int] = {}
+        for vp in paths:
+            per_lun[vp.lun] = per_lun.get(vp.lun, 0) + 1
+        lun_count = len(per_lun)
+        ppl_min, ppl_max = (min(per_lun.values()), max(per_lun.values())) if per_lun else (0, 0)
+        ppl_txt = f"{ppl_min}" if ppl_min == ppl_max else f"{ppl_min}–{ppl_max}"
+        initiators = "HBA(s)" if fc_paths else "initiator(s)"
+        counts = f"{lun_count} LUN(s) · {hbas} {initiators} · {ppl_txt} path(s) per LUN"
+
+        if not paths:
+            verdict = "no_path"
+            # Only claim an export exists when one does. The old wording asserted it unconditionally
+            # and was printed for volumes that had never been created, which reads as reassurance.
+            detail = (
+                f"0 live paths for {len(expected)} exported volume(s) — the host is off or not zoned; "
+                "each activates once it is on and zoned"
+                if expected else
+                "0 live paths, and nothing is exported to this host"
+            )
+        elif not fc_paths:
+            # iSCSI has no fabrics; redundancy is paths through both controller nodes.
+            nodes = sorted({port.split(":")[0] for port in iscsi_ports})
+            verdict = "live" if len(nodes) >= 2 else "partial"
+            detail = f"{counts} · iSCSI on {', '.join(iscsi_ports)}" + (
+                " · both nodes" if len(nodes) >= 2 else f" · node {nodes[0]} only — no path through the other node"
+            )
+        elif len(fabrics) >= 2:
+            verdict = "live"
+            detail = f"{counts} · both fabrics ({', '.join(label(f) for f in fabrics)})"
+        else:
+            verdict = "partial"
+            missing = "even" if fabrics == ["odd"] else "odd"
+            only = names.get(fabrics[0]) or f"{fabrics[0]} fabric"
+            lacks = names.get(missing) or f"the {missing} fabric"
+            detail = f"{counts} · {only} only — missing {lacks} (single fabric)"
+        if fc_paths and iscsi_ports:
+            detail += f"; also iSCSI on {', '.join(iscsi_ports)}"
+
+        if dead_vols and paths:
+            detail += f"; exported but no path yet: {', '.join(dead_vols)}"
+        # WWPN-matched under a different array host-object name: say which, so the operator can
+        # correlate this verdict with `showhost` output on the array.
+        object_names = sorted({vp.host for vp in paths if vp.host != host})
+        if object_names:
+            detail += f" [array host object: {', '.join(object_names)}]"
+        report.hosts.append(HostPathStatus(
+            host=host, verdict=verdict, hbas_with_paths=hbas, fabrics=fabrics, fabric_names=fabric_names,
+            lun_count=lun_count, paths_per_lun=ppl_min,
+            live_volumes=live_vols, dead_volumes=dead_vols, detail=detail,
+        ))
+    return report
+
+
+def attach_esxi_view(
+    report: PathVerification,
+    expected_by_host: dict[str, set[str]],
+    esxi_luns: list[EsxiLun] | None,
+    wwn_by_volume: dict[str, str] | None,
+    esxi_hosts: set[str],
+    *,
+    read_error: str = "",
+) -> PathVerification:
+    """SPEC-013: add the HOST's view to each row. Joined on the volume WWN (R2) — the ESXi canonical
+    name is `naa.<wwn lower-case>`; names are never compared. The array-side `verdict` is untouched
+    (see HostPathStatus): a LUN exported a minute ago is absent from ESXi until a rescan, and the one
+    actionable sentence for that is R4's, not a downgrade."""
+    if read_error:
+        for row in report.hosts:
+            row.esxi_state = "not_read"
+            row.esxi_note = f"ESXi view: not read ({read_error})"
+        return report
+    wwns = {name: w.lower() for name, w in (wwn_by_volume or {}).items() if w}
+    by_host_naa: dict[str, dict[str, EsxiLun]] = {}
+    for lun in esxi_luns or []:
+        by_host_naa.setdefault(lun.host_name, {})[lun.naa] = lun
+    for row in report.hosts:
+        expected = sorted(expected_by_host.get(row.host, set()))
+        if row.host not in esxi_hosts:
+            row.esxi_state = "not_in_vcenter"
+            row.esxi_note = "ESXi view: n/a — not an ESXi host in this vCenter"
+            continue
+        if not expected:
+            row.esxi_state = "not_checked"
+            row.esxi_note = "ESXi view: nothing exported to this host"
+            continue
+        devices = by_host_naa.get(row.host, {})
+        luns: list[EsxiLunPaths] = []
+        for vol in expected:
+            wwn = wwns.get(vol, "")
+            naa = f"naa.{wwn}" if wwn else ""
+            dev = devices.get(naa) if naa else None
+            luns.append(EsxiLunPaths(
+                volume=vol, naa=naa, present=dev is not None,
+                paths_total=dev.paths_total if dev else 0, paths_active=dev.paths_active if dev else 0,
+                paths_dead=dev.paths_dead if dev else 0, adapters=list(dev.adapters) if dev else [],
+            ))
+        row.esxi_luns = luns
+        absent = [lp.volume for lp in luns if not lp.present]
+        no_wwn = [lp.volume for lp in luns if not lp.naa]
+        if absent:
+            row.esxi_state = "absent"
+            seen = len(luns) - len(absent)
+            row.esxi_note = (
+                f"ESXi sees {seen} of {len(luns)} exported volume(s); no device yet for {', '.join(absent)} — "
+                "rescan the host's storage adapters in vCenter, then Verify paths again"
+            )
+            if no_wwn:
+                row.esxi_note += f" (no WWN read for {', '.join(no_wwn)})"
+            continue
+        active_min = min(lp.paths_active for lp in luns)
+        total_min = min(lp.paths_total for lp in luns)
+        dead = sum(lp.paths_dead for lp in luns)
+        adapters = sorted({a for lp in luns for a in lp.adapters})
+        summary = (
+            f"ESXi sees {len(luns)} volume(s) · {active_min}"
+            + (f"–{max(lp.paths_active for lp in luns)}" if any(lp.paths_active != active_min for lp in luns) else "")
+            + f" active of {total_min} path(s) per LUN"
+            + (f" · {', '.join(adapters)}" if adapters else "")
+        )
+        if active_min >= 2 and dead == 0:
+            row.esxi_state = "ok"
+            row.esxi_note = summary
+        else:
+            row.esxi_state = "degraded"
+            why = f"{dead} dead path(s)" if dead else "one active path"
+            row.esxi_note = f"{summary} — {why}"
+    return report
+
+
+def verify_provisioned_paths(
+    intent: ProvisioningIntent,
+    discovery: DiscoveryReport,
+    *,
+    reachable_hosts: set[str],
+    array_cli_factory=make_array_cli,
+    vcenter_factory=make_vcenter,
+    wsapi_factory=make_wsapi,
+    zoning_plan: dict | None = None,
+) -> PathVerification:
+    """Flow hook: read `showvlun -a` from the array (read-only SSH) and verify the exported LUNs are
+    actually LIVE on the hosts they were presented to.
+
+    Targets come from the PROVISIONING INTENT's exports, resolved per host — not from the vCenter
+    inventory. Verifying every host vCenter happens to know produced verdicts about machines this run
+    never touched (2026-08-31: `.47` and `.86`, neither of them in any export row, were both reported
+    as having a dead export). Read-only, and it reports rather than gating (ADR 0010)."""
+    try:
+        with array_cli_factory(intent.array) as cli:
+            text = cli.run("showvlun -a")
+    except Exception as exc:  # noqa: BLE001
+        return PathVerification(error=f"Could not read 'showvlun -a' over SSH: {exc}")
+    expected_by_host = storage_provision.exported_volumes_by_host(intent, discovery, reachable_hosts, zoning_plan)
+    # The join key between "the hosts the run knows" and "the paths the array reports" is the HBA
+    # WWPN, never the name — the two namespaces don't intersect on real arrays (see verify_paths).
+    # SPEC-003: the hosts come from the same union plan and apply used, so a sheet-declared or
+    # fabric-named host is verified, not reported as pathless because vCenter never heard of it.
+    wwpns_by_host: dict[str, set[str]] = {
+        name: {normalize_wwpn(w) for w in wwpns}
+        for name, wwpns in storage_provision._hosts_by_name(discovery, intent, zoning_plan).items()
+    }
+    # Discovery resolved each port's REAL fabric from the switch it attaches to (parity is only its
+    # fallback) — hand that to the classifier so non-standard cabling can't fake dual-fabric redundancy.
+    fabric_by_port = {
+        p.label: p.fabric for p in discovery.array_ports if p.protocol == "fc" and p.fabric
+    }
+    # The switch each fabric slot maps to, when discovery resolved it (showportdev fcfabric) — so the
+    # sentence says SAN6700R13U38, not "odd" (SPEC-004 R5).
+    switch_by_fabric: dict[str, str] = {}
+    for p in discovery.array_ports:
+        if p.protocol == "fc" and p.fabric and getattr(p, "fabric_switch", ""):
+            switch_by_fabric.setdefault(p.fabric, p.fabric_switch)
+    report = verify_paths(
+        dict(expected_by_host), parse_showvlun_active(text), fabric_by_port, wwpns_by_host,
+        switch_by_fabric=switch_by_fabric,
+    )
+    if not report.hosts:
+        return report
+    # SPEC-013: the host's own view. Two more reads, both read-only, both degrading to a note (R6).
+    esxi_hosts = {h.host_name for h in discovery.host_hbas}
+    read_error = ""
+    wwn_by_volume: dict[str, str] = {}
+    esxi_luns: list[EsxiLun] = []
+    try:
+        with wsapi_factory(intent.array) as wsapi:
+            wwn_by_volume = {v.name: v.wwn for v in wsapi.volumes() if v.wwn}
+    except Exception as exc:  # noqa: BLE001
+        read_error = f"volume WWNs over WSAPI: {str(exc)[:160]}"
+    # With no vCenter inventory, "not an ESXi host in this vCenter" would be a guess about every host.
+    if not read_error and any(n.startswith("vCenter discovery failed") for n in discovery.notes):
+        read_error = "vCenter was not reached during Discovery"
+    if not read_error and esxi_hosts & set(expected_by_host):
+        try:
+            with vcenter_factory(intent.vcenter) as vcenter:
+                esxi_luns = vcenter.host_luns()
+        except Exception as exc:  # noqa: BLE001
+            read_error = str(exc)[:200]
+    return attach_esxi_view(report, dict(expected_by_host), esxi_luns, wwn_by_volume, esxi_hosts, read_error=read_error)

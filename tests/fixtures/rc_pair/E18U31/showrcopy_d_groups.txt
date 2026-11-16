@@ -1,0 +1,46 @@
+# showrcopy -d groups
+
+Remote Copy System Information
+Status: Started, Normal
+
+Group Information
+
+Name          ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                      
+300gb.r188150   22 AlletraMP_E18U31 Started  Secondary  Sync     SSD_r6       SSD_r6     auto_recover,auto_synchronize
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  300gb        1521 300gb         269 Synced        none      none     NA      NA     NA     NA            300gb    300gb    
+  Test         1522 Test         9342 Synced        none      none     NA      NA     NA     NA            300gb    300gb    
+
+Name             ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                                    
+APP_Test.r188150   13 AlletraMP_E18U31 Started  Primary    Sync     SSD_r6       SSD_r6     auto_recover,auto_synchronize,active_active
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  APP.test.vv   531 APP.test.vv  4754 Synced        none      none     NA      NA     NA     NA            APP_Test APP_Test 
+
+Name                      ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Intern_Automation.r188150   17 AlletraMP_E18U31 Started  Secondary  Sync     SSD_r6       SSD_r6            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  Automation1   687 Automation1  6199 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation2   688 Automation2  6200 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation3   689 Automation3  6201 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation4   690 Automation4  6202 Synced        none      none     NA      NA     NA     NA            NA       NA       
+
+Name                       ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Intern_Automation2.r188150   21 AlletraMP_E18U31 Started  Secondary  Sync     SSD_r6       SSD_r6            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  Automation5  1313 Automation5  8288 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation6  1314 Automation6  8290 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation7  1315 Automation7  8291 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation8  1316 Automation8  8292 Synced        none      none     NA      NA     NA     NA            NA       NA       
+
+Name             ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Test-RCG.r188150   14 AlletraMP_E18U31 Started  Secondary  Sync                                    
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  TestRC_VV1    554 TestRC_VV1   4838 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  TestRC_VV2    555 TestRC_VV2   4839 Synced        none      none     NA      NA     NA     NA            NA       NA       
+
+Name              ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Test-RCG2.r188150   18 AlletraMP_E18U31 Started  Secondary  Sync                                    
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  TestRC2_VV1  1000 TestRC2_VV1  6857 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  TestRC2_VV2  1001 TestRC2_VV2  6858 Synced        none      none     NA      NA     NA     NA            NA       NA       
+

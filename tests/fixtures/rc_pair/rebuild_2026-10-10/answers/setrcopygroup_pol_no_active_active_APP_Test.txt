@@ -1,0 +1,2 @@
+# setrcopygroup pol no_active_active APP_Test
+Error: Cannot remove active_active policy: Operation failed. Remote group APP_Test.r188150 contains an exported Peer Persistence volume (Id=531).  Please unexport geoclustered volumes, or remove from relevant groups and retry.

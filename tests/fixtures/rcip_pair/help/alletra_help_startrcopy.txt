@@ -1,0 +1,29 @@
+# help startrcopy
+startrcopy - Enable Remote Copy
+
+SYNTAX
+    startrcopy
+
+DESCRIPTION
+    The startrcopy command starts the Remote Copy Service.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopy_start right
+
+OPTIONS
+    None.
+
+SPECIFIERS
+    None.
+
+NOTES
+    Access to all domains is required to run this command.
+
+    This command must be executed before any other Remote Copy commands.
+
+EXAMPLES
+    The following example starts Remote Copy on a system:
+
+        cli% startrcopy
+

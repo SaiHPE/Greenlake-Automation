@@ -1,0 +1,108 @@
+{
+  "outcomes": [
+    {
+      "kind": "test_volume",
+      "name": "zz_rc_test_v01",
+      "where": "A",
+      "status": "created",
+      "detail": "1 GiB tpvv on SSD_r6"
+    },
+    {
+      "kind": "test_vvset",
+      "name": "zz_rc_test",
+      "where": "A",
+      "status": "created",
+      "detail": "1 member(s)"
+    },
+    {
+      "kind": "group",
+      "name": "zz_rc_vvs_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "async → AlletraMP_E18U31, period 300 s"
+    },
+    {
+      "kind": "policy",
+      "name": "zz_rc_vvs_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "auto_recover=true, auto_synchronize=true, period 300 s"
+    },
+    {
+      "kind": "volume_admit",
+      "name": "zz_rc_vol01",
+      "where": "A",
+      "status": "created",
+      "detail": "→ zz_rc_vvs_rcg, secondary zz_rc_vol01 on SSD_r6"
+    },
+    {
+      "kind": "peer_vvset",
+      "name": "zz_rc_vvs_rc",
+      "where": "B",
+      "status": "created",
+      "detail": "1 member(s)"
+    },
+    {
+      "kind": "start",
+      "name": "zz_rc_vvs_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "started"
+    },
+    {
+      "kind": "group",
+      "name": "zz_rc_test_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "async → AlletraMP_E18U31, period 300 s"
+    },
+    {
+      "kind": "policy",
+      "name": "zz_rc_test_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "auto_recover=true, auto_synchronize=true, period 300 s"
+    },
+    {
+      "kind": "volume_admit",
+      "name": "zz_rc_test_v01",
+      "where": "A",
+      "status": "created",
+      "detail": "→ zz_rc_test_rcg, secondary zz_rc_test_v01 on SSD_r6"
+    },
+    {
+      "kind": "peer_vvset",
+      "name": "zz_rc_test_rc",
+      "where": "B",
+      "status": "created",
+      "detail": "1 member(s)"
+    },
+    {
+      "kind": "start",
+      "name": "zz_rc_test_rcg",
+      "where": "A",
+      "status": "created",
+      "detail": "started"
+    }
+  ],
+  "removals_a": [
+    "stoprcopygroup -f zz_rc_vvs_rcg",
+    "dismissrcopyvv -f -removevv zz_rc_vol01 zz_rc_vvs_rcg",
+    "removercopygroup -f zz_rc_vvs_rcg",
+    "stoprcopygroup -f zz_rc_test_rcg",
+    "dismissrcopyvv -f -removevv zz_rc_test_v01 zz_rc_test_rcg",
+    "removercopygroup -f zz_rc_test_rcg",
+    "removevvset -f zz_rc_test",
+    "removevv -f zz_rc_test_v01"
+  ],
+  "removals_b": [
+    "removevvset -f zz_rc_vvs_rc",
+    "removevvset -f zz_rc_test_rc"
+  ],
+  "notes": [],
+  "groups_created": [
+    "zz_rc_vvs_rcg",
+    "zz_rc_test_rcg"
+  ],
+  "error": null
+}

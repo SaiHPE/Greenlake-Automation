@@ -1,0 +1,41 @@
+# showsys -d
+------------------------General------------------------
+System Name                  :         AlletraMP_E18U31
+System Model                 :   HPE Alletra Storage MP
+Serial Number                :               CZ2D3209YV
+Product Number               :                   S1R06A
+System ID                    :                  0x2DEF2
+Number of Nodes              :                        2
+Master Node                  :                        1
+Nodes Online                 :                      0,1
+Nodes in Cluster             :                      0,1
+Chunklet Size (MiB)          :                     1024
+Minimum PW length            :                        8
+Minimum PW character classes :                        1
+Subscription Status          :               Subscribed
+
+---Raw System Capacity (MiB)---
+Total Capacity     :   29278208
+Allocated Capacity :    5718406
+Free Capacity      :   20854394
+Failed Capacity    :          0
+
+-Usable System Capacity (MiB)--
+Total Capacity     :   21131040
+Allocated Capacity :    4956250
+Free Capacity      :   16174790
+
+----------Remote_Syslog_Status-----------
+Active              :                   1
+General Server      :   10.56.56.46:30514
+General Connection  :                 UDP
+RemoteSyslogProfile :                None
+Security Server     :     10.56.56.46:443
+Security Connection :                None
+
+--------System Descriptors--------
+Location    : 
+Owner       : 
+Contact     : Ramesh Kumar P, 8095234554, ramesh-kumar.p@hpe.com
+Comment     : 
+

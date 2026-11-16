@@ -1,0 +1,79 @@
+# help stoprcopygroup
+stoprcopygroup - Stops Remote Copy of one or more groups.
+
+SYNTAX
+    stoprcopygroup [option <arg>] [<group_name> | <pattern>...]
+
+DESCRIPTION
+    The stoprcopygroup command stops the Remote Copy functionality for the
+    specified Remote Copy volume groups.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopygroup_stop right
+
+OPTIONS
+    -nosnap
+        In synchronous mode, this option turns off the creation of snapshots.
+	This is useful if removercopygroup is to be run to remove Remote Copy.
+	In asynchronous periodic mode, this option deletes any current
+	synchronization snapshots. Using this option will result in a full
+	resync being required if the group is later restarted.
+
+    -t <targetname>
+        Only stop the group on the specified target.
+
+    -f
+        Specifies that the command is forced. If this option is not used, the
+        command requires confirmation before proceeding with its operation.
+
+    -pat
+        Specifies that specified patterns are treated as glob-style patterns
+        and all Remote Copy groups matching the specified pattern will be
+        stopped. The -pat option can specify a list of patterns. By default, confirmation
+        is required to proceed with the command unless the -f option is
+        specified. A maximum of 512 Remote Copy groups can be stopped using the -pat option.
+        -pat must be used if the <pattern> specifier is used.
+
+    -remote
+        This option can be used to stop the group from the secondary array.
+        It is ignored when issued from the primary array. Behaves the same way as if the
+        command is run on the primary array without this option. When run from the
+        secondary array without -t <target> option, it stops specified group on all targets
+        on primary side. When specified with -t <target>, it stops group on specified
+        target on primary.
+
+        On SLD and 3DC-PP configurations, this option will work only when all arrays support this option.
+
+SPECIFIERS
+    <group_name>
+        The name of the Remote Copy volume group to stop.
+
+    <pattern>
+        Specifies a glob-style pattern(see help on sub,globpat). This specifier
+        can be repeated to stop multiple groups. If this specifier
+        is not used, the <group_name> specifier must be used.
+
+NOTES
+    In sync mode, this command creates snapshots that are used for synchronizing
+    the primary and secondary groups if startrcopygroup is run later.
+
+    If a group target has the mirror_config policy set and the group is a primary
+    group, then this command will be mirrored to that target and the corresponding
+    secondary group will be stopped. If the mirror_config policy is set and the
+    group is a secondary, then this command will fail if the user does not specify
+    -remote option.
+
+    If the mirror_config policy is not set and this command is issued on a
+    secondary group, then the corresponding primary group will also be stopped
+    as a result of this command.
+
+EXAMPLES
+    The following example stops Remote Copy for Group1:
+
+        cli% stoprcopygroup Group1
+
+    The following example stops Remote Copy Groups that start with the name testgroup:
+
+	cli% stoprcopygroup -pat testgroup* 
+

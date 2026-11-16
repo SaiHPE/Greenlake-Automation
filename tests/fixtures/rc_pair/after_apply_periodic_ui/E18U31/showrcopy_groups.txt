@@ -1,0 +1,17 @@
+# showrcopy groups
+
+Remote Copy System Information
+Status: Started, Normal
+
+Group Information
+
+Name                   Target           Status   Role       Mode     Options                                               
+zz_rc_test_rcg.r188150 AlletraMP_E18U31 Started  Secondary  Periodic Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV        ID   RemoteVV        ID   SyncStatus    LastSyncTime           
+  zz_rc_test_v01 1802 zz_rc_test_v01 12449 Synced        2026-10-10 15:42:48 IST
+
+Name                  Target           Status   Role       Mode     Options                                               
+zz_rc_vvs_rcg.r188150 AlletraMP_E18U31 Started  Secondary  Periodic Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV      ID   RemoteVV      ID   SyncStatus    LastSyncTime           
+  zz_rc_vol01  1801 zz_rc_vol01  12447 Synced        2026-10-10 15:42:48 IST
+

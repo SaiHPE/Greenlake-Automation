@@ -1,0 +1,73 @@
+# help admitrcopylink
+admitrcopylink - Add one or more connections to a target system
+
+SYNTAX
+    For remote copy over IP(RCIP), the syntax for the admitrcopylink command is
+    as follows:
+    admitrcopylink <target_name> <N:S:P:IP_address>...
+
+    For remote copy over fibre channel(RCFC), the syntax for the admitrcopylink
+    command is as follows:
+    admitrcopylink <target_name> <N:S:P:WWN>...
+
+DESCRIPTION
+    The admitrcopylink command adds one or more links(connections) to a
+    remote copy target system.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopylink_admit right
+
+OPTIONS
+    None.
+
+SPECIFIERS
+    <target_name>
+        The target name, as specified with the creatercopytarget command.
+
+    <node:slot:port:IP_address>...
+        Specifies the node, slot, and port of the Ethernet port on the local
+        system and an IP address of the peer port on the target system.
+
+    <node:slot:port:WWN>...
+        Specifies the node, slot, and port of the Fibre Channel port on the
+        local system and World Wide Name (WWN) of the peer port on the target
+        system.
+
+NOTES
+    IP targets are made up of pairs composed of the node, slot and port of the
+    ethernet port on the local system and an IP address of the peer port on the
+    target system.
+
+    FC targets are made up of sets with the node, slot, and port of the FC port
+    on the local system and WWN of the peer port on the target system.  
+
+    This command concludes by returning a list of one or more links to be
+    admitted.
+
+      o For IP targets, the list consists of pairs composed of the node containing
+        the Ethernet port on the local system and an IP address of the peer port
+        on the target system.
+
+      o For FC targets, the list consists of sets with the node, slot, and port
+        of the FC port on the local system and the WWN of the peer port on the
+        target system.
+
+    Access to all domains is required to run this command.
+
+    The transport layer (RCIP or RCFC) is set using the creatercopytarget
+    command.
+
+    The specifier <node:IP_address> has been deprecated.
+
+EXAMPLES
+    The following example adds a link on System2 (targetname), node 1. The IP
+    address 193.1.2.11 specifies the address on the target system:
+
+        cli% admitrcopylink System2 1:1:1:193.1.2.11
+
+    The following WWN creates an RCFC link to target System2, which connects
+    to the local 3:3:2 (N:S:P) in the target system:
+
+        cli% admitrcopylink System2 3:3:2:20010002AC000060
+

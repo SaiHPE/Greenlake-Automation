@@ -1,0 +1,441 @@
+"""Component A — GreenLake REST provisioning orchestrator.
+
+Runs the per-array pipeline from archive/2026-06-planning/AUTOMATION_PLAN.md section 3:
+
+    discover -> add subscription -> register device -> assign application
+             -> apply subscription -> verify
+
+Every write is GET-guarded for idempotency, and every 202+Location response is polled
+to a terminal state. ``dry_run`` performs all the read/guard calls (safe GETs) but skips
+every POST/PATCH, so it prints a faithful preview of exactly what the live run would do.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
+
+import httpx
+
+from alletra_onboard.adapters.greenlake.devices import DevicesClient
+from alletra_onboard.adapters.greenlake.http_client import (
+    GreenLakeAsyncOperationError,
+    GreenLakeHttpClient,
+)
+from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogClient
+from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
+from alletra_onboard.application.onboarding.clients import make_greenlake, missing_credentials  # noqa: F401 - missing_credentials re-exported
+from alletra_onboard.config import Settings
+from alletra_onboard.domain.models import ArrayWorkItem, WorkflowPhase
+from alletra_onboard.domain.policies import redact
+
+ASSIGNED_STATE_TARGET = "ASSIGNED_TO_SERVICE"
+
+# Phase outcome statuses.
+DONE = "done"
+SKIPPED = "skipped"
+WOULD_DO = "would-do"  # dry-run: a write the live run would perform
+WARNING = "warning"  # non-fatal: the run continues and is still considered a success
+FAILED = "failed"
+
+
+@dataclass
+class PhaseOutcome:
+    phase: WorkflowPhase
+    status: str
+    detail: str
+
+
+@dataclass
+class ProvisionResult:
+    serial: str
+    succeeded: bool = False
+    dry_run: bool = False
+    phases: list[PhaseOutcome] = field(default_factory=list)
+    device_id: str | None = None
+    subscription_id: str | None = None
+    subscription_available_quantity: str | None = None
+    service_manager_id: str | None = None
+    region: str | None = None
+    assigned_state: str | None = None
+    error: str | None = None
+
+
+class GreenLakeProvisioningService:
+    def __init__(
+        self,
+        *,
+        http: GreenLakeHttpClient,
+        devices: DevicesClient,
+        subscriptions: SubscriptionsClient,
+        service_catalog: ServiceCatalogClient,
+        progress: Callable[[WorkflowPhase, str], None] | None = None,
+        device_state_timeout: float = 300.0,
+    ) -> None:
+        self.http = http
+        self.devices = devices
+        self.subscriptions = subscriptions
+        self.service_catalog = service_catalog
+        self._progress = progress or (lambda phase, message: None)
+        self.device_state_timeout = device_state_timeout
+
+    async def provision(self, item: ArrayWorkItem, *, dry_run: bool = False) -> ProvisionResult:
+        result = ProvisionResult(serial=item.serial_number, dry_run=dry_run)
+        try:
+            await self._discover(item, result)
+            await self._add_subscription(item, result, dry_run=dry_run)
+            await self._register_device(item, result, dry_run=dry_run)
+            await self._assign_application(result, dry_run=dry_run)
+            await self._apply_subscription(result, dry_run=dry_run)
+            await self._verify(result, dry_run=dry_run)
+            result.succeeded = not dry_run and all(p.status != FAILED for p in result.phases)
+        except Exception as exc:  # noqa: BLE001 - operator-facing pipeline must report, not crash.
+            detail = _exception_detail(exc)
+            phase = _current_phase(result)
+            result.error = detail
+            result.phases.append(PhaseOutcome(phase, FAILED, detail))
+            self._progress(phase, f"FAILED: {detail}")
+        return result
+
+    # ------------------------------------------------------------------ phases
+
+    async def _discover(self, item: ArrayWorkItem, result: ProvisionResult) -> None:
+        phase = WorkflowPhase.GL_DISCOVER_SERVICE
+        provisions = await self.service_catalog.service_manager_provisions(item.service_catalog_region_id)
+        if not provisions:
+            raise ProvisioningError(
+                f"No PROVISIONED Data Services service-manager found in region "
+                f"{item.service_catalog_region_id}. Add the Data Services service to this "
+                f"workspace and deploy it to the region (GreenLake UI: Manage Workspace -> "
+                f"Services), or correct service_catalog_region_id. Until a service is "
+                f"provisioned, the device cannot be assigned to an application instance."
+            )
+        provision = provisions[0]
+        result.service_manager_id = provision.service_manager_id
+        result.region = provision.region
+        detail = f"service-manager {provision.service_manager_id} in {provision.region}"
+        if len(provisions) > 1:
+            detail += f" ({len(provisions)} provisions; using the first)"
+        self._record(result, phase, DONE, detail)
+
+    async def _add_subscription(self, item: ArrayWorkItem, result: ProvisionResult, *, dry_run: bool) -> None:
+        phase = WorkflowPhase.GL_ADD_SUBSCRIPTION
+        key = item.subscription_key.get_secret_value()
+        existing = await self.subscriptions.find_by_key(key)
+        if existing:
+            result.subscription_id = _res_id(existing)
+            result.subscription_available_quantity = _available_quantity(existing)
+            self._record(result, phase, SKIPPED, f"subscription already present as {result.subscription_id}")
+            return
+        if dry_run:
+            self._record(result, phase, WOULD_DO, "would add subscription, then poll until active")
+            return
+        location = await self.subscriptions.add_subscription(key)
+        if location:
+            await self.http.poll_async(
+                location,
+                bucket="subscription_async_poll",
+                on_progress=lambda status, elapsed: self._progress(
+                    phase, f"waiting for the subscription to register: {status} ({elapsed:.0f}s)"
+                ),
+                settled=lambda: self._subscription_present(key),
+            )
+        added = await self.subscriptions.find_by_key(key)
+        if not added:
+            raise ProvisioningError("Subscription add completed but the key is still not queryable.")
+        result.subscription_id = _res_id(added)
+        result.subscription_available_quantity = _available_quantity(added)
+        self._record(result, phase, DONE, f"subscription added as {result.subscription_id}")
+
+    async def _register_device(self, item: ArrayWorkItem, result: ProvisionResult, *, dry_run: bool) -> None:
+        phase = WorkflowPhase.GL_REGISTER_DEVICE
+        existing = await self.devices.find_by_serial(item.serial_number)
+        if existing:
+            result.device_id = _res_id(existing)
+            self._record(result, phase, SKIPPED, f"device already registered as {result.device_id}")
+            return
+        if dry_run:
+            # Validate the device payload against GreenLake (dry-run=true) without creating it.
+            await self.devices.add_storage_device(item.serial_number, item.part_number, item.tags, dry_run=True)
+            self._record(
+                result, phase, WOULD_DO,
+                f"device payload validated by API (dry-run); would register serial={item.serial_number}",
+            )
+            return
+        location = await self.devices.add_storage_device(item.serial_number, item.part_number, item.tags)
+        if location:
+            # The async-operation resource can stay non-terminal long after the device is really
+            # registered (MEASURED live: inventory showed it registered + ASSIGNED_TO_SERVICE while
+            # the operation never settled and this poll ran on in silence). So report every poll,
+            # and stop as soon as the SERIAL IS IN INVENTORY — that is the outcome we are waiting
+            # for; the operation resource is only a description of it.
+            await self.http.poll_async(
+                location,
+                bucket="device_async_poll",
+                on_progress=lambda status, elapsed: self._progress(
+                    phase, f"waiting for GreenLake to register {item.serial_number}: {status} ({elapsed:.0f}s)"
+                ),
+                settled=lambda: self._serial_in_inventory(item.serial_number),
+            )
+        added = await self.devices.find_by_serial(item.serial_number)
+        if not added:
+            raise ProvisioningError("Device add completed but the serial is still not in inventory.")
+        result.device_id = _res_id(added)
+        self._record(result, phase, DONE, f"device registered as {result.device_id}")
+
+    async def _subscription_present(self, key: str) -> bool:
+        """Is the subscription key queryable yet? Ends the add poll early. Unreadable = 'not yet'."""
+        try:
+            return await self.subscriptions.find_by_key(key) is not None
+        except Exception:  # noqa: BLE001
+            return False
+
+    async def _serial_in_inventory(self, serial: str) -> bool:
+        """Is the device visible in inventory yet? Used to end an async poll early. A failure to
+        answer must never end the poll — an unreachable read is 'not yet', not 'done'."""
+        try:
+            return await self.devices.find_by_serial(serial) is not None
+        except Exception:  # noqa: BLE001
+            return False
+
+    async def _assign_application(self, result: ProvisionResult, *, dry_run: bool) -> None:
+        phase = WorkflowPhase.GL_ASSIGN_APPLICATION
+        if result.service_manager_id is None:
+            return
+        if result.device_id is None:
+            # Only reachable in dry-run before a real registration exists.
+            self._record(result, phase, WOULD_DO, "would assign application after the device is registered")
+            return
+        device = await self.devices.get(result.device_id)
+        if _application_id(device) == result.service_manager_id and _device_region(device) == result.region:
+            result.assigned_state = _assigned_state(device)
+            self._record(result, phase, SKIPPED, "device already assigned to this application/region")
+            return
+        if dry_run:
+            self._record(result, phase, WOULD_DO, f"would assign application {result.service_manager_id} / {result.region}")
+            return
+        location = await self.devices.assign_application(result.device_id, result.service_manager_id, result.region or "")
+        if location:
+            await self.http.poll_async(
+                location,
+                bucket="device_async_poll",
+                on_progress=lambda status, elapsed: self._progress(
+                    phase, f"waiting for the application assignment: {status} ({elapsed:.0f}s)"
+                ),
+                settled=lambda: self._device_assigned(result.device_id or ""),
+            )
+        device = await self._wait_for_device_state(result.device_id, ASSIGNED_STATE_TARGET)
+        result.assigned_state = _assigned_state(device)
+        self._record(result, phase, DONE, f"assignedState={result.assigned_state}")
+
+    async def _apply_subscription(self, result: ProvisionResult, *, dry_run: bool) -> None:
+        phase = WorkflowPhase.GL_APPLY_SUBSCRIPTION
+        if result.device_id is None or result.subscription_id is None:
+            if dry_run:
+                self._record(result, phase, WOULD_DO, "would apply subscription after device + subscription exist")
+            return
+        device = await self.devices.get(result.device_id)
+        if result.subscription_id in _subscription_ids(device):
+            self._record(result, phase, SKIPPED, "subscription already applied to the device")
+            return
+        if dry_run:
+            self._record(result, phase, WOULD_DO, f"would apply subscription {result.subscription_id}")
+            return
+        # Non-fatal: the device is already registered + ASSIGNED_TO_SERVICE (which is what
+        # clears cloudinit's fail-prov gates). The subscription is also applied by the DSCC
+        # Setup wizard, so a failure here is a warning, not a blocker for connectivity.
+        try:
+            location = await self.devices.apply_subscription(result.device_id, result.subscription_id)
+            if location:
+                await self.http.poll_async(location, bucket="device_async_poll")
+        except (GreenLakeAsyncOperationError, httpx.HTTPStatusError) as exc:
+            hint = ""
+            if str(result.subscription_available_quantity) == "0":
+                hint = (
+                    " — subscription availableQuantity is 0 (its seat is allocated elsewhere); "
+                    "free a seat, or apply it in the DSCC Setup wizard"
+                )
+            self._record(
+                result, phase, WARNING,
+                f"subscription apply failed (device is registered + assigned, so it can still "
+                f"connect){hint}: {_exception_detail(exc)}",
+            )
+            return
+        self._record(result, phase, DONE, f"subscription {result.subscription_id} applied")
+
+    async def _verify(self, result: ProvisionResult, *, dry_run: bool) -> None:
+        phase = WorkflowPhase.GL_VERIFY_DEVICE
+        if dry_run:
+            self._record(result, phase, WOULD_DO, "would verify assignedState == ASSIGNED_TO_SERVICE + subscription")
+            return
+        if result.device_id is None:
+            raise ProvisioningError("Cannot verify: no device id resolved.")
+        device = await self.devices.get(result.device_id)
+        result.assigned_state = _assigned_state(device)
+        # Connectivity-critical (these clear cloudinit's fail-prov gates): hard-fail if missing.
+        problems = []
+        if result.assigned_state != ASSIGNED_STATE_TARGET:
+            problems.append(f"assignedState={result.assigned_state!r} (expected {ASSIGNED_STATE_TARGET})")
+        if not _application_id(device):
+            problems.append("application.id is empty")
+        if problems:
+            raise ProvisioningError("Verification failed: " + "; ".join(problems))
+        # Subscription is licensing, not connectivity — missing it is a warning, not a failure.
+        if not _subscription_ids(device):
+            self._record(
+                result, phase, WARNING,
+                "registered + ASSIGNED_TO_SERVICE (the array can connect); subscription not yet "
+                "applied — apply it in the DSCC Setup wizard or once a seat is free",
+            )
+            return
+        self._record(result, phase, DONE, "assignedState=ASSIGNED_TO_SERVICE, application + subscription present")
+
+    # ----------------------------------------------------------------- helpers
+
+    async def _device_assigned(self, device_id: str) -> bool:
+        """Has the device already reached the assigned state? Ends the assignment poll early when
+        the operation resource lags behind the device's real state. Unreadable = 'not yet'."""
+        if not device_id:
+            return False
+        try:
+            return _assigned_state(await self.devices.get(device_id)) == ASSIGNED_STATE_TARGET
+        except Exception:  # noqa: BLE001
+            return False
+
+    async def _wait_for_device_state(self, device_id: str, target_state: str) -> dict[str, Any]:
+        """Wait for the device to reach `target_state`, reporting each check.
+
+        Like poll_async, this used to run to its full budget in silence — a second way for a live
+        step to look identical to a hung one. It deliberately RETURNS the last device on timeout
+        rather than raising: the caller records whatever state was reached.
+        """
+        deadline = time.monotonic() + self.device_state_timeout
+        started = time.monotonic()
+        device: dict[str, Any] = {}
+        while True:
+            device = await self.devices.get(device_id)
+            state = _assigned_state(device)
+            if state == target_state:
+                return device
+            elapsed = time.monotonic() - started
+            if time.monotonic() >= deadline:
+                self._progress(
+                    WorkflowPhase.GL_ASSIGN_APPLICATION,
+                    f"device state is still {state or 'unknown'} after {elapsed:.0f}s "
+                    f"(wanted {target_state}) — continuing",
+                )
+                return device
+            self._progress(
+                WorkflowPhase.GL_ASSIGN_APPLICATION,
+                f"waiting for assignedState={target_state}: currently {state or 'unknown'} ({elapsed:.0f}s)",
+            )
+            await asyncio.sleep(5.0)
+
+    def _record(self, result: ProvisionResult, phase: WorkflowPhase, status: str, detail: str) -> None:
+        result.phases.append(PhaseOutcome(phase, status, detail))
+        self._progress(phase, f"{status}: {detail}")
+
+
+class ProvisioningError(RuntimeError):
+    """A provisioning phase failed in a way the operator must act on."""
+
+
+def build_provisioning_service(
+    settings: Settings,
+    *,
+    progress: Callable[[WorkflowPhase, str], None] | None = None,
+) -> GreenLakeProvisioningService:
+    clients = make_greenlake(settings)
+    return GreenLakeProvisioningService(
+        http=clients.http,
+        devices=clients.devices,
+        subscriptions=clients.subscriptions,
+        service_catalog=clients.service_catalog,
+        progress=progress,
+    )
+
+
+def _record_phases_have(result: ProvisionResult, phase: WorkflowPhase) -> bool:
+    return any(p.phase == phase for p in result.phases)
+
+
+def _current_phase(result: ProvisionResult) -> WorkflowPhase:
+    order = [
+        WorkflowPhase.GL_DISCOVER_SERVICE,
+        WorkflowPhase.GL_ADD_SUBSCRIPTION,
+        WorkflowPhase.GL_REGISTER_DEVICE,
+        WorkflowPhase.GL_ASSIGN_APPLICATION,
+        WorkflowPhase.GL_APPLY_SUBSCRIPTION,
+        WorkflowPhase.GL_VERIFY_DEVICE,
+    ]
+    for phase in order:
+        if not _record_phases_have(result, phase):
+            return phase
+    return WorkflowPhase.GL_VERIFY_DEVICE
+
+
+def _exception_detail(exc: Exception) -> str:
+    import httpx
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        base = f"HTTP {exc.response.status_code} from {exc.request.method} {exc.request.url.path}"
+        body = _greenlake_error_text(exc.response)
+        return f"{base} — {body}" if body else base
+    return redact(str(exc) or exc.__class__.__name__)
+
+
+def _greenlake_error_text(response: Any) -> str:
+    """Pull the human-readable message + field issues out of a GreenLake error body."""
+    try:
+        data = response.json()
+    except Exception:  # noqa: BLE001 - error bodies are not always JSON.
+        return redact((response.text or "").strip()[:300])
+    if not isinstance(data, dict):
+        return ""
+    parts: list[str] = []
+    if data.get("message"):
+        parts.append(str(data["message"]))
+    if data.get("errorCode"):
+        parts.append(f"[{data['errorCode']}]")
+    for detail in data.get("badRequestErrorDetails") or []:
+        issues = detail.get("issues") if isinstance(detail, dict) else None
+        for issue in issues or []:
+            if not isinstance(issue, dict):
+                continue
+            description = issue.get("description") or issue.get("subject")
+            source = issue.get("source")
+            if description:
+                parts.append(f"{source + ': ' if source else ''}{description}")
+    return redact("; ".join(parts))[:500]
+
+
+def _res_id(value: dict[str, Any]) -> str:
+    return str(value.get("id") or value.get("resourceId") or value.get("deviceId") or "unknown")
+
+
+def _available_quantity(subscription: dict[str, Any]) -> str | None:
+    value = subscription.get("availableQuantity")
+    return str(value) if value is not None else None
+
+
+def _application_id(device: dict[str, Any]) -> str | None:
+    application = device.get("application") or {}
+    return application.get("id") if isinstance(application, dict) else None
+
+
+def _device_region(device: dict[str, Any]) -> str | None:
+    return device.get("region")
+
+
+def _assigned_state(device: dict[str, Any]) -> str | None:
+    return device.get("assignedState")
+
+
+def _subscription_ids(device: dict[str, Any]) -> list[str]:
+    subscriptions = device.get("subscription") or []
+    if isinstance(subscriptions, dict):
+        subscriptions = [subscriptions]
+    return [str(s.get("id")) for s in subscriptions if isinstance(s, dict) and s.get("id")]

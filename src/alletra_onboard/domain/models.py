@@ -1,0 +1,295 @@
+from __future__ import annotations
+
+import re
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
+from uuid import uuid4
+
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+
+
+class WorkflowPhase(StrEnum):
+    NOT_STARTED = "NOT_STARTED"
+    PREFLIGHT = "PREFLIGHT"
+    GL_DISCOVER_SERVICE = "GL_DISCOVER_SERVICE"
+    GL_ADD_SUBSCRIPTION = "GL_ADD_SUBSCRIPTION"
+    GL_REGISTER_DEVICE = "GL_REGISTER_DEVICE"
+    GL_ASSIGN_APPLICATION = "GL_ASSIGN_APPLICATION"
+    GL_APPLY_SUBSCRIPTION = "GL_APPLY_SUBSCRIPTION"
+    GL_VERIFY_DEVICE = "GL_VERIFY_DEVICE"
+    CLOUDINIT_CONNECT = "CLOUDINIT_CONNECT"
+    DSCC_SETUP_SYSTEM = "DSCC_SETUP_SYSTEM"
+    # Storage provisioning (Phase 2) — driven over WSAPI, see docs/adr/0002-0004 + the runbook.
+    STORAGE_DISCOVER = "STORAGE_DISCOVER"
+    STORAGE_ZONING = "STORAGE_ZONING"
+    STORAGE_PROVISION = "STORAGE_PROVISION"
+    # Replication (SPEC-015..017) — groups over WSAPI to a peer array, then the failover test.
+    STORAGE_REPLICATE = "STORAGE_REPLICATE"
+    STORAGE_FAILOVER_TEST = "STORAGE_FAILOVER_TEST"
+    CONFIG_VERIFY = "CONFIG_VERIFY"
+    ASBUILT_DOCUMENT = "ASBUILT_DOCUMENT"
+    COMPLETE = "COMPLETE"
+
+
+class RunMode(StrEnum):
+    """Which slice of the onboarding the operator chose to run (decoupling — see docs/adr/0005).
+
+    The mode picks the set of steps the wizard renders + the service advances through, so an
+    operator can verify or provision an already-initialised array without re-running init.
+    CUSTOM means "use the explicit selected_steps list" rather than a preset.
+    """
+
+    FULL_ONBOARDING = "FULL_ONBOARDING"  # GreenLake -> Cloud Connectivity -> DSCC -> Verify
+    PROVISION_ONLY = "PROVISION_ONLY"    # Discovery -> Zoning -> Provision -> Verify
+    BOTH = "BOTH"                        # full onboarding, then provisioning
+    REPLICATE = "REPLICATE"              # provisioning, then replication + failover test (SPEC-015)
+    VERIFY_ONLY = "VERIFY_ONLY"          # just the read-only SSH config/health check
+    CUSTOM = "CUSTOM"                    # exactly the steps in selected_steps
+
+
+class RunStatus(StrEnum):
+    NOT_STARTED = "not_started"
+    READY = "ready"
+    RUNNING = "running"
+    WAITING_FOR_OPERATOR = "waiting_for_operator"
+    RETRYABLE_FAILURE = "retryable_failure"
+    TERMINAL_FAILURE = "terminal_failure"
+    CANCEL_REQUESTED = "cancel_requested"
+    CANCELLED = "cancelled"
+    SUCCEEDED = "succeeded"
+    SKIPPED = "skipped"
+
+
+class BrowserResultStatus(StrEnum):
+    ALREADY_DONE = "already_done"
+    SUCCEEDED = "succeeded"
+    FAILED_RETRYABLE = "failed_retryable"
+    FAILED_TERMINAL = "failed_terminal"
+    WAITING_FOR_OPERATOR = "waiting_for_operator"
+
+
+class CheckStatus(StrEnum):
+    PASS = "pass"
+    WARN = "warn"
+    FAIL = "fail"
+    SKIP = "skip"
+
+
+class NetworkConfig(BaseModel):
+    mgmt_ipv4: str
+    mask: str
+    gateway: str
+    dns: list[str] = Field(default_factory=list)
+    ntp: str
+    timezone: str
+    proxy_host: str | None = None
+    proxy_port: int | None = None
+    proxy_username: str | None = None
+    proxy_password_ref: str | None = None
+
+    @model_validator(mode="after")
+    def _normalize_proxy_host(self) -> NetworkConfig:
+        """Accept the natural URL form for the proxy and store a bare host.
+
+        People copy the proxy from browser or environment settings, where it reads
+        ``http://host:port`` — but the array's Cloud Connectivity wizard validates Proxy Server as
+        an IPv4 or domain name and rejects a scheme outright (seen live: "Value must be valid IPv4
+        or domain name"). Normalising at intake means every consumer gets a clean host, and an
+        embedded port fills the port field when none was given separately.
+        """
+        host = (self.proxy_host or "").strip()
+        if not host:
+            return self
+        host = re.sub(r"^[a-z][a-z0-9+.-]*://", "", host, flags=re.IGNORECASE).rstrip("/")
+        if host.count(":") == 1:  # exactly one — leave IPv6 literals alone
+            bare, _, port = host.partition(":")
+            if port.isdigit():
+                host = bare
+                if self.proxy_port is None:
+                    self.proxy_port = int(port)
+        self.proxy_host = host
+        return self
+
+
+class DsccSetupConfig(BaseModel):
+    # System step
+    system_name: str
+    country: str
+    # System Credentials (the array admin secret DSCC stores; reused if present, else created)
+    credential_name: str = "b10000-admin"
+    username: str = "3paradm"
+    password: SecretStr | None = None
+    # Attributes -> Support Contact step
+    contact_first_name: str | None = None
+    contact_last_name: str | None = None
+    contact_language: str = "English"
+    contact_company: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
+    # Review -> blueprint (left off by default; revisit later)
+    blueprint_name: str | None = None
+    apply_blueprint: bool = False
+
+
+class ArrayWorkItem(BaseModel):
+    serial_number: str
+    part_number: str
+    subscription_key: SecretStr
+    service_catalog_region_id: str
+    dscc_region_code: str
+    cloudinit_url: str
+    network: NetworkConfig
+    dscc_setup: DsccSetupConfig
+    tags: dict[str, str] = Field(default_factory=dict)
+    support_contact: dict[str, Any] = Field(default_factory=dict)
+    customer_name: str = ""   # for the as-built cover page (operator-supplied; not stored on the array)
+    site: str = ""
+    # As-built narrative fields the template asks for and the array cannot know. Optional on
+    # purpose: existing workbooks predate them, and an unfilled one leaves a visible placeholder
+    # plus a warning rather than blocking the document.
+    application_workload: str = ""   # e.g. "VMware vSphere cluster"
+    storage_purpose: str = ""        # e.g. "primary datastore for the vault zone"
+
+    @field_validator("serial_number", "part_number", "service_catalog_region_id", "dscc_region_code")
+    @classmethod
+    def non_empty(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("value cannot be empty")
+        return value
+
+
+class ExternalResources(BaseModel):
+    device_id: str | None = None
+    subscription_id: str | None = None
+    service_manager_id: str | None = None
+    service_catalog_region_id: str | None = None
+    active_async_operation_id: str | None = None
+
+
+class RunEvent(BaseModel):
+    event_id: str = Field(default_factory=lambda: str(uuid4()))
+    run_id: str
+    phase: WorkflowPhase
+    event_type: str
+    message: str
+    data: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ArrayCredentialInfo(BaseModel):
+    """What a client may know about the run's array credential (ADR 0013 / SPEC-008 R3): whether the
+    run holds one, where the sheet supplied it, the account and the array. Never the password."""
+
+    available: bool = False
+    source: str = "none"        # provisioning | dscc_setup | none
+    username: str = ""
+    host: str = ""
+
+
+class ArrayCredential(ArrayCredentialInfo):
+    """Server-side only: the info plus the secret. `public()` is the only shape that leaves the process."""
+
+    secret: SecretStr | None = None
+
+    def public(self) -> ArrayCredentialInfo:
+        return ArrayCredentialInfo.model_validate(self.model_dump(exclude={"secret"}))
+
+
+class RunRecord(BaseModel):
+    run_id: str = Field(default_factory=lambda: str(uuid4()))
+    serial_number: str
+    status: RunStatus = RunStatus.NOT_STARTED
+    current_phase: WorkflowPhase = WorkflowPhase.NOT_STARTED
+    # Decoupling (docs/adr/0005): the operator-selected slice. Defaults preserve the historical
+    # full-onboarding behaviour for runs created before modes existed (old DB rows deserialize here).
+    mode: RunMode = RunMode.FULL_ONBOARDING
+    selected_steps: list[str] = Field(default_factory=list)  # step keys; empty = derive from mode
+    resources: ExternalResources = Field(default_factory=ExternalResources)
+    warnings: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class PhaseResult(BaseModel):
+    status: RunStatus
+    message: str
+    resources: ExternalResources = Field(default_factory=ExternalResources)
+    warnings: list[str] = Field(default_factory=list)
+    artifacts: list[str] = Field(default_factory=list)
+
+
+class PreflightCheck(BaseModel):
+    name: str
+    status: CheckStatus
+    message: str
+    remediation: str | None = None
+
+
+class PreflightReport(BaseModel):
+    serial_number: str
+    overall_status: CheckStatus
+    checks: list[PreflightCheck]
+
+    @property
+    def passed(self) -> bool:
+        return self.overall_status in {CheckStatus.PASS, CheckStatus.WARN}
+
+
+class FieldCheckStatus(StrEnum):
+    PASS = "pass"
+    MISMATCH = "mismatch"
+    NOT_READABLE = "not_readable"  # the array didn't expose this value (or the parser missed it)
+
+
+class FieldCheck(BaseModel):
+    """One configured value compared against what the array actually reports."""
+
+    field: str
+    expected: str
+    actual: str | None = None
+    status: FieldCheckStatus
+    critical: bool = False  # network + system name — a mismatch here is prominent
+    # SPEC-011 R3 (V-4): how the comparison was made, so a Match between two visibly different strings
+    # can say why. exact | contains (expected within actual) | includes (every expected value present).
+    match: str = "exact"
+
+
+class HealthDetail(BaseModel):
+    """One row of the Detail table of `checkhealth -svc -detail`: what the array itself names."""
+
+    identifier: str   # e.g. hw_cage:1, Task:7092, SSH
+    description: str
+    resolution: str   # the array's word, usually "Manual"
+
+
+class HealthIssue(BaseModel):
+    """One row from `checkhealth -svc -detail` — a component the array reports a problem on."""
+
+    component: str  # e.g. Alert, Cage, CDM, iLO, RC, Security
+    summary: str    # the Summary Description text
+    qty: int        # how many of this issue
+    details: list[HealthDetail] = Field(default_factory=list)  # SPEC-011 R1: the Detail rows for this component
+
+
+class VerificationReport(BaseModel):
+    """Result of the post-init SSH verification (see docs/adr/0001) — config + array health."""
+
+    reachable: bool  # could we SSH in + run the show commands at all?
+    error: str | None = None
+    checks: list[FieldCheck] = Field(default_factory=list)
+    health_issues: list[HealthIssue] = Field(default_factory=list)  # from checkhealth -svc -detail
+    raw: dict[str, str] = Field(default_factory=dict)  # raw show* output, for operator review/calibration
+
+    @property
+    def passed(self) -> int:
+        return sum(1 for c in self.checks if c.status == FieldCheckStatus.PASS)
+
+    @property
+    def mismatches(self) -> int:
+        return sum(1 for c in self.checks if c.status == FieldCheckStatus.MISMATCH)
+
+    @property
+    def health_total(self) -> int:
+        return sum(i.qty for i in self.health_issues)

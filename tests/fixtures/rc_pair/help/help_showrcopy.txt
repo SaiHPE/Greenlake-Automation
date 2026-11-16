@@ -1,0 +1,86 @@
+# help showrcopy
+showrcopy - Show details of the Remote Copy configuration
+
+SYNTAX
+    showrcopy [options <arg>] [links]
+    showrcopy [options <arg>] [hosts [<group_name_or_pattern> ...]]
+    showrcopy [options <arg>] [groups [<name_or_pattern> ...]]
+    showrcopy [options <arg>] [targets [<name_or_pattern> ...]]
+
+DESCRIPTION
+    The showrcopy command displays details of the Remote Copy configuration.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+    -d
+        Displays more detailed configuration information.
+
+    -qw
+        Display additional target specific Peer Persistence
+        related configuration where applicable.
+
+    -domain <domainname_or_pattern>[,<domainname_or_pattern>...]
+        Shows only Remote Copy groups whose virtual volumes are in domains with
+        names matching one or more of the specified domain name or pattern. This
+        option does not allow listing objects within a domain of which the user
+        is not a member.
+
+SPECIFIERS
+    links
+        Specifies all Remote Copy links.
+
+    hosts [<group_name_or_pattern>]
+        Specifies either all host definitions of specific group(s) by name or
+        glob-style patterns of Active Peer Persistence groups.
+
+    groups [<name_or_pattern>]
+        Specifies either all Remote Copy volume groups or specific Remote Copy
+	volume group(s) by name or glob-style patterns.
+
+    targets [<name_or_pattern>]
+        Specifies either all target definitions or specific target(s) definition
+	by name or glob-style patterns.
+
+NOTES
+    If the showrcopy command is used with no specifiers, all configuration
+    information is displayed.
+
+    If showrcopy links|groups|targets|hosts is used without specifying a name,
+    information for all links, groups, or targets is displayed.
+
+    See help on sub,globpat for information on glob-style patterns.
+
+    To limit the performance impact of remote copy on the rest of the system,
+    the number of volumes that are concurrently synchronizing is limited. This
+    limit is not user-configurable and applies to the initial synchronization
+    as well as subsequent resynchronizations for synchronous as well as
+    asynchronous periodic groups.
+
+    A Domain column may be included by using the setclienv command to
+    set listdom to 1.  The listdom option is also set to 1 if the CLI was
+    started with the -listdom option, or if the CLI was started with the
+    TPDLISTDOM environment variable set. Please run "cli -h"  and
+    "setclienv -h" for details of the environment variables.
+
+    Long names can cause the display to be very wide. Use -shortnames
+    to display shortened 31 character names for objects. Use the setclienv
+    command to set shortnames to 1. The -shortnames option is also set to 1
+    if the CLI was started with the -shortnames option, or if the CLI was
+    started with the TPDSHORTNAMES environment variable set. Run "cli -h"
+    and "setclienv -h" for details of the environment variables.
+
+EXAMPLES
+    The following example displays output from the showrcopy command:
+
+        cli% showrcopy
+
+    The following example displays output from the showrcopy groups <pat>
+    command, where <pat> is specified as b* and 1*:
+
+        cli% showrcopy groups b* l*
+
+    Use the following to get a description of each column in the above examples:
+        clihelp -col showrcopy
+

@@ -1,0 +1,56 @@
+# showrcopy groups
+
+Remote Copy System Information
+Status: Started, Normal
+
+Group Information
+
+Name          Target           Status   Role       Mode     Options                      
+300gb.r188150 AlletraMP_E18U31 Stopped  Secondary  Sync     auto_recover,auto_synchronize
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime           
+  300gb        1521 300gb         269 Stopped       2026-10-09 23:32:20 IST
+  Test         1522 Test         9342 Stopped       2026-10-09 23:32:20 IST
+
+Name             Target           Status   Role       Mode     Options                                    
+APP_Test.r188150 AlletraMP_E18U31 Stopped  Secondary  Sync     auto_recover,auto_synchronize,active_active
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime           
+  APP.test.vv   531 APP.test.vv  4754 Stopped       2026-10-09 23:32:21 IST
+
+Name                      Target           Status   Role       Mode     Options
+Intern_Automation.r188150 AlletraMP_E18U31 Stopped  Secondary  Sync            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime           
+  Automation1   687 Automation1  6199 Stopped       2026-10-09 23:32:21 IST
+  Automation2   688 Automation2  6200 Stopped       2026-10-09 23:32:21 IST
+  Automation3   689 Automation3  6201 Stopped       2026-10-09 23:32:21 IST
+  Automation4   690 Automation4  6202 Stopped       2026-10-09 23:32:21 IST
+
+Name                       Target           Status   Role       Mode     Options
+Intern_Automation2.r188150 AlletraMP_E18U31 Stopped  Secondary  Sync            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime           
+  Automation5  1313 Automation5  8288 Stopped       2026-10-09 23:32:21 IST
+  Automation6  1314 Automation6  8290 Stopped       2026-10-09 23:32:21 IST
+  Automation7  1315 Automation7  8291 Stopped       2026-10-09 23:32:21 IST
+  Automation8  1316 Automation8  8292 Stopped       2026-10-09 23:32:21 IST
+
+Name             Target           Status   Role       Mode     Options
+Test-RCG.r188150 AlletraMP_E18U31 Stopped  Secondary  Sync            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime           
+  TestRC_VV1    554 TestRC_VV1   4838 Stopped       2026-10-09 23:32:22 IST
+  TestRC_VV2    555 TestRC_VV2   4839 Stopped       2026-10-09 23:32:22 IST
+
+Name              Target           Status   Role       Mode     Options
+Test-RCG2.r188150 AlletraMP_E18U31 Stopped  Secondary  Sync            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    LastSyncTime           
+  TestRC2_VV1  1000 TestRC2_VV1  6857 Stopped       2026-10-09 23:32:22 IST
+  TestRC2_VV2  1001 TestRC2_VV2  6858 Stopped       2026-10-09 23:32:22 IST
+
+Name                   Target           Status   Role       Mode     Options                                               
+zz_rc_test_rcg.r188150 AlletraMP_E18U31 Started  Secondary  Periodic Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV        ID   RemoteVV        ID   SyncStatus    LastSyncTime           
+  zz_rc_test_v01 1779 zz_rc_test_v01 12389 Synced        2026-10-09 23:39:24 IST
+
+Name                  Target           Status   Role       Mode     Options                                               
+zz_rc_vvs_rcg.r188150 AlletraMP_E18U31 Started  Secondary  Periodic Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV      ID   RemoteVV      ID   SyncStatus    LastSyncTime           
+  zz_rc_vol01  1778 zz_rc_vol01  12373 Synced        2026-10-09 23:39:23 IST
+

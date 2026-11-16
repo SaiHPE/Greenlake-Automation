@@ -1,0 +1,322 @@
+{
+  "groups": [
+    {
+      "name": "300gb",
+      "target": "AlletraMP_E18U31",
+      "status": "Started",
+      "role": "Primary",
+      "mode": "Sync",
+      "local_cpg": "SSD_r6",
+      "remote_cpg": "SSD_r6",
+      "options": [
+        "auto_recover",
+        "auto_synchronize"
+      ],
+      "volumes": [
+        {
+          "local": "300gb",
+          "remote": "300gb",
+          "local_set": "300gb",
+          "remote_set": "300gb"
+        },
+        {
+          "local": "Test",
+          "remote": "Test",
+          "local_set": "300gb",
+          "remote_set": "300gb"
+        }
+      ],
+      "array": "D22U27"
+    },
+    {
+      "name": "APP_Test",
+      "target": "AlletraMP_E18U31",
+      "status": "Started",
+      "role": "Primary",
+      "mode": "Sync",
+      "local_cpg": "SSD_r6",
+      "remote_cpg": "SSD_r6",
+      "options": [
+        "auto_recover",
+        "auto_synchronize",
+        "active_active"
+      ],
+      "volumes": [
+        {
+          "local": "APP.test.vv",
+          "remote": "APP.test.vv",
+          "local_set": "APP_Test",
+          "remote_set": "APP_Test"
+        }
+      ],
+      "array": "D22U27"
+    },
+    {
+      "name": "Intern_Automation",
+      "target": "AlletraMP_E18U31",
+      "status": "Started",
+      "role": "Primary",
+      "mode": "Sync",
+      "local_cpg": "SSD_r6",
+      "remote_cpg": "SSD_r6",
+      "options": [],
+      "volumes": [
+        {
+          "local": "Automation1",
+          "remote": "Automation1",
+          "local_set": "NA",
+          "remote_set": "NA"
+        },
+        {
+          "local": "Automation2",
+          "remote": "Automation2",
+          "local_set": "NA",
+          "remote_set": "NA"
+        },
+        {
+          "local": "Automation3",
+          "remote": "Automation3",
+          "local_set": "NA",
+          "remote_set": "NA"
+        },
+        {
+          "local": "Automation4",
+          "remote": "Automation4",
+          "local_set": "NA",
+          "remote_set": "NA"
+        }
+      ],
+      "array": "D22U27"
+    },
+    {
+      "name": "Intern_Automation2",
+      "target": "AlletraMP_E18U31",
+      "status": "Started",
+      "role": "Primary",
+      "mode": "Sync",
+      "local_cpg": "SSD_r6",
+      "remote_cpg": "SSD_r6",
+      "options": [],
+      "volumes": [
+        {
+          "local": "Automation5",
+          "remote": "Automation5",
+          "local_set": "NA",
+          "remote_set": "NA"
+        },
+        {
+          "local": "Automation6",
+          "remote": "Automation6",
+          "local_set": "NA",
+          "remote_set": "NA"
+        },
+        {
+          "local": "Automation7",
+          "remote": "Automation7",
+          "local_set": "NA",
+          "remote_set": "NA"
+        },
+        {
+          "local": "Automation8",
+          "remote": "Automation8",
+          "local_set": "NA",
+          "remote_set": "NA"
+        }
+      ],
+      "array": "D22U27"
+    },
+    {
+      "name": "Test-RCG",
+      "target": "AlletraMP_E18U31",
+      "status": "Started",
+      "role": "Primary",
+      "mode": "Sync",
+      "local_cpg": "",
+      "remote_cpg": "",
+      "options": [],
+      "volumes": [
+        {
+          "local": "TestRC_VV1",
+          "remote": "TestRC_VV1",
+          "local_set": "NA",
+          "remote_set": "NA"
+        },
+        {
+          "local": "TestRC_VV2",
+          "remote": "TestRC_VV2",
+          "local_set": "NA",
+          "remote_set": "NA"
+        }
+      ],
+      "array": "D22U27"
+    },
+    {
+      "name": "Test-RCG2",
+      "target": "AlletraMP_E18U31",
+      "status": "Started",
+      "role": "Primary",
+      "mode": "Sync",
+      "local_cpg": "",
+      "remote_cpg": "",
+      "options": [],
+      "volumes": [
+        {
+          "local": "TestRC2_VV1",
+          "remote": "TestRC2_VV1",
+          "local_set": "NA",
+          "remote_set": "NA"
+        },
+        {
+          "local": "TestRC2_VV2",
+          "remote": "TestRC2_VV2",
+          "local_set": "NA",
+          "remote_set": "NA"
+        }
+      ],
+      "array": "D22U27"
+    }
+  ],
+  "sets": {
+    "D22U27": {
+      "test_CRV_set": [
+        "test_CRV.r"
+      ],
+      "New-test": [],
+      "300gb": [
+        "300gb",
+        "Test"
+      ],
+      "test55": [
+        "test5"
+      ],
+      "600gb": [
+        "600gb"
+      ],
+      "700gb": [
+        "700gb"
+      ],
+      "IBK-Test-Vset": [
+        "IBK-test-v1"
+      ],
+      "dsccvvset200": [
+        "dsccvv200"
+      ],
+      "DR_Repl": [
+        "DR_Repl"
+      ],
+      "dsccvvset2001775733799528889667": [
+        "dsccvv200.260505170000"
+      ],
+      "snap_300gb": [],
+      "Yoshino_774718_480550": [
+        "Yoshino_774718_480550.0",
+        "Yoshino_774718_480550.1"
+      ],
+      "z101": [
+        "snp1"
+      ],
+      "set-test999": [
+        "test999"
+      ],
+      "Yoshino_774718_480550_1TB": [
+        "Yoshino_774718_480550_1TB"
+      ],
+      "APP_Test": [
+        "APP.test.vv"
+      ],
+      "set-test9991784524165764448212": [
+        "test999.260804153001",
+        "test999.261009153000",
+        "test999.261009154500",
+        "test999.261009160000",
+        "test999.261009161500",
+        "test999.261009163000",
+        "test999.261009164500",
+        "test999.261009170000",
+        "test999.261009171500",
+        "test999.261009173000",
+        "test999.261009174500",
+        "test999.261009180000",
+        "test999.261009181500",
+        "test999.261009183000",
+        "test999.261009184500",
+        "test999.261009190000",
+        "test999.261009191500",
+        "test999.261009193000",
+        "test999.261009194500",
+        "test999.261009200000",
+        "test999.261009201500",
+        "test999.261009203000",
+        "test999.261009204500",
+        "test999.261010080000",
+        "test999.261010081500",
+        "test999.261010083001",
+        "test999.261010084501",
+        "test999.261010090001",
+        "test999.261010091501",
+        "test999.261010093001",
+        "test999.261010094501",
+        "test999.261010100000",
+        "test999.261010101501",
+        "test999.261010103001",
+        "test999.261010104501",
+        "test999.261010110001",
+        "test999.261010111501",
+        "test999.261010113001",
+        "test999.261010114501",
+        "test999.261010120001",
+        "test999.261010121501",
+        "test999.261010123001",
+        "test999.261010124501",
+        "test999.261010130001",
+        "test999.261010131501",
+        "test999.261010133001",
+        "test999.261010134501",
+        "test999.261010140001",
+        "test999.261010141501",
+        "test999.261010143001",
+        "test999.261010144501",
+        "test999.261010150001",
+        "test999.261010151501"
+      ],
+      "Morpheus_datastore": [
+        "Morpheus-datastore"
+      ],
+      "Test.Snapset": [
+        "300gb.261009070000",
+        "Test.261009070000"
+      ]
+    },
+    "E18U31": {
+      "Testcrv_volumeset": [
+        "test_CRV"
+      ],
+      "rcopy_async_test": [
+        "rcopy_async_test_vv"
+      ],
+      "Oneview-vol-test": [
+        "oneview-vol-test2"
+      ],
+      "Oneview-vol-test2": [
+        "Oneview-vol-test2"
+      ],
+      "patchi": [
+        "patchi",
+        "patchivolume"
+      ],
+      "patchisched.Snapset": [],
+      "patchisnapshot": [],
+      "APP_Test": [
+        "APP.test.vv"
+      ],
+      "Kiran_vv_Set": [
+        "Kiran_VV"
+      ],
+      "300gb": [
+        "300gb",
+        "Test"
+      ]
+    }
+  },
+  "saved": "2026-10-10 15:29:21"
+}

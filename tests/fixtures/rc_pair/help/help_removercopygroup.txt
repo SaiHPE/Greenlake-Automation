@@ -1,0 +1,93 @@
+# help removercopygroup
+removercopygroup - Remove one or more Remote Copy groups
+
+SYNTAX
+    removercopygroup [options] {<group_name> ... | <pattern> ...}
+
+DESCRIPTION
+    The removercopygroup command removes a remote copy volume group or multiple
+    remote copy groups that match a given pattern.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the rcopygroup_remove right
+
+OPTIONS
+    -f
+        Specifies that the command is forced. If this option is not used, the
+        command requires confirmation before proceeding with its operation.
+        If the Remote Copy group is not empty and -removevv is used, the command
+        will ask for a confirmation even if the -f option is used.
+
+    -removevv
+        Remove remote sides' volumes.
+
+    -keepsnap
+        Specifies that the local volume's resync snapshot should be retained.
+        The retained snapshot will reflect the state of the secondary volume
+        and may be used as the starting snapshot should the volume be
+        readmitted to a remote copy group. The snapshot will begin with
+        "sv.rcpy"
+
+    -pat
+        Specifies that specified patterns are treated as glob-style patterns
+        and all remote copy groups matching the specified pattern will be
+        removed. By default, confirmation is required to proceed with the
+        command unless the -f option is specified. This option must be used
+        if the <pattern> specifier is used.
+
+    -keepalua
+        Keeps the local volume's ALUA state from changing. This option
+        must be used during Peer Motion migrations of Remote Copy Groups.
+        Please refer to "Volume migration in a Remote Copy Primary group"
+        in the Peer Motion User Guide for further details.
+
+SPECIFIERS
+    <group_name>
+        The name of the group to be removed.
+
+    <pattern>
+        Specifies a glob-style pattern. This specifier can be repeated to
+        remove multiple groups. If the <pattern> specifier is not used,
+        the <group_name> specifier must be used.
+
+NOTES
+    This is not allowed if remote copy is in progress; the system will
+    generate an error. The group must be stopped using the stoprcopygroup
+    command.
+
+    You must have access to the domain of the specified group (<group_name>)
+    to run this command.
+
+    If the mirror_config policy is set for this group's target system and
+    the group is a primary group, this command will be mirrored to the target
+    and the corresponding secondary group will also be removed. If the policy
+    is set and the group is a secondary group, this command fails.
+
+    The -keepsnap and -removevv options are mutually exclusive.
+
+    The removercopygroup command removes all the associations configured in the
+    specified group and removes the group name and any remote copy
+    synchronization snapshots affiliated with volumes in the group.
+
+EXAMPLES
+    The following example removes Group1 from a remote copy system:
+
+        removercopygroup Group1
+
+    The following example removes remote copy groups that start with
+    the name testgroup:
+
+        removercopygroup -pat testgroup*
+
+    The following example removes the remote copy group (Group1) and retains
+    the resync snapshots associated with each volume.
+
+        removercopygroup -keepsnap Group1
+
+    The following example removes Group1 and associated volumes from the local
+    system and removes the corresponding volumes on all the target systems
+    of Group1:
+
+        removercopygroup -removevv Group1
+

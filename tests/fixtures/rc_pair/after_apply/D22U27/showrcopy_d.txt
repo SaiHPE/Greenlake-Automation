@@ -1,0 +1,69 @@
+# showrcopy -d
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name             ID Type Status Options Version Policy        Socks  Buffsz SysName           SysID RemoteName       RemoteID
+AlletraMP_E18U31  5 IP   ready  -            57 mirror_config    20 2097152 AlletraMP_E18U31 188146 AlletraMP_E18U31        3
+
+Link Information
+
+Target           Name                   IPC    ID Node  Address       Status Options
+AlletraMP_E18U31 AlletraMP_E18U31_0_4_3 RCs023 23 0:4:3 10.54.154.192 Up     -      
+AlletraMP_E18U31 AlletraMP_E18U31_1_4_3 RCs120 20 1:4:3 10.54.154.193 Up     -      
+receive          rcv_ip_043             RCr024 24 0:4:3 10.54.122.92  Up     -      
+receive          rcv_ip_143             RCr122 22 1:4:3 10.54.122.93  Up     -      
+
+Group Information
+
+Name         ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                      
+300gb          22 AlletraMP_E18U31 Started  Primary    Sync     SSD_r6       SSD_r6     auto_recover,auto_synchronize
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  300gb         269 300gb        1521 Synced        none      none     NA      NA     NA     NA            300gb    300gb    
+  Test         9342 Test         1522 Synced        none      none     NA      NA     NA     NA            300gb    300gb    
+
+Name         ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                                    
+APP_Test       13 AlletraMP_E18U31 Started  Primary    Sync     SSD_r6       SSD_r6     auto_recover,auto_synchronize,active_active
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  APP.test.vv  4754 APP.test.vv   531 Synced        none      none     NA      NA     NA     NA            APP_Test APP_Test 
+
+Name              ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Intern_Automation   17 AlletraMP_E18U31 Started  Primary    Sync     SSD_r6       SSD_r6            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  Automation1  6199 Automation1   687 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation2  6200 Automation2   688 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation3  6201 Automation3   689 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation4  6202 Automation4   690 Synced        none      none     NA      NA     NA     NA            NA       NA       
+
+Name               ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Intern_Automation2   21 AlletraMP_E18U31 Started  Primary    Sync     SSD_r6       SSD_r6            
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  Automation5  8288 Automation5  1313 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation6  8290 Automation6  1314 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation7  8291 Automation7  1315 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  Automation8  8292 Automation8  1316 Synced        none      none     NA      NA     NA     NA            NA       NA       
+
+Name         ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Test-RCG       14 AlletraMP_E18U31 Started  Primary    Sync                                    
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  TestRC_VV1   4838 TestRC_VV1    554 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  TestRC_VV2   4839 TestRC_VV2    555 Synced        none      none     NA      NA     NA     NA            NA       NA       
+
+Name         ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+Test-RCG2      18 AlletraMP_E18U31 Started  Primary    Sync                                    
+  LocalVV      ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet RemoteSet
+  TestRC2_VV1  6857 TestRC2_VV1  1000 Synced        none      none     NA      NA     NA     NA            NA       NA       
+  TestRC2_VV2  6858 TestRC2_VV2  1001 Synced        none      none     NA      NA     NA     NA            NA       NA       
+
+Name           ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                      
+zz_rc_test_rcg   26 AlletraMP_E18U31 Started  Primary    Sync     SSD_r6       SSD_r6     auto_recover,auto_synchronize
+  LocalVV         ID   RemoteVV       ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet   RemoteSet
+  zz_rc_test_v01 12370 zz_rc_test_v01 1773 Synced        none      none     NA      NA     NA     NA            zz_rc_test NA       
+
+Name          ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options                      
+zz_rc_vvs_rcg   25 AlletraMP_E18U31 Started  Primary    Sync     SSD_r6       SSD_r6     auto_recover,auto_synchronize
+  LocalVV       ID   RemoteVV     ID   SyncStatus    Resync_ss Sync_ss  VV_iter R_iter S_iter LastSyncTime  LocalSet  RemoteSet
+  zz_rc_vol01  12367 zz_rc_vol01  1772 Synced        none      none     NA      NA     NA     NA            zz_rc_vvs NA       
+
