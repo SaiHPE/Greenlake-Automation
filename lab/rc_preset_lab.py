@@ -217,7 +217,8 @@ def main():
         check("provision plan: 0 blockers", not plan["blockers"], "; ".join(plan["blockers"]))
         if plan["blockers"]:
             raise RuntimeError("provision plan has blockers")
-        ev = step(run1, "/storage/apply", ["storage.applied", "storage.apply.failed"], "storage-apply")
+        ev = step(run1, "/storage/apply", ["storage.applied", "storage.apply.failed"], "storage-apply",
+                  body={"approved_plan": plan.get("plan_id")})
         res = ev["data"]["result"]
         storage_removals = res.get("removals", [])
         failed = [o for o in res["outcomes"] if o["status"] == "failed"]
@@ -242,7 +243,8 @@ def main():
         if rplan["blockers"]:
             raise RuntimeError("replication plan has blockers")
         # SPEC-020 R4: on RCIP the apply needs the link checked first
-        status, resp = api("POST", "/runs/%s/replication/apply" % run1, {})
+        approve = {"approved_plan": rplan.get("plan_id")}   # the plan just read
+        status, resp = api("POST", "/runs/%s/replication/apply" % run1, approve)
         check("7b gate: apply refused until the link is checked", status == 409 and "Check the link first" in str(resp), "HTTP %s %s" % (status, str(resp)[:160]))
         ev = step(run1, "/replication/link-check", ["replication.link_checked", "replication.link_check.failed"], "link-check", body={"duration_s": 600})
         lc = ev["data"]["link_check"]
@@ -250,7 +252,7 @@ def main():
         check("7b link check: every link measured, latency within the sync limit", ev["event_type"] == "replication.link_checked"
               and all(x["status"] == "measured" for x in lc["results"]) and worst is not None and worst <= 10,
               ev["message"][:160])
-        ev = step(run1, "/replication/apply", ["replication.applied", "replication.apply.failed"], "replication-apply")
+        ev = step(run1, "/replication/apply", ["replication.applied", "replication.apply.failed"], "replication-apply", body=approve)
         rres = ev["data"]["result"]
         rep_a, rep_b = rres.get("removals_a", []), rres.get("removals_b", [])
         check("7b apply: groups created, nothing failed", GROUP in rres.get("groups_created", []) and not rres.get("error"),
@@ -274,7 +276,7 @@ def main():
         creates = [a for a in ev["data"]["plan"]["actions"] if a["state"] == "create"]
         check("7c rerun: every row exists, 0 to create", not creates, "; ".join("%s %s" % (a["kind"], a["name"]) for a in creates))
         snap = fl.run(p, "showrcopy groups " + GROUP)
-        status, resp = api("POST", "/runs/%s/replication/apply" % run2, {})
+        status, resp = api("POST", "/runs/%s/replication/apply" % run2, {"approved_plan": ev["data"]["plan"].get("plan_id")})
         evidence("rerun-apply.txt", "HTTP %s %s" % (status, resp))
         check("7c rerun: apply refused, nothing to create", status == 409 and "nothing to create" in str(resp), "HTTP %s %s" % (status, resp))
         check("7c rerun: showrcopy groups unchanged", fl.run(p, "showrcopy groups " + GROUP).split("\n")[:4] == snap.split("\n")[:4])

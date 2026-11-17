@@ -1,0 +1,28 @@
+      showsys                3 line(s)
+      showversion            12 line(s)
+      showport               27 line(s)
+      showport -par          23 line(s)
+      showport -peer         5 line(s)
+      showport -c            43 line(s)
+      showport -i            27 line(s)
+      showport -sfp          27 line(s)
+      showhost -d            31 line(s)
+      showvlun -a            75 line(s)
+      help controlport       494 line(s)
+      help showport          280 line(s)
+      help showportdev       137 line(s)
+      GET /ports               ok
+      GET /wsapiconfiguration  ok
+      OS: Release version 10.5.60
+      0:3:1 mode target    state ready     Type host  par host/point     logins 6  wsapi mode 2 type 1
+      0:3:2 mode initiator state ready     Type peer  par peer/point     logins 0  wsapi mode 3 type 6
+      0:3:3 mode target    state loss_sync Type free  par host/point     logins 0  wsapi mode 2 type 3
+      0:3:4 mode target    state ready     Type host  par host/point     logins 2  wsapi mode 2 type 1
+      1:3:1 mode target    state ready     Type host  par host/point     logins 6  wsapi mode 2 type 1
+      1:3:2 mode initiator state ready     Type peer  par peer/point     logins 0  wsapi mode 3 type 6
+      1:3:3 mode target    state loss_sync Type free  par host/point     logins 0  wsapi mode 2 type 3
+      1:3:4 mode target    state ready     Type host  par host/point     logins 2  wsapi mode 2 type 1
+PASS  E18U31 showport -par read
+PASS  E18U31 controlport help read
+
+0 FAIL

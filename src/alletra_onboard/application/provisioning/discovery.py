@@ -37,6 +37,7 @@ from alletra_onboard.domain.discovery import (
     os_from_persona,
     os_from_switch_string,
 )
+from alletra_onboard.domain.network import IscsiPortAddress, IscsiVlanInterface
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.shared import EndpointCreds, Fabric, normalize_wwpn
 
@@ -51,6 +52,90 @@ def parse_iscsi_ips(showport_iscsi: str) -> dict[str, str]:
         if len(p) >= 3 and p[0][:1].isdigit() and ":" in p[0]:
             ips[p[0]] = "" if p[1] == "offline" else p[2]
     return ips
+
+
+_NSP_RE = re.compile(r"\d+:\d+:\d+")
+
+
+def _header_rows(text: str, command: str, required: tuple[str, ...]) -> list[dict[str, str]]:
+    """The port rows of a `showport` view, each keyed by the view's own header words.
+
+    A port row with no header above it, or a header without the `required` words, is refused: a
+    layout this code has not seen must fail loudly instead of reading as "no addresses"."""
+    header: list[str] | None = None
+    rows: list[dict[str, str]] = []
+    for line in (text or "").splitlines():
+        p = line.split()
+        if not p:
+            continue
+        if p[0] == "N:S:P":
+            missing = [w for w in required if w not in p]
+            if missing:
+                raise ValueError(f"`{command}` header has no {', '.join(missing)} column: {line.strip()}")
+            header = p
+        elif _NSP_RE.fullmatch(p[0]):
+            if header is None:
+                raise ValueError(f"`{command}` printed a port row before its header: {line.strip()}")
+            rows.append(dict(zip(header, p, strict=False)))
+    return rows
+
+
+def _address(cell: str) -> str:
+    """`0.0.0.0` is the CLI's "not set". A trailing `*` marks a port with more than one address
+    (`help showport`, NOTES) and is not part of the address."""
+    value = cell.rstrip("*")
+    return "" if value in ("0.0.0.0", "-") else value
+
+
+def parse_showport_iscsi(text: str) -> list[IscsiPortAddress]:
+    """`showport -iscsi` -> each iSCSI port's untagged address, netmask, gateway and peer flag.
+
+    Columns by header word, because two layouts are real: `... STGT VLAN` (VLAN `Y`) and
+    `... STGT VLANs Peer_Enabled` (E18U31 OS 10.5.0, 2026-10-07, and 10.5.60; VZ OS 10.5.51;
+    rack13-ARCUS OS 10.6.0). No Peer_Enabled column means not peer-enabled. An array without iSCSI
+    ports answers in prose (*"There is no specified port information."*, D22U27): []."""
+    return [
+        IscsiPortAddress(
+            nsp=row["N:S:P"],
+            ip=_address(row.get("IPAddr", "")),
+            netmask=_address(row.get("Netmask/PrefixLen", "")),
+            gateway=_address(row.get("Gateway", "")),
+            peer_enabled=row.get("Peer_Enabled", "").upper() == "Y",
+            vlans=row.get("VLANs", row.get("VLAN", "")),
+        )
+        for row in _header_rows(text, "showport -iscsi", ("IPAddr", "Netmask/PrefixLen", "Gateway"))
+    ]
+
+
+def parse_iscsi_vlans(text: str) -> list[IscsiVlanInterface]:
+    """`showport -iscsivlans` -> the VLAN-tagged addresses on the iSCSI ports.
+
+    Layout from rack13-ARCUS (OS 10.6.0, 2026-11-16) and E18U31 (OS 10.5.60, 2026-11-17), no State
+    column:
+
+        N:S:P VLAN IPAddr Netmask/PrefixLen Gateway MTU TPGT STGT iSNS_Addr iSNS_Port
+
+    The view also lists each port's untagged address, VLAN `untagged`, with the same values as
+    `showport -iscsi`; a port with no address has no row. The untagged row is the port's base
+    address, not a VLAN interface, so it is left out. When no iSCSI port has an address the answer
+    is `no ports listed`, whether the array has iSCSI ports (VZ, OS 10.5.51) or none (D22U27, OS
+    10.5.0): []. A tagged row has a tag of 1 to 4094 in the VLAN column; none is captured yet. Any
+    other VLAN value is refused."""
+    out: list[IscsiVlanInterface] = []
+    required = ("VLAN", "IPAddr", "Netmask/PrefixLen", "Gateway")
+    for row in _header_rows(text, "showport -iscsivlans", required):
+        vlan = row.get("VLAN", "")
+        if vlan == "untagged":
+            continue
+        if not (vlan.isdigit() and 1 <= int(vlan) <= 4094):
+            raise ValueError(f"`showport -iscsivlans` row {row['N:S:P']} has VLAN {vlan!r}, "
+                             "neither a tag from 1 to 4094 nor untagged")
+        out.append(IscsiVlanInterface(
+            nsp=row["N:S:P"], vlan_id=int(vlan), ip=_address(row.get("IPAddr", "")),
+            netmask=_address(row.get("Netmask/PrefixLen", "")),
+            gateway=_address(row.get("Gateway", "")), mtu=row.get("MTU", ""),
+        ))
+    return out
 
 
 #: Slot-4 card ports 1-2 carry data services (file OR iSCSI); 3-4 are the RCIP-capable ports. A
@@ -515,6 +600,7 @@ def _apply_read(host: DiscoveredHost, read: HostRead | None) -> None:
     host.os_text = read.os_text or host.os_text
     host.serial_number = read.serial_number or host.serial_number
     host.multipath = read.multipath
+    host.multipath_state = read.multipath_state
     for w in read.wwpns:
         if w not in host.wwpns:
             host.wwpns.append(w)

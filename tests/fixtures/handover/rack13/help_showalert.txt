@@ -1,0 +1,64 @@
+# help showalert
+showalert - Display system alerts.
+
+SYNTAX
+    showalert [options]
+
+DESCRIPTION
+    The showalert command displays the status of system alerts. When issued
+    without options, all new customer alerts are displayed.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+    The selection of alerts to be displayed is controlled by selecting one of
+    the following options:
+    -n
+        Specifies that only new customer alerts are displayed.
+        This is the default.
+
+    -a
+        Specifies that only acknowledged alerts are displayed.
+
+    -f
+        Specifies that only fixed alerts are displayed.
+
+    -all
+        Specifies that all customer alerts are displayed.
+
+    The format of the alert display is controlled by the following options:
+
+    -d
+        Specifies that detailed information is displayed. Cannot be specified
+        with the -oneline option.
+
+    -oneline
+        Specifies that summary information is displayed in a tabular form with
+        one line per alert. For customer alerts, the message text will be
+        truncated if it is too long unless the -wide option is also specified.
+
+    -svc
+        Specifies that only service alerts are displayed. This option can only be
+        used with the -d or -oneline formatting options.
+
+    -wide
+        Do not truncate the message text. Only valid for customer alerts and if the
+        -oneline option is also specified.
+
+SPECIFIERS
+    None.
+
+NOTES
+    Without any options, the showalert command displays all customer alerts in
+    the New state.
+
+    Set the status of alerts by issuing the setalert command.
+
+    Alerts can be removed by issuing the removealert command.
+
+EXAMPLES
+    The following example displays new customer alerts on a system:
+
+        cli% showalert -n
+

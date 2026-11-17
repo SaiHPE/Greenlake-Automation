@@ -1,5 +1,9 @@
 # The platform is a hybrid control plane: DSCC/GreenLake cloud API primary, direct-array WSAPI for depth
 
+> **Corrected by [ADR 0019](0019-handover-report-from-the-array.md) (2026-11-17):** "DSCC telemetry"
+> under *Build-ready now (verified)* below was read from documentation. The tool has never called a
+> DSCC telemetry endpoint; the first call is ADR 0019's second slice, after a read-only probe.
+
 The full-scope automation (initialize → discover → connect → provision → replicate/DR → report →
 document, across Alletra MP **block** and **file** — see [SCOPE.md](../SCOPE.md)) is built on **two
 control surfaces, routed per capability**:

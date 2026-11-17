@@ -1,0 +1,20 @@
+PASS  D22U27 10.64.122.99: SSH login
+      D22U27: AlletraMP_D22U27, Release version 10.5.0
+      D22U27: array clock: Node Date
+      D22U27: showalert     525 alert(s); state New 525; severity Minor 521, Major 4; times 2026-09-30 20:00:00 IST to 2026-11-17 00:00:01 IST
+      D22U27: showalert -d  525 alert(s); state New 525; severity Minor 521, Major 4; times 2026-09-30 20:00:00 IST to 2026-11-17 00:00:01 IST
+      D22U27: srstatcpu (plain)            answered, 145 line(s)
+      D22U27: srstatcpu (24-hour form)     answered, 9 line(s)
+      D22U27: srstatcpu (24-hour form)     answered, 13 line(s)
+      D22U27: srstatport (plain)           answered, 148 line(s)
+      D22U27: srstatport (24-hour form)    answered, 19 line(s)
+      D22U27: srstatport (24-hour form)    answered, 19 line(s)
+      D22U27: srstatvv (plain)             answered, 148 line(s)
+      D22U27: srstatvv (24-hour form)      answered, 7 line(s)
+      D22U27: srstatrcvv (plain)           answered, 4 line(s)
+      D22U27: srstatrcvv (24-hour form)    answered, 4 line(s)
+PASS  D22U27: System Reporter answered every report - 10 of 10
+PASS  D22U27: no command refused by the array
+PASS  D22U27: CLI help read for every report
+
+0 FAIL

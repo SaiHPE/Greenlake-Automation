@@ -49,8 +49,9 @@ target carries one mode, so the run is refused before anything is written. When 
 planned, the groups are not: the plan says the groups come after
 the partnership is up and the link checked (SPEC-020), on a second preview.
 
-**R4 — Apply, partnership only.** Over `ArrayRcCliClient` (ADR 0015), in order, stopping at the
-first refusal: RCIP addresses on this array, then on the peer; a ping from every this-array port to
+**R4 — Apply, partnership only.** Over `ArrayRcCliClient` (ADR 0015), one per array, each built with
+the ports, addresses and target the approved plan names on that array; it refuses a command on any
+other (ADR 0025, BL-58). In order, stopping at the first refusal: RCIP addresses on this array, then on the peer; a ping from every this-array port to
 its partner address (`controlport rcip ping -c 3`), any loss stops the apply; `startrcopy` where
 planned; the target on this array, then on the peer; then `showrcopy links` on both until every
 planned link is Up (3 minutes). Each command's answer is checked (an `Error` line is a refusal),

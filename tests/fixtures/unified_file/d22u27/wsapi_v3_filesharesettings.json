@@ -1,0 +1,185 @@
+{
+ "request": "GET /api/v3/filesharesettings",
+ "port": 443,
+ "status": 200,
+ "headers": [
+  [
+   "Cache-Control",
+   "no-cache, no-store, private, max-age=-1, must-revalidate"
+  ],
+  [
+   "Content-Language",
+   "en-US"
+  ],
+  [
+   "Content-Security-Policy",
+   "default-src 'self' https://www.google-analytics.com/ ; script-src 'self'  https://www.googletagmanager.com/gtag/js https://www.google-analytics.com/analytics.js 'sha256-v0Q8X6xSNmwWcfldSEWqW+3imFpJurfHYdywm3hw6+w=' ; style-src 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'nonce-d29tZSBjb29sIHN0cmluZyB3aWxsIHBvcCB1cCAxMjM=' 'self' blob:; frame-src 'self'; object-src 'self';  media-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'self'"
+  ],
+  [
+   "Content-Type",
+   "application/json;charset=UTF-8"
+  ],
+  [
+   "Last-Modified",
+   "Tue, 3 Nov 2026 10:18:58 GMT"
+  ],
+  [
+   "Pragma",
+   "no-cache"
+  ],
+  [
+   "Strict-Transport-Security",
+   "max-age=31536000; includeSubDomains;"
+  ],
+  [
+   "Vary",
+   "Accept-Encoding"
+  ],
+  [
+   "Vary",
+   "Origin"
+  ],
+  [
+   "X-Content-Type-Options",
+   "nosniff"
+  ],
+  [
+   "X-Frame-Options",
+   "SAMEORIGIN"
+  ],
+  [
+   "X-Server-Version",
+   "2.5.0.1463"
+  ],
+  [
+   "X-Xss-Protection",
+   "1; mode=block"
+  ],
+  [
+   "Date",
+   "Mon, 16 Nov 2026 18:46:50 GMT"
+  ],
+  [
+   "Connection",
+   "close"
+  ],
+  [
+   "Transfer-Encoding",
+   "chunked"
+  ]
+ ],
+ "body": {
+  "version": "00000000000000000001",
+  "arraySerialNumber": "CZ2D320BT1",
+  "members": {
+   "ee400ec276265eb7274b97a978a43a4c": {
+    "uid": "ee400ec276265eb7274b97a978a43a4c",
+    "uri": "/api/v3/filesharesettings/ee400ec276265eb7274b97a978a43a4c",
+    "systemWWN": "2FF70002AC02DEF6",
+    "displayname": {
+     "key": "FILE_SHARE_SETTING_NAME",
+     "args": [
+      "test1"
+     ],
+     "default": "File Share Setting test1"
+    },
+    "domain": "",
+    "id": 26,
+    "name": "test1",
+    "shortName": "test1",
+    "uuid": "5d5b1074-13b7-4137-8942-6984aeffe15e",
+    "creationTime": {
+     "ms": 1786022373000,
+     "tz": "+0530"
+    },
+    "state": "STATE_NORMAL",
+    "overallState": {
+     "overall": "STATE_NORMAL"
+    },
+    "hostCount": 1,
+    "sharecount": 1,
+    "clientInfo": [
+     {
+      "ipaddress": "*",
+      "access": "rw",
+      "options": "root_squash"
+     }
+    ],
+    "lastModifiedEpoch": 1793701138,
+    "lastModifiedEpochMS": 1793701138270
+   },
+   "f15da36506ba580d0708dfa0a8a1e459": {
+    "uid": "f15da36506ba580d0708dfa0a8a1e459",
+    "uri": "/api/v3/filesharesettings/f15da36506ba580d0708dfa0a8a1e459",
+    "systemWWN": "2FF70002AC02DEF6",
+    "displayname": {
+     "key": "FILE_SHARE_SETTING_NAME",
+     "args": [
+      "fs01"
+     ],
+     "default": "File Share Setting fs01"
+    },
+    "domain": "",
+    "id": 0,
+    "name": "fs01",
+    "shortName": "fs01",
+    "uuid": "b69ccd32-7d6a-48c8-903d-c8ad14f99e00",
+    "creationTime": {
+     "ms": 1785343428000,
+     "tz": "+0530"
+    },
+    "state": "STATE_NORMAL",
+    "overallState": {
+     "overall": "STATE_NORMAL"
+    },
+    "hostCount": 1,
+    "sharecount": 1,
+    "clientInfo": [
+     {
+      "ipaddress": "*",
+      "access": "rw",
+      "options": "root_squash"
+     }
+    ],
+    "lastModifiedEpoch": 1793701138,
+    "lastModifiedEpochMS": 1793701138270
+   },
+   "e8166fc79e06dc721533c858e4f9b787": {
+    "uid": "e8166fc79e06dc721533c858e4f9b787",
+    "uri": "/api/v3/filesharesettings/e8166fc79e06dc721533c858e4f9b787",
+    "systemWWN": "2FF70002AC02DEF6",
+    "displayname": {
+     "key": "FILE_SHARE_SETTING_NAME",
+     "args": [
+      "lab_100"
+     ],
+     "default": "File Share Setting lab_100"
+    },
+    "domain": "",
+    "id": 10,
+    "name": "lab_100",
+    "shortName": "lab_100",
+    "uuid": "6d9de0fa-5595-4546-92ee-fda118c0175c",
+    "creationTime": {
+     "ms": 1785785907000,
+     "tz": "+0530"
+    },
+    "state": "STATE_NORMAL",
+    "overallState": {
+     "overall": "STATE_NORMAL"
+    },
+    "hostCount": 1,
+    "sharecount": 1,
+    "clientInfo": [
+     {
+      "ipaddress": "*",
+      "access": "rw",
+      "options": "root_squash"
+     }
+    ],
+    "lastModifiedEpoch": 1793701138,
+    "lastModifiedEpochMS": 1793701138270
+   }
+  }
+ }
+}

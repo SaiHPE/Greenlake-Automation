@@ -1,0 +1,6 @@
+# showcpg
+                ----Volumes---- -------(MiB)--------
+Id Name   Warn% VVs TPVVs TDVVs   Used   Free  Total
+ 0 SSD_r6     -  29     9     4 102375 238875 341250
+----------------------------------------------------
+ 1 total                        102375 238875 341250

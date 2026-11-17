@@ -1,0 +1,12 @@
+{
+ "httpState": "Disabled",
+ "httpPort": 80,
+ "httpsState": "Enabled",
+ "httpsPort": 443,
+ "version": "1.15.0",
+ "sessionsInUse": 1,
+ "systemResourceUsage": 96,
+ "sessionTimeout": 15,
+ "eventSessionsInUse": 0,
+ "maxEventSessions": 5
+}

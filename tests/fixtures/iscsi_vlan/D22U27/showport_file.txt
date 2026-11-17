@@ -1,0 +1,8 @@
+# showport -file
+N:S:P   Mode State IPAddr/PrefixLen IPDisable      Gateway     VLAN  MTU   Rate  Eth Link FailoverIPs
+0:4:1 target ready   10.54.90.70/21         N 10.54.95.254 untagged 1500 10Gbps eth6   up           -
+0:4:2 target ready   10.54.90.71/21         N 10.54.95.254 untagged 1500 10Gbps eth8   up           -
+1:4:1 target ready   10.54.90.73/21         N 10.54.95.254 untagged 1500 10Gbps eth6   up           -
+1:4:2 target ready   10.54.90.74/21         N 10.54.95.254 untagged 1500 10Gbps eth9   up           -
+-----------------------------------------------------------------------------------------------------
+    4                                                                                                

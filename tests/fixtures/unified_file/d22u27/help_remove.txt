@@ -1,0 +1,37 @@
+# help remove
+remove* - Remove entities such as virtual volumes and logical disks.
+In each case type "help <command>" for detailed help.
+
+    removealert        - remove one or more alerts
+    removebanner       - remove banners
+    removecert         - remove a SSL service's certificate
+    removecpg          - remove Common Provisioning Groups (CPGs)
+                         or LDs from CPGs.
+    removedomain       - remove domains
+    removedomainset    - remove a domain set or domains from a set
+    removefileshare    - remove a fileshare from a filesystem
+    removefilesystem   - remove a filesystem from the system
+    removehost         - remove a host or path(s) to a host.
+    removehostset      - remove a host set or hosts from a set.
+    removekeys         - remove keys for a service.
+    removeld           - remove logical disks
+    removercopygroup   - remove  groups used for Remote Copy
+    removercopytarget  - remove a target used for Remote Copy
+    removesched        - remove a scheduled task
+    removesharesetting - remove a share setting
+    removesnmpmgr      - remove an SNMP trap manager
+    removesnmppw       - remove an SNMP password
+    removesnmpuser     - remove an SNMP user
+    removespare        - remove spare chunklets
+    removesralertcrit  - remove System Reporter threshold alert criterion
+    removesshkey       - remove SSH public keys
+    removetask         - remove tasks or task details
+    removeuser         - remove user accounts
+    removeuserconn     - remove user connection
+    removevlun         - remove virtual LUNs
+    removevv           - remove volumes (including snapshot volumes)
+    removevvolsc       - remove a vVol Storage Container and all of its Protocol
+                         Endpoints
+    removevvset        - remove a VV set or VVs from a set
+    removewsapisession - remove WSAPI user sessions
+

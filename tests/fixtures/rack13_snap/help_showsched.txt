@@ -1,0 +1,90 @@
+# help showsched
+showsched - Show the state of tasks that are currently scheduled on the system.
+
+SYNTAX
+    The syntax for the setsched command can be one of the following:
+        showsched [options] [<schedname>|<pattern>]
+        showsched [options] -window <start_window_time> <end_window_time>
+                  [<schedname>|<pattern>]
+
+DESCRIPTION
+    The showsched command shows the state of tasks currently scheduled on the
+    system.
+
+AUTHORITY
+    Super, Service, Edit, Browse
+    Any extended role in the system
+
+OPTIONS
+    -all
+        Specifies that all scheduled tasks will be displayed, including system
+        created scheduled tasks.
+
+     -window <start_window_time> <end_window_time>
+        Display all predicted runtimes for all user scheduled tasks for
+        a specified window of time.  This displays up to 10,000 predicted
+        runtimes.  If schedname or pattern are specified, then the
+        list of up to 10,000 is filtered to only those schedule names
+        that match.
+
+    -sortcol <col>[,<dir>][:<col>[,<dir>]...]
+        Sorts command output based on column number (<col>). Columns are
+        numbered from left to right, beginning with 0. At least one column must
+        be specified. In addition, the direction of sorting (<dir>) can be
+        specified as follows:
+          inc
+              Sort in increasing order (default).
+          dec
+              Sort in decreasing order.
+
+        Multiple columns can be specified and separated by a colon (:). Rows
+        with the same information in them as earlier columns will be sorted
+        by values in later columns.
+
+SPECIFIERS
+    <schedname>|<pattern>...
+        Specifies the schedules with the specified name (127 character
+        maximum) or matching the glob-style pattern (see help on sub,globpat).
+        This specifier can be repeated to display configuration information
+        about multiple schedules. This specifier is not required. If not
+        specified, configuration information for all non system scheduled
+        tasks in the system is displayed.
+
+    <start_window_time> <end_window_time>
+        Specifies the time window for which to show the predicted runtimes.
+        Start and end window times should each include a date and time.
+        For example, they can be specified as "yyyy-mm-dd hh:mm:ss" where
+        hh is specified as the hour interpreted on a 24 hour clock.  Date and
+        time pairs must be surrounded by double quotation marks.
+
+        Some flexibility exists around the format of date and time.  Acceptable
+        formats for time are hh:mm:ss or hhmm.  Acceptable formats for date are
+        mm/dd/yy, month_name dd, dd month_name yy, or yy-mm-dd. If the
+        syntax yy-mm-dd is used, the year must be specified.
+
+NOTES
+    If the -all option is not specified then tasks that were created by the system
+    will not be displayed.
+
+    The -window option by itself will display only user created scheduled task runtimes.
+    To see all scheduled task runtimes including system tasks, include the -all option
+    in the command.
+
+EXAMPLES
+    Show all the user schedules that have "createsv" in the name:
+        showsched *createsv*
+
+    Show all the schedules including those created by the system:
+        cli% showsched -all
+
+    Show all the runtimes, including schedules created by the system,
+    for a 2 hour window:
+        cli% showsched -all -window "2024-12-19 12:00:00" "2024-12-19 14:00:00"
+
+    Show the runtimes, not including schedules created by the system,
+    for a 2 week window and only show schedule names starting with "alpha":
+        cli% showsched -window "2024-02-14 00:00:00" "2024-02-28 00:00:00" alpha*
+
+    Use the following to get a description of each column in the above examples:
+        cli% clihelp -col showsched
+

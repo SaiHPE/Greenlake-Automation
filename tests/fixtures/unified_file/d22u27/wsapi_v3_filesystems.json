@@ -1,0 +1,227 @@
+{
+ "request": "GET /api/v3/filesystems",
+ "port": 443,
+ "status": 200,
+ "headers": [
+  [
+   "Cache-Control",
+   "no-cache, no-store, private, max-age=-1, must-revalidate"
+  ],
+  [
+   "Content-Language",
+   "en-US"
+  ],
+  [
+   "Content-Security-Policy",
+   "default-src 'self' https://www.google-analytics.com/ ; script-src 'self'  https://www.googletagmanager.com/gtag/js https://www.google-analytics.com/analytics.js 'sha256-v0Q8X6xSNmwWcfldSEWqW+3imFpJurfHYdywm3hw6+w=' ; style-src 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'nonce-d29tZSBjb29sIHN0cmluZyB3aWxsIHBvcCB1cCAxMjM=' 'self' blob:; frame-src 'self'; object-src 'self';  media-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'self'"
+  ],
+  [
+   "Content-Type",
+   "application/json;charset=UTF-8"
+  ],
+  [
+   "Last-Modified",
+   "Tue, 3 Nov 2026 10:18:58 GMT"
+  ],
+  [
+   "Pragma",
+   "no-cache"
+  ],
+  [
+   "Strict-Transport-Security",
+   "max-age=31536000; includeSubDomains;"
+  ],
+  [
+   "Vary",
+   "Accept-Encoding"
+  ],
+  [
+   "Vary",
+   "Origin"
+  ],
+  [
+   "X-Content-Type-Options",
+   "nosniff"
+  ],
+  [
+   "X-Frame-Options",
+   "SAMEORIGIN"
+  ],
+  [
+   "X-Server-Version",
+   "2.5.0.1463"
+  ],
+  [
+   "X-Xss-Protection",
+   "1; mode=block"
+  ],
+  [
+   "Date",
+   "Mon, 16 Nov 2026 18:46:50 GMT"
+  ],
+  [
+   "Connection",
+   "close"
+  ],
+  [
+   "Transfer-Encoding",
+   "chunked"
+  ]
+ ],
+ "body": {
+  "version": "00000000000000000001",
+  "arraySerialNumber": "CZ2D320BT1",
+  "members": {
+   "d7be69c10181dd29aeed4b142e396c1a": {
+    "uid": "d7be69c10181dd29aeed4b142e396c1a",
+    "uri": "/api/v3/filesystems/d7be69c10181dd29aeed4b142e396c1a",
+    "systemWWN": "2FF70002AC02DEF6",
+    "displayname": {
+     "key": "FILE_SYSTEM_NAME",
+     "args": [
+      "fs01"
+     ],
+     "default": "File System fs01"
+    },
+    "domain": "",
+    "id": 0,
+    "name": "fs01",
+    "shortName": "fs01",
+    "uuid": "a3bbfa3e-d1fe-4def-a98c-76904e4bf084",
+    "creationTime": {
+     "ms": 1785342875000,
+     "tz": "+0530"
+    },
+    "prov": "tpvv",
+    "dedupe": false,
+    "compression": false,
+    "reduce": false,
+    "state": "STATE_NORMAL",
+    "detailedState": "STATE_NORMAL",
+    "overallState": {
+     "overall": "STATE_NORMAL"
+    },
+    "type": "XFS",
+    "sharecount": 1,
+    "sizeInMiB": 102272,
+    "vvSizeInMiB": 102400,
+    "fsmaster": 0,
+    "replicant": 1,
+    "replicant2": 253,
+    "replicant3": 253,
+    "volumemembers": {
+     "7978": {
+      "vvid": 7978,
+      "vvname": "fs01",
+      "vvShortName": "fs01",
+      "vvstate": "STATE_NORMAL",
+      "vvdegradedstate": "LDS_NOT_STARTED",
+      "vvfailedstate": "LDS_NOT_STARTED"
+     }
+    },
+    "lastModifiedEpoch": 1793701138,
+    "lastModifiedEpochMS": 1793701138269
+   },
+   "c9c13dbc5437379173d9f95efdc09366": {
+    "uid": "c9c13dbc5437379173d9f95efdc09366",
+    "uri": "/api/v3/filesystems/c9c13dbc5437379173d9f95efdc09366",
+    "systemWWN": "2FF70002AC02DEF6",
+    "displayname": {
+     "key": "FILE_SYSTEM_NAME",
+     "args": [
+      "lab_100"
+     ],
+     "default": "File System lab_100"
+    },
+    "domain": "",
+    "id": 2,
+    "name": "lab_100",
+    "shortName": "lab_100",
+    "uuid": "902b4b7e-0173-4ad8-ab39-b4df34bba3f3",
+    "creationTime": {
+     "ms": 1785783453000,
+     "tz": "+0530"
+    },
+    "prov": "tpvv",
+    "dedupe": false,
+    "compression": false,
+    "reduce": false,
+    "state": "STATE_NORMAL",
+    "detailedState": "STATE_NORMAL",
+    "overallState": {
+     "overall": "STATE_NORMAL"
+    },
+    "type": "XFS",
+    "sharecount": 1,
+    "sizeInMiB": 102272,
+    "vvSizeInMiB": 102400,
+    "fsmaster": 0,
+    "replicant": 1,
+    "replicant2": 253,
+    "replicant3": 253,
+    "volumemembers": {
+     "8371": {
+      "vvid": 8371,
+      "vvname": "lab_100",
+      "vvShortName": "lab_100",
+      "vvstate": "STATE_NORMAL",
+      "vvdegradedstate": "LDS_NOT_STARTED",
+      "vvfailedstate": "LDS_NOT_STARTED"
+     }
+    },
+    "lastModifiedEpoch": 1793701138,
+    "lastModifiedEpochMS": 1793701138269
+   },
+   "c3083522669b6b111727a79670a39253": {
+    "uid": "c3083522669b6b111727a79670a39253",
+    "uri": "/api/v3/filesystems/c3083522669b6b111727a79670a39253",
+    "systemWWN": "2FF70002AC02DEF6",
+    "displayname": {
+     "key": "FILE_SYSTEM_NAME",
+     "args": [
+      "testfile"
+     ],
+     "default": "File System testfile"
+    },
+    "domain": "",
+    "id": 10,
+    "name": "testfile",
+    "shortName": "testfile",
+    "uuid": "c9c0739e-5dd8-4fad-97df-7fc45a55976a",
+    "creationTime": {
+     "ms": 1786022372000,
+     "tz": "+0530"
+    },
+    "prov": "tdvv",
+    "dedupe": true,
+    "compression": true,
+    "reduce": true,
+    "state": "STATE_NORMAL",
+    "detailedState": "STATE_NORMAL",
+    "overallState": {
+     "overall": "STATE_NORMAL"
+    },
+    "type": "XFS",
+    "sharecount": 1,
+    "sizeInMiB": 51072,
+    "vvSizeInMiB": 51200,
+    "fsmaster": 0,
+    "replicant": 1,
+    "replicant2": 253,
+    "replicant3": 253,
+    "volumemembers": {
+     "8591": {
+      "vvid": 8591,
+      "vvname": "testfile",
+      "vvShortName": "testfile",
+      "vvstate": "STATE_NORMAL",
+      "vvdegradedstate": "LDS_NOT_STARTED",
+      "vvfailedstate": "LDS_NOT_STARTED"
+     }
+    },
+    "lastModifiedEpoch": 1793701138,
+    "lastModifiedEpochMS": 1793701138269
+   }
+  }
+ }
+}

@@ -1,0 +1,20 @@
+PASS  E18U31 10.64.154.190: SSH login
+      E18U31: DHCI_B10K, Release version 10.5.60
+      E18U31: array clock: Node Date
+      E18U31: showalert     no alert records; the array says: no alerts
+      E18U31: showalert -d  no alert records; the array says: no alerts
+      E18U31: srstatcpu (plain)            answered, 145 line(s)
+      E18U31: srstatcpu (24-hour form)     answered, 9 line(s)
+      E18U31: srstatcpu (24-hour form)     answered, 13 line(s)
+      E18U31: srstatport (plain)           answered, 148 line(s)
+      E18U31: srstatport (24-hour form)    answered, 16 line(s)
+      E18U31: srstatport (24-hour form)    answered, 28 line(s)
+      E18U31: srstatvv (plain)             answered, 148 line(s)
+      E18U31: srstatvv (24-hour form)      answered, 7 line(s)
+      E18U31: srstatrcvv (plain)           answered, 4 line(s)
+      E18U31: srstatrcvv (24-hour form)    answered, 4 line(s)
+PASS  E18U31: System Reporter answered every report - 10 of 10
+PASS  E18U31: no command refused by the array
+PASS  E18U31: CLI help read for every report
+
+0 FAIL

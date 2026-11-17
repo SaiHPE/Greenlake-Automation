@@ -1,0 +1,45 @@
+# help createfilesystem
+createfilesystem - create a filesystem of a specified size.
+
+SYNTAX
+    createfilesystem [-tpvv|-reduce] <name> <size>[g|G|t|T]
+
+DESCRIPTION
+    The createfilesystem command creates a filesystem for NFS protocols
+     of specified size and name.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the filesystem_create right
+
+OPTIONS
+    -reduce
+        Specifies that the filesystem should use thin provisioning with compression
+        and dedup technologies. This is the default option.
+
+     -tpvv
+        Specifies that the filesystem should use thin provisioning only.
+
+SPECIFIERS
+    <name>
+        Specifies a filesystem name up to 255 characters in length.
+
+    <size>[g|G|t|T]
+        Specifies the size for the filesystem in MB.
+        The size is rounded up to the next multiple of 256 MB. The size must be an integer.
+
+NOTES
+    Verify the creation of filesystem by issuing the showfilesystem command.
+
+    Maximum size of filesystem is 64 TiB.
+
+EXAMPLES
+    Creating a 10G filesystem named demo_fs which would use thin provisioning capability
+
+        cli% createfilesystem demo_fs 10g
+
+    Creating a 10G filesystem named demo_fs which would use thin provisioning capability
+    with compression and dedup technologies.
+
+        cli% createfilesystem -reduce demo_fs 10g
+

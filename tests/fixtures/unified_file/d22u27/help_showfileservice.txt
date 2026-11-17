@@ -1,0 +1,29 @@
+# help showfileservice
+showfileservice - Show fileservice state on the system.
+
+SYNTAX
+    showfileservice [options]
+
+DESCRIPTION
+    The showfileservice command shows fileservice state on the system.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+    -status
+        Displays the status of fileservice and file persona ports on each node.
+
+SPECIFIERS
+    None.
+
+NOTES
+    None.
+
+EXAMPLES
+    The following example shows the fileservice state on the system:
+    cli% showfileservice
+
+    The following example shows the status of fileservice and file persona ports on each node:
+    cli% showfileservice -status
+

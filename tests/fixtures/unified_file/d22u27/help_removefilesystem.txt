@@ -1,0 +1,35 @@
+# help removefilesystem
+removefilesystem - remove a filesystem from the system
+
+SYNTAX
+    removefilesystem [options] <name>
+
+DESCRIPTION
+    The removefilesystem command removes the filesystem from the system.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the filesystem_remove right
+
+OPTIONS
+    -f
+        Specifies that the command is forced. If this option is not used, the
+        command requires confirmation before proceeding with its operation.
+
+SPECIFIERS
+    <name>
+        Specifies a filesystem name to be removed.
+
+NOTES
+    Issuing the removefilesystem command with invalid filesystem name causes the
+    command to exit without removing any filesystem.
+
+    Issuing the removefilesystem command if fileshare is present on it will fail the command.
+
+    Verify the removal of filesystem by issuing the showfilesystem command.
+
+EXAMPLES
+    The following example removes filesystem demo_fs
+
+       cli% removefilesystem demo_fs
+

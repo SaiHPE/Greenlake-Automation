@@ -1,0 +1,94 @@
+# help show
+show* - Show information about resources.
+
+In each case type "help <command>" for detailed help.
+
+    showai           - show System AI information
+    showalert        - show status of system alerts
+    showauditlog     - show audit log information
+    showauthparam    - show authentication parameters
+    showbanner       - show the banners
+    showblock        - show block mapping info for vvs, lds, pds
+    showcachesvr     - show cachesvr startup state
+    showcage         - show disk cage information
+    showcert         - show SSL certificate
+    showcim          - show the CIM server information
+    showclienv       - show CLI environment parameters
+    showcpg          - show Common Provisioning Groups (CPGs)
+    showdate         - show date and time on all system nodes
+    showdomain       - show domains in the system
+    showdomainset    - show sets of domains in the system
+    showdpsrv        - show the Data Protection Service information
+    showencryption   - show encryption information
+    showeventlog     - show event logs
+    showfileservice  - show fileservice status
+    showfileshare    - show information of all fileshares
+    showfilesystem   - show information of all filesystems
+    showfirmwaredb   - show current database of firmware levels
+    showhost         - show host and host path information
+    showhostset      - show sets of hosts in the system
+    showinventory    - show hardware inventory
+    showiscsisession - show iscsi sessions
+    showkeys         - show configured keys for a service
+    showld           - show logical disks (LDs) in the system
+    showldch         - show LD to PD chunklet mapping
+    showldmap        - show LD to VV mapping
+    showlicense      - show installed license key
+    showmaint        - show maintenance window records
+    shownet          - show network configuration and status
+    shownode         - show node and its component information
+    shownvmeconn     - show NVMe over Fabric target connections
+    showpd           - show physical disks (PDs) in the system
+    showpdch         - show status of selected chunklets of physical disks
+    showpdvv         - show PD to VV mapping
+    showport         - show ports in the system
+    showportarp      - show ARP table for ports
+    showportdev      - show detailed information about devices on a port
+    showportlesb     - show Link Error Status Block information about
+                       devices on Fibre Channel port
+    showqos          - show QoS rules in the system
+    showrcopy        - show Remote Copy configuration information
+    showrctransport  - show information about end-to-end transport for
+                       Remote Copy
+    showreset        - show component reset reason statement information
+    showrole         - show information about roles in the system
+    showrsv          - show information about reservation and registration
+                       of VLUNs connected on a Fibre Channel port
+    showsched        - show scheduled tasks in the system
+    showsharesetting - show information of all sharesettings
+    showsnmpmgr      - show SNMP trap managers
+    showsnmppw       - shows SNMP access passwords
+    showsnmpuser     - show SNMPv3 users and their authentication and
+                       privacy protocols
+    showspace        - show estimated free space
+    showspare        - show information about spare and relocated chunklets
+    showsr           - show System Reporter status
+    showsralertcrit  - show System Reporter alert criteria
+    showsshkey       - show ssh public keys authorized by the current user
+    showswitch       - show information about the system switches
+    showsys          - show system information (system name, serial number etc.)
+    showsysmgr       - show system manager startup state
+    showtarget       - show unrecognized targets
+    showtask         - show information about tasks
+    showtoc          - show system Table of Contents (TOC) summary
+    showtocgen       - show system Table of Contents (TOC) generation number
+    showunavail      - show unavailable data status
+    showuser         - show user accounts and SSH keys
+    showuseracl      - show user access control list
+    showuserconn     - show user connections
+    showvasa         - show properties of the VASA web service provider
+    showversion      - show software versions
+    showvlun         - show virtual LUNs (VLUNs) in the system
+    showvv           - show virtual volumes (VVs) in the system
+    showvvcpg        - show VV space distribution among CPGs
+    showvvmap        - show VV to LD mapping
+    showvvolsc       - show vVol storage containers in the system
+    showvvolvm       - show information about virtual machines (vVol-based)
+                       in the system
+    showvvpd         - show VV distribution across PDs
+    showvvset        - show sets of VVs in the system
+    showwsapi        - show the Web Services API server information
+    showwsapisession - show the Web Services API server sessions information
+
+Use setclienv command to change the table format options.
+

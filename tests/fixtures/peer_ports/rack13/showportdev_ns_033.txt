@@ -1,0 +1,4 @@
+# showportdev ns 0:3:3
+PtId LpID  Hadr -Node_WWN- -Port_WWN- ftrs svpm bbct flen -vp_WWN- -SNN- Name
+-----------------------------------------------------------------------------
+   0 total                                                                   

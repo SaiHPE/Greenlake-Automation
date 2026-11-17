@@ -791,6 +791,104 @@ def test_subscription_refusal_is_translated_to_the_onboarding_gate():
     assert isinstance(err, WsapiError) and "GreenLake" in str(err)
 
 
+def test_a_refused_write_says_the_arrays_reason_once():
+    # Live on rack13-ARCUS (Alletra MP, OS 10.6.0), 2026-11-16: createVolume was refused with
+    # HTTP 400 {"code": 28, "desc": "client request contains value that is too large"}, and the
+    # operator read "...failed: client request contains value that is too large: Bad request
+    # (HTTP 400) 28 - client request contains value that is too large" (the reason twice).
+    from types import SimpleNamespace
+
+    from hpe3parclient import exceptions as hpe_exc
+
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiError
+
+    reason = "client request contains value that is too large"
+    # Built the way the SDK raises it: http.request() hands the parsed body to from_response().
+    exc = hpe_exc.from_response(SimpleNamespace(status=400), {"code": 28, "desc": reason})
+    assert type(exc) is hpe_exc.HTTPBadRequest
+    assert str(exc) == f"Bad request (HTTP 400) 28 - {reason}"
+
+    err = WsapiClient("h", "u", "p")._translate(exc, where="createVolume zz_bl45_vol02")
+
+    assert type(err) is WsapiError
+    assert str(err) == f"WSAPI createVolume zz_bl45_vol02 failed: {reason} (HTTP 400, code 28)"
+    assert str(err).count(reason) == 1
+
+
+def test_an_error_without_the_arrays_reason_keeps_its_type_and_text():
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+
+    err = WsapiClient("h", "u", "p")._translate(RuntimeError("connection reset"), where="login")
+    assert str(err) == "WSAPI login failed: RuntimeError: connection reset"
+
+
+def test_a_refusal_that_mentions_a_timeout_keeps_the_arrays_reason():
+    # The array answered, so this is not a WSAPI that stopped responding.
+    from types import SimpleNamespace
+
+    from hpe3parclient import exceptions as hpe_exc
+
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiNotReady
+
+    client = WsapiClient("h", "u", "p")
+    refused = hpe_exc.from_response(SimpleNamespace(status=400), {"desc": "invalid timeout value"})
+    err = client._translate(refused, where="createVolume v1")
+    assert not isinstance(err, WsapiNotReady)
+    assert str(err) == "WSAPI createVolume v1 failed: invalid timeout value (HTTP 400)"
+
+    # A status the SDK does not map: the bare ClientException, which drops the status.
+    unmapped = hpe_exc.from_response(SimpleNamespace(status=422), {"desc": "invalid timeout value"})
+    assert type(unmapped) is hpe_exc.ClientException
+    err = client._translate(unmapped, where="createVolume v1")
+    assert not isinstance(err, WsapiNotReady)
+    assert str(err) == "WSAPI createVolume v1 failed: invalid timeout value"
+
+
+def test_the_sdks_own_timeout_still_says_wsapi_did_not_respond():
+    from hpe3parclient import exceptions as hpe_exc
+
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiNotReady
+
+    # Raised the way the SDK does when requests times out.
+    exc = hpe_exc.Timeout("Timeout: HTTPSConnectionPool(host='h', port=443): Read timed out.")
+    err = WsapiClient("h", "u", "p")._translate(exc, where="login")
+    assert isinstance(err, WsapiNotReady) and "did not respond" in str(err)
+
+
+def test_a_subscription_refusal_with_an_unmapped_status_still_points_at_greenlake():
+    # For an HTTP status it does not map, the SDK raises the bare ClientException, whose str()
+    # fails. The array's words must still be found, and quoted.
+    from hpe3parclient import exceptions as hpe_exc
+
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+
+    said = "Array has not yet completed the subscription process"
+    exc = hpe_exc.ClientException({"code": 5, "desc": said})
+    assert "subscri" not in WsapiClient._safe_str(exc)
+
+    err = WsapiClient("h", "u", "p")._translate(exc, where="createVolume v1")
+    assert "GreenLake" in str(err)
+    assert str(err).endswith(f"array said: {said} (code 5)")
+
+
+def test_a_long_error_body_is_cut_short():
+    # An HTML error page arrives whole as the description; 5,000 characters is not a message.
+    from types import SimpleNamespace
+
+    from hpe3parclient import exceptions as hpe_exc
+
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+
+    page = "<html><body>" + "Internal error. " * 320 + "</body></html>"
+    assert len(page) > 5000
+    exc = hpe_exc.from_response(SimpleNamespace(status=500), page)
+
+    err = str(WsapiClient("h", "u", "p")._translate(exc, where="createVolume v1"))
+    assert err.startswith("WSAPI createVolume v1 failed: <html><body>Internal error.")
+    assert err.endswith("… (HTTP 500)")
+    assert len(err) < 360
+
+
 class _StubSdkSets(_StubSdk):
     """_StubSdk plus host/volume sets, for the set-membership reconciliation."""
 

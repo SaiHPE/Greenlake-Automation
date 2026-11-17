@@ -263,8 +263,17 @@ class LinkCheckRequest(BaseModel):
     duration_s: int = Field(default=600, ge=300, le=172800)
 
 
+class StorageApplyRequest(BaseModel):
+    """`approved_plan` is the `plan_id` of the plan the operator ticked, from the `storage.previewed`
+    event. The server refuses the apply without it, or when it is not the plan it holds."""
+
+    approved_plan: str | None = None
+
+
 class ReplicationApplyRequest(BaseModel):
     """SPEC-020 R4: `accept_latency` is the operator's 'Continue anyway' when the measured latency is
-    over HPE's limit for a mode on the tab."""
+    over HPE's limit for a mode on the tab. `approved_plan` is the `plan_id` of the plan the operator
+    ticked, from the `replication.previewed` event."""
 
     accept_latency: bool = False
+    approved_plan: str | None = None

@@ -1,0 +1,5 @@
+# srstatrcvv
+          -IO/s-- -KBytes/sec- -Svct(ms)- IOSz KB
+Time Secs Lcl Rmt   Lcl    Rmt  Lcl   Rmt     Lcl   RPO
+-------------------------------------------------------
+        0 0.0 0.0   0.0    0.0 0.00  0.00     0.0 0.0ms

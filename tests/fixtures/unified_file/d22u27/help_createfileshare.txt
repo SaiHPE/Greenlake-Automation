@@ -1,0 +1,78 @@
+# help createfileshare
+createfileshare - create a fileshare and export it to a client.
+
+SYNTAX
+    createfileshare [options] <filesystem_name> <share_name>
+
+DESCRIPTION
+    The createfileshare command creates a fileshare for NFS protocols and
+     optionally exports it to one or more client IPs specified.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the fileshare_create right
+
+OPTIONS
+    -option
+        Specifies client access parameters to be set for the share being created.
+        Use comma to separate multiple options.
+
+        Following options are supported:
+            ro
+                Specifies that the fileshare will be exported to client as read-only.
+
+            rw
+                Specifies that the fileshare will be exported to client as read-write.
+                If not specified, it will be exported to client as read-write.
+                The default access permissions for fileshare is read-write.
+
+            root_squash
+                Map requests from UID/GID 0 to the anonymous UID/GID. Note that this does
+                not apply to any other UIDs or GIDs that might be equally sensitive, such
+                as user "bin" or group "staff"
+
+            no_root_squash
+                Turn off root squashing.
+
+            all_squash
+                Map all UIDs and GIDs to the anonymous user.
+
+        This is the default option that will be applied: sync, wdelay,
+        sec=sys, subtree_check, secure, hide, root_squash, rw.
+
+     -ipaddr
+        Specifies the client IP address that can access the share.
+        Use comma to separate the IP addresses.
+        Use "*" to allow access to share by any client.
+        Use 192.168.1.0/24 for multiple clients to have access to shares in a subnet.
+
+SPECIFIERS
+    <filesystem_name>
+        Specifies a filesystem name in which the share should be created.
+
+    <share_name>
+        Specifies a fileshare name up to 255 characters in length.
+
+NOTES
+    A filesystem needs to be created before creating a fileshare.
+    Use createfilesystem command to create a filesystem.
+
+    Verify the creation of fileshares by issuing the showfileshare command.
+
+    Maximum of one share can be created in a filesystem.
+
+EXAMPLES
+    Creating a fileshare named demo_share in filesystem demo_fs
+
+        cli% createfileshare demo_fs demo_share
+
+    Creating a fileshare named demo_share in filesystem demo_fs
+    and export it to NFS client 10.31.51.21 with read write permissions
+
+        cli% createfileshare -ipaddr 10.31.51.21 demo_fs demo_share
+
+    Creating a fileshare named demo_share in filesystem demo_fs
+    and export it to NFS client 10.31.51.21 with read only permissions
+
+        cli% createfileshare -option ro -ipaddr 10.31.51.21 demo_fs demo_share
+

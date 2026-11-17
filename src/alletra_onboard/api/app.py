@@ -74,6 +74,7 @@ from alletra_onboard.api.schemas import (
     RunFromSheetRequest,
     RunListResponse,
     RunResponse,
+    StorageApplyRequest,
     VerifyStepRequest,
 )
 from alletra_onboard.application.onboarding.health import greenlake_check
@@ -606,9 +607,10 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         return _start_step(run_id, lambda: service.start_storage_preview(run_id))
 
     @app.post("/runs/{run_id}/storage/apply", response_model=RunResponse)
-    async def run_storage_apply(run_id: str) -> RunResponse:
-        # Creates host/volumes/exports on the array — the UI must preview + confirm first.
-        return _start_step(run_id, lambda: service.start_storage_apply(run_id))
+    async def run_storage_apply(run_id: str, request: StorageApplyRequest | None = None) -> RunResponse:
+        # Creates host/volumes/exports on the array: only the held plan, named by the id the operator ticked.
+        req = request or StorageApplyRequest()
+        return _start_step(run_id, lambda: service.start_storage_apply(run_id, approved_plan=req.approved_plan))
 
     @app.post("/runs/{run_id}/storage/verify-paths", response_model=RunResponse)
     async def run_storage_verify_paths(run_id: str) -> RunResponse:
@@ -628,10 +630,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.post("/runs/{run_id}/replication/apply", response_model=RunResponse)
     async def run_replication_apply(run_id: str, request: ReplicationApplyRequest | None = None) -> RunResponse:
-        # SPEC-016 R4/R7: creates Remote Copy groups over WSAPI — the UI must preview + confirm first.
+        # SPEC-016 R4/R7: creates Remote Copy groups over WSAPI: only the held plan, named by the id the operator ticked.
         # SPEC-020 R4: on RCIP the link must have been checked; over the limit needs accept_latency.
         req = request or ReplicationApplyRequest()
-        return _start_step(run_id, lambda: service.start_replication_apply(run_id, accept_latency=req.accept_latency))
+        return _start_step(run_id, lambda: service.start_replication_apply(
+            run_id, approved_plan=req.approved_plan, accept_latency=req.accept_latency))
 
     @app.post("/runs/{run_id}/replication/verify", response_model=RunResponse)
     async def run_replication_verify(run_id: str) -> RunResponse:

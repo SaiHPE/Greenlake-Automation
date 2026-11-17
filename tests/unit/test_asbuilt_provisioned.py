@@ -430,6 +430,31 @@ def test_run_records_union_removals_from_every_apply():
     assert [r["command"] for r in data.provisioning_removals] == ["removevv -f v1", "removehost h2"]
 
 
+def test_run_records_include_the_removals_of_a_failed_apply():
+    """SPEC-007 R6: what a failed apply made is undone like the rest; a retry calls those objects Exists."""
+    from types import SimpleNamespace
+
+    from alletra_onboard.application.documents import steps as st
+
+    def ev(t, data, ts):
+        return SimpleNamespace(event_type=t, data=data, created_at=ts)
+
+    events = [
+        ev("storage.apply.failed", {"result": {"outcomes": [], "error": "Stopped while creating volume v2: HTTP 400",
+                                               "removals": [{"kind": "volume", "name": "v1", "command": "removevv -f v1"}]}}, "t1"),
+        ev("storage.applied", {"result": {"outcomes": [], "removals": [{"kind": "volume", "name": "v2", "command": "removevv -f v2"}]}}, "t2"),
+    ]
+    data = AsBuiltData()
+    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events, list_commands=lambda run_id, since=0: []))._run_records("r1", data)
+    assert [r["command"] for r in data.provisioning_removals] == ["removevv -f v1", "removevv -f v2"]
+    assert data.provisioning_result["removals"][0]["command"] == "removevv -f v2"      # the newest apply's record
+
+    only_failed = AsBuiltData()     # a run whose one apply failed is not "a plan built but not applied"
+    st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events[:1], list_commands=lambda run_id, since=0: []))._run_records("r1", only_failed)
+    assert only_failed.provisioning_result["error"].startswith("Stopped while creating volume v2")
+    assert [r["command"] for r in only_failed.provisioning_removals] == ["removevv -f v1"]
+
+
 def test_the_two_run_sections_share_a_page(tmp_path):
     """A-4: a one-sentence zoning section owned a whole page because every Heading 1 starts one. The
     first run section starts a page; the second flows on. Every other Heading 1 still breaks."""

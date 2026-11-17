@@ -1,0 +1,28 @@
+      showsys                3 line(s)
+      showversion            12 line(s)
+      showport               27 line(s)
+      showport -par          19 line(s)
+      showport -peer         1 line(s)
+      showport -c            32 line(s)
+      showport -i            27 line(s)
+      showport -sfp          25 line(s)
+      showhost -d            25 line(s)
+      showvlun -a            232 line(s)
+      help controlport       494 line(s)
+      help showport          280 line(s)
+      help showportdev       137 line(s)
+      GET /ports               ok
+      GET /wsapiconfiguration  ok
+      OS: Release version 10.5.0
+      0:3:1 mode target    state ready     Type host  par host/point     logins 3  wsapi mode 2 type 1
+      0:3:2 mode target    state ready     Type free  par host/point     logins 0  wsapi mode 2 type 3
+      0:3:3 mode target    state loss_sync Type free  par host/point     logins 0  wsapi mode 2 type 3
+      0:3:4 mode target    state ready     Type host  par host/point     logins 3  wsapi mode 2 type 1
+      1:3:1 mode target    state ready     Type host  par host/point     logins 3  wsapi mode 2 type 1
+      1:3:2 mode target    state ready     Type host  par host/point     logins 1  wsapi mode 2 type 1
+      1:3:3 mode target    state loss_sync Type free  par host/point     logins 0  wsapi mode 2 type 3
+      1:3:4 mode target    state ready     Type host  par host/point     logins 2  wsapi mode 2 type 1
+PASS  D22U27 showport -par read
+PASS  D22U27 controlport help read
+
+0 FAIL

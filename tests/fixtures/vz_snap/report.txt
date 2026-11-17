@@ -1,0 +1,30 @@
+      showversion                              12 line(s)
+      showdate                                 3 line(s)
+      showsched                                5 line(s)
+      showvvset                                8 line(s)
+      showcpg                                  5 line(s)
+      showvv -showcols Id,Name,Prov,Type,CopyO 96 line(s)
+      showvv zz_sn_*                           1 line(s)
+      showvvset zz_sn_*                        1 line(s)
+      help createsched                         138 line(s)
+      help setsched                            82 line(s)
+      help removesched                         42 line(s)
+      help showsched                           89 line(s)
+      help createsv                            160 line(s)
+      help removevv                            92 line(s)
+      GET /system      ok
+      GET /volumes     ok
+      GET /volumesets  ok
+      GET /schedules   HTTP 501 {"code":9,"desc":"unsupported operation for the resource"}
+      OS: Release version 10.5.51
+      showdate: Node Date | 0    2026-11-17 00:08:32 IST (Asia/Kolkata) | 1    2026-11-17 00:08:32 IST (Asia/Kolkata)
+      schedules: 0 (createsv: 0)
+      snapshots over WSAPI: 66; keys seen on them: additionalStates, baseId, capacityEfficiency, comment, compressionState, copyOf, copyType, creationTime8601, creationTimeSec, deduplicationState, degradedStates, expirationTime8601, expirationTimeSec, failedStates, hostWriteMiB, id, links, name, nguid, parentId, policies, provisioningType, rcopyGroup, rcopyStatus, readOnly, retentionTime8601, retentionTimeSec, roChildId, rwChildId, shortName, sizeMiB, state, totalUsedMiB, udid, userCPG, usrSpcAllocLimitPct, usrSpcAllocWarningPct, uuid, wwn
+      snapshots with a retention field: retentionTime8601, retentionTimeSec
+      /schedules: no resource (see file)
+PASS  nothing named zz_sn_* on the array
+PASS  showsched read
+PASS  createsched help read
+PASS  createsv help read
+
+0 FAIL

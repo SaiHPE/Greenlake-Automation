@@ -42,6 +42,22 @@ includes the block under *To remove what this run created*, unioned across every
 **R5 — Empty is stated.** An apply that created nothing renders *"Nothing to remove — this apply
 created nothing."*
 
+**R6 — A failed apply has a removal set too** (BL-45, 2026-11-16). Apply stops at the first write the
+array refuses, but what it made before that stays on the array. The set is still built, inside the
+array session: objects by `created` outcome, exports by a fresh read of the templates when the failure
+came among the exports (the failed call may have presented a LUN). If that read fails too, a note says
+to check `showvlun -t`. The error names the object it was creating. When that object is a host, host
+set, volume or volume set, a note names it with the command to check for it and the command to remove it:
+a timeout can lose the answer after the array made it, but it stays out of the set, since it may have
+been there before this run (tested against fakes, not yet seen live). The page, the as-built and the lab
+cleanups take the removals from `storage.apply.failed` as well as `storage.applied`, unioned across the
+run, and the page keeps showing them after a rebuild: a retry calls the failed attempt's objects
+*Exists*, so its own set never names them. Until 2026-11-16 a failed apply returned an empty set and the
+page never showed its result.
+**Live 2026-11-16** on rack13-ARCUS, 21/0 ([validation record](../validation/2026-11-16-failed-apply-rack13.md)):
+stopped at a volume the array refused, three objects made, their removal set exactly those three, the
+page, the rebuild and the as-built as above, the array back as it was.
+
 ## 3. Data contract
 
 ```python
@@ -53,7 +69,7 @@ class RemovalItem(BaseModel):
 class ProvisioningResult(BaseModel):
     ...
     removals: list[RemovalItem]
-    removal_notes: list[str]    # R1's "not reverted" note
+    removal_notes: list[str]    # R1's "not reverted" note; R6's notes on what to check by hand
 
 def render_removal_commands(items: list[RemovalItem]) -> list[str]   # R3 order, de-duplicated
 ```
@@ -65,5 +81,11 @@ def render_removal_commands(items: list[RemovalItem]) -> list[str]   # R3 order,
 `test_updated_objects_are_not_reverted_but_named`,
 `test_render_orders_by_kind_and_dedups_across_two_applies`,
 `test_nothing_created_means_an_empty_set`,
+`test_a_failed_apply_still_removes_what_it_made_before_the_failure`,
+`test_an_object_whose_create_failed_is_named_in_a_note_not_in_the_set`,
+`test_a_failure_among_the_exports_reads_back_what_the_array_presented`,
+`test_exports_that_cannot_be_read_back_after_a_failure_are_named_in_a_note`,
+`test_a_session_that_never_opened_wrote_nothing_and_removes_nothing`,
+`test_run_records_include_the_removals_of_a_failed_apply` (in `test_asbuilt_provisioned.py`),
 `test_the_second_session_cleanup_would_have_been_generated` (pinned to the 2026-09-14 apply: the
 same fourteen lines the operator typed, in the same order).

@@ -1,0 +1,28 @@
+# showport
+N:S:P      Mode     State --Node_WWN/IP--- -Port_WWN/HW_Addr- Type Protocol      Label
+0:1:1 initiator     ready       16.1.14.90       88E9A4DBB31C disk     NVMe       DP-1
+0:1:2 initiator     ready       16.1.15.90       88E9A4DBB31D disk     NVMe       DP-2
+0:2:1 initiator     ready         16.1.8.1       88E9A4DB73E6 disk     NVMe       DP-1
+0:2:2 initiator     ready         16.1.9.1       88E9A4DB73E7 disk     NVMe       DP-2
+0:3:1    target     ready 2FF70002AC02DEF6   20310002AC02DEF6 host       FC  peer port
+0:3:2    target     ready 2FF70002AC02DEF6   20320002AC02DEF6 free       FC          -
+0:3:3    target loss_sync 2FF70002AC02DEF6   20330002AC02DEF6 free       FC          -
+0:3:4    target     ready 2FF70002AC02DEF6   20340002AC02DEF6 host       FC          -
+0:4:1    target     ready      10.54.90.70       40A6B7D8E6A0 file       IP          -
+0:4:2    target     ready      10.54.90.71       40A6B7D8E6A1 file       IP          -
+0:4:3      peer     ready     10.54.122.92       40A6B7D8E6A2 rcip       IP          -
+0:4:4      peer   offline                -       40A6B7D8E6A3 free       IP          -
+1:1:1 initiator     ready       16.1.14.91       88E9A4DBA3F2 disk     NVMe       DP-1
+1:1:2 initiator     ready       16.1.15.91       88E9A4DBA3F3 disk     NVMe       DP-2
+1:2:1 initiator     ready         16.1.8.2       88E9A4DBC216 disk     NVMe       DP-1
+1:2:2 initiator     ready         16.1.9.2       88E9A4DBC217 disk     NVMe       DP-2
+1:3:1    target     ready 2FF70002AC02DEF6   21310002AC02DEF6 host       FC peer 1:3:1
+1:3:2    target     ready 2FF70002AC02DEF6   21320002AC02DEF6 host       FC  Peer_port
+1:3:3    target loss_sync 2FF70002AC02DEF6   21330002AC02DEF6 free       FC          -
+1:3:4    target     ready 2FF70002AC02DEF6   21340002AC02DEF6 host       FC          -
+1:4:1    target     ready      10.54.90.73       40A6B7D900C0 file       IP          -
+1:4:2    target     ready      10.54.90.74       40A6B7D900C1 file       IP          -
+1:4:3      peer     ready     10.54.122.93       40A6B7D900C2 rcip       IP          -
+1:4:4      peer   offline                -       40A6B7D900C3 free       IP          -
+--------------------------------------------------------------------------------------
+   24                                                                                 

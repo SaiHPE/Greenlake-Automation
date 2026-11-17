@@ -6,6 +6,7 @@ Output fixtures are shaped on RHEL 9 / SLES 15 command output; no rack13 Linux h
 live read is owed (SPEC-014 slice 2: built — pending live run)."""
 
 import json
+from pathlib import Path
 
 import pytest
 from pydantic import SecretStr
@@ -32,25 +33,30 @@ PRETTY_NAME="Red Hat Enterprise Linux 9.2 (Plow)"
 '''
 PORT_NAMES = "0x10000090fa8b1234\n0x10000090fa8b1235\n"
 INITIATOR = "## DO NOT EDIT OR REMOVE THIS FILE!\nInitiatorName=iqn.1994-05.com.redhat:rhel92lab01\n"
-MULTIPATH = """mpatha (360002ac0000000000000007a0002d495) dm-2 3PARdata,VV
-size=10G features='1 queue_if_no_path' hwhandler='1 alua' wp=rw
-`-+- policy='service-time 0' prio=50 status=active
-  |- 1:0:0:1 sdb 8:16  active ready running
-  |- 1:0:1:1 sdc 8:32  active ready running
-  |- 2:0:0:1 sdd 8:48  active ready running
-  `- 2:0:1:1 sde 8:64  active ready running
-360002ac0000000000000007b0002d495 dm-3 3PARdata,VV
-size=2.0G features='1 queue_if_no_path' hwhandler='1 alua' wp=rw
-`-+- policy='service-time 0' prio=50 status=active
-  |- 1:0:0:2 sdf 8:80  active ready running
-  |- 1:0:1:2 sdg 8:96  failed faulty running
-  |- 2:0:0:2 sdh 8:112 active ready running
-  `- 2:0:1:2 sdi 8:128 active ready running
-mpathc (3600508b1001c7e4f0000000000000001) dm-4 HPE,LOGICAL VOLUME
-size=446G features='0' hwhandler='0' wp=rw
-`-+- policy='service-time 0' prio=1 status=active
-  `- 0:1:0:0 sda 8:0   active ready running
-"""
+# `multipath -ll` as printed in published documents: no lab Linux host has an Alletra volume yet
+# (tests/fixtures/linux_multipath/README.md says where each came from and how to replace them).
+MP_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "linux_multipath"
+MP_HPE_P67 = (MP_DIR / "hpe_primera_rhel_guide_p67_documented_sample.txt").read_text()
+MP_HPE_P76 = (MP_DIR / "hpe_primera_rhel_guide_p76_documented_sample.txt").read_text()
+MP_SUSE_NETAPP = (MP_DIR / "suse_sles15sp6_storage_guide_documented_sample.txt").read_text()
+# The lab RHEL 8.9 host as root, 2026-11-16: the real answers when multipath is not set up.
+MP_LAB_NOT_SET_UP = (MP_DIR / "rhel89_lab_2026-11-16_not_set_up.txt").read_text()
+
+
+def _captured(text: str) -> dict[str, tuple[int, str]]:
+    """`=== name` sections of a hand capture -> (exit status, output); `exit=N` closes a section."""
+    out: dict[str, tuple[int, str]] = {}
+    name, lines = "", []
+    for line in text.splitlines():
+        if line.startswith("=== "):
+            if name and name not in out:
+                out[name] = (0, "\n".join(lines) + "\n")
+            name, lines = line[4:], []
+        elif line.startswith("exit="):
+            out[name] = (int(line[5:]), "\n".join(lines) + "\n")
+        else:
+            lines.append(line)
+    return out
 
 
 class FakeLinux:
@@ -66,14 +72,19 @@ class FakeLinux:
     def __exit__(self, *a):
         return False
 
-    def read(self, key):
+    def run(self, key):
+        """(exit status, stdout): a key with an output ran (exit 0); a key without one failed (exit 1)."""
         assert key in linux_ssh.COMMANDS
         self.keys.append(key)
-        return self.outputs.get(key, "")
+        return (0, self.outputs[key]) if key in self.outputs else (1, "")
+
+    def read(self, key):
+        status, out = self.run(key)
+        return out if status == 0 else ""
 
 
 FULL = {"hostname": "rhel92lab01\n", "os": OS_RELEASE, "serial": "CZJ3140ABC\n", "fc": PORT_NAMES,
-        "iqn": INITIATOR, "multipath": MULTIPATH}
+        "iqn": INITIATOR, "multipath": MP_HPE_P67}
 
 
 # ------------------------------------------------------------------ R4: the read
@@ -91,8 +102,6 @@ def test_parsers_read_rhel_output():
     assert linux_ssh.parse_fc_port_names(PORT_NAMES) == ["10000090FA8B1234", "10000090FA8B1235"]
     assert linux_ssh.parse_initiator_name(INITIATOR) == ["iqn.1994-05.com.redhat:rhel92lab01"]
     assert linux_ssh.parse_serial("To Be Filled By O.E.M.\n") == ""
-    # Two Alletra devices (the local HPE LOGICAL VOLUME is not counted), 4 paths each, one faulty.
-    assert linux_ssh.parse_multipath(MULTIPATH) == "2 Alletra/3PAR device(s), 4 path(s) each, 1 path(s) not active"
 
 
 def test_a_full_read_as_root():
@@ -104,12 +113,252 @@ def test_a_full_read_as_root():
 
 
 def test_a_non_root_login_falls_back_to_sudo_n_and_says_what_it_could_not_read():
-    fake = FakeLinux({k: v for k, v in FULL.items() if k not in ("serial", "multipath")})
+    # BL-36: multipath is loaded, but neither `multipath -ll` nor `sudo -n multipath -ll` ran.
+    outputs = {k: v for k, v in FULL.items() if k not in ("serial", "multipath")} | {"dm_multipath": "live\n"}
+    fake = FakeLinux(outputs)
     read = linux_ssh.read_linux_host(fake, "rhel92lab01", "10.132.30.140")
     assert "serial_sudo" in fake.keys and "multipath_sudo" in fake.keys
-    assert read.serial_number == "" and read.multipath == ""
+    assert read.serial_number == ""
+    assert read.multipath_state == "not_permitted"
+    assert read.multipath == ("not read: it needs root, or sudo without a password. "
+                              "Use a root login on the Hosts tab to see it.")
     assert any("serial number not readable" in n for n in read.notes)
+    assert any("multipath not readable" in n for n in read.notes)
     assert read.wwpns                                           # sysfs port_name is world-readable
+
+
+# ------------------------------------------------------------------ BL-36: the multipath summary
+
+def test_the_parser_reads_the_documented_alletra_samples():
+    (one,) = linux_ssh.parse_multipath(MP_HPE_P67)
+    assert one.name == "360002ac000000000000003e3000185df"
+    assert one.paths == ("active ready running",) * 4 and one.failed == 0
+    (two,) = linux_ssh.parse_multipath(MP_HPE_P76)              # header line ends in a space
+    assert two.name == "350002ac000160121" and len(two.paths) == 4
+
+
+def test_another_vendors_device_is_not_counted():
+    # An aliased device with two path groups (`| |-` lines), from a NetApp array.
+    assert linux_ssh.parse_multipath(MP_SUSE_NETAPP) == []
+    assert linux_ssh.parse_multipath(MP_SUSE_NETAPP + MP_HPE_P67)[0].paths == ("active ready running",) * 4
+
+
+def test_a_root_read_summarises_the_alletra_devices():
+    fake = FakeLinux(FULL)
+    read = linux_ssh.read_linux_host(fake, "rhel92lab01", "10.132.30.140")
+    assert "multipath_sudo" not in fake.keys and "dm_multipath" not in fake.keys
+    assert read.multipath_state == "ok"
+    assert read.multipath == "1 Alletra/3PAR device, 4 paths, all active"
+
+
+def test_multipath_not_set_up_is_said_plainly():
+    # BL-10's lab host: non-root login, no /etc/multipath.conf, dm-multipath not loaded.
+    fake = FakeLinux({k: v for k, v in FULL.items() if k != "multipath"})
+    read = linux_ssh.read_linux_host(fake, "rhel92lab01", "10.132.30.140")
+    assert fake.keys[-1] == "dm_multipath"
+    assert read.multipath_state == "not_set_up"
+    assert read.multipath.startswith("not set up on this server (the dm-multipath module is not loaded)")
+    assert not any("multipath not readable" in n for n in read.notes)
+
+
+def test_the_lab_hosts_real_answers_read_as_not_set_up():
+    """The lab RHEL 8.9 host as root (tests/fixtures/linux_multipath/README.md): `multipath -ll` exits 1
+    and the module's initstate file is absent, so the sentence says multipath is not set up."""
+    real = _captured(MP_LAB_NOT_SET_UP)
+    assert real["multipath -ll"][0] == 1 and "DM multipath kernel driver not loaded" in real["multipath -ll"][1]
+    answers = {"hostname": real["hostname"], "multipath": real["multipath -ll"],
+               "multipath_sudo": real["multipath -ll"], "dm_multipath": real["initstate"]}
+
+    class LabHost(FakeLinux):
+        def run(self, key):
+            assert key in linux_ssh.COMMANDS
+            self.keys.append(key)
+            return answers.get(key, (1, ""))
+
+    read = linux_ssh.read_linux_host(LabHost({}), "localhost.localdomain", "10.54.159.49")
+    assert read.hostname == "localhost.localdomain"
+    assert read.multipath_state == "not_set_up"
+    assert read.multipath == ("not set up on this server (the dm-multipath module is not loaded). "
+                              "Set up multipath before volumes are presented.")
+
+
+def test_the_tools_own_read_of_the_lab_host_replays_to_the_summary_it_gave():
+    """2026-11-17: the tool's own client as root on the lab RHEL 8.9 host saved each command's exit code
+    and stdout, and the summary it made of them (tests/fixtures/linux_multipath/README.md)."""
+    folder = MP_DIR / "rhel89_lab_2026-11-17_tool_read"
+
+    def saved(key: str) -> tuple[int, str]:
+        command, status, out = (folder / f"{key}.txt").read_text().split("\n", 2)
+        assert command == "# " + linux_ssh.COMMANDS[key]
+        return int(status.removeprefix("# exit ")), out
+
+    answers = {key: saved(key) for key in ("hostname", "multipath", "multipath_sudo", "dm_multipath")}
+    assert [answers[k][0] for k in ("multipath", "multipath_sudo", "dm_multipath")] == [1, 1, 1]
+
+    class LabHost(FakeLinux):
+        def run(self, key):
+            assert key in linux_ssh.COMMANDS
+            self.keys.append(key)
+            return answers.get(key, (1, ""))
+
+    read = linux_ssh.read_linux_host(LabHost({}), "localhost.localdomain", "10.54.159.49")
+    summary = dict(line.split(": ", 1) for line in (folder / "summary.txt").read_text().splitlines())
+    assert read.hostname == "localhost.localdomain"
+    assert (read.multipath_state, read.multipath) == (summary["state"], summary["multipath"]) == (
+        "not_set_up", ("not set up on this server (the dm-multipath module is not loaded). "
+                       "Set up multipath before volumes are presented."))
+
+
+def test_multipath_set_up_with_no_alletra_devices_yet():
+    for listing in ("", MP_SUSE_NETAPP):                       # nothing listed, or another vendor only
+        read = linux_ssh.read_linux_host(FakeLinux(FULL | {"multipath": listing, "dm_multipath": "live\n"}),
+                                         "rhel92lab01", "10.132.30.140")
+        assert read.multipath_state == "none"
+        assert read.multipath.startswith("set up, no Alletra/3PAR devices yet")
+
+
+def test_sudo_n_is_used_when_the_login_is_not_root():
+    fake = FakeLinux({k: v for k, v in FULL.items() if k != "multipath"} | {"multipath_sudo": MP_HPE_P76})
+    read = linux_ssh.read_linux_host(fake, "rhel92lab01", "10.132.30.140")
+    assert read.multipath == "1 Alletra/3PAR device, 4 paths, all active"
+
+
+Device = linux_ssh.MultipathDevice
+OK4 = ("active ready running",) * 4
+
+
+def test_the_sentence_for_several_devices_all_healthy():
+    devices = [Device("mpatha", OK4), Device("mpathb", OK4)]
+    assert linux_ssh.multipath_summary(devices, listed=True, module_loaded=True) == (
+        "ok", "2 Alletra/3PAR devices, 4 paths each, all active")
+
+
+def test_uneven_path_counts_name_the_device():
+    devices = [Device("mpatha", OK4), Device("mpathb", OK4[:2]), Device("mpathc", OK4)]
+    assert linux_ssh.multipath_summary(devices, listed=True, module_loaded=True) == (
+        "uneven", "3 Alletra/3PAR devices, 4 paths each except mpathb (2 paths). Check the zoning and cabling.")
+
+
+def test_a_failed_path_names_the_device_and_a_standby_path_is_not_a_failure():
+    failed = ("active ready running", "failed faulty running", "active ready running", "active ready running")
+    standby = ("active ready running",) * 2 + ("active ghost running",) * 2
+    devices = [Device("mpatha", standby), Device("mpathb", failed)]
+    assert linux_ssh.multipath_summary(devices, listed=True, module_loaded=True) == (
+        "degraded", "2 Alletra/3PAR devices, 4 paths each; 1 path failed on mpathb. Check the zoning and cabling.")
+
+
+def _aliased(sample: str, alias: str) -> str:
+    """A published sample's header in the aliased form the SUSE sample prints: `alias (wwid) dm-N …`."""
+    header, rest = sample.split("\n", 1)
+    wwid, tail = header.split(" ", 1)
+    return f"{alias} ({wwid}) {tail}\n{rest}"
+
+
+def test_an_aliased_alletra_device_keeps_its_own_paths_when_another_vendor_follows():
+    # Composed from the published samples: the HPE device under an alias, then the NetApp device, then
+    # the second HPE device. NetApp's three paths must not land on mpatha.
+    text = _aliased(MP_HPE_P67, "mpatha") + MP_SUSE_NETAPP.replace("mpatha ", "mpathb ", 1) + MP_HPE_P76
+    first, second = linux_ssh.parse_multipath(text)
+    assert (first.name, first.wwid) == ("mpatha", "360002ac000000000000003e3000185df")
+    assert first.paths == ("active ready running",) * 4
+    assert (second.name, second.wwid, len(second.paths)) == ("350002ac000160121", "350002ac000160121", 4)
+
+
+# SYNTHETIC edge cases, NOT array output: no lab capture or published sample shows these yet. Each is
+# one line in the shape multipath-tools prints for it, to test the parser's robustness: a failed path,
+# a path whose device has left sysfs (`#:#:#:#` and `-`), a path check still running (a two-word
+# checker state), and the header of a map that has lost every path (`##,##` for vendor and product).
+SYN_FAILED = "  |- 7:0:1:1  sdv  65:80  failed faulty running"
+SYN_GONE = "  |- #:#:#:# -    #:#    failed faulty running"
+SYN_PENDING = "  |- 8:0:0:1  sdap 66:144 active i/o pending running"
+SYN_LOST_HEADER = "mpathb (360002AC000000000000003e3000185e0) dm-4 ##,##"
+
+
+def _lost_map(header: str = SYN_LOST_HEADER) -> str:
+    """A map with no paths left: the synthetic header and the p67 sample's size line."""
+    return header + "\n" + MP_HPE_P67.splitlines()[1] + "\n"
+
+
+def test_a_failed_a_gone_and_a_pending_path_are_read():
+    head = MP_HPE_P67.splitlines()[:3]
+    last = MP_HPE_P67.splitlines()[-1]
+    (one,) = linux_ssh.parse_multipath("\n".join([*head, SYN_FAILED, SYN_GONE, SYN_PENDING, last]) + "\n")
+    assert one.paths == ("failed faulty running", "no device: failed faulty running",
+                         "active i/o pending running", "active ready running")
+    assert one.failed == 2                                     # a running check is not a failure
+
+
+def test_a_map_that_lost_every_path_is_still_an_alletra_device_by_its_wwid():
+    (dead,) = linux_ssh.parse_multipath(_lost_map())
+    assert (dead.name, dead.wwid, dead.paths) == ("mpathb", "360002AC000000000000003e3000185e0", ())
+    # The NAA-5 WWID form of the p76 sample counts too; another vendor's WWID does not.
+    assert len(linux_ssh.parse_multipath(_lost_map("mpathc (350002ac000160121) dm-5 ##,##"))) == 1
+    assert linux_ssh.parse_multipath(_lost_map("mpathd (3600a098000aad1e300000b4b5a275d45) dm-0 ##,##")) == []
+
+
+def test_one_healthy_and_one_dead_alletra_device_is_degraded_and_names_the_dead_one():
+    read = linux_ssh.read_linux_host(FakeLinux(FULL | {"multipath": MP_HPE_P67 + _lost_map()}), "rhel92lab01", "x")
+    assert read.multipath_state == "degraded"
+    assert read.multipath == "2 Alletra/3PAR devices, 4 paths each except mpathb (no paths). Check the zoning and cabling."
+    only = linux_ssh.read_linux_host(FakeLinux(FULL | {"multipath": _lost_map()}), "rhel92lab01", "x")
+    assert only.multipath_state == "degraded"
+    assert only.multipath == "1 Alletra/3PAR device with no paths: mpathb. Check the zoning and cabling."
+
+
+def test_a_device_with_a_single_path_is_degraded_because_it_has_no_redundancy():
+    assert linux_ssh.multipath_summary([Device("mpatha", OK4), Device("mpathc", OK4[:1])],
+                                       listed=True, module_loaded=True) == (
+        "degraded", ("2 Alletra/3PAR devices, 4 paths each except mpathc (1 path). "
+                     "A single path is no redundancy. Check the zoning and cabling."))
+    assert linux_ssh.multipath_summary([Device("mpathc", OK4[:1])], listed=True, module_loaded=True) == (
+        "degraded", "1 Alletra/3PAR device, 1 path. A single path is no redundancy. Check the zoning and cabling.")
+
+
+def test_many_devices_are_named_three_at_most():
+    # One fabric down: every device lost a path.
+    half = ("active ready running", "failed faulty running")
+    devices = [Device(f"mpath{c}", half) for c in "abcde"]
+    assert linux_ssh.multipath_summary(devices, listed=True, module_loaded=True)[1] == (
+        "5 Alletra/3PAR devices, 2 paths each; 5 paths failed on mpatha, mpathb, mpathc and 2 more. "
+        "Check the zoning and cabling.")
+    uneven = [Device("mpathz", OK4)] * 5 + [Device(f"mpath{c}", OK4[:2]) for c in "abcd"]
+    assert linux_ssh.multipath_summary(uneven, listed=True, module_loaded=True)[1] == (
+        "9 Alletra/3PAR devices, 4 paths each except mpatha (2 paths), mpathb (2 paths), mpathc (2 paths) "
+        "and 1 more. Check the zoning and cabling.")
+
+
+class SlowLinux(FakeLinux):
+    """`run` gives -1 for the keys in `slow`, as the real client does when a command does not answer."""
+
+    def __init__(self, outputs: dict[str, str], slow: set[str]):
+        super().__init__(outputs)
+        self.slow = slow
+
+    def run(self, key):
+        if key in self.slow:
+            self.keys.append(key)
+            return -1, ""
+        return super().run(key)
+
+
+def test_a_timed_out_multipath_read_says_so_and_does_not_ask_for_root():
+    as_root = SlowLinux(FULL | {"dm_multipath": "live\n"}, slow={"multipath"})
+    read = linux_ssh.read_linux_host(as_root, "rhel92lab01", "x")
+    assert "multipath_sudo" not in as_root.keys                 # sudo would only wait again
+    assert read.multipath_state == "timed_out"
+    assert read.multipath == "could not be read: the command timed out. Run Discovery again."
+    assert "multipath not read: the command timed out" in read.notes
+    assert not any("needs root" in n for n in read.notes if n.startswith("multipath"))
+    not_root = SlowLinux({k: v for k, v in FULL.items() if k != "multipath"}, slow={"multipath_sudo"})
+    assert linux_ssh.read_linux_host(not_root, "rhel92lab01", "x").multipath_state == "timed_out"
+
+
+def test_a_listing_with_maps_means_multipath_is_loaded_even_without_the_module_file():
+    # dm-multipath built into the kernel has no initstate file; the listing itself proves it is there.
+    fake = FakeLinux(FULL | {"multipath": MP_SUSE_NETAPP})                # no "dm_multipath" answer
+    read = linux_ssh.read_linux_host(fake, "rhel92lab01", "x")
+    assert read.multipath_state == "none"
+    assert read.multipath.startswith("set up, no Alletra/3PAR devices yet")
 
 
 # ------------------------------------------------------------------ discovery end to end
@@ -163,7 +412,8 @@ def test_a_sheet_linux_host_with_only_a_name_ip_and_login_is_fully_discovered():
     assert host.iqns == ["iqn.1994-05.com.redhat:rhel92lab01"]
     assert host.lookup == "read from the server over SSH (10.132.30.140)"
     assert host.host_read == "read over SSH from 10.132.30.140" and "host" in host.sources
-    assert host.os == "linux" and host.multipath.startswith("2 Alletra/3PAR")
+    assert host.os == "linux" and host.multipath == "1 Alletra/3PAR device, 4 paths, all active"
+    assert host.multipath_state == "ok"
     assert "pw" not in json.dumps(report.model_dump(mode="json"))
 
 

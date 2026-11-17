@@ -1,0 +1,22 @@
+{
+ "iSCSIVlans": [
+  {
+   "IPAddr": "10.1.1.3",
+   "netmask": "255.255.255.0",
+   "gateway": "0.0.0.0",
+   "vlanTag": 0,
+   "mtu": 9000,
+   "stgt": 0,
+   "tpgt": 141,
+   "iSNSAddr": "0.0.0.0",
+   "iSNSPort": 3205
+  }
+ ],
+ "total": 1,
+ "links": [
+  {
+   "href": "https://10.64.154.190/api/v1/ports/1:4:1/iSCSIVlans",
+   "rel": "self"
+  }
+ ]
+}

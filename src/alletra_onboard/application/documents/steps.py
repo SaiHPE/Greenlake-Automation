@@ -51,6 +51,7 @@ class DocumentSteps:
         "zoning.rendered": ("zoning_rendered", None),
         "storage.previewed": ("provisioning_plan", "plan"),
         "storage.applied": ("provisioning_result", "result"),
+        "storage.apply.failed": ("provisioning_result", "result"),     # SPEC-007 R6: a failed apply made objects too
         "storage.paths.verified": ("path_verification", "verification"),
         # SPEC-018: the replication plan and what the apply did (a failed apply also carries a result)
         "replication.previewed": ("replication_plan", "plan"),
@@ -203,7 +204,8 @@ class DocumentSteps:
         rc_applies: list[dict] = []
         last_rc_plan: dict | None = None
         for event in self._coord.list_events(run_id):
-            if event.event_type == "storage.applied":
+            # SPEC-007 R6: a failed apply's objects are undone too; a retry calls them Exists.
+            if event.event_type in ("storage.applied", "storage.apply.failed"):
                 data.provisioning_removals.extend((event.data.get("result") or {}).get("removals") or [])
             if event.event_type in ("replication.applied", "replication.apply.failed"):
                 rc_applies.append(event.data.get("result") or {})

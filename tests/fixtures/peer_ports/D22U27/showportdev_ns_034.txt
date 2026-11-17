@@ -1,0 +1,11 @@
+# showportdev ns 0:3:4
+    PtId LpID  Hadr ----Node_WWN---- ----Port_WWN---- ftrs   svpm   bbct   flen   -----vp_WWN----- ---------------------------------------------------SNN--------------------------------------------------- Name               
+0x180200 0x00  0x00 2FF70002AC02DEF6 20340002AC02DEF6 0x8800 0x0012 n/a    0x0800 20340002AC02DEF6 HPE Alletra Storage MP - CZ2D320BT1 - fw:10500                                                            0:3:4              
+0x181100 0x00  0x00 2FF70002AC02DEF6 21340002AC02DEF6 0x0000 0x0000 0x0000 0x0000 20340002AC02DEF6 n/a                                                                                                       1:3:4              
+0x341500 0x00  0x00 2FF70002AC07E835 20320002AC07E835 0x0000 0x0000 0x0000 0x0000 20340002AC02DEF6 n/a                                                                                                       -                  
+0x340d00 0x00  0x00 2FF70002AC07E835 21320002AC07E835 0x0000 0x0000 0x0000 0x0000 20340002AC02DEF6 n/a                                                                                                       -                  
+0x700800 0x05  0x00 20009440C9CF655E 10009440C9CF655E 0x0000 0x0000 0x0000 0x0000 20340002AC02DEF6 Emulex SN1610E2P FV14.4.731.5 DV14.4.0.40 HN:localhost.bgl1.global.tslabs.hpecorp.net OS:VMware ESXi 8.0. DL380G10PQ8U17_655E
+0x541b5f 0x04  0x00 200070106FE9A981 100070106FE9A981 0x0000 0x0000 0x0000 0x0000 20340002AC02DEF6 Emulex 650FLB FV12.0.1345.0 DV12.0.1500.3 HN:localhost.bgl1.global.tslabs.hpecorp.net OS:VMware ESXi 8.0. ESX2               
+0x541b0b 0x03  0x00 2000D0BF9CB7A3D1 1000D0BF9CB7A3D1 0x0000 0x0000 0x0000 0x0000 20340002AC02DEF6 Emulex 650FLB FV12.0.1216.0 DV12.0.1500.3 HN:localhost.bgl1.global.tslabs.hpecorp.net OS:VMware ESXi 8.0. ESX1               
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+       7 total                                                                                                                                                                                                                  

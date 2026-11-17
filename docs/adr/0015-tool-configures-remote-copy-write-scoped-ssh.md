@@ -2,7 +2,9 @@
 
 **Status:** accepted 2026-10-07 (operator decision); **sequenced the same day** — § *Sequencing* ·
 **Amends:** ADR 0001 (SSH is read-only) from the release that ships links and targets ·
-**Keeps:** ADR 0012 (no switch writes) · **Specs:** SPEC-016, SPEC-017, SPEC-021 · **Layers 1–2 built 2026-11-04** (`ArrayRcCliClient`, SPEC-021), first on an Alletra MP → Primera pair; pending live run
+**Keeps:** ADR 0012 (no switch writes) · **Specs:** SPEC-016, SPEC-017, SPEC-021 · **Layers 1–2 built 2026-11-04** (`ArrayRcCliClient`, SPEC-021), first on an Alletra MP → Primera pair; pending live run ·
+**Generalised by:** ADR 0025 (one rule for every SSH write); since BL-58 the client checks each command's
+whole shape **and** that every port, address and target in it is one the approved plan names on that array
 
 ## Sequencing (2026-10-07)
 
@@ -61,6 +63,8 @@ read-only client is unchanged and stays the default.**
    `dismissrcopylink`, `removercopytarget` — and the same metacharacter refusal. Sub-command shape is
    checked, not just the first word: `controlport` is allowed only with `rcip addr|gw|ping`, never
    `offline` or `config`. Group and DR commands are **not** on it: they go over WSAPI (§4).
+   *(BL-58, ADR 0025 condition 3:)* the client is also built with the approved plan's ports, addresses
+   and target for its array, and refuses a well-formed command that names any other.
 2. **Never without a plan.** The write client is constructed only inside `apply` of a plan the
    operator approved in the UI (SPEC-016 §R5), the same gate as `POST /storage/apply`. No API route
    runs a Remote Copy write directly.
@@ -93,7 +97,12 @@ read-only client is unchanged and stays the default.**
   `zz_rc_*` and the existing group is never touched.
 - `controlport rcip ping` is in the write client although it changes nothing: it is not `show*`,
   and keeping the read client's definition exact matters more than one classification.
-- Not decided here: RCFC links (FC transport). Out of scope until RCIP is live.
+- Not decided here: RCFC links (FC transport). Out of scope until RCIP is live. *2026-11-17:* RCIP is
+  live. [ADR 0024](0024-rcfc-ports-and-targets.md) accepts using an existing RCFC partnership
+  ([SPEC-031](../specs/SPEC-031-rcfc.md) part A) and defers setting one up (part B); this client is
+  unchanged. The *Context* above read only the DSCC block-storage API. The storage-fleet v1 API has a
+  `replication-partners` POST and an RCIP port call, `PUT …/ports/{id}/edit-rcip` (ADR 0024 option C,
+  not probed), so "layers 1–2 have none" no longer holds for DSCC; the decision to use SSH stands.
 - The v0.19 "create partnership" path cannot be proven on the lab pair without dismantling its
   partnership; it waits for a pair that can be partnered from scratch, or the operator's decision to
   rebuild the lab one.
@@ -102,3 +111,9 @@ read-only client is unchanged and stays the default.**
   target."*). The v0.19 "second target for the other mode" therefore needs spare RCIP ports with
   addresses on at least one side; the tool must say so from `showport -rcip` before it plans one,
   and must recognise that sentence as the array's refusal.
+
+## Addendum 2026-11-17 (BL-51)
+
+`admitrcopylink`, `dismissrcopylink` and `removercopytarget` were on the write client's list and no code
+sent them. They are off it now. `removercopytarget` still appears in removal sets, as text the operator
+pastes; the tool never runs it. A command form joins the list in the same change as the code that sends it.

@@ -1,0 +1,5256 @@
+# showalert -d
+Id          : 444
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-09-30 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:17841
+Tier        : Software check
+Message     : Task 17841 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 445
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-09-30 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:17843
+Tier        : Software check
+Message     : Task 17843 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 446
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:17882
+Tier        : Software check
+Message     : Task 17882 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 447
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:17884
+Tier        : Software check
+Message     : Task 17884 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 448
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:17929
+Tier        : Software check
+Message     : Task 17929 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 449
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:17930
+Tier        : Software check
+Message     : Task 17930 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 450
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:17983
+Tier        : Software check
+Message     : Task 17983 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 451
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:17982
+Tier        : Software check
+Message     : Task 17982 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 452
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18047
+Tier        : Software check
+Message     : Task 18047 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 453
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18048
+Tier        : Software check
+Message     : Task 18048 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 454
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18076
+Tier        : Software check
+Message     : Task 18076 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 455
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18115
+Tier        : Software check
+Message     : Task 18115 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 456
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-01 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18113
+Tier        : Software check
+Message     : Task 18113 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 457
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18154
+Tier        : Software check
+Message     : Task 18154 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 458
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18156
+Tier        : Software check
+Message     : Task 18156 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 459
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18201
+Tier        : Software check
+Message     : Task 18201 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 460
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18202
+Tier        : Software check
+Message     : Task 18202 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 461
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18255
+Tier        : Software check
+Message     : Task 18255 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 462
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18254
+Tier        : Software check
+Message     : Task 18254 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 463
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18320
+Tier        : Software check
+Message     : Task 18320 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 464
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18319
+Tier        : Software check
+Message     : Task 18319 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 465
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18348
+Tier        : Software check
+Message     : Task 18348 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 466
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18385
+Tier        : Software check
+Message     : Task 18385 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 467
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-02 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18387
+Tier        : Software check
+Message     : Task 18387 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 468
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18426
+Tier        : Software check
+Message     : Task 18426 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 469
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18428
+Tier        : Software check
+Message     : Task 18428 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 470
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18473
+Tier        : Software check
+Message     : Task 18473 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 471
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18474
+Tier        : Software check
+Message     : Task 18474 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 472
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18526
+Tier        : Software check
+Message     : Task 18526 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 473
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18527
+Tier        : Software check
+Message     : Task 18527 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 474
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18592
+Tier        : Software check
+Message     : Task 18592 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 475
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18591
+Tier        : Software check
+Message     : Task 18591 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 476
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18620
+Tier        : Software check
+Message     : Task 18620 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 477
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18657
+Tier        : Software check
+Message     : Task 18657 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 478
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-03 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18659
+Tier        : Software check
+Message     : Task 18659 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 479
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18701
+Tier        : Software check
+Message     : Task 18701 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 480
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18699
+Tier        : Software check
+Message     : Task 18699 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 481
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18747
+Tier        : Software check
+Message     : Task 18747 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 482
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18746
+Tier        : Software check
+Message     : Task 18746 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 483
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18799
+Tier        : Software check
+Message     : Task 18799 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 484
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18800
+Tier        : Software check
+Message     : Task 18800 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 485
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18865
+Tier        : Software check
+Message     : Task 18865 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 486
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18864
+Tier        : Software check
+Message     : Task 18864 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 487
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18893
+Tier        : Software check
+Message     : Task 18893 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 488
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18930
+Tier        : Software check
+Message     : Task 18930 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 489
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-04 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18932
+Tier        : Software check
+Message     : Task 18932 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 490
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18971
+Tier        : Software check
+Message     : Task 18971 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 491
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:18973
+Tier        : Software check
+Message     : Task 18973 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 492
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19018
+Tier        : Software check
+Message     : Task 19018 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 493
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19019
+Tier        : Software check
+Message     : Task 19019 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 494
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19071
+Tier        : Software check
+Message     : Task 19071 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 495
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19072
+Tier        : Software check
+Message     : Task 19072 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 496
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19136
+Tier        : Software check
+Message     : Task 19136 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 497
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19137
+Tier        : Software check
+Message     : Task 19137 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 498
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19165
+Tier        : Software check
+Message     : Task 19165 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 499
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19202
+Tier        : Software check
+Message     : Task 19202 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 500
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-05 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19204
+Tier        : Software check
+Message     : Task 19204 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 501
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19243
+Tier        : Software check
+Message     : Task 19243 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 502
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19245
+Tier        : Software check
+Message     : Task 19245 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 503
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19291
+Tier        : Software check
+Message     : Task 19291 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 504
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19290
+Tier        : Software check
+Message     : Task 19290 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 505
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19343
+Tier        : Software check
+Message     : Task 19343 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 506
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19344
+Tier        : Software check
+Message     : Task 19344 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 507
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19408
+Tier        : Software check
+Message     : Task 19408 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 508
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19409
+Tier        : Software check
+Message     : Task 19409 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 509
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19437
+Tier        : Software check
+Message     : Task 19437 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 510
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19475
+Tier        : Software check
+Message     : Task 19475 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 511
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-06 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19477
+Tier        : Software check
+Message     : Task 19477 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 512
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19518
+Tier        : Software check
+Message     : Task 19518 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 513
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19516
+Tier        : Software check
+Message     : Task 19516 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 514
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19563
+Tier        : Software check
+Message     : Task 19563 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 515
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19564
+Tier        : Software check
+Message     : Task 19564 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 516
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19616
+Tier        : Software check
+Message     : Task 19616 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 517
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19617
+Tier        : Software check
+Message     : Task 19617 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 518
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19682
+Tier        : Software check
+Message     : Task 19682 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 519
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19681
+Tier        : Software check
+Message     : Task 19681 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 520
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19710
+Tier        : Software check
+Message     : Task 19710 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 521
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19749
+Tier        : Software check
+Message     : Task 19749 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 522
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-07 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19747
+Tier        : Software check
+Message     : Task 19747 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 523
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19788
+Tier        : Software check
+Message     : Task 19788 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 524
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19790
+Tier        : Software check
+Message     : Task 19790 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 525
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19835
+Tier        : Software check
+Message     : Task 19835 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 526
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19836
+Tier        : Software check
+Message     : Task 19836 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 527
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19888
+Tier        : Software check
+Message     : Task 19888 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 528
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19889
+Tier        : Software check
+Message     : Task 19889 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 529
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19954
+Tier        : Software check
+Message     : Task 19954 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 530
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19953
+Tier        : Software check
+Message     : Task 19953 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 531
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:19985
+Tier        : Software check
+Message     : Task 19985 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 532
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20022
+Tier        : Software check
+Message     : Task 20022 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 533
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-08 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20024
+Tier        : Software check
+Message     : Task 20024 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 534
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20065
+Tier        : Software check
+Message     : Task 20065 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 535
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20063
+Tier        : Software check
+Message     : Task 20063 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 536
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20110
+Tier        : Software check
+Message     : Task 20110 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 537
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20111
+Tier        : Software check
+Message     : Task 20111 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 538
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20164
+Tier        : Software check
+Message     : Task 20164 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 539
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20165
+Tier        : Software check
+Message     : Task 20165 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 540
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20229
+Tier        : Software check
+Message     : Task 20229 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 541
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20230
+Tier        : Software check
+Message     : Task 20230 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 542
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20258
+Tier        : Software check
+Message     : Task 20258 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 543
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20297
+Tier        : Software check
+Message     : Task 20297 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 544
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-09 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20295
+Tier        : Software check
+Message     : Task 20295 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 545
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20355
+Tier        : Software check
+Message     : Task 20355 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 546
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20357
+Tier        : Software check
+Message     : Task 20357 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 547
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20402
+Tier        : Software check
+Message     : Task 20402 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 548
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20403
+Tier        : Software check
+Message     : Task 20403 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 549
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20456
+Tier        : Software check
+Message     : Task 20456 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 550
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20455
+Tier        : Software check
+Message     : Task 20455 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 551
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20521
+Tier        : Software check
+Message     : Task 20521 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 552
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20520
+Tier        : Software check
+Message     : Task 20520 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 553
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20566
+Tier        : Software check
+Message     : Task 20566 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 554
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20627
+Tier        : Software check
+Message     : Task 20627 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 555
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-10 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20625
+Tier        : Software check
+Message     : Task 20625 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 556
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20669
+Tier        : Software check
+Message     : Task 20669 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 557
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20667
+Tier        : Software check
+Message     : Task 20667 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 558
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20714
+Tier        : Software check
+Message     : Task 20714 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 559
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20715
+Tier        : Software check
+Message     : Task 20715 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 560
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20767
+Tier        : Software check
+Message     : Task 20767 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 561
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20768
+Tier        : Software check
+Message     : Task 20768 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 562
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20865
+Tier        : Software check
+Message     : Task 20865 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 563
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20866
+Tier        : Software check
+Message     : Task 20866 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 564
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20894
+Tier        : Software check
+Message     : Task 20894 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 565
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20931
+Tier        : Software check
+Message     : Task 20931 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 566
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-11 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20933
+Tier        : Software check
+Message     : Task 20933 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 567
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20974
+Tier        : Software check
+Message     : Task 20974 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 568
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:20972
+Tier        : Software check
+Message     : Task 20972 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 569
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21020
+Tier        : Software check
+Message     : Task 21020 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 570
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21019
+Tier        : Software check
+Message     : Task 21019 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 571
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21072
+Tier        : Software check
+Message     : Task 21072 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 572
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21073
+Tier        : Software check
+Message     : Task 21073 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 136
+State       : New
+Message Code: 0x03900fa
+Repeat Count: Occurred 11 times, first at 2026-06-15 12:14:10 IST
+Time        : 2026-10-12 13:39:57 IST
+Severity    : Major
+Type        : Component state change
+Component   : sw_rmm_target:5:AlletraMP_E18U31
+Tier        : General
+Message     : Remote Copy Target 5(AlletraMP_E18U31) Failed (All Links To Target Are Down)
+
+Id          : 574
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21137
+Tier        : Software check
+Message     : Task 21137 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 575
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21138
+Tier        : Software check
+Message     : Task 21138 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 576
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21166
+Tier        : Software check
+Message     : Task 21166 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 573
+State       : New
+Message Code: 0x03a00fa
+Repeat Count: Occurred 2 times, first at 2026-10-12 13:39:40 IST
+Time        : 2026-10-12 17:39:41 IST
+Severity    : Major
+Type        : Component state change
+Component   : sw_rmm_link:23:AlletraMP_E18U31_0_4_3
+Tier        : Software check
+Message     : Remote Copy Link 23(AlletraMP_E18U31_0_4_3) Failed (Link Has Been Down For More Than 4 Hours)
+
+Id          : 135
+State       : New
+Message Code: 0x03a00fa
+Repeat Count: Occurred 10 times, first at 2026-06-15 12:09:35 IST
+Time        : 2026-10-12 17:39:51 IST
+Severity    : Major
+Type        : Component state change
+Component   : sw_rmm_link:20:AlletraMP_E18U31_1_4_3
+Tier        : Software check
+Message     : Remote Copy Link 20(AlletraMP_E18U31_1_4_3) Failed (Link Has Been Down For More Than 4 Hours)
+
+Id          : 577
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21205
+Tier        : Software check
+Message     : Task 21205 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 578
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-12 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21203
+Tier        : Software check
+Message     : Task 21203 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 579
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21246
+Tier        : Software check
+Message     : Task 21246 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 580
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21244
+Tier        : Software check
+Message     : Task 21244 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 581
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21292
+Tier        : Software check
+Message     : Task 21292 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 582
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21291
+Tier        : Software check
+Message     : Task 21291 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 583
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21345
+Tier        : Software check
+Message     : Task 21345 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 584
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21344
+Tier        : Software check
+Message     : Task 21344 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 585
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21410
+Tier        : Software check
+Message     : Task 21410 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 586
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21409
+Tier        : Software check
+Message     : Task 21409 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 587
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21438
+Tier        : Software check
+Message     : Task 21438 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 588
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21477
+Tier        : Software check
+Message     : Task 21477 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 589
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-13 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21475
+Tier        : Software check
+Message     : Task 21475 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 590
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21516
+Tier        : Software check
+Message     : Task 21516 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 591
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21518
+Tier        : Software check
+Message     : Task 21518 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 592
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21564
+Tier        : Software check
+Message     : Task 21564 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 593
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21563
+Tier        : Software check
+Message     : Task 21563 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 594
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21617
+Tier        : Software check
+Message     : Task 21617 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 595
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21616
+Tier        : Software check
+Message     : Task 21616 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 596
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21681
+Tier        : Software check
+Message     : Task 21681 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 597
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21682
+Tier        : Software check
+Message     : Task 21682 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 598
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21710
+Tier        : Software check
+Message     : Task 21710 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 599
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21749
+Tier        : Software check
+Message     : Task 21749 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 600
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-14 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21747
+Tier        : Software check
+Message     : Task 21747 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 601
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21790
+Tier        : Software check
+Message     : Task 21790 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 602
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21788
+Tier        : Software check
+Message     : Task 21788 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 603
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21835
+Tier        : Software check
+Message     : Task 21835 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 604
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21836
+Tier        : Software check
+Message     : Task 21836 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 605
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21889
+Tier        : Software check
+Message     : Task 21889 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 606
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21888
+Tier        : Software check
+Message     : Task 21888 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 607
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21953
+Tier        : Software check
+Message     : Task 21953 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 608
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21954
+Tier        : Software check
+Message     : Task 21954 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 609
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:21982
+Tier        : Software check
+Message     : Task 21982 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 610
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22021
+Tier        : Software check
+Message     : Task 22021 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 611
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-15 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22019
+Tier        : Software check
+Message     : Task 22019 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 612
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22060
+Tier        : Software check
+Message     : Task 22060 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 613
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22062
+Tier        : Software check
+Message     : Task 22062 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 614
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22107
+Tier        : Software check
+Message     : Task 22107 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 615
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22108
+Tier        : Software check
+Message     : Task 22108 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 616
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22161
+Tier        : Software check
+Message     : Task 22161 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 617
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22160
+Tier        : Software check
+Message     : Task 22160 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 618
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22226
+Tier        : Software check
+Message     : Task 22226 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 619
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22225
+Tier        : Software check
+Message     : Task 22225 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 620
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22254
+Tier        : Software check
+Message     : Task 22254 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 621
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22291
+Tier        : Software check
+Message     : Task 22291 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 622
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-16 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22293
+Tier        : Software check
+Message     : Task 22293 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 623
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22332
+Tier        : Software check
+Message     : Task 22332 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 624
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22334
+Tier        : Software check
+Message     : Task 22334 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 625
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22379
+Tier        : Software check
+Message     : Task 22379 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 626
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22380
+Tier        : Software check
+Message     : Task 22380 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 627
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22432
+Tier        : Software check
+Message     : Task 22432 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 628
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22433
+Tier        : Software check
+Message     : Task 22433 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 629
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22497
+Tier        : Software check
+Message     : Task 22497 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 630
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22498
+Tier        : Software check
+Message     : Task 22498 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 631
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22526
+Tier        : Software check
+Message     : Task 22526 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 632
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22563
+Tier        : Software check
+Message     : Task 22563 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 633
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-17 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22565
+Tier        : Software check
+Message     : Task 22565 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 634
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22605
+Tier        : Software check
+Message     : Task 22605 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 635
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22607
+Tier        : Software check
+Message     : Task 22607 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 636
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22652
+Tier        : Software check
+Message     : Task 22652 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 637
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22653
+Tier        : Software check
+Message     : Task 22653 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 638
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22705
+Tier        : Software check
+Message     : Task 22705 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 639
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22706
+Tier        : Software check
+Message     : Task 22706 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 640
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22771
+Tier        : Software check
+Message     : Task 22771 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 641
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22770
+Tier        : Software check
+Message     : Task 22770 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 642
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22799
+Tier        : Software check
+Message     : Task 22799 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 643
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22838
+Tier        : Software check
+Message     : Task 22838 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 644
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-18 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22836
+Tier        : Software check
+Message     : Task 22836 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 645
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22879
+Tier        : Software check
+Message     : Task 22879 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 646
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22877
+Tier        : Software check
+Message     : Task 22877 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 647
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22925
+Tier        : Software check
+Message     : Task 22925 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 648
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22924
+Tier        : Software check
+Message     : Task 22924 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 649
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22977
+Tier        : Software check
+Message     : Task 22977 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 650
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:22978
+Tier        : Software check
+Message     : Task 22978 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 651
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23043
+Tier        : Software check
+Message     : Task 23043 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 652
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23042
+Tier        : Software check
+Message     : Task 23042 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 653
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23071
+Tier        : Software check
+Message     : Task 23071 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 654
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23108
+Tier        : Software check
+Message     : Task 23108 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 655
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-19 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23110
+Tier        : Software check
+Message     : Task 23110 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 656
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23151
+Tier        : Software check
+Message     : Task 23151 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 657
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23149
+Tier        : Software check
+Message     : Task 23149 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 658
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23196
+Tier        : Software check
+Message     : Task 23196 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 659
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23197
+Tier        : Software check
+Message     : Task 23197 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 660
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23249
+Tier        : Software check
+Message     : Task 23249 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 661
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23250
+Tier        : Software check
+Message     : Task 23250 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 662
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23314
+Tier        : Software check
+Message     : Task 23314 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 663
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23315
+Tier        : Software check
+Message     : Task 23315 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 664
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23343
+Tier        : Software check
+Message     : Task 23343 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 665
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23382
+Tier        : Software check
+Message     : Task 23382 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 666
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-20 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23380
+Tier        : Software check
+Message     : Task 23380 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 667
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23421
+Tier        : Software check
+Message     : Task 23421 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 668
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23423
+Tier        : Software check
+Message     : Task 23423 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 669
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23469
+Tier        : Software check
+Message     : Task 23469 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 670
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23468
+Tier        : Software check
+Message     : Task 23468 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 671
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23522
+Tier        : Software check
+Message     : Task 23522 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 672
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23521
+Tier        : Software check
+Message     : Task 23521 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 673
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23586
+Tier        : Software check
+Message     : Task 23586 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 674
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23587
+Tier        : Software check
+Message     : Task 23587 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 675
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23615
+Tier        : Software check
+Message     : Task 23615 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 676
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23652
+Tier        : Software check
+Message     : Task 23652 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 677
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-21 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23654
+Tier        : Software check
+Message     : Task 23654 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 678
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23695
+Tier        : Software check
+Message     : Task 23695 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 679
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23693
+Tier        : Software check
+Message     : Task 23693 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 680
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23741
+Tier        : Software check
+Message     : Task 23741 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 681
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23740
+Tier        : Software check
+Message     : Task 23740 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 682
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23793
+Tier        : Software check
+Message     : Task 23793 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 683
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23794
+Tier        : Software check
+Message     : Task 23794 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 684
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23858
+Tier        : Software check
+Message     : Task 23858 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 685
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23859
+Tier        : Software check
+Message     : Task 23859 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 686
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23887
+Tier        : Software check
+Message     : Task 23887 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 687
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23924
+Tier        : Software check
+Message     : Task 23924 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 688
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-22 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23926
+Tier        : Software check
+Message     : Task 23926 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 689
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23965
+Tier        : Software check
+Message     : Task 23965 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 690
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:23967
+Tier        : Software check
+Message     : Task 23967 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 691
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24012
+Tier        : Software check
+Message     : Task 24012 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 692
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24013
+Tier        : Software check
+Message     : Task 24013 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 693
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24065
+Tier        : Software check
+Message     : Task 24065 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 694
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24066
+Tier        : Software check
+Message     : Task 24066 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 695
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24130
+Tier        : Software check
+Message     : Task 24130 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 696
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24131
+Tier        : Software check
+Message     : Task 24131 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 697
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24159
+Tier        : Software check
+Message     : Task 24159 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 698
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24196
+Tier        : Software check
+Message     : Task 24196 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 699
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-23 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24198
+Tier        : Software check
+Message     : Task 24198 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 700
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24237
+Tier        : Software check
+Message     : Task 24237 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 701
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24239
+Tier        : Software check
+Message     : Task 24239 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 702
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24284
+Tier        : Software check
+Message     : Task 24284 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 703
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24285
+Tier        : Software check
+Message     : Task 24285 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 704
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24337
+Tier        : Software check
+Message     : Task 24337 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 705
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24338
+Tier        : Software check
+Message     : Task 24338 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 706
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24403
+Tier        : Software check
+Message     : Task 24403 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 707
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24402
+Tier        : Software check
+Message     : Task 24402 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 708
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24431
+Tier        : Software check
+Message     : Task 24431 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 709
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24468
+Tier        : Software check
+Message     : Task 24468 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 710
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-24 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24470
+Tier        : Software check
+Message     : Task 24470 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 711
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24510
+Tier        : Software check
+Message     : Task 24510 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 712
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24512
+Tier        : Software check
+Message     : Task 24512 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 713
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24558
+Tier        : Software check
+Message     : Task 24558 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 714
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24557
+Tier        : Software check
+Message     : Task 24557 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 715
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24611
+Tier        : Software check
+Message     : Task 24611 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 716
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24610
+Tier        : Software check
+Message     : Task 24610 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 717
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24676
+Tier        : Software check
+Message     : Task 24676 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 718
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24675
+Tier        : Software check
+Message     : Task 24675 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 719
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24704
+Tier        : Software check
+Message     : Task 24704 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 720
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24743
+Tier        : Software check
+Message     : Task 24743 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 721
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-25 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24741
+Tier        : Software check
+Message     : Task 24741 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 722
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24782
+Tier        : Software check
+Message     : Task 24782 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 723
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24784
+Tier        : Software check
+Message     : Task 24784 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 724
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24829
+Tier        : Software check
+Message     : Task 24829 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 725
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24830
+Tier        : Software check
+Message     : Task 24830 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 726
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24883
+Tier        : Software check
+Message     : Task 24883 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 727
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24882
+Tier        : Software check
+Message     : Task 24882 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 728
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24947
+Tier        : Software check
+Message     : Task 24947 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 729
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24948
+Tier        : Software check
+Message     : Task 24948 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 730
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:24976
+Tier        : Software check
+Message     : Task 24976 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 731
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25013
+Tier        : Software check
+Message     : Task 25013 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 732
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-26 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25015
+Tier        : Software check
+Message     : Task 25015 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 733
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25056
+Tier        : Software check
+Message     : Task 25056 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 734
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25054
+Tier        : Software check
+Message     : Task 25054 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 735
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25102
+Tier        : Software check
+Message     : Task 25102 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 736
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25101
+Tier        : Software check
+Message     : Task 25101 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 737
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25155
+Tier        : Software check
+Message     : Task 25155 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 738
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25154
+Tier        : Software check
+Message     : Task 25154 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 739
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25220
+Tier        : Software check
+Message     : Task 25220 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 740
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25219
+Tier        : Software check
+Message     : Task 25219 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 741
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25248
+Tier        : Software check
+Message     : Task 25248 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 742
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25287
+Tier        : Software check
+Message     : Task 25287 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 743
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-27 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25285
+Tier        : Software check
+Message     : Task 25285 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 744
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25326
+Tier        : Software check
+Message     : Task 25326 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 745
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25328
+Tier        : Software check
+Message     : Task 25328 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 746
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25373
+Tier        : Software check
+Message     : Task 25373 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 747
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25374
+Tier        : Software check
+Message     : Task 25374 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 748
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25427
+Tier        : Software check
+Message     : Task 25427 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 749
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25426
+Tier        : Software check
+Message     : Task 25426 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 750
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25491
+Tier        : Software check
+Message     : Task 25491 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 751
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25492
+Tier        : Software check
+Message     : Task 25492 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 752
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25520
+Tier        : Software check
+Message     : Task 25520 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 753
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25557
+Tier        : Software check
+Message     : Task 25557 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 754
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-28 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25559
+Tier        : Software check
+Message     : Task 25559 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 755
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25598
+Tier        : Software check
+Message     : Task 25598 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 756
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25600
+Tier        : Software check
+Message     : Task 25600 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 757
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25645
+Tier        : Software check
+Message     : Task 25645 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 758
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25646
+Tier        : Software check
+Message     : Task 25646 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 759
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25698
+Tier        : Software check
+Message     : Task 25698 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 760
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25699
+Tier        : Software check
+Message     : Task 25699 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 762
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25765
+Tier        : Software check
+Message     : Task 25765 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 763
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25766
+Tier        : Software check
+Message     : Task 25766 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 764
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25794
+Tier        : Software check
+Message     : Task 25794 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 765
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25833
+Tier        : Software check
+Message     : Task 25833 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 766
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-29 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25831
+Tier        : Software check
+Message     : Task 25831 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 767
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25872
+Tier        : Software check
+Message     : Task 25872 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 768
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25874
+Tier        : Software check
+Message     : Task 25874 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 769
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25919
+Tier        : Software check
+Message     : Task 25919 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 770
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25920
+Tier        : Software check
+Message     : Task 25920 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 771
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25973
+Tier        : Software check
+Message     : Task 25973 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 772
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:25972
+Tier        : Software check
+Message     : Task 25972 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 773
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26037
+Tier        : Software check
+Message     : Task 26037 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 774
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26038
+Tier        : Software check
+Message     : Task 26038 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 775
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26066
+Tier        : Software check
+Message     : Task 26066 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 776
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26103
+Tier        : Software check
+Message     : Task 26103 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 777
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-30 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26105
+Tier        : Software check
+Message     : Task 26105 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 778
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26144
+Tier        : Software check
+Message     : Task 26144 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 779
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26146
+Tier        : Software check
+Message     : Task 26146 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 780
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26192
+Tier        : Software check
+Message     : Task 26192 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 781
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26191
+Tier        : Software check
+Message     : Task 26191 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 782
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26244
+Tier        : Software check
+Message     : Task 26244 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 783
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26245
+Tier        : Software check
+Message     : Task 26245 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 784
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26309
+Tier        : Software check
+Message     : Task 26309 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 785
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26310
+Tier        : Software check
+Message     : Task 26310 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 786
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26338
+Tier        : Software check
+Message     : Task 26338 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 787
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26377
+Tier        : Software check
+Message     : Task 26377 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 788
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-10-31 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26375
+Tier        : Software check
+Message     : Task 26375 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 789
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26417
+Tier        : Software check
+Message     : Task 26417 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 790
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26419
+Tier        : Software check
+Message     : Task 26419 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 791
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26464
+Tier        : Software check
+Message     : Task 26464 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 792
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26465
+Tier        : Software check
+Message     : Task 26465 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 793
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26517
+Tier        : Software check
+Message     : Task 26517 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 794
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26518
+Tier        : Software check
+Message     : Task 26518 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 795
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26583
+Tier        : Software check
+Message     : Task 26583 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 796
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26582
+Tier        : Software check
+Message     : Task 26582 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 797
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26611
+Tier        : Software check
+Message     : Task 26611 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 798
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26648
+Tier        : Software check
+Message     : Task 26648 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 799
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-01 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26650
+Tier        : Software check
+Message     : Task 26650 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 800
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26689
+Tier        : Software check
+Message     : Task 26689 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 801
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26691
+Tier        : Software check
+Message     : Task 26691 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 802
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26737
+Tier        : Software check
+Message     : Task 26737 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 803
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26736
+Tier        : Software check
+Message     : Task 26736 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 804
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26790
+Tier        : Software check
+Message     : Task 26790 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 805
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26789
+Tier        : Software check
+Message     : Task 26789 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 806
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26854
+Tier        : Software check
+Message     : Task 26854 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 807
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26855
+Tier        : Software check
+Message     : Task 26855 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 808
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26883
+Tier        : Software check
+Message     : Task 26883 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 809
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26920
+Tier        : Software check
+Message     : Task 26920 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 810
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-02 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26922
+Tier        : Software check
+Message     : Task 26922 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 811
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26961
+Tier        : Software check
+Message     : Task 26961 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 812
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:26963
+Tier        : Software check
+Message     : Task 26963 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 813
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27009
+Tier        : Software check
+Message     : Task 27009 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 814
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27008
+Tier        : Software check
+Message     : Task 27008 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 815
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27061
+Tier        : Software check
+Message     : Task 27061 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 816
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27062
+Tier        : Software check
+Message     : Task 27062 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 817
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27126
+Tier        : Software check
+Message     : Task 27126 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 818
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27127
+Tier        : Software check
+Message     : Task 27127 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 819
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27155
+Tier        : Software check
+Message     : Task 27155 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 820
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27192
+Tier        : Software check
+Message     : Task 27192 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 821
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-03 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27194
+Tier        : Software check
+Message     : Task 27194 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 822
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27235
+Tier        : Software check
+Message     : Task 27235 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 823
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27233
+Tier        : Software check
+Message     : Task 27233 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 824
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27281
+Tier        : Software check
+Message     : Task 27281 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 825
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27280
+Tier        : Software check
+Message     : Task 27280 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 826
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27334
+Tier        : Software check
+Message     : Task 27334 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 827
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27333
+Tier        : Software check
+Message     : Task 27333 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 828
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27399
+Tier        : Software check
+Message     : Task 27399 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 829
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27398
+Tier        : Software check
+Message     : Task 27398 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 830
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27427
+Tier        : Software check
+Message     : Task 27427 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 831
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27466
+Tier        : Software check
+Message     : Task 27466 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 832
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-04 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27464
+Tier        : Software check
+Message     : Task 27464 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 833
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27507
+Tier        : Software check
+Message     : Task 27507 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 834
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27505
+Tier        : Software check
+Message     : Task 27505 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 835
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27553
+Tier        : Software check
+Message     : Task 27553 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 836
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27552
+Tier        : Software check
+Message     : Task 27552 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 837
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27605
+Tier        : Software check
+Message     : Task 27605 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 838
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27606
+Tier        : Software check
+Message     : Task 27606 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 839
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27670
+Tier        : Software check
+Message     : Task 27670 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 840
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27671
+Tier        : Software check
+Message     : Task 27671 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 841
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27699
+Tier        : Software check
+Message     : Task 27699 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 842
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27738
+Tier        : Software check
+Message     : Task 27738 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 843
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-05 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27736
+Tier        : Software check
+Message     : Task 27736 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 844
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27777
+Tier        : Software check
+Message     : Task 27777 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 845
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27779
+Tier        : Software check
+Message     : Task 27779 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 846
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27824
+Tier        : Software check
+Message     : Task 27824 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 847
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27825
+Tier        : Software check
+Message     : Task 27825 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 848
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27877
+Tier        : Software check
+Message     : Task 27877 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 849
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27878
+Tier        : Software check
+Message     : Task 27878 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 850
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27943
+Tier        : Software check
+Message     : Task 27943 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 851
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27942
+Tier        : Software check
+Message     : Task 27942 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 852
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:27971
+Tier        : Software check
+Message     : Task 27971 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 853
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28010
+Tier        : Software check
+Message     : Task 28010 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 854
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-06 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28008
+Tier        : Software check
+Message     : Task 28008 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 855
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28049
+Tier        : Software check
+Message     : Task 28049 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 856
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28051
+Tier        : Software check
+Message     : Task 28051 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 857
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28096
+Tier        : Software check
+Message     : Task 28096 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 858
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28097
+Tier        : Software check
+Message     : Task 28097 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 859
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28150
+Tier        : Software check
+Message     : Task 28150 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 860
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28149
+Tier        : Software check
+Message     : Task 28149 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 861
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28215
+Tier        : Software check
+Message     : Task 28215 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 862
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28214
+Tier        : Software check
+Message     : Task 28214 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 863
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28243
+Tier        : Software check
+Message     : Task 28243 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 864
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28280
+Tier        : Software check
+Message     : Task 28280 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 865
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-07 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28282
+Tier        : Software check
+Message     : Task 28282 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 866
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28322
+Tier        : Software check
+Message     : Task 28322 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 867
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28324
+Tier        : Software check
+Message     : Task 28324 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 868
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28369
+Tier        : Software check
+Message     : Task 28369 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 869
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28370
+Tier        : Software check
+Message     : Task 28370 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 870
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28423
+Tier        : Software check
+Message     : Task 28423 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 871
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28422
+Tier        : Software check
+Message     : Task 28422 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 872
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28487
+Tier        : Software check
+Message     : Task 28487 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 873
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28488
+Tier        : Software check
+Message     : Task 28488 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 874
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28516
+Tier        : Software check
+Message     : Task 28516 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 875
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28553
+Tier        : Software check
+Message     : Task 28553 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 876
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-08 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28555
+Tier        : Software check
+Message     : Task 28555 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 877
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28594
+Tier        : Software check
+Message     : Task 28594 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 878
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28596
+Tier        : Software check
+Message     : Task 28596 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 879
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28641
+Tier        : Software check
+Message     : Task 28641 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 880
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28642
+Tier        : Software check
+Message     : Task 28642 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 881
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28695
+Tier        : Software check
+Message     : Task 28695 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 882
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28696
+Tier        : Software check
+Message     : Task 28696 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 883
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28761
+Tier        : Software check
+Message     : Task 28761 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 884
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28760
+Tier        : Software check
+Message     : Task 28760 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 885
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28789
+Tier        : Software check
+Message     : Task 28789 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 886
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28828
+Tier        : Software check
+Message     : Task 28828 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 887
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-09 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28826
+Tier        : Software check
+Message     : Task 28826 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 888
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28869
+Tier        : Software check
+Message     : Task 28869 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 889
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28867
+Tier        : Software check
+Message     : Task 28867 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 890
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28914
+Tier        : Software check
+Message     : Task 28914 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 891
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28915
+Tier        : Software check
+Message     : Task 28915 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 892
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28968
+Tier        : Software check
+Message     : Task 28968 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 893
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:28967
+Tier        : Software check
+Message     : Task 28967 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 894
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29033
+Tier        : Software check
+Message     : Task 29033 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 895
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29032
+Tier        : Software check
+Message     : Task 29032 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 896
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29061
+Tier        : Software check
+Message     : Task 29061 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 897
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29098
+Tier        : Software check
+Message     : Task 29098 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 898
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-10 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29100
+Tier        : Software check
+Message     : Task 29100 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 899
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29139
+Tier        : Software check
+Message     : Task 29139 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 900
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29141
+Tier        : Software check
+Message     : Task 29141 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 901
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29186
+Tier        : Software check
+Message     : Task 29186 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 902
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29187
+Tier        : Software check
+Message     : Task 29187 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 903
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29240
+Tier        : Software check
+Message     : Task 29240 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 904
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29239
+Tier        : Software check
+Message     : Task 29239 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 905
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29304
+Tier        : Software check
+Message     : Task 29304 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 906
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29305
+Tier        : Software check
+Message     : Task 29305 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 907
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29333
+Tier        : Software check
+Message     : Task 29333 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 908
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29372
+Tier        : Software check
+Message     : Task 29372 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 909
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-11 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29370
+Tier        : Software check
+Message     : Task 29370 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 910
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29411
+Tier        : Software check
+Message     : Task 29411 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 911
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29413
+Tier        : Software check
+Message     : Task 29413 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 912
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29459
+Tier        : Software check
+Message     : Task 29459 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 913
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 05:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29458
+Tier        : Software check
+Message     : Task 29458 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 914
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29511
+Tier        : Software check
+Message     : Task 29511 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 915
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29512
+Tier        : Software check
+Message     : Task 29512 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 916
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29576
+Tier        : Software check
+Message     : Task 29576 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 917
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29577
+Tier        : Software check
+Message     : Task 29577 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 918
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29605
+Tier        : Software check
+Message     : Task 29605 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 919
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29642
+Tier        : Software check
+Message     : Task 29642 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 920
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-12 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29644
+Tier        : Software check
+Message     : Task 29644 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 921
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29685
+Tier        : Software check
+Message     : Task 29685 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 922
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29683
+Tier        : Software check
+Message     : Task 29683 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 923
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29731
+Tier        : Software check
+Message     : Task 29731 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 924
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29730
+Tier        : Software check
+Message     : Task 29730 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 925
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29783
+Tier        : Software check
+Message     : Task 29783 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 926
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29784
+Tier        : Software check
+Message     : Task 29784 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 927
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29849
+Tier        : Software check
+Message     : Task 29849 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 928
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29848
+Tier        : Software check
+Message     : Task 29848 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 929
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 17:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29877
+Tier        : Software check
+Message     : Task 29877 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 930
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29914
+Tier        : Software check
+Message     : Task 29914 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 931
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-13 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29916
+Tier        : Software check
+Message     : Task 29916 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 932
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29957
+Tier        : Software check
+Message     : Task 29957 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 933
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:29955
+Tier        : Software check
+Message     : Task 29955 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 934
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:3
+Tier        : Software check
+Message     : Task 3 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 935
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:4
+Tier        : Software check
+Message     : Task 4 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 936
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:56
+Tier        : Software check
+Message     : Task 56 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 937
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:57
+Tier        : Software check
+Message     : Task 57 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 938
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:121
+Tier        : Software check
+Message     : Task 121 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 939
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:122
+Tier        : Software check
+Message     : Task 122 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 940
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:150
+Tier        : Software check
+Message     : Task 150 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 941
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:189
+Tier        : Software check
+Message     : Task 189 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 942
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-14 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:187
+Tier        : Software check
+Message     : Task 187 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 943
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:229
+Tier        : Software check
+Message     : Task 229 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 944
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:231
+Tier        : Software check
+Message     : Task 231 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 945
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:277
+Tier        : Software check
+Message     : Task 277 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 946
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:276
+Tier        : Software check
+Message     : Task 276 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 947
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:330
+Tier        : Software check
+Message     : Task 330 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 948
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 10:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:329
+Tier        : Software check
+Message     : Task 329 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 949
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:395
+Tier        : Software check
+Message     : Task 395 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 950
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 15:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:394
+Tier        : Software check
+Message     : Task 394 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 951
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:423
+Tier        : Software check
+Message     : Task 423 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 952
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:460
+Tier        : Software check
+Message     : Task 460 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 953
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-15 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:462
+Tier        : Software check
+Message     : Task 462 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 954
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:503
+Tier        : Software check
+Message     : Task 503 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 955
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:501
+Tier        : Software check
+Message     : Task 501 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 956
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:548
+Tier        : Software check
+Message     : Task 548 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 957
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 05:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:549
+Tier        : Software check
+Message     : Task 549 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 958
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:601
+Tier        : Software check
+Message     : Task 601 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 959
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 10:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:602
+Tier        : Software check
+Message     : Task 602 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 960
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:666
+Tier        : Software check
+Message     : Task 666 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 961
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 15:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:667
+Tier        : Software check
+Message     : Task 667 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 962
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 17:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:695
+Tier        : Software check
+Message     : Task 695 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 963
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:732
+Tier        : Software check
+Message     : Task 732 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 964
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-16 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:734
+Tier        : Software check
+Message     : Task 734 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+Id          : 10
+State       : New
+Message Code: 0x060000a
+Repeat Count: Occurred 2285 times, first at 2025-12-26 21:11:20 IST
+Time        : 2026-11-16 23:50:26 IST
+Severity    : Major
+Type        : Disconnected from Data Services Cloud Console for a prolonged period of time
+Component   : sw_wsapi
+Tier        : Security
+Message     : Storage system has been disconnected from Data Services Cloud Console for more than 19202 minutes.
+
+Id          : 965
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-17 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:775
+Tier        : Software check
+Message     : Task 775 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.
+
+Id          : 966
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-11-17 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Component   : sw_task:773
+Tier        : Software check
+Message     : Task 773 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.
+
+525 alerts

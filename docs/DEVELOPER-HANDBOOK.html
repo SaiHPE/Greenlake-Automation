@@ -612,11 +612,11 @@ Add-Content .env "LAB_DEFAULT_PW=&lt;the lab vCenter and switch password&gt;"</c
   </g>
   <g class="t-small">
     <text x="190" y="62" text-anchor="middle">POST /runs/{id}/storage/apply</text>
-    <text x="390" y="98" text-anchor="middle">service.start_storage_apply(run_id)</text>
+    <text x="390" y="98" text-anchor="middle">service.start_storage_apply(run_id, approved_plan)</text>
     <rect class="b-info" x="340" y="122" width="300" height="74" rx="6"/>
     <text x="490" y="144" text-anchor="middle" class="t-strong">preconditions</text>
     <text x="490" y="163" text-anchor="middle">is there a plan the engineer approved?</text>
-    <text x="490" y="180" text-anchor="middle">does it have blockers? did discovery run?</text>
+    <text x="490" y="180" text-anchor="middle">blockers? does the request name that plan?</text>
     <text x="590" y="206" text-anchor="middle">spawn(the work)</text>
     <text x="190" y="242" text-anchor="middle">200 and the run record, straight away</text>
     <text x="790" y="286" text-anchor="middle">the work, in a thread</text>
@@ -632,7 +632,7 @@ Add-Content .env "LAB_DEFAULT_PW=&lt;the lab vCenter and switch password&gt;"</c
 
 <ol class="steps">
   <li><strong>The route calls one method on the service.</strong> <code>application/service.py</code> is a thin front door. It holds the <code>RunCoordinator</code> and five step services (<code>OnboardingSteps</code>, <code>DiscoveryZoningSteps</code>, <code>ProvisioningSteps</code>, <code>ReplicationSteps</code>, <code>DocumentSteps</code>) and passes each call to the right one.</li>
-  <li><strong>The step service checks its preconditions.</strong> If they fail it raises <code>StepPreconditionError</code> with a sentence an engineer can read, and the route returns HTTP 409 with that sentence. Examples: zoning before discovery; apply without a previewed plan; a plan with conflicts.</li>
+  <li><strong>The step service checks its preconditions.</strong> If they fail it raises <code>StepPreconditionError</code> with a sentence an engineer can read, and the route returns HTTP 409 with that sentence. Examples: zoning before discovery; apply without a previewed plan; a plan with conflicts; an apply that does not name the plan the engineer ticked (its <code>plan_id</code>).</li>
   <li><strong>The coordinator starts the work in the background</strong> (<code>spawn</code>). There is one background task per run at a time. A second button press while one is running gets <code>RunBusyError</code>, also a 409. That is why the screen never has two things running at once.</li>
   <li><strong>The device work runs in a thread.</strong> The libraries that talk to the array, vCenter and the switches are blocking, so they are moved off the web server's event loop with <code>asyncio.to_thread</code>. The screen stays responsive.</li>
   <li><strong>Results and progress are events.</strong> The step calls <code>coordinator.emit(run_id, phase, event_type, message, data)</code>. Long steps emit <code>phase.progress</code> lines as they go. The run's <code>status</code> is set separately with <code>set_state</code>: <code>RUNNING</code> at the start; <code>READY</code>, <code>WAITING_FOR_OPERATOR</code> or <code>RETRYABLE_FAILURE</code> at the end.</li>
@@ -641,13 +641,14 @@ Add-Content .env "LAB_DEFAULT_PW=&lt;the lab vCenter and switch password&gt;"</c
 </ol>
 
 <pre><code># application/provisioning/steps.py, shortened. Every step has this shape.
-def start_storage_apply(self, run_id):
+def start_storage_apply(self, run_id, *, approved_plan):
     run = coord.get_run(run_id)
     plan = self._previewed_plan(run_id)                              # 2. preconditions
     if plan is None:
         raise StepPreconditionError("no provisioning plan to apply — run the preview first")
     if plan.blockers:
         raise StepPreconditionError("the plan has conflicts that must be resolved on the array first: ...")
+    check_approval(approved_plan, plan.plan_id)                      # the id of the plan that was ticked
     coord.spawn(run_id, self._run_storage_apply(run, intent, discovery))   # 3. background
     return run
 

@@ -1,0 +1,113 @@
+# help setsched
+setsched - Set the state of a currently scheduled task
+
+SYNTAX
+    setsched [options] <schedname>
+    setsched [{-alert | -no_alert} | -name <newname> |
+              {-allow_rebalance | -no_rebalance} | -run_now | -s |
+              -interval <interval>] <schedname>
+    setsched {-resume | -suspend} <schedname>
+    setsched {-resume_all | -rebalance | -suspend_all}
+
+DESCRIPTION
+    The setsched command allows users to suspend, pause, change the schedule,
+    and change the name of currently scheduled tasks.
+
+AUTHORITY
+    Super, Service, Edit
+    Any role granted the sched_setany right can set any user scheduled task properties
+    Any role granted the sched_setown right can only set their own scheduled task properties
+
+    -rebalance, -resume_all, and -suspend_all can only be used by users with
+    the Super or Service role and require the sched_setany right.
+
+OPTIONS
+    -alert
+        Failures of tasks will generate an alert. This is set by default.
+
+    -no_alert
+        Failures of tasks will no longer generate an alert.
+
+    -immutable
+        Prevent the schedule from being modified or deleted.  This option only
+        applies to snapshot schedules using -retain. If combined with the
+        -run_once option, the schedule will be deleted after it runs. It cannot
+        be modified or deleted until that scheduled time.
+        Note: When a schedule is immutable, the referenced objects like vv, vvset
+        or RC group cannot be renamed or deleted.
+
+    -name <newname>
+        Set a new name for a given task. The newname is the new name to be given
+        to the specified task. This can be at most 127 characters in length.
+
+    -resume
+        Will resume scheduling of a specified task.
+        Cannot be used with any other options.
+
+    -resume_all
+        Will resume scheduling of all scheduled tasks.
+        Cannot be used with any other options.
+
+    -run_now
+        Run the schedule immediately.
+
+    -s <newschedule>
+        Set a new schedule for a given task. The newschedule is a cron-style
+        schedule for the task to be run on. Each field can be at most 127
+        characters in length.
+
+    -interval <interval>
+        Set a new schedule with the given frequency.  Must be used with -s.
+
+    -f
+        Do not detect when a modified scheduled task exceeds the recommended number
+        of scheduled task starts per minute.  Do not ask for confirmation
+        to modify the scheduled task.  This option only applies to the setsched -s
+        option for setting a new schedule.
+
+    -rebalance
+        Attempt to limit the number of schedules running per minute by changing
+        the schedule times of any schedules that allow rebalance.  This cannot
+        be used with any other option in the same command.
+
+    -allow_rebalance
+        Allow rebalance for this schedule when -rebalance is used. This is
+        the default behavior.
+
+    -no_rebalance
+        Do not rebalance this schedule when -rebalance is used. Also, this
+        option is not allowed with schedules using the -interval option.
+
+    -suspend
+        Suspends execution of a specified task.
+        This will not halt execution of an already running task.
+        Cannot be used with any other options.
+
+    -suspend_all
+        Will suspend execution of all scheduled tasks.
+        This will not halt execution of an already running task.
+        Cannot be used with any other options.
+
+SPECIFIERS
+    <interval>
+        Indicates how often a schedule runs in minutes. This must be a number
+        between 15 and 1440.
+
+    <newname>
+        The new name to be given to the specified schedule. This can be at most
+        127 characters in length.
+
+    <schedname>
+        The name of the scheduled task to modify.
+
+NOTES
+    To avoid spikes in resource utilization, it is recommended to spread out
+    scheduled task start times as much as possible.  Setsched -s can predict
+    out to 30 days when the modified scheduled task exceeds the recommended
+    number of scheduled task starts per minute.  When this is detected,
+    user confirmation is requested to continue modifying the schedule.
+    To skip this detection and confirmation, use the -f option.
+
+EXAMPLES
+    None.
+

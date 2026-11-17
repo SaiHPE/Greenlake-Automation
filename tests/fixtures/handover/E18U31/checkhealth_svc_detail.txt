@@ -1,0 +1,51 @@
+# checkhealth -svc -detail
+Checking alert
+Checking cabling
+Checking cage
+Checking cdm
+Checking cert
+Checking dar
+Checking date
+Checking file
+Checking fileservice
+Checking host
+Checking hostkeys
+Checking ilo
+Checking ld
+Checking license
+Checking network
+Checking node
+Checking pd
+Checking pdch
+Checking port
+Checking qos
+Checking rc
+Checking security
+Checking signature
+Checking snmp
+Checking switch
+Checking task
+Checking ui
+Checking vlun
+Checking vv
+Component -------------------------------------Summary Description------------------------------------- Qty
+File      sysvars.init is altering system behavior                                                        4
+Network   Too few working admin network connections                                                       1
+Network   Errors detected on network on 2026-11-16 04:02:07 IST. 2 or more packet errors have occurred.   1
+Port      Degraded or failed SFPs                                                                         2
+Security  System with remote root access enabled                                                          1
+-----------------------------------------------------------------------------------------------------------
+        5 total                                                                                           9
+
+Component ---Identifier--- ------------------------------------------Detailed Description------------------------------------------ Resolution
+File      node:0           Behavior altering sysvars.init "sysvars.init:dd_hint_req_vv_max=100000 " exists, created on Jul 23 18:13 Manual    
+File      node:0           Behavior altering sysvars.init "sysvars.init:dd_hint_req_max=-1 " exists, created on Jul 23 18:13        Manual    
+File      node:1           Behavior altering sysvars.init "sysvars.init:dd_hint_req_vv_max=100000 " exists, created on Jul 23 18:13 Manual    
+File      node:1           Behavior altering sysvars.init "sysvars.init:dd_hint_req_max=-1 " exists, created on Jul 23 18:13        Manual    
+Network   --               Node 0 has no admin network link detected                                                                Manual    
+Network   Node1:NVMe:1:1:2 Errors detected on network on 2026-11-16 04:02:07 IST. 2 or more packet errors have occurred.            Manual    
+Port      port:0:4:1       SFP is Degraded                                                                                          Manual    
+Port      port:1:4:1       SFP is Degraded                                                                                          Manual    
+Security  SSH              Remote root access is enabled on the array                                                               Manual    
+----------------------------------------------------------------------------------------------------------------------------------------------
+        9 total                                                                                                                               

@@ -117,7 +117,8 @@ def run_all(run_id):
         raise RuntimeError("partnership plan has blockers")
 
     fl.banner("Apply 1: ports and partnership, over the write-scoped SSH client")
-    ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "apply-1")
+    ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "apply-1",
+              body={"approved_plan": plan.get("plan_id")})
     res = ev["data"].get("result") or {}
     removals.append(res)
     kinds = [o["kind"] for o in res.get("outcomes", [])]
@@ -163,7 +164,8 @@ def run_all(run_id):
     check("preview 2: the group is %s%s" % (MODE, ", period %d s" % want_period if want_period else ""),
           g.get("detail", {}).get("mode") == MODE and g.get("detail", {}).get("period_seconds") == want_period,
           json.dumps({k: g.get("detail", {}).get(k) for k in ("mode", "period_seconds")}) + " " + g.get("reason", ""))
-    status, resp = api("POST", "/runs/%s/replication/apply" % run_id, {})
+    approve = {"approved_plan": plan.get("plan_id")}   # the plan of preview 2
+    status, resp = api("POST", "/runs/%s/replication/apply" % run_id, approve)
     check("apply 2 is refused until the link is checked", status == 409 and "Check the link first" in str(resp),
           "HTTP %s %s" % (status, str(resp)[:160]))
     ev = step(run_id, "/replication/link-check", ["replication.link_checked", "replication.link_check.failed"], "link-check",
@@ -173,7 +175,7 @@ def run_all(run_id):
           ev["message"][:200])
 
     fl.banner("Apply 2: the groups")
-    ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "apply-2")
+    ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "apply-2", body=approve)
     res = ev["data"].get("result") or {}
     removals.append(res)
     check("apply 2: groups created", GROUP in res.get("groups_created", []) and not res.get("error"),

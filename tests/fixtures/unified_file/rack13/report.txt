@@ -1,0 +1,47 @@
+      showversion              13 line(s)
+      showsys                  3 line(s)
+      showport                 31 line(s)
+      showport -file           1 line(s)
+      shownet                  8 line(s)
+      help                     58 line(s)
+      help help                58 line(s)
+      help -sub                1 line(s)
+      help show                93 line(s)
+      help controlport         510 line(s)
+      help showport            275 line(s)
+      help showfs              1 line(s)
+      help showfpg             1 line(s)
+      help showvfs             1 line(s)
+      help showfshare          1 line(s)
+      help showfstore          1 line(s)
+      help showfileservice     34 line(s)
+      help showfilesystem      73 line(s)
+      help showfileshare       47 line(s)
+      POST   /api/v1/credentials                  port 443  201
+      GET    /api/v1/system                       port 443  200
+      GET    /api/v1/wsapiconfiguration           port 443  200
+      DELETE /api/v1/credentials/<key>            port 443  200
+      POST   /api/v3/credentials                  port 443  201
+      GET    /api/v3/fileservice                  port 443  200
+      GET    /api/v3/filesystems                  port 443  200
+      GET    /api/v3/filesharesettings            port 443  200
+      GET    /api/v3/fileshares                   port 443  200
+      DELETE /api/v3/credentials/<token>          port 443  200
+      OS: Release version 10.6.0
+      showport Type file: 0 
+      showport -file: There is no specified port information.
+      help answers with a SYNTAX section: help controlport, help showfileservice, help showfileshare, help showfilesystem, help showport
+      v1 login: accepted
+      v3 port: 443, login accepted
+      GET /api/v3/fileservice       HTTP 200
+      GET /api/v3/filesystems       HTTP 200
+      GET /api/v3/filesharesettings HTTP 200
+      GET /api/v3/fileshares        HTTP 200
+      file systems: ?
+      client groups (share settings): ?
+      shares: ?
+PASS  rack13 showport -file read
+PASS  rack13 WSAPI v1 login
+PASS  rack13 no password, session key or cookie in the saved files
+
+0 FAIL

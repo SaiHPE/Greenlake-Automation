@@ -1,0 +1,2 @@
+# showportdev ns 0:3:4
+Error: Unable to get device list on port 0:3:4

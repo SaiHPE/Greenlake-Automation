@@ -206,6 +206,8 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       return 'stopped during configure';
     case 'storage.preview.failed':
       return 'plan could not be built';
+    case 'storage.apply.failed':
+      return 'stopped during create';
     case 'failover.failed':
       return 'test failed';
     case 'verify.failed':

@@ -1,0 +1,53 @@
+# help showfilesystem
+showfilesystem - Display information of all filesystems or a specific filesystem in a system.
+
+SYNTAX
+    showfilesystem [name]
+
+DESCRIPTION
+    The showfilesystem command displays information about all the filesystems
+    or a specific filesystem in a system.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+    -space
+        Displays the filesystem space usage.
+
+    -state
+        Lists the detailed state information of filesystem and
+        the underlying VV.
+
+    -d
+        Lists the detailed information of filesystem.
+
+    -vv
+        Lists the information of the VV on which filesystems are created.
+
+    -allnames
+        Shows both the shortened and full filesystem names.
+
+SPECIFIERS
+    <name>
+        Specifies the filesystem name whose information will be displayed.
+        If not specified, configuration information for all filesystems in
+        the system is displayed.
+
+NOTES
+    Long names can cause the display to be very wide. Use -shortnames
+    to display shortened 31 character names for objects. Use the setclienv
+    command to set shortnames to 1. The -shortnames option is also set to 1
+    if the CLI was started with the -shortnames option, or if the CLI was
+    started with the TPDSHORTNAMES environment variable set. Run "cli -h"
+    and "setclienv -h" for details of the environment variables.
+
+EXAMPLES
+    The following example shows all the filesystems on the system.
+
+       cli% showfilesystem
+
+    The following example shows demo_fs filesystem on the system.
+
+       cli% showfilesystem demo_fs
+

@@ -1,0 +1,52 @@
+# showvlun -a
+Lun VVName                        HostName              -Host_WWN/iSCSI_Name/Host_NQN-  Port     Type Status ID
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U25 10009440C9D01212               0:3:1 host set nonopt 10
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U25 10009440C9D01212               0:3:1 host set nonopt 10
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U25 10009440C9D01212               0:3:1 host set active 10
+ 50 new_snap                      CRV_VZ_DL360G11D24U25 10009440C9D01212               0:3:1 host set active 10
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U25 10009440C9D01213               0:3:2 host set nonopt 10
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U25 10009440C9D01213               0:3:2 host set nonopt 10
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U25 10009440C9D01213               0:3:2 host set active 10
+ 50 new_snap                      CRV_VZ_DL360G11D24U25 10009440C9D01213               0:3:2 host set active 10
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U25 10009440C9D01212               1:3:1 host set active 11
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U25 10009440C9D01212               1:3:1 host set active 11
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U25 10009440C9D01212               1:3:1 host set nonopt 11
+ 50 new_snap                      CRV_VZ_DL360G11D24U25 10009440C9D01212               1:3:1 host set nonopt 11
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U25 10009440C9D01213               1:3:2 host set active 11
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U25 10009440C9D01213               1:3:2 host set active 11
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U25 10009440C9D01213               1:3:2 host set nonopt 11
+ 50 new_snap                      CRV_VZ_DL360G11D24U25 10009440C9D01213               1:3:2 host set nonopt 11
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U26 10005CBA2CFC835A               0:3:1 host set nonopt 10
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U26 10005CBA2CFC835A               0:3:1 host set nonopt 10
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U26 10005CBA2CFC835A               0:3:1 host set active 10
+ 50 new_snap                      CRV_VZ_DL360G11D24U26 10005CBA2CFC835A               0:3:1 host set active 10
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U26 10005CBA2CFC835B               0:3:2 host set nonopt 10
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U26 10005CBA2CFC835B               0:3:2 host set nonopt 10
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U26 10005CBA2CFC835B               0:3:2 host set active 10
+ 50 new_snap                      CRV_VZ_DL360G11D24U26 10005CBA2CFC835B               0:3:2 host set active 10
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U26 10005CBA2CFC835A               1:3:1 host set active 11
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U26 10005CBA2CFC835A               1:3:1 host set active 11
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U26 10005CBA2CFC835A               1:3:1 host set nonopt 11
+ 50 new_snap                      CRV_VZ_DL360G11D24U26 10005CBA2CFC835A               1:3:1 host set nonopt 11
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U26 10005CBA2CFC835B               1:3:2 host set active 11
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U26 10005CBA2CFC835B               1:3:2 host set active 11
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U26 10005CBA2CFC835B               1:3:2 host set nonopt 11
+ 50 new_snap                      CRV_VZ_DL360G11D24U26 10005CBA2CFC835B               1:3:2 host set nonopt 11
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U27 10005CBA2CFC8366               0:3:1 host set nonopt 10
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U27 10005CBA2CFC8366               0:3:1 host set nonopt 10
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U27 10005CBA2CFC8366               0:3:1 host set active 10
+ 50 new_snap                      CRV_VZ_DL360G11D24U27 10005CBA2CFC8366               0:3:1 host set active 10
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U27 10005CBA2CFC8367               0:3:2 host set nonopt 10
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U27 10005CBA2CFC8367               0:3:2 host set nonopt 10
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U27 10005CBA2CFC8367               0:3:2 host set active 10
+ 50 new_snap                      CRV_VZ_DL360G11D24U27 10005CBA2CFC8367               0:3:2 host set active 10
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U27 10005CBA2CFC8366               1:3:1 host set active 11
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U27 10005CBA2CFC8366               1:3:1 host set active 11
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U27 10005CBA2CFC8366               1:3:1 host set nonopt 11
+ 50 new_snap                      CRV_VZ_DL360G11D24U27 10005CBA2CFC8366               1:3:1 host set nonopt 11
+  1 VZ_ESXi_Profile_bk            CRV_VZ_DL360G11D24U27 10005CBA2CFC8367               1:3:2 host set active 11
+  5 snap_profile_auto_test_040926 CRV_VZ_DL360G11D24U27 10005CBA2CFC8367               1:3:2 host set active 11
+  6 snap_infra_auto_test_940926   CRV_VZ_DL360G11D24U27 10005CBA2CFC8367               1:3:2 host set nonopt 11
+ 50 new_snap                      CRV_VZ_DL360G11D24U27 10005CBA2CFC8367               1:3:2 host set nonopt 11
+---------------------------------------------------------------------------------------------------------------
+ 48 total                                                                                                      

@@ -1,0 +1,76 @@
+# showvlun -a
+Lun VVName                                                 HostName                        -----Host_WWN/iSCSI_Name/Host_NQN------  Port     Type Status ID
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 0:4:1 host set active 10
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 0:4:1 host set nonopt 10
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 0:4:1 host set active 10
+  3 imagestore-63hS                                        HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 0:4:1 host set nonopt 10
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 0:4:2 host set active 10
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 0:4:2 host set nonopt 10
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 0:4:2 host set active 10
+  3 imagestore-63hS                                        HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 0:4:2 host set nonopt 10
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 1:4:1 host set nonopt 11
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 1:4:1 host set active 11
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 1:4:1 host set nonopt 11
+  3 imagestore-63hS                                        HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 1:4:1 host set active 11
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 1:4:2 host set nonopt 11
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 1:4:2 host set active 11
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 1:4:2 host set nonopt 11
+  3 imagestore-63hS                                        HPE_VM_3a9a0976ecc696ed2af9f507 iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 1:4:2 host set active 11
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 0:4:1 host set active 10
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 0:4:1 host set nonopt 10
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 0:4:1 host set active 10
+  3 imagestore-63hS                                        HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 0:4:1 host set nonopt 10
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 0:4:2 host set active 10
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 0:4:2 host set nonopt 10
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 0:4:2 host set active 10
+  3 imagestore-63hS                                        HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 0:4:2 host set nonopt 10
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 1:4:1 host set nonopt 11
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 1:4:1 host set active 11
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 1:4:1 host set nonopt 11
+  3 imagestore-63hS                                        HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 1:4:1 host set active 11
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 1:4:2 host set nonopt 11
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 1:4:2 host set active 11
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 1:4:2 host set nonopt 11
+  3 imagestore-63hS                                        HPE_VM_39b1dae95f677c0ef68c5cb2 iqn.2026-10.com.hpe:hvm-host-cnx3240100 1:4:2 host set active 11
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 0:4:1 host set active 10
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 0:4:1 host set nonopt 10
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 0:4:1 host set active 10
+  3 imagestore-63hS                                        HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 0:4:1 host set nonopt 10
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 0:4:2 host set active 10
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 0:4:2 host set nonopt 10
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 0:4:2 host set active 10
+  3 imagestore-63hS                                        HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 0:4:2 host set nonopt 10
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 1:4:1 host set nonopt 11
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 1:4:1 host set active 11
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 1:4:1 host set nonopt 11
+  3 imagestore-63hS                                        HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 1:4:1 host set active 11
+  0 pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 1:4:2 host set nonopt 11
+  1 S4V1610053qcow2-Tm9X                                   HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 1:4:2 host set active 11
+  2 HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 1:4:2 host set nonopt 11
+  3 imagestore-63hS                                        HPE_VM_5763b05a9d2bb9eba6141621 iqn.2026-10.com.hpe:hvm-host-cnx32400zz 1:4:2 host set active 11
+233 LabPoc-NEW-RH-LK-04                                    LabPoc-esxi1                    100052AECF000002                        0:3:1     host nonopt 10
+234 LabPoc-NEW-RH-LK-05                                    LabPoc-esxi1                    100052AECF000002                        0:3:1     host active 10
+235 LabPoc-NEW-RH-LK-06                                    LabPoc-esxi1                    100052AECF000002                        0:3:1     host nonopt 10
+233 LabPoc-NEW-RH-LK-04                                    LabPoc-esxi1                    100052AECF000002                        1:3:1     host active 11
+234 LabPoc-NEW-RH-LK-05                                    LabPoc-esxi1                    100052AECF000002                        1:3:1     host nonopt 11
+235 LabPoc-NEW-RH-LK-06                                    LabPoc-esxi1                    100052AECF000002                        1:3:1     host active 11
+263 LabPoc-NEW-RH-04                                       LabPoc-RHEL3                    100052AECF000000                        0:3:1 host set active 10
+264 LabPoc-NEW-RH-05                                       LabPoc-RHEL3                    100052AECF000000                        0:3:1 host set nonopt 10
+265 LabPoc-NEW-RH-06                                       LabPoc-RHEL3                    100052AECF000000                        0:3:1 host set active 10
+263 LabPoc-NEW-RH-04                                       LabPoc-RHEL3                    100052AECF000000                        1:3:1 host set nonopt 11
+264 LabPoc-NEW-RH-05                                       LabPoc-RHEL3                    100052AECF000000                        1:3:1 host set active 11
+265 LabPoc-NEW-RH-06                                       LabPoc-RHEL3                    100052AECF000000                        1:3:1 host set nonopt 11
+243 LabPoc-NEW-WIN-LK-04                                   LabPoc-win1                     100052AECF000006                        0:3:1 host set active 10
+244 LabPoc-NEW-WIN-LK-05                                   LabPoc-win1                     100052AECF000006                        0:3:1 host set nonopt 10
+245 LabPoc-NEW-WIN-LK-06                                   LabPoc-win1                     100052AECF000006                        0:3:1 host set active 10
+243 LabPoc-NEW-WIN-LK-04                                   LabPoc-win1                     100052AECF000006                        1:3:1 host set nonopt 11
+244 LabPoc-NEW-WIN-LK-05                                   LabPoc-win1                     100052AECF000006                        1:3:1 host set active 11
+245 LabPoc-NEW-WIN-LK-06                                   LabPoc-win1                     100052AECF000006                        1:3:1 host set nonopt 11
+243 LabPoc-NEW-WIN-LK-04                                   LabPoc-win2                     100052AECF000008                        0:3:1 host set active 10
+244 LabPoc-NEW-WIN-LK-05                                   LabPoc-win2                     100052AECF000008                        0:3:1 host set nonopt 10
+245 LabPoc-NEW-WIN-LK-06                                   LabPoc-win2                     100052AECF000008                        0:3:1 host set active 10
+243 LabPoc-NEW-WIN-LK-04                                   LabPoc-win2                     100052AECF000008                        1:3:1 host set nonopt 11
+244 LabPoc-NEW-WIN-LK-05                                   LabPoc-win2                     100052AECF000008                        1:3:1 host set active 11
+245 LabPoc-NEW-WIN-LK-06                                   LabPoc-win2                     100052AECF000008                        1:3:1 host set nonopt 11
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ 72 total                                                                                                                                                  

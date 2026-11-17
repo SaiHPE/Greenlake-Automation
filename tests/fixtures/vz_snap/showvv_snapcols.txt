@@ -1,0 +1,97 @@
+# showvv -showcols Id,Name,Prov,Type,CopyOf,Rd,CPG,CreationTime,ExpirationTime,RetentionEndTime
+   Id Name                                        Prov Type  CopyOf                                     Rd CPG    CreationTime            ExpirationTime          RetentionEndTime       
+    2 .mgmtdata                                   full base  ---                                        RW --     2026-06-05 12:26:40 IST --                      --                     
+    3 .shared.SSD_r6_0                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+    4 .shared.SSD_r6_1                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+    5 .shared.SSD_r6_2                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+    6 .shared.SSD_r6_3                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+    7 .shared.SSD_r6_4                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+    8 .shared.SSD_r6_5                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+    9 .shared.SSD_r6_6                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+   10 .shared.SSD_r6_7                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+   11 .shared.SSD_r6_8                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+   12 .shared.SSD_r6_9                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+   13 .shared.SSD_r6_a                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+   14 .shared.SSD_r6_b                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+   15 .shared.SSD_r6_c                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+   16 .shared.SSD_r6_d                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+   17 .shared.SSD_r6_e                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+   18 .shared.SSD_r6_f                            dds  base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+   19  Test                                       tdvv base  ---                                        RW SSD_r6 2026-06-08 20:41:26 IST --                      --                     
+    1 .srdata                                     full base  ---                                        RW --     2026-06-05 12:26:27 IST --                      --                     
+ 2373 2nd_Attempt_sv_CRV_LZ_Infra_RW_clone        tpvv base  ---                                        RW SSD_r6 2026-07-20 10:58:18 IST --                      --                     
+ 2369 2nd_Attempt_sv_CRV_LZ_Prod1_RW_clone        tpvv base  ---                                        RW SSD_r6 2026-07-20 10:57:38 IST --                      --                     
+    0 admin                                       full base  ---                                        RW --     2026-06-05 12:26:19 IST --                      --                     
+   26 CRV_LZ_ESXi_Backup                          tpvv base  ---                                        RW SSD_r6 2026-06-27 12:33:37 IST --                      --                     
+ 6825  sv_CRV_LZ_ESXi_Backup_09.04.15.05.53       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-09-04 15:05:50 IST 2026-09-06 15:05:50 IST 2026-09-05 15:23:56 IST
+ 6830   snap_profile_auto_test_040926             snp  vcopy sv_CRV_LZ_ESXi_Backup_09.04.15.05.53       RW SSD_r6 2026-09-04 15:07:06 IST 2026-09-06 15:05:50 IST --                     
+11978  sv_CRV_LZ_ESXi_Backup_11.14.23.55.01       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-14 23:54:08 IST 2026-11-16 23:54:08 IST 2026-11-15 23:54:07 IST
+11990  sv_CRV_LZ_ESXi_Backup_11.15.03.55.00       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-15 03:54:08 IST 2026-11-17 03:54:08 IST 2026-11-16 03:54:09 IST
+12002  sv_CRV_LZ_ESXi_Backup_11.15.07.55.00       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-15 07:54:11 IST 2026-11-17 07:54:11 IST 2026-11-16 07:54:11 IST
+12014  sv_CRV_LZ_ESXi_Backup_11.15.11.55.00       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-15 11:54:08 IST 2026-11-17 11:54:08 IST 2026-11-16 11:54:07 IST
+12026  sv_CRV_LZ_ESXi_Backup_11.15.15.55.01       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-15 15:54:05 IST 2026-11-17 15:54:05 IST 2026-11-16 15:54:05 IST
+12038  sv_CRV_LZ_ESXi_Backup_11.15.19.55.00       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-15 19:54:07 IST 2026-11-17 19:54:07 IST 2026-11-16 19:54:07 IST
+12050  sv_CRV_LZ_ESXi_Backup_11.15.23.55.00       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-15 23:54:09 IST 2026-11-17 23:54:09 IST 2026-11-16 23:54:09 IST
+12062  sv_CRV_LZ_ESXi_Backup_11.16.03.55.00       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-16 03:54:10 IST 2026-11-18 03:54:10 IST 2026-11-17 03:54:11 IST
+12074  sv_CRV_LZ_ESXi_Backup_11.16.07.55.01       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-16 07:54:15 IST 2026-11-18 07:54:15 IST 2026-11-17 07:54:15 IST
+12086  sv_CRV_LZ_ESXi_Backup_11.16.11.55.00       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-16 11:54:05 IST 2026-11-18 11:54:05 IST 2026-11-17 11:54:04 IST
+12098  sv_CRV_LZ_ESXi_Backup_11.16.15.55.00       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-16 15:54:06 IST 2026-11-18 15:54:06 IST 2026-11-17 15:54:06 IST
+12110  sv_CRV_LZ_ESXi_Backup_11.16.19.55.01       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-16 19:54:11 IST 2026-11-18 19:54:11 IST 2026-11-17 19:54:11 IST
+12122  sv_CRV_LZ_ESXi_Backup_11.16.23.55.00       snp  vcopy CRV_LZ_ESXi_Backup                         RO SSD_r6 2026-11-16 23:54:04 IST 2026-11-18 23:54:04 IST 2026-11-17 23:54:04 IST
+   20 CRV_LZ_Infra                                tpvv base  ---                                        RW SSD_r6 2026-06-24 06:45:44 IST --                      --                     
+ 1236  2nd_Attempt_sv_CRV_LZ_Infra_07.08.21.50.24 snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-07-08 21:50:58 IST 2026-07-10 21:50:58 IST 2026-07-09 22:09:03 IST
+ 1245   2nd_Attempt_sv_CRV_LZ_Infra_RW            snp  vcopy 2nd_Attempt_sv_CRV_LZ_Infra_07.08.21.50.24 RW SSD_r6 2026-07-08 22:20:16 IST --                      --                     
+ 2393   2nd_Attempt_sv_CRV_LZ_Infra_Recover_Back  snp  vcopy 2nd_Attempt_sv_CRV_LZ_Infra_07.08.21.50.24 RW SSD_r6 2026-07-20 12:49:17 IST --                      --                     
+ 2397    rcpy.3.2393.1.1                          snp  vcopy 2nd_Attempt_sv_CRV_LZ_Infra_Recover_Back   RO SSD_r6 2026-07-20 13:11:32 IST --                      --                     
+ 6822  sv_CRV_LZ_Infra_09.04.15.05.53             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-09-04 15:05:50 IST 2026-09-06 15:05:50 IST 2026-09-05 15:23:57 IST
+ 6831   snap_infra_auto_test_940926               snp  vcopy sv_CRV_LZ_Infra_09.04.15.05.53             RW SSD_r6 2026-09-04 15:45:18 IST 2026-09-06 15:05:50 IST --                     
+11975  sv_CRV_LZ_Infra_11.14.23.55.01             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-14 23:54:08 IST 2026-11-16 23:54:08 IST 2026-11-15 23:54:08 IST
+11987  sv_CRV_LZ_Infra_11.15.03.55.00             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-15 03:54:08 IST 2026-11-17 03:54:08 IST 2026-11-16 03:54:09 IST
+11999  sv_CRV_LZ_Infra_11.15.07.55.00             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-15 07:54:11 IST 2026-11-17 07:54:11 IST 2026-11-16 07:54:11 IST
+12011  sv_CRV_LZ_Infra_11.15.11.55.00             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-15 11:54:08 IST 2026-11-17 11:54:08 IST 2026-11-16 11:54:07 IST
+12023  sv_CRV_LZ_Infra_11.15.15.55.01             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-15 15:54:05 IST 2026-11-17 15:54:05 IST 2026-11-16 15:54:05 IST
+12035  sv_CRV_LZ_Infra_11.15.19.55.00             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-15 19:54:07 IST 2026-11-17 19:54:07 IST 2026-11-16 19:54:07 IST
+12047  sv_CRV_LZ_Infra_11.15.23.55.00             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-15 23:54:09 IST 2026-11-17 23:54:09 IST 2026-11-16 23:54:09 IST
+12059  sv_CRV_LZ_Infra_11.16.03.55.00             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-16 03:54:10 IST 2026-11-18 03:54:10 IST 2026-11-17 03:54:11 IST
+12071  sv_CRV_LZ_Infra_11.16.07.55.01             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-16 07:54:15 IST 2026-11-18 07:54:15 IST 2026-11-17 07:54:15 IST
+12083  sv_CRV_LZ_Infra_11.16.11.55.00             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-16 11:54:05 IST 2026-11-18 11:54:05 IST 2026-11-17 11:54:04 IST
+12095  sv_CRV_LZ_Infra_11.16.15.55.00             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-16 15:54:06 IST 2026-11-18 15:54:06 IST 2026-11-17 15:54:06 IST
+12107  sv_CRV_LZ_Infra_11.16.19.55.01             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-16 19:54:11 IST 2026-11-18 19:54:11 IST 2026-11-17 19:54:11 IST
+12119  sv_CRV_LZ_Infra_11.16.23.55.00             snp  vcopy CRV_LZ_Infra                               RO SSD_r6 2026-11-16 23:54:04 IST 2026-11-18 23:54:04 IST 2026-11-17 23:54:04 IST
+   21 CRV_LZ_Prod1                                tpvv base  ---                                        RW SSD_r6 2026-06-24 06:45:57 IST --                      --                     
+ 1237  2nd_Attempt_sv_CRV_LZ_Prod1_07.08.21.50.24 snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-07-08 21:50:58 IST 2026-07-10 21:50:58 IST 2026-07-09 22:09:03 IST
+ 1246   2nd_Attempt_sv_CRV_LZ_Prod1_RW            snp  vcopy 2nd_Attempt_sv_CRV_LZ_Prod1_07.08.21.50.24 RW SSD_r6 2026-07-08 22:20:27 IST --                      --                     
+ 2394   2nd_Attempt_sv_CRV_LZ_Prod1_Recover-back  snp  vcopy 2nd_Attempt_sv_CRV_LZ_Prod1_07.08.21.50.24 RW SSD_r6 2026-07-20 12:49:35 IST --                      --                     
+ 2398    rcpy.3.2394.1.1                          snp  vcopy 2nd_Attempt_sv_CRV_LZ_Prod1_Recover-back   RO SSD_r6 2026-07-20 13:11:32 IST --                      --                     
+11976  sv_CRV_LZ_Prod1_11.14.23.55.01             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-14 23:54:08 IST 2026-11-16 23:54:08 IST 2026-11-15 23:54:07 IST
+11988  sv_CRV_LZ_Prod1_11.15.03.55.00             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-15 03:54:08 IST 2026-11-17 03:54:08 IST 2026-11-16 03:54:09 IST
+12000  sv_CRV_LZ_Prod1_11.15.07.55.00             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-15 07:54:11 IST 2026-11-17 07:54:11 IST 2026-11-16 07:54:11 IST
+12012  sv_CRV_LZ_Prod1_11.15.11.55.00             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-15 11:54:08 IST 2026-11-17 11:54:08 IST 2026-11-16 11:54:07 IST
+12024  sv_CRV_LZ_Prod1_11.15.15.55.01             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-15 15:54:05 IST 2026-11-17 15:54:05 IST 2026-11-16 15:54:05 IST
+12036  sv_CRV_LZ_Prod1_11.15.19.55.00             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-15 19:54:07 IST 2026-11-17 19:54:07 IST 2026-11-16 19:54:07 IST
+12048  sv_CRV_LZ_Prod1_11.15.23.55.00             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-15 23:54:09 IST 2026-11-17 23:54:09 IST 2026-11-16 23:54:09 IST
+12060  sv_CRV_LZ_Prod1_11.16.03.55.00             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-16 03:54:10 IST 2026-11-18 03:54:10 IST 2026-11-17 03:54:11 IST
+12072  sv_CRV_LZ_Prod1_11.16.07.55.01             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-16 07:54:15 IST 2026-11-18 07:54:15 IST 2026-11-17 07:54:15 IST
+12084  sv_CRV_LZ_Prod1_11.16.11.55.00             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-16 11:54:05 IST 2026-11-18 11:54:05 IST 2026-11-17 11:54:04 IST
+12096  sv_CRV_LZ_Prod1_11.16.15.55.00             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-16 15:54:06 IST 2026-11-18 15:54:06 IST 2026-11-17 15:54:06 IST
+12108  sv_CRV_LZ_Prod1_11.16.19.55.01             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-16 19:54:11 IST 2026-11-18 19:54:11 IST 2026-11-17 19:54:11 IST
+12120  sv_CRV_LZ_Prod1_11.16.23.55.00             snp  vcopy CRV_LZ_Prod1                               RO SSD_r6 2026-11-16 23:54:04 IST 2026-11-18 23:54:04 IST 2026-11-17 23:54:04 IST
+   22 CRV_LZ_Test                                 tpvv base  ---                                        RW SSD_r6 2026-06-24 06:46:06 IST --                      --                     
+ 6535  sv_CRV_LZ_Test_09.01.15.55.01              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-09-01 15:55:05 IST 2026-09-03 15:55:05 IST 2026-09-02 16:13:10 IST
+ 6717   new_snap                                  snp  vcopy sv_CRV_LZ_Test_09.01.15.55.01              RW SSD_r6 2026-09-03 14:54:32 IST 2026-09-03 15:55:05 IST --                     
+11977  sv_CRV_LZ_Test_11.14.23.55.01              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-14 23:54:08 IST 2026-11-16 23:54:08 IST 2026-11-15 23:54:07 IST
+11989  sv_CRV_LZ_Test_11.15.03.55.00              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-15 03:54:08 IST 2026-11-17 03:54:08 IST 2026-11-16 03:54:09 IST
+12001  sv_CRV_LZ_Test_11.15.07.55.00              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-15 07:54:11 IST 2026-11-17 07:54:11 IST 2026-11-16 07:54:11 IST
+12013  sv_CRV_LZ_Test_11.15.11.55.00              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-15 11:54:08 IST 2026-11-17 11:54:08 IST 2026-11-16 11:54:07 IST
+12025  sv_CRV_LZ_Test_11.15.15.55.01              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-15 15:54:05 IST 2026-11-17 15:54:05 IST 2026-11-16 15:54:05 IST
+12037  sv_CRV_LZ_Test_11.15.19.55.00              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-15 19:54:07 IST 2026-11-17 19:54:07 IST 2026-11-16 19:54:07 IST
+12049  sv_CRV_LZ_Test_11.15.23.55.00              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-15 23:54:09 IST 2026-11-17 23:54:09 IST 2026-11-16 23:54:09 IST
+12061  sv_CRV_LZ_Test_11.16.03.55.00              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-16 03:54:10 IST 2026-11-18 03:54:10 IST 2026-11-17 03:54:11 IST
+12073  sv_CRV_LZ_Test_11.16.07.55.01              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-16 07:54:15 IST 2026-11-18 07:54:15 IST 2026-11-17 07:54:15 IST
+12085  sv_CRV_LZ_Test_11.16.11.55.00              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-16 11:54:05 IST 2026-11-18 11:54:05 IST 2026-11-17 11:54:04 IST
+12097  sv_CRV_LZ_Test_11.16.15.55.00              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-16 15:54:06 IST 2026-11-18 15:54:06 IST 2026-11-17 15:54:06 IST
+12109  sv_CRV_LZ_Test_11.16.19.55.01              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-16 19:54:11 IST 2026-11-18 19:54:11 IST 2026-11-17 19:54:11 IST
+12121  sv_CRV_LZ_Test_11.16.23.55.00              snp  vcopy CRV_LZ_Test                                RO SSD_r6 2026-11-16 23:54:04 IST 2026-11-18 23:54:04 IST 2026-11-17 23:54:04 IST
+  392 VZ_ESXi_Profile_bk                          tpvv base  ---                                        RW SSD_r6 2026-06-30 14:42:08 IST --                      --                     
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+   93 total                                                                                                                                                                              

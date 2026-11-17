@@ -1,0 +1,30 @@
+      showversion                              13 line(s)
+      showdate                                 3 line(s)
+      showsched                                1 line(s)
+      showvvset                                15 line(s)
+      showcpg                                  5 line(s)
+      showvv -showcols Id,Name,Prov,Type,CopyO 38 line(s)
+      showvv zz_sn_*                           1 line(s)
+      showvvset zz_sn_*                        1 line(s)
+      help createsched                         150 line(s)
+      help setsched                            112 line(s)
+      help removesched                         42 line(s)
+      help showsched                           89 line(s)
+      help createsv                            166 line(s)
+      help removevv                            92 line(s)
+      GET /system      ok
+      GET /volumes     ok
+      GET /volumesets  ok
+      GET /schedules   HTTP 501 {"code":9,"desc":"unsupported operation for the resource"}
+      OS: Release version 10.6.0
+      showdate: Node Date | 0    2026-11-16 23:18:05 IST (Asia/Kolkata) | 1    2026-11-16 23:18:05 IST (Asia/Kolkata)
+      schedules: 0 (createsv: 0)
+      snapshots over WSAPI: 0; keys seen on them: 
+      snapshots with a retention field: none
+      /schedules: no resource (see file)
+PASS  nothing named zz_sn_* on the array
+PASS  showsched read
+PASS  createsched help read
+PASS  createsv help read
+
+0 FAIL

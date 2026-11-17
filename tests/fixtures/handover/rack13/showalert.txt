@@ -1,0 +1,74 @@
+# showalert
+Id          : 27
+State       : New
+Message Code: 0x0c40002
+Time        : 2026-11-11 23:22:51 IST
+Severity    : Major
+Type        : Unable to register iLO ssh key
+Message     : Unable to register ssh key for iLO on Node 0
+
+Id          : 28
+State       : New
+Message Code: 0x0c40002
+Time        : 2026-11-11 23:22:51 IST
+Severity    : Major
+Type        : Unable to register iLO ssh key
+Message     : Unable to register ssh key for iLO on Node 1
+
+Id          : 31
+State       : New
+Message Code: 0x0b90007
+Time        : 2026-11-11 23:23:04 IST
+Severity    : Critical
+Type        : The configuration of switch is not synchronized
+Message     : Switch sw1 Running/startup_config mismatched.
+
+Id          : 34
+State       : New
+Message Code: 0x0b90007
+Time        : 2026-11-11 23:23:09 IST
+Severity    : Critical
+Type        : The configuration of switch is not synchronized
+Message     : Switch sw2 Running/startup_config mismatched.
+
+Id          : 36
+State       : New
+Message Code: 0x02d0003
+Time        : 2026-11-11 23:23:37 IST
+Severity    : Informational
+Type        : Cage I/O Module firmware outdated
+Message     : Cage cage41 (0x51402EC0207A9694) I/O Module 1 firmware is outdated.
+
+Id          : 37
+State       : New
+Message Code: 0x02d0003
+Time        : 2026-11-11 23:23:40 IST
+Severity    : Informational
+Type        : Cage I/O Module firmware outdated
+Message     : Cage cage41 (0x51402EC0207A9694) I/O Module 2 firmware is outdated.
+
+Id          : 38
+State       : New
+Message Code: 0x02900de
+Time        : 2026-11-11 23:24:01 IST
+Severity    : Degraded
+Type        : Component state change
+Message     : Port 1:4:2, SFP Degraded (Unqualified, check for unsupported SFP or cable)
+
+Id          : 39
+State       : New
+Message Code: 0x02900de
+Time        : 2026-11-11 23:24:37 IST
+Severity    : Degraded
+Type        : Component state change
+Message     : Port 0:4:2, SFP Degraded (Unqualified, check for unsupported SFP or cable)
+
+Id          : 40
+State       : New
+Message Code: 0x060000a
+Time        : 2026-11-16 23:25:20 IST
+Severity    : Major
+Type        : Disconnected from Data Services Cloud Console for a prolonged period of time
+Message     : Storage system has been disconnected from Data Services Cloud Console for more than 7200 minutes.
+
+9 alerts

@@ -7,6 +7,7 @@
 > `adapters/command_log.py` and `application/runs/console.py` (every device command recorded for the
 > console, SPEC-019); the Remote Copy write-scoped SSH client (ADR 0015); and the redesigned UI shell
 > in `frontend/src/ui/` (BL-43). The current folder map is in `AGENTS.md` at the repository root.
+> Statements that had gone stale (§4 to §8) were checked against the code at v0.18.0 on 2026-11-16.
 
 > **Purpose.** A snapshot of the system *as built today* (v0.12.0), written as the baseline for a
 > planned HLD/LLD-driven refactor. It records what exists, how the layers fit, the runtime flows, and —
@@ -67,7 +68,9 @@ Four layers, dependencies point inward (`api → application → domain`; `adapt
   (verify + as-built), `platform/` (intake, init sheet, config, proxy, prereqs). `service.py` is the
   composition-root façade the API constructs.
 - **`adapters/`** — one subpackage per external system, each built from `EndpointCreds`/config via
-  factory functions (`storage/clients.py`, injectable so services unit-test with fakes).
+  factory functions (`application/provisioning/clients.py` for the array, Remote Copy, vCenter, switch
+  and host clients; `application/onboarding/clients.py` for GreenLake), injectable so services
+  unit-test with fakes.
 - **`api/`** — `app.py` (all routes as inline closures in `create_app(service)`), `schemas.py` (Pydantic
   request/response models).
 
@@ -84,17 +87,18 @@ Four layers, dependencies point inward (`api → application → domain`; `adapt
   peer array is a step credential like the switches. Groups, period, policies and DR actions over
   **WSAPI** `/remotecopygroups` behind the plan → approve → apply gate (live since v0.17); RCIP ports,
   `startrcopy`, targets and links from the *Replication network* tab via the write-scoped SSH client
-  (`adapters/array/rc_cli_client.py`, `application/replication/partnership.py`; built 2026-11-04,
-  pending live run). Paired runs (ADR 0014) deferred.
+  (`adapters/array/rc_cli_client.py`, `application/replication/partnership.py`; live since v0.18,
+  BL-41). Paired runs (ADR 0014) deferred.
 - **Switch (read-only, by decision):** Brocade FOS (`adapters/fabric/brocade_client.py`) — verify +
   the zoning *plan* → an emitted **command set** the consultant applies. The tool **never writes to
   the switch** (ADR 0012; the write path that shipped in v0.14–v0.15 was removed in v0.16).
 
 **Coverage against the nine scope areas** — see the status table in [SCOPE.md](SCOPE.md). In brief
-(v0.16.0-rc.5): Initialization ✅ · Host/array discovery ◐ (ESXi via vCenter + array-side; no agentless
-Win/Linux) · SAN/network ◐ (FC zoning as command set; no VLAN/peer-port) · Block provisioning 🟡
-(built, pending live run) · Snapshots/replication ◻︎ · Unified File ◻︎ · GL4F ◻︎ · Reports ◐ (config,
-inventory, checkhealth; no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
+(v0.18.0): Initialization ✅ · Host/array discovery ◐ (ESXi via vCenter, array, Windows over WinRM,
+Linux over SSH; no source array) · SAN/network ◐ (FC zoning as command set; RCIP ports for
+replication; no VLAN, no migration) · Block provisioning ✅ (FC and iSCSI) · Snapshots/replication ◐
+(replication ✅; no snapshots) · Unified File ◻︎ · GL4F ◻︎ · Reports ◐ (config, inventory, checkhealth;
+no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 
 ## 5. LLD — module map (by layer)
 
@@ -105,15 +109,15 @@ inventory, checkhealth; no performance) · Documentation ◐ (as-built ✅; HLD/
 | `shared.py` | Storage-context primitives: `EndpointCreds`, `Fabric`, `normalize_wwpn`/`wwpn_colons` |
 | `discovery.py` | Discovery context: `ArrayPort`/`HostHba`/`ArrayHost`/`DiscoveryReport` |
 | `zoning.py` | Zoning context: verify (`ZoningReport`) + read-only plan (`ZoningPlan`, `AliasedWwpn`) |
-| `provisioning.py` | Provisioning context: **plural intent** (`ProvisioningIntent` = `volumes[]`+`host_sets[]`+`exports[]`, `from_simple`); `persona_for_os`→name; builder palette (`ProvisioningObjects`/`ProvisioningBuilder`); plan+result; tier-2 (`PathVerification`). (As-built's `AsBuiltData` is a dataclass in `application/asbuilt.py`) |
-| `workflow.py` | **`STEP_REGISTRY`** (ordered `StepDef`s: greenlake, cloudinit, dscc, discover, zoning, provision, verify, **asbuilt**) + `_MODE_STEPS` (preset mode→steps) + `enabled_steps`/`initial_phase`/`next_enabled_phase` |
+| `provisioning.py` | Provisioning context: **plural intent** (`ProvisioningIntent` = `volumes[]`+`host_sets[]`+`exports[]`, `from_simple`); `persona_for_os`→name; builder palette (`ProvisioningObjects`/`ProvisioningBuilder`); plan+result; tier-2 (`PathVerification`). (As-built's `AsBuiltData` is a dataclass in `application/documents/asbuilt.py`) |
+| `workflow.py` | **`STEP_REGISTRY`** (ordered `StepDef`s: greenlake, cloudinit, dscc, discover, zoning, provision, replicate, failover_test, verify, **asbuilt**) + `_MODE_STEPS` (preset mode→steps) + `enabled_steps`/`initial_phase`/`next_enabled_phase` |
 | `ports.py` | `RunStore` interface (persistence contract) |
 | `policies.py`, `errors.py` | Domain rules + typed errors |
 
 ### 5.2 application/ (bounded-context packages, ADR 0011)
 | Module | Responsibility |
 |---|---|
-| **`service.py`** | The **composition-root façade** (`OnboardingService`): wires the coordinator + four step services and delegates one-to-one; step logic lives in the services |
+| **`service.py`** | The **composition-root façade** (`OnboardingService`): wires the coordinator + five step services (onboarding, discovery and zoning, provisioning, replication, documents) and delegates one-to-one; step logic lives in the services |
 | `runs/coordinator.py` | `RunCoordinator` — run lifecycle, pending-sheet stash, guarded background spawn, `set_state`/`emit` (store + SSE); owns the step exceptions |
 | `runs/event_bus.py` | `InMemoryEventBus` — per-run pub/sub feeding SSE |
 | `onboarding/steps.py` | `OnboardingSteps` — A GreenLake → B Cloud Connectivity → C DSCC (+ default adapter factories) |
@@ -130,8 +134,8 @@ inventory, checkhealth; no performance) · Documentation ◐ (as-built ✅; HLD/
 ### 5.3 application/provisioning/ (storage-provisioning context)
 | Module | Responsibility |
 |---|---|
-| `steps.py` | `DiscoveryZoningSteps` (discover + zoning verify/plan; owns the durable discovery artifact behind `require_discovery`) and `ProvisioningSteps` (tier-1 preview/apply, Stage-2 builder, tier-2 path-verify) |
-| `clients.py` | Adapter **factories** (`make_wsapi`/`make_array_cli`/`make_vcenter`/`make_brocade`) — the injection seam for tests |
+| `steps.py` | `DiscoveryZoningSteps` (discover + zoning verify/plan; owns the durable discovery artifact behind `require_discovery`) and `ProvisioningSteps` (tier-1 preview/apply, Stage-2 builder, tier-2 path-verify; the previewed plan is held in memory on purpose, see §7) |
+| `clients.py` | Adapter **factories** (`make_wsapi`/`make_array_cli`/`make_rc_cli`/`make_vcenter`/`make_brocade`/`make_linux_host`/`make_windows_host`) — the injection seam for tests |
 | `discovery.py` | Read array ports + `showhost -d` + fabric resolution + vCenter HBAs → `DiscoveryReport` |
 | `zoning.py`, `zoning_plan.py` | Array-side zoning **verify** (report) + read-only zoning **plan** builder (ADR 0004) |
 | `storage_provision.py` | Tier-1 `build_plan`/`apply_plan` (plural/heterogeneous create; exports w/ default fallback) + builder palette reads (`read_array_objects`, `host_briefs`) |
@@ -155,8 +159,9 @@ inventory, checkhealth; no performance) · Documentation ◐ (as-built ✅; HLD/
   init-sheet upload/template, runs CRUD, per-step `POST`s (`/greenlake`…/`verify`/**`/asbuilt`** +
   `/asbuilt/download`), storage (`/discover`,`/zoning/*`,`/storage/{objects,builder,preview,apply,verify-paths}`),
   events + SSE.
-- `frontend/src/` — `App.tsx` (wizard shell + step render switch), `modes.ts` (mirror of the step registry —
-  **kept in lockstep with `workflow.py` by hand**), `api.ts` (fetch client + all TS interfaces), `useRunEvents.ts`
+- `frontend/src/` — `App.tsx` (wizard shell + step render switch; the step list comes from the registry
+  served by `GET /app/profile`), `modes.ts` (presentation only: step subtitles, mode labels and blurbs, and
+  helpers over the served registry; no copy of the step list), `api.ts` (fetch client + all TS interfaces), `useRunEvents.ts`
   (SSE hook), `steps/*` (one component per step: GreenLake/Cloudinit/Dscc/Discovery/Zoning(+ZoningPlanView)/
   Provision(+ProvisioningBuilderView)/Verify/**AsBuilt**/Done/Mode/Prereq/InitSheet).
 
@@ -181,17 +186,22 @@ inventory, checkhealth; no performance) · Documentation ◐ (as-built ✅; HLD/
 
 ## 7. State & persistence
 - **Durable (SQLite):** runs, work items, pending sheets (single-use token), provisioning intent.
-- **Durable step artifacts (SQLite `run_artifacts`, ADR 0011 C7):** discovery report, provisioning-plan
-  gate, as-built docx — the store is the truth (restart-proof), the step services keep an in-memory parse
-  cache. Also emitted in event data so the UI has them. Only `_tasks` (running asyncio tasks) is
-  inherently transient.
+- **Durable step artifacts (SQLite `run_artifacts`, ADR 0011 C7):** discovery report, zoned hosts,
+  replication report, link check, replication result, failover record, as-built docx. The store is the
+  truth (restart-proof); the step services keep an in-memory parse cache. Also emitted in event data so
+  the UI has them.
+- **In memory on purpose:** the previewed provisioning plan and the replication plan
+  (`ProvisioningSteps._plan`, `ReplicationSteps._plan`). Each is an approval, not a result: it is
+  withdrawn when its inputs change (provisioning: a new discovery or an edit to the composition;
+  replication: a new read) and is gone after a restart, so the operator previews again
+  ([LESSONS](LESSONS.md) 6). `_tasks` (running asyncio tasks) is transient too.
 - **Secrets:** GreenLake creds + proxy in gitignored `.env`; device passwords supplied per-run or held in the
   pending-sheet/intent, never echoed to the browser.
 
 ## 8. Refactoring seams & known pain points (read this first)
 
-Updated after the ADR-0011 Phase-1 refactor (2026-07-24). Of the five seams the original baseline
-named, three are RESOLVED; two remain, plus the standing invariants:
+Updated after the ADR-0011 Phase-1 refactor (2026-07-24) and Phase 2 (the served step registry). Of
+the five seams the original baseline named, four are RESOLVED; one remains, plus the standing invariants:
 
 - **RESOLVED — the god-object (C1):** the orchestrator is decomposed into `runs/coordinator.py` +
   four per-context step services; `service.py` is a thin, permanent composition-root façade
@@ -201,12 +211,14 @@ named, three are RESOLVED; two remain, plus the standing invariants:
   (`runs/ onboarding/ provisioning/ documents/ platform/`); Component A renamed
   `greenlake_provision` (the old `application/provisioning.py` name collided with the
   storage-provisioning context).
-- **RESOLVED — in-memory-only step state (C7):** durable `run_artifacts` (discovery / plan gate /
-  as-built docx); store is the truth, the services keep a parse cache. Only `_tasks` is memory-only.
-- **REMAINING — the step registry is duplicated** across `domain/workflow.py` and
-  `frontend/src/modes.ts` (plus hand-mirrored types in `api.ts`, phase/status string literals across
-  the step components, and the `workItem.ts` shape mirror). ADR-0011 **Phase 2** serves the registry
-  via `GET /app/profile` and deletes the mirrors — the only planned API-contract change.
+- **RESOLVED — in-memory-only step state (C7):** durable `run_artifacts` for results (discovery,
+  replication, as-built docx); the store is the truth, the services keep a parse cache. The approved
+  plans stay in memory on purpose (§7, LESSONS 6).
+- **RESOLVED — the step registry duplicate (ADR-0011 Phase 2):** `GET /app/profile` serves the step
+  registry and the mode presets from `domain/workflow.py`, and the wizard renders from it. `modes.ts`
+  keeps presentation only. Still kept by hand: the TypeScript types in `api.ts`, the step-key and mode
+  unions in `modes.ts`, phase/status string literals in a few components, and the `workItem.ts`
+  shape.
 - **REMAINING — the hybrid control plane is half-built** (ADR 0006): everything is
   direct-WSAPI/SSH/browser; the DSCC *cloud* client does not exist. Its slot is now explicit:
   `application/onboarding/clients.py` (`make_greenlake`) — add the DSCC client + capability routing
@@ -218,7 +230,7 @@ named, three are RESOLVED; two remain, plus the standing invariants:
   `key:value` detail output, not fixed-width slicing. Prefer that pattern for any new device reads.
 
 ## 9. Pointers
-- **Scope / north-star:** [SCOPE.md](SCOPE.md) — the 7-stage × block/file matrix.
+- **Scope / north-star:** [SCOPE.md](SCOPE.md) — the nine scope areas and where each stands.
 - **Glossary:** [CONTEXT.md](../CONTEXT.md) — canonical domain terms (incl. As-built, Provisioning intent,
   Path verification, Ideal subset, control plane).
 - **Decisions:** [docs/adr/0001–0011](adr/) — post-init verify (0001), discovery-driven (0002), WSAPI

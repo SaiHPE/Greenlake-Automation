@@ -52,3 +52,25 @@ configuration, but it starts and stops a process on the array, so it does not jo
 It has an allowlist of its own (`run_diagnostic`: exactly `startserver`, `stopserver`, `startclient`,
 `stopclient`, with the port, address and test length validated), is called only by the replication
 link check, and is never reachable from the Console prompt (SPEC-019), which keeps the read allowlist.
+
+## Addendum 2026-11-16 (BL-46)
+
+The read allowlist checked only the command name, so an allowed command with an option that acts got
+through: `showtarget -rescan` makes the peer ports rescan for targets (HPE CLI reference, showtarget).
+It changes no configuration, but it is not a read, and the Console prompt could send it. The client now
+also refuses known acting options per command (`_ACTION_OPTIONS` in `cli_client.py`, case-insensitive),
+each with a test. Only `showtarget -rescan` is known today; another joins the list when a captured
+`help` shows it.
+**Live 2026-11-16** on rack13-ARCUS (OS 10.6.0, run `aa3d93c5`, `lab/failed_apply_lab.py`): typed in the
+Console, `showtarget -rescan` was refused on screen and over the API, the refusal was in the command log
+and nothing reached the array; `showtarget` still ran. Record: `docs/validation/2026-11-16-failed-apply-rack13.md`
+(BL-45's pull request).
+
+Tcl's quoting and substitution characters are refused too: `"` `'` `{` `}` `[` `]` `\` joined the shell
+metacharacters in `_FORBIDDEN_CHARS`, with a test for each. The array CLI is built on Tcl. If it parses
+an SSH exec line that way, `showvv [removevv -f zz]` runs `removevv` inside an allowed read, and
+`showtarget "-rescan"`, `showtarget {-rescan}` or `showtarget \-rescan` reach the array as `-rescan`
+while the option check sees a different word. No read the tool makes uses these characters, so refusing
+them costs nothing. The link check and the Remote Copy write client share the same set and refuse them
+as well. Whether the CLI really applies Tcl parsing to an SSH exec is not confirmed: a harmless lab
+check such as `showsys [showdate]` would settle it. It has not been run.

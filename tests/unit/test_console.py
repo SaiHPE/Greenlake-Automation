@@ -199,7 +199,8 @@ async def test_a_spawned_step_records_reads_made_in_its_worker_threads(tmp_path)
 
 
 @pytest.mark.parametrize("command", ["removevv -f zz", "setrcopygroup failover -f g", "createvv SSD zz 1g",
-                                     "showvv; removevv zz", "showvv | more", "showvv `x`"])
+                                     "showvv; removevv zz", "showvv | more", "showvv `x`",
+                                     "showtarget -rescan", "showtarget -lun all -RESCAN"])
 async def test_the_prompt_refuses_anything_but_the_read_allowlist(tmp_path, command):
     service, run_id = _service(tmp_path)
     opened = []
@@ -276,6 +277,40 @@ def test_the_text_log_has_one_header_line_per_command_and_indented_output():
 def test_the_allowlist_check_is_the_clients_own():
     assert cli_client.refusal("showvv -showcols Name,VSize_MB") is None
     assert "metacharacter" in cli_client.refusal("showvv && removevv x")
+
+
+def test_an_allowed_command_is_refused_with_an_option_that_acts():
+    """The name check alone passed `showtarget -rescan`, which makes the peer ports rescan for targets."""
+    assert cli_client.refusal("showtarget -rescan") == (
+        "refused: 'showtarget -rescan' is not a read: it makes the peer ports rescan for targets")
+    assert cli_client.refusal("showtarget -lun all -rescan") is not None
+    assert cli_client.refusal("showtarget") is None
+    assert cli_client.refusal("showtarget -lun all") is None
+
+
+@pytest.mark.parametrize("ch", ['"', "'", "{", "}", "[", "]", "\\"])
+def test_each_tcl_quoting_or_substitution_character_is_refused(ch):
+    """The array CLI is Tcl-based: these characters could run a second command or hide an option."""
+    assert cli_client.refusal(f"showvv zz{ch}") == "refused: command contains a forbidden shell metacharacter"
+
+
+@pytest.mark.parametrize("command", [
+    "showvv [removevv -f zz]",          # command substitution would run removevv
+    'showtarget "-rescan"',             # quoting hides the acting option from the option check
+    "showtarget '-rescan'",
+    "showtarget {-rescan}",
+    "showtarget \\-rescan",
+])
+def test_tcl_substitution_or_quoting_cannot_slip_an_action_past_the_check(command):
+    assert "metacharacter" in cli_client.refusal(command)
+
+
+@pytest.mark.parametrize("command", ["showtarget -rescan", "showvv [removevv -f zz]", 'showtarget "-rescan"'])
+def test_an_acting_option_or_a_substitution_is_recorded_and_never_sent(recorded, command):
+    cli = _cli("x")
+    with pytest.raises(ArrayCliError, match="refused"):
+        cli.run(command)
+    assert cli._client.sent == [] and recorded[0]["ok"] is False and "refused" in recorded[0]["result"]
 
 
 # ------------------------------------------------------------------ R2: the as-built appendix

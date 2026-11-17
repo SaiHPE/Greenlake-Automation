@@ -1,0 +1,615 @@
+# checkhealth -svc -detail
+Checking alert
+Checking cabling
+Checking cage
+Checking cdm
+Checking cert
+Checking dar
+Checking date
+Checking file
+Checking fileservice
+Checking host
+Checking hostkeys
+Checking ilo
+Checking ld
+Checking license
+Checking network
+Checking node
+Checking pd
+Checking pdch
+Checking port
+Checking qos
+Checking rc
+Checking security
+Checking signature
+Checking snmp
+Checking switch
+Checking task
+Checking ui
+Checking vlun
+Checking vv
+Component -------------------------------------Summary Description------------------------------------- Qty
+Alert     New alerts                                                                                    525
+File      sysvars.init is altering system behavior                                                        4
+host      Hosts not seen by all nodes                                                                     1
+Network   Errors detected on network on 2026-11-16 03:56:14 IST. 2 or more packet errors have occurred.   1
+Network   Errors detected on network on 2026-11-16 04:06:14 IST. 2 or more packet errors have occurred.   1
+Port      Unavailable host ports                                                                          3
+RC        Transports not ready                                                                            2
+RC        Failed targets                                                                                  1
+RC        Links which are down                                                                            2
+RC        Groups which are not started                                                                    6
+Security  System with remote root access enabled                                                          1
+Task      Failed Tasks                                                                                   11
+vlun      Hosts not connected to a port                                                                   7
+-----------------------------------------------------------------------------------------------------------
+       13 total                                                                                         565
+
+Component -------------Identifier-------------- -------------------------------------------------Detailed Description------------------------------------------------- Resolution
+Alert     sw_task:17841                         Task 17841 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:17843                         Task 17843 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:17882                         Task 17882 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:17884                         Task 17884 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:17929                         Task 17929 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:17930                         Task 17930 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:17983                         Task 17983 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:17982                         Task 17982 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18047                         Task 18047 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18048                         Task 18048 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18076                         Task 18076 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18115                         Task 18115 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18113                         Task 18113 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18154                         Task 18154 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18156                         Task 18156 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18201                         Task 18201 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18202                         Task 18202 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18255                         Task 18255 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18254                         Task 18254 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18320                         Task 18320 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18319                         Task 18319 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18348                         Task 18348 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18385                         Task 18385 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18387                         Task 18387 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18426                         Task 18426 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18428                         Task 18428 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18473                         Task 18473 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18474                         Task 18474 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18526                         Task 18526 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18527                         Task 18527 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18592                         Task 18592 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18591                         Task 18591 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18620                         Task 18620 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18657                         Task 18657 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18659                         Task 18659 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18701                         Task 18701 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18699                         Task 18699 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18747                         Task 18747 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18746                         Task 18746 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18799                         Task 18799 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18800                         Task 18800 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18865                         Task 18865 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18864                         Task 18864 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18893                         Task 18893 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18930                         Task 18930 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:18932                         Task 18932 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18971                         Task 18971 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:18973                         Task 18973 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19018                         Task 19018 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19019                         Task 19019 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19071                         Task 19071 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19072                         Task 19072 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19136                         Task 19136 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19137                         Task 19137 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19165                         Task 19165 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19202                         Task 19202 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19204                         Task 19204 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19243                         Task 19243 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19245                         Task 19245 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19291                         Task 19291 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19290                         Task 19290 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19343                         Task 19343 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19344                         Task 19344 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19408                         Task 19408 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19409                         Task 19409 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19437                         Task 19437 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19475                         Task 19475 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19477                         Task 19477 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19518                         Task 19518 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19516                         Task 19516 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19563                         Task 19563 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19564                         Task 19564 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19616                         Task 19616 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19617                         Task 19617 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19682                         Task 19682 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19681                         Task 19681 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19710                         Task 19710 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19749                         Task 19749 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19747                         Task 19747 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19788                         Task 19788 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19790                         Task 19790 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19835                         Task 19835 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19836                         Task 19836 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19888                         Task 19888 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19889                         Task 19889 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19954                         Task 19954 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:19953                         Task 19953 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:19985                         Task 19985 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20022                         Task 20022 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20024                         Task 20024 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20065                         Task 20065 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20063                         Task 20063 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20110                         Task 20110 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20111                         Task 20111 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20164                         Task 20164 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20165                         Task 20165 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20229                         Task 20229 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20230                         Task 20230 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20258                         Task 20258 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20297                         Task 20297 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20295                         Task 20295 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20355                         Task 20355 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20357                         Task 20357 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20402                         Task 20402 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20403                         Task 20403 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20456                         Task 20456 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20455                         Task 20455 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20521                         Task 20521 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20520                         Task 20520 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20566                         Task 20566 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20627                         Task 20627 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20625                         Task 20625 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20669                         Task 20669 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20667                         Task 20667 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20714                         Task 20714 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20715                         Task 20715 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20767                         Task 20767 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20768                         Task 20768 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20865                         Task 20865 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20866                         Task 20866 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20894                         Task 20894 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20931                         Task 20931 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20933                         Task 20933 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:20974                         Task 20974 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:20972                         Task 20972 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21020                         Task 21020 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21019                         Task 21019 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21072                         Task 21072 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21073                         Task 21073 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_rmm_target:5:AlletraMP_E18U31      Remote Copy Target 5(AlletraMP_E18U31) Failed (All Links To Target Are Down)                                           Manual    
+Alert     sw_task:21137                         Task 21137 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21138                         Task 21138 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21166                         Task 21166 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_rmm_link:23:AlletraMP_E18U31_0_4_3 Remote Copy Link 23(AlletraMP_E18U31_0_4_3) Failed (Link Has Been Down For More Than 4 Hours)                          Manual    
+Alert     sw_rmm_link:20:AlletraMP_E18U31_1_4_3 Remote Copy Link 20(AlletraMP_E18U31_1_4_3) Failed (Link Has Been Down For More Than 4 Hours)                          Manual    
+Alert     sw_task:21205                         Task 21205 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21203                         Task 21203 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21246                         Task 21246 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21244                         Task 21244 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21292                         Task 21292 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21291                         Task 21291 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21345                         Task 21345 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21344                         Task 21344 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21410                         Task 21410 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21409                         Task 21409 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21438                         Task 21438 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21477                         Task 21477 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21475                         Task 21475 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21516                         Task 21516 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21518                         Task 21518 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21564                         Task 21564 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21563                         Task 21563 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21617                         Task 21617 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21616                         Task 21616 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21681                         Task 21681 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21682                         Task 21682 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21710                         Task 21710 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21749                         Task 21749 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21747                         Task 21747 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21790                         Task 21790 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21788                         Task 21788 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21835                         Task 21835 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21836                         Task 21836 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21889                         Task 21889 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21888                         Task 21888 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21953                         Task 21953 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:21954                         Task 21954 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:21982                         Task 21982 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22021                         Task 22021 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22019                         Task 22019 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22060                         Task 22060 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22062                         Task 22062 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22107                         Task 22107 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22108                         Task 22108 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22161                         Task 22161 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22160                         Task 22160 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22226                         Task 22226 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22225                         Task 22225 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22254                         Task 22254 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22291                         Task 22291 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22293                         Task 22293 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22332                         Task 22332 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22334                         Task 22334 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22379                         Task 22379 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22380                         Task 22380 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22432                         Task 22432 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22433                         Task 22433 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22497                         Task 22497 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22498                         Task 22498 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22526                         Task 22526 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22563                         Task 22563 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22565                         Task 22565 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22605                         Task 22605 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22607                         Task 22607 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22652                         Task 22652 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22653                         Task 22653 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22705                         Task 22705 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22706                         Task 22706 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22771                         Task 22771 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22770                         Task 22770 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22799                         Task 22799 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22838                         Task 22838 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22836                         Task 22836 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22879                         Task 22879 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22877                         Task 22877 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22925                         Task 22925 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22924                         Task 22924 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:22977                         Task 22977 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:22978                         Task 22978 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23043                         Task 23043 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23042                         Task 23042 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23071                         Task 23071 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23108                         Task 23108 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23110                         Task 23110 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23151                         Task 23151 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23149                         Task 23149 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23196                         Task 23196 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23197                         Task 23197 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23249                         Task 23249 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23250                         Task 23250 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23314                         Task 23314 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23315                         Task 23315 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23343                         Task 23343 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23382                         Task 23382 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23380                         Task 23380 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23421                         Task 23421 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23423                         Task 23423 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23469                         Task 23469 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23468                         Task 23468 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23522                         Task 23522 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23521                         Task 23521 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23586                         Task 23586 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23587                         Task 23587 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23615                         Task 23615 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23652                         Task 23652 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23654                         Task 23654 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23695                         Task 23695 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23693                         Task 23693 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23741                         Task 23741 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23740                         Task 23740 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23793                         Task 23793 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23794                         Task 23794 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23858                         Task 23858 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23859                         Task 23859 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23887                         Task 23887 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23924                         Task 23924 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:23926                         Task 23926 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23965                         Task 23965 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:23967                         Task 23967 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24012                         Task 24012 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24013                         Task 24013 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24065                         Task 24065 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24066                         Task 24066 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24130                         Task 24130 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24131                         Task 24131 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24159                         Task 24159 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24196                         Task 24196 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24198                         Task 24198 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24237                         Task 24237 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24239                         Task 24239 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24284                         Task 24284 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24285                         Task 24285 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24337                         Task 24337 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24338                         Task 24338 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24403                         Task 24403 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24402                         Task 24402 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24431                         Task 24431 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24468                         Task 24468 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24470                         Task 24470 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24510                         Task 24510 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24512                         Task 24512 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24558                         Task 24558 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24557                         Task 24557 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24611                         Task 24611 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24610                         Task 24610 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24676                         Task 24676 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24675                         Task 24675 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24704                         Task 24704 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24743                         Task 24743 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24741                         Task 24741 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24782                         Task 24782 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24784                         Task 24784 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24829                         Task 24829 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24830                         Task 24830 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24883                         Task 24883 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24882                         Task 24882 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24947                         Task 24947 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:24948                         Task 24948 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:24976                         Task 24976 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25013                         Task 25013 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25015                         Task 25015 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25056                         Task 25056 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25054                         Task 25054 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25102                         Task 25102 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25101                         Task 25101 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25155                         Task 25155 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25154                         Task 25154 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25220                         Task 25220 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25219                         Task 25219 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25248                         Task 25248 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25287                         Task 25287 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25285                         Task 25285 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25326                         Task 25326 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25328                         Task 25328 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25373                         Task 25373 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25374                         Task 25374 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25427                         Task 25427 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25426                         Task 25426 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25491                         Task 25491 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25492                         Task 25492 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25520                         Task 25520 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25557                         Task 25557 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25559                         Task 25559 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25598                         Task 25598 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25600                         Task 25600 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25645                         Task 25645 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25646                         Task 25646 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25698                         Task 25698 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25699                         Task 25699 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25765                         Task 25765 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25766                         Task 25766 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25794                         Task 25794 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25833                         Task 25833 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25831                         Task 25831 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25872                         Task 25872 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25874                         Task 25874 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25919                         Task 25919 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25920                         Task 25920 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:25973                         Task 25973 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:25972                         Task 25972 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26037                         Task 26037 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26038                         Task 26038 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26066                         Task 26066 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26103                         Task 26103 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26105                         Task 26105 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26144                         Task 26144 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26146                         Task 26146 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26192                         Task 26192 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26191                         Task 26191 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26244                         Task 26244 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26245                         Task 26245 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26309                         Task 26309 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26310                         Task 26310 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26338                         Task 26338 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26377                         Task 26377 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26375                         Task 26375 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26417                         Task 26417 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26419                         Task 26419 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26464                         Task 26464 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26465                         Task 26465 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26517                         Task 26517 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26518                         Task 26518 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26583                         Task 26583 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26582                         Task 26582 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26611                         Task 26611 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26648                         Task 26648 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26650                         Task 26650 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26689                         Task 26689 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26691                         Task 26691 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26737                         Task 26737 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26736                         Task 26736 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26790                         Task 26790 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26789                         Task 26789 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26854                         Task 26854 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26855                         Task 26855 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26883                         Task 26883 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26920                         Task 26920 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:26922                         Task 26922 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26961                         Task 26961 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:26963                         Task 26963 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27009                         Task 27009 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27008                         Task 27008 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27061                         Task 27061 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27062                         Task 27062 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27126                         Task 27126 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27127                         Task 27127 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27155                         Task 27155 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27192                         Task 27192 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27194                         Task 27194 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27235                         Task 27235 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27233                         Task 27233 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27281                         Task 27281 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27280                         Task 27280 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27334                         Task 27334 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27333                         Task 27333 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27399                         Task 27399 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27398                         Task 27398 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27427                         Task 27427 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27466                         Task 27466 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27464                         Task 27464 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27507                         Task 27507 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27505                         Task 27505 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27553                         Task 27553 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27552                         Task 27552 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27605                         Task 27605 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27606                         Task 27606 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27670                         Task 27670 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27671                         Task 27671 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27699                         Task 27699 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27738                         Task 27738 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27736                         Task 27736 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27777                         Task 27777 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27779                         Task 27779 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27824                         Task 27824 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27825                         Task 27825 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27877                         Task 27877 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27878                         Task 27878 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27943                         Task 27943 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:27942                         Task 27942 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:27971                         Task 27971 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28010                         Task 28010 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28008                         Task 28008 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28049                         Task 28049 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28051                         Task 28051 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28096                         Task 28096 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28097                         Task 28097 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28150                         Task 28150 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28149                         Task 28149 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28215                         Task 28215 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28214                         Task 28214 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28243                         Task 28243 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28280                         Task 28280 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28282                         Task 28282 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28322                         Task 28322 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28324                         Task 28324 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28369                         Task 28369 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28370                         Task 28370 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28423                         Task 28423 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28422                         Task 28422 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28487                         Task 28487 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28488                         Task 28488 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28516                         Task 28516 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28553                         Task 28553 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28555                         Task 28555 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28594                         Task 28594 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28596                         Task 28596 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28641                         Task 28641 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28642                         Task 28642 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28695                         Task 28695 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28696                         Task 28696 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28761                         Task 28761 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28760                         Task 28760 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28789                         Task 28789 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28828                         Task 28828 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28826                         Task 28826 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28869                         Task 28869 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28867                         Task 28867 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28914                         Task 28914 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28915                         Task 28915 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:28968                         Task 28968 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:28967                         Task 28967 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29033                         Task 29033 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29032                         Task 29032 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29061                         Task 29061 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29098                         Task 29098 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29100                         Task 29100 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29139                         Task 29139 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29141                         Task 29141 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29186                         Task 29186 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29187                         Task 29187 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29240                         Task 29240 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29239                         Task 29239 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29304                         Task 29304 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29305                         Task 29305 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29333                         Task 29333 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29372                         Task 29372 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29370                         Task 29370 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29411                         Task 29411 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29413                         Task 29413 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29459                         Task 29459 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29458                         Task 29458 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29511                         Task 29511 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29512                         Task 29512 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29576                         Task 29576 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29577                         Task 29577 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29605                         Task 29605 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29642                         Task 29642 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29644                         Task 29644 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29685                         Task 29685 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29683                         Task 29683 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29731                         Task 29731 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29730                         Task 29730 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29783                         Task 29783 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29784                         Task 29784 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29849                         Task 29849 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29848                         Task 29848 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29877                         Task 29877 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29914                         Task 29914 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29916                         Task 29916 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:29957                         Task 29957 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.  Manual    
+Alert     sw_task:29955                         Task 29955 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:3                             Task 3 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.      Manual    
+Alert     sw_task:4                             Task 4 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.     Manual    
+Alert     sw_task:56                            Task 56 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:57                            Task 57 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.     Manual    
+Alert     sw_task:121                           Task 121 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:122                           Task 122 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:150                           Task 150 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:189                           Task 189 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:187                           Task 187 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:229                           Task 229 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:231                           Task 231 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:277                           Task 277 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:276                           Task 276 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:330                           Task 330 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:329                           Task 329 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:395                           Task 395 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:394                           Task 394 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:423                           Task 423 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:460                           Task 460 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:462                           Task 462 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:503                           Task 503 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:501                           Task 501 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:548                           Task 548 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:549                           Task 549 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:601                           Task 601 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:602                           Task 602 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:666                           Task 666 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:667                           Task 667 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:695                           Task 695 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_task:732                           Task 732 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:734                           Task 734 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+Alert     sw_wsapi                              Storage system has been disconnected from Data Services Cloud Console for more than 19202 minutes.                     Manual    
+Alert     sw_task:775                           Task 775 (type "scheduled_task", name "Compact-Task") has failed (Task Failed). Please see task status for details.    Manual    
+Alert     sw_task:773                           Task 773 (type "scheduled_task", name "Compact-Task1") has failed (Task Failed). Please see task status for details.   Manual    
+File      node:0                                Behavior altering sysvars.init "sysvars.init:dd_hint_req_vv_max=100000 " exists, created on Oct 29 13:55               Manual    
+File      node:0                                Behavior altering sysvars.init "sysvars.init:dd_hint_req_max=-1 " exists, created on Oct 29 13:55                      Manual    
+File      node:1                                Behavior altering sysvars.init "sysvars.init:dd_hint_req_vv_max=100000 " exists, created on Oct 29 13:55               Manual    
+File      node:1                                Behavior altering sysvars.init "sysvars.init:dd_hint_req_max=-1 " exists, created on Oct 29 13:55                      Manual    
+host      DL380G10PQ8U17_655E                   Host is not seen by all nodes, only seen from node 0                                                                   Manual    
+Network   Node0:rcip:0:4:3                      Errors detected on network on 2026-11-16 03:56:14 IST. 2 or more packet errors have occurred.                          Manual    
+Network   Node1:rcip:1:4:3                      Errors detected on network on 2026-11-16 04:06:14 IST. 2 or more packet errors have occurred.                          Manual    
+Port      port:0:3:2                            Port listed as host path but is State:ready, Mode:target and Type:free                                                 Manual    
+Port      port:0:4:1                            Port listed as host path but is State:ready, Mode:target and Type:file                                                 Manual    
+Port      port:1:4:1                            Port listed as host path but is State:ready, Mode:target and Type:file                                                 Manual    
+RC        rc:0:4:3                              Transport is missing                                                                                                   Manual    
+RC        rc:1:4:3                              Transport is missing                                                                                                   Manual    
+RC        rc:AlletraMP_E18U31                   Target AlletraMP_E18U31 has failed.                                                                                    Manual    
+RC        rc:AlletraMP_E18U31_0_4_3             Link AlletraMP_E18U31_0_4_3 of target AlletraMP_E18U31 is down.                                                        Manual    
+RC        rc:AlletraMP_E18U31_1_4_3             Link AlletraMP_E18U31_1_4_3 of target AlletraMP_E18U31 is down.                                                        Manual    
+RC        rc:300gb                              Group 300gb is not started to target AlletraMP_E18U31.                                                                 Manual    
+RC        rc:APP_Test                           Group APP_Test is not started to target AlletraMP_E18U31.                                                              Manual    
+RC        rc:Intern_Automation                  Group Intern_Automation is not started to target AlletraMP_E18U31.                                                     Manual    
+RC        rc:Intern_Automation2                 Group Intern_Automation2 is not started to target AlletraMP_E18U31.                                                    Manual    
+RC        rc:Test-RCG                           Group Test-RCG is not started to target AlletraMP_E18U31.                                                              Manual    
+RC        rc:Test-RCG2                          Group Test-RCG2 is not started to target AlletraMP_E18U31.                                                             Manual    
+Security  SSH                                   Remote root access is enabled on the array                                                                             Manual    
+Task      Task:548                              Failed Task                                                                                                            Manual    
+Task      Task:549                              Failed Task                                                                                                            Manual    
+Task      Task:601                              Failed Task                                                                                                            Manual    
+Task      Task:602                              Failed Task                                                                                                            Manual    
+Task      Task:666                              Failed Task                                                                                                            Manual    
+Task      Task:667                              Failed Task                                                                                                            Manual    
+Task      Task:695                              Failed Task                                                                                                            Manual    
+Task      Task:732                              Failed Task                                                                                                            Manual    
+Task      Task:734                              Failed Task                                                                                                            Manual    
+Task      Task:773                              Failed Task                                                                                                            Manual    
+Task      Task:775                              Failed Task                                                                                                            Manual    
+vlun      host:winhost_CDS                      Host wwn:50060B0000C2EE2C is not connected to a port                                                                   Manual    
+vlun      host:winhost_CDS                      Host wwn:50060B0000C2EE2E is not connected to a port                                                                   Manual    
+vlun      host:DL380G11D21U6_3D1X               Host wwn:10005CBA2CFC3D15 is not connected to a port                                                                   Manual    
+vlun      host:DL380G11D21U6_3D1X               Host wwn:10005CBA2CFC3D16 is not connected to a port                                                                   Manual    
+vlun      host:DL380G10C12U29_58EX              Host wwn:100028924AAF58EE is not connected to a port                                                                   Manual    
+vlun      host:DL380G10C12U29_58EX              Host wwn:100028924AAF58EF is not connected to a port                                                                   Manual    
+vlun      host:Host1-zerto                      Host wwn:5001438037C6B290 is not connected to a port                                                                   Manual    
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      565 total                                                                                                                                                                  

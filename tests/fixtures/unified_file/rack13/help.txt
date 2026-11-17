@@ -1,0 +1,59 @@
+# help
+help/clihelp - Help for CLI specific commands.
+See the tclsh and Tcl documentation for help on the Tcl language.
+
+CLI commands fall under the following categories:
+
+    add      - add resources
+    admit    - admit resources
+    attach   - attach entities like vVol Storage Container
+    cancel   - cancel operations
+    change   - change current domain cli environment
+    check    - check volumes or logical disks for consistency
+    cmore    - page command output
+    compact  - consolidate space
+    control  - control physical entities (disks, ports, magazines)
+    create   - create new entities such as volumes
+    detach   - detach entities like vVol Storage Container
+    dismiss  - remove entities from system use
+    exit     - exit from this shell (same as quit)
+    free     - free resources
+    grow     - grow entities such as volumes
+    hist     - display service time histograms
+    import   - import data from remote storage system
+    locate   - identify physical system resources
+    move     - move data from one resource to another
+    promote  - promote a copy to a base volume
+    quit     - exit from this shell (same as exit)
+    remove   - remove entities such as volumes
+    service  - prepare system to begin or complete service
+    set      - set specific parameters
+    show     - display information about resources
+    shutdown - shutdown a single node or the entire system
+    sr       - historical reports from system reporter
+    start    - start entities (Remote Copy groups, volumes, logical disks)
+    stat     - display statistics for performance resources
+    stop     - stop entities (Remote Copy groups, etc.)
+    sync     - synchronize Remote Copy volume groups
+    tune     - tune resources
+    update   - update objects
+    upgrade  - upgrade firmware of system components
+    wait     - wait for operations to complete
+
+help usage:
+    help                  This help message. List command categories.
+    help <command>        Help on specific <command>
+    help <category>       Help on specific <category> of commands
+    help sub              List subjects other than commands
+    help -sub <subject>   Help on <subject>. Same as "help sub,<subject>"
+    help -col <command>   Explain column headers for <command>
+                          Same as "help col,<command>"
+    help -search <regex>  Search help text with regular expression <regex>
+    help opensource       Display opensource usage and attribution information
+
+"clihelp" can be used instead of "help"
+
+
+Help on a specific <command> can also be obtained by typing "<command> -h"
+(C) Copyright Hewlett Packard Enterprise Development LP
+

@@ -1,0 +1,2 @@
+# showport -iscsivlans
+no ports listed

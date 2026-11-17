@@ -1,0 +1,13 @@
+      VZ: GET /ports/0:4:1/iSCSIVlans/ ok (iSCSIPortInfo.vlan = 0)
+      VZ: GET /ports/0:4:2/iSCSIVlans/ ok (iSCSIPortInfo.vlan = 0)
+      VZ: GET /ports/1:4:1/iSCSIVlans/ ok (iSCSIPortInfo.vlan = 0)
+      VZ: GET /ports/1:4:2/iSCSIVlans/ ok (iSCSIPortInfo.vlan = 0)
+      VZ: MPB10K-D24U21-VZ, Release version 10.5.51
+      VZ: showport -iscsi header: N:S:P State IPAddr Netmask/PrefixLen Gateway TPGT MTU Rate iSNS_Addr iSNS_Port STGT VLANs Peer_Enabled
+      VZ: iSCSI 0:4:1 offline 0.0.0.0 0.0.0.0 0.0.0.0 41 1500 n/a 0.0.0.0 3205 0 0 N
+      VZ: iSCSI 0:4:2 offline 0.0.0.0 0.0.0.0 0.0.0.0 42 1500 n/a 0.0.0.0 3205 0 0 N
+      VZ: iSCSI 1:4:1 offline 0.0.0.0 0.0.0.0 0.0.0.0 141 1500 n/a 0.0.0.0 3205 0 0 N
+      VZ: iSCSI 1:4:2 offline 0.0.0.0 0.0.0.0 0.0.0.0 142 1500 n/a 0.0.0.0 3205 0 0 N
+      VZ: showport -iscsivlans: 1 line(s); first: no ports listed
+      VZ: help controliscsiport forms: controliscsiport - Control the characteristics of an iscsi port; controliscsiport addr <IP_address> <netmask|prefix_len> [-vlan <vlan_tag>] [-f] <node:slot:port>; controliscsiport allowpeer [-f] <false/true> <node:slot:port>; controliscsiport delete [-vlan <vlan_tag>] [-f] <node:slot:port>; controliscsiport discovery add [-vlan <vlan_tag>] [-f] <portal> <node:slot:port>; controliscsiport discovery remove [-vlan <vlan_tag>] [-f] <portal> <node:slot:port>; controliscsiport discovery rescan [-vlan <vlan_tag>] [<portal>] <node:slot:port>; controliscsiport discovery show [<portal>] [<node:slot:port
+      VZ: hosts logged in per port: CRV_VZ_DL360G11D24U25 on 0:3:1; CRV_VZ_DL360G11D24U25 on 0:3:2; CRV_VZ_DL360G11D24U25 on 1:3:1; CRV_VZ_DL360G11D24U25 on 1:3:2; CRV_VZ_DL360G11D24U26 on 0:3:1; CRV_VZ_DL360G11D24U26 on 0:3:2; CRV_VZ_DL360G11D24U26 on 1:3:1; CRV_VZ_DL360G11D24U26 on 1:3:2; CRV_VZ_DL360G11D24U27 on 0:3:1; CRV_VZ_DL360G11D24U27 on 0:3:2; CRV_VZ_DL360G11D24U27 on 1:3:1; CRV_VZ_DL360G11D24U27 on 1:3:2

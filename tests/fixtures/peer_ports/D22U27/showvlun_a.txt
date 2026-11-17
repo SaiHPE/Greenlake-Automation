@@ -1,0 +1,233 @@
+# showvlun -a
+Lun VVName                  HostName            -Host_WWN/iSCSI_Name/Host_NQN-  Port     Type Status ID
+  0 testuser1_885564_553150 DL380G10PQ8U17_655E 10009440C9CF655E               0:3:4 host set nonopt 10
+  0 rcopy_async_test_vv     ESX1                1000D0BF9CB7A3C9               0:3:1 host set active 10
+  1 test5                   ESX1                1000D0BF9CB7A3C9               0:3:1 host set active 10
+  2 300gb                   ESX1                1000D0BF9CB7A3C9               0:3:1 host set nonopt 10
+  3 600gb                   ESX1                1000D0BF9CB7A3C9               0:3:1 host set active 10
+  4 700gb                   ESX1                1000D0BF9CB7A3C9               0:3:1 host set nonopt 10
+  5 IBK-test-v1             ESX1                1000D0BF9CB7A3C9               0:3:1 host set active 10
+  6 dsccvv200               ESX1                1000D0BF9CB7A3C9               0:3:1 host set active 10
+  7 DR_Repl                 ESX1                1000D0BF9CB7A3C9               0:3:1 host set nonopt 10
+  8 test7                   ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+  9 test8                   ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 10 test9                   ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 11 VV1_Esxi1               ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 12 test_CRV.r              ESX1                1000D0BF9CB7A3C9               0:3:1 host set active 20
+ 13 Alletra_VV1             ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 14 Alletra_VV2             ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 15 Alletra_VV3             ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 16 APP.test.vv             ESX1                1000D0BF9CB7A3C9               0:3:1 host set nonopt 10
+ 17 Alletra_Test1           ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 18 Alletra_Test2           ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 19 Alletra_Test3           ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 20 New_Test_VV1            ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 21 New_Test_VV2            ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 22 New_Test_VV3            ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 23 devwinvm-basic-core02   ESX1                1000D0BF9CB7A3C9               0:3:1 host set nonopt 10
+ 24 devvm-basic-ghb01       ESX1                1000D0BF9CB7A3C9               0:3:1 host set active 10
+ 25 Alletra_HPE_VV1         ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 26 Alletra_HPE_VV2         ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 27 Alletra_HPE_VV3         ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 28 HPE_ESXi_VLUN1          ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 29 HPE_ESXi_VLUN2          ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 30 HPE_ESXi_VLUN3          ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 31 HPE_GCC_VLUN1           ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 32 HPE_GCC_VLUN2           ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 33 HPE_GCC_VLUN3           ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 34 VV2_Esxi2               ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 35 VV3_Esxi3               ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 36 VV01_BLR                ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 37 VV02_DEL                ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 38 VV03_HYD                ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 39 VV01_SAPHANA            ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 40 VV02_SAPHANA            ESX1                1000D0BF9CB7A3C9               0:3:1     host active 10
+ 41 VV03_SAPHANA            ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+ 42 Test                    ESX1                1000D0BF9CB7A3C9               0:3:1 host set nonopt 10
+ 43 Morpheus-datastore      ESX1                1000D0BF9CB7A3C9               0:3:1 host set active 10
+ 50 vv100                   ESX1                1000D0BF9CB7A3C9               0:3:1 host set active 10
+100 AlletraVol              ESX1                1000D0BF9CB7A3C9               0:3:1     host nonopt 10
+  0 rcopy_async_test_vv     ESX1                1000D0BF9CB7A3D1               0:3:4 host set active 10
+  1 test5                   ESX1                1000D0BF9CB7A3D1               0:3:4 host set active 10
+  2 300gb                   ESX1                1000D0BF9CB7A3D1               0:3:4 host set nonopt 10
+  3 600gb                   ESX1                1000D0BF9CB7A3D1               0:3:4 host set active 10
+  4 700gb                   ESX1                1000D0BF9CB7A3D1               0:3:4 host set nonopt 10
+  5 IBK-test-v1             ESX1                1000D0BF9CB7A3D1               0:3:4 host set active 10
+  6 dsccvv200               ESX1                1000D0BF9CB7A3D1               0:3:4 host set active 10
+  7 DR_Repl                 ESX1                1000D0BF9CB7A3D1               0:3:4 host set nonopt 10
+  8 test7                   ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+  9 test8                   ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 10 test9                   ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 11 VV1_Esxi1               ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 12 test_CRV.r              ESX1                1000D0BF9CB7A3D1               0:3:4 host set active 20
+ 13 Alletra_VV1             ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 14 Alletra_VV2             ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 15 Alletra_VV3             ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 16 APP.test.vv             ESX1                1000D0BF9CB7A3D1               0:3:4 host set nonopt 10
+ 17 Alletra_Test1           ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 18 Alletra_Test2           ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 19 Alletra_Test3           ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 20 New_Test_VV1            ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 21 New_Test_VV2            ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 22 New_Test_VV3            ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 23 devwinvm-basic-core02   ESX1                1000D0BF9CB7A3D1               0:3:4 host set nonopt 10
+ 24 devvm-basic-ghb01       ESX1                1000D0BF9CB7A3D1               0:3:4 host set active 10
+ 25 Alletra_HPE_VV1         ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 26 Alletra_HPE_VV2         ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 27 Alletra_HPE_VV3         ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 28 HPE_ESXi_VLUN1          ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 29 HPE_ESXi_VLUN2          ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 30 HPE_ESXi_VLUN3          ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 31 HPE_GCC_VLUN1           ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 32 HPE_GCC_VLUN2           ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 33 HPE_GCC_VLUN3           ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 34 VV2_Esxi2               ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 35 VV3_Esxi3               ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 36 VV01_BLR                ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 37 VV02_DEL                ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 38 VV03_HYD                ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 39 VV01_SAPHANA            ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 40 VV02_SAPHANA            ESX1                1000D0BF9CB7A3D1               0:3:4     host active 10
+ 41 VV03_SAPHANA            ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+ 42 Test                    ESX1                1000D0BF9CB7A3D1               0:3:4 host set nonopt 10
+ 43 Morpheus-datastore      ESX1                1000D0BF9CB7A3D1               0:3:4 host set active 10
+ 50 vv100                   ESX1                1000D0BF9CB7A3D1               0:3:4 host set active 10
+100 AlletraVol              ESX1                1000D0BF9CB7A3D1               0:3:4     host nonopt 10
+  0 rcopy_async_test_vv     ESX1                1000D0BF9CB7A3C9               1:3:1 host set nonopt 11
+  1 test5                   ESX1                1000D0BF9CB7A3C9               1:3:1 host set nonopt 11
+  2 300gb                   ESX1                1000D0BF9CB7A3C9               1:3:1 host set active 11
+  3 600gb                   ESX1                1000D0BF9CB7A3C9               1:3:1 host set nonopt 11
+  4 700gb                   ESX1                1000D0BF9CB7A3C9               1:3:1 host set active 11
+  5 IBK-test-v1             ESX1                1000D0BF9CB7A3C9               1:3:1 host set nonopt 11
+  6 dsccvv200               ESX1                1000D0BF9CB7A3C9               1:3:1 host set nonopt 11
+  7 DR_Repl                 ESX1                1000D0BF9CB7A3C9               1:3:1 host set active 11
+  8 test7                   ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+  9 test8                   ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 10 test9                   ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 11 VV1_Esxi1               ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 12 test_CRV.r              ESX1                1000D0BF9CB7A3C9               1:3:1 host set nonopt 21
+ 13 Alletra_VV1             ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 14 Alletra_VV2             ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 15 Alletra_VV3             ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 16 APP.test.vv             ESX1                1000D0BF9CB7A3C9               1:3:1 host set active 11
+ 17 Alletra_Test1           ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 18 Alletra_Test2           ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 19 Alletra_Test3           ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 20 New_Test_VV1            ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 21 New_Test_VV2            ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 22 New_Test_VV3            ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 23 devwinvm-basic-core02   ESX1                1000D0BF9CB7A3C9               1:3:1 host set active 11
+ 24 devvm-basic-ghb01       ESX1                1000D0BF9CB7A3C9               1:3:1 host set nonopt 11
+ 25 Alletra_HPE_VV1         ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 26 Alletra_HPE_VV2         ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 27 Alletra_HPE_VV3         ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 28 HPE_ESXi_VLUN1          ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 29 HPE_ESXi_VLUN2          ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 30 HPE_ESXi_VLUN3          ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 31 HPE_GCC_VLUN1           ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 32 HPE_GCC_VLUN2           ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 33 HPE_GCC_VLUN3           ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 34 VV2_Esxi2               ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 35 VV3_Esxi3               ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 36 VV01_BLR                ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 37 VV02_DEL                ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 38 VV03_HYD                ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 39 VV01_SAPHANA            ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 40 VV02_SAPHANA            ESX1                1000D0BF9CB7A3C9               1:3:1     host nonopt 11
+ 41 VV03_SAPHANA            ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+ 42 Test                    ESX1                1000D0BF9CB7A3C9               1:3:1 host set active 11
+ 43 Morpheus-datastore      ESX1                1000D0BF9CB7A3C9               1:3:1 host set nonopt 11
+ 50 vv100                   ESX1                1000D0BF9CB7A3C9               1:3:1 host set nonopt 11
+100 AlletraVol              ESX1                1000D0BF9CB7A3C9               1:3:1     host active 11
+  0 rcopy_async_test_vv     ESX1                1000D0BF9CB7A3D1               1:3:4 host set nonopt 11
+  1 test5                   ESX1                1000D0BF9CB7A3D1               1:3:4 host set nonopt 11
+  2 300gb                   ESX1                1000D0BF9CB7A3D1               1:3:4 host set active 11
+  3 600gb                   ESX1                1000D0BF9CB7A3D1               1:3:4 host set nonopt 11
+  4 700gb                   ESX1                1000D0BF9CB7A3D1               1:3:4 host set active 11
+  5 IBK-test-v1             ESX1                1000D0BF9CB7A3D1               1:3:4 host set nonopt 11
+  6 dsccvv200               ESX1                1000D0BF9CB7A3D1               1:3:4 host set nonopt 11
+  7 DR_Repl                 ESX1                1000D0BF9CB7A3D1               1:3:4 host set active 11
+  8 test7                   ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+  9 test8                   ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 10 test9                   ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 11 VV1_Esxi1               ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 12 test_CRV.r              ESX1                1000D0BF9CB7A3D1               1:3:4 host set nonopt 21
+ 13 Alletra_VV1             ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 14 Alletra_VV2             ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 15 Alletra_VV3             ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 16 APP.test.vv             ESX1                1000D0BF9CB7A3D1               1:3:4 host set active 11
+ 17 Alletra_Test1           ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 18 Alletra_Test2           ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 19 Alletra_Test3           ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 20 New_Test_VV1            ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 21 New_Test_VV2            ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 22 New_Test_VV3            ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 23 devwinvm-basic-core02   ESX1                1000D0BF9CB7A3D1               1:3:4 host set active 11
+ 24 devvm-basic-ghb01       ESX1                1000D0BF9CB7A3D1               1:3:4 host set nonopt 11
+ 25 Alletra_HPE_VV1         ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 26 Alletra_HPE_VV2         ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 27 Alletra_HPE_VV3         ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 28 HPE_ESXi_VLUN1          ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 29 HPE_ESXi_VLUN2          ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 30 HPE_ESXi_VLUN3          ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 31 HPE_GCC_VLUN1           ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 32 HPE_GCC_VLUN2           ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 33 HPE_GCC_VLUN3           ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 34 VV2_Esxi2               ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 35 VV3_Esxi3               ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 36 VV01_BLR                ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 37 VV02_DEL                ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 38 VV03_HYD                ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 39 VV01_SAPHANA            ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 40 VV02_SAPHANA            ESX1                1000D0BF9CB7A3D1               1:3:4     host nonopt 11
+ 41 VV03_SAPHANA            ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+ 42 Test                    ESX1                1000D0BF9CB7A3D1               1:3:4 host set active 11
+ 43 Morpheus-datastore      ESX1                1000D0BF9CB7A3D1               1:3:4 host set nonopt 11
+ 50 vv100                   ESX1                1000D0BF9CB7A3D1               1:3:4 host set nonopt 11
+100 AlletraVol              ESX1                1000D0BF9CB7A3D1               1:3:4     host active 11
+  0 Morpheus-datastore      ESX2                100070106FE9A979               0:3:1 host set active 10
+  1 test5                   ESX2                100070106FE9A979               0:3:1 host set active 10
+  2 300gb                   ESX2                100070106FE9A979               0:3:1 host set nonopt 10
+  3 600gb                   ESX2                100070106FE9A979               0:3:1 host set active 10
+  4 700gb                   ESX2                100070106FE9A979               0:3:1 host set nonopt 10
+  6 dsccvv200               ESX2                100070106FE9A979               0:3:1 host set active 10
+  7 DR_Repl                 ESX2                100070106FE9A979               0:3:1 host set nonopt 10
+ 23 devwinvm-basic-core02   ESX2                100070106FE9A979               0:3:1 host set nonopt 10
+ 24 devvm-basic-ghb01       ESX2                100070106FE9A979               0:3:1 host set active 10
+ 42 Test                    ESX2                100070106FE9A979               0:3:1 host set nonopt 10
+ 50 vv100                   ESX2                100070106FE9A979               0:3:1 host set active 10
+  0 Morpheus-datastore      ESX2                100070106FE9A981               0:3:4 host set active 10
+  1 test5                   ESX2                100070106FE9A981               0:3:4 host set active 10
+  2 300gb                   ESX2                100070106FE9A981               0:3:4 host set nonopt 10
+  3 600gb                   ESX2                100070106FE9A981               0:3:4 host set active 10
+  4 700gb                   ESX2                100070106FE9A981               0:3:4 host set nonopt 10
+  6 dsccvv200               ESX2                100070106FE9A981               0:3:4 host set active 10
+  7 DR_Repl                 ESX2                100070106FE9A981               0:3:4 host set nonopt 10
+ 23 devwinvm-basic-core02   ESX2                100070106FE9A981               0:3:4 host set nonopt 10
+ 24 devvm-basic-ghb01       ESX2                100070106FE9A981               0:3:4 host set active 10
+ 42 Test                    ESX2                100070106FE9A981               0:3:4 host set nonopt 10
+ 50 vv100                   ESX2                100070106FE9A981               0:3:4 host set active 10
+  0 Morpheus-datastore      ESX2                100070106FE9A979               1:3:1 host set nonopt 11
+  1 test5                   ESX2                100070106FE9A979               1:3:1 host set nonopt 11
+  2 300gb                   ESX2                100070106FE9A979               1:3:1 host set active 11
+  3 600gb                   ESX2                100070106FE9A979               1:3:1 host set nonopt 11
+  4 700gb                   ESX2                100070106FE9A979               1:3:1 host set active 11
+  6 dsccvv200               ESX2                100070106FE9A979               1:3:1 host set nonopt 11
+  7 DR_Repl                 ESX2                100070106FE9A979               1:3:1 host set active 11
+ 23 devwinvm-basic-core02   ESX2                100070106FE9A979               1:3:1 host set active 11
+ 24 devvm-basic-ghb01       ESX2                100070106FE9A979               1:3:1 host set nonopt 11
+ 42 Test                    ESX2                100070106FE9A979               1:3:1 host set active 11
+ 50 vv100                   ESX2                100070106FE9A979               1:3:1 host set nonopt 11
+  0 Morpheus-datastore      ESX2                100070106FE9A981               1:3:4 host set nonopt 11
+  1 test5                   ESX2                100070106FE9A981               1:3:4 host set nonopt 11
+  2 300gb                   ESX2                100070106FE9A981               1:3:4 host set active 11
+  3 600gb                   ESX2                100070106FE9A981               1:3:4 host set nonopt 11
+  4 700gb                   ESX2                100070106FE9A981               1:3:4 host set active 11
+  6 dsccvv200               ESX2                100070106FE9A981               1:3:4 host set nonopt 11
+  7 DR_Repl                 ESX2                100070106FE9A981               1:3:4 host set active 11
+ 23 devwinvm-basic-core02   ESX2                100070106FE9A981               1:3:4 host set active 11
+ 24 devvm-basic-ghb01       ESX2                100070106FE9A981               1:3:4 host set nonopt 11
+ 42 Test                    ESX2                100070106FE9A981               1:3:4 host set active 11
+ 50 vv100                   ESX2                100070106FE9A981               1:3:4 host set nonopt 11
+-------------------------------------------------------------------------------------------------------
+229 total                                                                                              

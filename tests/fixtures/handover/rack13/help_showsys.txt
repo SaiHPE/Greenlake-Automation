@@ -1,0 +1,95 @@
+# help showsys
+showsys - Show system information.
+
+SYNTAX
+    showsys [options]
+
+DESCRIPTION
+    The showsys command displays storage system properties such as the system
+    name, serial number, and system capacity information.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+    -block
+        Displays system capacity information by only looking at block-based
+        virtual volumes (that is, excluding fileservice VVs). This option
+        can only be issued with -detailspace, -domainspace, -space or -vvspace.
+
+    -d
+        Specifies that more detailed information about the system is displayed.
+
+    -desc
+        Displays the system descriptor properties.
+
+    -devtype {SSD|QLC}
+        Displays the system capacity information where the disks must have a
+        device type string matching the specified device type; either Triple
+        Layer Cell Solid State Drive (SSD) or Quad Layer Cell (QLC). This
+        option can only be issued with -detailspace, -domainspace, -space or
+        -vvspace.
+
+    -detailspace
+        Displays the system capacity information in MiB in more detail than
+        -space.
+
+    -domainspace
+        Displays the system capacity information broken down by domain in MiB.
+
+    -fileservice
+        Displays system capacity information by only looking at fileservice-
+        related virtual volumes (that is, excluding block-based VVs). This
+        option can only be issued with -detailspace, -domainspace, -space or
+        -vvspace.
+
+    -param
+        Specifies that the system parameters are displayed.
+
+    -space
+        Displays the system capacity information in MiB.
+
+    -syslogprofile
+        Specifies that the Remote syslog configuration files are displayed.
+
+    -vvspace
+        Displays the system capacity information in MiB with an emphasis on
+        VVs.
+
+SPECIFIERS
+    None.
+
+NOTES
+    See setsys command for information on setting the threshold parameters
+    indicated by the Value column in the output for showsys -param.
+
+    In the output for showsys -param, "from configured settings" indicates that
+    the system parameters displayed have been successfully read from the
+    Persistent Repository (PR). If the PR is not available (most likely because
+    of problems with the admin volume), the output reads "from default settings"
+    and the values displayed would indicate the system defaults. When "from
+    default settings" is displayed, system parameters cannot be updated.
+
+    If the VVRetentionTimeMax is 0, then the volume retention time in the system
+    is disabled.
+
+    For the system capacity information, there might be some overlaps among
+    Volumes, System, and Failed Capacities.
+
+EXAMPLES
+    The following example displays the system descriptor properties of a
+    storage system:
+
+        cli% showsys -desc
+        ------------System s36------------
+        System Name  :  s36
+        Location     :  Your Facility Address
+        Owner        :  Your Company Name
+        Contact      :  Joe Admin
+        Comment      :  Your Notes
+
+    The following example displays more detailed (-d option) information about
+    the same storage server:
+
+        cli% showsys -d
+

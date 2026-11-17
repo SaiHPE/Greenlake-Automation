@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 import pytest
 from pydantic import SecretStr
@@ -226,8 +227,17 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     from alletra_onboard.application.replication.steps import LINK_CHECK_ARTIFACT
     from alletra_onboard.domain.replication import LinkCheck, LinkCheckResult, LinkPair
 
+    # BL-52: the server checks the operator's approval itself: the apply names the plan that was ticked
+    approved = event.data["plan"]["plan_id"]
+    assert approved and approved == service.replication.previewed_plan(run.run_id).plan_id
+    for missing in (None, ""):
+        with pytest.raises(StepPreconditionError, match=re.escape("Tick the approval for this plan first.")):
+            service.start_replication_apply(run.run_id, approved_plan=missing)
+    with pytest.raises(StepPreconditionError,
+                       match=re.escape("The plan changed since it was approved. Review the new plan and tick again.")):
+        service.start_replication_apply(run.run_id, approved_plan="a-plan-nobody-was-shown")
     with pytest.raises(StepPreconditionError, match="Check the link first: the latency between the arrays has not been measured"):
-        service.start_replication_apply(run.run_id)
+        service.start_replication_apply(run.run_id, approved_plan=approved)
     assert applied == []
 
     said: list[str] = []
@@ -248,7 +258,7 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     assert LinkCheck.model_validate_json(service.store.load_artifact(run.run_id, LINK_CHECK_ARTIFACT)).worst_ms == 0.4
     assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR
 
-    service.start_replication_apply(run.run_id)
+    service.start_replication_apply(run.run_id, approved_plan=approved)
     await service.wait(run.run_id)
     assert applied == [["HS_rcg", "HS_rc"]]
     assert service.get_run(run.run_id).status == RunStatus.READY
@@ -258,7 +268,7 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     assert done.data["result"]["notes"] == ["Link check 2026-10-12T07:00:00+00:00: latency 0.4 ms on 1 link(s); within the limit."]
     assert ReplicationResult.model_validate_json(service.store.load_artifact(run.run_id, RESULT_ARTIFACT)).groups_created == ["HS_rcg"]
     with pytest.raises(StepPreconditionError, match="read both arrays first"):
-        service.start_replication_apply(run.run_id)                 # spent: a second apply needs a fresh plan
+        service.start_replication_apply(run.run_id, approved_plan=approved)   # spent: a second apply needs a fresh plan
 
     # ---- R6: verify finds the plan in the run's events once the approval is spent
     def fake_verify(provisioning, plan, *, read_fn=None, progress=None):
@@ -419,16 +429,36 @@ async def test_the_link_gate_refuses_over_the_limit_without_the_tick_and_records
         service.start_link_check(run.run_id, duration_s=600)       # the check needs the read's ports and links
     service.start_replication_preview(run.run_id)
     await service.wait(run.run_id)
+
+    # A rerun whose plan has nothing to create is refused with the old sentence and needs no link check.
+    plan = service.replication.previewed_plan(run.run_id)
+    states = [a.state for a in plan.actions]
+    for action in plan.actions:
+        action.state = "exists"
+    with pytest.raises(StepPreconditionError, match="^nothing to create — every object in the plan already exists$"):
+        service.start_replication_apply(run.run_id, approved_plan=plan.plan_id)   # approved, still nothing to do
+    for action, state in zip(plan.actions, states, strict=True):
+        action.state = state
+
     service.start_link_check(run.run_id, duration_s=600)
     await service.wait(run.run_id)
     checked = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.link_checked")
     assert checked.message == ("Latency 12 ms on 1 link(s) (sync needs 10 ms or less) — over the limit for sync; "
                                "the operator decides whether to continue. Pings were lost on 0:4:3 (1 %).")
 
+    # BL-52: reading both arrays again is a new plan; the tick given for the old one no longer counts
+    first = _plan_id(service, run.run_id, "replication.previewed")
+    service.start_replication_preview(run.run_id)
+    await service.wait(run.run_id)
+    approved = _plan_id(service, run.run_id, "replication.previewed")
+    assert first and approved and approved != first
+    with pytest.raises(StepPreconditionError, match="The plan changed since it was approved"):
+        service.start_replication_apply(run.run_id, approved_plan=first, accept_latency=True)
+
     with pytest.raises(StepPreconditionError, match="The measured latency is 12 ms; sync replication over RCIP needs 10 ms or less. Tick 'Continue anyway'"):
-        service.start_replication_apply(run.run_id)
+        service.start_replication_apply(run.run_id, approved_plan=approved)
     assert applied == []
-    service.start_replication_apply(run.run_id, accept_latency=True)
+    service.start_replication_apply(run.run_id, approved_plan=approved, accept_latency=True)
     await service.wait(run.run_id)
     assert applied == [1]
     done = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.applied")
@@ -620,6 +650,12 @@ async def test_set_provisioning_builder_persists_membership_vvsets_and_exports(t
     assert saved.volumes[0].vvset == "myvvset"
 
 
+def _plan_id(service, run_id, *event_types):
+    """The id an apply quotes back: the plan in the latest preview event, as the operator saw it (BL-52)."""
+    types = event_types or ("storage.previewed",)
+    return next(e.data["plan"]["plan_id"] for e in reversed(service.list_events(run_id)) if e.event_type in types)
+
+
 async def _preview(service, run_id, monkeypatch, actions=("host",)):
     """Drive a provisioning preview so the apply PREVIEW gate is satisfied, and record a zoned host —
     zoning is a hard prerequisite for apply and these tests exercise the preview approval, not the
@@ -654,10 +690,11 @@ async def test_apply_requires_a_preview_from_this_session(tmp_path, monkeypatch)
     service._discovery[run.run_id] = DiscoveryReport()
     await _preview(service, run.run_id, monkeypatch)
 
+    approved = _plan_id(service, run.run_id)
     restarted = OnboardingService(Settings(), store, InMemoryEventBus())
     restarted.discovery_zoning._discovery[run.run_id] = DiscoveryReport()  # discovery does survive
-    with pytest.raises(StepPreconditionError):
-        restarted.start_storage_apply(run.run_id)
+    with pytest.raises(StepPreconditionError, match="run the provisioning preview first"):
+        restarted.start_storage_apply(run.run_id, approved_plan=approved)   # even with the id the operator ticked
 
 
 async def test_editing_the_composition_withdraws_the_approval(tmp_path, monkeypatch):
@@ -671,11 +708,12 @@ async def test_editing_the_composition_withdraws_the_approval(tmp_path, monkeypa
     service._discovery[run.run_id] = DiscoveryReport()
     await _preview(service, run.run_id, monkeypatch)
 
+    approved = _plan_id(service, run.run_id)
     service.set_provisioning_builder(
         run.run_id, ProvisioningBuilder(host_sets=[HostSetRequest(name="TOTALLY_DIFFERENT", members=["esx9"])])
     )
-    with pytest.raises(StepPreconditionError):
-        service.start_storage_apply(run.run_id)
+    with pytest.raises(StepPreconditionError, match="run the provisioning preview first"):
+        service.start_storage_apply(run.run_id, approved_plan=approved)
 
 
 async def test_rerunning_discovery_withdraws_the_approval(tmp_path, monkeypatch):
@@ -689,12 +727,13 @@ async def test_rerunning_discovery_withdraws_the_approval(tmp_path, monkeypatch)
     service._discovery[run.run_id] = DiscoveryReport()
     await _preview(service, run.run_id, monkeypatch)
 
+    approved = _plan_id(service, run.run_id)
     monkeypatch.setattr(sd, "discover", lambda intent, progress=None: DiscoveryReport(notes=["re-read"]))
     service.start_discover(run.run_id)
     await service.wait(run.run_id)
 
-    with pytest.raises(StepPreconditionError):
-        service.start_storage_apply(run.run_id)
+    with pytest.raises(StepPreconditionError, match="run the provisioning preview first"):
+        service.start_storage_apply(run.run_id, approved_plan=approved)
 
 
 async def test_apply_is_gated_on_zoning(tmp_path, monkeypatch):
@@ -722,7 +761,7 @@ async def test_apply_is_gated_on_zoning(tmp_path, monkeypatch):
     await service.wait(run.run_id)
 
     service.discovery_zoning._save_zoned_hosts(run.run_id, ["esx1"])
-    service.start_storage_apply(run.run_id)
+    service.start_storage_apply(run.run_id, approved_plan=_plan_id(service, run.run_id))
     await service.wait(run.run_id)
     assert any(e.event_type == "storage.applied" for e in service.list_events(run.run_id))
 
@@ -743,7 +782,67 @@ async def test_apply_refuses_a_failed_preview(tmp_path, monkeypatch):
     await service.wait(run.run_id)
 
     with pytest.raises(StepPreconditionError, match="blocking problem"):
-        service.start_storage_apply(run.run_id)
+        service.start_storage_apply(run.run_id, approved_plan=_plan_id(service, run.run_id, "storage.preview.failed"))
+
+
+async def test_apply_needs_the_id_of_the_plan_the_operator_ticked(tmp_path, monkeypatch):
+    """BL-52: the approval tick lived only on the screen, so any local caller could POST the apply for
+    a plan nobody ticked. The apply now names the plan it approves; the server refuses it without the
+    id, and refuses an id from an earlier preview (LESSONS 6 and 7)."""
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import ProvisioningResult
+
+    applied: list = []
+    monkeypatch.setattr(sp, "apply_plan", lambda i, d, **kw: applied.append(1) or ProvisioningResult())
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    await _preview(service, run.run_id, monkeypatch)
+    first = _plan_id(service, run.run_id)
+    assert first
+
+    for missing in (None, ""):
+        with pytest.raises(StepPreconditionError, match=re.escape("Tick the approval for this plan first.")):
+            service.start_storage_apply(run.run_id, approved_plan=missing)
+
+    await _preview(service, run.run_id, monkeypatch)       # rebuilt: a new plan to approve, so a new id
+    second = _plan_id(service, run.run_id)
+    assert second and second != first
+    with pytest.raises(StepPreconditionError,
+                       match=re.escape("The plan changed since it was approved. Review the new plan and tick again.")):
+        service.start_storage_apply(run.run_id, approved_plan=first)
+    assert applied == []
+
+    service.start_storage_apply(run.run_id, approved_plan=second)
+    await service.wait(run.run_id)
+    assert applied == [1]
+    assert any(e.event_type == "storage.applied" for e in service.list_events(run.run_id))
+
+
+async def test_a_preview_that_fails_still_withdraws_the_old_approval(tmp_path, monkeypatch):
+    """Starting a new preview withdraws the held plan at once: a rebuild that crashes must not leave
+    the previous plan approvable while the operator expects a new one."""
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.application.service import StepPreconditionError
+    from alletra_onboard.domain.discovery import DiscoveryReport
+
+    service = _service(tmp_path)
+    run = service.create_run(_item(), provisioning_intent=_prov_intent())
+    service._discovery[run.run_id] = DiscoveryReport()
+    await _preview(service, run.run_id, monkeypatch)
+    approved = _plan_id(service, run.run_id)
+
+    def crash(*args, **kw):
+        raise RuntimeError("the array stopped answering")
+
+    monkeypatch.setattr(sp, "build_plan", crash)
+    service.start_storage_preview(run.run_id)
+    await service.wait(run.run_id)
+    assert service.list_events(run.run_id)[-1].event_type == "step.crashed"
+    with pytest.raises(StepPreconditionError, match="run the provisioning preview first"):
+        service.start_storage_apply(run.run_id, approved_plan=approved)
 
 
 async def test_verify_and_asbuilt_read_the_same_array(tmp_path, monkeypatch):
@@ -922,7 +1021,7 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
     # its export. Only a verify can do that (ADR 0012).
     service.discovery_zoning._save_zoned_hosts(run.run_id, ["esx1"])
 
-    service.start_storage_apply(run.run_id)
+    service.start_storage_apply(run.run_id, approved_plan=_plan_id(service, run.run_id))
     await service.wait(run.run_id)
     applied = [e for e in service.list_events(run.run_id) if e.event_type == "storage.applied"]
     assert applied and applied[-1].data["result"]["outcomes"][0]["status"] == "created"

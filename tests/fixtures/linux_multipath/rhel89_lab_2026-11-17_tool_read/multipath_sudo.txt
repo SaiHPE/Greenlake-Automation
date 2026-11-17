@@ -1,0 +1,2 @@
+# sudo -n multipath -ll
+# exit 1

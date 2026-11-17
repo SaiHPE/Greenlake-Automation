@@ -1,0 +1,4 @@
+{
+ "http_status": 501,
+ "body": "{\"code\":9,\"desc\":\"unsupported operation for the resource\"}"
+}

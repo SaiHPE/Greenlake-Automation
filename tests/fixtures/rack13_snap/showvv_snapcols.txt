@@ -1,0 +1,39 @@
+# showvv -showcols Id,Name,Prov,Type,CopyOf,Rd,CPG,CreationTime,ExpirationTime,RetentionEndTime
+Id Name                                         Prov Type CopyOf Rd CPG    CreationTime            ExpirationTime RetentionEndTime
+ 2 .mgmtdata                                    full base ---    RW --     2026-10-28 14:47:18 IST --             --              
+ 3 .shared.SSD_r6_0                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+ 4 .shared.SSD_r6_1                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+ 5 .shared.SSD_r6_2                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+ 6 .shared.SSD_r6_3                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+ 7 .shared.SSD_r6_4                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+ 8 .shared.SSD_r6_5                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+ 9 .shared.SSD_r6_6                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+10 .shared.SSD_r6_7                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+11 .shared.SSD_r6_8                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+12 .shared.SSD_r6_9                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+13 .shared.SSD_r6_a                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+14 .shared.SSD_r6_b                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+15 .shared.SSD_r6_c                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+16 .shared.SSD_r6_d                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+17 .shared.SSD_r6_e                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+18 .shared.SSD_r6_f                             dds  base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+19  HPE_VM_bed1c3ff-0d3a-48fc-9de2-3f917bbeb31c tdvv base ---    RW SSD_r6 2026-10-29 10:46:44 IST --             --              
+20  HPE_VM_3ff59c3f-441a-460f-92cf-ce92b9810ec9 tdvv base ---    RW SSD_r6 2026-10-29 11:00:04 IST --             --              
+21  HPE_VM_179c60ed-3e49-496e-b431-51d658a77f21 tdvv base ---    RW SSD_r6 2026-10-29 11:29:50 IST --             --              
+24  HPE_VM_90d3ae6b-3abf-4b17-bf36-10e704840d70 tdvv base ---    RW SSD_r6 2026-10-29 11:39:19 IST --             --              
+26  HPE_VM_25781fe1-26ff-406e-bbdc-1852786da155 tdvv base ---    RW SSD_r6 2026-10-29 12:06:39 IST --             --              
+28  HPE_VM_5e6330ed-53c2-4838-b135-6aaed4de002c tdvv base ---    RW SSD_r6 2026-10-29 12:07:18 IST --             --              
+32  HPE_VM_1efca747-04a0-4159-9a4f-0b71635b5849 tdvv base ---    RW SSD_r6 2026-10-29 13:04:23 IST --             --              
+35  HPE_VM_f7a7b9b8-a322-46f7-9ea6-20843521a84e tdvv base ---    RW SSD_r6 2026-10-29 14:19:13 IST --             --              
+36  HPE_VM_78403e6c-4066-45c6-a330-737d21976213 tdvv base ---    RW SSD_r6 2026-10-29 14:20:07 IST --             --              
+37  test_vme_shared                             tdvv base ---    RW SSD_r6 2026-10-29 14:32:34 IST --             --              
+38  test_vme_shared_2                           tdvv base ---    RW SSD_r6 2026-10-29 14:33:16 IST --             --              
+39  test_vme_shared_3                           tdvv base ---    RW SSD_r6 2026-10-29 14:33:38 IST --             --              
+40  test_vme_shared_4                           tdvv base ---    RW SSD_r6 2026-10-29 14:34:21 IST --             --              
+42  HPE_VM_4a44fe87-29f6-40f7-bdae-fb067f35263d tdvv base ---    RW SSD_r6 2026-10-29 20:52:11 IST --             --              
+45  HPE_VM_3686cf71-53ce-4344-a7e1-00483774de70 tdvv base ---    RW SSD_r6 2026-10-29 22:14:59 IST --             --              
+46  HPE_VM_01fbd387-23c2-44ca-bdb2-6fd68dd29540 tdvv base ---    RW SSD_r6 2026-10-29 22:16:08 IST --             --              
+ 1 .srdata                                      full base ---    RW --     2026-10-28 14:47:05 IST --             --              
+ 0 admin                                        full base ---    RW --     2026-10-28 14:40:49 IST --             --              
+----------------------------------------------------------------------------------------------------------------------------------
+35 total                                                                                                                          

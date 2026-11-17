@@ -1,0 +1,785 @@
+{
+ "total": 20,
+ "members": [
+  {
+   "portPos": {
+    "node": 0,
+    "slot": 1,
+    "cardPort": 1
+   },
+   "mode": 3,
+   "linkState": 4,
+   "nodeWWN": "16.1.14.90",
+   "portWWN": "88E9A4DB23D0",
+   "type": 2,
+   "protocol": 6,
+   "label": "DP-1",
+   "device": [
+    "cage41"
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 7,
+   "connectionType": 2,
+   "connectionMode": 1,
+   "configurableRate": "100Gbps",
+   "maxRate": "100Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 0,
+    "slot": 1,
+    "cardPort": 2
+   },
+   "mode": 3,
+   "linkState": 4,
+   "nodeWWN": "16.1.15.90",
+   "portWWN": "88E9A4DB23D1",
+   "type": 2,
+   "protocol": 6,
+   "label": "DP-2",
+   "device": [
+    "cage41"
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 7,
+   "connectionType": 2,
+   "connectionMode": 1,
+   "configurableRate": "100Gbps",
+   "maxRate": "100Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 0,
+    "slot": 2,
+    "cardPort": 1
+   },
+   "mode": 3,
+   "linkState": 4,
+   "nodeWWN": "16.1.8.1",
+   "portWWN": "88E9A4DB330C",
+   "type": 2,
+   "protocol": 6,
+   "label": "DP-1",
+   "device": [
+    "cage41"
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 7,
+   "connectionType": 2,
+   "connectionMode": 1,
+   "configurableRate": "100Gbps",
+   "maxRate": "100Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 0,
+    "slot": 2,
+    "cardPort": 2
+   },
+   "mode": 3,
+   "linkState": 4,
+   "nodeWWN": "16.1.9.1",
+   "portWWN": "88E9A4DB330D",
+   "type": 2,
+   "protocol": 6,
+   "label": "DP-2",
+   "device": [
+    "cage41"
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 7,
+   "connectionType": 2,
+   "connectionMode": 1,
+   "configurableRate": "100Gbps",
+   "maxRate": "100Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 0,
+    "slot": 3,
+    "cardPort": 1
+   },
+   "mode": 2,
+   "linkState": 4,
+   "nodeWWN": "2FF70002AC02DEF2",
+   "portWWN": "20310002AC02DEF2",
+   "type": 1,
+   "protocol": 1,
+   "device": [
+    "TPIPoc-win1",
+    "TPIPoc-win2",
+    "TPIPoc-esxi1",
+    "TPIPoc-RHEL3"
+   ],
+   "virtualPorts": [
+    {
+     "portPos": {
+      "node": 0,
+      "slot": 3,
+      "cardPort": 1
+     },
+     "mode": 2,
+     "linkState": 4,
+     "nodeWWN": "2FF70102AC02DEF2",
+     "portWWN": "20310102ADF2DEF2",
+     "type": 3,
+     "vpi": 31,
+     "protocol": 6
+    }
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 1,
+   "connectionType": 2,
+   "connectionMode": 2,
+   "configurableRate": "auto",
+   "maxRate": "32Gbps",
+   "class2": 3,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 2,
+   "vcn": 2,
+   "interruptCoalesce": 1,
+   "targetModeWriteOptimization": 2
+  },
+  {
+   "portPos": {
+    "node": 0,
+    "slot": 3,
+    "cardPort": 2
+   },
+   "mode": 3,
+   "linkState": 4,
+   "nodeWWN": "2FF70202AC02DEF2",
+   "portWWN": "20320202AC02DEF2",
+   "type": 6,
+   "protocol": 1,
+   "device": [
+    "2FF70002AC07E528"
+   ],
+   "virtualPorts": [],
+   "iSCSIVlans": [],
+   "hardwareType": 1,
+   "connectionType": 2,
+   "connectionMode": 4,
+   "configurableRate": "auto",
+   "maxRate": "32Gbps",
+   "class2": 3,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 2,
+   "vcn": 2,
+   "interruptCoalesce": 1,
+   "targetModeWriteOptimization": 2
+  },
+  {
+   "portPos": {
+    "node": 0,
+    "slot": 3,
+    "cardPort": 3
+   },
+   "mode": 2,
+   "linkState": 5,
+   "nodeWWN": "2FF70002AC02DEF2",
+   "portWWN": "20330002AC02DEF2",
+   "type": 3,
+   "protocol": 1,
+   "device": [],
+   "virtualPorts": [
+    {
+     "portPos": {
+      "node": 0,
+      "slot": 3,
+      "cardPort": 3
+     },
+     "mode": 2,
+     "linkState": 5,
+     "nodeWWN": "2FF70102AC02DEF2",
+     "portWWN": "20330102ADF2DEF2",
+     "type": 3,
+     "vpi": 31,
+     "protocol": 6
+    }
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 1,
+   "connectionType": 2,
+   "connectionMode": 2,
+   "configurableRate": "auto",
+   "maxRate": "32Gbps",
+   "class2": 3,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 2,
+   "vcn": 2,
+   "interruptCoalesce": 1,
+   "targetModeWriteOptimization": 2
+  },
+  {
+   "portPos": {
+    "node": 0,
+    "slot": 3,
+    "cardPort": 4
+   },
+   "mode": 2,
+   "linkState": 4,
+   "nodeWWN": "2FF70002AC02DEF2",
+   "portWWN": "20340002AC02DEF2",
+   "type": 1,
+   "protocol": 1,
+   "device": [],
+   "virtualPorts": [
+    {
+     "portPos": {
+      "node": 0,
+      "slot": 3,
+      "cardPort": 4
+     },
+     "mode": 2,
+     "linkState": 4,
+     "nodeWWN": "2FF70102AC02DEF2",
+     "portWWN": "20340102ADF2DEF2",
+     "type": 3,
+     "vpi": 31,
+     "protocol": 6
+    }
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 1,
+   "connectionType": 2,
+   "connectionMode": 2,
+   "configurableRate": "auto",
+   "maxRate": "32Gbps",
+   "class2": 3,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 2,
+   "vcn": 2,
+   "interruptCoalesce": 1,
+   "targetModeWriteOptimization": 2
+  },
+  {
+   "portPos": {
+    "node": 0,
+    "slot": 4,
+    "cardPort": 1
+   },
+   "mode": 2,
+   "linkState": 4,
+   "HWAddr": "40A6B7D8EEA0",
+   "type": 1,
+   "protocol": 2,
+   "label": "0:4:1-iscsi-1",
+   "device": [
+    "HPE_VM_3a9a0976ecc696ed2af9f507",
+    "HPE_VM_5763b05a9d2bb9eba6141621",
+    "HPE_VM_39b1dae95f677c0ef68c5cb2"
+   ],
+   "IPAddr": "10.1.1.2",
+   "iSCSIName": "iqn.2023-24.com.hpe:cz2d3209yv",
+   "iSCSIPortInfo": {
+    "IPAddr": "10.1.1.2",
+    "iSCSIName": "iqn.2023-24.com.hpe:cz2d3209yv",
+    "netmask": "255.255.255.0",
+    "gateway": "0.0.0.0",
+    "mtu": 9000,
+    "tpgt": 41,
+    "stgt": 0,
+    "iSNSPort": 3205,
+    "iSNSAddr": "0.0.0.0",
+    "rate": "10Gbps",
+    "vlan": 0
+   },
+   "iSCSIVlans": [
+    {
+     "IPAddr": "10.1.1.2",
+     "netmask": "255.255.255.0",
+     "gateway": "0.0.0.0",
+     "vlanTag": 0,
+     "mtu": 9000,
+     "stgt": 0,
+     "tpgt": 41,
+     "iSNSAddr": "0.0.0.0",
+     "iSNSPort": 3205
+    }
+   ],
+   "hardwareType": 3,
+   "connectionType": 99,
+   "connectionMode": 2,
+   "configurableRate": "auto",
+   "maxRate": "25Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 0,
+    "slot": 4,
+    "cardPort": 2
+   },
+   "mode": 2,
+   "linkState": 4,
+   "HWAddr": "40A6B7D8EEA1",
+   "type": 1,
+   "protocol": 2,
+   "label": "0:4:2-iscsi-2",
+   "device": [
+    "HPE_VM_3a9a0976ecc696ed2af9f507",
+    "HPE_VM_5763b05a9d2bb9eba6141621",
+    "HPE_VM_39b1dae95f677c0ef68c5cb2"
+   ],
+   "IPAddr": "20.1.1.2",
+   "iSCSIName": "iqn.2023-24.com.hpe:cz2d3209yv",
+   "iSCSIPortInfo": {
+    "IPAddr": "20.1.1.2",
+    "iSCSIName": "iqn.2023-24.com.hpe:cz2d3209yv",
+    "netmask": "255.255.255.0",
+    "gateway": "0.0.0.0",
+    "mtu": 9000,
+    "tpgt": 42,
+    "stgt": 0,
+    "iSNSPort": 3205,
+    "iSNSAddr": "0.0.0.0",
+    "rate": "10Gbps",
+    "vlan": 0
+   },
+   "iSCSIVlans": [
+    {
+     "IPAddr": "20.1.1.2",
+     "netmask": "255.255.255.0",
+     "gateway": "0.0.0.0",
+     "vlanTag": 0,
+     "mtu": 9000,
+     "stgt": 0,
+     "tpgt": 42,
+     "iSNSAddr": "0.0.0.0",
+     "iSNSPort": 3205
+    }
+   ],
+   "hardwareType": 3,
+   "connectionType": 99,
+   "connectionMode": 2,
+   "configurableRate": "auto",
+   "maxRate": "25Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 1,
+    "slot": 1,
+    "cardPort": 1
+   },
+   "mode": 3,
+   "linkState": 4,
+   "nodeWWN": "16.1.14.91",
+   "portWWN": "88E9A4DB13F2",
+   "type": 2,
+   "protocol": 6,
+   "label": "DP-1",
+   "device": [
+    "cage41"
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 7,
+   "connectionType": 2,
+   "connectionMode": 1,
+   "configurableRate": "100Gbps",
+   "maxRate": "100Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 1,
+    "slot": 1,
+    "cardPort": 2
+   },
+   "mode": 3,
+   "linkState": 4,
+   "nodeWWN": "16.1.15.91",
+   "portWWN": "88E9A4DB13F3",
+   "type": 2,
+   "protocol": 6,
+   "label": "DP-2",
+   "device": [
+    "cage41"
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 7,
+   "connectionType": 2,
+   "connectionMode": 1,
+   "configurableRate": "100Gbps",
+   "maxRate": "100Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 1,
+    "slot": 2,
+    "cardPort": 1
+   },
+   "mode": 3,
+   "linkState": 4,
+   "nodeWWN": "16.1.8.2",
+   "portWWN": "88E9A4DB73F2",
+   "type": 2,
+   "protocol": 6,
+   "label": "DP-1",
+   "device": [
+    "cage41"
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 7,
+   "connectionType": 2,
+   "connectionMode": 1,
+   "configurableRate": "100Gbps",
+   "maxRate": "100Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 1,
+    "slot": 2,
+    "cardPort": 2
+   },
+   "mode": 3,
+   "linkState": 4,
+   "nodeWWN": "16.1.9.2",
+   "portWWN": "88E9A4DB73F3",
+   "type": 2,
+   "protocol": 6,
+   "label": "DP-2",
+   "device": [
+    "cage41"
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 7,
+   "connectionType": 2,
+   "connectionMode": 1,
+   "configurableRate": "100Gbps",
+   "maxRate": "100Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 1,
+    "slot": 3,
+    "cardPort": 1
+   },
+   "mode": 2,
+   "linkState": 4,
+   "nodeWWN": "2FF70002AC02DEF2",
+   "portWWN": "21310002AC02DEF2",
+   "type": 1,
+   "protocol": 1,
+   "device": [
+    "TPIPoc-win1",
+    "TPIPoc-win2",
+    "TPIPoc-esxi1",
+    "TPIPoc-RHEL3"
+   ],
+   "virtualPorts": [
+    {
+     "portPos": {
+      "node": 1,
+      "slot": 3,
+      "cardPort": 1
+     },
+     "mode": 2,
+     "linkState": 4,
+     "nodeWWN": "2FF70102AC02DEF2",
+     "portWWN": "21310102ADF2DEF2",
+     "type": 3,
+     "vpi": 31,
+     "protocol": 6
+    }
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 1,
+   "connectionType": 2,
+   "connectionMode": 2,
+   "configurableRate": "auto",
+   "maxRate": "32Gbps",
+   "class2": 3,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 2,
+   "vcn": 2,
+   "interruptCoalesce": 1,
+   "targetModeWriteOptimization": 2
+  },
+  {
+   "portPos": {
+    "node": 1,
+    "slot": 3,
+    "cardPort": 2
+   },
+   "mode": 3,
+   "linkState": 4,
+   "nodeWWN": "2FF70202AC02DEF2",
+   "portWWN": "21320202AC02DEF2",
+   "type": 6,
+   "protocol": 1,
+   "device": [
+    "2FF70002AC07E528"
+   ],
+   "virtualPorts": [],
+   "iSCSIVlans": [],
+   "hardwareType": 1,
+   "connectionType": 2,
+   "connectionMode": 4,
+   "configurableRate": "auto",
+   "maxRate": "32Gbps",
+   "class2": 3,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 2,
+   "vcn": 2,
+   "interruptCoalesce": 1,
+   "targetModeWriteOptimization": 2
+  },
+  {
+   "portPos": {
+    "node": 1,
+    "slot": 3,
+    "cardPort": 3
+   },
+   "mode": 2,
+   "linkState": 5,
+   "nodeWWN": "2FF70002AC02DEF2",
+   "portWWN": "21330002AC02DEF2",
+   "type": 3,
+   "protocol": 1,
+   "device": [],
+   "virtualPorts": [
+    {
+     "portPos": {
+      "node": 1,
+      "slot": 3,
+      "cardPort": 3
+     },
+     "mode": 2,
+     "linkState": 5,
+     "nodeWWN": "2FF70102AC02DEF2",
+     "portWWN": "21330102ADF2DEF2",
+     "type": 3,
+     "vpi": 31,
+     "protocol": 6
+    }
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 1,
+   "connectionType": 2,
+   "connectionMode": 2,
+   "configurableRate": "auto",
+   "maxRate": "32Gbps",
+   "class2": 3,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 2,
+   "vcn": 2,
+   "interruptCoalesce": 1,
+   "targetModeWriteOptimization": 2
+  },
+  {
+   "portPos": {
+    "node": 1,
+    "slot": 3,
+    "cardPort": 4
+   },
+   "mode": 2,
+   "linkState": 4,
+   "nodeWWN": "2FF70002AC02DEF2",
+   "portWWN": "21340002AC02DEF2",
+   "type": 1,
+   "protocol": 1,
+   "device": [],
+   "virtualPorts": [
+    {
+     "portPos": {
+      "node": 1,
+      "slot": 3,
+      "cardPort": 4
+     },
+     "mode": 2,
+     "linkState": 4,
+     "nodeWWN": "2FF70102AC02DEF2",
+     "portWWN": "21340102ADF2DEF2",
+     "type": 3,
+     "vpi": 31,
+     "protocol": 6
+    }
+   ],
+   "iSCSIVlans": [],
+   "hardwareType": 1,
+   "connectionType": 2,
+   "connectionMode": 2,
+   "configurableRate": "auto",
+   "maxRate": "32Gbps",
+   "class2": 3,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 2,
+   "vcn": 2,
+   "interruptCoalesce": 1,
+   "targetModeWriteOptimization": 2
+  },
+  {
+   "portPos": {
+    "node": 1,
+    "slot": 4,
+    "cardPort": 1
+   },
+   "mode": 2,
+   "linkState": 4,
+   "HWAddr": "40A6B7D90048",
+   "type": 1,
+   "protocol": 2,
+   "label": "1:4:1-iscsi-1",
+   "device": [
+    "HPE_VM_3a9a0976ecc696ed2af9f507",
+    "HPE_VM_5763b05a9d2bb9eba6141621",
+    "HPE_VM_39b1dae95f677c0ef68c5cb2"
+   ],
+   "IPAddr": "10.1.1.3",
+   "iSCSIName": "iqn.2023-24.com.hpe:cz2d3209yv",
+   "iSCSIPortInfo": {
+    "IPAddr": "10.1.1.3",
+    "iSCSIName": "iqn.2023-24.com.hpe:cz2d3209yv",
+    "netmask": "255.255.255.0",
+    "gateway": "0.0.0.0",
+    "mtu": 9000,
+    "tpgt": 141,
+    "stgt": 0,
+    "iSNSPort": 3205,
+    "iSNSAddr": "0.0.0.0",
+    "rate": "10Gbps",
+    "vlan": 0
+   },
+   "iSCSIVlans": [
+    {
+     "IPAddr": "10.1.1.3",
+     "netmask": "255.255.255.0",
+     "gateway": "0.0.0.0",
+     "vlanTag": 0,
+     "mtu": 9000,
+     "stgt": 0,
+     "tpgt": 141,
+     "iSNSAddr": "0.0.0.0",
+     "iSNSPort": 3205
+    }
+   ],
+   "hardwareType": 3,
+   "connectionType": 99,
+   "connectionMode": 2,
+   "configurableRate": "auto",
+   "maxRate": "25Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  },
+  {
+   "portPos": {
+    "node": 1,
+    "slot": 4,
+    "cardPort": 2
+   },
+   "mode": 2,
+   "linkState": 4,
+   "HWAddr": "40A6B7D90049",
+   "type": 1,
+   "protocol": 2,
+   "label": "1:4:2-iscsi-2",
+   "device": [
+    "HPE_VM_3a9a0976ecc696ed2af9f507",
+    "HPE_VM_5763b05a9d2bb9eba6141621",
+    "HPE_VM_39b1dae95f677c0ef68c5cb2"
+   ],
+   "IPAddr": "20.1.1.3",
+   "iSCSIName": "iqn.2023-24.com.hpe:cz2d3209yv",
+   "iSCSIPortInfo": {
+    "IPAddr": "20.1.1.3",
+    "iSCSIName": "iqn.2023-24.com.hpe:cz2d3209yv",
+    "netmask": "255.255.255.0",
+    "gateway": "0.0.0.0",
+    "mtu": 9000,
+    "tpgt": 142,
+    "stgt": 0,
+    "iSNSPort": 3205,
+    "iSNSAddr": "0.0.0.0",
+    "rate": "10Gbps",
+    "vlan": 0
+   },
+   "iSCSIVlans": [
+    {
+     "IPAddr": "20.1.1.3",
+     "netmask": "255.255.255.0",
+     "gateway": "0.0.0.0",
+     "vlanTag": 0,
+     "mtu": 9000,
+     "stgt": 0,
+     "tpgt": 142,
+     "iSNSAddr": "0.0.0.0",
+     "iSNSPort": 3205
+    }
+   ],
+   "hardwareType": 3,
+   "connectionType": 99,
+   "connectionMode": 2,
+   "configurableRate": "auto",
+   "maxRate": "25Gbps",
+   "class2": 99,
+   "smartSANStatus": 99,
+   "uniqueNodeWWN": 3,
+   "vcn": 3,
+   "interruptCoalesce": 3,
+   "targetModeWriteOptimization": 3
+  }
+ ]
+}

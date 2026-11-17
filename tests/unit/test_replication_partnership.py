@@ -10,7 +10,14 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
+from alletra_onboard.adapters.array.cli_client import ArrayCliError
+from alletra_onboard.adapters.array.rc_cli_client import (
+    RcPlanObjects,
+    rc_object_refusal,
+    rc_write_refusal,
+)
 from alletra_onboard.application.platform import init_sheet
+from alletra_onboard.application.provisioning.clients import make_rc_cli
 from alletra_onboard.application.replication import partnership
 from alletra_onboard.application.replication.plan import build_plan, check
 from alletra_onboard.application.replication.read import parse_showport_roles, read_array
@@ -18,6 +25,7 @@ from alletra_onboard.domain.models import RunMode
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import ProtectionRequest, RcipPortRequest, ReplicationIntent
 from alletra_onboard.domain.shared import EndpointCreds
+from tests.unit.test_rc_cli_client import ALLETRA_OBJECTS, PRIMERA_OBJECTS
 
 FIX = Path(__file__).resolve().parents[1] / "fixtures" / "rcip_pair"
 A_HOST, B_HOST = "10.132.30.121", "10.132.30.28"
@@ -131,6 +139,41 @@ def test_the_primeras_old_fc_target_for_the_alletra_blocks_the_plan():
     )]
 
 
+def _fc_pair(target_status, link_status="", group_status=""):
+    """Two arrays where A holds an FC target for B (BL-57); links and groups only when asked for."""
+    from alletra_onboard.domain.replication import RcGroup, RcLink, RcTarget, ReplicationArrayView
+    a = ReplicationArrayView(name="arrayA", fc_node_wwn="2FF70002AC000001",
+                             targets=[RcTarget(name="arrayB_fc", type="FC", status=target_status, options="2FF70002AC000002")],
+                             links=[RcLink(target="arrayB_fc", nsp="0:3:4", address="21340002AC000002", status=link_status)]
+                             if link_status else [],
+                             groups=[RcGroup(name="db_rcg", target="arrayB_fc", status=group_status)] if group_status else [])
+    b = ReplicationArrayView(name="arrayB", fc_node_wwn="2FF70002AC000002")
+    return a, b
+
+
+def test_a_working_fc_partnership_is_never_told_to_remove_its_target():
+    """BL-57: the blocker used to print `removercopytarget -cleargroups -f` for ANY FC target to the peer,
+    which on a working pair deletes the target and its groups."""
+    a, b = _fc_pair("ready", link_status="Up", group_status="Started")
+    [msg] = partnership.stale_fc_targets(a, b)
+    assert "removercopytarget" not in msg
+    assert msg.startswith("arrayA already replicates to arrayB over Fibre Channel (target 'arrayB_fc': status ready; "
+                          "1 link up; started group db_rcg)")
+    assert "will not remove a target that is in use" in msg
+
+
+def test_a_failed_fc_target_with_a_started_group_is_not_removed_either():
+    a, b = _fc_pair("failed", group_status="Started")
+    [msg] = partnership.stale_fc_targets(a, b)
+    assert "removercopytarget" not in msg and "started group db_rcg" in msg
+
+
+def test_only_a_failed_fc_target_with_no_link_up_and_no_started_group_gets_the_removal_command():
+    a, b = _fc_pair("failed", link_status="Down", group_status="Stopped")
+    [msg] = partnership.stale_fc_targets(a, b)
+    assert "`removercopytarget -cleargroups -f arrayB_fc`" in msg
+
+
 def _without_fc_target():
     text = (FIX / "before" / "primera" / "showrcopy.txt").read_text()
     lines = [ln for ln in text.splitlines() if "rack13-ARCUS_PRIMERA" not in ln]
@@ -213,11 +256,13 @@ def test_after_the_setup_the_partnership_reads_as_existing_and_the_groups_are_pl
 # ------------------------------------------------------------------ R4/R5: apply and its removal set
 
 class _RcCli:
-    """The two arrays as the apply sees them, answering as they did live on 2026-11-03."""
+    """The two arrays as the apply sees them, answering as they did live on 2026-11-03. Like the real
+    client, it refuses a command outside its forms or the plan objects it was built with."""
 
-    def __init__(self, side: str, state: dict, log: list, *, ping_loss: bool = False, refuse: str = "",
-                 gw_ignored: bool = False) -> None:
-        self.side, self.state, self.log, self.ping_loss, self.refuse, self.gw_ignored = side, state, log, ping_loss, refuse, gw_ignored
+    def __init__(self, side: str, objects: RcPlanObjects, state: dict, log: list, *, ping_loss: bool = False,
+                 refuse: str = "", gw_ignored: bool = False) -> None:
+        self.side, self.objects, self.state, self.log = side, objects, state, log
+        self.ping_loss, self.refuse, self.gw_ignored = ping_loss, refuse, gw_ignored
 
     def __enter__(self):
         return self
@@ -226,6 +271,9 @@ class _RcCli:
         return None
 
     def write(self, command: str) -> str:
+        why = rc_write_refusal(command) or rc_object_refusal(command, self.objects)
+        if why:
+            raise ArrayCliError(why)
         self.log.append((self.side, command))
         s = self.state[self.side]
         if self.refuse and command.startswith(self.refuse):
@@ -265,16 +313,44 @@ class _RcCli:
         raise AssertionError(command)
 
 
-def _apply(plan, **kw):
+def _apply(plan, network=None, **kw):
     state = {"A": {"rcip": {}, "rc": "", "targets": {}},
              "B": {"rcip": {"0:1:1": ("10.93.18.19", "255.255.254.0"), "1:1:1": ("10.93.18.20", "255.255.254.0")},
                    "rc": "Started", "targets": {}}}
     log: list = []
     hosts = {A_HOST: "A", B_HOST: "B"}
     result = partnership.apply_partnership(
-        plan, _prov(_intent()), sleep=lambda s: None,
-        rc_cli_factory=lambda creds: _RcCli(hosts[creds.host], state, log, **kw))
+        plan, _prov(_intent(network)), sleep=lambda s: None,
+        rc_cli_factory=lambda creds, objects: _RcCli(hosts[creds.host], objects, state, log, **kw))
     return result, log, state
+
+
+
+def test_each_arrays_client_is_bound_to_what_the_plan_names_on_that_array():
+    """ADR 0025 condition 3: the apply builds each client with its own array's ports, addresses and target,
+    the same objects test_rc_cli_client.py binds the live setup's writes to."""
+    plan = _plan(b_over=_without_fc_target())
+    assert partnership.plan_objects(plan, "A") == ALLETRA_OBJECTS
+    assert partnership.plan_objects(plan, "B") == PRIMERA_OBJECTS
+    routed = partnership.plan_objects(_plan(ROUTED, a_over=WITH_SET, b_over=_without_fc_target()), "A")
+    assert routed.addresses == {"10.93.18.11", "10.93.18.13", "10.93.18.1"}          # the gateway it sets
+    assert make_rc_cli(_creds(A_HOST), ALLETRA_OBJECTS).objects == ALLETRA_OBJECTS   # the apply's default factory
+
+
+def test_an_address_the_plan_will_not_set_is_not_given_to_the_client():
+    """1:1:1 already has 10.93.18.20; the sheet's 10.93.18.29 is a conflict, so the peer's client may not set it."""
+    network = [*NETWORK[:3], RcipPortRequest(side="B", nsp="1:1:1", ip="10.93.18.29", netmask="255.255.254.0")]
+    objects = partnership.plan_objects(_plan(network, b_over=_without_fc_target()), "B")
+    assert objects.addresses == {"10.93.18.19"} and objects.ports == {"0:1:1", "1:1:1"}
+
+
+def test_an_apply_whose_sheet_changed_after_the_approval_is_refused_by_the_client():
+    """The pings follow the run's sheet; a port the approved plan never named is refused before it is sent."""
+    plan = _plan(b_over=_without_fc_target())
+    moved = [RcipPortRequest(side="A", nsp="0:4:3", ip="10.93.18.11", netmask="255.255.254.0"), *NETWORK[1:]]
+    result, log, _ = _apply(plan, network=moved)
+    assert "refused: port 0:4:3 is not in the approved plan" in result.error
+    assert not any("0:4:3" in c for _, c in log)
 
 
 def test_apply_sends_the_live_commands_in_order_and_the_removal_set_undoes_exactly_them():

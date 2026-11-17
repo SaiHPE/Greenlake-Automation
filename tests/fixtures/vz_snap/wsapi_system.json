@@ -1,0 +1,182 @@
+{
+ "id": 193924,
+ "name": "MPB10K-D24U21-VZ",
+ "systemVersion": "10.5.51.1",
+ "IPv4Addr": "10.64.122.140",
+ "model": "HPE Alletra Storage MP",
+ "serialNumber": "SGHD44LQLS",
+ "totalNodes": 2,
+ "masterNode": 0,
+ "onlineNodes": [
+  0,
+  1
+ ],
+ "clusterNodes": [
+  0,
+  1
+ ],
+ "chunkletSizeMiB": 1024,
+ "totalCapacityMiB": 29547910.0,
+ "allocatedCapacityMiB": 599314.0,
+ "freeCapacityMiB": 28948596.0,
+ "failedCapacityMiB": 0.0,
+ "readOnlyParameters": {
+  "maxVolumeSizeMiB": 67108864,
+  "maxReduceVolumeSizeMiB": 67108864
+ },
+ "contact": "lab-user",
+ "timeZone": "Asia/Kolkata",
+ "licenseInfo": {
+  "issueTimeSec": 1773714629,
+  "issueTime8601": "2026-03-17T08:00:29+05:30",
+  "diskCount": 0,
+  "WWNBASE": 193924,
+  "licenses": [
+   {
+    "name": "Owned"
+   },
+   {
+    "name": "SED Encryption"
+   },
+   {
+    "name": "Software and Support SaaS",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Virtual Copy",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Autonomic Rebalance",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Cluster Extension",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Dynamic Optimization",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Management Plug-In for VMware vCenter",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Online Import",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Peer Motion",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Peer Persistence",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Priority Optimization",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Remote Copy",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "RMC Application Suite",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Smart SAN",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "System Reporter",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Thin Conversion",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Thin Persistence",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Virtual Domains",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "Virtual Lock",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   },
+   {
+    "name": "VSS Provider for Microsoft Windows",
+    "expiryTimeSec": 1935360000,
+    "expiryTime8601": "2031-05-01T05:30:00+05:30"
+   }
+  ],
+  "licenseState": {
+   "virtualCopy": true,
+   "remoteCopy": true,
+   "thinProvisioing": true,
+   "thinProvisioning": true,
+   "domains": true,
+   "dynamicOptimization": true,
+   "virtualLock": true,
+   "thinPersistence": true,
+   "thinConversion": true,
+   "adaptiveOptimization": true,
+   "peerVirtualization": true,
+   "qos": true,
+   "systemReporter": true,
+   "darEncryption": false,
+   "fileServices": true,
+   "storageFederation": true,
+   "onlineImport": true,
+   "rmcApplicationSuite": true,
+   "smartSAN": true,
+   "sedEncryption": true
+  }
+ },
+ "parameters": {
+  "rawSpaceAlertSSD": 0,
+  "remoteSyslog": false,
+  "remoteSyslogHost": "0.0.0.0",
+  "remoteSyslogSecurityHost": "0.0.0.0",
+  "sparingAlgorithm": "Minimal",
+  "eventLogsize": 5242880,
+  "eventLogNum": 10,
+  "VVRetentionTimeMax": 1209600,
+  "upgradeNote": "",
+  "autoExportAfterReboot": true,
+  "thermalShutdown": true,
+  "sessionTimeout": 3600,
+  "overProvRatioLimit": 0.0,
+  "overProvRatioWarning": 0.0,
+  "disableChunkletInitUNMAP": false,
+  "remoteCopyHostThrottling": false,
+  "autoAdmitTune": true,
+  "singleLunHost": false,
+  "allowDomainUsersAffectNoDomain": 2,
+  "dsccReadOnly": false
+ }
+}

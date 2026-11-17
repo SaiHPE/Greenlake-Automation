@@ -36,6 +36,6 @@ Security Connection :                None
 --------System Descriptors--------
 Location    : 
 Owner       : 
-Contact     : Ramesh Kumar P, 8095234554, ramesh-kumar.p@hpe.com
+Contact     : Lab User, 0000000000, lab-user@example.com
 Comment     : 
 

@@ -1,0 +1,32 @@
+# showhost -d
+Id Name                            Persona       ----------WWN/iSCSI_Name/NQN----------- Port  IP/IP:Port
+ 0 HPE_VM_3a9a0976ecc696ed2af9f507 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 0:4:1 10.1.1.4  
+ 0 HPE_VM_3a9a0976ecc696ed2af9f507 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 0:4:2 20.1.1.4  
+ 0 HPE_VM_3a9a0976ecc696ed2af9f507 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 1:4:2 20.1.1.4  
+ 0 HPE_VM_3a9a0976ecc696ed2af9f507 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-sgh327xh4s 1:4:1 10.1.1.4  
+ 2 HPE_VM_39b1dae95f677c0ef68c5cb2 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-cnx3240100 0:4:2 20.1.1.6  
+ 2 HPE_VM_39b1dae95f677c0ef68c5cb2 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-cnx3240100 0:4:1 10.1.1.6  
+ 2 HPE_VM_39b1dae95f677c0ef68c5cb2 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-cnx3240100 1:4:2 20.1.1.6  
+ 2 HPE_VM_39b1dae95f677c0ef68c5cb2 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-cnx3240100 1:4:1 10.1.1.6  
+ 1 HPE_VM_5763b05a9d2bb9eba6141621 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-cnx32400zz 1:4:1 10.1.1.5  
+ 1 HPE_VM_5763b05a9d2bb9eba6141621 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-cnx32400zz 0:4:1 10.1.1.5  
+ 1 HPE_VM_5763b05a9d2bb9eba6141621 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-cnx32400zz 0:4:2 20.1.1.5  
+ 1 HPE_VM_5763b05a9d2bb9eba6141621 Generic-ALUA  iqn.2026-10.com.hpe:hvm-host-cnx32400zz 1:4:2 20.1.1.5  
+ 5 LabPoc-esxi1                    VMware        100052AECF000002                        1:3:1 n/a       
+ 5 LabPoc-esxi1                    VMware        100052AECF000002                        0:3:1 n/a       
+ 6 LabPoc-RHEL3                    Generic-ALUA  100052AECF000000                        1:3:1 n/a       
+ 6 LabPoc-RHEL3                    Generic-ALUA  100052AECF000000                        0:3:1 n/a       
+ 3 LabPoc-win1                     WindowsServer 100052AECF000006                        1:3:1 n/a       
+ 3 LabPoc-win1                     WindowsServer 100052AECF000006                        0:3:1 n/a       
+ 4 LabPoc-win2                     WindowsServer 100052AECF000008                        1:3:1 n/a       
+ 4 LabPoc-win2                     WindowsServer 100052AECF000008                        0:3:1 n/a       
+-- --                              --            100070106FE9A979                        1:3:1 n/a       
+-- --                              --            1000D0BF9CB7A3C9                        1:3:1 n/a       
+-- --                              --            1000D0BF9CB7A3D1                        1:3:4 n/a       
+-- --                              --            100070106FE9A981                        1:3:4 n/a       
+-- --                              --            1000D0BF9CB7A3D1                        0:3:4 n/a       
+-- --                              --            100070106FE9A981                        0:3:4 n/a       
+-- --                              --            100070106FE9A979                        0:3:1 n/a       
+-- --                              --            1000D0BF9CB7A3C9                        0:3:1 n/a       
+---------------------------------------------------------------------------------------------------------
+28 total                                                                                                 

@@ -1,0 +1,90 @@
+# checkhealth -svc -detail
+Checking alert
+Checking cabling
+Checking cage
+Checking cdm
+Checking cert
+Checking cpg
+Checking dar
+Checking date
+Checking file
+Checking fileservice
+Checking host
+Checking hostkeys
+Checking ilo
+Checking ld
+Checking license
+Checking network
+Checking node
+Checking pd
+Checking pdch
+Checking port
+Checking qos
+Checking rc
+Checking security
+Checking signature
+Checking snmp
+Checking switch
+Checking task
+Checking ui
+Checking vlun
+Checking vv
+Component ---------Summary Description---------- Qty
+Alert     New alerts                               9
+Cage      Cages in failed or degraded state        1
+Cage      Cages not on current firmware            1
+iLO       Mismatched iLO firmware versions         1
+PD        PDs that are degraded                   12
+Port      Degraded or failed SFPs                  2
+Security  System with remote root access enabled   1
+Switch    Switch has old firmware version          2
+Switch    Switch has mismatched configuration      2
+vlun      Hosts not connected to a port            9
+----------------------------------------------------
+       10 total                                   40
+
+Component -------------Identifier------------- --------------------------------------Detailed Description--------------------------------------- Resolution
+Alert     sw_ilo:0                             Unable to register ssh key for iLO on Node 0                                                      Manual    
+Alert     sw_ilo:1                             Unable to register ssh key for iLO on Node 1                                                      Manual    
+Alert     hw_switch:sw1                        Switch sw1 Running/startup_config mismatched.                                                     Manual    
+Alert     hw_switch:sw2                        Switch sw2 Running/startup_config mismatched.                                                     Manual    
+Alert     hw_cage:41,hw_cage_ifc:1             Cage cage41 (0x51402EC0207A9694) I/O Module 1 firmware is outdated.                               Manual    
+Alert     hw_cage:41,hw_cage_ifc:2             Cage cage41 (0x51402EC0207A9694) I/O Module 2 firmware is outdated.                               Manual    
+Alert     sw_port:1:4:2,hw_sfp                 Port 1:4:2, SFP Degraded (Unqualified, check for unsupported SFP or cable)                        Manual    
+Alert     sw_port:0:4:2,hw_sfp                 Port 0:4:2, SFP Degraded (Unqualified, check for unsupported SFP or cable)                        Manual    
+Alert     sw_wsapi                             Storage system has been disconnected from Data Services Cloud Console for more than 7200 minutes. Manual    
+Cage      cage:41                              Detailed State: degraded                                                                          Manual    
+Cage      cage:41                              Firmware is not current                                                                           Auto      
+iLO       cage:1,41                            iLO firmware version mismatch detected between the specified cages                                Manual    
+PD        disk:0                               Degraded States: old_firmware                                                                     Manual    
+PD        disk:1                               Degraded States: old_firmware                                                                     Manual    
+PD        disk:2                               Degraded States: old_firmware                                                                     Manual    
+PD        disk:3                               Degraded States: old_firmware                                                                     Manual    
+PD        disk:4                               Degraded States: old_firmware                                                                     Manual    
+PD        disk:5                               Degraded States: old_firmware                                                                     Manual    
+PD        disk:6                               Degraded States: old_firmware                                                                     Manual    
+PD        disk:7                               Degraded States: old_firmware                                                                     Manual    
+PD        disk:8                               Degraded States: old_firmware                                                                     Manual    
+PD        disk:9                               Degraded States: old_firmware                                                                     Manual    
+PD        disk:10                              Degraded States: old_firmware                                                                     Manual    
+PD        disk:11                              Degraded States: old_firmware                                                                     Manual    
+Port      port:0:4:2                           SFP is Degraded                                                                                   Manual    
+Port      port:1:4:2                           SFP is Degraded                                                                                   Manual    
+Security  SSH                                  Remote root access is enabled on the array                                                        Manual    
+Switch    switch:sw1                           Switch sw1 has old firmware version: 10.12.1000, expected: 10.16.1020                             Manual    
+Switch    switch:sw2                           Switch sw2 has old firmware version: 10.12.1000, expected: 10.16.1020                             Manual    
+Switch    switch:sw1                           Switch sw1 has mismatched configuration Running_Config, Startup_Config                            Manual    
+Switch    switch:sw2                           Switch sw2 has mismatched configuration Running_Config, Startup_Config                            Manual    
+vlun      host:HPE_VM_bb3202a986f1faa7609e72e3 Host iscsi_name:iqn.2024-12.com.hpe:vmenode1:3754 is not connected to a port                      Manual    
+vlun      host:HPE_VM_589813aa9975debcd7c48217 Host iscsi_name:iqn.2024-12.com.hpe:vmenode2:47012 is not connected to a port                     Manual    
+vlun      host:HPE_VM_d6c02c9c2c1d03cf38ebe384 Host iscsi_name:iqn.2024-12.com.hpe:vmenode3:21739 is not connected to a port                     Manual    
+vlun      host:HPE_VM_e14e0a358a9e8cdf541e8f57 Host iscsi_name:iqn.2024-12.com.hpe:vmenode1:8671 is not connected to a port                      Manual    
+vlun      host:HPE_VM_0f9ed8c8c6ce061e96e060ae Host iscsi_name:iqn.2024-12.com.hpe:vmenode2:59615 is not connected to a port                     Manual    
+vlun      host:HPE_VM_4f730dfc5418336fc646279e Host iscsi_name:iqn.2024-12.com.hpe:vmenode3:41592 is not connected to a port                     Manual    
+vlun      host:HPE_VM_d416da3543a37663497979aa Host iscsi_name:iqn.2024-12.com.hpe:vmenode1:13851 is not connected to a port                     Manual    
+vlun      host:HPE_VM_cf14699733393ef51e2ebbce Host iscsi_name:iqn.2024-12.com.hpe:vmenode3:23880 is not connected to a port                     Manual    
+vlun      host:HPE_VM_8cf519a8c8ca95051c3e4a28 Host iscsi_name:iqn.2024-12.com.hpe:vmenode2:59721 is not connected to a port                     Manual    
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+       40 total                                                                                                                                            
+
+Execute "checkhealth -autofix" to fix auto resolvable issues.

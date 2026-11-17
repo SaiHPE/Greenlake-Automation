@@ -1,0 +1,37 @@
+# help create
+create* - Create new entities such as virtual volumes and logical disks.
+In each case type "help <command>" for detailed help.
+
+    createcert        - create SSL certificate
+    createcpg         - create a Common Provisioning Group (CPG)
+    createdomain      - create a domain
+    createdomainset   - create or add domains to a set of domains
+    createfileshare   - create a fileshare and export it to a client
+    createfilesystem  - create a filesystem of a specified size
+    creategroupsv     - create consistent group snapshots of a list of VVs
+    creategroupvvcopy - create consistent group physical copies of a list of
+                        VVs
+    createhost        - create or add paths to a system host
+    createhostset     - create or add hosts to a set of hosts
+    createmaint       - create a maintenance window record
+    creatercopygroup  - create a group for Remote Copy
+    creatercopytarget - create a target for Remote Copy
+    createsched       - create a scheduled task
+    createsharesetting - create a share setting from specified client
+                        information
+    createsnmpuser    - create a SNMPv3 user and key
+    createspare       - create a spare chunklet(s)
+    createsralertcrit - create a System Reporter threshold alert criterion
+    createsv          - create snapshot volumes
+    createuser        - create user accounts
+    createvlun        - export a virtual volume as a SCSI LUN
+    createvv          - create a virtual volume from a common provisioning
+                        group
+    createvvcopy      - copy a vv
+    createvvolsc      - create a vVol Storage Container and all of its Protocol
+                        Endpoints
+    createvvset       - create or add VVs to a set of VVs
+
+User supplied names for the create* commands are limited to alphanumeric
+characters, period/dot, dash and underscore. Names cannot start with a "-".
+

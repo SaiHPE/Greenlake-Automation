@@ -1,0 +1,44 @@
+# showport -c
+N:S:P      Mode                          Device Pos Config Topology    Rate Cls Mode_change
+0:1:1 initiator                          cage41   0  valid   fabric 100Gbps n/a  prohibited
+0:1:2 initiator                          cage41   0  valid   fabric 100Gbps n/a  prohibited
+0:2:1 initiator                          cage41   0  valid   fabric 100Gbps n/a  prohibited
+0:2:2 initiator                          cage41   0  valid   fabric 100Gbps n/a  prohibited
+0:3:1    target                     LabPoc-win1   0  valid   fabric  32Gbps   3     allowed
+                                    LabPoc-win2   0  valid   fabric  32Gbps   3     allowed
+                                   LabPoc-esxi1   0  valid   fabric  32Gbps   3     allowed
+                                   LabPoc-RHEL3   0  valid   fabric  32Gbps   3     allowed
+0:3:2 initiator                2FF70002AC07E528   0  valid   fabric  32Gbps   3     allowed
+0:3:3    target                             ---   -    ---      n/a     n/a n/a     allowed
+0:3:4    target                             ---   -    ---   fabric  16Gbps   3     allowed
+                                            ---   -    ---   fabric  16Gbps   3     allowed
+0:4:1    target HPE_VM_3a9a0976ecc696ed2af9f507   -  valid ethernet  10Gbps n/a  prohibited
+                HPE_VM_5763b05a9d2bb9eba6141621   -  valid ethernet  10Gbps n/a  prohibited
+                HPE_VM_39b1dae95f677c0ef68c5cb2   -  valid ethernet  10Gbps n/a  prohibited
+0:4:2    target HPE_VM_3a9a0976ecc696ed2af9f507   -  valid ethernet  10Gbps n/a  prohibited
+                HPE_VM_5763b05a9d2bb9eba6141621   -  valid ethernet  10Gbps n/a  prohibited
+                HPE_VM_39b1dae95f677c0ef68c5cb2   -  valid ethernet  10Gbps n/a  prohibited
+0:4:3      peer                             ---   -    ---      n/a     n/a n/a  prohibited
+0:4:4      peer                             ---   -    ---      n/a     n/a n/a  prohibited
+1:1:1 initiator                          cage41   0  valid   fabric 100Gbps n/a  prohibited
+1:1:2 initiator                          cage41   0  valid   fabric 100Gbps n/a  prohibited
+1:2:1 initiator                          cage41   0  valid   fabric 100Gbps n/a  prohibited
+1:2:2 initiator                          cage41   0  valid   fabric 100Gbps n/a  prohibited
+1:3:1    target                     LabPoc-win1   0  valid   fabric  32Gbps   3     allowed
+                                    LabPoc-win2   0  valid   fabric  32Gbps   3     allowed
+                                   LabPoc-esxi1   0  valid   fabric  32Gbps   3     allowed
+                                   LabPoc-RHEL3   0  valid   fabric  32Gbps   3     allowed
+1:3:2 initiator                2FF70002AC07E528   0  valid   fabric  32Gbps   3     allowed
+1:3:3    target                             ---   -    ---      n/a     n/a n/a     allowed
+1:3:4    target                             ---   -    ---   fabric  16Gbps   3     allowed
+                                            ---   -    ---   fabric  16Gbps   3     allowed
+1:4:1    target HPE_VM_3a9a0976ecc696ed2af9f507   -  valid ethernet  10Gbps n/a  prohibited
+                HPE_VM_5763b05a9d2bb9eba6141621   -  valid ethernet  10Gbps n/a  prohibited
+                HPE_VM_39b1dae95f677c0ef68c5cb2   -  valid ethernet  10Gbps n/a  prohibited
+1:4:2    target HPE_VM_3a9a0976ecc696ed2af9f507   -  valid ethernet  10Gbps n/a  prohibited
+                HPE_VM_5763b05a9d2bb9eba6141621   -  valid ethernet  10Gbps n/a  prohibited
+                HPE_VM_39b1dae95f677c0ef68c5cb2   -  valid ethernet  10Gbps n/a  prohibited
+1:4:3      peer                             ---   -    ---      n/a     n/a n/a  prohibited
+1:4:4      peer                             ---   -    ---      n/a     n/a n/a  prohibited
+-------------------------------------------------------------------------------------------
+   40                                                                                      

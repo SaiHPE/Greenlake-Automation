@@ -31,6 +31,11 @@ APP_REL = APP.relative_to(REPO).as_posix()
 DIST = f"{APP_REL}/frontend/dist/"
 TOKEN = re.compile(r"ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|gh[osu]_[A-Za-z0-9]{30,}"
                    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----")
+# A capture keeps what the device printed, its contact block included: an address in a fixture is a
+# colleague's or a customer's. Captures use lab-user@example.com instead.
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+PLACEHOLDER_DOMAINS = ("example.com", "example.org", "example.net")
+FIXTURES = f"{APP_REL}/tests/fixtures/"
 RESULTS: list[tuple[str, str, str]] = []
 
 
@@ -123,12 +128,18 @@ def main() -> int:
         record("dist", "PASS", "frontend/dist untouched")
 
     secrets = lab_passwords()
-    leaks = []
+    leaks, people = [], []
     for path, line in added_lines(base):
         if TOKEN.search(line) or any(pw in line for pw in secrets):
             leaks.append(path)
-    if leaks:
-        record("secrets", "FAIL", "a token, key or lab password is in: " + ", ".join(sorted(set(leaks))))
+        if path.startswith(FIXTURES) and any(m.group(0).rsplit("@", 1)[1].lower() not in PLACEHOLDER_DOMAINS
+                                             for m in EMAIL.finditer(line)):
+            people.append(path)
+    if leaks or people:
+        found = (["a token, key or lab password is in: " + ", ".join(sorted(set(leaks)))] if leaks else []) + (
+            ["a real email address is in: " + ", ".join(sorted(set(people))) + " (use lab-user@example.com)"]
+            if people else [])
+        record("secrets", "FAIL", "; ".join(found))
     else:
         record("secrets", "PASS", f"{len(changed)} changed file(s) scanned")
 

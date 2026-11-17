@@ -1,0 +1,34 @@
+# showsys -space
+-------------- Raw Capacity (MiB) --------------
+Total                               :   29278208
+  System                            :    3872768
+    Internal                        :    1910784
+    Spare                           :      81920
+    Unmapped                        :          0
+    Metadata                        :    1880064
+  Unusable                          :          0
+  Usable                            :   25405440
+    Allocated                       :     947899
+    Free                            :   24457541
+      VV Preallocated               :     880030
+      CPG Preallocated              :    1563559
+      Unallocated                   :   22013952
+------------ Usable Capacity (MiB) -------------
+Total                               :   19890325
+  Used                              :    1381934
+    Shared                          :      14568
+    Private                         :    1174611
+    Snapshot                        :       6310
+    Metadata                        :     186445
+  Free                              :   18508391
+    VV Preallocated                 :     137311
+    CPG Preallocated                :    1277430
+    Unallocated                     :   17093650
+------------------ Efficiency ------------------
+Thin                                :      21.88
+Dedup                               :       1.02
+Compression                         :       1.03
+Reduction                           :       1.05
+Total                               :      22.90
+Overprovisioning                    :       0.60
+

@@ -1,0 +1,176 @@
+{
+ "request": "GET /api/v1/system",
+ "port": 443,
+ "status": 200,
+ "headers": [
+  [
+   "Cache-Control",
+   "no-cache, no-store, private, max-age=-1, must-revalidate"
+  ],
+  [
+   "Cache-Control",
+   "no-cache"
+  ],
+  [
+   "Content-Language",
+   "en-US"
+  ],
+  [
+   "Content-Security-Policy",
+   "default-src 'self' https://www.google-analytics.com/ ; script-src 'self'  https://www.googletagmanager.com/gtag/js https://www.google-analytics.com/analytics.js 'sha256-v0Q8X6xSNmwWcfldSEWqW+3imFpJurfHYdywm3hw6+w=' ; style-src 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'nonce-d29tZSBjb29sIHN0cmluZyB3aWxsIHBvcCB1cCAxMjM=' 'self' blob:; frame-src 'self'; object-src 'self';  media-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'self'"
+  ],
+  [
+   "Content-Type",
+   "application/json"
+  ],
+  [
+   "Date",
+   "Mon, 16 Nov 2026 18:46:50 GMT"
+  ],
+  [
+   "Pragma",
+   "no-cache"
+  ],
+  [
+   "Pragma",
+   "no-cache"
+  ],
+  [
+   "Server",
+   "hp3par-wsapi"
+  ],
+  [
+   "Strict-Transport-Security",
+   "max-age=31536000; includeSubDomains;"
+  ],
+  [
+   "Vary",
+   "Accept-Encoding"
+  ],
+  [
+   "Vary",
+   "Origin"
+  ],
+  [
+   "X-Content-Type-Options",
+   "nosniff"
+  ],
+  [
+   "X-Frame-Options",
+   "SAMEORIGIN"
+  ],
+  [
+   "X-Xss-Protection",
+   "1; mode=block"
+  ],
+  [
+   "Content-Length",
+   "2023"
+  ],
+  [
+   "Connection",
+   "close"
+  ]
+ ],
+ "body": {
+  "id": 188150,
+  "name": "AlletraMP_D22U27",
+  "systemVersion": "10.5.0.43",
+  "IPv4Addr": "10.64.122.99",
+  "model": "HPE Alletra Storage MP",
+  "serialNumber": "CZ2D320BT1",
+  "totalNodes": 2,
+  "masterNode": 1,
+  "onlineNodes": [
+   0,
+   1
+  ],
+  "clusterNodes": [
+   0,
+   1
+  ],
+  "chunkletSizeMiB": 1024,
+  "totalCapacityMiB": 19890325.0,
+  "allocatedCapacityMiB": 1381934.0,
+  "freeCapacityMiB": 18508391.0,
+  "failedCapacityMiB": 0.0,
+  "readOnlyParameters": {
+   "maxVolumeSizeMiB": 67108864,
+   "maxReduceVolumeSizeMiB": 67108864
+  },
+  "contact": "<removed: a person's name, phone and email>",
+  "timeZone": "Asia/Calcutta",
+  "licenseInfo": {
+   "issueTimeSec": 1791292622,
+   "issueTime8601": "2026-10-06T18:47:02+05:30",
+   "diskCount": 0,
+   "WWNBASE": 188150,
+   "licenses": [
+    {
+     "name": "FIPS Encryption",
+     "expiryTimeSec": 282,
+     "expiryTime8601": "1970-01-01T05:34:42+05:30"
+    },
+    {
+     "name": "HPE Alletra Storage MP Disconnected",
+     "expiryTimeSec": 305,
+     "expiryTime8601": "1970-01-01T05:35:05+05:30"
+    },
+    {
+     "name": "Owned",
+     "expiryTimeSec": 304,
+     "expiryTime8601": "1970-01-01T05:35:04+05:30"
+    },
+    {
+     "name": "Software and Support SaaS",
+     "expiryTimeSec": 260,
+     "expiryTime8601": "1970-01-01T05:34:20+05:30"
+    }
+   ],
+   "licenseState": {
+    "virtualCopy": true,
+    "remoteCopy": true,
+    "thinProvisioing": true,
+    "thinProvisioning": true,
+    "domains": true,
+    "dynamicOptimization": true,
+    "virtualLock": true,
+    "thinPersistence": true,
+    "thinConversion": true,
+    "adaptiveOptimization": true,
+    "peerVirtualization": true,
+    "qos": true,
+    "systemReporter": true,
+    "darEncryption": true,
+    "fileServices": true,
+    "storageFederation": true,
+    "onlineImport": true,
+    "rmcApplicationSuite": true,
+    "smartSAN": true,
+    "sedEncryption": false
+   }
+  },
+  "parameters": {
+   "rawSpaceAlertSSD": 0,
+   "remoteSyslog": true,
+   "remoteSyslogHost": "0.0.0.0",
+   "remoteSyslogSecurityHost": "0.0.0.0",
+   "sparingAlgorithm": "Minimal",
+   "eventLogsize": 5242880,
+   "eventLogNum": 10,
+   "VVRetentionTimeMax": 1209600,
+   "upgradeNote": "",
+   "autoExportAfterReboot": true,
+   "thermalShutdown": true,
+   "sessionTimeout": 3600,
+   "overProvRatioLimit": 0.0,
+   "overProvRatioWarning": 0.0,
+   "disableChunkletInitUNMAP": false,
+   "remoteCopyHostThrottling": false,
+   "autoAdmitTune": true,
+   "singleLunHost": false,
+   "allowDomainUsersAffectNoDomain": 2,
+   "dsccReadOnly": false
+  }
+ }
+}

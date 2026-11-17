@@ -1,0 +1,4 @@
+# showsys
+                                                                        ---------------(MiB)----------------
+     ID ------Name------ --------Model--------- --Serial-- Nodes Master TotalCap AllocCap  FreeCap FailedCap
+0x2F584 MPB10K-D24U21-VZ HPE Alletra Storage MP SGHD44LQLS     2      0 43929600   696198 37244026         0

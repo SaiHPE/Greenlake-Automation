@@ -4,7 +4,7 @@ unit-tested with fakes (the live clients need an array / vCenter / switches)."""
 from __future__ import annotations
 
 from alletra_onboard.adapters.array.cli_client import ArrayCliClient
-from alletra_onboard.adapters.array.rc_cli_client import ArrayRcCliClient
+from alletra_onboard.adapters.array.rc_cli_client import ArrayRcCliClient, RcPlanObjects
 from alletra_onboard.adapters.array.wsapi_client import WsapiClient
 from alletra_onboard.adapters.fabric.brocade_client import BrocadeClient
 from alletra_onboard.adapters.hosts.linux_ssh import LinuxHostClient
@@ -22,10 +22,11 @@ def make_array_cli(creds: EndpointCreds) -> ArrayCliClient:
     return ArrayCliClient(creds.host, creds.username, creds.password.get_secret_value())
 
 
-def make_rc_cli(creds: EndpointCreds) -> ArrayRcCliClient:
+def make_rc_cli(creds: EndpointCreds, objects: RcPlanObjects) -> ArrayRcCliClient:
     # ADR 0015: the write-scoped SSH client for Remote Copy links and targets. Only the apply of an
-    # approved replication plan builds one.
-    return ArrayRcCliClient(creds.host, creds.username, creds.password.get_secret_value())
+    # approved replication plan builds one, with the ports, addresses and target that plan names on
+    # this array (ADR 0025 condition 3).
+    return ArrayRcCliClient(creds.host, creds.username, creds.password.get_secret_value(), objects=objects)
 
 
 def make_vcenter(creds: EndpointCreds) -> VCenterClient:

@@ -279,6 +279,8 @@ export interface DiscoveredHost {
   lookup?: string;
   host_read?: string;
   multipath?: string;
+  // Linux only: ok | uneven | degraded | none | not_set_up | not_permitted | timed_out.
+  multipath_state?: string;
 }
 export interface DiscoveryReport {
   array_ports: ArrayPort[];
@@ -351,7 +353,8 @@ export interface PlannedAction {
   state: PlanState; reason: string;           // SPEC-001: what apply will do, and why
   exists: boolean; detail: Record<string, any>;
 }
-export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; blockers: string[]; error: string | null; }
+// plan_id: the apply quotes it back, and the server refuses any other (an older event may lack it).
+export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; blockers: string[]; error: string | null; plan_id?: string; }
 export interface ActionOutcome { kind: string; name: string; status: 'created' | 'exists' | 'updated' | 'failed'; detail: string; }
 export interface RemovalItem { kind: string; name: string; command: string; }        // SPEC-007
 export interface ProvisioningResult {
@@ -390,7 +393,9 @@ export const getStorageObjects = (runId: string) => request<ProvisioningObjects>
 export const saveStorageBuilder = (runId: string, builder: ProvisioningBuilder) =>
   request<ProvisioningComposition>('POST', `/runs/${runId}/storage/builder`, builder);
 export const storagePreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/preview`);
-export const storageApply = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/apply`);
+// approvedPlan: the plan_id of the plan the operator ticked; null when nothing is ticked (the server refuses).
+export const storageApply = (runId: string, approvedPlan: string | null) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/apply`, { approved_plan: approvedPlan });
 
 // Tier-2 path verification (ADR 0010): read `showvlun -a` back and report, per host, whether the
 // exported LUN is actually live and over how many fabrics. Read-only; report-only (never gates).
@@ -446,7 +451,9 @@ export interface ReplicationAction {
   kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset' | 'rcip_port' | 'rc_service' | 'target'; name: string; where: 'A' | 'B';
   state: ReplicationActionState; reason: string; calls: PlannedCall[]; detail: Record<string, any>;
 }
-export interface ReplicationPlan { actions: ReplicationAction[]; blockers: string[]; notes: string[]; existing_groups: string[]; error: string | null; }
+export interface ReplicationPlan {
+  actions: ReplicationAction[]; blockers: string[]; notes: string[]; existing_groups: string[]; error: string | null; plan_id?: string;
+}
 export const replicationPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/preview`);
 // R4/R7: what the arrays said per write, and the removal lines per array (the operator pastes; the tool never runs them).
 export interface ReplicationOutcome {
@@ -464,8 +471,8 @@ export const setsUpPartnership = (plan: ReplicationPlan | null | undefined) =>
   !!plan && plan.actions.some((a) => a.state === 'create' && PARTNERSHIP_KINDS.includes(a.kind));
 export const isPartnershipResult = (result: ReplicationResult | null | undefined) =>
   !!result && result.outcomes.length > 0 && result.outcomes.every((o) => PARTNERSHIP_KINDS.includes(o.kind));
-export const replicationApply = (runId: string, acceptLatency = false) =>
-  request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/apply`, { accept_latency: acceptLatency });
+export const replicationApply = (runId: string, approvedPlan: string | null, acceptLatency = false) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/apply`, { approved_plan: approvedPlan, accept_latency: acceptLatency });
 // SPEC-020: the latency between the arrays measured with checkrclink (server on B, client on A, read until
 // the latency is printed, stop both). RTT_LIMIT_MS mirrors the domain's HPE limits for the verdict per mode.
 export const RTT_LIMIT_MS: Record<string, number> = { sync: 10, async: 200 };

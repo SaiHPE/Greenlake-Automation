@@ -1,0 +1,8 @@
+# showvlun -a
+Lun VVName            HostName                        ---Host_WWN/iSCSI_Name/Host_NQN---  Port     Type Status ID
+204 test_vme_shared_4 HPE_VM_8cf519a8c8ca95051c3e4a28 iqn.2024-12.com.hpe:vmenode2:59721 0:4:1 host set active 10
+204 test_vme_shared_4 HPE_VM_8cf519a8c8ca95051c3e4a28 iqn.2024-12.com.hpe:vmenode2:59721 1:4:1 host set nonopt 11
+204 test_vme_shared_4 HPE_VM_d416da3543a37663497979aa iqn.2024-12.com.hpe:vmenode1:13851 0:4:1 host set active 10
+204 test_vme_shared_4 HPE_VM_d416da3543a37663497979aa iqn.2024-12.com.hpe:vmenode1:13851 1:4:1 host set nonopt 11
+-----------------------------------------------------------------------------------------------------------------
+  4 total                                                                                                        

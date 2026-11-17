@@ -1,0 +1,9 @@
+      hostname        exit 0, 1 line(s)
+      multipath       exit 1, 0 line(s)
+      multipath_sudo  exit 1, 0 line(s)
+      dm_multipath    exit 1, 0 line(s)
+      state not_set_up: multipath: not set up on this server (the dm-multipath module is not loaded). Set up multipath before volumes are presented.
+PASS  multipath -ll listed (as root, or through sudo)
+FAIL  at least one Alletra/3PAR device listed
+
+1 FAIL

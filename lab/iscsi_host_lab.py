@@ -122,7 +122,9 @@ def run(run_id):
         return None
 
     since = len(ui.events(run_id))
-    applied = ui.api_step(run_id, "/storage/apply", ["storage.applied", "storage.apply.failed"], "apply")
+    # the apply names the plan it approves: the id from the preview just read
+    applied = ui.api_step(run_id, "/storage/apply", ["storage.applied", "storage.apply.failed"], "apply",
+                          body={"approved_plan": plan.get("plan_id")})
     result = applied["data"].get("result", {})
     outcome = {(o["kind"], o["name"]): o for o in result.get("outcomes", [])}
     host = outcome.get(("host", HOST), {})
@@ -200,7 +202,7 @@ def main():
     except Exception as exc:  # noqa: BLE001
         check("stopped: %s" % str(exc).splitlines()[0][:200], False)
         fl.save("error.txt", traceback.format_exc())
-        done = [e for e in ui.events(run_id) if e["event_type"] == "storage.applied"]
+        done = [e for e in ui.events(run_id) if e["event_type"] in ("storage.applied", "storage.apply.failed")]
         applied = done[-1] if done else None
     finally:
         cleanup(applied)

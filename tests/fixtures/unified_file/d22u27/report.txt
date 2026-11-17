@@ -1,0 +1,60 @@
+      showversion              12 line(s)
+      showsys                  3 line(s)
+      showport                 27 line(s)
+      showport -file           7 line(s)
+      shownet                  8 line(s)
+      help                     58 line(s)
+      help help                58 line(s)
+      help -sub                1 line(s)
+      help show                96 line(s)
+      help create              36 line(s)
+      help remove              36 line(s)
+      help controlport         494 line(s)
+      help showport            280 line(s)
+      help showsharesetting    39 line(s)
+      help showfs              1 line(s)
+      help showfpg             1 line(s)
+      help showvfs             1 line(s)
+      help showfshare          1 line(s)
+      help showfstore          1 line(s)
+      help showfileservice     28 line(s)
+      help showfilesystem      52 line(s)
+      help showfileshare       40 line(s)
+      help createfileshare     77 line(s)
+      help createfilesystem    44 line(s)
+      help createsharesetting  97 line(s)
+      help removefileshare     48 line(s)
+      help removefilesystem    34 line(s)
+      help removesharesetting  33 line(s)
+      POST   /api/v1/credentials                  port 443  201
+      GET    /api/v1/system                       port 443  200
+      GET    /api/v1/wsapiconfiguration           port 443  200
+      DELETE /api/v1/credentials/<key>            port 443  200
+      POST   /api/v3/credentials                  port 443  201
+      GET    /api/v3/fileservice                  port 443  200
+      GET    /api/v3/filesystems                  port 443  200
+      GET    /api/v3/filesharesettings            port 443  200
+      GET    /api/v3/fileshares                   port 443  200
+      DELETE /api/v3/credentials/<token>          port 443  200
+      OS: Release version 10.5.0
+      showport Type file: 4 0:4:1 ready, 0:4:2 ready, 1:4:1 ready, 1:4:2 ready
+      File port 0:4:1 state ready     10.54.90.70/21     gateway 10.54.95.254 VLAN untagged MTU 1500 link up failover -
+      File port 0:4:2 state ready     10.54.90.71/21     gateway 10.54.95.254 VLAN untagged MTU 1500 link up failover -
+      File port 1:4:1 state ready     10.54.90.73/21     gateway 10.54.95.254 VLAN untagged MTU 1500 link up failover -
+      File port 1:4:2 state ready     10.54.90.74/21     gateway 10.54.95.254 VLAN untagged MTU 1500 link up failover -
+      help answers with a SYNTAX section: help controlport, help createfileshare, help createfilesystem, help createsharesetting, help removefileshare, help removefilesystem, help removesharesetting, help showfileservice, help showfileshare, help showfilesystem, help showport, help showsharesetting
+      v1 login: accepted
+      v3 port: 443, login accepted
+      GET /api/v3/fileservice       HTTP 200
+      GET /api/v3/filesystems       HTTP 200
+      GET /api/v3/filesharesettings HTTP 200
+      GET /api/v3/fileshares        HTTP 200
+      file service enabled: True (node 0 normal, node 1 normal)
+      file systems: 3
+      client groups (share settings): 3
+      shares: 3
+PASS  D22U27 showport -file read
+PASS  D22U27 WSAPI v1 login
+PASS  D22U27 no password, session key or cookie in the saved files
+
+0 FAIL

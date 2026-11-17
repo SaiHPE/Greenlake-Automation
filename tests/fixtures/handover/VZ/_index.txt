@@ -1,0 +1,23 @@
+showversion                                                                                                  12 lines     0.3 s
+showsys                                                                                                       3 lines     0.3 s
+showdate                                                                                                      3 lines     0.3 s
+help showalert                                                                                               81 lines     0.3 s
+help showsys                                                                                                 82 lines     0.3 s
+help srstatcpu                                                                                              149 lines     0.3 s
+help srstatport                                                                                             166 lines     0.3 s
+help srstatvv                                                                                               170 lines     0.3 s
+help srstatrcvv                                                                                             193 lines     0.3 s
+showalert                                                                                                   249 lines     0.4 s
+showalert -d                                                                                                327 lines     0.4 s
+showsys -space                                                                                               33 lines     0.3 s
+checkhealth -svc -detail                                                                                    146 lines    27.5 s
+srstatcpu                                                                                                   145 lines     0.5 s
+srstatcpu -hires -btsecs -24h -groupby NODE -summary avg,95%,max,per_group                                    9 lines     0.6 s
+srstatcpu -hires -btsecs -24h -groupby NODE -summary min,avg,5%,95%,max,per_group                            13 lines     0.6 s
+srstatport                                                                                                  148 lines     0.5 s
+srstatport -hires -btsecs -24h -port_type host -groupby PORT_N,PORT_S,PORT_P -summary avg,95%,max,per_group    16 lines     0.6 s
+srstatport -hires -btsecs -24h -port_type host,iscsi -groupby PORT_N,PORT_S,PORT_P -summary avg,95%,max,per_group    28 lines     0.7 s
+srstatvv                                                                                                    148 lines     0.6 s
+srstatvv -hires -btsecs -24h -summary avg,95%,max                                                             7 lines     0.6 s
+srstatrcvv                                                                                                   37 lines     0.5 s
+srstatrcvv -hires -btsecs -24h -groupby GROUP_NAME -summary avg,max,per_group                                 8 lines     0.6 s

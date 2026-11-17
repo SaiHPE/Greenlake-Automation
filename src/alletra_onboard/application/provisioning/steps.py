@@ -20,7 +20,12 @@ from alletra_onboard.application.provisioning import preflight as storage_prefli
 from alletra_onboard.application.provisioning import storage_provision
 from alletra_onboard.application.provisioning import zoning as storage_zoning
 from alletra_onboard.application.provisioning import zoning_plan as storage_zoning_plan
-from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
+from alletra_onboard.application.runs.coordinator import (
+    RunCoordinator,
+    StepPreconditionError,
+    check_approval,
+    new_plan_id,
+)
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.provisioning import (
@@ -242,12 +247,15 @@ class ProvisioningSteps:
     async def _run_storage_preview(self, run: RunRecord, intent, discovery) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
+        self.invalidate_plan(run.run_id)   # a new preview withdraws the old approval, even if it fails
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "step.started", "Building the provisioning plan…")
         zoned = self._discovery_steps.zoned_hosts(run.run_id)
         plan = await asyncio.to_thread(
             partial(storage_provision.build_plan, intent, discovery, reachable_hosts=zoned,
                     zoning_plan=self._zoning_plan_payload(run.run_id))
         )
+        # The identity the apply must quote back: a new preview is a new plan to approve.
+        plan = plan.model_copy(update={"plan_id": new_plan_id()})
         self._plan[run.run_id] = (plan, discovery)
         status = RunStatus.RETRYABLE_FAILURE if plan.error else RunStatus.WAITING_FOR_OPERATOR
         coord.set_state(run, status, WorkflowPhase.STORAGE_PROVISION)
@@ -258,7 +266,7 @@ class ProvisioningSteps:
             data={"plan": plan.model_dump(mode="json")},
         )
 
-    def start_storage_apply(self, run_id: str) -> RunRecord:
+    def start_storage_apply(self, run_id: str, *, approved_plan: str | None) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
         intent = coord.get_provisioning_intent(run_id)
@@ -278,6 +286,8 @@ class ProvisioningSteps:
             raise StepPreconditionError(
                 "the plan has conflicts that must be resolved on the array first: " + "; ".join(plan.blockers)
             )
+        # LESSONS 7: the operator's tick reaches the server as the id of the plan it was given for.
+        check_approval(approved_plan, plan.plan_id)
         coord.spawn(run_id, self._run_storage_apply(run, intent, discovery))
         return run
 

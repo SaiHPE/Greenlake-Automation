@@ -1,0 +1,39 @@
+# showvv -showcols Id,Name,Prov,Type,CopyOf,Rd,CPG,CreationTime,ExpirationTime,RetentionEndTime
+Id Name                                                    Prov Type  CopyOf              Rd CPG    CreationTime            ExpirationTime RetentionEndTime
+ 2 .mgmtdata                                               full base  ---                 RW --     2026-10-22 22:55:17 IST --             --              
+ 3 .shared.SSD_r6_0                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+ 4 .shared.SSD_r6_1                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+ 5 .shared.SSD_r6_2                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+ 6 .shared.SSD_r6_3                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+ 7 .shared.SSD_r6_4                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+ 8 .shared.SSD_r6_5                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+ 9 .shared.SSD_r6_6                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+10 .shared.SSD_r6_7                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+11 .shared.SSD_r6_8                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+12 .shared.SSD_r6_9                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+13 .shared.SSD_r6_a                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+14 .shared.SSD_r6_b                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+15 .shared.SSD_r6_c                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+16 .shared.SSD_r6_d                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+17 .shared.SSD_r6_e                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+18 .shared.SSD_r6_f                                        dds  base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+19  pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73 tdvv base  ---                 RW SSD_r6 2026-10-23 20:02:39 IST --             --              
+20  S4V1610053qcow2-Tm9X                                   tdvv base  ---                 RW SSD_r6 2026-10-23 20:04:06 IST --             --              
+21  HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae            tdvv base  ---                 RW SSD_r6 2026-10-23 20:04:47 IST --             --              
+22  imagestore-63hS                                        tdvv base  ---                 RW SSD_r6 2026-10-23 20:05:29 IST --             --              
+ 1 .srdata                                                 full base  ---                 RW --     2026-10-22 22:54:55 IST --             --              
+ 0 admin                                                   full base  ---                 RW --     2026-10-22 22:54:03 IST --             --              
+35 TPIPoc-NEW-RH-04                                        tpvv base  ---                 RW SSD_r6 2026-11-06 07:51:43 IST --             --              
+36 TPIPoc-NEW-RH-05                                        tpvv base  ---                 RW SSD_r6 2026-11-06 07:51:59 IST --             --              
+37 TPIPoc-NEW-RH-06                                        tpvv base  ---                 RW SSD_r6 2026-11-06 07:58:19 IST --             --              
+32 TPIPoc-NEW-RH-LK-04                                     tpvv base  ---                 RW SSD_r6 2026-10-29 13:30:19 IST --             --              
+38  preRecover_LK04_20261116                               snp  vcopy TPIPoc-NEW-RH-LK-04 RO SSD_r6 2026-11-16 13:09:55 IST --             --              
+33 TPIPoc-NEW-RH-LK-05                                     tpvv base  ---                 RW SSD_r6 2026-10-29 13:30:28 IST --             --              
+40  preRecover_LK05_20261116                               snp  vcopy TPIPoc-NEW-RH-LK-05 RO SSD_r6 2026-11-16 14:03:18 IST --             --              
+34 TPIPoc-NEW-RH-LK-06                                     tpvv base  ---                 RW SSD_r6 2026-10-29 13:30:32 IST --             --              
+39  preRecover_LK06_20261116                               snp  vcopy TPIPoc-NEW-RH-LK-06 RO SSD_r6 2026-11-16 13:11:39 IST --             --              
+29 TPIPoc-NEW-WIN-LK-04                                    tpvv base  ---                 RW SSD_r6 2026-10-28 13:51:16 IST --             --              
+30 TPIPoc-NEW-WIN-LK-05                                    tpvv base  ---                 RW SSD_r6 2026-10-28 13:51:25 IST --             --              
+31 TPIPoc-NEW-WIN-LK-06                                    tpvv base  ---                 RW SSD_r6 2026-10-28 13:51:34 IST --             --              
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+35 total                                                                                                                                                   

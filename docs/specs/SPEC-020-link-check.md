@@ -5,6 +5,14 @@ replication we have to do that start stop and show the latency"; "give option to
 latency"). Built the same day. **Live on one array 2026-10-12** (`rc_link_solo_lab.py`, D22U27's two
 RCIP ports, 8/0: the sequence, the read-until, the parser, the stops — fixtures `rc_pair/D22U27/checkrclink_*.txt`);
 the pair, the gate and the page wait for the replacement peer (TRACKER BL-42).
+**Live on a pair 2026-11-03 to 2026-11-06** (Alletra MP rack13-ARCUS → Primera PRIMERA630R11U22, BL-41 runs
+fadc7d54, 4dc6331e, 29d4a304, b8e5f956, and through the screens 179121cc): R1 to R3, R2a, R6, and R4 and R5 in the
+*not measured* and *within the limit* states. **Built, pending live run (2026-11-16):** the over-the-limit
+path of R4 and R5 (the refusal, *Continue anyway*, the accepted note in the result and the as-built) and the
+per-link verdict column. The lab pair measures 0.02 ms, so it cannot show them. **Closed 2026-11-17 on the owner's
+decision:** the over-the-limit path stands on its unit tests, since no lab pair is over 10 ms; a live run is still welcome
+when one is. One known limit: every link
+is judged against every mode on the sheet, whatever target it carries. See the addendum.
 **ADRs:** [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (addendum: `checkrclink` is the one
 non-`show` command the SSH client runs, on its own allowlist) · [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md)
 (the same check runs before the tool configures links and targets in v0.19)
@@ -136,3 +144,69 @@ showing the six commands per pair, then the apply.
 
 `run_diagnostic` + allowlist (~60 lines), `link_check.py` (~150), step + gate (~70), route + schema
 (~25), page panel (~120), as-built (~25), sheet rule (~5), ~18 unit tests, two lab scripts.
+
+## Addendum 2026-11-16 — gap analysis (BL-42)
+
+Each requirement against the code, the tests and the live records. *VR* is
+[`validation/2026-11-03-rcip-partnership.md`](../validation/2026-11-03-rcip-partnership.md). A live claim cites
+the VR, `docs/TRACKER.md`, this spec's status line or a capture under `tests/fixtures/`; what none of them
+records is marked *not in the record*. Unit tests are in `tests/unit/test_replication_link_check.py` unless
+another file is named.
+
+| Req | Built | Live | Status |
+|---|---|---|---|
+| R1 the pairs | `link_check.plan_pairs`; `test_pairs_come_from_the_links_on_a_and_the_ports_on_b`, `test_a_link_whose_address_no_peer_port_carries_is_listed_not_checked`, `test_no_partnership_means_nothing_to_measure` | VR *The run* 18:54:48 (run fadc7d54): 2 links measured. The targets in the VR pair them: A 0:4:4 → 10.93.18.19 (B 0:1:1) and A 1:4:4 → 10.93.18.20 (B 1:1:1). A link that does not resolve: unit only (the lab pair has none). A fibre-channel pair never reaches the check: the read finds no partnership and the plan refuses it (`test_replication_plan.py::test_a_fibre_channel_only_pair_says_so`); no FC pair in the lab | Live |
+| R2 the sequence | `link_check._check_pair`, `_links_still_down`; `cli_client.run_diagnostic` and its allowlist; `test_the_sequence_per_pair_is_…`, `test_a_refused_server_fails_the_pair_and_the_stops_still_run`, `test_run_diagnostic_*`, `test_links_left_down_after_the_check_are_an_error_with_the_way_back`, `test_a_gateway_on_b_…`, `test_no_reply_names_the_gateway_…` | On one array, 2026-10-12: the sequence, the read-until (the client read in under 2 minutes, not for the 600 s test), the stops and the 300 s floor: `lab/rc_link_solo_lab.py`, 8/0 (this spec's status line; captures `rc_pair/D22U27/checkrclink_*.txt`). On the pair: the server on B and the client on A, captures `rcip_pair/checkrclink_startserver_gateway.txt` and `checkrclink_startclient_lost.txt` (2026-11-03); VR *The run* 18:54:48: "Links still Up afterwards". Each pair's commands in the console log: not in the record. Gateway note, no reply through the gateway, links left Down with the way back, and the way back working: VR *2026-11-06: the in-scope paths*, gateway row (run 29d4a304) and *How it got here*, try 1 | Live |
+| R2a ping fallback | `link_check._ping_latency`; `test_a_latency_line_with_no_number_is_measured_with_ping_and_says_so`, `test_a_ping_that_loses_any_reply_leaves_the_pair_unmeasured` (captures `rcip_pair/checkrclink_startclient_routed_no_number.txt`, `controlport_rcip_ping_routed_redirect.txt`) | VR *2026-11-06: through a router*, run b8e5f956: 0.089 ms and 0.106 ms, 10 pings each; the no-number refusal before it, run 1b2cfe2d. A ping that loses a reply: unit only | Live |
+| R3 the result | `LinkCheck`, `steps._run_link_check`, artifact `link_check`, events `replication.link_checked` / `.failed`; `test_onboarding_service.py` (link check in the replication test), `test_within_the_limit_is_told_apart_from_over_it` | Run fadc7d54: *Latency 0.018 ms on 2 link(s) (sync needs 10 ms or less) — within the limit.*; async run 4dc6331e: *… (async needs 200 ms or less)*; a failed check, run 29d4a304 (VR, gateway row). Progress lines in order: `rc_link_solo_lab.py`, 8/0 (R2) | Live |
+| R4 the gate | `steps._gate_on_link`, `start_replication_apply`; `ReplicationApplyRequest.accept_latency`; sheet rule in `init_sheet.py`; `test_onboarding_service.py::test_the_link_gate_refuses_over_the_limit_without_the_tick_…` (with a *nothing to create* case added 2026-11-16), `test_replication_sheet.py::test_rtt_within_limits_is_accepted_for_both_modes` | No check → 409 *Check the link first*: VR *The run* (fadc7d54). Within the limit → the apply went through after the check: fadc7d54, 4dc6331e, b8e5f956; **the result's note (*… within the limit.*): not in the record**. Unmeasured → refused: 29d4a304, 1b2cfe2d. A sync sheet with no typed RTT accepted: every BL-41 run (the runners' sheet, `lab/rcip_pair_lab.py` `compose_body`, has none). **Over the limit → refused without `accept_latency`, allowed with it, the accepted note: unit only.** *Nothing to create* before the gate: the sentence live 2026-10-11 (`rc_preset_lab.py` 7c, 32/0 in TRACKER BL-20), before the gate existed; unit since 2026-11-16 | **Built, pending live run** (over the limit, and the result's note) |
+| R5 the page | `ReplicationStep.tsx`: *Check the link* section between *What the arrays say* and *Review the plan*, progress, one row per link, *Not checked*, *Check again*, the tick-box, the three gate texts. **Added 2026-11-16:** an *Against the limit* column, the verdict for each mode on each link (it was only on the summary line); a check that ended in an error shows `--` there | VR *2026-11-05: through the screens*, run 179121cc: *Check the link* not done, then 0.02 ms and the groups configured, 2 of 2 replicating. **Over the limit (status line, tick-box) and the new column: not seen live** | **Built, pending live run** |
+| R6 as-built | `asbuilt._add_link_check`; `test_the_as_built_states_the_measured_latency_and_the_operators_choice` | Run b8e5f956 (VR *through a router*): the as-built marks the latencies *(ping)* and says why. The paragraph's wording for a `checkrclink` latency: not in the record. The accepted wording: unit only (it follows R4) | Live, except the accepted wording |
+| R7 runners | `lab/rc_link_lab.py`, `lab/rc_preset_lab.py` (check between preview and apply). Both point at the D22U27/E18U31 pair (their docstrings), which the BL-41 runs do not use; no run of `rc_link_lab.py` is recorded | Superseded by `lab/rcip_tool_lab.py` (preview, apply refused until checked, link check, apply), live 25/0, 27/0 and 28/0, and `lab/rcip_scope_lab.py` (the gateway case), 35/0 | Live (through the BL-41 runners) |
+| Limit: every link against every mode | `LinkCheck.over_limit`, `asbuilt._add_link_check` and the page (status line and *Against the limit*) judge the measured latency against every mode on the sheet, whatever target each link carries | Cannot arise on the lab pair: the partnership the tool sets up has one target (VR *2026-11-06: the in-scope paths*, first row) | **Known limit**, below |
+
+Two corrections to the text above. The panel is titled *Check the link*, not *Link latency*. §4's "six
+commands per pair" is five `checkrclink` commands per pair (stop server, start server, start client, stop
+client, stop server), then one `showrcopy links` on each array after the last pair, and a
+`controlport rcip ping` per pair only when R2a applies.
+
+### Known limit: every link is judged against every mode on the sheet
+
+`plan_pairs` measures the links of every target this run uses (one per mode, `target_by_mode`).
+`LinkCheck.over_limit` then compares the worst latency with the limit of every mode on the sheet; the
+as-built paragraph does the same, and the page's *Against the limit* column compares each link with every
+mode. On an existing partnership with one target per mode (a sync target and an async target, the HPE
+layout), a link that carries only the async target is still judged against sync's 10 ms. An async link at
+40 ms reads *Over sync (10 ms)*, and the gate refuses to configure the sync groups until the operator ticks
+*Continue anyway*, although no sync group uses that link. The partnership the tool sets up has one target,
+so the limit only arises on a partnership that was already there.
+
+Not changed in BL-42. The fix: record the link's target on `LinkPair` (`plan_pairs` has it, `RcLink.target`),
+and judge each link only against the modes whose target it carries (`target_by_mode`). Change the backend
+(`over_limit`, the gate's sentence, the result's note, the as-built paragraph) and the page (status line
+and column) together, so the page and the gate never disagree. A unit test with two targets, one per mode,
+pins it.
+
+### What the live run must show to close BL-42
+
+It needs a pair whose measured round trip is over 10 ms: two sites over a WAN, or a delay inserted
+between two RCIP networks. The lab pair measures 0.02 ms and cannot show it. On a sheet with one sync row:
+
+1. *Check the link* measures every link. Each row's *Against the limit* reads *Over sync (10 ms)*. The
+   status line reads *The measured latency is N ms, over HPE's limit for sync*, and *Configure replication*
+   is blocked.
+2. The apply without the tick answers HTTP 409: *The measured latency is N ms; sync replication over RCIP
+   needs 10 ms or less. Tick 'Continue anyway' to configure it regardless.* Nothing is written.
+3. The tick-box *Continue anyway: I accept the measured latency of N ms for sync replication.* enables
+   *Configure replication*; the groups are created and verified replicating.
+4. The result's note reads *Link check …: latency N ms on 2 link(s); over the 10 ms limit for sync — the
+   operator accepted it and chose to continue.*
+5. The as-built's *Link check* paragraph says the latency was over HPE's limit for sync and that the
+   operator accepted it and continued.
+6. The run's removal set puts the pair back where it started.
+
+The column alone can be seen on the lab pair: after a link check each row reads *Within sync (10 ms)*
+(screenshots at 1366 × 768 and 1080 × 720).
+
+If no pair over 10 ms can be found, the owner decides whether the unit tests for the over-the-limit branch
+are enough to close it.

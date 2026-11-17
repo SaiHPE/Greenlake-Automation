@@ -155,7 +155,8 @@ def main():
         ev = step(run_id, "/replication/preview", ["replication.previewed", "replication.preview.failed"], "preview")
         part = ev["data"]["report"].get("partnership") or {}
         check("partnership found by link address", bool(part), str(part)[:200])
-        status, resp = api("POST", "/runs/%s/replication/apply" % run_id, {})
+        approve = {"approved_plan": (ev["data"].get("plan") or {}).get("plan_id")}   # the plan just read
+        status, resp = api("POST", "/runs/%s/replication/apply" % run_id, approve)
         check("apply is refused until the link is checked", status == 409 and "Check the link first" in str(resp), "HTTP %s %s" % (status, str(resp)[:200]))
 
         fl.banner("Check the link (checkrclink)")
@@ -176,7 +177,7 @@ def main():
             fl.save("client-%s.txt" % x["pair"]["nsp_a"].replace(":", "-"), x["output"])
         check("the client output has the latency lines", all("Average measured latency" in x["output"] and "Pings Lost" in x["output"] for x in measured))
         check("the operator's option: apply still refused (no plan to create here) with the old sentence, not the latency one",
-              "latency" not in str(api("POST", "/runs/%s/replication/apply" % run_id, {})[1]).lower())
+              "latency" not in str(api("POST", "/runs/%s/replication/apply" % run_id, approve)[1]).lower())
 
         fl.banner("The command log")
         status, log = api("GET", "/runs/%s/console/log" % run_id)

@@ -1,0 +1,221 @@
+{
+ "request": "GET /api/v3/fileshares",
+ "port": 443,
+ "status": 200,
+ "headers": [
+  [
+   "Cache-Control",
+   "no-cache, no-store, private, max-age=-1, must-revalidate"
+  ],
+  [
+   "Content-Language",
+   "en-US"
+  ],
+  [
+   "Content-Security-Policy",
+   "default-src 'self' https://www.google-analytics.com/ ; script-src 'self'  https://www.googletagmanager.com/gtag/js https://www.google-analytics.com/analytics.js 'sha256-v0Q8X6xSNmwWcfldSEWqW+3imFpJurfHYdywm3hw6+w=' ; style-src 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'nonce-d29tZSBjb29sIHN0cmluZyB3aWxsIHBvcCB1cCAxMjM=' 'self' blob:; frame-src 'self'; object-src 'self';  media-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'self'"
+  ],
+  [
+   "Content-Type",
+   "application/json;charset=UTF-8"
+  ],
+  [
+   "Last-Modified",
+   "Tue, 3 Nov 2026 10:18:58 GMT"
+  ],
+  [
+   "Pragma",
+   "no-cache"
+  ],
+  [
+   "Strict-Transport-Security",
+   "max-age=31536000; includeSubDomains;"
+  ],
+  [
+   "Vary",
+   "Accept-Encoding"
+  ],
+  [
+   "Vary",
+   "Origin"
+  ],
+  [
+   "X-Content-Type-Options",
+   "nosniff"
+  ],
+  [
+   "X-Frame-Options",
+   "SAMEORIGIN"
+  ],
+  [
+   "X-Server-Version",
+   "2.5.0.1463"
+  ],
+  [
+   "X-Xss-Protection",
+   "1; mode=block"
+  ],
+  [
+   "Date",
+   "Mon, 16 Nov 2026 18:46:50 GMT"
+  ],
+  [
+   "Connection",
+   "close"
+  ],
+  [
+   "Transfer-Encoding",
+   "chunked"
+  ]
+ ],
+ "body": {
+  "version": "00000000000000000001",
+  "arraySerialNumber": "CZ2D320BT1",
+  "members": {
+   "fefee6a85c84aa0b80d53fc4ceb8def3": {
+    "uid": "fefee6a85c84aa0b80d53fc4ceb8def3",
+    "uri": "/api/v3/fileshares/fefee6a85c84aa0b80d53fc4ceb8def3",
+    "systemWWN": "2FF70002AC02DEF6",
+    "displayname": {
+     "key": "FILE_SHARE_NAME",
+     "args": [
+      "share01"
+     ],
+     "default": "File Share share01"
+    },
+    "domain": "",
+    "id": 1,
+    "uuid": "d8edbd55-4317-4835-a3de-d8bd0e88103e",
+    "name": "share01",
+    "shortName": "share01",
+    "creationTime": {
+     "ms": 1785343428000,
+     "tz": "+0530"
+    },
+    "overallState": {
+     "overall": "STATE_NORMAL"
+    },
+    "detailedState": "STATE_NORMAL",
+    "state": "STATE_NORMAL",
+    "mountpath": "/file/fs01/share01",
+    "protocol": [
+     "NFS"
+    ],
+    "hostip": "10.54.90.70",
+    "filesystem": {
+     "id": 0,
+     "fsShortName": "fs01",
+     "name": "fs01"
+    },
+    "sharesettings": {
+     "name": "fs01",
+     "clientInfo": [
+      {
+       "ipaddress": "*",
+       "access": "rw",
+       "options": "root_squash"
+      }
+     ]
+    },
+    "lastModifiedEpoch": 1793701138,
+    "lastModifiedEpochMS": 1793701138270
+   },
+   "ddcebf90eb9483c8eb6bdb30ca09eef5": {
+    "uid": "ddcebf90eb9483c8eb6bdb30ca09eef5",
+    "uri": "/api/v3/fileshares/ddcebf90eb9483c8eb6bdb30ca09eef5",
+    "systemWWN": "2FF70002AC02DEF6",
+    "displayname": {
+     "key": "FILE_SHARE_NAME",
+     "args": [
+      "Lab_test"
+     ],
+     "default": "File Share Lab_test"
+    },
+    "domain": "",
+    "id": 11,
+    "uuid": "fe7b6e3c-52f9-41e6-a473-7c70876e7514",
+    "name": "Lab_test",
+    "shortName": "Lab_test",
+    "creationTime": {
+     "ms": 1785785907000,
+     "tz": "+0530"
+    },
+    "overallState": {
+     "overall": "STATE_NORMAL"
+    },
+    "detailedState": "STATE_NORMAL",
+    "state": "STATE_NORMAL",
+    "mountpath": "/file/lab_100/Lab_test",
+    "protocol": [
+     "NFS"
+    ],
+    "hostip": "10.54.90.70",
+    "filesystem": {
+     "id": 2,
+     "fsShortName": "lab_100",
+     "name": "lab_100"
+    },
+    "sharesettings": {
+     "name": "lab_100",
+     "clientInfo": [
+      {
+       "ipaddress": "*",
+       "access": "rw",
+       "options": "root_squash"
+      }
+     ]
+    },
+    "lastModifiedEpoch": 1793701138,
+    "lastModifiedEpochMS": 1793701138270
+   },
+   "7a1a8266366be65926694dd0b7d6f063": {
+    "uid": "7a1a8266366be65926694dd0b7d6f063",
+    "uri": "/api/v3/fileshares/7a1a8266366be65926694dd0b7d6f063",
+    "systemWWN": "2FF70002AC02DEF6",
+    "displayname": {
+     "key": "FILE_SHARE_NAME",
+     "args": [
+      "test1"
+     ],
+     "default": "File Share test1"
+    },
+    "domain": "",
+    "id": 27,
+    "uuid": "8786038d-ec25-4b4c-98eb-edc00a1e66b5",
+    "name": "test1",
+    "shortName": "test1",
+    "creationTime": {
+     "ms": 1786022373000,
+     "tz": "+0530"
+    },
+    "overallState": {
+     "overall": "STATE_NORMAL"
+    },
+    "detailedState": "STATE_NORMAL",
+    "state": "STATE_NORMAL",
+    "mountpath": "/file/testfile/test1",
+    "protocol": [
+     "NFS"
+    ],
+    "hostip": "10.54.90.71",
+    "filesystem": {
+     "id": 10,
+     "fsShortName": "testfile",
+     "name": "testfile"
+    },
+    "sharesettings": {
+     "name": "test1",
+     "clientInfo": [
+      {
+       "ipaddress": "*",
+       "access": "rw",
+       "options": "root_squash"
+      }
+     ]
+    },
+    "lastModifiedEpoch": 1793701138,
+    "lastModifiedEpochMS": 1793701138270
+   }
+  }
+ }
+}

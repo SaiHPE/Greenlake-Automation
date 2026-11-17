@@ -1,0 +1,98 @@
+# help createsharesetting
+createsharesetting - Create a sharesetting.
+
+SYNTAX
+    createsharesetting [-add <ipaddr_list>? <options for host access>] sharesetting_name
+
+DESCRIPTION
+    The createsharesetting command creates the share setting in the system.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the sharesetting_create right
+
+OPTIONS
+    -add
+        Specifies the client IP address and access permissions for share access.
+        Use , to separate the IP addresses.
+        Use ? to seperate client access permissions after the IP addresses.
+
+        Following IP address formats are supported:
+            Use "*" to allow access to share by any client.
+            Use 192.168.1.0/24 for multiple clients to have access to shares in a subnet.
+
+        Following client access permissions are supported.
+            ro
+                Specifies that the fileshare will be exported to client as read-only.
+
+            rw
+                Specifies that the fileshare will be exported to client as read-write. If not specified, it will be
+                exported to client as read-write. The default access permissions for fileshare is read-write.
+
+            root_squash
+                Map requests from UID/GID 0 to the anonymous UID/GID. Note that this does
+                not apply to any other UIDs or GIDs that might be equally sensitive, such as
+                user "bin" or group "staff".
+
+            no_root_squash
+                Turn off root squashing.
+
+            all_squash
+                Map all UIDs and GIDs to the anonymous user.
+
+            Following options will be applied by default and cannot be changed: sync, wdelay,
+            sec=sys, subtree_check, secure, hide.
+
+            sync
+                Reply to requests only after the changes have been committed to stable storage.
+
+            wdelay
+                The NFS server will normally delay committing a write request to disc slightly if it
+                suspects that another related write request may be in progress or may arrive soon.
+                This allows multiple write requests to be committed to disc with the one operation
+                which can improve performance.
+
+            sec=sys
+                Restricts the export to clients using the security sys which is the default - no
+                cryptographic security.
+
+            subtree_check
+                This allows server checks the accessed file to be in the appropriate filesystem and also
+                that it is in the exported tree.
+
+            secure
+                Requires that requests originate on an Internet port less than IPPORT_RESERVED (1024).
+
+            hide
+                If a server exports two filesystems one of which is mounted on the other, then the client
+                will have to mount both filesystems explicitly to get access to them. If it just mounts the
+                parent, it will see an empty directory at the place where the other filesystem is mounted.
+
+SPECIFIERS
+    <sharesetting_name>
+        Specifies a share setting name up to 255 characters in length.
+
+NOTES
+    A sharesetting needs to be created before creating a fileshare.
+
+EXAMPLES
+    The following examples create sharesetting setting_demo which provides access to clients
+    with specified ip address, access permissions and options. 
+
+       cli% createsharesetting -add 1.1.1.1,2.2.2.2?ro,no_root_squash 100.100.100.100?ro,no_root_squash setting_demo
+
+    The following example creates share setting object which provides access to clients 
+    with specified ip address, default access permissions and options will be applied
+    since the previliges and options are not specified. 
+
+       cli% createsharesetting -add 1.1.1.1,2.2.2.2 100.100.100.100/24 setting_demo
+
+    The following example creates a sharesetting object setting_demo.
+
+       cli% createsharesetting setting_demo
+
+    The following example creates a sharesetting object setting_demo and allows
+       access to share by any client.
+
+       cli% createsharesetting -add * setting_demo
+

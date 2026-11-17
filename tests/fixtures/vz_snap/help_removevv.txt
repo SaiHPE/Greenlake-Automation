@@ -1,0 +1,93 @@
+# help removevv
+removevv - Remove virtual volumes (including snapshot volumes).
+
+SYNTAX
+    removevv [options] <VV_name>|<pattern>...
+    removevv -expired [options] [<VV_name>|<pattern>...]
+
+DESCRIPTION
+    The removevv command removes Virtual Volumes (VVs) from the system.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the vv_remove right can remove base volumes
+    Any role granted the vvcopy_remove right can remove physical volumes
+    Any role granted the sv_remove right can remove virtual copies
+
+OPTIONS
+    -pat
+        Specifies that specified patterns are treated as glob-style patterns and
+        that all VVs matching the specified pattern are removed. By
+        default, confirmation is required to proceed with the command unless the
+        -f option is specified. This option must be used if the pattern
+        specifier is used.
+
+    -f
+        Specifies that the command is forced. If this option is not used, the
+        command requires confirmation before proceeding with its operation.
+
+    -dr
+        Specifies that the operation is a dry run and no VVs are removed.
+
+    -stale
+        Specifies that all stale VVs can be removed.
+        This option cannot be used together with -expired.
+
+    -expired
+        Remove specified expired volumes.
+        This option cannot be used together with -stale.
+
+    -snaponly
+        Remove the snapshot copies only.
+
+    -cascade
+        Remove specified volumes and their descendent volumes as long as none
+        has an active VLUN. It will remove any VLUN templates as long as there
+        were no active VLUNs. It will remove the volumes from all the volume
+        sets.
+        If -expired is specified, all expired volumes and their descendent
+        volumes will be removed regardless if they are expired or not.
+        If -stale is specified, all stale volumes and their descendent
+        volumes will be removed regardless if they are stale or not.
+
+SPECIFIERS
+    <VV_name>
+        Specifies the virtual volume name, using up to 255 characters. This
+        specifier can be repeated to remove multiple VVs. If this
+        specifier is not used, the pattern specifier must be used.
+
+    <pattern>
+        Specifies a glob-style pattern(see help on sub,globpat). This specifier
+        can be repeated to remove multiple VVs. If this specifier is not used,
+        the <VV_name> specifier must be used.
+
+NOTES
+    Issuing the removevv command with invalid virtual volume names causes the
+    command to exit without removing any virtual volumes.
+
+    Any virtual volumes exported as VLUNs are not removed and the command stops
+    at that virtual volume.
+
+    Any virtual volume that contains snapshots cannot be removed.
+
+    Verify the removal of VVs by issuing the showvv command.
+
+EXAMPLES
+    The following example removes virtual volume vv0:
+
+        cli% removevv -f vv0
+
+     The following example removes all the expired volumes:
+
+        cli% removevv -f -expired
+
+     The following example removes the volumes that start with test and are
+     snapshot copies:
+
+        cli% removevv -f -snaponly -pat test*
+
+     The following example removes vv1_snap if it is a snapshot and all its
+     descendents:
+
+        cli% removevv -f -snaponly -cascade vv1_snap
+

@@ -585,3 +585,122 @@ def test_verify_and_asbuilt_use_the_sheets_array_credential(tmp_path, monkeypatc
     # the credential is in no event
     events = client.get(f"/runs/{run_id}/events").text
     assert "arraypw" not in events and "rotated" not in events
+
+
+# ------------------------------------------------------------------ BL-52: the server checks the approval
+
+def _wait_for(client, rid: str, event_types: tuple[str, ...], after: int) -> dict:
+    import time
+
+    for _ in range(500):
+        events = client.get(f"/runs/{rid}/events").json()["events"]
+        hits = [e for e in events[after:] if e["event_type"] in (*event_types, "step.crashed")]
+        if hits:
+            assert hits[-1]["event_type"] != "step.crashed", hits[-1]["message"]
+            return hits[-1]
+        time.sleep(0.01)
+    raise AssertionError(f"no {'/'.join(event_types)} event")
+
+
+def _approval_run(tmp_path, *, replication: bool = False):
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.models import RunMode
+    from alletra_onboard.domain.provisioning import ProvisioningIntent
+    from alletra_onboard.domain.replication import ProtectionRequest, ReplicationIntent
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    def creds(host):
+        return EndpointCreds(host=host, username="u", password=SecretStr("p"))
+
+    intent = ProvisioningIntent.from_simple(host_set_name="HS", array=creds("a"), vcenter=creds("vc"),
+                                            switch_f1=creds("sw1"), switch_f2=creds("sw2"),
+                                            name_prefix="V", size_gib=10, count=1)
+    if replication:
+        intent.replication = ReplicationIntent(peer=creds("b"), failover_test=False,
+                                               protections=[ProtectionRequest(vvset="HS", peer_cpg="SSD_r6")])
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(Settings(), store, InMemoryEventBus())
+    item = ArrayWorkItem.model_validate(_work_item_payload())
+    run = service.create_run(item, mode=RunMode.REPLICATE if replication else RunMode.PROVISION_ONLY,
+                             provisioning_intent=intent)
+    service.discovery_zoning._discovery[run.run_id] = DiscoveryReport()
+    return service, run.run_id
+
+
+def test_storage_apply_needs_the_plan_id_the_operator_ticked(tmp_path, monkeypatch):
+    # The tick was only on the screen: any local caller could POST /storage/apply for a plan nobody
+    # ticked. The body now names the plan; the server refuses without it and refuses a stale one.
+    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.domain.provisioning import (
+        PlannedAction,
+        ProvisioningPlan,
+        ProvisioningResult,
+    )
+
+    monkeypatch.setattr(sp, "build_plan", lambda i, d, **kw: ProvisioningPlan(actions=[PlannedAction(kind="host", name="esx1", description="d")]))
+    applied: list = []
+    monkeypatch.setattr(sp, "apply_plan", lambda i, d, **kw: applied.append(1) or ProvisioningResult())
+    service, rid = _approval_run(tmp_path)
+    with TestClient(create_app(service)) as client:
+        def preview() -> str:
+            after = len(client.get(f"/runs/{rid}/events").json()["events"])
+            assert client.post(f"/runs/{rid}/storage/preview").status_code == 200
+            return _wait_for(client, rid, ("storage.previewed",), after)["data"]["plan"]["plan_id"]
+
+        first = preview()
+        for body in (None, {}, {"approved_plan": None}, {"approved_plan": ""}):
+            refused = client.post(f"/runs/{rid}/storage/apply", json=body)
+            assert refused.status_code == 409 and refused.json()["detail"] == "Tick the approval for this plan first."
+        second = preview()
+        assert first and second and second != first
+        refused = client.post(f"/runs/{rid}/storage/apply", json={"approved_plan": first})
+        assert refused.status_code == 409
+        assert refused.json()["detail"] == "The plan changed since it was approved. Review the new plan and tick again."
+        assert applied == []
+
+        after = len(client.get(f"/runs/{rid}/events").json()["events"])
+        assert client.post(f"/runs/{rid}/storage/apply", json={"approved_plan": second}).status_code == 200
+        _wait_for(client, rid, ("storage.applied",), after)
+        assert applied == [1]
+
+
+def test_replication_apply_needs_the_plan_id_the_operator_ticked(tmp_path, monkeypatch):
+    from alletra_onboard.application.replication import apply as replication_apply
+    from alletra_onboard.application.replication import plan as replication_plan
+    from alletra_onboard.application.replication import read as replication_read
+    from alletra_onboard.domain.replication import (
+        ReplicationAction,
+        ReplicationArrayView,
+        ReplicationPlan,
+        ReplicationReport,
+        ReplicationResult,
+    )
+
+    monkeypatch.setattr(replication_read, "read_array", lambda creds, progress=None: ReplicationArrayView(host=creds.host, name=creds.host))
+    monkeypatch.setattr(replication_plan, "check", lambda a, b, r: ReplicationReport(primary=a, peer=b))   # no RCIP partnership: no link gate
+    monkeypatch.setattr(replication_plan, "build_plan", lambda report, r, i: ReplicationPlan(actions=[ReplicationAction(kind="group", name="HS_rcg")]))
+    applied: list = []
+    monkeypatch.setattr(replication_apply, "apply_plan", lambda plan, prov, **kw: applied.append(plan.plan_id) or ReplicationResult(groups_created=["HS_rcg"]))
+    service, rid = _approval_run(tmp_path, replication=True)
+    with TestClient(create_app(service)) as client:
+        def preview() -> str:
+            after = len(client.get(f"/runs/{rid}/events").json()["events"])
+            assert client.post(f"/runs/{rid}/replication/preview").status_code == 200
+            return _wait_for(client, rid, ("replication.previewed",), after)["data"]["plan"]["plan_id"]
+
+        first = preview()
+        for body in (None, {"accept_latency": True}, {"approved_plan": ""}):
+            refused = client.post(f"/runs/{rid}/replication/apply", json=body)
+            assert refused.status_code == 409 and refused.json()["detail"] == "Tick the approval for this plan first."
+        second = preview()
+        assert first and second and second != first
+        refused = client.post(f"/runs/{rid}/replication/apply", json={"approved_plan": first})
+        assert refused.status_code == 409
+        assert refused.json()["detail"] == "The plan changed since it was approved. Review the new plan and tick again."
+        assert applied == []
+
+        after = len(client.get(f"/runs/{rid}/events").json()["events"])
+        assert client.post(f"/runs/{rid}/replication/apply", json={"approved_plan": second}).status_code == 200
+        _wait_for(client, rid, ("replication.applied",), after)
+        assert applied == [second]

@@ -457,7 +457,8 @@ try {
   Check 'plan: 0 blockers' (@($plan1.blockers).Count -eq 0) (@($plan1.blockers) -join '; ') | Out-Null
 
   $before1 = Snap-Templates (Wsapi-Read 'before-apply-1')
-  $ev = Run-Step -RunId $Run1 -Path '/storage/apply' -Types @('storage.applied', 'storage.apply.failed') -Save 'run1-apply'
+  # The apply names the plan it approves: the plan_id of the preview just read.
+  $ev = Run-Step -RunId $Run1 -Path '/storage/apply' -Body @{ approved_plan = $plan1.plan_id } -Types @('storage.applied', 'storage.apply.failed') -Save 'run1-apply'
   $res1 = $ev.data.result
   $plannedCreate = (Plan-Rows $plan1 'create').Count; $plannedExists = (Plan-Rows $plan1 'exists').Count
   Check 'apply: no outcome failed' ((Outcomes $res1 'failed').Count -eq 0 -and -not $res1.error) (($res1.outcomes | Where-Object { $_.status -eq 'failed' } | ForEach-Object { "$($_.kind) $($_.name): $($_.detail)" }) -join '; ') | Out-Null
@@ -510,7 +511,7 @@ try {
   $plan2 = Compose-And-Preview $f2 $HostName 'run2'
   Check "plan: every row 'exists', 0 to create" ((Plan-Rows $plan2 'create').Count -eq 0 -and @($plan2.actions | Where-Object { $_.state -ne 'exists' }).Count -eq 0) (($plan2.actions | ForEach-Object { "$($_.kind) $($_.name)=$($_.state)" }) -join '; ') | Out-Null
   Check 'plan: 0 blockers' (@($plan2.blockers).Count -eq 0) (@($plan2.blockers) -join '; ') | Out-Null
-  $ev = Run-Step -RunId $f2.RunId -Path '/storage/apply' -Types @('storage.applied', 'storage.apply.failed') -Save 'run2-apply'
+  $ev = Run-Step -RunId $f2.RunId -Path '/storage/apply' -Body @{ approved_plan = $plan2.plan_id } -Types @('storage.applied', 'storage.apply.failed') -Save 'run2-apply'
   $res2 = $ev.data.result
   Check "apply: every outcome 'exists'" (@($res2.outcomes | Where-Object { $_.status -ne 'exists' }).Count -eq 0 -and -not $res2.error) (($res2.outcomes | ForEach-Object { "$($_.kind) $($_.name)=$($_.status)" }) -join '; ') | Out-Null
   $after2 = Snap-Templates (Wsapi-Read 'after-apply-2')
@@ -531,7 +532,8 @@ try {
   Check "plan: $Vol1 is 'conflict'" ($row -and $row.state -eq 'conflict') $(if ($row) { $row.reason } else { 'no row' }) | Out-Null
   Check 'plan: blockers non-empty' (@($plan3.blockers).Count -gt 0) (@($plan3.blockers) -join '; ') | Out-Null
   Check "plan: names the volume no export presents, $Vol3 (P-19)" (@($plan3.notes | Where-Object { $_ -eq "1 volume is not presented by this plan: $Vol3" }).Count -eq 1) (@($plan3.notes) -join ' | ') | Out-Null
-  $refused = Api 'POST' "/runs/$($f3.RunId)/storage/apply" $null 'run3-apply-refused'
+  # With the plan's own id, so the refusal is the conflict's and not a missing approval.
+  $refused = Api 'POST' "/runs/$($f3.RunId)/storage/apply" @{ approved_plan = $plan3.plan_id } 'run3-apply-refused'
   Check 'POST /storage/apply refused (HTTP 4xx)' ($refused.Status -ge 400 -and $refused.Status -lt 500) "HTTP $($refused.Status): $($refused.Text)" | Out-Null
   $after3Snap = Wsapi-Read 'after-conflict'
   $after3 = Snap-Templates $after3Snap

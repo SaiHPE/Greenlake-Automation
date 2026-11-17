@@ -1,0 +1,53 @@
+
+======================================================================
+D22U27 10.64.122.99: alerts, capacity, System Reporter (read-only)
+======================================================================
+PASS  D22U27 10.64.122.99: SSH login
+  showversion                                                       12 line(s)     0.4 s
+  showsys                                                            3 line(s)     0.4 s
+  showdate                                                           3 line(s)     0.3 s
+  help showalert                                                    81 line(s)     0.3 s
+  help showsys                                                      82 line(s)     0.3 s
+  help srstatcpu                                                   149 line(s)     0.3 s
+  help srstatport                                                  166 line(s)     0.3 s
+  help srstatvv                                                    170 line(s)     0.3 s
+  help srstatrcvv                                                  193 line(s)     0.3 s
+  showalert                                                       4201 line(s)     3.0 s
+  showalert -d                                                    5255 line(s)     3.0 s
+  showsys -space                                                    33 line(s)     0.4 s
+  checkhealth -svc -detail                                         614 line(s)    27.7 s
+  srstatcpu                                                        145 line(s)     0.6 s
+  srstatcpu -hires -btsecs -24h -groupby NODE -summary avg,95%,m     9 line(s)     0.6 s
+  srstatcpu -hires -btsecs -24h -groupby NODE -summary min,avg,5    13 line(s)     0.7 s
+  srstatport                                                       148 line(s)     0.7 s
+  srstatport -hires -btsecs -24h -port_type host -groupby PORT_N    19 line(s)     0.7 s
+  srstatport -hires -btsecs -24h -port_type host,iscsi -groupby     19 line(s)     0.7 s
+  srstatvv                                                         148 line(s)     0.7 s
+  srstatvv -hires -btsecs -24h -summary avg,95%,max                  7 line(s)     0.8 s
+  srstatrcvv                                                         4 line(s)     0.6 s
+  srstatrcvv -hires -btsecs -24h -groupby GROUP_NAME -summary av     4 line(s)     0.6 s
+
+======================================================================
+D22U27 10.64.122.99: what it says
+======================================================================
+      D22U27: AlletraMP_D22U27, Release version 10.5.0
+      D22U27: array clock: Node Date
+      D22U27: showalert     525 alert(s); state New 525; severity Minor 521, Major 4; times 2026-09-30 20:00:00 IST to 2026-11-17 00:00:01 IST
+      D22U27: showalert -d  525 alert(s); state New 525; severity Minor 521, Major 4; times 2026-09-30 20:00:00 IST to 2026-11-17 00:00:01 IST
+      D22U27: srstatcpu (plain)            answered, 145 line(s)
+      D22U27: srstatcpu (24-hour form)     answered, 9 line(s)
+      D22U27: srstatcpu (24-hour form)     answered, 13 line(s)
+      D22U27: srstatport (plain)           answered, 148 line(s)
+      D22U27: srstatport (24-hour form)    answered, 19 line(s)
+      D22U27: srstatport (24-hour form)    answered, 19 line(s)
+      D22U27: srstatvv (plain)             answered, 148 line(s)
+      D22U27: srstatvv (24-hour form)      answered, 7 line(s)
+      D22U27: srstatrcvv (plain)           answered, 4 line(s)
+      D22U27: srstatrcvv (24-hour form)    answered, 4 line(s)
+PASS  D22U27: System Reporter answered every report - 10 of 10
+PASS  D22U27: no command refused by the array
+PASS  D22U27: CLI help read for every report
+
+======================================================================
+Done, 0 FAIL. Send me C:\Users\<user>\Downloads\handover_capture.zip
+======================================================================

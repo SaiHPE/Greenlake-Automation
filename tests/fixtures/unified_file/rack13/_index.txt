@@ -1,0 +1,30 @@
+showversion                 13 lines
+showsys                      3 lines
+showport                    31 lines
+showport -file               1 lines
+shownet                      8 lines
+help                        58 lines
+help help                   58 lines
+help -sub                    1 lines
+help show                   93 lines
+help controlport           510 lines
+help showport              275 lines
+help showfs                  1 lines
+help showfpg                 1 lines
+help showvfs                 1 lines
+help showfshare              1 lines
+help showfstore              1 lines
+help showfileservice        34 lines
+help showfilesystem         73 lines
+help showfileshare          47 lines
+
+POST   /api/v1/credentials                  port 443  201
+GET    /api/v1/system                       port 443  200
+GET    /api/v1/wsapiconfiguration           port 443  200
+DELETE /api/v1/credentials/<key>            port 443  200
+POST   /api/v3/credentials                  port 443  201
+GET    /api/v3/fileservice                  port 443  200
+GET    /api/v3/filesystems                  port 443  200
+GET    /api/v3/filesharesettings            port 443  200
+GET    /api/v3/fileshares                   port 443  200
+DELETE /api/v3/credentials/<token>          port 443  200

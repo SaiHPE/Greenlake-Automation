@@ -1,0 +1,138 @@
+# help showportdev
+showportdev - Show detailed information about devices on a port.
+
+SYNTAX
+    showportdev loop|all|ns|sas|fcswitch|fcfabric <node:slot:port>
+    showportdev sas [options] <node:slot:port>
+    showportdev findport <WWN> <node:slot:port>
+    showportdev uns [options] <node:slot:port>
+    showportdev lldp [options] [<node:slot:port>]
+    showportdev dcbx [options] [<node:slot:port>]
+
+SUBCOMMANDS
+    loop
+        Specifies that information is returned for arbitrated loop devices
+        that are attached to the specified port. This subcommand is only
+        for use with Fibre Channel arbitrated loop ports.
+    all
+        Specifies that information for all devices attached to the specified
+        port is returned. This subcommand is only for use with FC/SAS ports.
+    ns
+        Specifies that information for the switch name server database is
+        returned. This subcommand is only for use with fabric-attached
+        topologies.
+    sas
+        Specifies that information for all devices in the SAS topology
+        attached to the specified port is returned.  This subcommand is
+        only for use with SAS ports.
+    fcswitch
+        Specifies that a list of all switches in the Fibre Channel fabric
+        is returned.  This subcommand is only for use with fabric-attached
+        Fibre Channel ports.
+    fcfabric
+        Specifies that a description of the Fibre Channel fabric is
+        returned.  This subcommand is only for use with fabric-attached
+        Fibre Channel ports.
+    findport
+        Searches the Fibre Channel fabric attached to the specified
+        port for information on the supplied WWN.  Supplying the term "this"
+        in place of a WWN indicates that the port WWN of the specified
+        storage system host port should be used.  This subcommand is only for
+        use with fabric-attached Fibre Channel ports.
+    uns
+        Specifies that information for all initiators from the switch unzoned
+        name server database is returned. This subcommand is only for use with
+        fabric-attached topologies.
+    lldp
+        Specifies available Link Layer Discovery Protocol information
+        for the iSCSI or NVMe/TCP port specified is returned.
+        With -d option, LLDP information of the peer device is returned.
+        This subcommand is only used with iSCSI and NVMe/TCP ports.
+    dcbx
+        Specifies available Data Center Bridging Exchange Protocol information
+        for the iSCSI or NVMe/TCP port specified is returned.
+        With -d option, DCBX information of the peer device is returned.
+        This subcommand is only used with iSCSI and NVMe/TCP ports.
+
+DESCRIPTION
+    The showportdev command displays detailed information about devices
+    on a specified port.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+    -pel
+        Includes the SAS Phy Error Log (PEL) data for each phy in the SAS
+        topology.  This option is only valid when using the sas subcommand.
+    -d
+        Includes detailed initiator information: HBA Manufacturer, HBA Model,
+        HBA Firmware Version, HBA OS Name/Version, the HBA port's supported
+        and current speeds, HBA port's OS device name, hostname, alias
+        name(s). When used with the uns subcommand.
+
+        When used with the lldp or dcbx subcommand, this option will return
+        relevant detailed information on the LLDP and DCBX information received
+        from the peer device. This option is only valid when using either the
+        uns, lldp or dcbx subcommand.
+    -app
+        Includes detailed information provided from the DCBX Application
+        Protocol TLV configured on the peer device.
+    -pfc
+        Includes detailed information from the DCBX Priority Flow Control TLV
+        configured on the peer device.
+    -pg
+        Includes detailed information from the DCBX Priority Groups TLV
+        configured on the peer device.
+
+SPECIFIERS
+    [<node:slot:port>]
+        Specifies the port for which information about devices on that port are
+	displayed.
+
+          node
+            Specifies the node.
+          slot
+            Specifies the PCI bus slot in the specified node.
+          port
+            Specifies the Fibre Channel port number of the PCI card in the
+	    specified PCI bus slot.
+
+      [<WWN>]
+         Specifies the Fibre Channel worldwide port name of an attached port.
+
+NOTES
+    The loop subcommand is functional only in a private loop topology.
+
+EXAMPLES
+    The following example displays information about all devices attached to
+     Fibre Channel port 1:0:2:
+
+        cli% showportdev all 1:0:2
+            PtId LpID Hadr Node_WWN         Port_WWN         ftrs   svpm   bbct flen   Name
+            0xd3 0x0c 0x00 2FF70002AC000013 21020002AC000013 0x8800 0x0022 n/a  0x0800 1:0:2
+            0xef 0x00 0xef 2000000087002078 2200000087002078 0x8800 0x0012 n/a  0x0800 pd7
+            0xe8 0x01 0xe8 2000000087002515 2200000087002515 0x8800 0x0012 n/a  0x0800 pd6
+            ...
+
+     The following example displays the SAS topology for port 1:0:2:
+
+        cli% showportdev sas 1:0:2
+
+     The following example displays the SAS topology with PEL data for port 1:0:2:
+
+        cli% showportdev sas -pel 1:0:2
+
+     The following example displays the attached Fibre Channel fabric for port 0:2:3:
+
+        cli% showportdev findport 21002C27D752ABC7 0:2:3
+
+     The following example searches the attached Fibre Channel fabric for the
+     port WWN of port 0:2:3
+
+        cli% showportdev findport this 0:2:3
+
+    Use the following to get a description of each column:
+
+        clihelp -col showportdev
+

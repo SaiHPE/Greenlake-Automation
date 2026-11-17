@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from pydantic import SecretStr
 from test_plan_truth import (  # sibling module (rootdir conftest, no packages)
     REACHABLE,
@@ -137,6 +138,95 @@ def test_nothing_created_means_an_empty_set():
     )
     result = _apply(fake)
     assert result.error is None and result.removals == [] and render_removal_commands([]) == []
+
+
+# ------------------------------------------------------------------ R6 a failed apply
+
+class _FailingWsapi(TruthfulFakeWsapi):
+    """The WSAPI client raises on an HTTP error, and whatever was written before it stays on the array."""
+
+    def __init__(self, *, fail_on, made_by_the_failed_call=(), read_back_fails=False, **kw):
+        super().__init__(**kw)
+        self.fail_on, self.read_back_fails = fail_on, read_back_fails
+        self.made_by_the_failed_call = list(made_by_the_failed_call)
+        self.failed = False
+
+    def _answer(self, kind, name, present):
+        if (kind, name) == self.fail_on:
+            raise RuntimeError("HTTP 400: the array refused the request")
+        return super()._answer(kind, name, present)
+
+    def ensure_vlun(self, source_ref, target_ref, lun=None):
+        if ("vlun", source_ref) == self.fail_on:
+            self._vluns.extend(self.made_by_the_failed_call)      # the array presented it; the answer was lost
+            self.failed = True
+            raise RuntimeError("timed out waiting for the array")
+        return super().ensure_vlun(source_ref, target_ref, lun)
+
+    def vlun_templates(self):
+        if self.failed and self.read_back_fails:
+            raise RuntimeError("connection reset")
+        return super().vlun_templates()
+
+
+ESX1 = ArrayHostRecord(name="esx1", persona="VMware", wwns=[WWN_A, WWN_B])
+MADE = [VlunTemplate(volume="vol01", target="set:hs", lun=0), VlunTemplate(volume="vol02", target="set:hs", lun=1)]
+
+
+def test_a_failed_apply_still_removes_what_it_made_before_the_failure():
+    result = _apply(_FailingWsapi(fail_on=("volume", "vol02"), hosts=[]))
+    assert result.error == "Stopped while creating volume vol02: HTTP 400: the array refused the request"
+    assert render_removal_commands(result.removals) == ["removevv -f vol01", "removehostset -f hs", "removehost esx1"]
+    assert [i.command for i in result.removals] == render_removal_commands(result.removals)   # R3 holds too
+
+
+@pytest.mark.parametrize("fail_on, label, show, remove, removed_before", [
+    (("host", "esx1"), "host esx1", "showhost esx1", "removehost esx1", []),
+    (("hostset", "hs"), "host set hs", "showhostset hs", "removehostset -f hs", ["removehost esx1"]),
+    (("volume", "vol02"), "volume vol02", "showvv vol02", "removevv -f vol02",
+     ["removevv -f vol01", "removehostset -f hs", "removehost esx1"]),
+    (("vvset", "vvs"), "volume set vvs", "showvvset vvs", "removevvset -f vvs",
+     ["removevv -f vol01", "removevv -f vol02", "removehostset -f hs", "removehost esx1"]),
+])
+def test_an_object_whose_create_failed_is_named_in_a_note_not_in_the_set(fail_on, label, show, remove, removed_before):
+    """A timeout or a 5xx can lose the answer after the array made the object, and a retry would call it
+    Exists. It is not added to the set (it may have been there before this run): a note names it."""
+    result = _apply(_FailingWsapi(fail_on=fail_on, hosts=[]))
+    assert result.error.startswith(f"Stopped while creating {label}: ")
+    assert render_removal_commands(result.removals) == removed_before
+    note = (f"The array may have made {label} before the error. If `{show}` lists it and it was not there "
+            f"before this run, `{remove}` removes it.")
+    assert result.removal_notes == [note]
+
+
+def test_a_failure_among_the_exports_reads_back_what_the_array_presented():
+    result = _apply(_FailingWsapi(fail_on=("vlun", "set:vvs"), made_by_the_failed_call=MADE, hosts=[ESX1]))
+    assert result.error == "Stopped while creating export of vvs to hs: timed out waiting for the array"
+    assert render_removal_commands(result.removals) == [
+        "removevlun -f vol01 0 set:hs",
+        "removevlun -f vol02 1 set:hs",
+        "removevvset -f vvs",
+        "removevv -f vol01",
+        "removevv -f vol02",
+        "removehostset -f hs",
+    ]
+    assert result.removal_notes == []
+
+
+def test_exports_that_cannot_be_read_back_after_a_failure_are_named_in_a_note():
+    result = _apply(_FailingWsapi(fail_on=("vlun", "set:vvs"), made_by_the_failed_call=MADE, read_back_fails=True, hosts=[ESX1]))
+    assert result.error.startswith("Stopped while creating export of vvs to hs: ")
+    assert not any(i.kind == "vlun" for i in result.removals)
+    assert "removevv -f vol01" in render_removal_commands(result.removals)
+    assert any("showvlun -t" in note for note in result.removal_notes)
+
+
+def test_a_session_that_never_opened_wrote_nothing_and_removes_nothing():
+    def refuse(creds):
+        raise RuntimeError("login refused")
+
+    result = prov.apply_plan(_intent(), _discovery(), reachable_hosts=REACHABLE, wsapi_factory=refuse)
+    assert result.error == "login refused" and result.removals == [] and result.outcomes == []
 
 
 # ------------------------------------------------------------------ the live case, pinned

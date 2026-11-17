@@ -403,6 +403,8 @@ class ReplicationPlan(BaseModel):
     notes: list[str] = Field(default_factory=list)
     existing_groups: list[str] = Field(default_factory=list)   # R9: present, never touched
     error: str | None = None
+    # Set when the step holds the plan for approval; the apply must quote it back (BL-52).
+    plan_id: str = ""
 
     @property
     def sets_up_partnership(self) -> bool:

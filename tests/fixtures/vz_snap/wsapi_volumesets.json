@@ -1,0 +1,37 @@
+{
+ "total": 2,
+ "members": [
+  {
+   "id": 0,
+   "uuid": "3e6995f3-a268-4b7b-8549-8045c4bbcee9",
+   "name": "Test",
+   "shortName": "Test",
+   "setmembers": [
+    "Test"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "HPE VM Essentials",
+   "businessImportance": 2,
+   "excludeAIQoS": false
+  },
+  {
+   "id": 1,
+   "uuid": "0d4ca552-939c-4c04-be9a-36ff9894ca70",
+   "name": "VZ_VVSet",
+   "shortName": "VZ_VVSet",
+   "setmembers": [
+    "CRV_LZ_ESXi_Backup",
+    "CRV_LZ_Infra",
+    "CRV_LZ_Prod1",
+    "CRV_LZ_Test"
+   ],
+   "count": 4,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "other",
+   "businessImportance": 2
+  }
+ ]
+}
