@@ -1,0 +1,20 @@
+PASS  VZ 10.64.122.140: SSH login
+      VZ: MPB10K-D24U21-VZ, Release version 10.5.51
+      VZ: array clock: Node Date
+      VZ: showalert     31 alert(s); state New 31; severity Minor 18, Major 8, Degraded 4, Informational 1; times 2026-06-24 16:00:00 IST to 2026-11-17 00:06:30 IST
+      VZ: showalert -d  31 alert(s); state New 31; severity Minor 18, Major 8, Degraded 4, Informational 1; times 2026-06-24 16:00:00 IST to 2026-11-17 00:06:30 IST
+      VZ: srstatcpu (plain)            answered, 145 line(s)
+      VZ: srstatcpu (24-hour form)     answered, 9 line(s)
+      VZ: srstatcpu (24-hour form)     answered, 13 line(s)
+      VZ: srstatport (plain)           answered, 148 line(s)
+      VZ: srstatport (24-hour form)    answered, 16 line(s)
+      VZ: srstatport (24-hour form)    answered, 28 line(s)
+      VZ: srstatvv (plain)             answered, 148 line(s)
+      VZ: srstatvv (24-hour form)      answered, 7 line(s)
+      VZ: srstatrcvv (plain)           answered, 37 line(s)
+      VZ: srstatrcvv (24-hour form)    answered, 8 line(s)
+PASS  VZ: System Reporter answered every report - 10 of 10
+PASS  VZ: no command refused by the array
+PASS  VZ: CLI help read for every report
+
+0 FAIL

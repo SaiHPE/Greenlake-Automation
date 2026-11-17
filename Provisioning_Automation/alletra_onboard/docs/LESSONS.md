@@ -393,3 +393,31 @@ target from learning who it was (`showrcopy -d targets`: SysName None), and noth
 check that sends anything re-reads afterwards and fails if it left the device worse than it found it;
 before creating something, look for an older object of the same kind between the same two systems and
 block on it with the command that removes it.
+
+**45. A rule written in the problem statement is not a requirement until a test asks for it.**
+SPEC-007 began "the undo for a half-failed apply, and the cleanup after a test, are the same document",
+then every requirement and test covered the apply that succeeded. `apply_plan` built the removal set
+after the last write, so a refused write left it empty; the page read only `storage.applied`, so a
+failed result never showed; and a retry called the half-made objects *Exists*, so no set ever named
+them again. Found on 2026-11-16 by reading the code for the design document, never by a run. Rules:
+every sentence of a spec's problem statement maps to a numbered requirement or is struck out; and for
+each write path, test the failure at write N, not only the success and the refusal before write 1.
+
+**46. An allowlist of names is not an allowlist of actions.**
+The read client allowed every command whose first word was on the list. `showtarget` was on it, so
+`showtarget -rescan` passed, from the Console prompt too, and would make the peer ports rescan for targets:
+an action on a client documented as read-only. Found on 2026-11-16 while designing migration (BL-27),
+not by a test, because every test asked "is this name allowed?" and none asked "can an allowed name
+act?". Rules: when you add a command to a read allowlist, read its captured `help` for options that do
+something and refuse them in `_ACTION_OPTIONS` with a test; a test of an allowlist includes an allowed
+name with an acting option. An allowlist must also refuse the quoting and substitution characters of the
+shell or interpreter on the far side (Tcl's `"` `'` `{` `}` `[` `]` `\` on the array), or a refused
+option comes back quoted and a second command comes back in brackets.
+
+**47. A capture carries everyone the device knows about.**
+`showsys -d` prints the array's contact (name, phone, email); `showsched` and `showtask` print who created each
+schedule. Two colleagues' contact details and a third's login sat in committed fixtures from October until
+2026-11-16, found only because an agent scrubbing a new capture looked at the old ones. Rules: scrub a
+capture before it is a fixture (names to `lab-user`, addresses to `lab-user@example.com`, padded to the
+same width in fixed-width output), and `check.py` refuses a real email address in an added fixture line.
+What is already in git history stays there; removing it means rewriting history, which is the owner's call.

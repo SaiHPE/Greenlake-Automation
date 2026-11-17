@@ -1,0 +1,9 @@
+# shownet
+IP Address    Netmask/PrefixLen Nodes Active Speed Duplex AutoNeg Status Mode  
+10.132.30.121     255.255.240.0    01      1  1000 Full   Yes     Active Static
+
+Default IPv4 route :     10.132.16.1
+Default IPv6 route :            None
+NTP server         :   10.132.31.200
+DNS server         :   10.132.16.206
+Proxy server       :            None

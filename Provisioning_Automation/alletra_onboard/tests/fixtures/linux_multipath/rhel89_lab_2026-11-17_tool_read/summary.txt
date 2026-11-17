@@ -1,0 +1,3 @@
+state: not_set_up
+multipath: not set up on this server (the dm-multipath module is not loaded). Set up multipath before volumes are presented.
+notes: []

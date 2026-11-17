@@ -1,0 +1,9 @@
+# srstatrcvv -hires -btsecs -24h -groupby GROUP_NAME -summary avg,max,per_group
+Start Time: 2026-11-16 00:09:31 IST (1794767971)
+End Time: 2026-11-17 00:00:00 IST (1794853800)
+                               --IO/s--- -KBytes/sec- -Svct(ms)- IOSz KB
+Summary             GROUP_NAME   Lcl Rmt     Lcl  Rmt  Lcl   Rmt     Lcl                 RPO
+    Avg LZ_RcopyGroup1.r194089   7.2 0.0  1490.1  0.0 0.08   0.0    18.3                   -
+    Avg           Recover_back   0.0 0.0     0.0  0.0  0.0   0.0     0.0 2026-07-20 13:11:32
+    Max LZ_RcopyGroup1.r194089 185.3 0.0 41521.9  0.0 0.87   0.0   224.1                   0
+    Max           Recover_back   0.0 0.0     0.0  0.0  0.0   0.0     0.0 2026-07-20 13:11:32

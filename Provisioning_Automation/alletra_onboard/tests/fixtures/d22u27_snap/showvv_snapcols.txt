@@ -1,0 +1,221 @@
+# showvv -showcols Id,Name,Prov,Type,CopyOf,Rd,CPG,CreationTime,ExpirationTime,RetentionEndTime
+   Id Name                       Prov Type  CopyOf      Rd CPG    CreationTime            ExpirationTime          RetentionEndTime       
+    2 .mgmtdata                  full base  ---         RW --     2025-10-28 12:09:23 IST --                      --                     
+   11 .shared.SSD_r6_0           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   12 .shared.SSD_r6_1           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   13 .shared.SSD_r6_2           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   14 .shared.SSD_r6_3           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   15 .shared.SSD_r6_4           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   16 .shared.SSD_r6_5           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   17 .shared.SSD_r6_6           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   18 .shared.SSD_r6_7           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   19 .shared.SSD_r6_8           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   20 .shared.SSD_r6_9           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   21 .shared.SSD_r6_a           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   22 .shared.SSD_r6_b           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   23 .shared.SSD_r6_c           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   24 .shared.SSD_r6_d           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   25 .shared.SSD_r6_e           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   26 .shared.SSD_r6_f           dds  base  ---         RW SSD_r6 2026-01-18 20:43:13 IST --                      --                     
+   37  vv100                     tdvv base  ---         RW SSD_r6 2026-01-20 08:55:11 IST --                      --                     
+   38  vv101                     tdvv base  ---         RW SSD_r6 2026-01-20 09:57:15 IST --                      --                     
+  269  300gb                     tdvv base  ---         RW SSD_r6 2026-02-24 12:55:33 IST --                      --                     
+ 3584   300gb.260526225429       snp  vcopy 300gb       RW SSD_r6 2026-05-26 22:54:29 IST --                      --                     
+12619   rcpy.41.269.5            snp  vcopy 300gb       RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+  270  test5                     tdvv base  ---         RW SSD_r6 2026-02-24 13:50:35 IST --                      --                     
+  306  600gb                     tdvv base  ---         RW SSD_r6 2026-03-02 03:03:01 IST --                      --                     
+  316  700gb                     tdvv base  ---         RW SSD_r6 2026-03-03 14:13:08 IST --                      --                     
+  394  rcopy_async_test_vv       tdvv base  ---         RW SSD_r6 2026-03-15 23:10:20 IST --                      --                     
+  590  IBK-test-v1               tdvv base  ---         RW SSD_r6 2026-03-17 11:30:13 IST --                      --                     
+  612  dsccvv200                 tdvv base  ---         RW SSD_r6 2026-03-20 11:33:30 IST --                      --                     
+ 2326   dsccvv200.260505170000   snp  vcopy dsccvv200   RO SSD_r6 2026-05-05 17:00:00 IST --                      --                     
+  673  DR_Repl                   tdvv base  ---         RW SSD_r6 2026-03-30 11:43:40 IST --                      --                     
+ 1478  Yoshino_774718_480550.0   tdvv base  ---         RW SSD_r6 2026-04-21 13:41:10 IST --                      --                     
+ 1479  Yoshino_774718_480550.1   tdvv base  ---         RW SSD_r6 2026-04-21 13:41:10 IST --                      --                     
+ 1590  TestVV_23April26          tdvv base  ---         RW SSD_r6 2026-04-23 12:11:21 IST --                      --                     
+ 3297  test999                   tdvv base  ---         RW SSD_r6 2026-05-22 09:41:48 IST --                      --                     
+ 5966   2                        snp  vcopy test999     RW SSD_r6 2026-07-04 22:26:43 IST --                      --                     
+ 8440   test999.260804153001     snp  vcopy test999     RO SSD_r6 2026-08-04 15:30:01 IST --                      --                     
+14637   test999.261116080000     snp  vcopy test999     RO SSD_r6 2026-11-16 08:00:00 IST 2026-11-17 08:00:00 IST --                     
+14639   test999.261116081500     snp  vcopy test999     RO SSD_r6 2026-11-16 08:15:00 IST 2026-11-17 08:15:00 IST --                     
+14640   test999.261116083000     snp  vcopy test999     RO SSD_r6 2026-11-16 08:30:00 IST 2026-11-17 08:30:00 IST --                     
+14641   test999.261116084500     snp  vcopy test999     RO SSD_r6 2026-11-16 08:45:00 IST 2026-11-17 08:45:00 IST --                     
+14642   test999.261116090000     snp  vcopy test999     RO SSD_r6 2026-11-16 09:00:00 IST 2026-11-17 09:00:00 IST --                     
+14643   test999.261116091500     snp  vcopy test999     RO SSD_r6 2026-11-16 09:15:00 IST 2026-11-17 09:15:00 IST --                     
+14644   test999.261116093000     snp  vcopy test999     RO SSD_r6 2026-11-16 09:30:00 IST 2026-11-17 09:30:00 IST --                     
+14645   test999.261116094500     snp  vcopy test999     RO SSD_r6 2026-11-16 09:45:00 IST 2026-11-17 09:45:00 IST --                     
+14646   test999.261116100000     snp  vcopy test999     RO SSD_r6 2026-11-16 10:00:00 IST 2026-11-17 10:00:00 IST --                     
+14647   test999.261116101500     snp  vcopy test999     RO SSD_r6 2026-11-16 10:15:00 IST 2026-11-17 10:15:00 IST --                     
+14648   test999.261116103000     snp  vcopy test999     RO SSD_r6 2026-11-16 10:30:00 IST 2026-11-17 10:30:00 IST --                     
+14649   test999.261116104500     snp  vcopy test999     RO SSD_r6 2026-11-16 10:45:00 IST 2026-11-17 10:45:00 IST --                     
+14650   test999.261116110000     snp  vcopy test999     RO SSD_r6 2026-11-16 11:00:00 IST 2026-11-17 11:00:00 IST --                     
+14651   test999.261116111500     snp  vcopy test999     RO SSD_r6 2026-11-16 11:15:00 IST 2026-11-17 11:15:00 IST --                     
+14652   test999.261116113000     snp  vcopy test999     RO SSD_r6 2026-11-16 11:30:00 IST 2026-11-17 11:30:00 IST --                     
+14653   test999.261116114500     snp  vcopy test999     RO SSD_r6 2026-11-16 11:45:00 IST 2026-11-17 11:45:00 IST --                     
+14654   test999.261116120000     snp  vcopy test999     RO SSD_r6 2026-11-16 12:00:00 IST 2026-11-17 12:00:00 IST --                     
+14656   test999.261116121500     snp  vcopy test999     RO SSD_r6 2026-11-16 12:15:00 IST 2026-11-17 12:15:00 IST --                     
+14657   test999.261116123000     snp  vcopy test999     RO SSD_r6 2026-11-16 12:30:00 IST 2026-11-17 12:30:00 IST --                     
+14658   test999.261116124500     snp  vcopy test999     RO SSD_r6 2026-11-16 12:45:00 IST 2026-11-17 12:45:00 IST --                     
+14659   test999.261116130000     snp  vcopy test999     RO SSD_r6 2026-11-16 13:00:00 IST 2026-11-17 13:00:00 IST --                     
+14660   test999.261116131500     snp  vcopy test999     RO SSD_r6 2026-11-16 13:15:00 IST 2026-11-17 13:15:00 IST --                     
+14661   test999.261116133000     snp  vcopy test999     RO SSD_r6 2026-11-16 13:30:00 IST 2026-11-17 13:30:00 IST --                     
+14662   test999.261116134500     snp  vcopy test999     RO SSD_r6 2026-11-16 13:45:00 IST 2026-11-17 13:45:00 IST --                     
+14663   test999.261116140000     snp  vcopy test999     RO SSD_r6 2026-11-16 14:00:00 IST 2026-11-17 14:00:00 IST --                     
+14664   test999.261116141500     snp  vcopy test999     RO SSD_r6 2026-11-16 14:15:00 IST 2026-11-17 14:15:00 IST --                     
+14665   test999.261116143000     snp  vcopy test999     RO SSD_r6 2026-11-16 14:30:00 IST 2026-11-17 14:30:00 IST --                     
+14666   test999.261116144500     snp  vcopy test999     RO SSD_r6 2026-11-16 14:45:00 IST 2026-11-17 14:45:00 IST --                     
+14667   test999.261116150000     snp  vcopy test999     RO SSD_r6 2026-11-16 15:00:00 IST 2026-11-17 15:00:00 IST --                     
+14668   test999.261116151500     snp  vcopy test999     RO SSD_r6 2026-11-16 15:15:00 IST 2026-11-17 15:15:00 IST --                     
+14669   test999.261116153000     snp  vcopy test999     RO SSD_r6 2026-11-16 15:30:00 IST 2026-11-17 15:30:00 IST --                     
+14670   test999.261116154500     snp  vcopy test999     RO SSD_r6 2026-11-16 15:45:00 IST 2026-11-17 15:45:00 IST --                     
+14671   test999.261116160000     snp  vcopy test999     RO SSD_r6 2026-11-16 16:00:00 IST 2026-11-17 16:00:00 IST --                     
+14673   test999.261116161500     snp  vcopy test999     RO SSD_r6 2026-11-16 16:15:00 IST 2026-11-17 16:15:00 IST --                     
+14674   test999.261116163000     snp  vcopy test999     RO SSD_r6 2026-11-16 16:30:00 IST 2026-11-17 16:30:00 IST --                     
+14675   test999.261116164500     snp  vcopy test999     RO SSD_r6 2026-11-16 16:45:00 IST 2026-11-17 16:45:00 IST --                     
+14676   test999.261116170001     snp  vcopy test999     RO SSD_r6 2026-11-16 17:00:00 IST 2026-11-17 17:00:00 IST --                     
+14677   test999.261116171500     snp  vcopy test999     RO SSD_r6 2026-11-16 17:15:00 IST 2026-11-17 17:15:00 IST --                     
+14678   test999.261116173000     snp  vcopy test999     RO SSD_r6 2026-11-16 17:30:00 IST 2026-11-17 17:30:00 IST --                     
+14679   test999.261116174500     snp  vcopy test999     RO SSD_r6 2026-11-16 17:45:00 IST 2026-11-17 17:45:00 IST --                     
+14680   test999.261116180000     snp  vcopy test999     RO SSD_r6 2026-11-16 18:00:00 IST 2026-11-17 18:00:00 IST --                     
+14681   test999.261116181500     snp  vcopy test999     RO SSD_r6 2026-11-16 18:15:00 IST 2026-11-17 18:15:00 IST --                     
+14682   test999.261116183000     snp  vcopy test999     RO SSD_r6 2026-11-16 18:30:00 IST 2026-11-17 18:30:00 IST --                     
+14683   test999.261116184501     snp  vcopy test999     RO SSD_r6 2026-11-16 18:45:00 IST 2026-11-17 18:45:00 IST --                     
+14684   test999.261116190001     snp  vcopy test999     RO SSD_r6 2026-11-16 19:00:00 IST 2026-11-17 19:00:00 IST --                     
+14685   test999.261116191500     snp  vcopy test999     RO SSD_r6 2026-11-16 19:15:00 IST 2026-11-17 19:15:00 IST --                     
+14686   test999.261116193000     snp  vcopy test999     RO SSD_r6 2026-11-16 19:30:00 IST 2026-11-17 19:30:00 IST --                     
+14687   test999.261116194501     snp  vcopy test999     RO SSD_r6 2026-11-16 19:45:00 IST 2026-11-17 19:45:00 IST --                     
+14688   test999.261116200001     snp  vcopy test999     RO SSD_r6 2026-11-16 20:00:00 IST 2026-11-17 20:00:00 IST --                     
+14690   test999.261116201501     snp  vcopy test999     RO SSD_r6 2026-11-16 20:15:01 IST 2026-11-17 20:15:01 IST --                     
+14691   test999.261116203001     snp  vcopy test999     RO SSD_r6 2026-11-16 20:30:01 IST 2026-11-17 20:30:01 IST --                     
+14692   test999.261116204501     snp  vcopy test999     RO SSD_r6 2026-11-16 20:45:00 IST 2026-11-17 20:45:00 IST --                     
+ 4438  Yoshino_774718_480550_1TB tdvv base  ---         RW SSD_r6 2026-06-10 06:22:02 IST --                      --                     
+ 4675  dvv1                      tdvv base  ---         RW SSD_r6 2026-06-14 00:10:13 IST --                      --                     
+ 5530  devwinvm-basic-core02     tdvv base  ---         RW SSD_r6 2026-06-27 18:19:28 IST --                      --                     
+ 5531  devvm-basic-ghb01         tdvv base  ---         RW SSD_r6 2026-06-27 18:19:36 IST --                      --                     
+ 5713  50GB-Test                 tdvv base  ---         RW SSD_r6 2026-06-30 17:23:26 IST --                      --                     
+ 9342  Test                      tdvv base  ---         RW SSD_r6 2026-08-19 14:04:33 IST --                      --                     
+12620   rcpy.41.9342.5           snp  vcopy Test        RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+10467  Morpheus-datastore        tdvv base  ---         RW SSD_r6 2026-09-07 15:51:02 IST --                      --                     
+13045  lab-user1_885564_553150   tdvv base  ---         RW SSD_r6 2026-10-19 17:05:03 IST --                      --                     
+  763 .shared.test_0             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  764 .shared.test_1             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  765 .shared.test_2             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  766 .shared.test_3             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  767 .shared.test_4             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  768 .shared.test_5             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  769 .shared.test_6             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  770 .shared.test_7             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  771 .shared.test_8             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  772 .shared.test_9             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  773 .shared.test_a             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  774 .shared.test_b             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  775 .shared.test_c             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  776 .shared.test_d             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  777 .shared.test_e             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  778 .shared.test_f             dds  base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+  779  AlletraVol                tdvv base  ---         RW test   2026-04-09 10:23:35 IST --                      --                     
+    1 .srdata                    full base  ---         RW --     2025-10-28 12:09:09 IST --                      --                     
+  193 3sc-vv                     tpvv base  ---         RW 3sc    2026-02-13 00:05:44 IST --                      --                     
+    0 admin                      full base  ---         RW --     2025-10-28 12:01:10 IST --                      --                     
+ 5579 Alletra_HPE_VV1            tpvv base  ---         RW SSD_r6 2026-06-28 15:27:33 IST --                      --                     
+ 5580 Alletra_HPE_VV2            tpvv base  ---         RW SSD_r6 2026-06-28 15:27:33 IST --                      --                     
+ 5581 Alletra_HPE_VV3            tpvv base  ---         RW SSD_r6 2026-06-28 15:27:34 IST --                      --                     
+ 4972 Alletra_Test1              tpvv base  ---         RW SSD_r6 2026-06-18 15:51:36 IST --                      --                     
+ 4973 Alletra_Test2              tpvv base  ---         RW SSD_r6 2026-06-18 15:51:36 IST --                      --                     
+ 4974 Alletra_Test3              tpvv base  ---         RW SSD_r6 2026-06-18 15:51:36 IST --                      --                     
+ 3293 Alletra_VV1                tpvv base  ---         RW SSD_r6 2026-05-22 09:19:28 IST --                      --                     
+ 3294 Alletra_VV2                tpvv base  ---         RW SSD_r6 2026-05-22 09:19:28 IST --                      --                     
+ 3295 Alletra_VV3                tpvv base  ---         RW SSD_r6 2026-05-22 09:19:29 IST --                      --                     
+ 4754 APP.test.vv                tpvv base  ---         RW SSD_r6 2026-06-15 11:25:27 IST --                      --                     
+12621  rcpy.42.4754.5            snp  vcopy APP.test.vv RO SSD_r6 2026-10-12 13:39:57 IST --                      --                     
+ 6199 Automation1                tpvv base  ---         RW SSD_r6 2026-07-08 15:25:18 IST --                      --                     
+12615  rcpy.43.6199.5            snp  vcopy Automation1 RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 6200 Automation2                tpvv base  ---         RW SSD_r6 2026-07-08 15:25:26 IST --                      --                     
+12616  rcpy.43.6200.5            snp  vcopy Automation2 RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 6201 Automation3                tpvv base  ---         RW SSD_r6 2026-07-08 15:25:35 IST --                      --                     
+12617  rcpy.43.6201.5            snp  vcopy Automation3 RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 6202 Automation4                tpvv base  ---         RW SSD_r6 2026-07-08 15:25:47 IST --                      --                     
+12618  rcpy.43.6202.5            snp  vcopy Automation4 RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 8288 Automation5                tpvv base  ---         RW SSD_r6 2026-08-03 15:37:45 IST --                      --                     
+12611  rcpy.44.8288.5            snp  vcopy Automation5 RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 8290 Automation6                tpvv base  ---         RW SSD_r6 2026-08-03 15:37:57 IST --                      --                     
+12612  rcpy.44.8290.5            snp  vcopy Automation6 RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 8291 Automation7                tpvv base  ---         RW SSD_r6 2026-08-03 15:38:05 IST --                      --                     
+12613  rcpy.44.8291.5            snp  vcopy Automation7 RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 8292 Automation8                tpvv base  ---         RW SSD_r6 2026-08-03 15:38:12 IST --                      --                     
+12614  rcpy.44.8292.5            snp  vcopy Automation8 RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 5583 HPE_ESXi_VLUN1             tpvv base  ---         RW SSD_r6 2026-06-28 15:38:57 IST --                      --                     
+ 5584 HPE_ESXi_VLUN2             tpvv base  ---         RW SSD_r6 2026-06-28 15:38:57 IST --                      --                     
+ 5585 HPE_ESXi_VLUN3             tpvv base  ---         RW SSD_r6 2026-06-28 15:38:58 IST --                      --                     
+ 5589 HPE_GCC_VLUN1              tpvv base  ---         RW SSD_r6 2026-06-28 16:03:34 IST --                      --                     
+ 5590 HPE_GCC_VLUN2              tpvv base  ---         RW SSD_r6 2026-06-28 16:03:35 IST --                      --                     
+ 5591 HPE_GCC_VLUN3              tpvv base  ---         RW SSD_r6 2026-06-28 16:03:35 IST --                      --                     
+ 4977 New_Test_VV1               tpvv base  ---         RW SSD_r6 2026-06-18 16:12:32 IST --                      --                     
+ 4978 New_Test_VV2               tpvv base  ---         RW SSD_r6 2026-06-18 16:12:33 IST --                      --                     
+ 4979 New_Test_VV3               tpvv base  ---         RW SSD_r6 2026-06-18 16:12:33 IST --                      --                     
+ 7419 PRD-HANA-DATA01            tpvv base  ---         RW SSD_r6 2026-07-21 10:59:33 IST --                      --                     
+ 7420 PRD-HANA-LOG01             tpvv base  ---         RW SSD_r6 2026-07-21 10:59:34 IST --                      --                     
+13620 lab-user_HOC               tpvv base  ---         RW test   2026-10-29 15:35:52 IST --                      --                     
+ 1620 test7                      tpvv base  ---         RW SSD_r6 2026-04-23 19:00:52 IST --                      --                     
+ 6993  S-test7_2026071516_Wed    snp  vcopy test7       RW SSD_r6 2026-07-15 16:01:47 IST --                      --                     
+ 7100  S-test7_2026071613_Thu    snp  vcopy test7       RW SSD_r6 2026-07-16 13:13:43 IST --                      --                     
+ 7412  S-test7_2026072109_Tue    snp  vcopy test7       RW SSD_r6 2026-07-21 09:29:13 IST --                      --                     
+ 7445  S-test7_2026072115_Tue    snp  vcopy test7       RW SSD_r6 2026-07-21 15:17:25 IST --                      2026-07-21 16:17:24 IST
+ 7456  S-test7_2026072116_Tue    snp  vcopy test7       RW SSD_r6 2026-07-21 16:55:26 IST --                      2026-07-21 17:55:26 IST
+ 1622 test8                      tpvv base  ---         RW SSD_r6 2026-04-23 19:24:46 IST --                      --                     
+ 6075  S-test8_2026070615_Mon    snp  vcopy test8       RW SSD_r6 2026-07-06 15:02:28 IST --                      2026-07-06 16:02:28 IST
+ 6259  S-test8_2026070910_Thu    snp  vcopy test8       RW SSD_r6 2026-07-09 10:21:14 IST --                      2026-07-09 11:21:15 IST
+ 6790  S-test8_2026071417_Tue    snp  vcopy test8       RW SSD_r6 2026-07-14 17:50:27 IST --                      --                     
+ 7447  S-test8_2026072115_Tue    snp  vcopy test8       RW SSD_r6 2026-07-21 15:17:44 IST --                      2026-07-21 16:17:45 IST
+ 7458  S-test8_2026072116_Tue    snp  vcopy test8       RW SSD_r6 2026-07-21 16:55:37 IST --                      2026-07-21 17:55:37 IST
+ 1623 test9                      tpvv base  ---         RW SSD_r6 2026-04-23 19:24:46 IST --                      --                     
+ 4352  S-test9_2026060816        snp  vcopy test9       RW SSD_r6 2026-06-08 16:49:19 IST --                      2026-06-08 17:56:07 IST
+ 1624 test10                     tpvv base  ---         RW SSD_r6 2026-04-23 19:24:47 IST --                      --                     
+    3 test_CRV.r                 tpvv base  ---         RW SSD_r6 2026-01-18 03:41:49 IST --                      --                     
+ 2365  snp-test_CRV.r05061200    snp  vcopy test_CRV.r  RO SSD_r6 2026-05-06 12:00:01 IST --                      2026-05-08 12:06:23 IST
+14556  snp-test_CRV.r11141600    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-14 16:00:00 IST 2026-11-17 00:00:00 IST 2026-11-16 16:00:01 IST
+14573  snp-test_CRV.r11142000    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-14 20:00:00 IST 2026-11-17 04:00:00 IST 2026-11-16 20:00:00 IST
+14577  snp-test_CRV.r11150000    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-15 00:00:00 IST 2026-11-17 08:00:00 IST 2026-11-17 00:00:00 IST
+14578  snp-test_CRV.r11150400    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-15 04:00:00 IST 2026-11-17 12:00:00 IST 2026-11-17 04:00:00 IST
+14579  snp-test_CRV.r11150800    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-15 08:00:00 IST 2026-11-17 16:00:00 IST 2026-11-17 08:00:01 IST
+14596  snp-test_CRV.r11151200    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-15 12:00:01 IST 2026-11-17 20:00:01 IST 2026-11-17 12:00:00 IST
+14614  snp-test_CRV.r11151600    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-15 16:00:01 IST 2026-11-18 00:00:01 IST 2026-11-17 16:00:01 IST
+14630  snp-test_CRV.r11152000    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-15 20:00:00 IST 2026-11-18 04:00:00 IST 2026-11-17 20:00:00 IST
+14635  snp-test_CRV.r11160000    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-16 00:00:00 IST 2026-11-18 08:00:00 IST 2026-11-18 00:00:00 IST
+14636  snp-test_CRV.r11160400    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-16 04:00:00 IST 2026-11-18 12:00:00 IST 2026-11-18 04:00:00 IST
+14638  snp-test_CRV.r11160800    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-16 08:00:00 IST 2026-11-18 16:00:00 IST 2026-11-18 08:00:00 IST
+14655  snp-test_CRV.r11161200    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-16 12:00:00 IST 2026-11-18 20:00:00 IST 2026-11-18 12:00:00 IST
+14672  snp-test_CRV.r11161600    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-16 16:00:00 IST 2026-11-19 00:00:00 IST 2026-11-18 16:00:01 IST
+14689  snp-test_CRV.r11162000    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-16 20:00:01 IST 2026-11-19 04:00:01 IST 2026-11-18 20:00:01 IST
+14693  snp-test_CRV.r11170000    snp  vcopy test_CRV.r  RO SSD_r6 2026-11-17 00:00:01 IST 2026-11-19 08:00:01 IST 2026-11-19 00:00:01 IST
+14426 test_vv_1                  tpvv base  ---         RW test_1 2026-11-12 12:50:25 IST --                      --                     
+ 6857 TestRC2_VV1                tpvv base  ---         RW SSD_r6 2026-07-15 10:24:03 IST --                      --                     
+12607  rcpy.46.6857.5            snp  vcopy TestRC2_VV1 RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 6858 TestRC2_VV2                tpvv base  ---         RW SSD_r6 2026-07-15 10:24:04 IST --                      --                     
+12608  rcpy.46.6858.5            snp  vcopy TestRC2_VV2 RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 4838 TestRC_VV1                 tpvv base  ---         RW SSD_r6 2026-06-16 12:19:53 IST --                      --                     
+12609  rcpy.45.4838.5            snp  vcopy TestRC_VV1  RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 4839 TestRC_VV2                 tpvv base  ---         RW SSD_r6 2026-06-16 12:20:01 IST --                      --                     
+ 9800  TestRC_VV2.snp1           snp  vcopy TestRC_VV2  RW SSD_r6 2026-08-27 09:05:14 IST --                      --                     
+12610  rcpy.45.4839.5            snp  vcopy TestRC_VV2  RO SSD_r6 2026-10-12 13:39:47 IST --                      --                     
+ 7797 training                   tpvv base  ---         RW test   2026-07-27 14:42:11 IST --                      --                     
+ 7974 LAB-VOLUME-001             tpvv base  ---         RW test   2026-07-29 20:01:23 IST --                      --                     
+ 8000 LAB-VOLUME-002             tpvv base  ---         RW test   2026-07-30 12:07:10 IST --                      --                     
+ 8293 VV01_BLR                   tpvv base  ---         RW SSD_r6 2026-08-03 15:42:12 IST --                      --                     
+ 7423 VV1_Esxi1                  tpvv base  ---         RW SSD_r6 2026-07-21 11:02:17 IST --                      --                     
+ 8297 VV01_SAPHANA               tpvv base  ---         RW SSD_r6 2026-08-03 15:57:14 IST --                      --                     
+ 8294 VV02_DEL                   tpvv base  ---         RW SSD_r6 2026-08-03 15:42:12 IST --                      --                     
+ 7424 VV2_Esxi2                  tpvv base  ---         RW SSD_r6 2026-07-21 11:02:18 IST --                      --                     
+ 8298 VV02_SAPHANA               tpvv base  ---         RW SSD_r6 2026-08-03 15:57:15 IST --                      --                     
+ 7425 VV3_Esxi3                  tpvv base  ---         RW SSD_r6 2026-07-21 11:02:18 IST --                      --                     
+ 8295 VV03_HYD                   tpvv base  ---         RW SSD_r6 2026-08-03 15:42:12 IST --                      --                     
+ 8299 VV03_SAPHANA               tpvv base  ---         RW SSD_r6 2026-08-03 15:57:15 IST --                      --                     
+ 1897 z10                        tpvv base  ---         RW SSD_r6 2026-04-28 14:31:36 IST --                      --                     
+ 1899  snp1                      snp  vcopy z10         RW SSD_r6 2026-04-28 14:57:17 IST --                      --                     
+ 2377  z10.1                     snp  vcopy z10         RW SSD_r6 2026-05-06 14:23:27 IST --                      --                     
+ 2379  z10.2                     snp  vcopy z10         RW SSD_r6 2026-05-06 14:23:31 IST --                      --                     
+ 2381  z10.3                     snp  vcopy z10         RW SSD_r6 2026-05-06 14:23:34 IST --                      --                     
+ 2383  z10.4                     snp  vcopy z10         RW SSD_r6 2026-05-06 14:23:37 IST --                      --                     
+ 2385  z10.5                     snp  vcopy z10         RW SSD_r6 2026-05-06 14:23:40 IST --                      --                     
+-----------------------------------------------------------------------------------------------------------------------------------------
+  217 total                                                                                                                              

@@ -1,0 +1,6 @@
+# showsched
+                                                   ---------------- Schedule ----------------                                      
+SchedName         File/Command                     Interval Min            Hour DOM Month DOW CreatedBy    Status Alert NextRunTime
+SynRcopy_Schedule syncrcopy LZ_RcopyGroup1.r194089        0   5 3,7,11,15,19,23   *     *   * 3paradm   suspended     Y --         
+-----------------------------------------------------------------------------------------------------------------------------------
+1                 total                                                                                                            

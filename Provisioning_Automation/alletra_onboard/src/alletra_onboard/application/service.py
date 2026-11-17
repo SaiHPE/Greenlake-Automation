@@ -182,8 +182,8 @@ class OnboardingService:
     def start_storage_preview(self, run_id: str) -> RunRecord:
         return self.provisioning.start_storage_preview(run_id)
 
-    def start_storage_apply(self, run_id: str) -> RunRecord:
-        return self.provisioning.start_storage_apply(run_id)
+    def start_storage_apply(self, run_id: str, *, approved_plan: str | None) -> RunRecord:
+        return self.provisioning.start_storage_apply(run_id, approved_plan=approved_plan)
 
     def start_path_verify(self, run_id: str) -> RunRecord:
         return self.provisioning.start_path_verify(run_id)
@@ -202,8 +202,8 @@ class OnboardingService:
     def start_replication_preview(self, run_id: str) -> RunRecord:
         return self.replication.start_replication_preview(run_id)
 
-    def start_replication_apply(self, run_id: str, *, accept_latency: bool = False) -> RunRecord:
-        return self.replication.start_replication_apply(run_id, accept_latency=accept_latency)
+    def start_replication_apply(self, run_id: str, *, approved_plan: str | None, accept_latency: bool = False) -> RunRecord:
+        return self.replication.start_replication_apply(run_id, approved_plan=approved_plan, accept_latency=accept_latency)
 
     def start_link_check(self, run_id: str, *, duration_s: int) -> RunRecord:
         return self.replication.start_link_check(run_id, duration_s=duration_s)

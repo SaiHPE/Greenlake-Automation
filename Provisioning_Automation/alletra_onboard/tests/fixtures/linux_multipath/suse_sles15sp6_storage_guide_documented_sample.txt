@@ -1,0 +1,7 @@
+mpatha (3600a098000aad1e300000b4b5a275d45) dm-0 NETAPP,INF-01-00
+size=64G features='3 queue_if_no_path pg_init_retries 50' hwhandler='1 alua' wp=rw
+|-+- policy='historical-service-time 2' prio=50 status=active
+| |- 3:0:0:1 sdb 8:16 active ready running
+| `- 4:0:0:1 sdf 8:80  active ready running
+`-+- policy='historical-service-time 2' prio=10 status=enabled
+  `- 4:0:1:1 sdj 8:144 active ready running

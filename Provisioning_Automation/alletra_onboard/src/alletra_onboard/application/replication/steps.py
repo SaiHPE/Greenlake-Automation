@@ -17,7 +17,12 @@ from alletra_onboard.application.replication import partnership as replication_p
 from alletra_onboard.application.replication import plan as replication_plan
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.replication import verify as replication_verify
-from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
+from alletra_onboard.application.runs.coordinator import (
+    RunCoordinator,
+    StepPreconditionError,
+    check_approval,
+    new_plan_id,
+)
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.replication import (
     LINK_CHECK_TIME_DEFAULT,
@@ -83,7 +88,8 @@ class ReplicationSteps:
         primary = await asyncio.to_thread(partial(replication_read.read_array, intent.array, progress=progress))
         peer = await asyncio.to_thread(partial(replication_read.read_array, intent.replication.peer, progress=progress))
         report = replication_plan.check(primary, peer, intent.replication)
-        plan = replication_plan.build_plan(report, intent.replication, intent)
+        # The identity the apply must quote back: a new read is a new plan to approve.
+        plan = replication_plan.build_plan(report, intent.replication, intent).model_copy(update={"plan_id": new_plan_id()})
         try:
             coord.store.save_artifact(run.run_id, REPORT_ARTIFACT, report.model_dump_json().encode("utf-8"))
         except Exception:  # noqa: BLE001 - the read succeeded; failing to cache it must not fail the step
@@ -204,7 +210,7 @@ class ReplicationSteps:
 
     # ------------------------------------------------------------------ R4/R7: apply the approved plan
 
-    def start_replication_apply(self, run_id: str, *, accept_latency: bool = False) -> RunRecord:
+    def start_replication_apply(self, run_id: str, *, approved_plan: str | None, accept_latency: bool = False) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
         intent = self._require_replication(run_id)
@@ -218,6 +224,8 @@ class ReplicationSteps:
             raise StepPreconditionError("the plan has findings that must be resolved first: " + "; ".join(plan.blockers))
         if not any(a.state == "create" for a in plan.actions):
             raise StepPreconditionError("nothing to create — every object in the plan already exists")
+        # LESSONS 7: the operator's tick reaches the server as the id of the plan it was given for.
+        check_approval(approved_plan, plan.plan_id)
         notes = self._gate_on_link(run_id, report, accept_latency)
         coord.spawn(run_id, self._run_apply(run, intent, plan, notes))
         return run

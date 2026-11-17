@@ -1,0 +1,41 @@
+# help showfileshare
+showfileshare - Display information of all fileshares or a specific fileshares in a system.
+
+SYNTAX
+    showfileshare [<filesystem_name> [<share_name>]]
+
+DESCRIPTION
+    The showfileshare command displays information about all the fileshares or a specific fileshare in a system.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+     -allnames
+        Shows both the shortened and full fileshare names.
+
+SPECIFIERS
+    <filesystem_name>
+        Specifies the filesystem name whose fileshare needs to be displayed.
+
+    <share_name>
+        Specifies the fileshare name whose information will be displayed.
+	If not specified, configuration information for all fileshares in the system is displayed.
+
+NOTES
+    Long names can cause the display to be very wide. Use -shortnames
+    to display shortened 31 character names for objects. Use the setclienv
+    command to set shortnames to 1. The -shortnames option is also set to 1
+    if the CLI was started with the -shortnames option, or if the CLI was
+    started with the TPDSHORTNAMES environment variable set. Run "cli -h"
+    and "setclienv -h" for details of the environment variables.
+
+EXAMPLES
+    The following example shows all the fileshares on the system.
+
+	 cli% showfileshare
+
+     The following example shows demo_share fileshare in the demo_fs filesystem.
+
+	  cli% showfileshare demo_fs demo_share
+

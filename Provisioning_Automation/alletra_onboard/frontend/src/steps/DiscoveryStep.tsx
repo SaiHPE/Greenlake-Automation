@@ -1,5 +1,5 @@
 import { Box, Button, DataTable, Text } from 'grommet';
-import { Search } from 'grommet-icons';
+import { Search, StatusWarning } from 'grommet-icons';
 import { useState } from 'react';
 import {
   ArrayPort,
@@ -35,6 +35,10 @@ const OS_LABEL: Record<DiscoveredHost['os'], string> = {
   esxi: 'ESXi', windows: 'Windows', linux: 'Linux', vme: 'HPE VM Essentials', unknown: 'not reported',
 };
 const OTHER_HOSTS_FOLD = 10;
+// A Linux host's own multipath view that needs the operator: a failed, missing or single path, no
+// multipath, a login that cannot read it, or a read that timed out. "none" (no Alletra devices yet) is
+// normal before volumes are presented.
+const MULTIPATH_WARN = new Set(['degraded', 'uneven', 'not_set_up', 'not_permitted', 'timed_out']);
 
 function osLabel(h: DiscoveredHost): string {
   if (h.os_text) return h.os_text;
@@ -89,7 +93,17 @@ const HOST_COLUMNS = [
       <Box gap="xxsmall">
         <Text size="small" color={h.os === 'unknown' && !h.os_text ? 'text-weak' : undefined}>{osLabel(h)}</Text>
         {h.persona && <Text size="xsmall" color="text-weak">persona {h.persona}</Text>}
-        {h.multipath && <Text size="xsmall" color="text-weak">multipath: {h.multipath}</Text>}
+        {h.multipath &&
+          (MULTIPATH_WARN.has(h.multipath_state ?? '') ? (
+            <Box direction="row" gap="xxsmall" align="start">
+              <Box flex={false} pad={{ top: '2px' }}>
+                <StatusWarning size="small" color="status-warning" a11yTitle="Warning" />
+              </Box>
+              <Text size="xsmall" color="status-warning">multipath: {h.multipath}</Text>
+            </Box>
+          ) : (
+            <Text size="xsmall" color="text-weak">multipath: {h.multipath}</Text>
+          ))}
       </Box>
     ),
   },

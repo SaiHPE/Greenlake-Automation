@@ -1,0 +1,139 @@
+# help createsched
+createsched - Allows users to schedule tasks.
+
+SYNTAX
+    createsched [options] <cmd> <taskschedule> <schedname>
+
+DESCRIPTION
+    The createsched command provides users access to create tasks that are
+    periodically run by the scheduler.
+
+AUTHORITY
+    Super, Service, Edit
+    Any role granted the sched_create right
+
+OPTIONS
+    -run_once
+        The task will only run once, at the specified time.
+
+    -no_alert
+        Failure of tasks created with 'no_alert' will not generate alerts if
+        the task fails.
+
+    -f
+        Do not detect when a new scheduled task exceeds the recommended number
+        of scheduled task starts per minute. Do not ask for confirmation
+        to create the new scheduled task.
+
+    -interval <interval>
+        Specify the frequency a schedule should run in addition to the
+        crontab-style schedule.
+
+SPECIFIERS
+    <cmd>
+        Specifies the cli command or the HPE-distributed script. Can be at most
+        1023 characters in length.
+
+    <taskschedule>
+        Specifies the crontab-style schedule. Each field can be at most 127
+        characters in length.
+
+    <interval>
+        Indicates how often a schedule runs in minutes. This must be a number
+        between 15 and 1440.
+
+    <schedname>
+        Specifies the name given to the schedule. The name can be up to 31
+        characters in length.
+
+NOTES
+    The names "all" and "upgrade" are reserved.
+
+    Only the following commands can be scheduled:
+    checkhealth compactcpg compactld compactvv creategroupsv
+    createsv creategroupvvcopy createvvcopy importvv moverelocpd removevv setqos
+    setsralertcrit setvv syncrcopy tunepd tunesys
+    tunevv updatesnapspace updatevv
+
+    The <taskschedule> string has five fixed fields:
+           minute, hour, day-of-month, month, day-of-week
+
+    To avoid spikes in resource utilization, it is recommended to spread out
+    scheduled task start times as much as possible. Createsched can predict
+    out to 30 days when the newly scheduled task exceeds the recommended
+    number of scheduled task starts per minute. When this is detected,
+    user confirmation is requested to continue creating the schedule.
+    To skip this detection and confirmation, use the -f option.
+
+    Fields are separated by spaces. The allowed values for the fields are:
+
+           Field         Allowed Values
+           -----         --------------
+           minute        0-59 (Must be * when -interval is used)
+           hour          * or 0-23
+           day-of-month  * or 1-31
+           month         * or 1-12
+           day-of-week   * or 0-6 (0 is Sunday)
+
+    Scheduling on February 29 is not supported.
+
+    Lists are allowed. A list is a set of numbers (or ranges) separated by
+    commas. Examples: "1,2,5,9", "0-4,8-12".
+
+    Ranges of numbers are allowed. Ranges are two numbers separated with a
+    hyphen. The specified range is inclusive. For example, 8-11 for an hour
+    entry specifies execution at hours 8, 9, 10 and 11. Ranges must be
+    specified from low to high.
+
+    Using -interval can make a schedule run a specified number of minutes
+    between 15 and 1440 (1 day). When -interval is used, the minute field must
+    be "*" or "-". This can be combined with the scheduling fields above
+    other than minute. The system will try to automatically balance the
+    schedule compared to other schedules already running on the system. The
+    schedule will always run for the specified interval, so it can run at
+    different times every day if the specified interval is not a divisor of
+    1440.
+
+    One of six special strings may also appear instead of the specification
+    above.  These internally use intervals so the run times are balanced:
+
+           string     meaning
+           ------     -------
+           @yearly    Run once a year.
+           @monthly   Run once a month.
+           @weekly    Run once a week.
+           @daily     Run once a day.
+           @hourly    Run once a hour.
+
+    If some form of daylight savings or summer/winter time is in effect, then
+    jobs scheduled during the switchover period could be executed once, twice,
+    or not at all.
+
+EXAMPLES
+    Create a scheduled task that will run every hour on the hour ("0 * * * *")
+    and will create a readonly (-ro) snapshot of sample_vv, that will expire in
+    two hours (-exp 2h). The created snapshot will be named sample_vv_set.HH.MMM
+    where HH and MM refer to the hour and minute that the snapshot was created
+    (@vvname@.@H@.@M@).
+        createsched "createsv -ro -exp 2h @vvname@.@H@.@M@ vv" "0 * * * *" sv_task
+
+    Create a scheduled task which will create a consistent group snapshot.
+    The readonly snapshots will be created from the volume set set:dbora (see
+    clihelp -sub objectsets) that will expire in two hours (-exp 2h) and the
+    snapshots will be named using the pattern @vvname@.@s@ (volume name specified
+    in the set, with the epoch in seconds appended). The task will be named
+    "snap_odbora_set" and run every hour on the hour during the working hours
+    from 8am to 5pm ("0 8-17 * * *").
+        createsched "createsv -ro -exp 2h @vvname@.@s@ set:dbora" "0 8-17 * * *"  sv_dbora_task
+
+    If just a single vv then:
+        createsched "createsv -ro -exp 2h @vvname@.@s@ vvname" "0 * * * *" snap_large_tpvv_a
+
+    Add a comment with spaces to createsv by surrounding the comment with
+    escaped double quotes:
+        createsched "createsv -ro -exp 2h -comment \"Comment with spaces\"
+            @vvname@.@H@.@M@ vv" "0 * * * *" sv_task
+
+    Create a snapshot every 60 minutes Monday through Friday.
+        createsched -interval 60 "createsv -ro -exp 2h @vvname@.@s@ vvname" "* * * * 1-5" snap_interval
+

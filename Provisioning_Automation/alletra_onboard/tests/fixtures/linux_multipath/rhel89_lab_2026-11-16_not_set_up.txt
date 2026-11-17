@@ -1,0 +1,15 @@
+=== hostname
+localhost.localdomain
+=== multipath -ll
+Nov 16 13:48:10 | /etc/multipath.conf does not exist, blacklisting all devices.
+Nov 16 13:48:10 | You can run "/sbin/mpathconf --enable" to create
+Nov 16 13:48:10 | /etc/multipath.conf. See man mpathconf(8) for more details
+Nov 16 13:48:10 | DM multipath kernel driver not loaded
+exit=1
+=== initstate
+cat: /sys/module/dm_multipath/initstate: No such file or directory
+exit=1
+=== multipath.conf
+ls: cannot access '/etc/multipath.conf': No such file or directory
+=== lsmod
+=== done

@@ -1,0 +1,276 @@
+# help showport
+showport - Show information about ports in the system.
+
+SYNTAX
+    showport [options] [-failed] [-sortcol <col>[,<dir>]] [<node:slot:port> |<pattern>...]
+
+DESCRIPTION
+    The showport command displays information about ports in the system.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+    -i
+        Shows port hardware inventory information.
+
+    -c
+        Displays all devices connected to the port. Such devices include cages
+        (for initiator ports), hosts (for target ports) and ports from other
+        storage system (for RCFC and peer ports).
+
+    -par
+        Displays a parameter listing such as the configured data rate of a port
+	and the maximum data rate that the card supports. Also shown is the
+        type of attachment (Direct Connect or Fabric Attached) and whether the
+        unique_nwwn and VCN capabilities are enabled.
+
+    -rc
+        Displays information that is specific to the Remote Copy ports.
+
+    -rcfc
+        Displays information that is specific to the Fibre Channel Remote Copy
+        ports.
+
+    -peer
+        Displays information that is specific to the Fibre Channel ports for
+        Data Migration.
+
+    -vpi
+        Displays information about Fibre Channel virtual ports.
+
+    -rcip
+        Displays information specific to the Ethernet Remote Copy ports.
+
+    -iscsi
+        Displays information about iSCSI ports.
+
+    -iscsiname
+        Displays iSCSI names associated with iSCSI ports.
+
+    -iscsivlans
+        Displays information about VLANs on iSCSI ports.
+
+    -nvme
+        Displays information about the NVMe over Fabric ports.
+
+    -file
+        Displays information about the File ports.
+
+    -stats
+        Displays link statistics for the NVMe over Fabric ports. This
+        option requires the -nvme option.
+
+    -fullstats
+        Displays the full list of available statistics for an NVMe over Fabric
+        or iSCSI port. This option requires either the -nvme or -iscsi option.
+
+    -sfp
+        Displays information about the SFPs attached to ports.
+
+    -ddm
+        Displays Digital Diagnostics Monitoring (DDM) readings from the SFPs if
+        they support DDM. This option must be used with the -sfp option.
+
+    -d
+        Displays detailed port information, supported only with -sfp, -iscsi or -nvme options.
+
+    -failed
+        Shows only failed ports.
+
+    -state
+        Displays the detailed state information. This is the same as -s.
+
+    -s
+        Displays the detailed state information.
+        This option is deprecated and will be removed in a subsequent release.
+
+    -ids
+        Displays the identities hosted by each physical port.
+
+    -sortcol <col>[,<dir>][:<col>[,<dir>]...]
+        Sorts command output based on column number (<col>). Columns are
+        numbered from left to right, beginning with 0. At least one column must
+        be specified. In addition, the direction of sorting (<dir>) can be
+        specified as follows:
+          inc
+              Sort in increasing order (default).
+          dec
+              Sort in decreasing order.
+
+        Multiple columns can be specified and separated by a colon (:). Rows
+        with the same information in them as earlier columns will be sorted
+        by values in later columns. 
+
+SPECIFIERS
+    <node:slot:port>...
+        Requests that information for a specified port is displayed.
+        This specifier can be repeated to display configuration information
+        about multiple ports. If not specified, configuration information
+        for all ports in the system is displayed.
+
+        node
+            Specifies the node using a number from 0 through 7.
+
+        slot
+            Specifies the PCI slot in the specified node. Valid range is 0 - 9.
+
+        port
+            Specifies the port using a number from 1 through 4.
+
+    <pattern>...
+        Specifies that the port matching the specified glob-style
+        pattern is displayed. This specifier can be repeated to display
+        configuration information about multiple ports. If not
+        specified, configuration information for all ports in the
+        system is displayed.
+
+NOTES
+    IP address denoted with * (Ex: 10.43.69.41*) indicates the port has more
+    than one IP address configured with VLANs.
+
+EXAMPLES
+    Descriptions for each column in the examples can be found at the end of this section.
+
+    The following example displays information about all ports in the system:
+
+        cli% showport
+        N:S:P      Mode     State --Node_WWN/IP--- -Port_WWN/HW_Addr- Type Protocol  Label
+        0:0:1 initiator     ready         16.1.8.1       A45D36D2344A disk     NVMe      -
+        0:0:2 initiator     ready         16.1.9.1       A45D36D2344B disk     NVMe      -
+        0:1:1      peer   offline                -       A45D36D23448 free       IP      -
+        0:2:1      peer   offline                -       A45D36D23449 free       IP      -
+        0:3:1    target     ready 2FF70002AC07EA61   20310002AC07EA61 host       FC      -
+        0:3:2    target     ready 2FF70002AC07EA61   20320002AC07EA61 host       FC      -
+        0:3:3    target     ready 2FF70002AC07EA61   20330002AC07EA61 host       FC      -
+        0:3:4    target     ready 2FF70002AC07EA61   20340002AC07EA61 host       FC      -
+        1:0:1 initiator     ready        16.1.8.17       A45D36D23450 disk     NVMe      -
+        1:0:2 initiator     ready        16.1.9.17       A45D36D23451 disk     NVMe      -
+        1:1:1      peer   offline                -       A45D36D2344E free       IP      -
+        1:2:1      peer   offline                -       A45D36D2344F free       IP      -
+        1:3:1    target     ready 2FF70002AC07EA61   21310002AC07EA61 host       FC      -
+        1:3:2    target     ready 2FF70002AC07EA61   21320002AC07EA61 host       FC      -
+        1:3:3    target     ready 2FF70002AC07EA61   21330002AC07EA61 host       FC      -
+        1:3:4    target     ready 2FF70002AC07EA61   21340002AC07EA61 host       FC      -
+        ...
+
+    The following example displays hardware and connection information about the
+    ports settings:
+
+        cli% showport -i
+        N:S:P Brand  Model   Rev Firmware    Serial         HWType
+        0:0:1 LSI    9205-8e 01  17.11.00.00 SP12430085     SAS
+        0:0:2 LSI    9205-8e 01  17.11.00.00 SP12430085     SAS
+        0:1:1 QLOGIC QLE2672 02  8.1.1       RFE1228G50820  FC
+        0:1:2 QLOGIC QLE2672 02  8.1.1       RFE1228G50820  FC
+        0:2:1 QLOGIC QLE8242 58  4.15.2      PCGLTX0RC1G3PX CNA
+        0:2:2 QLOGIC QLE8242 58  4.15.2      PCGLTX0RC1G3PX CNA
+
+    The following example displays devices connected to ports and
+    information about the ports settings on node 0 slot 4:
+        cli% showport -par 0:4:*
+        N:S:P Connmode ConnType CfgRate MaxRate Class2   UniqNodeWwn VCN      IntCoal TMWO
+        0:4:1 host     point    auto    4Gbps   disabled disabled    disabled enabled enabled
+        0:4:2 host     point    auto    4Gbps   disabled disabled    disabled enabled enabled
+        0:4:3 disk     loop     auto    4Gbps   disabled disabled    disabled enabled n/a
+        0:4:4 disk     loop     auto    4Gbps   disabled disabled    disabled enabled n/a
+        -----------------------------------------------------------------------------
+        4
+
+    The following example displays each system ports' configuration:
+
+        cli% showport -par
+        N:S:P Connmode ConnType CfgRate MaxRate Class2   UniqNodeWwn VCN      IntCoal TMWO
+        0:0:1 disk     point    6Gbps   6Gbps   n/a      n/a         n/a      enabled n/a
+        0:0:2 disk     point    6Gbps   6Gbps   n/a      n/a         n/a      enabled n/a
+        0:1:1 host     point    auto    16Gbps  disabled disabled    disabled enabled disabled
+        0:1:2 host     point    auto    16Gbps  disabled disabled    disabled enabled disabled
+        0:7:1 host     point    auto    16Gbps  disabled disabled    disabled enabled disabled
+        0:7:2 host     point    auto    16Gbps  disabled disabled    disabled enabled disabled
+
+    The following example displays information about all Remote Copy ports:
+
+        cli% showport -rc
+        N:S:P State -----HwAddr-----   Rate Type
+        0:1:1 ready     040973BA1149 10Gbps rcip
+        0:3:3 ready 20330002AC07E903 32Gbps rcfc
+        0:3:4 ready 20340002AC07E903 32Gbps rcfc
+        1:1:1 ready     040973BA0812 10Gbps rcip
+        1:3:3 ready 21330002AC07E903 32Gbps rcfc
+        1:3:4 ready 21340002AC07E903 32Gbps rcfc
+
+    The following example displays the detailed state of the port:
+
+        cli% showport -state
+        N:S:P --State-- -Detailed_State-
+        0:0:1 loss_sync loss_sync
+        0:0:2 loss_sync loss_sync
+        0:3:1 offline   offline
+        0:3:1 offline   offline
+        0:5:1 loss_sync loss_sync
+        --------------------------------
+        10
+
+    The following example displays information about RCIP ports:
+
+        cli% showport -rcip
+
+    The following example displays all ports that are configured as peer:
+
+        cli% showport -peer
+        N:S:P Mode State ----Node_WWN---- ----Port_WWN---- Rate
+        0:5:1 initiator ready 2FF70202AC000007 20510202AC000007 2Gbps
+
+    The following example displays fibre channel virtual ports information:
+
+        cli% showport -vpi
+        N:S:P   Mode     State ----Node_WWN---- ----Port_WWN---- Type Protocol VPI
+        0:3:1 target     ready 2FF70002AC07EA60 20310002AC07EA60 host       FC   0
+        0:3:1 target  disabled 2FF70002AC07EA60 21310002AC07EA60 free       FC   1
+        0:3:1 target     ready 2FF70102AC07EA60 20310102ADF7EA60 free     NVMe  31
+        .....
+
+    The following examples display both standard and detailed information about SFPs attached
+    to ports:
+
+        cli% showport -sfp
+        N:S:P -State- -Manufacturer- MaxSpeed(Gbps) TXDisable TXFault RXLoss DDM
+        0:0:1 OK      FINISAR_CORP.            2.10 No        No      No     Yes
+        0:0:2 OK      FINISAR_CORP.            2.10 No        No      Yes    Yes
+        0:3:2 OK      SIGMA-LINKS              2.10 No        No      Yes    Yes
+        1:0:1 OK      FINISAR_CORP.            2.10 No        No      No     Yes
+        1:0:2 OK      FINISAR_CORP.            2.10 No        No      Yes    Yes
+
+        cli% showport -sfp -d
+        ------------Port 0:0:2------------
+        N:S:P         :   0:0:2
+        State         :   Degraded
+        Manufacturer  :   PICOLIGHT
+        Part Number   :   PL-XPL-VE-S24-31
+        Serial Number :   425EF1E6
+        Revision      :   N/A
+        MaxSpeed(Gbps):   2.10
+        Qualified     :   No
+        TX Disable    :   --
+        TX Fault      :   --
+        RX Loss       :   --
+        RX Power Low  :   No
+        DDM Support   :   No
+        ----------Port 1:3:1-----------
+        N:S:P         :   1:3:1
+        State         :   OK
+        Manufacturer  :   FINISAR_CORP.
+        Part Number   :   FTLF8519P2BNL
+        Serial Number :   U76031S
+        Revision      :   A
+        MaxSpeed(Gbps):   2.10
+        Qualified     :   Yes
+        TX Disable    :   No
+        TX Fault      :   No
+        RX Loss       :   No
+        RX Power Low  :   No
+        DDM Support   :   Yes
+
+    Use the following to get a description of each column:
+    clihelp -col showport
+

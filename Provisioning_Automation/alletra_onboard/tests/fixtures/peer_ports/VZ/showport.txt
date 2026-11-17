@@ -1,0 +1,24 @@
+# showport
+N:S:P   Mode     State --Node_WWN/IP--- -Port_WWN/HW_Addr-    Type Protocol Label
+0:3:1 target     ready 2FF70002AC02F584   20310002AC02F584    host       FC     -
+0:3:2 target     ready 2FF70002AC02F584   20320002AC02F584    host       FC     -
+0:3:3 target loss_sync 2FF70002AC02F584   20330002AC02F584    free       FC     -
+0:3:4 target loss_sync 2FF70002AC02F584   20340002AC02F584    free       FC     -
+0:4:1 target   offline          0.0.0.0       40A6B7E031A8    free    iSCSI     -
+0:4:2 target   offline          0.0.0.0       40A6B7E031A9    free    iSCSI     -
+0:4:3   peer loss_sync       10.222.1.5       40A6B7E031AA    rcip       IP     -
+0:4:4   peer loss_sync       10.222.1.6       40A6B7E031AB    rcip       IP     -
+0:5:1   peer     ready                -        202AC000103 cluster       IP     -
+0:5:2   peer     ready                -        202AC000103 cluster       IP     -
+1:3:1 target     ready 2FF70002AC02F584   21310002AC02F584    host       FC     -
+1:3:2 target     ready 2FF70002AC02F584   21320002AC02F584    host       FC     -
+1:3:3 target loss_sync 2FF70002AC02F584   21330002AC02F584    free       FC     -
+1:3:4 target loss_sync 2FF70002AC02F584   21340002AC02F584    free       FC     -
+1:4:1 target   offline          0.0.0.0       40A6B7E02318    free    iSCSI     -
+1:4:2 target   offline          0.0.0.0       40A6B7E02319    free    iSCSI     -
+1:4:3   peer loss_sync       10.222.1.7       40A6B7E0231A    rcip       IP     -
+1:4:4   peer loss_sync       10.222.1.8       40A6B7E0231B    rcip       IP     -
+1:5:1   peer     ready                -        202AC000105 cluster       IP     -
+1:5:2   peer     ready                -        202AC000105 cluster       IP     -
+---------------------------------------------------------------------------------
+   20                                                                            

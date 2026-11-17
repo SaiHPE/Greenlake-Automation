@@ -1,0 +1,16 @@
+# showport -par
+N:S:P Connmode ConnType CfgRate MaxRate Class2   UniqNodeWwn VCN      IntCoal TMWO    
+0:3:1 host     point    auto    32Gbps  disabled disabled    disabled enabled disabled
+0:3:2 host     point    auto    32Gbps  disabled disabled    disabled enabled disabled
+0:3:3 host     point    auto    32Gbps  disabled disabled    disabled enabled disabled
+0:3:4 host     point    auto    32Gbps  disabled disabled    disabled enabled disabled
+0:4:1 host     eth      auto    25Gbps  n/a      n/a         n/a      n/a     n/a     
+0:4:2 host     eth      auto    25Gbps  n/a      n/a         n/a      n/a     n/a     
+1:3:1 host     point    auto    32Gbps  disabled disabled    disabled enabled disabled
+1:3:2 host     point    auto    32Gbps  disabled disabled    disabled enabled disabled
+1:3:3 host     point    auto    32Gbps  disabled disabled    disabled enabled disabled
+1:3:4 host     point    auto    32Gbps  disabled disabled    disabled enabled disabled
+1:4:1 host     eth      auto    25Gbps  n/a      n/a         n/a      n/a     n/a     
+1:4:2 host     eth      auto    25Gbps  n/a      n/a         n/a      n/a     n/a     
+--------------------------------------------------------------------------------------
+12                                                                                    

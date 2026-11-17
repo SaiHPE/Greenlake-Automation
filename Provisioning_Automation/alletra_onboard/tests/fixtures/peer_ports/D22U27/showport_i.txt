@@ -1,0 +1,28 @@
+# showport -i
+N:S:P Brand    Model      Rev Firmware   Serial          HWType
+0:1:1 Mellanox CX6-DP-DX  n/a 22.42.1000 1VY515045D      NVMe  
+0:1:2 Mellanox CX6-DP-DX  n/a 22.42.1000 1VY515045D      NVMe  
+0:2:1 Mellanox CX6-DP-DX  n/a 22.42.1000 1VY515040N      NVMe  
+0:2:2 Mellanox CX6-DP-DX  n/a 22.42.1000 1VY515040N      NVMe  
+0:3:1 HPE      HPE64004-M 02  9.11.15    MY551410HR      FC    
+0:3:2 HPE      HPE64004-M 02  9.11.15    MY551410HR      FC    
+0:3:3 HPE      HPE64004-M 02  9.11.15    MY551410HR      FC    
+0:3:4 HPE      HPE64004-M 02  9.11.15    MY551410HR      FC    
+0:4:1 HPE      E810-CSFP  n/a 4.50       1TD506018Y      Eth   
+0:4:2 HPE      E810-CSFP  n/a 4.50       1TD506018Y      Eth   
+0:4:3 HPE      E810-CSFP  n/a 4.50       1TD506018Y      Eth   
+0:4:4 HPE      E810-CSFP  n/a 4.50       1TD506018Y      Eth   
+1:1:1 Mellanox CX6-DP-DX  n/a 22.42.1000 1VY5150455      NVMe  
+1:1:2 Mellanox CX6-DP-DX  n/a 22.42.1000 1VY5150455      NVMe  
+1:2:1 Mellanox CX6-DP-DX  n/a 22.42.1000 1VY51503D9      NVMe  
+1:2:2 Mellanox CX6-DP-DX  n/a 22.42.1000 1VY51503D9      NVMe  
+1:3:1 HPE      HPE64004-M 02  9.11.15    MY551410G2      FC    
+1:3:2 HPE      HPE64004-M 02  9.11.15    MY551410G2      FC    
+1:3:3 HPE      HPE64004-M 02  9.11.15    MY551410G2      FC    
+1:3:4 HPE      HPE64004-M 02  9.11.15    MY551410G2      FC    
+1:4:1 HPE      E810-CSFP  n/a 4.50       1TD5060159      Eth   
+1:4:2 HPE      E810-CSFP  n/a 4.50       1TD5060159      Eth   
+1:4:3 HPE      E810-CSFP  n/a 4.50       1TD5060159      Eth   
+1:4:4 HPE      E810-CSFP  n/a 4.50       1TD5060159      Eth   
+---------------------------------------------------------------
+   24                                                          

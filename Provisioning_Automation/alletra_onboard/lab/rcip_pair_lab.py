@@ -207,7 +207,8 @@ def run_replication(run_id):
           ev["event_type"] == "replication.link_checked" and lc.get("results") and len(measured) == len(lc["results"]),
           ev["message"][:200])
 
-    ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "replication-apply")
+    ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "replication-apply",
+              body={"approved_plan": rplan.get("plan_id")})
     res = ev["data"].get("result") or {}
     check("apply: group created, nothing failed", GROUP in res.get("groups_created", []) and not res.get("error"),
           res.get("error") or ", ".join(res.get("groups_created", [])))

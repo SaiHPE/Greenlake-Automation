@@ -1,0 +1,102 @@
+{
+ "id": 185493,
+ "name": "rack13-ARCUS",
+ "systemVersion": "10.6.0.74",
+ "IPv4Addr": "10.132.30.121",
+ "model": "HPE Alletra Storage MP B10230",
+ "serialNumber": "CZ2D2K014S",
+ "totalNodes": 2,
+ "masterNode": 0,
+ "onlineNodes": [
+  0,
+  1
+ ],
+ "clusterNodes": [
+  0,
+  1
+ ],
+ "chunkletSizeMiB": 1024,
+ "totalCapacityMiB": 15174810.0,
+ "allocatedCapacityMiB": 90039.0,
+ "freeCapacityMiB": 15084771.0,
+ "failedCapacityMiB": 0.0,
+ "readOnlyParameters": {
+  "maxVolumeSizeMiB": 67108864,
+  "maxReduceVolumeSizeMiB": 67108864
+ },
+ "contact": "lab-user",
+ "timeZone": "Asia/Kolkata",
+ "licenseInfo": {
+  "issueTimeSec": 1788274836,
+  "issueTime8601": "2026-09-01T20:30:36+05:30",
+  "diskCount": 0,
+  "WWNBASE": 185493,
+  "licenses": [
+   {
+    "name": "HPE Alletra Storage MP B10000 Disconnected",
+    "expiryTimeSec": 305,
+    "expiryTime8601": "1970-01-01T05:35:05+05:30"
+   },
+   {
+    "name": "Owned",
+    "expiryTimeSec": 304,
+    "expiryTime8601": "1970-01-01T05:35:04+05:30"
+   },
+   {
+    "name": "SED Encryption",
+    "expiryTimeSec": 301,
+    "expiryTime8601": "1970-01-01T05:35:01+05:30"
+   },
+   {
+    "name": "Software and Support SaaS",
+    "expiryTimeSec": 260,
+    "expiryTime8601": "1970-01-01T05:34:20+05:30"
+   }
+  ],
+  "licenseState": {
+   "virtualCopy": true,
+   "remoteCopy": true,
+   "thinProvisioing": true,
+   "thinProvisioning": true,
+   "domains": true,
+   "dynamicOptimization": true,
+   "virtualLock": true,
+   "thinPersistence": true,
+   "thinConversion": true,
+   "adaptiveOptimization": true,
+   "peerVirtualization": true,
+   "qos": true,
+   "systemReporter": true,
+   "darEncryption": false,
+   "fileServices": true,
+   "storageFederation": true,
+   "onlineImport": true,
+   "rmcApplicationSuite": true,
+   "smartSAN": true,
+   "sedEncryption": true
+  }
+ },
+ "parameters": {
+  "rawSpaceAlertSSD": 0,
+  "remoteSyslog": false,
+  "remoteSyslogHost": "0.0.0.0",
+  "remoteSyslogSecurityHost": "0.0.0.0",
+  "sparingAlgorithm": "Default",
+  "eventLogsize": 7340032,
+  "eventLogNum": 15,
+  "VVRetentionTimeMax": 1209600,
+  "upgradeNote": "",
+  "autoExportAfterReboot": true,
+  "thermalShutdown": true,
+  "sessionTimeout": 3600,
+  "overProvRatioLimit": 0.0,
+  "overProvRatioWarning": 0.0,
+  "disableChunkletInitUNMAP": false,
+  "remoteCopyHostThrottling": false,
+  "autoAdmitTune": true,
+  "singleLunHost": false,
+  "allowDomainUsersAffectNoDomain": 2,
+  "dsccReadOnly": false,
+  "remoteSyslogEnableMutualTLS": true
+ }
+}

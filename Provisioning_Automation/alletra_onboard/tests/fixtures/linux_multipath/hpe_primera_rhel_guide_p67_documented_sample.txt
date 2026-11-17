@@ -1,0 +1,7 @@
+360002ac000000000000003e3000185df dm-3 3PARdata,VV
+size=20G features='1 queue_if_no_path' hwhandler='1 alua' wp=rw
+`-+- policy='round-robin 0' prio=50 status=active
+  |- 7:0:0:1  sdb  8:16   active ready running
+  |- 7:0:1:1  sdv  65:80  active ready running
+  |- 8:0:0:1  sdap 66:144 active ready running
+  `- 8:0:1:1  sdbj 67:208 active ready running

@@ -1,0 +1,24 @@
+# showport -i
+N:S:P Brand    Model           Rev Firmware   Serial     HWType
+0:3:1 HPE      HPE64004-B      10  14.2.807.1 MYT5342RY2 FC    
+0:3:2 HPE      HPE64004-B      10  14.2.807.1 MYT5342RY2 FC    
+0:3:3 HPE      HPE64004-B      10  14.2.807.1 MYT5342RY2 FC    
+0:3:4 HPE      HPE64004-B      10  14.2.807.1 MYT5342RY2 FC    
+0:4:1 HPE      E810-CSFP       n/a 4.50       1TD528011T iSCSI 
+0:4:2 HPE      E810-CSFP       n/a 4.50       1TD528011T iSCSI 
+0:4:3 HPE      E810-CSFP       n/a 4.50       1TD528011T Eth   
+0:4:4 HPE      E810-CSFP       n/a 4.50       1TD528011T Eth   
+0:5:1 Mellanox CX6-Dual-PortLx 00  26.42.1000 Onboard    Eth   
+0:5:2 Mellanox CX6-Dual-PortLx 00  26.42.1000 Onboard    Eth   
+1:3:1 HPE      HPE64004-B      10  14.2.807.1 MYT5342RY4 FC    
+1:3:2 HPE      HPE64004-B      10  14.2.807.1 MYT5342RY4 FC    
+1:3:3 HPE      HPE64004-B      10  14.2.807.1 MYT5342RY4 FC    
+1:3:4 HPE      HPE64004-B      10  14.2.807.1 MYT5342RY4 FC    
+1:4:1 HPE      E810-CSFP       n/a 4.50       1TD52800X9 iSCSI 
+1:4:2 HPE      E810-CSFP       n/a 4.50       1TD52800X9 iSCSI 
+1:4:3 HPE      E810-CSFP       n/a 4.50       1TD52800X9 Eth   
+1:4:4 HPE      E810-CSFP       n/a 4.50       1TD52800X9 Eth   
+1:5:1 Mellanox CX6-Dual-PortLx 00  26.42.1000 Onboard    Eth   
+1:5:2 Mellanox CX6-Dual-PortLx 00  26.42.1000 Onboard    Eth   
+---------------------------------------------------------------
+   20                                                          

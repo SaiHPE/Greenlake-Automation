@@ -168,3 +168,22 @@ blockers — S-1 in miniature. **Still owed on hardware:** S-1 (through the UI) 
   extended will show the extra volume nowhere. Acceptable — the as-built (G-0) reports array state.
 - One extra WSAPI read (VLUNs) per plan. On a large array `GET /vluns` is the biggest list on the
   box; measured cost belongs in S-1.
+
+## Addendum (BL-52, 2026-11-17): the server checks the approval
+
+Until now the tick (*"I have reviewed this plan and authorise creating these objects"*) existed only on
+the screen. The server refused an apply without a previewed plan, but any local caller could apply a
+plan nobody ticked. Now each preview gives the plan an identity, `plan_id`, which the server keeps with
+the held plan and sends in the `storage.previewed` event. `POST /runs/{id}/storage/apply` must carry
+`{"approved_plan": "<plan_id>"}`. Without it the server answers 409 *"Tick the approval for this plan
+first."*; with any other id, 409 *"The plan changed since it was approved. Review the new plan and tick
+again."* The screen sends the id only when the tick was given for the plan on screen, so a plan rebuilt
+between the tick and the click starts unticked. Starting a preview withdraws the held plan at once, even
+if the preview then fails, and re-running discovery or changing the composition still withdraws it
+(LESSONS 6). The replication apply (SPEC-016 R5) works the same way, with the id from the
+`replication.previewed` event. The id is not a secret, since anyone who can read the run's events can
+read it. It makes the approval explicit and ties it to one plan; it is not authentication. Tests:
+`test_apply_needs_the_id_of_the_plan_the_operator_ticked`,
+`test_a_preview_that_fails_still_withdraws_the_old_approval` (service), and
+`test_storage_apply_needs_the_plan_id_the_operator_ticked`,
+`test_replication_apply_needs_the_plan_id_the_operator_ticked` (API).

@@ -1,0 +1,6 @@
+# showport -peer
+N:S:P      Mode State ----Node_WWN---- ----Port_WWN----   Rate VPI
+0:3:2 initiator ready 2FF70202AC02DEF2 20320202AC02DEF2 32Gbps   0
+1:3:2 initiator ready 2FF70202AC02DEF2 21320202AC02DEF2 32Gbps   0
+------------------------------------------------------------------
+    2                                                             

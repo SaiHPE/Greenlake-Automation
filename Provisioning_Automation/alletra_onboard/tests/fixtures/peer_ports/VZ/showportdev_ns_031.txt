@@ -1,0 +1,8 @@
+# showportdev ns 0:3:1
+    PtId LpID  Hadr ----Node_WWN---- ----Port_WWN---- ftrs   svpm   bbct   flen   -----vp_WWN----- ---------------------------------------------------SNN---------------------------------------------------- Name                 
+0x1b0400 0x06  0x00 20009440C9D01212 10009440C9D01212 0x0000 0x0000 0x0000 0x0000 20310002AC02F584 Emulex SN1610E2P FV14.4.329.10 DV14.4.0.42 HN:DL360G11E24U25.bgl1.global.tslabs.hpecorp.net OS:VMware ESXi CRV_VZ_DL360G11D24U25
+0x1b0200 0x00  0x00 2FF70002AC02F584 20310002AC02F584 0x8800 0x0012 n/a    0x0800 20310002AC02F584 HPE Alletra Storage MP - SGHD44LQLS - fw:105510                                                            0:3:1                
+0x1b0500 0x08  0x00 20005CBA2CFC835A 10005CBA2CFC835A 0x0000 0x0000 0x0000 0x0000 20310002AC02F584 Emulex SN1610E2P FV14.4.473.30 DV14.4.0.42 HN:DL360G11E24U26.bgl1.global.tslabs.hpecorp.net OS:VMware ESXi CRV_VZ_DL360G11D24U26
+0x1b0600 0x07  0x00 20005CBA2CFC8366 10005CBA2CFC8366 0x0000 0x0000 0x0000 0x0000 20310002AC02F584 Emulex SN1610E2P FV14.4.473.30 DV14.4.0.42 HN:DL360G11E24U27.bgl1.global.tslabs.hpecorp.net OS:VMware ESXi CRV_VZ_DL360G11D24U27
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+       4 total                                                                                                                                                                                                                     

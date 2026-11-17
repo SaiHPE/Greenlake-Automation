@@ -7,6 +7,7 @@ import { theme } from '../src/theme';
 import { NotesContext } from './kit';
 import { Screen } from './screen';
 import { asbuilt } from './screens/AsBuilt';
+import { calmZoning } from './screens/CalmZoning';
 import { discovery } from './screens/Discovery';
 import { failover } from './screens/Failover';
 import { finish } from './screens/Finish';
@@ -21,7 +22,7 @@ import { startScreen } from './screens/Start';
 import { stopped } from './screens/Stopped';
 import { verify } from './screens/Verify';
 
-const SCREENS: Screen[] = [home, prerequisites, sheet, mode, overview, discovery, replication, handoff, stopped, finish, provision, failover, verify, asbuilt, custom];
+const SCREENS: Screen[] = [home, prerequisites, sheet, mode, overview, discovery, replication, handoff, stopped, finish, provision, failover, verify, asbuilt, custom, calmZoning];
 const WIDTHS = [
   { label: 'Jump box 1366 × 768', w: 1366, h: 768 },
   { label: 'Small laptop 1080 × 720', w: 1080, h: 720 },
@@ -116,7 +117,7 @@ function Gallery() {
           <Box background="decorative-purple" round="xsmall" pad={{ horizontal: 'small', vertical: 'xxsmall' }}>
             <Text size="xsmall" weight="bold" color="text-onStrong">MOCKUP</Text>
           </Box>
-          <Text size="small" weight="bold" color="text-strong">Redesign draft 3</Text>
+          <Text size="small" weight="bold" color="text-strong">Redesign draft 3 (M16: draft 4)</Text>
           {all.map((s) => (
             <Button key={s.id} size="small" primary={s.id === screen.id} label={s.id} tip={s.title} onClick={() => go(s.id)} />
           ))}

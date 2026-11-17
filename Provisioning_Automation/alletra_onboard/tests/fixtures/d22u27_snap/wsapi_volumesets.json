@@ -1,0 +1,363 @@
+{
+ "total": 21,
+ "members": [
+  {
+   "id": 0,
+   "uuid": "57ab859d-edf1-4c8c-95a7-6e55c2adf538",
+   "name": "test_CRV_set",
+   "shortName": "test_CRV_set",
+   "setmembers": [
+    "test_CRV.r"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "other",
+   "businessImportance": 2
+  },
+  {
+   "id": 9,
+   "uuid": "f2d0db9e-cc0f-498f-8c0d-f9fb93b01252",
+   "name": "New-test",
+   "shortName": "New-test",
+   "count": 0,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMWare ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 10,
+   "uuid": "e39722ea-61a0-48a3-bdbf-413f5a57cc18",
+   "name": "300gb",
+   "shortName": "300gb",
+   "setmembers": [
+    "300gb",
+    "Test"
+   ],
+   "count": 2,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMWare ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 11,
+   "uuid": "605f20bf-aeee-4e6c-9a09-a89bc6784acb",
+   "name": "test55",
+   "shortName": "test55",
+   "setmembers": [
+    "test5"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMWare ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 15,
+   "uuid": "5ded0e86-3a10-4f50-b5e7-52b08ed4b8cd",
+   "name": "600gb",
+   "shortName": "600gb",
+   "setmembers": [
+    "600gb"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMWare ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 16,
+   "uuid": "e3ec861b-bdcc-4798-9632-2b4000971df3",
+   "name": "700gb",
+   "shortName": "700gb",
+   "setmembers": [
+    "700gb"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMWare ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 22,
+   "uuid": "a217bfbd-81d5-4c9f-8957-2a60f6f74a0a",
+   "name": "IBK-Test-Vset",
+   "shortName": "IBK-Test-Vset",
+   "setmembers": [
+    "IBK-test-v1"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMWare ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 24,
+   "uuid": "980fd5c2-9e97-4f53-8ab6-ab5396c743f9",
+   "name": "dsccvvset200",
+   "shortName": "dsccvvset200",
+   "setmembers": [
+    "dsccvv200"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMware ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": false
+  },
+  {
+   "id": 25,
+   "uuid": "86171131-6288-4ce7-8c65-dabf1786f32d",
+   "name": "DR_Repl",
+   "shortName": "DR_Repl",
+   "setmembers": [
+    "DR_Repl"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMware ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": false
+  },
+  {
+   "id": 28,
+   "uuid": "eb1ddc2a-f95f-4d34-a46c-4248cad01b00",
+   "name": "dsccvvset2001775733799528889667",
+   "shortName": "dsccvvset2001775~28",
+   "setmembers": [
+    "dsccvv200.260505170000"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMware ESXi",
+   "businessImportance": 2
+  },
+  {
+   "id": 29,
+   "uuid": "181a6c0f-89c2-470c-87ef-f1da927ef6ef",
+   "name": "snap_300gb",
+   "shortName": "snap_300gb",
+   "count": 0,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMWare ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 31,
+   "uuid": "e620b05e-7d79-4105-bede-281dfcebf2cb",
+   "name": "Yoshino_774718_480550",
+   "shortName": "Yoshino_774718_480550",
+   "setmembers": [
+    "Yoshino_774718_480550.0",
+    "Yoshino_774718_480550.1"
+   ],
+   "count": 2,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "Windows File Server",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 34,
+   "uuid": "d4727f96-60d9-4f1d-8153-566aadc5785d",
+   "name": "z101",
+   "shortName": "z101",
+   "setmembers": [
+    "snp1"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "other",
+   "businessImportance": 2
+  },
+  {
+   "id": 36,
+   "uuid": "b36f9d37-bba2-4a84-8ab0-fcd7aee2cb96",
+   "name": "set-test999",
+   "shortName": "set-test999",
+   "setmembers": [
+    "test999"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMware ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": false
+  },
+  {
+   "id": 37,
+   "uuid": "af6f61e0-3048-4fbb-8acb-295d8fec9f50",
+   "name": "Yoshino_774718_480550_1TB",
+   "shortName": "Yoshino_774718_480550_1TB",
+   "setmembers": [
+    "Yoshino_774718_480550_1TB"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "Windows File Server",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 38,
+   "uuid": "adcb8b2b-6543-41b5-99a3-7e63dc31bce3",
+   "name": "APP_Test",
+   "shortName": "APP_Test",
+   "setmembers": [
+    "APP.test.vv",
+    "lab-user_HOC"
+   ],
+   "count": 2,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "Other",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 48,
+   "uuid": "b1b3aea8-c757-4e08-a043-2f0faf0afcb4",
+   "name": "set-test9991784524165764448212",
+   "shortName": "set-test99917845~48",
+   "setmembers": [
+    "test999.260804153001",
+    "test999.261116080000",
+    "test999.261116081500",
+    "test999.261116083000",
+    "test999.261116084500",
+    "test999.261116090000",
+    "test999.261116091500",
+    "test999.261116093000",
+    "test999.261116094500",
+    "test999.261116100000",
+    "test999.261116101500",
+    "test999.261116103000",
+    "test999.261116104500",
+    "test999.261116110000",
+    "test999.261116111500",
+    "test999.261116113000",
+    "test999.261116114500",
+    "test999.261116120000",
+    "test999.261116121500",
+    "test999.261116123000",
+    "test999.261116124500",
+    "test999.261116130000",
+    "test999.261116131500",
+    "test999.261116133000",
+    "test999.261116134500",
+    "test999.261116140000",
+    "test999.261116141500",
+    "test999.261116143000",
+    "test999.261116144500",
+    "test999.261116150000",
+    "test999.261116151500",
+    "test999.261116153000",
+    "test999.261116154500",
+    "test999.261116160000",
+    "test999.261116161500",
+    "test999.261116163000",
+    "test999.261116164500",
+    "test999.261116170001",
+    "test999.261116171500",
+    "test999.261116173000",
+    "test999.261116174500",
+    "test999.261116180000",
+    "test999.261116181500",
+    "test999.261116183000",
+    "test999.261116184501",
+    "test999.261116190001",
+    "test999.261116191500",
+    "test999.261116193000",
+    "test999.261116194501",
+    "test999.261116200001",
+    "test999.261116201501",
+    "test999.261116203001",
+    "test999.261116204501"
+   ],
+   "count": 53,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMware ESXi",
+   "businessImportance": 2
+  },
+  {
+   "id": 50,
+   "uuid": "5f4d2e45-fdfe-4d4c-831d-d14597c7785a",
+   "name": "Morpheus_datastore",
+   "shortName": "Morpheus_datastore",
+   "setmembers": [
+    "Morpheus-datastore"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMWare ESXi",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 51,
+   "uuid": "23148cce-e9c7-45f1-bd3e-06cbab4e636a",
+   "name": "Test.Snapset",
+   "shortName": "Test.Snapset",
+   "count": 0,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "VMWare ESXi",
+   "businessImportance": 2
+  },
+  {
+   "id": 74,
+   "uuid": "47ad257e-7bec-4eda-8cb9-e920fa125fd7",
+   "name": "lab-user1_885564_553150",
+   "shortName": "lab-user1_885564_553150",
+   "setmembers": [
+    "lab-user1_885564_553150"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "Windows File Server",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 76,
+   "uuid": "d3b2c3c1-01ff-4595-a705-978d82ef8153",
+   "name": "Automation_set",
+   "shortName": "Automation_set",
+   "setmembers": [
+    "Automation1",
+    "Automation2",
+    "Automation3",
+    "Automation4"
+   ],
+   "count": 4,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "other",
+   "businessImportance": 2
+  }
+ ]
+}

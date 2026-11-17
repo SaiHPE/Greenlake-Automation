@@ -1,0 +1,5 @@
+# srstatrcvv -hires -btsecs -24h -groupby GROUP_NAME -summary avg,max,per_group
+Start Time: 2026-11-16 00:05:20 IST (1794767720)
+End Time: 1970-01-01 05:30:00 IST (0)
+                   -IO/s-- -KBytes/sec- -Svct(ms)- IOSz KB
+Summary GROUP_NAME Lcl Rmt   Lcl    Rmt  Lcl   Rmt     Lcl   RPO

@@ -64,10 +64,11 @@ function download(filename: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-/** The undo for exactly what this apply created (SPEC-007). Text for the operator; the tool never runs it. */
-function RemovalSet({ result, runId, serial }: { result: ProvisioningResult; runId: string; serial?: string }) {
+/** The undo for exactly what this run created, across every apply, failed ones included (SPEC-007 R4, R6).
+ *  Text for the operator; the tool never runs it. */
+function RemovalSet({ removals, notes, runId, serial }: { removals: RemovalItem[]; notes: string[]; runId: string; serial?: string }) {
   const [copied, setCopied] = useState(false);
-  const lines = removalLines(result.removals ?? []);
+  const lines = removalLines(removals);
   const header = [
     `# Removal of what run ${runId.slice(0, 8)} created on ${serial ?? 'the array'} — ${new Date().toISOString()}`,
     '# Review before pasting. The tool never runs these. Order: exports, VV sets, volumes, host sets, hosts.',
@@ -80,11 +81,12 @@ function RemovalSet({ result, runId, serial }: { result: ProvisioningResult; run
     <Box gap="xsmall" margin={{ top: 'small' }}>
       <Text size="small" weight={500}>Removal command set</Text>
       {lines.length === 0 ? (
-        <Text size="small" color="text-weak">Nothing to remove: this apply created nothing.</Text>
+        <Text size="small" color="text-weak">Nothing to remove: this run has created nothing on the array.</Text>
       ) : (
         <>
           <Text size="small" color="text-weak">
-            Undoes exactly what this apply created, in dependency order. Objects that already existed are not touched.
+            Undoes exactly what this run created, in dependency order, including anything made before a failed attempt. Objects that already
+            existed are not touched.
           </Text>
           <Box background="background-contrast" round="xsmall" pad="small" tabIndex={0} style={{ overflowX: 'auto' }}>
             {[...header, ...lines].map((c, i) => <Text key={i} size="small" style={{ ...mono, whiteSpace: 'pre-wrap' }}>{c}</Text>)}
@@ -95,7 +97,7 @@ function RemovalSet({ result, runId, serial }: { result: ProvisioningResult; run
           </Box>
         </>
       )}
-      {(result.removal_notes ?? []).length > 0 && <NotesList notes={result.removal_notes} />}
+      {notes.length > 0 && <NotesList notes={notes} />}
     </Box>
   );
 }
@@ -107,38 +109,54 @@ interface Props {
   onDone: () => void;
 }
 
-function latest<T>(events: RunEvent[], type: string, key: string): T | null {
-  const event = [...events].reverse().find((item) => item.event_type === type);
+// SPEC-007 R6: a failed apply carries a result too: what it made before it stopped, and the undo.
+const APPLY_EVENTS = ['storage.applied', 'storage.apply.failed'];
+
+function latest<T>(events: RunEvent[], types: string[], key: string): T | null {
+  const event = [...events].reverse().find((item) => types.includes(item.event_type));
   return (event?.data?.[key] as T) ?? null;
 }
 
-/** Index of the newest event of this type, or -1. Used to compare which of two outcomes is current. */
-function latestIndex(events: RunEvent[], type: string): number {
-  for (let i = events.length - 1; i >= 0; i -= 1) if (events[i].event_type === type) return i;
+/** Index of the newest event of these types, or -1. Used to compare which of two outcomes is current. */
+function latestIndex(events: RunEvent[], types: string[]): number {
+  for (let i = events.length - 1; i >= 0; i -= 1) if (types.includes(events[i].event_type)) return i;
   return -1;
 }
 
 export function ProvisionStep({ runId, run, events, onDone }: Props) {
   const { nextTitle } = useStepContext();
   const [error, setError] = useState<string | null>(null);
-  const [authorised, setAuthorised] = useState(false);
+  // The tick belongs to one plan: a rebuilt plan has a new id, so it starts unticked (and the server
+  // refuses an apply that does not carry the ticked plan's id).
+  const [authorisedFor, setAuthorisedFor] = useState<string | null>(null);
   const running = run?.status === 'running';
 
-  const plan = latest<ProvisioningPlan>(events, 'storage.previewed', 'plan');
-  const paths = latest<PathVerification>(events, 'storage.paths.verified', 'verification');
+  const plan = latest<ProvisioningPlan>(events, ['storage.previewed'], 'plan');
+  const planId = plan?.plan_id ?? '';
+  const authorised = !!plan && authorisedFor === planId;
+  const paths = latest<PathVerification>(events, ['storage.paths.verified'], 'verification');
   // A result only reflects the plan on screen while it is newer than the newest preview. Rebuilding
   // the plan after a successful apply must offer Create again, not leave the operator with no action.
-  const applied = latestIndex(events, 'storage.applied');
-  const previewed = latestIndex(events, 'storage.previewed');
+  const applied = latestIndex(events, APPLY_EVENTS);
+  const previewed = latestIndex(events, ['storage.previewed']);
   const resultIsCurrent = applied > previewed;
-  const result = resultIsCurrent ? latest<ProvisioningResult>(events, 'storage.applied', 'result') : null;
+  const result = resultIsCurrent ? latest<ProvisioningResult>(events, APPLY_EVENTS, 'result') : null;
+  // An approval is for the plan on screen (LESSONS 6, 7). Derived, not reset after render, so a new
+  // plan never shows a frame with the old tick; after an apply only a new plan offers the tick again.
+  // Every apply's undo, kept past a rebuild: a retry calls a failed attempt's objects Exists, so its
+  // own removal set never names them (SPEC-007 R6).
+  const applyResults = events
+    .filter((event) => APPLY_EVENTS.includes(event.event_type) && event.data?.result)
+    .map((event) => event.data!.result as ProvisioningResult);
+  const allRemovals = applyResults.flatMap((r) => r.removals ?? []);
+  const allRemovalNotes = applyResults.flatMap((r) => r.removal_notes ?? []).filter((note, i, all) => all.indexOf(note) === i);
 
   // SPEC-012 R7 (X-7): the plan before this one, within the run, so a re-plan says what moved.
   const previews = events.filter((event) => event.event_type === 'storage.previewed');
   const previousPlan = previews.length >= 2 ? ((previews[previews.length - 2].data?.plan as ProvisioningPlan | undefined) ?? null) : null;
   const previousState = new Map((previousPlan?.actions ?? []).map((a) => [`${a.kind}|${a.name}`, a.state]));
   // SPEC-012 R2 (P-10): has anything been created in this run at all?
-  const everApplied = events.some((event) => event.event_type === 'storage.applied');
+  const everApplied = events.some((event) => event.event_type === 'storage.applied') || allRemovals.length > 0;
 
   const count = (state: PlanState) => (plan ? plan.actions.filter((action) => action.state === state).length : 0);
   const toCreate = count('create');
@@ -162,17 +180,27 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
     }
   };
 
-  const at = !plan || plan.error ? 0 : !result ? 1 : 3;
-  const allDone = !!result && !!paths && !paths.error;
+  const stopped = !!result?.error;
+  const at = !plan || plan.error ? 0 : !result ? 1 : stopped ? 2 : 3;
+  const allDone = !!result && !stopped && !!paths && !paths.error;
   const next = nextTitle ? `Continue to ${nextTitle}` : 'Continue';
   const build: FooterAction = { label: plan ? 'Rebuild plan' : 'Build plan', busy: running, onClick: call(() => storagePreview(runId)) };
   const skip: FooterAction = { label: everApplied ? next : `${next} without provisioning`, onClick: onDone };
   const verify: FooterAction = { label: paths ? 'Verify paths again' : 'Verify paths', busy: running, onClick: call(() => verifyPaths(runId)) };
-  const create: FooterAction = { label: 'Create storage objects', busy: running, onClick: call(() => storageApply(runId)) };
+  // The server checks the tick too: it gets the plan's id only when this plan was ticked.
+  const create: FooterAction = {
+    label: 'Create storage objects',
+    busy: running,
+    onClick: call(() => storageApply(runId, authorised ? planId : null)),
+  };
 
   let primary: FooterAction;
   let buttons: FooterAction[];
-  if (result) {
+  if (stopped) {
+    // A new plan reads the array again: what the failed attempt made shows as Exists, the rest as Create.
+    primary = build;
+    buttons = [skip];
+  } else if (result) {
     primary = paths ? { label: next, onClick: onDone } : verify;
     buttons = paths ? [verify, build] : [build, skip];
   } else if (plan && !plan.error && !blocked) {
@@ -188,24 +216,30 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
       title="Provision storage"
       description="Creates the hosts, host sets, volumes and exports on the array. Nothing is written until you approve the plan."
       stateDetail={
-        result
-          ? 'objects created'
-          : blocked
-            ? `${plan!.blockers.length} blocker${plan!.blockers.length === 1 ? '' : 's'} to resolve`
-            : plan
-              ? 'awaiting approval'
-              : undefined
+        stopped
+          ? 'stopped during create'
+          : result
+            ? 'objects created'
+            : blocked
+              ? `${plan!.blockers.length} blocker${plan!.blockers.length === 1 ? '' : 's'} to resolve`
+              : plan
+                ? 'awaiting approval'
+                : undefined
       }
       error={error}
       onDismissError={() => setError(null)}
-      top={<PartsBar parts={['Compose', 'Review the plan', 'Create', 'Verify paths']} at={at} doneAll={allDone} failed={blocked && !result} />}
+      top={<PartsBar parts={['Compose', 'Review the plan', 'Create', 'Verify paths']} at={at} doneAll={allDone} failed={(blocked && !result) || stopped} />}
       primary={primary}
       buttons={buttons}
       // The only action in this tool that writes to a customer array, so it takes an explicit
       // authorisation rather than a single click (LESSONS 7).
       confirmation={
         plan && !plan.error && !blocked && !result
-          ? { label: 'I have reviewed this plan and authorise creating these objects on the array.', checked: authorised, onChange: setAuthorised }
+          ? {
+              label: 'I have reviewed this plan and authorise creating these objects on the array.',
+              checked: authorised,
+              onChange: (on: boolean) => setAuthorisedFor(on ? planId : null),
+            }
           : undefined
       }
       guideOpen={false}
@@ -269,7 +303,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
           }
         >
           {result.error
-            ? result.error
+            ? `${result.error.replace(/\.$/, '')}. ${created ? `${created} object${created === 1 ? ' was' : 's were'} created before it stopped; the removal set below undoes them. ` : ''}Fix the cause on the array or in the plan, then rebuild the plan: objects already made will show as Exists.`
             : failed > 0
               ? "The array reported the export created, but it is not in the array's export list. Check `showvlun -t` on the array before continuing."
               : `${result.outcomes.length - created - updated} already existed and were left untouched.${paths ? '' : ' Verify the paths next.'}`}
@@ -277,8 +311,8 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
       )}
 
       {/* keyed: Section reads `open` once, so it folds when the plan arrives */}
-      <Section key={plan ? 'planned' : 'compose'} title={result ? 'Composition applied' : 'Compose'} summary="Host set members and exports" open={!plan}>
-        <ProvisioningBuilderView runId={runId} disabled={running} readOnly={!!result} />
+      <Section key={plan ? 'planned' : 'compose'} title={result && !stopped ? 'Composition applied' : 'Compose'} summary="Host set members and exports" open={!plan}>
+        <ProvisioningBuilderView runId={runId} disabled={running} readOnly={!!result && !stopped} />
       </Section>
 
       {plan && !plan.error && !result && (
@@ -361,7 +395,12 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             primaryKey={false}
             a11yTitle="Provisioning result: one row per object, with what the array reported"
           />
-          <RemovalSet result={result} runId={runId} serial={run?.serial_number} />
+          <RemovalSet removals={allRemovals} notes={allRemovalNotes} runId={runId} serial={run?.serial_number} />
+        </Section>
+      )}
+      {!result && allRemovals.length > 0 && (
+        <Section title="Undo what this run created" summary={`${removalLines(allRemovals).length} removal command${removalLines(allRemovals).length === 1 ? '' : 's'} from earlier applies in this run`} open={false}>
+          <RemovalSet removals={allRemovals} notes={allRemovalNotes} runId={runId} serial={run?.serial_number} />
         </Section>
       )}
 

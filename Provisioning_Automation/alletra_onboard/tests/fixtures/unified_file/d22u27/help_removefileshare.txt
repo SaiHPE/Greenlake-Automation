@@ -1,0 +1,49 @@
+# help removefileshare
+removefileshare - Remove a fileshare from a filesystem
+
+SYNTAX
+    removefileshare [options] <filesystem_name> <share_name>
+
+DESCRIPTION
+    The removefileshare command unexports the specified fileshare in a
+    filesystem which is exported to the NFS clients.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the fileshare_remove right
+
+OPTIONS
+    -d
+        Remove fileshare after unexporting it. The fileshare can only be removed if
+        there is no user data in the share.
+
+    -f
+        Specifies that the command is forced. If this option is not used, the
+        command requires confirmation before proceeding with its operation.
+
+SPECIFIERS
+    <filesystem_name>
+        Specifies a filesystem name whose share needs to be unmounted and removed.
+
+    <share_name>
+        Specifies a fileshare name up to 255 characters in length.
+
+NOTES
+    If -d option is specified and user data is present in the share, the command
+    fails and fileshare will not be unexported and will not be removed as well.
+
+    Issuing the removefileshare command with invalid filesystem name or invalid
+    fileshare name causes the command to exit without unexporting and removing any fileshare.
+
+    Verify the removal of fileshare by issuing the showfileshare command.
+
+EXAMPLES
+    The following example unmounts and removes fileshare demo_share which is part
+    of filesystem demo_fs
+
+       cli% removefileshare -d demo_fs demo_share
+
+    The following example unexports fileshare demo_share which is part of filesystem demo_fs
+
+       cli% removefileshare demo_fs demo_share
+

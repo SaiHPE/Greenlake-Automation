@@ -305,6 +305,8 @@ class ProvisioningPlan(BaseModel):
     notes: list[str] = Field(default_factory=list)
     blockers: list[str] = Field(default_factory=list)   # every conflict reason; non-empty refuses apply
     error: str | None = None
+    # Set when the step holds the plan for approval; the apply must quote it back (BL-52).
+    plan_id: str = ""
 
 
 class ActionOutcome(BaseModel):
@@ -326,7 +328,7 @@ class RemovalItem(BaseModel):
 class ProvisioningResult(BaseModel):
     outcomes: list[ActionOutcome] = Field(default_factory=list)
     removals: list[RemovalItem] = Field(default_factory=list)      # SPEC-007: what this apply created, as undo lines
-    removal_notes: list[str] = Field(default_factory=list)         # objects touched but not reverted
+    removal_notes: list[str] = Field(default_factory=list)         # objects touched but not reverted; after a failure, what to check by hand
     error: str | None = None
 
 
@@ -353,6 +355,11 @@ class ArrayVolumeRecord(BaseModel):
     provisioning_type: ArrayProvisioningType
     id: int | None = None          # SPEC-012 R1
     wwn: str = ""
+    # SPEC-023 R3: a snapshot names its base in copy_of; times are WSAPI's ISO 8601 text, "" when unset.
+    copy_of: str = ""
+    read_only: bool = False
+    created: str = ""
+    expires: str = ""
 
 
 class VlunTemplate(BaseModel):

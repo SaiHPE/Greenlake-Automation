@@ -1,0 +1,28 @@
+      showsys                3 line(s)
+      showversion            13 line(s)
+      showport               31 line(s)
+      showport -par          23 line(s)
+      showport -peer         1 line(s)
+      showport -c            29 line(s)
+      showport -i            31 line(s)
+      showport -sfp          25 line(s)
+      showhost -d            17 line(s)
+      showvlun -a            7 line(s)
+      help controlport       510 line(s)
+      help showport          275 line(s)
+      help showportdev       112 line(s)
+      GET /ports               ok
+      GET /wsapiconfiguration  ok
+      OS: Release version 10.6.0
+      0:3:1 mode target    state loss_sync Type free  par host/point     logins 0  wsapi mode 2 type 3
+      0:3:2 mode target    state loss_sync Type free  par host/point     logins 0  wsapi mode 2 type 3
+      0:3:3 mode target    state ready     Type free  par host/point     logins 0  wsapi mode 2 type 3
+      0:3:4 mode target    state ready     Type host  par host/point     logins 1  wsapi mode 2 type 1
+      1:3:1 mode target    state loss_sync Type free  par host/point     logins 0  wsapi mode 2 type 3
+      1:3:2 mode target    state loss_sync Type free  par host/point     logins 0  wsapi mode 2 type 3
+      1:3:3 mode target    state ready     Type host  par host/point     logins 1  wsapi mode 2 type 1
+      1:3:4 mode target    state ready     Type free  par host/point     logins 0  wsapi mode 2 type 3
+PASS  rack13 showport -par read
+PASS  rack13 controlport help read
+
+0 FAIL

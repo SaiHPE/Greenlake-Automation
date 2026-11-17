@@ -1,0 +1,72 @@
+{
+ "request": "DELETE /api/v1/credentials/<key>",
+ "port": 443,
+ "status": 200,
+ "headers": [
+  [
+   "Cache-Control",
+   "no-cache, no-store, private, max-age=-1, must-revalidate"
+  ],
+  [
+   "Cache-Control",
+   "no-cache"
+  ],
+  [
+   "Content-Language",
+   "en-US"
+  ],
+  [
+   "Content-Security-Policy",
+   "default-src 'self' https://www.google-analytics.com/ ; script-src 'self' https://www.googletagmanager.com/gtag/js https://www.google-analytics.com/analytics.js 'sha256-7wkVEulpD0N/LcnGQ+TRib5+8cIkAJP+nr7E+phzYrM=' ; style-src 'sha256-e+DgwDhR7CPviQ8Wc0JBdN2coh8FXcqA/IzKjD43e3g=' 'sha256-97o4u6NOOXKKCCQ/RV8J53F81vXBBOI8bZ5/3dfFuLs=' 'sha256-q387eizGZlBxZDde0PiQjfDa7E3xDgZX6fjOFpqKc3w=' 'sha256-EO0dSN75EORMtDAT6Cb25+ikfSEkixNaSvoW2xfqidI=' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-6iPv2/R0hM6Mp+v24RfP/3NFRdmjbJoaxxcnstv9VrY=' 'sha256-YwkYsBWC8s6AMCyxdUblLuGw6ukyXc+cHHpXPykX48s=' 'sha256-xoNN63L9AAEOpg5YcXPLo/hZsa/ms6XGntW9P4Bv2J0=' 'sha256-v/wH7wXCD1YzUnbcqwmt80/PUXxWSTWe+KqqRYeL3w4=' 'sha256-97o4u6NOOXKKCCQ/RV8J53F81vXBBOI8bZ5/3dfFuLs=' 'sha256-VtaGpfsPgdkeubZ2SaznXRbEjBFiNOXTh6gmuxQt5ZM=' 'sha256-97o4u6NOOXKKCCQ/RV8J53F81vXBBOI8bZ5/3dfFuLs=' 'sha256-q387eizGZlBxZDde0PiQjfDa7E3xDgZX6fjOFpqKc3w=' 'sha256-EO0dSN75EORMtDAT6Cb25+ikfSEkixNaSvoW2xfqidI=' 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'sha256-6iPv2/R0hM6Mp+v24RfP/3NFRdmjbJoaxxcnstv9VrY=' 'sha256-YwkYsBWC8s6AMCyxdUblLuGw6ukyXc+cHHpXPykX48s=' 'sha256-xoNN63L9AAEOpg5YcXPLo/hZsa/ms6XGntW9P4Bv2J0=' 'sha256-v/wH7wXCD1YzUnbcqwmt80/PUXxWSTWe+KqqRYeL3w4=' 'sha256-OknxMK//EB25JPoGYtKN7uTn7GMrhu/IhuOrEb0g8pE=' 'sha256-kcdzKY49CcjWbp5/H/gXaBxYvRjQzttv+6uf+z25em0=' 'sha256-OeGKYP6GTb6qVfIkZxsen+yHNmiRaYV7HixBldjU/dM=' 'sha256-BF//iJZwtpPsuWkdSnQu6jzdbvYI89TonAdPsDXBYyk=' 'sha256-79r+C3Vfqi2WhqLqx8qJ+pvOqFP2kVW+AEQHft2dMeo=' 'sha256-BuoVWz+0nhFH1s6A+Pb7ozJqpyyJrVTcLvsZXcg0IfU=' 'sha256-BCmQavSMVvV5OxgWeFSMlZNGmQOOZqIr9r6zdmrgUIQ=' 'sha256-wycEadbqyap1lzI8fe5whjcPll4StPOU2pDRk+cjffU=' 'sha256-XTOOWbMsh6dXtrIPLf0Ophom1MWWbAY0gwI/5MOfdY0=' 'sha256-5qg3LVD3A6Ixt/Q9owf4f0Yvcp8dDiQ4hG8FLn7Erg8=' 'sha256-vNwCl70raC54JPQBJyFDFg3UV8VEStQEVg48ztBoRbg=' 'sha256-d1+HH1yZvsrq9gET8R/24HEVwd9+d+56PrMirP25b00=' 'sha256-kFlQW12Z09kKdlgTdJhDeICE99NFtFZ6o6/N2d2+k94=' 'nonce-d29tZSBjb29sIHN0cmluZyB3aWxsIHBvcCB1cCAxMjM=' 'self' blob:; img-src 'self' data: blob:; frame-src 'self'; object-src 'self'; media-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'self'"
+  ],
+  [
+   "Date",
+   "Mon, 16 Nov 2026 17:58:52 GMT"
+  ],
+  [
+   "Pragma",
+   "no-cache"
+  ],
+  [
+   "Pragma",
+   "no-cache"
+  ],
+  [
+   "Server",
+   "hp3par-wsapi"
+  ],
+  [
+   "Strict-Transport-Security",
+   "max-age=31536000; includeSubDomains;"
+  ],
+  [
+   "Vary",
+   "Accept-Encoding"
+  ],
+  [
+   "Vary",
+   "Origin"
+  ],
+  [
+   "X-Content-Type-Options",
+   "nosniff"
+  ],
+  [
+   "X-Frame-Options",
+   "SAMEORIGIN"
+  ],
+  [
+   "X-Xss-Protection",
+   "1; mode=block"
+  ],
+  [
+   "Content-Length",
+   "0"
+  ],
+  [
+   "Connection",
+   "close"
+  ]
+ ],
+ "body": ""
+}

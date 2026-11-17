@@ -1,0 +1,43 @@
+# help removesched
+removesched - Remove a scheduled task.
+
+SYNTAX
+    removesched [options] {<schedname>|<pattern>}...
+
+DESCRIPTION
+    The removesched command removes a scheduled task from the system.
+
+AUTHORITY
+    Super, Service, Edit
+    Any role granted the sched_setany right can remove any user scheduled tasks
+    Any role granted the sched_setown right can only remove their own scheduled tasks
+
+OPTIONS
+    -pat
+        Specifies that certain patterns are treated as glob-style patterns and
+        that all scheduled tasks matching the specified pattern are removed.
+        This option must be used if the pattern specifier is used.
+
+    -f
+        Specifies that the command is forced. If this option is not used, the
+        command requires confirmation before proceeding with its operation.
+
+SPECIFIERS
+    <schedname>
+        Specifies the scheduled task name. This specifier can be repeated to
+        remove multiple scheduled tasks. If this specifier is not used, the
+        pattern specifier must be used.
+        Can be at most 31 characters in length.
+
+    <pattern>
+        Specifies a glob-style pattern(see help on sub,globpat). This specifier
+        can be repeated to remove multiple scheduled tasks. If this specifier is
+        not used, the <schedname> specifier must be used.
+        Can be at most 31 characters in length.
+
+NOTES
+    None.
+
+EXAMPLES
+    None.
+

@@ -1,0 +1,1770 @@
+{
+ "total": 35,
+ "members": [
+  {
+   "id": 0,
+   "name": "admin",
+   "shortName": "admin",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 1,
+   "copyType": 1,
+   "baseId": 0,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 10240,
+   "totalUsedMiB": 10240,
+   "sizeMiB": 10240,
+   "wwn": "60002AC000000000000000000002DEF2",
+   "nguid": "60002AC0000000000002AC000002DEF2",
+   "creationTimeSec": 1792689843,
+   "creationTime8601": "2026-10-22T22:54:03+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": true,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "4bb039e1-633b-4c34-b93a-77a23c70ed64",
+   "udid": 0,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/admin",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/admin",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 1,
+   "name": ".srdata",
+   "shortName": ".srdata",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 1,
+   "copyType": 1,
+   "baseId": 1,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 102400,
+   "totalUsedMiB": 102400,
+   "sizeMiB": 102400,
+   "wwn": "60002AC000000000000000010002DEF2",
+   "nguid": "60002AC0000000000002AC010002DEF2",
+   "creationTimeSec": 1792689895,
+   "creationTime8601": "2026-10-22T22:54:55+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": true,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "5588b0e6-50a8-4a18-95a5-04f418be8088",
+   "udid": 1,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.srdata",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.srdata",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "name": ".mgmtdata",
+   "shortName": ".mgmtdata",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 1,
+   "copyType": 1,
+   "baseId": 2,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 524288,
+   "totalUsedMiB": 524288,
+   "sizeMiB": 524288,
+   "wwn": "60002AC000000000000000020002DEF2",
+   "nguid": "60002AC0000000000002AC020002DEF2",
+   "creationTimeSec": 1792689917,
+   "creationTime8601": "2026-10-22T22:55:17+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": true,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "05e11768-aac0-42b9-a818-87d3e8f90d99",
+   "udid": 2,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.mgmtdata",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.mgmtdata",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "name": ".shared.SSD_r6_0",
+   "shortName": ".shared.SSD_r6_0",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 3,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2625,
+   "totalUsedMiB": 1461,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000030002DEF2",
+   "nguid": "60002AC0000000000002AC030002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "59b2740a-db43-4d26-aa28-108bc6ee1acc",
+   "udid": 3,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.19
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_0",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_0",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "name": ".shared.SSD_r6_1",
+   "shortName": ".shared.SSD_r6_1",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 4,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2625,
+   "totalUsedMiB": 1462,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000040002DEF2",
+   "nguid": "60002AC0000000000002AC040002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "a6db1da6-1418-4637-8043-ff2c4e624692",
+   "sharedParentId": 3,
+   "udid": 4,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.2
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_1",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_1",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "name": ".shared.SSD_r6_2",
+   "shortName": ".shared.SSD_r6_2",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 5,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2100,
+   "totalUsedMiB": 1467,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000050002DEF2",
+   "nguid": "60002AC0000000000002AC050002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "f6de8cc2-320c-47a1-b15f-98ca5cb1799f",
+   "sharedParentId": 4,
+   "udid": 5,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.19
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_2",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_2",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "name": ".shared.SSD_r6_3",
+   "shortName": ".shared.SSD_r6_3",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 6,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2100,
+   "totalUsedMiB": 1458,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000060002DEF2",
+   "nguid": "60002AC0000000000002AC060002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "49ff5615-c04a-427b-96dc-800557ffc5fb",
+   "sharedParentId": 5,
+   "udid": 6,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.2
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_3",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_3",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "name": ".shared.SSD_r6_4",
+   "shortName": ".shared.SSD_r6_4",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 7,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2100,
+   "totalUsedMiB": 1457,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000070002DEF2",
+   "nguid": "60002AC0000000000002AC070002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "f93f6a0f-fcc2-4d6c-b9a8-da5569330dbf",
+   "sharedParentId": 6,
+   "udid": 7,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.19
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_4",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_4",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "name": ".shared.SSD_r6_5",
+   "shortName": ".shared.SSD_r6_5",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 8,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2625,
+   "totalUsedMiB": 1465,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000080002DEF2",
+   "nguid": "60002AC0000000000002AC080002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "5bed00e4-7af9-4b0f-a9b1-74b157da90f5",
+   "sharedParentId": 7,
+   "udid": 8,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.2
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_5",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_5",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "name": ".shared.SSD_r6_6",
+   "shortName": ".shared.SSD_r6_6",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 9,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2625,
+   "totalUsedMiB": 1455,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000090002DEF2",
+   "nguid": "60002AC0000000000002AC090002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "17542474-9dc3-448a-ab82-878952f92f86",
+   "sharedParentId": 8,
+   "udid": 9,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.2
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_6",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_6",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "name": ".shared.SSD_r6_7",
+   "shortName": ".shared.SSD_r6_7",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 10,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2100,
+   "totalUsedMiB": 1453,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000A0002DEF2",
+   "nguid": "60002AC0000000000002AC0A0002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "43dd1943-0fe5-45ae-b6b2-06560bc0b442",
+   "sharedParentId": 9,
+   "udid": 10,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.2
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_7",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_7",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "name": ".shared.SSD_r6_8",
+   "shortName": ".shared.SSD_r6_8",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 11,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2625,
+   "totalUsedMiB": 1467,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000B0002DEF2",
+   "nguid": "60002AC0000000000002AC0B0002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "d6bdeb1a-f6db-43b6-8f2d-2a4be5de26a4",
+   "sharedParentId": 10,
+   "udid": 11,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.2
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_8",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_8",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "name": ".shared.SSD_r6_9",
+   "shortName": ".shared.SSD_r6_9",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 12,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2625,
+   "totalUsedMiB": 1461,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000C0002DEF2",
+   "nguid": "60002AC0000000000002AC0C0002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "ed239f8c-dbe6-41a8-b658-bbab95eb4229",
+   "sharedParentId": 11,
+   "udid": 12,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.19
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_9",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_9",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "name": ".shared.SSD_r6_a",
+   "shortName": ".shared.SSD_r6_a",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 13,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2625,
+   "totalUsedMiB": 1459,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000D0002DEF2",
+   "nguid": "60002AC0000000000002AC0D0002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "236d7e46-f03d-44cf-8616-87f52b8564db",
+   "sharedParentId": 12,
+   "udid": 13,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.19
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_a",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_a",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "name": ".shared.SSD_r6_b",
+   "shortName": ".shared.SSD_r6_b",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 14,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2625,
+   "totalUsedMiB": 1458,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000E0002DEF2",
+   "nguid": "60002AC0000000000002AC0E0002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "e89cfbd3-c213-4791-90c1-c6cadb901c1a",
+   "sharedParentId": 13,
+   "udid": 14,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.2
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_b",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_b",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "name": ".shared.SSD_r6_c",
+   "shortName": ".shared.SSD_r6_c",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 15,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2100,
+   "totalUsedMiB": 1460,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000F0002DEF2",
+   "nguid": "60002AC0000000000002AC0F0002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "94785665-1d58-4ea1-b362-49de168f90e3",
+   "sharedParentId": 14,
+   "udid": 15,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.19
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_c",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_c",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "name": ".shared.SSD_r6_d",
+   "shortName": ".shared.SSD_r6_d",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 16,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2100,
+   "totalUsedMiB": 1459,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000100002DEF2",
+   "nguid": "60002AC0000000000002AC100002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "54ca8afe-ffac-4aa6-9ab3-bb1a208dd59b",
+   "sharedParentId": 15,
+   "udid": 16,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.2
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_d",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_d",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "name": ".shared.SSD_r6_e",
+   "shortName": ".shared.SSD_r6_e",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 17,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2100,
+   "totalUsedMiB": 1455,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000110002DEF2",
+   "nguid": "60002AC0000000000002AC110002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "6e027c82-4264-401f-b8d5-e140a2db747f",
+   "sharedParentId": 16,
+   "udid": 17,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.2
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_e",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_e",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "name": ".shared.SSD_r6_f",
+   "shortName": ".shared.SSD_r6_f",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 18,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 2100,
+   "totalUsedMiB": 1457,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000120002DEF2",
+   "nguid": "60002AC0000000000002AC120002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "d1f7fb3e-0ef9-4dc1-aba4-8007cd09efb6",
+   "sharedParentId": 17,
+   "udid": 18,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compression": 1.2
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/.shared.SSD_r6_f",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/.shared.SSD_r6_f",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "name": "pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73",
+   "shortName": "pc-image-dhci_clus27~19",
+   "deduplicationState": 1,
+   "compressionState": 6,
+   "provisioningType": 6,
+   "copyType": 1,
+   "baseId": 19,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 16800,
+   "totalUsedMiB": 12771,
+   "sizeMiB": 2097152,
+   "hostWriteMiB": 25618,
+   "wwn": "60002AC000000000000000130002DEF2",
+   "nguid": "60002AC0000000000002AC130002DEF2",
+   "creationTimeSec": 1792765959,
+   "creationTime8601": "2026-10-23T20:02:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "6fbea574-09b7-4546-ba33-48187dc780a0",
+   "sharedParentId": 18,
+   "udid": 19,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "deduplication": 2.01,
+    "compression": 1.65
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "name": "S4V1610053qcow2-Tm9X",
+   "shortName": "S4V1610053qcow2-Tm9X",
+   "deduplicationState": 1,
+   "compressionState": 6,
+   "provisioningType": 6,
+   "copyType": 1,
+   "baseId": 20,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 25725,
+   "totalUsedMiB": 19802,
+   "sizeMiB": 204800,
+   "hostWriteMiB": 42790,
+   "wwn": "60002AC000000000000000140002DEF2",
+   "nguid": "60002AC0000000000002AC140002DEF2",
+   "creationTimeSec": 1792766046,
+   "creationTime8601": "2026-10-23T20:04:06+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "6cfe0afb-f230-4d70-bd92-fca20de6fa86",
+   "sharedParentId": 18,
+   "udid": 20,
+   "comment": "Morpheus managed volume \"S4V16-10053.qcow2\"; created for VM \"dhci_clus/Data-Services-Connector\"",
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 10.34,
+    "deduplication": 2.16,
+    "compression": 1.48
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/S4V1610053qcow2-Tm9X",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/S4V1610053qcow2-Tm9X",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "name": "HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae",
+   "shortName": "HPEVMEManagerQCOW2Ju~21",
+   "deduplicationState": 1,
+   "compressionState": 6,
+   "provisioningType": 6,
+   "copyType": 1,
+   "baseId": 21,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 14175,
+   "totalUsedMiB": 10152,
+   "sizeMiB": 102400,
+   "hostWriteMiB": 26594,
+   "wwn": "60002AC000000000000000150002DEF2",
+   "nguid": "60002AC0000000000002AC150002DEF2",
+   "creationTimeSec": 1792766087,
+   "creationTime8601": "2026-10-23T20:04:47+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "3297636e-5a37-48b0-b562-6e168f505fd9",
+   "sharedParentId": 18,
+   "udid": 21,
+   "comment": "Morpheus managed volume \"HPE_VME_Manager_QCOW2_Jun_26_S4V16-10049.qcow2\"; created for VM \"dhci_clus/vmemgr01\"",
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 10.09,
+    "deduplication": 2.62,
+    "compression": 1.68
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "name": "imagestore-63hS",
+   "shortName": "imagestore-63hS",
+   "deduplicationState": 1,
+   "compressionState": 6,
+   "provisioningType": 6,
+   "copyType": 1,
+   "baseId": 22,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 3150,
+   "totalUsedMiB": 13,
+   "sizeMiB": 3377152,
+   "hostWriteMiB": 16781,
+   "wwn": "60002AC000000000000000160002DEF2",
+   "nguid": "60002AC0000000000002AC160002DEF2",
+   "creationTimeSec": 1792766129,
+   "creationTime8601": "2026-10-23T20:05:29+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "7b602e3a-5057-4383-8e46-e71949f8822d",
+   "sharedParentId": 18,
+   "udid": 22,
+   "comment": "Morpheus managed volume \"image-store\"; created for VM \"dhci_clus/vmemgr01\"",
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "deduplication": 3.4028234663852886e+38,
+    "compression": 2.32
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/imagestore-63hS",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/imagestore-63hS",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 29,
+   "name": "TPIPoc-NEW-WIN-LK-04",
+   "shortName": "TPIPoc-NEW-WIN-LK-04",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 29,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 65,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 87,
+   "wwn": "60002AC0000000000000001D0002DEF2",
+   "nguid": "60002AC0000000000002AC1D0002DEF2",
+   "creationTimeSec": 1793175676,
+   "creationTime8601": "2026-10-28T13:51:16+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "18ab3f28-f5a2-4a25-92c3-c7a9acd23742",
+   "udid": 29,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 1.35
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/TPIPoc-NEW-WIN-LK-04",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/TPIPoc-NEW-WIN-LK-04",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 30,
+   "name": "TPIPoc-NEW-WIN-LK-05",
+   "shortName": "TPIPoc-NEW-WIN-LK-05",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 30,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 65,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 87,
+   "wwn": "60002AC0000000000000001E0002DEF2",
+   "nguid": "60002AC0000000000002AC1E0002DEF2",
+   "creationTimeSec": 1793175685,
+   "creationTime8601": "2026-10-28T13:51:25+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "d0a40670-3ee3-4085-ad6e-69b2d1726259",
+   "udid": 30,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 1.35
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/TPIPoc-NEW-WIN-LK-05",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/TPIPoc-NEW-WIN-LK-05",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 31,
+   "name": "TPIPoc-NEW-WIN-LK-06",
+   "shortName": "TPIPoc-NEW-WIN-LK-06",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 31,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 65,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 87,
+   "wwn": "60002AC0000000000000001F0002DEF2",
+   "nguid": "60002AC0000000000002AC1F0002DEF2",
+   "creationTimeSec": 1793175694,
+   "creationTime8601": "2026-10-28T13:51:34+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "2729cf88-062a-465f-a000-e237754db906",
+   "udid": 31,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 1.35
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/TPIPoc-NEW-WIN-LK-06",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/TPIPoc-NEW-WIN-LK-06",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 32,
+   "name": "TPIPoc-NEW-RH-LK-04",
+   "shortName": "TPIPoc-NEW-RH-LK-04",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 32,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 3,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 25,
+   "roChildId": 38,
+   "wwn": "60002AC000000000000000200002DEF2",
+   "nguid": "60002AC0000000000002AC200002DEF2",
+   "creationTimeSec": 1793260819,
+   "creationTime8601": "2026-10-29T13:30:19+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "749a291f-2efc-456d-8d26-0fcc0803373c",
+   "udid": 32,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 8.72
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/TPIPoc-NEW-RH-LK-04",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/TPIPoc-NEW-RH-LK-04",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 33,
+   "name": "TPIPoc-NEW-RH-LK-05",
+   "shortName": "TPIPoc-NEW-RH-LK-05",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 33,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 3,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 25,
+   "roChildId": 40,
+   "wwn": "60002AC000000000000000210002DEF2",
+   "nguid": "60002AC0000000000002AC210002DEF2",
+   "creationTimeSec": 1793260828,
+   "creationTime8601": "2026-10-29T13:30:28+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "951b4df5-beb0-418f-a189-d5ac6fce855f",
+   "udid": 33,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 9.58
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/TPIPoc-NEW-RH-LK-05",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/TPIPoc-NEW-RH-LK-05",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 34,
+   "name": "TPIPoc-NEW-RH-LK-06",
+   "shortName": "TPIPoc-NEW-RH-LK-06",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 34,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 3,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 25,
+   "roChildId": 39,
+   "wwn": "60002AC000000000000000220002DEF2",
+   "nguid": "60002AC0000000000002AC220002DEF2",
+   "creationTimeSec": 1793260832,
+   "creationTime8601": "2026-10-29T13:30:32+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "9b5733b2-531d-47e5-8cf6-7f78f3670cc8",
+   "udid": 34,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 9.47
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/TPIPoc-NEW-RH-LK-06",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/TPIPoc-NEW-RH-LK-06",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 35,
+   "name": "TPIPoc-NEW-RH-04",
+   "shortName": "TPIPoc-NEW-RH-04",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 35,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 2,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 25,
+   "wwn": "60002AC000000000000000230002DEF2",
+   "nguid": "60002AC0000000000002AC230002DEF2",
+   "creationTimeSec": 1793931703,
+   "creationTime8601": "2026-11-06T07:51:43+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "2920d97b-6fd9-4600-8e1d-c4d416bb879e",
+   "udid": 35,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 11.07
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/TPIPoc-NEW-RH-04",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/TPIPoc-NEW-RH-04",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 36,
+   "name": "TPIPoc-NEW-RH-05",
+   "shortName": "TPIPoc-NEW-RH-05",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 36,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 2,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 25,
+   "wwn": "60002AC000000000000000240002DEF2",
+   "nguid": "60002AC0000000000002AC240002DEF2",
+   "creationTimeSec": 1793931719,
+   "creationTime8601": "2026-11-06T07:51:59+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "9a901923-d2b8-430e-9986-e6936435f2a2",
+   "udid": 36,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 11.07
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/TPIPoc-NEW-RH-05",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/TPIPoc-NEW-RH-05",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 37,
+   "name": "TPIPoc-NEW-RH-06",
+   "shortName": "TPIPoc-NEW-RH-06",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 37,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 2,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 25,
+   "wwn": "60002AC000000000000000250002DEF2",
+   "nguid": "60002AC0000000000002AC250002DEF2",
+   "creationTimeSec": 1793932099,
+   "creationTime8601": "2026-11-06T07:58:19+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "7edd0afc-1d19-4f0c-8b72-8b39c0ec5153",
+   "udid": 37,
+   "userCPG": "SSD_r6",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 11.07
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/TPIPoc-NEW-RH-06",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/TPIPoc-NEW-RH-06",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 38,
+   "name": "preRecover_LK04_20261116",
+   "shortName": "preRecover_LK04_20261116",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "TPIPoc-NEW-RH-LK-04",
+   "baseId": 32,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 0,
+   "parentId": 32,
+   "wwn": "60002AC000000000000000260002DEF2",
+   "nguid": "60002AC0000000000002AC260002DEF2",
+   "creationTimeSec": 1794814795,
+   "creationTime8601": "2026-11-16T13:09:55+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "5fb85cd4-7e63-4114-b8eb-c84a68b4f6e0",
+   "udid": 38,
+   "userCPG": "SSD_r6",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/preRecover_LK04_20261116",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/preRecover_LK04_20261116",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 39,
+   "name": "preRecover_LK06_20261116",
+   "shortName": "preRecover_LK06_20261116",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "TPIPoc-NEW-RH-LK-06",
+   "baseId": 34,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 0,
+   "parentId": 34,
+   "wwn": "60002AC000000000000000270002DEF2",
+   "nguid": "60002AC0000000000002AC270002DEF2",
+   "creationTimeSec": 1794814899,
+   "creationTime8601": "2026-11-16T13:11:39+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "7b55c1c0-70ff-4aae-b370-65cdc92dcd65",
+   "udid": 39,
+   "userCPG": "SSD_r6",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/preRecover_LK06_20261116",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/preRecover_LK06_20261116",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 40,
+   "name": "preRecover_LK05_20261116",
+   "shortName": "preRecover_LK05_20261116",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "TPIPoc-NEW-RH-LK-05",
+   "baseId": 33,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 51200,
+   "hostWriteMiB": 0,
+   "parentId": 33,
+   "wwn": "60002AC000000000000000280002DEF2",
+   "nguid": "60002AC0000000000002AC280002DEF2",
+   "creationTimeSec": 1794817998,
+   "creationTime8601": "2026-11-16T14:03:18+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "uuid": "d8541021-1d9c-4a9b-b357-191446274eeb",
+   "udid": 40,
+   "userCPG": "SSD_r6",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.154.190/api/v1/volumes/preRecover_LK05_20261116",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.154.190/api/v1/volumespacedistribution/preRecover_LK05_20261116",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  }
+ ],
+ "links": [
+  {
+   "href": "https://10.64.154.190/api/v1/volumes",
+   "rel": "self"
+  },
+  {
+   "href": "https://10.64.154.190/api/v1/volumespacedistribution",
+   "rel": "volumeSpaceDistribution"
+  }
+ ]
+}

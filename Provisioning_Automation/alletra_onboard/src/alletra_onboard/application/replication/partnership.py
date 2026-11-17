@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 
 from alletra_onboard.adapters.array.cli_client import ArrayCliError
-from alletra_onboard.adapters.array.rc_cli_client import answered_error
+from alletra_onboard.adapters.array.rc_cli_client import RcPlanObjects, answered_error
 from alletra_onboard.application.provisioning.clients import make_rc_cli
 from alletra_onboard.application.replication.read import parse_showport_rcip, parse_showrcopy
 from alletra_onboard.domain.provisioning import ProvisioningIntent
@@ -134,13 +134,31 @@ def stale_fc_targets(primary: ReplicationArrayView, peer: ReplicationArrayView) 
         if not there.fc_node_wwn:
             continue
         for t in here.targets:
-            if t.type.upper() == "FC" and t.options.upper() == there.fc_node_wwn:
+            if t.type.upper() != "FC" or t.options.upper() != there.fc_node_wwn:
+                continue
+            # BL-57: the removal command is printed only for a dead target. On a working FC pair it would
+            # delete the target and every group on it, and replication would stop.
+            links_up = [ln for ln in here.links if ln.target == t.name and ln.status.lower() == "up"]
+            started = [g.name for g in here.groups if g.target == t.name and g.status.lower() == "started"]
+            if t.status.lower() == "failed" and not links_up and not started:
                 out.append(
                     f"{_name(here)} already has target '{t.name}' for {_name(there)} over Fibre Channel (status "
                     f"{t.status}). The arrays keep one partnership per pair, so an IP target beside it does not "
                     f"work. Remove it on {_name(here)} first: `removercopytarget -cleargroups -f {t.name}` (this also "
                     "removes the groups on that target; their volumes stay). Save `showrcopy -d groups` before."
                 )
+                continue
+            alive = [f"status {t.status or 'unknown'}"]
+            if links_up:
+                alive.append(f"{len(links_up)} link{'s' if len(links_up) != 1 else ''} up")
+            if started:
+                alive.append(f"started group{'s' if len(started) != 1 else ''} {', '.join(started)}")
+            out.append(
+                f"{_name(here)} already replicates to {_name(there)} over Fibre Channel (target '{t.name}': "
+                f"{'; '.join(alive)}). The arrays keep one partnership per pair, so the tool will not set up an IP "
+                "target beside it, and it will not remove a target that is in use. Leave the Replication network "
+                "tab empty to keep the Fibre Channel partnership; moving it to IP is a planned change outside this tool."
+            )
     return out
 
 
@@ -182,6 +200,30 @@ def _same_net(row: RcipPortRequest, address: str) -> bool:
 
 # ------------------------------------------------------------------ R4 apply, R5 removal set
 
+def plan_objects(plan: ReplicationPlan, side: str) -> RcPlanObjects:
+    """ADR 0025 condition 3: the ports, addresses and target the approved plan names on one array. That
+    array's write client is built with them and refuses a command on anything else. A conflict row is
+    one the plan will not touch, so it adds nothing."""
+    ports: set[str] = set()
+    addresses: set[str] = set()
+    peers: set[str] = set()
+    targets: set[str] = set()
+    for x in plan.actions:
+        if x.where != side or x.state == "conflict":
+            continue
+        if x.kind == "rcip_port":
+            ports.add(x.name)
+            addresses.update(a for a in (x.detail.get("ip"), x.detail.get("gateway")) if a)
+        elif x.kind == "target":
+            targets.add(x.name)
+            for link in x.detail.get("links", []):
+                nsp, peer = link.rsplit(":", 1)
+                ports.add(nsp)
+                peers.add(peer)
+    return RcPlanObjects(ports=frozenset(ports), addresses=frozenset(addresses), peer_addresses=frozenset(peers),
+                         targets=frozenset(targets))
+
+
 def apply_partnership(
     plan: ReplicationPlan, provisioning: ProvisioningIntent, *, rc_cli_factory: Callable = make_rc_cli,
     progress: Callable[[str], None] | None = None, sleep: Callable[[float], None] = time.sleep,
@@ -216,7 +258,8 @@ def apply_partnership(
         return [x for x in plan.actions if x.kind == kind and x.where == side and x.state == "create"]
 
     try:
-        with rc_cli_factory(provisioning.array) as a_cli, rc_cli_factory(intent.peer) as b_cli:
+        with (rc_cli_factory(provisioning.array, plan_objects(plan, "A")) as a_cli,
+              rc_cli_factory(intent.peer, plan_objects(plan, "B")) as b_cli):
             cli = {"A": a_cli, "B": b_cli}
 
             def write(side: str, command: str) -> str:

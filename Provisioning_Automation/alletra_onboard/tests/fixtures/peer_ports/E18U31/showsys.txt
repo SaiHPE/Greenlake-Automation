@@ -1,0 +1,4 @@
+# showsys
+                                                                 ---------------(MiB)----------------
+     ID --Name--- --------Model--------- --Serial-- Nodes Master TotalCap AllocCap  FreeCap FailedCap
+0x2DEF2 DHCI_B10K HPE Alletra Storage MP CZ2D3209YV     2      0 29278208   106859 25006741         0

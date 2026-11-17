@@ -330,7 +330,8 @@ def test_wsapi_records_parse_the_captured_shapes():
     vols = {v.name: v for v in wc.parse_volumes(_wsapi("volumes"))}
     assert len(vols) == 51
     assert vols["zz_t2_vol01"] == ArrayVolumeRecord(name="zz_t2_vol01", size_mib=1024, cpg="SSD_r6", provisioning_type="tpvv",
-                                                    id=95, wwn="60002AC0000000000000005F0002D495")   # SPEC-012 R1
+                                                    id=95, wwn="60002AC0000000000000005F0002D495",   # SPEC-012 R1
+                                                    created="2026-09-13T00:41:40+05:30")   # SPEC-023 R3
     assert esx.id == 11
     assert vols["zz_t2_vol02"].provisioning_type == "reduce"          # created with {"reduce": true} -> 6
     assert vols["zz_t2_vol03"].size_mib == 2048
@@ -423,7 +424,8 @@ def test_live_wsapi_capture_pins_volumes_and_hosts():
     vols = {v.name: v for v in wc.parse_volumes(_wsapi("volumes"))}
     assert len(vols) == 51
     assert vols["zz_t2_vol01"] == ArrayVolumeRecord(name="zz_t2_vol01", size_mib=1024, cpg="SSD_r6", provisioning_type="tpvv",
-                                                    id=95, wwn="60002AC0000000000000005F0002D495")   # SPEC-012 R1
+                                                    id=95, wwn="60002AC0000000000000005F0002D495",   # SPEC-012 R1
+                                                    created="2026-09-13T00:41:40+05:30")   # SPEC-023 R3
     assert vols["zz_t2_vol02"].provisioning_type == "reduce"                        # created with {"reduce": true}
     assert vols[".mgmtdata"].provisioning_type == "full" and vols[".shared.SSD_r6_0"].provisioning_type == "dds"
     assert vols["vol1.0.260910000000"].provisioning_type == "snp"

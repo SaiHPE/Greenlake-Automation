@@ -1,0 +1,16 @@
+# showvvset
+Id Name                                        Members                                    
+ 1 HPE_VM_c5abcc90-d21e-4fa5-ae43-962f065460f7 HPE_VM_bed1c3ff-0d3a-48fc-9de2-3f917bbeb31c
+ 2 HPE_VM_e1363705-7804-4054-8496-1fa22a0f5bc3 HPE_VM_3ff59c3f-441a-460f-92cf-ce92b9810ec9
+ 3 HPE_VM_aabbcad6-7d12-41ee-91cd-0158a8901c56 HPE_VM_179c60ed-3e49-496e-b431-51d658a77f21
+ 4 HPE_VM_32ff6647-46b5-4216-abe4-c83a40b4772d HPE_VM_90d3ae6b-3abf-4b17-bf36-10e704840d70
+                                               HPE_VM_f7a7b9b8-a322-46f7-9ea6-20843521a84e
+                                               HPE_VM_78403e6c-4066-45c6-a330-737d21976213
+ 6 HPE_VM_1de02ee5-9aa8-4686-825d-be2d35584e91 HPE_VM_25781fe1-26ff-406e-bbdc-1852786da155
+ 7 HPE_VM_551f5cfe-0bb7-4d31-9e8f-9b05bc140f95 HPE_VM_5e6330ed-53c2-4838-b135-6aaed4de002c
+                                               HPE_VM_1efca747-04a0-4159-9a4f-0b71635b5849
+12 HPE_VM_2c19254d-28e7-4467-bc19-3315e8b2e1e9 HPE_VM_4a44fe87-29f6-40f7-bdae-fb067f35263d
+                                               HPE_VM_3686cf71-53ce-4344-a7e1-00483774de70
+                                               HPE_VM_01fbd387-23c2-44ca-bdb2-6fd68dd29540
+------------------------------------------------------------------------------------------
+ 7 total                                       12                                         

@@ -1,0 +1,10 @@
+# srstatcpu -hires -btsecs -24h -groupby NODE -summary avg,95%,max,per_group
+Start Time: 2026-11-15 23:28:34 IST (1794765514)
+End Time: 2026-11-16 23:25:00 IST (1794851700)
+Summary NODE User% Sys% Idle%   Intr/s CtxtSw/s
+    Avg    0   7.3  0.5  92.2  10738.3  16385.2
+    Avg    1   7.1  0.4  92.5  25713.3  44259.2
+    Max    0  10.0  1.0  92.5  15857.3  22708.6
+    Max    1  11.2  1.0  92.8  31723.9  97159.4
+    95%    0  7.40 0.60 92.40 11582.85 19972.83
+    95%    1  7.20 0.50 92.70 26360.92 45373.35

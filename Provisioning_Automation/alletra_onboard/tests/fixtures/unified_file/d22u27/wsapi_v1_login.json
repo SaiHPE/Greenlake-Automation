@@ -1,0 +1,82 @@
+{
+ "request": "POST /api/v1/credentials",
+ "port": 443,
+ "status": 201,
+ "headers": [
+  [
+   "Cache-Control",
+   "no-cache, no-store, private, max-age=-1, must-revalidate"
+  ],
+  [
+   "Cache-Control",
+   "no-cache"
+  ],
+  [
+   "Content-Language",
+   "en-US"
+  ],
+  [
+   "Content-Security-Policy",
+   "default-src 'self' https://www.google-analytics.com/ ; script-src 'self'  https://www.googletagmanager.com/gtag/js https://www.google-analytics.com/analytics.js 'sha256-v0Q8X6xSNmwWcfldSEWqW+3imFpJurfHYdywm3hw6+w=' ; style-src 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'nonce-d29tZSBjb29sIHN0cmluZyB3aWxsIHBvcCB1cCAxMjM=' 'self' blob:; frame-src 'self'; object-src 'self';  media-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'self'"
+  ],
+  [
+   "Content-Type",
+   "application/json"
+  ],
+  [
+   "Date",
+   "Mon, 16 Nov 2026 18:46:50 GMT"
+  ],
+  [
+   "Location",
+   "/api/v1/credentials/<redacted>"
+  ],
+  [
+   "Pragma",
+   "no-cache"
+  ],
+  [
+   "Pragma",
+   "no-cache"
+  ],
+  [
+   "Server",
+   "hp3par-wsapi"
+  ],
+  [
+   "Strict-Transport-Security",
+   "max-age=31536000; includeSubDomains;"
+  ],
+  [
+   "Vary",
+   "Accept-Encoding"
+  ],
+  [
+   "Vary",
+   "Origin"
+  ],
+  [
+   "X-Content-Type-Options",
+   "nosniff"
+  ],
+  [
+   "X-Frame-Options",
+   "SAMEORIGIN"
+  ],
+  [
+   "X-Xss-Protection",
+   "1; mode=block"
+  ],
+  [
+   "Content-Length",
+   "54"
+  ],
+  [
+   "Connection",
+   "close"
+  ]
+ ],
+ "body": {
+  "key": "<redacted str>"
+ }
+}

@@ -1,0 +1,13 @@
+# showversion
+Release version 10.5.60
+Release Type: Standard Support Release
+
+Component Name                   Version                         
+CLI Server                       10.5.60                         
+CLI Client                       10.5.60                         
+System Manager                   10.5.60                         
+Kernel                           10.5.60                         
+IO Stack                         10.5.60                         
+Drive Firmware                   10.5.60                         
+Enclosure Firmware               10.5.60                         
+Upgrade Tool                     91 (261005)                     

@@ -1,0 +1,53 @@
+{
+ "total": 3,
+ "members": [
+  {
+   "id": 1,
+   "uuid": "59819f08-c817-49e4-a1aa-6d7fad5d034d",
+   "name": "image-vol-app-set",
+   "shortName": "image-vol-app-set",
+   "setmembers": [
+    "pc-image-dhci_clus278cae01-59a8-4507-9574-a1bda6ba2d73"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "Other",
+   "businessImportance": 2,
+   "excludeAIQoS": false
+  },
+  {
+   "id": 2,
+   "uuid": "ce4489f3-1b20-493d-a109-516c86f7e08d",
+   "name": "DataServicesConne-Hz67",
+   "shortName": "DataServicesConne-Hz67",
+   "comment": "For Morpheus managed volume \"S4V16-10053.qcow2\"; created for VM \"dhci_clus/Data-Services-Connector\"",
+   "setmembers": [
+    "S4V1610053qcow2-Tm9X"
+   ],
+   "count": 1,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "HPE VM Essentials",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  },
+  {
+   "id": 3,
+   "uuid": "d4e8e86f-079a-4571-b92c-877126b08c60",
+   "name": "vmemgr01-Y4bU",
+   "shortName": "vmemgr01-Y4bU",
+   "comment": "For Morpheus managed volume \"HPE_VME_Manager_QCOW2_Jun_26_S4V16-10049.qcow2\"; created for VM \"dhci_clus/vmemgr01\"",
+   "setmembers": [
+    "HPEVMEManagerQCOW2Jun26S4V1610049qcow2-crae",
+    "imagestore-63hS"
+   ],
+   "count": 2,
+   "vvolStorageContainerEnabled": false,
+   "qosEnabled": false,
+   "appType": "HPE VM Essentials",
+   "businessImportance": 2,
+   "excludeAIQoS": true
+  }
+ ]
+}

@@ -1,0 +1,147 @@
+# checkhealth -svc -detail
+Checking alert
+Checking cabling
+Checking cage
+Checking cdm
+Checking cert
+Checking dar
+Checking date
+Checking file
+Checking fileservice
+Checking host
+Checking hostkeys
+Checking ilo
+Checking ld
+Checking license
+Checking network
+Checking node
+Checking pd
+Checking pdch
+Checking port
+Checking qos
+Checking rc
+Checking security
+Checking signature
+Checking snmp
+Checking switch
+Checking task
+Checking ui
+Checking vlun
+Checking vv
+Component ----------Summary Description----------- Qty
+Alert     New alerts                                31
+CDM       CDM is not connected to network switch     1
+File      sysvars.init is altering system behavior   6
+Port      Degraded or failed SFPs                    4
+Port      Disabled SFPs                              4
+Port      Mismatched SFP speed                       2
+RC        Ports not ready                            4
+RC        Transports not ready                       4
+RC        Failed targets                             1
+RC        Links which are down                       4
+RC        Groups which are not started               2
+Security  System with remote root access enabled     1
+Task      Failed Tasks                              24
+VV        Expired volumes                            8
+------------------------------------------------------
+       14 total                                     96
+
+Component -----------------Identifier------------------ ----------------------------------------------------Detailed Description----------------------------------------------------- Resolution
+Alert     sw_task:145                                   Task 145 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:179                                   Task 179 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:212                                   Task 212 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:247                                   Task 247 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:281                                   Task 281 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_update:OS-10.5.60.36                       An OS update is available: OS-10.5.60.36                                                                                      Manual    
+Alert     sw_task:314                                   Task 314 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:349                                   Task 349 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:382                                   Task 382 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:415                                   Task 415 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:450                                   Task 450 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:484                                   Task 484 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:517                                   Task 517 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:552                                   Task 552 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:585                                   Task 585 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:618                                   Task 618 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:653                                   Task 653 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:687                                   Task 687 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_task:720                                   Task 720 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details. Manual    
+Alert     sw_port:0:3:4                                 Port 0:3:4 Failed (Unsupported 64G SFP)                                                                                       Manual    
+Alert     sw_port:1:3:3,hw_sfp                          Port 1:3:3, SFP Degraded (Unqualified, check for unsupported SFP or cable)                                                    Manual    
+Alert     sw_port:0:3:3,hw_sfp                          Port 0:3:3, SFP Degraded (Unqualified, check for unsupported SFP or cable)                                                    Manual    
+Alert     sw_port:0:3:4,hw_sfp                          Port 0:3:4, SFP Degraded (Unqualified, check for unsupported SFP or cable)                                                    Manual    
+Alert     sw_port:1:3:4,hw_sfp                          Port 1:3:4, SFP Degraded (Unqualified, check for unsupported SFP or cable)                                                    Manual    
+Alert     sw_port:1:3:3                                 Port 1:3:3 Failed (Unsupported 64G SFP)                                                                                       Manual    
+Alert     sw_wsapi                                      Storage system has been disconnected from Data Services Cloud Console for more than 54636 minutes.                            Manual    
+Alert     sw_rmm_link:3:MPB10K-E24U21-LZ_1_4_3          Remote Copy Link 3(MPB10K-E24U21-LZ_1_4_3) Failed (Down Due To Send Error Or Missing Heartbeat)                               Manual    
+Alert     sw_rmm_link:1:MPB10K-E24U21-LZ_0_4_3          Remote Copy Link 1(MPB10K-E24U21-LZ_0_4_3) Failed (Down Due To Send Error Or Missing Heartbeat)                               Manual    
+Alert     sw_rmm_link:2:MPB10K-E24U21-LZ_0_4_4          Remote Copy Link 2(MPB10K-E24U21-LZ_0_4_4) Failed (Down Due To Send Error Or Missing Heartbeat)                               Manual    
+Alert     sw_rmm_link:4:MPB10K-E24U21-LZ_1_4_4          Remote Copy Link 4(MPB10K-E24U21-LZ_1_4_4) Failed (Down Due To Send Error Or Missing Heartbeat)                               Manual    
+Alert     sw_rmm_target:1:MPB10K-E24U21-LZ              Remote Copy Target 1(MPB10K-E24U21-LZ) Failed (All Links To Target Are Down)                                                  Manual    
+CDM       cage1                                         cage1 CDM is not connected to network switch                                                                                  Manual    
+File      node:0                                        Behavior altering sysvars.init "sysvars.init:dd_hint_req_vv_max=100000 " exists, created on Oct 29 07:23                      Manual    
+File      node:0                                        Behavior altering sysvars.init "sysvars.init:dd_hint_req_max=-1 " exists, created on Oct 29 07:23                             Manual    
+File      node:0                                        Behavior altering sysvars.init "sysvars.init:gfc_drop_rrq=0 " exists, created on Oct 29 07:23                                 Manual    
+File      node:1                                        Behavior altering sysvars.init "sysvars.init:dd_hint_req_vv_max=100000 " exists, created on Oct 29 07:23                      Manual    
+File      node:1                                        Behavior altering sysvars.init "sysvars.init:dd_hint_req_max=-1 " exists, created on Oct 29 07:23                             Manual    
+File      node:1                                        Behavior altering sysvars.init "sysvars.init:gfc_drop_rrq=0 " exists, created on Oct 29 07:23                                 Manual    
+Port      port:0:3:3                                    SFP is Degraded                                                                                                               Manual    
+Port      port:0:3:3                                    SFP is disabled                                                                                                               Manual    
+Port      port:0:3:4                                    SFP is Degraded                                                                                                               Manual    
+Port      port:0:3:4                                    SFP is disabled                                                                                                               Manual    
+Port      port:1:3:3                                    SFP is Degraded                                                                                                               Manual    
+Port      port:1:3:3                                    SFP is disabled                                                                                                               Manual    
+Port      port:1:3:4                                    SFP is Degraded                                                                                                               Manual    
+Port      port:1:3:4                                    SFP is disabled                                                                                                               Manual    
+Port      slot:3,port:3                                 SFP speed is different on Slot:3 Port:3 across all nodes                                                                      Manual    
+Port      slot:3,port:4                                 SFP speed is different on Slot:3 Port:4 across all nodes                                                                      Manual    
+RC        rc:0:4:3                                      Port is loss_sync                                                                                                             Manual    
+RC        rc:0:4:3                                      Transport is missing                                                                                                          Manual    
+RC        rc:0:4:4                                      Port is loss_sync                                                                                                             Manual    
+RC        rc:0:4:4                                      Transport is missing                                                                                                          Manual    
+RC        rc:1:4:3                                      Port is loss_sync                                                                                                             Manual    
+RC        rc:1:4:3                                      Transport is missing                                                                                                          Manual    
+RC        rc:1:4:4                                      Port is loss_sync                                                                                                             Manual    
+RC        rc:1:4:4                                      Transport is missing                                                                                                          Manual    
+RC        rc:MPB10K-E24U21-LZ                           Target MPB10K-E24U21-LZ has failed.                                                                                           Manual    
+RC        rc:MPB10K-E24U21-LZ_0_4_3                     Link MPB10K-E24U21-LZ_0_4_3 of target MPB10K-E24U21-LZ is down.                                                               Manual    
+RC        rc:MPB10K-E24U21-LZ_0_4_4                     Link MPB10K-E24U21-LZ_0_4_4 of target MPB10K-E24U21-LZ is down.                                                               Manual    
+RC        rc:MPB10K-E24U21-LZ_1_4_3                     Link MPB10K-E24U21-LZ_1_4_3 of target MPB10K-E24U21-LZ is down.                                                               Manual    
+RC        rc:MPB10K-E24U21-LZ_1_4_4                     Link MPB10K-E24U21-LZ_1_4_4 of target MPB10K-E24U21-LZ is down.                                                               Manual    
+RC        rc:LZ_RcopyGroup1.r194089                     Group LZ_RcopyGroup1.r194089 is not started to target MPB10K-E24U21-LZ.                                                       Manual    
+RC        rc:Recover_back                               Group Recover_back is not started to target MPB10K-E24U21-LZ.                                                                 Manual    
+Security  SSH                                           Remote root access is enabled on the array                                                                                    Manual    
+Task      Task:7289                                     Failed Task                                                                                                                   Manual    
+Task      Task:7297                                     Failed Task                                                                                                                   Manual    
+Task      Task:7306                                     Failed Task                                                                                                                   Manual    
+Task      Task:7314                                     Failed Task                                                                                                                   Manual    
+Task      Task:7323                                     Failed Task                                                                                                                   Manual    
+Task      Task:7332                                     Failed Task                                                                                                                   Manual    
+Task      Task:7340                                     Failed Task                                                                                                                   Manual    
+Task      Task:7348                                     Failed Task                                                                                                                   Manual    
+Task      Task:7356                                     Failed Task                                                                                                                   Manual    
+Task      Task:7364                                     Failed Task                                                                                                                   Manual    
+Task      Task:7372                                     Failed Task                                                                                                                   Manual    
+Task      Task:7380                                     Failed Task                                                                                                                   Manual    
+Task      Task:7388                                     Failed Task                                                                                                                   Manual    
+Task      Task:7398                                     Failed Task                                                                                                                   Manual    
+Task      Task:7406                                     Failed Task                                                                                                                   Manual    
+Task      Task:7414                                     Failed Task                                                                                                                   Manual    
+Task      Task:7422                                     Failed Task                                                                                                                   Manual    
+Task      Task:7430                                     Failed Task                                                                                                                   Manual    
+Task      Task:7438                                     Failed Task                                                                                                                   Manual    
+Task      Task:7446                                     Failed Task                                                                                                                   Manual    
+Task      Task:7454                                     Failed Task                                                                                                                   Manual    
+Task      Task:7462                                     Failed Task                                                                                                                   Manual    
+Task      Task:7470                                     Failed Task                                                                                                                   Manual    
+Task      Task:7478                                     Failed Task                                                                                                                   Manual    
+VV        vv:2nd_Attempt_sv_CRV_LZ_Infra_07.08.21.50.24 VV has expired                                                                                                                Manual    
+VV        vv:2nd_Attempt_sv_CRV_LZ_Prod1_07.08.21.50.24 VV has expired                                                                                                                Manual    
+VV        vv:sv_CRV_LZ_Test_09.01.15.55.01              VV has expired                                                                                                                Manual    
+VV        vv:new_snap                                   VV has expired                                                                                                                Manual    
+VV        vv:sv_CRV_LZ_Infra_09.04.15.05.53             VV has expired                                                                                                                Manual    
+VV        vv:sv_CRV_LZ_ESXi_Backup_09.04.15.05.53       VV has expired                                                                                                                Manual    
+VV        vv:snap_profile_auto_test_040926              VV has expired                                                                                                                Manual    
+VV        vv:snap_infra_auto_test_940926                VV has expired                                                                                                                Manual    
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+       96 total                                                                                                                                                                                 

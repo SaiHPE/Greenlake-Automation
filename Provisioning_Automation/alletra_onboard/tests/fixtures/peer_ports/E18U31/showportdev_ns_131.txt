@@ -1,0 +1,14 @@
+# showportdev ns 1:3:1
+    PtId LpID  Hadr ----Node_WWN---- ----Port_WWN---- ftrs   svpm   bbct   flen   -----vp_WWN----- ---------------------------------------------------SNN--------------------------------------------------- Name        
+0x330a00 0x00  0x00 2FF70002AC02DEF2 20310002AC02DEF2 0x0000 0x0000 0x0000 0x0000 21310002AC02DEF2 n/a                                                                                                       0:3:1       
+0x330900 0x00  0x00 2FF70002AC02DEF2 21310002AC02DEF2 0x8800 0x0012 n/a    0x0800 21310002AC02DEF2 HPE Alletra Storage MP - CZ2D3209YV - fw:105600                                                           1:3:1       
+0x170c00 0x00  0x00 2FF70002AC02DEF6 20310002AC02DEF6 0x0000 0x0000 0x0000 0x0000 21310002AC02DEF2 n/a                                                                                                       -           
+0x170d00 0x00  0x00 2FF70002AC02DEF6 21310002AC02DEF6 0x0000 0x0000 0x0000 0x0000 21310002AC02DEF2 n/a                                                                                                       -           
+0x531bc2 0x05  0x00 200070106FE9A979 100070106FE9A979 0x0000 0x0000 0x0000 0x0000 21310002AC02DEF2 Emulex 650FLB FV12.0.1345.0 DV12.0.1500.3 HN:localhost.bgl1.global.tslabs.hpecorp.net OS:VMware ESXi 8.0. -           
+0x531b0d 0x06  0x00 2000D0BF9CB7A3C9 1000D0BF9CB7A3C9 0x0000 0x0000 0x0000 0x0000 21310002AC02DEF2 Emulex 650FLB FV12.0.1216.0 DV12.0.1500.3 HN:localhost.bgl1.global.tslabs.hpecorp.net OS:VMware ESXi 8.0. -           
+0x5b0253 0x0a  0x00 100052AECF000001 100052AECF000000 0x0000 0x0000 0x0000 0x0000 21310002AC02DEF2 3830C FW:v8.08.232 DVR:v10.01.00.22.07.9-k                                                                LabPoc-RHEL3
+0x5b0235 0x07  0x00 100052AECF000003 100052AECF000002 0x0000 0x0000 0x0000 0x0000 21310002AC02DEF2 3830C FW:v8.08.232 DVR:v5.3.82.0                                                                          LabPoc-esxi1
+0x5b020c 0x09  0x00 100052AECF000007 100052AECF000006 0x0000 0x0000 0x0000 0x0000 21310002AC02DEF2 3830C FW:v8.08.232 DVR:v9.4.11.20                                                                         LabPoc-win1 
+0x5b020b 0x08  0x00 100052AECF000009 100052AECF000008 0x0000 0x0000 0x0000 0x0000 21310002AC02DEF2 3830C FW:v8.08.232 DVR:v9.4.11.20                                                                         LabPoc-win2 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+      10 total                                                                                                                                                                                                           

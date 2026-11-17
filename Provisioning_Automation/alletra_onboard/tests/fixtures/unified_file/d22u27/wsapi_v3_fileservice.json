@@ -1,0 +1,132 @@
+{
+ "request": "GET /api/v3/fileservice",
+ "port": 443,
+ "status": 200,
+ "headers": [
+  [
+   "Cache-Control",
+   "no-cache, no-store, private, max-age=-1, must-revalidate"
+  ],
+  [
+   "Content-Language",
+   "en-US"
+  ],
+  [
+   "Content-Security-Policy",
+   "default-src 'self' https://www.google-analytics.com/ ; script-src 'self'  https://www.googletagmanager.com/gtag/js https://www.google-analytics.com/analytics.js 'sha256-v0Q8X6xSNmwWcfldSEWqW+3imFpJurfHYdywm3hw6+w=' ; style-src 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'nonce-d29tZSBjb29sIHN0cmluZyB3aWxsIHBvcCB1cCAxMjM=' 'self' blob:; frame-src 'self'; object-src 'self';  media-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'self'"
+  ],
+  [
+   "Content-Type",
+   "application/json;charset=UTF-8"
+  ],
+  [
+   "Last-Modified",
+   "Tue, 3 Nov 2026 10:18:58 GMT"
+  ],
+  [
+   "Pragma",
+   "no-cache"
+  ],
+  [
+   "Strict-Transport-Security",
+   "max-age=31536000; includeSubDomains;"
+  ],
+  [
+   "Vary",
+   "Accept-Encoding"
+  ],
+  [
+   "Vary",
+   "Origin"
+  ],
+  [
+   "X-Content-Type-Options",
+   "nosniff"
+  ],
+  [
+   "X-Frame-Options",
+   "SAMEORIGIN"
+  ],
+  [
+   "X-Server-Version",
+   "2.5.0.1463"
+  ],
+  [
+   "X-Xss-Protection",
+   "1; mode=block"
+  ],
+  [
+   "Date",
+   "Mon, 16 Nov 2026 18:46:50 GMT"
+  ],
+  [
+   "Connection",
+   "close"
+  ],
+  [
+   "Transfer-Encoding",
+   "chunked"
+  ]
+ ],
+ "body": {
+  "version": "00000000000000000001",
+  "arraySerialNumber": "CZ2D320BT1",
+  "members": {
+   "e711edaf95c9d14a6d4cf6c2e23437f3": {
+    "uid": "e711edaf95c9d14a6d4cf6c2e23437f3",
+    "uri": "/api/v3/fileservice/e711edaf95c9d14a6d4cf6c2e23437f3",
+    "systemWWN": "2FF70002AC02DEF6",
+    "displayname": {
+     "key": "FILE_SERVICE_NAME",
+     "args": [
+      "2FF70002AC02DEF6"
+     ],
+     "default": "File Service on 2FF70002AC02DEF6"
+    },
+    "domain": "",
+    "isFileServiceEnabled": true,
+    "fileServiceSummary": [
+     {
+      "nodeNum": 0,
+      "fileserviceStatus": "normal",
+      "portStatus": [
+       {
+        "isFilePortConfigured": true,
+        "isFilePortOnline": true,
+        "mtu": 1500
+       },
+       {
+        "isFilePortConfigured": true,
+        "isFilePortOnline": true,
+        "mtu": 1500
+       }
+      ]
+     },
+     {
+      "nodeNum": 1,
+      "fileserviceStatus": "normal",
+      "portStatus": [
+       {
+        "isFilePortConfigured": true,
+        "isFilePortOnline": true,
+        "mtu": 1500
+       },
+       {
+        "isFilePortConfigured": true,
+        "isFilePortOnline": true,
+        "mtu": 1500
+       }
+      ]
+     }
+    ],
+    "capacitySummary": {
+     "totalCapacity": 5855641,
+     "usedCapacity": 256000,
+     "availableCapacity": 5599641
+    },
+    "lastModifiedEpoch": 1793701138,
+    "lastModifiedEpochMS": 1793701138266
+   }
+  }
+ }
+}

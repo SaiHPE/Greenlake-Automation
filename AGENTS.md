@@ -32,14 +32,15 @@ Everything lives under `Provisioning_Automation/alletra_onboard/` (called "the a
 
 1. **Never write to a SAN switch** (ADR 0012). Zoning is a copy-paste Brocade command set for the
    SAN team; `cfgenable` is shown separately. Do not add a switch write path.
-2. **Array SSH is read-only.** Every command goes through the allowlist in
-   `adapters/array/cli_client.py` (`ALLOWED_COMMANDS`). Writes go through WSAPI, and only after the
-   operator approved a plan on screen; Remote Copy groups and the failover actions are WSAPI too.
-   The link check runs `checkrclink` (and, when it prints no latency number, an RCIP ping) through a
-   separate diagnostic allowlist. The one SSH write
-   path is ADR 0015's `ArrayRcCliClient` (`adapters/array/rc_cli_client.py`): RCIP addresses,
-   `startrcopy`, Remote Copy targets and links only, each command checked for its whole shape,
-   built only inside the apply of an approved replication plan (SPEC-021).
+2. **Array SSH is read-only, and every write over it follows one rule** (ADR 0025). Every read goes
+   through the allowlist in `adapters/array/cli_client.py` (`ALLOWED_COMMANDS`; acting options, shell
+   and Tcl quoting characters refused). A write over SSH needs: exact command forms each with a test,
+   a client built only inside the apply of an approved plan, only on the objects that plan names, its
+   removal line written before the command, a read-back after it, and no prompts. One client per kind,
+   each kind argued in its own ADR; today the only one is ADR 0015's `ArrayRcCliClient` (RCIP
+   addresses, `startrcopy`, Remote Copy targets). WSAPI writes also run only after the operator approved
+   a plan on screen. The link check runs `checkrclink` (and, when it prints no latency number, an RCIP
+   ping) through a separate diagnostic allowlist.
 3. **Verification, as-built and discovery never change anything** on an array, host, vCenter or
    switch.
 4. **One array per run.** Refuse a workbook that names two.

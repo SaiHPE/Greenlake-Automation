@@ -1,6 +1,6 @@
 import { Box, Button, Heading, NameValueList, NameValuePair, Text } from 'grommet';
 import { useState } from 'react';
-import { markComplete, RunEvent, RunRecord } from '../api';
+import { markComplete, ProvisioningResult, RunEvent, RunRecord } from '../api';
 import { DocList, Section, StatusLine } from '../ui/blocks';
 import { ActivityTimeline, NotesList } from '../ui/primitives';
 import { PlainPage, runDocuments, when } from '../ui/RunPages';
@@ -19,7 +19,23 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const complete = run?.status === 'succeeded';
-  const created = events.filter((event) => event.event_type === 'storage.applied').length > 0;
+  // A failed apply can have made objects before it stopped (SPEC-007 R6), so both kinds of apply count.
+  const applies = events.filter((event) => ['storage.applied', 'storage.apply.failed'].includes(event.event_type) && event.data?.result);
+  const created = applies.some((event) => {
+    const result = event.data!.result as ProvisioningResult;
+    return (result.removals ?? []).length > 0 || (result.outcomes ?? []).some((outcome) => outcome.status === 'created');
+  });
+  // The answer follows the LAST apply: a run whose apply found everything already there is provisioned.
+  const lastApply = applies[applies.length - 1];
+  const provisioned = !lastApply
+    ? 'Not in this run'
+    : lastApply.event_type === 'storage.apply.failed'
+      ? created
+        ? 'Partly. The last attempt stopped before it finished. Provision storage shows what was created and the commands to remove it.'
+        : 'No. The last attempt stopped before it created anything. Provision storage says why.'
+      : created
+        ? 'Yes'
+        : 'Yes. Everything was already on the array.';
   const started = events.find((e) => e.event_type === 'run.created');
   const last = events[events.length - 1];
 
@@ -101,7 +117,7 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
             <Text>{modeLabel || '--'}</Text>
           </NameValuePair>
           <NameValuePair name="Storage provisioned">
-            <Text>{created ? 'Yes' : 'Not in this run'}</Text>
+            <Text>{provisioned}</Text>
           </NameValuePair>
         </NameValueList>
       </Section>

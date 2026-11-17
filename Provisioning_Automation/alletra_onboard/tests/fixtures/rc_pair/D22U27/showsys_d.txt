@@ -36,6 +36,6 @@ Security Connection :      None
 --------System Descriptors--------
 Location    : 
 Owner       : 
-Contact     : Vikas Mishra, 120124, vikas.mishra@hpe.com
+Contact     : Lab User, 0000000000, lab-user@example.com
 Comment     : 
 

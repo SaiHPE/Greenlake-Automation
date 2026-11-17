@@ -31,10 +31,17 @@ ALLOWED_COMMANDS = (
     # replication read (SPEC-016 R1): the RCIP links with their peer addresses
     "showrctransport",
 )
-# Shell metacharacters that could chain or redirect a second command — never present in a legit
-# show* invocation, so we reject the whole command if any appear (defence in depth on top of the
-# base-command allowlist).
-_FORBIDDEN_CHARS = set(";|&`$><\n\r")
+# Options that make an allowed command act instead of read. The name check alone let these through.
+# `showtarget -rescan` makes the peer ports rescan for targets (HPE CLI reference, showtarget). When a
+# captured `help` shows another such option, add it here with a test.
+_ACTION_OPTIONS: dict[str, dict[str, str]] = {
+    "showtarget": {"-rescan": "it makes the peer ports rescan for targets"},
+}
+# Shell metacharacters that could chain or redirect a second command, and Tcl's quoting and
+# substitution characters: the array CLI is Tcl-based, so `showvv [removevv -f zz]` could run removevv,
+# and `showtarget "-rescan"`, `{-rescan}` or `\-rescan` could send an option the check above never saw.
+# No read the tool makes uses any of them, so the whole command is refused if one appears.
+_FORBIDDEN_CHARS = set(";|&`$><\n\r\"'{}[]\\")
 
 # SPEC-020 R2: the non-show commands, on an allowlist of their own. `checkrclink` starts and stops
 # a link test between two Remote Copy ports, and `controlport rcip ping` pings from one; neither changes
@@ -67,6 +74,10 @@ def refusal(command: str) -> str | None:
     base = parts[0] if parts else ""
     if base not in ALLOWED_COMMANDS:
         return f"refused: '{base}' is not a read-only show command"
+    options = {p.lower() for p in parts[1:]}
+    for option, what in _ACTION_OPTIONS.get(base, {}).items():
+        if option in options:
+            return f"refused: '{base} {option}' is not a read: {what}"
     return None
 
 

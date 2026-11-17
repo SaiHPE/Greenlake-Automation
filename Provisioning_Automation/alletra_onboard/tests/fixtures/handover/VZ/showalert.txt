@@ -1,0 +1,250 @@
+# showalert
+Id          : 20
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-24 16:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 145 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 22
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-24 20:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 179 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 23
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-25 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 212 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 24
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-25 04:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 247 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 25
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-25 08:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 281 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 26
+State       : New
+Message Code: 0x0b00001
+Time        : 2026-06-25 08:11:42 IST
+Severity    : Informational
+Type        : OS update available (informational)
+Message     : An OS update is available: OS-10.5.60.36
+
+Id          : 27
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-25 12:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 314 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 28
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-25 16:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 349 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 29
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-25 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 382 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 30
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-26 00:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 415 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 31
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-26 04:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 450 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 32
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-26 08:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 484 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 33
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-26 12:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 517 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 34
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-26 16:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 552 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 35
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-26 20:00:01 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 585 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 36
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-27 00:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 618 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 37
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-27 04:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 653 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 38
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-27 08:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 687 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 39
+State       : New
+Message Code: 0x00e000a
+Time        : 2026-06-27 12:00:00 IST
+Severity    : Minor
+Type        : Task failed
+Message     : Task 720 (type "scheduled_task", name "LZ_RcopyGroup1.r194089") has failed (Task Failed). Please see task status for details.
+
+Id          : 44
+State       : New
+Message Code: 0x00300fa
+Time        : 2026-10-10 01:03:57 IST
+Severity    : Major
+Type        : Component state change
+Message     : Port 0:3:4 Failed (Unsupported 64G SFP)
+
+Id          : 43
+State       : New
+Message Code: 0x02900de
+Time        : 2026-10-10 01:04:07 IST
+Severity    : Degraded
+Type        : Component state change
+Message     : Port 1:3:3, SFP Degraded (Unqualified, check for unsupported SFP or cable)
+
+Id          : 45
+State       : New
+Message Code: 0x02900de
+Time        : 2026-10-10 01:05:26 IST
+Severity    : Degraded
+Type        : Component state change
+Message     : Port 0:3:3, SFP Degraded (Unqualified, check for unsupported SFP or cable)
+
+Id          : 46
+State       : New
+Message Code: 0x02900de
+Time        : 2026-10-10 01:05:26 IST
+Severity    : Degraded
+Type        : Component state change
+Message     : Port 0:3:4, SFP Degraded (Unqualified, check for unsupported SFP or cable)
+
+Id          : 47
+State       : New
+Message Code: 0x02900de
+Time        : 2026-10-10 01:05:57 IST
+Severity    : Degraded
+Type        : Component state change
+Message     : Port 1:3:4, SFP Degraded (Unqualified, check for unsupported SFP or cable)
+
+Id          : 42
+State       : New
+Message Code: 0x00300fa
+Time        : 2026-10-10 01:20:21 IST
+Severity    : Major
+Type        : Component state change
+Message     : Port 1:3:3 Failed (Unsupported 64G SFP)
+
+Id          : 11
+State       : New
+Message Code: 0x060000a
+Time        : 2026-11-16 23:50:13 IST
+Severity    : Major
+Type        : Disconnected from Data Services Cloud Console for a prolonged period of time
+Message     : Storage system has been disconnected from Data Services Cloud Console for more than 54636 minutes.
+
+Id          : 13
+State       : New
+Message Code: 0x03a00fa
+Time        : 2026-11-17 00:03:04 IST
+Severity    : Major
+Type        : Component state change
+Message     : Remote Copy Link 3(MPB10K-E24U21-LZ_1_4_3) Failed (Down Due To Send Error Or Missing Heartbeat)
+
+Id          : 12
+State       : New
+Message Code: 0x03a00fa
+Time        : 2026-11-17 00:03:04 IST
+Severity    : Major
+Type        : Component state change
+Message     : Remote Copy Link 1(MPB10K-E24U21-LZ_0_4_3) Failed (Down Due To Send Error Or Missing Heartbeat)
+
+Id          : 14
+State       : New
+Message Code: 0x03a00fa
+Time        : 2026-11-17 00:03:10 IST
+Severity    : Major
+Type        : Component state change
+Message     : Remote Copy Link 2(MPB10K-E24U21-LZ_0_4_4) Failed (Down Due To Send Error Or Missing Heartbeat)
+
+Id          : 15
+State       : New
+Message Code: 0x03a00fa
+Time        : 2026-11-17 00:03:10 IST
+Severity    : Major
+Type        : Component state change
+Message     : Remote Copy Link 4(MPB10K-E24U21-LZ_1_4_4) Failed (Down Due To Send Error Or Missing Heartbeat)
+
+Id          : 21
+State       : New
+Message Code: 0x03900fa
+Time        : 2026-11-17 00:06:30 IST
+Severity    : Major
+Type        : Component state change
+Message     : Remote Copy Target 1(MPB10K-E24U21-LZ) Failed (All Links To Target Are Down)
+
+31 alerts

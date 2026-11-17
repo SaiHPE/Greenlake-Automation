@@ -378,6 +378,11 @@ It writes `session-<stamp>\report.md` (PASS/FAIL per check) and keeps every resp
 the docx and the SSH transcript in that folder; exit code 1 on any FAIL. Send the folder back.
 It never writes to a switch and never issues a CLI command the tool did not generate.
 
+A script that applies through the API must name the plan it approves: send
+`{"approved_plan": "<plan_id>"}`, with the `plan_id` from the `storage.previewed` or
+`replication.previewed` event it has just read. Without it, or after the plan was rebuilt, the
+app refuses the apply and says why. `session.ps1` and the lab scripts already do this.
+
 **Run history** lives in `%LOCALAPPDATA%\AlletraOnboard\` (from rc.28), so a new zip in a new folder
 keeps every earlier run; the console banner prints the folder. An older `.alletra_onboard\state.db`
 beside the exe is still used when present. *Runs, Your runs* (top right) lists every run, grouped by who has to act next.

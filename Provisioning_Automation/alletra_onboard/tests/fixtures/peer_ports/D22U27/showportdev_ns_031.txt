@@ -1,0 +1,11 @@
+# showportdev ns 0:3:1
+    PtId LpID  Hadr ----Node_WWN---- ----Port_WWN---- ftrs   svpm   bbct   flen   -----vp_WWN----- ---------------------------------------------------SNN--------------------------------------------------- Name 
+0x170c00 0x00  0x00 2FF70002AC02DEF6 20310002AC02DEF6 0x8800 0x0012 n/a    0x0800 20310002AC02DEF6 HPE Alletra Storage MP - CZ2D320BT1 - fw:10500                                                            0:3:1
+0x170d00 0x00  0x00 2FF70002AC02DEF6 21310002AC02DEF6 0x0000 0x0000 0x0000 0x0000 20310002AC02DEF6 n/a                                                                                                       1:3:1
+0x531bc5 0x06  0x00 2000040973C52791 1000040973C52791 0x0000 0x0000 0x0000 0x0000 20310002AC02DEF6 n/a                                                                                                       -    
+0x330a00 0x00  0x00 2FF70002AC02DEF2 20310002AC02DEF2 0x0000 0x0000 0x0000 0x0000 20310002AC02DEF6 n/a                                                                                                       -    
+0x330900 0x00  0x00 2FF70002AC02DEF2 21310002AC02DEF2 0x0000 0x0000 0x0000 0x0000 20310002AC02DEF6 n/a                                                                                                       -    
+0x531bc2 0x04  0x00 200070106FE9A979 100070106FE9A979 0x0000 0x0000 0x0000 0x0000 20310002AC02DEF6 Emulex 650FLB FV12.0.1345.0 DV12.0.1500.3 HN:localhost.bgl1.global.tslabs.hpecorp.net OS:VMware ESXi 8.0. ESX2 
+0x531b0d 0x05  0x00 2000D0BF9CB7A3C9 1000D0BF9CB7A3C9 0x0000 0x0000 0x0000 0x0000 20310002AC02DEF6 Emulex 650FLB FV12.0.1216.0 DV12.0.1500.3 HN:localhost.bgl1.global.tslabs.hpecorp.net OS:VMware ESXi 8.0. ESX1 
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+       7 total                                                                                                                                                                                                    

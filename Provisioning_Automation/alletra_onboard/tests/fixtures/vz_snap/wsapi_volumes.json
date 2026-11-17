@@ -1,0 +1,4985 @@
+{
+ "total": 93,
+ "members": [
+  {
+   "id": 0,
+   "name": "admin",
+   "shortName": "admin",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 1,
+   "copyType": 1,
+   "baseId": 0,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 10240,
+   "totalUsedMiB": 10240,
+   "sizeMiB": 10240,
+   "wwn": "60002AC000000000000000000002F584",
+   "nguid": "60002AC0000000000002AC000002F584",
+   "creationTimeSec": 1780642579,
+   "creationTime8601": "2026-06-05T12:26:19+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": true,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "b5600a66-72d7-481a-9588-fbbae5a8728b",
+   "udid": 0,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/admin",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/admin",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 1,
+   "name": ".srdata",
+   "shortName": ".srdata",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 1,
+   "copyType": 1,
+   "baseId": 1,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 81920,
+   "totalUsedMiB": 81920,
+   "sizeMiB": 81920,
+   "wwn": "60002AC000000000000000010002F584",
+   "nguid": "60002AC0000000000002AC010002F584",
+   "creationTimeSec": 1780642587,
+   "creationTime8601": "2026-06-05T12:26:27+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": true,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "819cf756-0278-4679-be1b-887dca3c7304",
+   "udid": 1,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.srdata",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.srdata",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "name": ".mgmtdata",
+   "shortName": ".mgmtdata",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 1,
+   "copyType": 1,
+   "baseId": 2,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 524288,
+   "totalUsedMiB": 524288,
+   "sizeMiB": 524288,
+   "wwn": "60002AC000000000000000020002F584",
+   "nguid": "60002AC0000000000002AC020002F584",
+   "creationTimeSec": 1780642600,
+   "creationTime8601": "2026-06-05T12:26:40+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": true,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "68acd7b6-0af0-49bd-8f09-9f61aa26ae19",
+   "udid": 2,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.mgmtdata",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.mgmtdata",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "name": ".shared.SSD_r6_0",
+   "shortName": ".shared.SSD_r6_0",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 3,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000030002F584",
+   "nguid": "60002AC0000000000002AC030002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "138a6dad-a529-4a84-9152-aead13bffcfd",
+   "udid": 3,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_0",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_0",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "name": ".shared.SSD_r6_1",
+   "shortName": ".shared.SSD_r6_1",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 4,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000040002F584",
+   "nguid": "60002AC0000000000002AC040002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "4acddc86-343a-4fdd-8f3b-731a57e60951",
+   "sharedParentId": 3,
+   "udid": 4,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_1",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_1",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "name": ".shared.SSD_r6_2",
+   "shortName": ".shared.SSD_r6_2",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 5,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000050002F584",
+   "nguid": "60002AC0000000000002AC050002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "48bb5058-b63f-4dd5-a648-676aca5bb1db",
+   "sharedParentId": 4,
+   "udid": 5,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_2",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_2",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "name": ".shared.SSD_r6_3",
+   "shortName": ".shared.SSD_r6_3",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 6,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000060002F584",
+   "nguid": "60002AC0000000000002AC060002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "3f0a48c8-b63b-4d87-a048-045cceb96a8f",
+   "sharedParentId": 5,
+   "udid": 6,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_3",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_3",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "name": ".shared.SSD_r6_4",
+   "shortName": ".shared.SSD_r6_4",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 7,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000070002F584",
+   "nguid": "60002AC0000000000002AC070002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "da7a8a3e-d996-4cea-b343-c59db60b4165",
+   "sharedParentId": 6,
+   "udid": 7,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_4",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_4",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "name": ".shared.SSD_r6_5",
+   "shortName": ".shared.SSD_r6_5",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 8,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000080002F584",
+   "nguid": "60002AC0000000000002AC080002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "39c322d3-19ff-46f2-8cce-431376ae1a7a",
+   "sharedParentId": 7,
+   "udid": 8,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_5",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_5",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "name": ".shared.SSD_r6_6",
+   "shortName": ".shared.SSD_r6_6",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 9,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000090002F584",
+   "nguid": "60002AC0000000000002AC090002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "89134d33-5b63-4080-a252-91cbff991b3b",
+   "sharedParentId": 8,
+   "udid": 9,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_6",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_6",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "name": ".shared.SSD_r6_7",
+   "shortName": ".shared.SSD_r6_7",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 10,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000A0002F584",
+   "nguid": "60002AC0000000000002AC0A0002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "acb4dbf9-bcbb-4b71-9723-c1bed3ec1ae0",
+   "sharedParentId": 9,
+   "udid": 10,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_7",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_7",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "name": ".shared.SSD_r6_8",
+   "shortName": ".shared.SSD_r6_8",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 11,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000B0002F584",
+   "nguid": "60002AC0000000000002AC0B0002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "96afb42b-c29e-4eab-a556-ab122ca81f38",
+   "sharedParentId": 10,
+   "udid": 11,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_8",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_8",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "name": ".shared.SSD_r6_9",
+   "shortName": ".shared.SSD_r6_9",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 12,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000C0002F584",
+   "nguid": "60002AC0000000000002AC0C0002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "9b494b1f-2944-4092-a61e-5fadcf531df7",
+   "sharedParentId": 11,
+   "udid": 12,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_9",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_9",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "name": ".shared.SSD_r6_a",
+   "shortName": ".shared.SSD_r6_a",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 13,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000D0002F584",
+   "nguid": "60002AC0000000000002AC0D0002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "e585380e-b71f-4213-a81c-479849f49393",
+   "sharedParentId": 12,
+   "udid": 13,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_a",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_a",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "name": ".shared.SSD_r6_b",
+   "shortName": ".shared.SSD_r6_b",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 14,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000E0002F584",
+   "nguid": "60002AC0000000000002AC0E0002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "b9f4b8eb-adc4-4391-ac7d-10399e9997f3",
+   "sharedParentId": 13,
+   "udid": 14,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_b",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_b",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "name": ".shared.SSD_r6_c",
+   "shortName": ".shared.SSD_r6_c",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 15,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC0000000000000000F0002F584",
+   "nguid": "60002AC0000000000002AC0F0002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "ff8f8b32-9576-4dde-96de-fe5fd530ed77",
+   "sharedParentId": 14,
+   "udid": 15,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_c",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_c",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "name": ".shared.SSD_r6_d",
+   "shortName": ".shared.SSD_r6_d",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 16,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000100002F584",
+   "nguid": "60002AC0000000000002AC100002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "9c75778b-2223-4760-9dd8-0ff2d0518c4d",
+   "sharedParentId": 15,
+   "udid": 16,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_d",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_d",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "name": ".shared.SSD_r6_e",
+   "shortName": ".shared.SSD_r6_e",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 17,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000110002F584",
+   "nguid": "60002AC0000000000002AC110002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "02dedb7e-1ab4-4360-a354-4be11daefc10",
+   "sharedParentId": 16,
+   "udid": 17,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_e",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_e",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "name": ".shared.SSD_r6_f",
+   "shortName": ".shared.SSD_r6_f",
+   "deduplicationState": 3,
+   "compressionState": 6,
+   "provisioningType": 7,
+   "copyType": 1,
+   "baseId": 18,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 4194304,
+   "wwn": "60002AC000000000000000120002F584",
+   "nguid": "60002AC0000000000002AC120002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "5ff948a4-b780-4613-8c0a-aa2cbd67950f",
+   "sharedParentId": 17,
+   "udid": 18,
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/.shared.SSD_r6_f",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/.shared.SSD_r6_f",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "name": "Test",
+   "shortName": "Test",
+   "deduplicationState": 1,
+   "compressionState": 6,
+   "provisioningType": 6,
+   "copyType": 1,
+   "baseId": 19,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 0,
+   "sizeMiB": 10240,
+   "hostWriteMiB": 0,
+   "wwn": "60002AC000000000000000130002F584",
+   "nguid": "60002AC0000000000002AC130002F584",
+   "creationTimeSec": 1780931486,
+   "creationTime8601": "2026-06-08T20:41:26+05:30",
+   "usrSpcAllocWarningPct": 95,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "02233087-2095-4105-981d-576c2d7cafd7",
+   "sharedParentId": 18,
+   "udid": 19,
+   "comment": "createdByIBP1.0",
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "deduplication": 0.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/Test",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/Test",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "name": "CRV_LZ_Infra",
+   "shortName": "CRV_LZ_Infra",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 20,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 395325,
+   "totalUsedMiB": 184874,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 284665,
+   "roChildId": 12119,
+   "wwn": "60002AC000000000000000030002F629",
+   "nguid": "60002AC0000000000002AC030002F629",
+   "creationTimeSec": 1782263744,
+   "creationTime8601": "2026-06-24T06:45:44+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "83954dee-d625-4150-87d3-8865357fa76d",
+   "udid": 20,
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 1.54
+   },
+   "rcopyStatus": 3,
+   "rcopyGroup": "LZ_RcopyGroup1.r194089",
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/CRV_LZ_Infra",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/CRV_LZ_Infra",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "name": "CRV_LZ_Prod1",
+   "shortName": "CRV_LZ_Prod1",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 21,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 53025,
+   "totalUsedMiB": 22355,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 69707,
+   "roChildId": 12120,
+   "wwn": "60002AC000000000000000040002F629",
+   "nguid": "60002AC0000000000002AC040002F629",
+   "creationTimeSec": 1782263757,
+   "creationTime8601": "2026-06-24T06:45:57+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "44c91b63-9d33-41fc-ba46-30ac66181985",
+   "udid": 21,
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 3.12
+   },
+   "rcopyStatus": 3,
+   "rcopyGroup": "LZ_RcopyGroup1.r194089",
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/CRV_LZ_Prod1",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/CRV_LZ_Prod1",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "name": "CRV_LZ_Test",
+   "shortName": "CRV_LZ_Test",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 22,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 1050,
+   "totalUsedMiB": 188,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 189,
+   "roChildId": 12121,
+   "wwn": "60002AC000000000000000050002F629",
+   "nguid": "60002AC0000000000002AC050002F629",
+   "creationTimeSec": 1782263766,
+   "creationTime8601": "2026-06-24T06:46:06+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "fe5deb4d-7617-4029-a2f2-0be5a66c9b2c",
+   "udid": 22,
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 1.01
+   },
+   "rcopyStatus": 3,
+   "rcopyGroup": "LZ_RcopyGroup1.r194089",
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/CRV_LZ_Test",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/CRV_LZ_Test",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 26,
+   "name": "CRV_LZ_ESXi_Backup",
+   "shortName": "CRV_LZ_ESXi_Backup",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 26,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 1050,
+   "totalUsedMiB": 40,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 46,
+   "roChildId": 12122,
+   "wwn": "60002AC0000000000000000B0002F629",
+   "nguid": "60002AC0000000000002AC0B0002F629",
+   "creationTimeSec": 1782543817,
+   "creationTime8601": "2026-06-27T12:33:37+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "738732a8-8329-4954-a42b-d4f64419bf09",
+   "udid": 26,
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 1.18
+   },
+   "rcopyStatus": 3,
+   "rcopyGroup": "LZ_RcopyGroup1.r194089",
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/CRV_LZ_ESXi_Backup",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/CRV_LZ_ESXi_Backup",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 392,
+   "name": "VZ_ESXi_Profile_bk",
+   "shortName": "VZ_ESXi_Profile_bk",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 392,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 525,
+   "totalUsedMiB": 25,
+   "sizeMiB": 512000,
+   "hostWriteMiB": 45,
+   "wwn": "60002AC000000000000001880002F584",
+   "nguid": "60002AC0000000010002AC880002F584",
+   "creationTimeSec": 1782810728,
+   "creationTime8601": "2026-06-30T14:42:08+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "a003bec2-1f2d-4c4d-875c-a94cf688dce3",
+   "udid": 392,
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 1.81
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/VZ_ESXi_Profile_bk",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/VZ_ESXi_Profile_bk",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 1236,
+   "name": "2nd_Attempt_sv_CRV_LZ_Infra_07.08.21.50.24",
+   "shortName": "2nd_Attempt_sv_CRV_L~1236",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 27129,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 71186,
+   "parentId": 6822,
+   "rwChildId": 2393,
+   "wwn": "60002AC000000000000004D40002F584",
+   "nguid": "60002AC0000000040002ACD40002F584",
+   "creationTimeSec": 1783527658,
+   "creationTime8601": "2026-07-08T21:50:58+05:30",
+   "expirationTimeSec": 1783700458,
+   "expirationTime8601": "2026-07-10T21:50:58+05:30",
+   "retentionTimeSec": 1783615143,
+   "retentionTime8601": "2026-07-09T22:09:03+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "22d0253e-f1b9-493e-9878-56aa35757580",
+   "udid": 1236,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 2.62
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/2nd_Attempt_sv_CRV_LZ_Infra_07.08.21.50.24",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/2nd_Attempt_sv_CRV_LZ_Infra_07.08.21.50.24",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 1237,
+   "name": "2nd_Attempt_sv_CRV_LZ_Prod1_07.08.21.50.24",
+   "shortName": "2nd_Attempt_sv_CRV_L~1237",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 22522,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 23243,
+   "parentId": 11976,
+   "rwChildId": 2394,
+   "wwn": "60002AC000000000000004D50002F584",
+   "nguid": "60002AC0000000040002ACD50002F584",
+   "creationTimeSec": 1783527658,
+   "creationTime8601": "2026-07-08T21:50:58+05:30",
+   "expirationTimeSec": 1783700458,
+   "expirationTime8601": "2026-07-10T21:50:58+05:30",
+   "retentionTimeSec": 1783615143,
+   "retentionTime8601": "2026-07-09T22:09:03+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "81cabe39-283a-4768-88da-b482459c765e",
+   "udid": 1237,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.03
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/2nd_Attempt_sv_CRV_LZ_Prod1_07.08.21.50.24",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/2nd_Attempt_sv_CRV_LZ_Prod1_07.08.21.50.24",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 1245,
+   "name": "2nd_Attempt_sv_CRV_LZ_Infra_RW",
+   "shortName": "2nd_Attempt_sv_CRV_LZ_Infra_RW",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "2nd_Attempt_sv_CRV_LZ_Infra_07.08.21.50.24",
+   "baseId": 20,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 55324,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 56217,
+   "parentId": 1236,
+   "wwn": "60002AC000000000000004DD0002F584",
+   "nguid": "60002AC0000000040002ACDD0002F584",
+   "creationTimeSec": 1783529416,
+   "creationTime8601": "2026-07-08T22:20:16+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "e6d84597-b8ae-41d5-9484-ff329e4061dc",
+   "udid": 1245,
+   "capacityEfficiency": {
+    "compression": 1.02
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/2nd_Attempt_sv_CRV_LZ_Infra_RW",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/2nd_Attempt_sv_CRV_LZ_Infra_RW",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 1246,
+   "name": "2nd_Attempt_sv_CRV_LZ_Prod1_RW",
+   "shortName": "2nd_Attempt_sv_CRV_LZ_Prod1_RW",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "2nd_Attempt_sv_CRV_LZ_Prod1_07.08.21.50.24",
+   "baseId": 21,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 3218,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 3484,
+   "parentId": 1237,
+   "wwn": "60002AC000000000000004DE0002F584",
+   "nguid": "60002AC0000000040002ACDE0002F584",
+   "creationTimeSec": 1783529427,
+   "creationTime8601": "2026-07-08T22:20:27+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "cc84a667-0cc0-479c-be84-40930fc8e066",
+   "udid": 1246,
+   "capacityEfficiency": {
+    "compression": 1.08
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/2nd_Attempt_sv_CRV_LZ_Prod1_RW",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/2nd_Attempt_sv_CRV_LZ_Prod1_RW",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 2369,
+   "name": "2nd_Attempt_sv_CRV_LZ_Prod1_RW_clone",
+   "shortName": "2nd_Attempt_sv_CRV_L~2369",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 2369,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 49350,
+   "totalUsedMiB": 44771,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 10485760,
+   "wwn": "60002AC000000000000009410002F584",
+   "nguid": "60002AC0000000090002AC410002F584",
+   "creationTimeSec": 1784525258,
+   "creationTime8601": "2026-07-20T10:57:38+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "e0c5c1c1-0083-46fa-b1b5-e6788051fa43",
+   "udid": 2369,
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 3.4028234663852886e+38
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/2nd_Attempt_sv_CRV_LZ_Prod1_RW_clone",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/2nd_Attempt_sv_CRV_LZ_Prod1_RW_clone",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 2373,
+   "name": "2nd_Attempt_sv_CRV_LZ_Infra_RW_clone",
+   "shortName": "2nd_Attempt_sv_CRV_L~2373",
+   "deduplicationState": 2,
+   "compressionState": 2,
+   "provisioningType": 2,
+   "copyType": 1,
+   "baseId": 2373,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalReservedMiB": 107625,
+   "totalUsedMiB": 98894,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 10485760,
+   "wwn": "60002AC000000000000009450002F584",
+   "nguid": "60002AC0000000090002AC450002F584",
+   "creationTimeSec": 1784525298,
+   "creationTime8601": "2026-07-20T10:58:18+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "a1783994-9263-4adb-8394-747bb0ffaa18",
+   "udid": 2373,
+   "capacityEfficiency": {
+    "compaction": 3.4028234663852886e+38,
+    "compression": 3.4028234663852886e+38
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/2nd_Attempt_sv_CRV_LZ_Infra_RW_clone",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/2nd_Attempt_sv_CRV_LZ_Infra_RW_clone",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 2393,
+   "name": "2nd_Attempt_sv_CRV_LZ_Infra_Recover_Back",
+   "shortName": "2nd_Attempt_sv_CRV_L~2393",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "2nd_Attempt_sv_CRV_LZ_Infra_07.08.21.50.24",
+   "baseId": 20,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 1236,
+   "roChildId": 2397,
+   "wwn": "60002AC000000000000009590002F584",
+   "nguid": "60002AC0000000090002AC590002F584",
+   "creationTimeSec": 1784531957,
+   "creationTime8601": "2026-07-20T12:49:17+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "563c9aba-47d6-452b-9dda-aaa422516a87",
+   "udid": 2393,
+   "rcopyStatus": 2,
+   "rcopyGroup": "Recover_back",
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/2nd_Attempt_sv_CRV_LZ_Infra_Recover_Back",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/2nd_Attempt_sv_CRV_LZ_Infra_Recover_Back",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 2394,
+   "name": "2nd_Attempt_sv_CRV_LZ_Prod1_Recover-back",
+   "shortName": "2nd_Attempt_sv_CRV_L~2394",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "2nd_Attempt_sv_CRV_LZ_Prod1_07.08.21.50.24",
+   "baseId": 21,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 1237,
+   "roChildId": 2398,
+   "wwn": "60002AC0000000000000095A0002F584",
+   "nguid": "60002AC0000000090002AC5A0002F584",
+   "creationTimeSec": 1784531975,
+   "creationTime8601": "2026-07-20T12:49:35+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "579c7912-eba9-4543-869a-dc649140b6af",
+   "udid": 2394,
+   "rcopyStatus": 2,
+   "rcopyGroup": "Recover_back",
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/2nd_Attempt_sv_CRV_LZ_Prod1_Recover-back",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/2nd_Attempt_sv_CRV_LZ_Prod1_Recover-back",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 2397,
+   "name": "rcpy.3.2393.1.1",
+   "shortName": "rcpy.3.2393.1.1",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "2nd_Attempt_sv_CRV_LZ_Infra_Recover_Back",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 2393,
+   "wwn": "60002AC0000000000000095D0002F584",
+   "nguid": "60002AC0000000090002AC5D0002F584",
+   "creationTimeSec": 1784533292,
+   "creationTime8601": "2026-07-20T13:11:32+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "2c2b97c7-1f22-4b55-8651-8cdb68f11094",
+   "udid": 2397,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'Recover_back'.",
+   "rcopyStatus": 4,
+   "rcopyGroup": "Recover_back",
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/rcpy.3.2393.1.1",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/rcpy.3.2393.1.1",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 2398,
+   "name": "rcpy.3.2394.1.1",
+   "shortName": "rcpy.3.2394.1.1",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "2nd_Attempt_sv_CRV_LZ_Prod1_Recover-back",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 2394,
+   "wwn": "60002AC0000000000000095E0002F584",
+   "nguid": "60002AC0000000090002AC5E0002F584",
+   "creationTimeSec": 1784533292,
+   "creationTime8601": "2026-07-20T13:11:32+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "1fe9c2bc-af3f-4bca-b785-838de0512780",
+   "udid": 2398,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'Recover_back'.",
+   "rcopyStatus": 4,
+   "rcopyGroup": "Recover_back",
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/rcpy.3.2394.1.1",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/rcpy.3.2394.1.1",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 6535,
+   "name": "sv_CRV_LZ_Test_09.01.15.55.01",
+   "shortName": "sv_CRV_LZ_Test_09.01.15.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 11977,
+   "rwChildId": 6717,
+   "wwn": "60002AC000000000000019870002F584",
+   "nguid": "60002AC0000000190002AC870002F584",
+   "creationTimeSec": 1788258305,
+   "creationTime8601": "2026-09-01T15:55:05+05:30",
+   "expirationTimeSec": 1788431105,
+   "expirationTime8601": "2026-09-03T15:55:05+05:30",
+   "retentionTimeSec": 1788345790,
+   "retentionTime8601": "2026-09-02T16:13:10+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "0f79562d-9c66-47ab-90a7-51c7145e8b5f",
+   "udid": 6535,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_09.01.15.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_09.01.15.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 6717,
+   "name": "new_snap",
+   "shortName": "new_snap",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "sv_CRV_LZ_Test_09.01.15.55.01",
+   "baseId": 22,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 3,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 2,
+   "parentId": 6535,
+   "wwn": "60002AC00000000000001A3D0002F584",
+   "nguid": "60002AC00000001A0002AC3D0002F584",
+   "creationTimeSec": 1788427472,
+   "creationTime8601": "2026-09-03T14:54:32+05:30",
+   "expirationTimeSec": 1788431105,
+   "expirationTime8601": "2026-09-03T15:55:05+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "585b74d3-8ba0-4fc2-9c25-21810facb806",
+   "udid": 6717,
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/new_snap",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/new_snap",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 6822,
+   "name": "sv_CRV_LZ_Infra_09.04.15.05.53",
+   "shortName": "sv_CRV_LZ_Infra_09.04.15.05.53",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 45064,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 56204,
+   "parentId": 11975,
+   "roChildId": 1236,
+   "rwChildId": 6831,
+   "wwn": "60002AC00000000000001AA60002F584",
+   "nguid": "60002AC00000001A0002ACA60002F584",
+   "creationTimeSec": 1788514550,
+   "creationTime8601": "2026-09-04T15:05:50+05:30",
+   "expirationTimeSec": 1788687350,
+   "expirationTime8601": "2026-09-06T15:05:50+05:30",
+   "retentionTimeSec": 1788602037,
+   "retentionTime8601": "2026-09-05T15:23:57+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "b77947b9-f461-4705-b995-bfae994926d6",
+   "udid": 6822,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.25
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_09.04.15.05.53",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_09.04.15.05.53",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 6825,
+   "name": "sv_CRV_LZ_ESXi_Backup_09.04.15.05.53",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~6825",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 11978,
+   "rwChildId": 6830,
+   "wwn": "60002AC00000000000001AA90002F584",
+   "nguid": "60002AC00000001A0002ACA90002F584",
+   "creationTimeSec": 1788514550,
+   "creationTime8601": "2026-09-04T15:05:50+05:30",
+   "expirationTimeSec": 1788687350,
+   "expirationTime8601": "2026-09-06T15:05:50+05:30",
+   "retentionTimeSec": 1788602036,
+   "retentionTime8601": "2026-09-05T15:23:56+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "aebc312e-7d5d-4062-8f43-538911dadb34",
+   "udid": 6825,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_09.04.15.05.53",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_09.04.15.05.53",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 6830,
+   "name": "snap_profile_auto_test_040926",
+   "shortName": "snap_profile_auto_test_040926",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "sv_CRV_LZ_ESXi_Backup_09.04.15.05.53",
+   "baseId": 26,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 6,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 6825,
+   "wwn": "60002AC00000000000001AAE0002F584",
+   "nguid": "60002AC00000001A0002ACAE0002F584",
+   "creationTimeSec": 1788514626,
+   "creationTime8601": "2026-09-04T15:07:06+05:30",
+   "expirationTimeSec": 1788687350,
+   "expirationTime8601": "2026-09-06T15:05:50+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "62f05578-294f-46dc-8bae-9974f0419666",
+   "udid": 6830,
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/snap_profile_auto_test_040926",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/snap_profile_auto_test_040926",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 6831,
+   "name": "snap_infra_auto_test_940926",
+   "shortName": "snap_infra_auto_test_940926",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "sv_CRV_LZ_Infra_09.04.15.05.53",
+   "baseId": 20,
+   "readOnly": false,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 15836,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 16173,
+   "parentId": 6822,
+   "wwn": "60002AC00000000000001AAF0002F584",
+   "nguid": "60002AC00000001A0002ACAF0002F584",
+   "creationTimeSec": 1788516918,
+   "creationTime8601": "2026-09-04T15:45:18+05:30",
+   "expirationTimeSec": 1788687350,
+   "expirationTime8601": "2026-09-06T15:05:50+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "5dbc511b-1c06-4590-bdcb-30c32469d2f8",
+   "udid": 6831,
+   "capacityEfficiency": {
+    "compression": 1.02
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/snap_infra_auto_test_940926",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/snap_infra_auto_test_940926",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11975,
+   "name": "sv_CRV_LZ_Infra_11.14.23.55.01",
+   "shortName": "sv_CRV_LZ_Infra_11.14.23.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 3069,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 3159,
+   "parentId": 11987,
+   "roChildId": 6822,
+   "wwn": "60002AC00000000000002EC70002F584",
+   "nguid": "60002AC00000002E0002ACC70002F584",
+   "creationTimeSec": 1794680648,
+   "creationTime8601": "2026-11-14T23:54:08+05:30",
+   "expirationTimeSec": 1794853448,
+   "expirationTime8601": "2026-11-16T23:54:08+05:30",
+   "retentionTimeSec": 1794767048,
+   "retentionTime8601": "2026-11-15T23:54:08+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "52f91a6b-43f5-4793-83f1-30d15e83279b",
+   "udid": 11975,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.03
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.14.23.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.14.23.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11976,
+   "name": "sv_CRV_LZ_Prod1_11.14.23.55.01",
+   "shortName": "sv_CRV_LZ_Prod1_11.14.23.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 11988,
+   "roChildId": 1237,
+   "wwn": "60002AC00000000000002EC80002F584",
+   "nguid": "60002AC00000002E0002ACC80002F584",
+   "creationTimeSec": 1794680648,
+   "creationTime8601": "2026-11-14T23:54:08+05:30",
+   "expirationTimeSec": 1794853448,
+   "expirationTime8601": "2026-11-16T23:54:08+05:30",
+   "retentionTimeSec": 1794767047,
+   "retentionTime8601": "2026-11-15T23:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "803c445f-3340-4228-bff7-a86254887af8",
+   "udid": 11976,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.14.23.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.14.23.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11977,
+   "name": "sv_CRV_LZ_Test_11.14.23.55.01",
+   "shortName": "sv_CRV_LZ_Test_11.14.23.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 11989,
+   "roChildId": 6535,
+   "wwn": "60002AC00000000000002EC90002F584",
+   "nguid": "60002AC00000002E0002ACC90002F584",
+   "creationTimeSec": 1794680648,
+   "creationTime8601": "2026-11-14T23:54:08+05:30",
+   "expirationTimeSec": 1794853448,
+   "expirationTime8601": "2026-11-16T23:54:08+05:30",
+   "retentionTimeSec": 1794767047,
+   "retentionTime8601": "2026-11-15T23:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "32f4a380-1a32-49eb-966d-8877bdb82680",
+   "udid": 11977,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.14.23.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.14.23.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11978,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.14.23.55.01",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~11978",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 11990,
+   "roChildId": 6825,
+   "wwn": "60002AC00000000000002ECA0002F584",
+   "nguid": "60002AC00000002E0002ACCA0002F584",
+   "creationTimeSec": 1794680648,
+   "creationTime8601": "2026-11-14T23:54:08+05:30",
+   "expirationTimeSec": 1794853448,
+   "expirationTime8601": "2026-11-16T23:54:08+05:30",
+   "retentionTimeSec": 1794767047,
+   "retentionTime8601": "2026-11-15T23:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "1d7e8780-9aef-424b-a84e-8a91dde93b29",
+   "udid": 11978,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.14.23.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.14.23.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11987,
+   "name": "sv_CRV_LZ_Infra_11.15.03.55.00",
+   "shortName": "sv_CRV_LZ_Infra_11.15.03.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1683,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1686,
+   "parentId": 11999,
+   "roChildId": 11975,
+   "wwn": "60002AC00000000000002ED30002F584",
+   "nguid": "60002AC00000002E0002ACD30002F584",
+   "creationTimeSec": 1794695048,
+   "creationTime8601": "2026-11-15T03:54:08+05:30",
+   "expirationTimeSec": 1794867848,
+   "expirationTime8601": "2026-11-17T03:54:08+05:30",
+   "retentionTimeSec": 1794781449,
+   "retentionTime8601": "2026-11-16T03:54:09+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "ab4c0057-a6e6-436f-903e-6d4b31d94af0",
+   "udid": 11987,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.15.03.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.15.03.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11988,
+   "name": "sv_CRV_LZ_Prod1_11.15.03.55.00",
+   "shortName": "sv_CRV_LZ_Prod1_11.15.03.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12000,
+   "roChildId": 11976,
+   "wwn": "60002AC00000000000002ED40002F584",
+   "nguid": "60002AC00000002E0002ACD40002F584",
+   "creationTimeSec": 1794695048,
+   "creationTime8601": "2026-11-15T03:54:08+05:30",
+   "expirationTimeSec": 1794867848,
+   "expirationTime8601": "2026-11-17T03:54:08+05:30",
+   "retentionTimeSec": 1794781449,
+   "retentionTime8601": "2026-11-16T03:54:09+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "769b97c8-612d-440f-aa1a-11ab426eaafb",
+   "udid": 11988,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.15.03.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.15.03.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11989,
+   "name": "sv_CRV_LZ_Test_11.15.03.55.00",
+   "shortName": "sv_CRV_LZ_Test_11.15.03.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12001,
+   "roChildId": 11977,
+   "wwn": "60002AC00000000000002ED50002F584",
+   "nguid": "60002AC00000002E0002ACD50002F584",
+   "creationTimeSec": 1794695048,
+   "creationTime8601": "2026-11-15T03:54:08+05:30",
+   "expirationTimeSec": 1794867848,
+   "expirationTime8601": "2026-11-17T03:54:08+05:30",
+   "retentionTimeSec": 1794781449,
+   "retentionTime8601": "2026-11-16T03:54:09+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "89819a5c-fc55-45f0-98d9-04ef450527eb",
+   "udid": 11989,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.15.03.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.15.03.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11990,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.15.03.55.00",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~11990",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12002,
+   "roChildId": 11978,
+   "wwn": "60002AC00000000000002ED60002F584",
+   "nguid": "60002AC00000002E0002ACD60002F584",
+   "creationTimeSec": 1794695048,
+   "creationTime8601": "2026-11-15T03:54:08+05:30",
+   "expirationTimeSec": 1794867848,
+   "expirationTime8601": "2026-11-17T03:54:08+05:30",
+   "retentionTimeSec": 1794781449,
+   "retentionTime8601": "2026-11-16T03:54:09+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "bfe26042-cd62-496e-9e78-94621cbb6964",
+   "udid": 11990,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.15.03.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.15.03.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 11999,
+   "name": "sv_CRV_LZ_Infra_11.15.07.55.00",
+   "shortName": "sv_CRV_LZ_Infra_11.15.07.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1627,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1629,
+   "parentId": 12011,
+   "roChildId": 11987,
+   "wwn": "60002AC00000000000002EDF0002F584",
+   "nguid": "60002AC00000002E0002ACDF0002F584",
+   "creationTimeSec": 1794709451,
+   "creationTime8601": "2026-11-15T07:54:11+05:30",
+   "expirationTimeSec": 1794882251,
+   "expirationTime8601": "2026-11-17T07:54:11+05:30",
+   "retentionTimeSec": 1794795851,
+   "retentionTime8601": "2026-11-16T07:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "8ec86880-ee31-4319-9392-07356aa88b91",
+   "udid": 11999,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.15.07.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.15.07.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12000,
+   "name": "sv_CRV_LZ_Prod1_11.15.07.55.00",
+   "shortName": "sv_CRV_LZ_Prod1_11.15.07.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12012,
+   "roChildId": 11988,
+   "wwn": "60002AC00000000000002EE00002F584",
+   "nguid": "60002AC00000002E0002ACE00002F584",
+   "creationTimeSec": 1794709451,
+   "creationTime8601": "2026-11-15T07:54:11+05:30",
+   "expirationTimeSec": 1794882251,
+   "expirationTime8601": "2026-11-17T07:54:11+05:30",
+   "retentionTimeSec": 1794795851,
+   "retentionTime8601": "2026-11-16T07:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "cc9ce8cd-3216-46d6-9089-dce8459c6af4",
+   "udid": 12000,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.15.07.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.15.07.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12001,
+   "name": "sv_CRV_LZ_Test_11.15.07.55.00",
+   "shortName": "sv_CRV_LZ_Test_11.15.07.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12013,
+   "roChildId": 11989,
+   "wwn": "60002AC00000000000002EE10002F584",
+   "nguid": "60002AC00000002E0002ACE10002F584",
+   "creationTimeSec": 1794709451,
+   "creationTime8601": "2026-11-15T07:54:11+05:30",
+   "expirationTimeSec": 1794882251,
+   "expirationTime8601": "2026-11-17T07:54:11+05:30",
+   "retentionTimeSec": 1794795851,
+   "retentionTime8601": "2026-11-16T07:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "d0fb4b33-25e6-4525-b346-80a64d3c131b",
+   "udid": 12001,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.15.07.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.15.07.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12002,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.15.07.55.00",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12002",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12014,
+   "roChildId": 11990,
+   "wwn": "60002AC00000000000002EE20002F584",
+   "nguid": "60002AC00000002E0002ACE20002F584",
+   "creationTimeSec": 1794709451,
+   "creationTime8601": "2026-11-15T07:54:11+05:30",
+   "expirationTimeSec": 1794882251,
+   "expirationTime8601": "2026-11-17T07:54:11+05:30",
+   "retentionTimeSec": 1794795851,
+   "retentionTime8601": "2026-11-16T07:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "28403567-08c0-4c59-807a-6f93e0a1fec4",
+   "udid": 12002,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.15.07.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.15.07.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12011,
+   "name": "sv_CRV_LZ_Infra_11.15.11.55.00",
+   "shortName": "sv_CRV_LZ_Infra_11.15.11.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1603,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1608,
+   "parentId": 12023,
+   "roChildId": 11999,
+   "wwn": "60002AC00000000000002EEB0002F584",
+   "nguid": "60002AC00000002E0002ACEB0002F584",
+   "creationTimeSec": 1794723848,
+   "creationTime8601": "2026-11-15T11:54:08+05:30",
+   "expirationTimeSec": 1794896648,
+   "expirationTime8601": "2026-11-17T11:54:08+05:30",
+   "retentionTimeSec": 1794810247,
+   "retentionTime8601": "2026-11-16T11:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "3fc9ad9c-20a3-4f38-96ae-2f5ec3a6b521",
+   "udid": 12011,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.15.11.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.15.11.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12012,
+   "name": "sv_CRV_LZ_Prod1_11.15.11.55.00",
+   "shortName": "sv_CRV_LZ_Prod1_11.15.11.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12024,
+   "roChildId": 12000,
+   "wwn": "60002AC00000000000002EEC0002F584",
+   "nguid": "60002AC00000002E0002ACEC0002F584",
+   "creationTimeSec": 1794723848,
+   "creationTime8601": "2026-11-15T11:54:08+05:30",
+   "expirationTimeSec": 1794896648,
+   "expirationTime8601": "2026-11-17T11:54:08+05:30",
+   "retentionTimeSec": 1794810247,
+   "retentionTime8601": "2026-11-16T11:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "0240761d-50f1-4b57-ad5e-e2a3ac146f95",
+   "udid": 12012,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.15.11.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.15.11.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12013,
+   "name": "sv_CRV_LZ_Test_11.15.11.55.00",
+   "shortName": "sv_CRV_LZ_Test_11.15.11.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12025,
+   "roChildId": 12001,
+   "wwn": "60002AC00000000000002EED0002F584",
+   "nguid": "60002AC00000002E0002ACED0002F584",
+   "creationTimeSec": 1794723848,
+   "creationTime8601": "2026-11-15T11:54:08+05:30",
+   "expirationTimeSec": 1794896648,
+   "expirationTime8601": "2026-11-17T11:54:08+05:30",
+   "retentionTimeSec": 1794810247,
+   "retentionTime8601": "2026-11-16T11:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "4880303d-0758-472e-b60f-6bbcb348a61d",
+   "udid": 12013,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.15.11.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.15.11.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12014,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.15.11.55.00",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12014",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12026,
+   "roChildId": 12002,
+   "wwn": "60002AC00000000000002EEE0002F584",
+   "nguid": "60002AC00000002E0002ACEE0002F584",
+   "creationTimeSec": 1794723848,
+   "creationTime8601": "2026-11-15T11:54:08+05:30",
+   "expirationTimeSec": 1794896648,
+   "expirationTime8601": "2026-11-17T11:54:08+05:30",
+   "retentionTimeSec": 1794810247,
+   "retentionTime8601": "2026-11-16T11:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "daca74e7-48d0-445f-a845-fd24cc271b8b",
+   "udid": 12014,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.15.11.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.15.11.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12023,
+   "name": "sv_CRV_LZ_Infra_11.15.15.55.01",
+   "shortName": "sv_CRV_LZ_Infra_11.15.15.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1584,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1586,
+   "parentId": 12035,
+   "roChildId": 12011,
+   "wwn": "60002AC00000000000002EF70002F584",
+   "nguid": "60002AC00000002E0002ACF70002F584",
+   "creationTimeSec": 1794738245,
+   "creationTime8601": "2026-11-15T15:54:05+05:30",
+   "expirationTimeSec": 1794911045,
+   "expirationTime8601": "2026-11-17T15:54:05+05:30",
+   "retentionTimeSec": 1794824645,
+   "retentionTime8601": "2026-11-16T15:54:05+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "0ff8a450-1247-40f7-9272-7205962f25d5",
+   "udid": 12023,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.15.15.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.15.15.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12024,
+   "name": "sv_CRV_LZ_Prod1_11.15.15.55.01",
+   "shortName": "sv_CRV_LZ_Prod1_11.15.15.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12036,
+   "roChildId": 12012,
+   "wwn": "60002AC00000000000002EF80002F584",
+   "nguid": "60002AC00000002E0002ACF80002F584",
+   "creationTimeSec": 1794738245,
+   "creationTime8601": "2026-11-15T15:54:05+05:30",
+   "expirationTimeSec": 1794911045,
+   "expirationTime8601": "2026-11-17T15:54:05+05:30",
+   "retentionTimeSec": 1794824645,
+   "retentionTime8601": "2026-11-16T15:54:05+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "11eddeac-302c-4454-a0cc-e4e796b4096d",
+   "udid": 12024,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.15.15.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.15.15.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12025,
+   "name": "sv_CRV_LZ_Test_11.15.15.55.01",
+   "shortName": "sv_CRV_LZ_Test_11.15.15.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12037,
+   "roChildId": 12013,
+   "wwn": "60002AC00000000000002EF90002F584",
+   "nguid": "60002AC00000002E0002ACF90002F584",
+   "creationTimeSec": 1794738245,
+   "creationTime8601": "2026-11-15T15:54:05+05:30",
+   "expirationTimeSec": 1794911045,
+   "expirationTime8601": "2026-11-17T15:54:05+05:30",
+   "retentionTimeSec": 1794824645,
+   "retentionTime8601": "2026-11-16T15:54:05+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "205270b7-85b7-4bc7-8d01-03fc9d4f9549",
+   "udid": 12025,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.15.15.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.15.15.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12026,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.15.15.55.01",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12026",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12038,
+   "roChildId": 12014,
+   "wwn": "60002AC00000000000002EFA0002F584",
+   "nguid": "60002AC00000002E0002ACFA0002F584",
+   "creationTimeSec": 1794738245,
+   "creationTime8601": "2026-11-15T15:54:05+05:30",
+   "expirationTimeSec": 1794911045,
+   "expirationTime8601": "2026-11-17T15:54:05+05:30",
+   "retentionTimeSec": 1794824645,
+   "retentionTime8601": "2026-11-16T15:54:05+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "d6c4144b-9b09-4660-8d22-6efd52dea30c",
+   "udid": 12026,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.15.15.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.15.15.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12035,
+   "name": "sv_CRV_LZ_Infra_11.15.19.55.00",
+   "shortName": "sv_CRV_LZ_Infra_11.15.19.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1548,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1550,
+   "parentId": 12047,
+   "roChildId": 12023,
+   "wwn": "60002AC00000000000002F030002F584",
+   "nguid": "60002AC00000002F0002AC030002F584",
+   "creationTimeSec": 1794752647,
+   "creationTime8601": "2026-11-15T19:54:07+05:30",
+   "expirationTimeSec": 1794925447,
+   "expirationTime8601": "2026-11-17T19:54:07+05:30",
+   "retentionTimeSec": 1794839047,
+   "retentionTime8601": "2026-11-16T19:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "bdc3ae7c-165a-4ee8-b3d6-658b61feaf55",
+   "udid": 12035,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.15.19.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.15.19.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12036,
+   "name": "sv_CRV_LZ_Prod1_11.15.19.55.00",
+   "shortName": "sv_CRV_LZ_Prod1_11.15.19.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12048,
+   "roChildId": 12024,
+   "wwn": "60002AC00000000000002F040002F584",
+   "nguid": "60002AC00000002F0002AC040002F584",
+   "creationTimeSec": 1794752647,
+   "creationTime8601": "2026-11-15T19:54:07+05:30",
+   "expirationTimeSec": 1794925447,
+   "expirationTime8601": "2026-11-17T19:54:07+05:30",
+   "retentionTimeSec": 1794839047,
+   "retentionTime8601": "2026-11-16T19:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "cd8872e3-9f3a-4e43-886e-23a4d37dce02",
+   "udid": 12036,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.15.19.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.15.19.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12037,
+   "name": "sv_CRV_LZ_Test_11.15.19.55.00",
+   "shortName": "sv_CRV_LZ_Test_11.15.19.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12049,
+   "roChildId": 12025,
+   "wwn": "60002AC00000000000002F050002F584",
+   "nguid": "60002AC00000002F0002AC050002F584",
+   "creationTimeSec": 1794752647,
+   "creationTime8601": "2026-11-15T19:54:07+05:30",
+   "expirationTimeSec": 1794925447,
+   "expirationTime8601": "2026-11-17T19:54:07+05:30",
+   "retentionTimeSec": 1794839047,
+   "retentionTime8601": "2026-11-16T19:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "8feb9719-3b74-4548-8a7e-5f392ea7adf2",
+   "udid": 12037,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.15.19.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.15.19.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12038,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.15.19.55.00",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12038",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12050,
+   "roChildId": 12026,
+   "wwn": "60002AC00000000000002F060002F584",
+   "nguid": "60002AC00000002F0002AC060002F584",
+   "creationTimeSec": 1794752647,
+   "creationTime8601": "2026-11-15T19:54:07+05:30",
+   "expirationTimeSec": 1794925447,
+   "expirationTime8601": "2026-11-17T19:54:07+05:30",
+   "retentionTimeSec": 1794839047,
+   "retentionTime8601": "2026-11-16T19:54:07+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "cc923cdb-f0f7-4098-a29e-b7412e6d4748",
+   "udid": 12038,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.15.19.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.15.19.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12047,
+   "name": "sv_CRV_LZ_Infra_11.15.23.55.00",
+   "shortName": "sv_CRV_LZ_Infra_11.15.23.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1608,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1612,
+   "parentId": 12059,
+   "roChildId": 12035,
+   "wwn": "60002AC00000000000002F0F0002F584",
+   "nguid": "60002AC00000002F0002AC0F0002F584",
+   "creationTimeSec": 1794767049,
+   "creationTime8601": "2026-11-15T23:54:09+05:30",
+   "expirationTimeSec": 1794939849,
+   "expirationTime8601": "2026-11-17T23:54:09+05:30",
+   "retentionTimeSec": 1794853449,
+   "retentionTime8601": "2026-11-16T23:54:09+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "ba856716-a948-43e3-9e3c-36d4890872c5",
+   "udid": 12047,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.15.23.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.15.23.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12048,
+   "name": "sv_CRV_LZ_Prod1_11.15.23.55.00",
+   "shortName": "sv_CRV_LZ_Prod1_11.15.23.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12060,
+   "roChildId": 12036,
+   "wwn": "60002AC00000000000002F100002F584",
+   "nguid": "60002AC00000002F0002AC100002F584",
+   "creationTimeSec": 1794767049,
+   "creationTime8601": "2026-11-15T23:54:09+05:30",
+   "expirationTimeSec": 1794939849,
+   "expirationTime8601": "2026-11-17T23:54:09+05:30",
+   "retentionTimeSec": 1794853449,
+   "retentionTime8601": "2026-11-16T23:54:09+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "0d07cb34-73e3-493a-8e57-679795254030",
+   "udid": 12048,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.15.23.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.15.23.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12049,
+   "name": "sv_CRV_LZ_Test_11.15.23.55.00",
+   "shortName": "sv_CRV_LZ_Test_11.15.23.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12061,
+   "roChildId": 12037,
+   "wwn": "60002AC00000000000002F110002F584",
+   "nguid": "60002AC00000002F0002AC110002F584",
+   "creationTimeSec": 1794767049,
+   "creationTime8601": "2026-11-15T23:54:09+05:30",
+   "expirationTimeSec": 1794939849,
+   "expirationTime8601": "2026-11-17T23:54:09+05:30",
+   "retentionTimeSec": 1794853449,
+   "retentionTime8601": "2026-11-16T23:54:09+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "ca21dd60-39e4-4c87-bbe5-2211c7764cf6",
+   "udid": 12049,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.15.23.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.15.23.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12050,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.15.23.55.00",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12050",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12062,
+   "roChildId": 12038,
+   "wwn": "60002AC00000000000002F120002F584",
+   "nguid": "60002AC00000002F0002AC120002F584",
+   "creationTimeSec": 1794767049,
+   "creationTime8601": "2026-11-15T23:54:09+05:30",
+   "expirationTimeSec": 1794939849,
+   "expirationTime8601": "2026-11-17T23:54:09+05:30",
+   "retentionTimeSec": 1794853449,
+   "retentionTime8601": "2026-11-16T23:54:09+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "6b4bd95e-6ad9-4d4b-b878-0a0a930c9dd5",
+   "udid": 12050,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.15.23.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.15.23.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12059,
+   "name": "sv_CRV_LZ_Infra_11.16.03.55.00",
+   "shortName": "sv_CRV_LZ_Infra_11.16.03.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1757,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1761,
+   "parentId": 12071,
+   "roChildId": 12047,
+   "wwn": "60002AC00000000000002F1B0002F584",
+   "nguid": "60002AC00000002F0002AC1B0002F584",
+   "creationTimeSec": 1794781450,
+   "creationTime8601": "2026-11-16T03:54:10+05:30",
+   "expirationTimeSec": 1794954250,
+   "expirationTime8601": "2026-11-18T03:54:10+05:30",
+   "retentionTimeSec": 1794867851,
+   "retentionTime8601": "2026-11-17T03:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "ffdd58e8-bbb8-4634-9010-83c624e24a0f",
+   "udid": 12059,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.16.03.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.16.03.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12060,
+   "name": "sv_CRV_LZ_Prod1_11.16.03.55.00",
+   "shortName": "sv_CRV_LZ_Prod1_11.16.03.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12072,
+   "roChildId": 12048,
+   "wwn": "60002AC00000000000002F1C0002F584",
+   "nguid": "60002AC00000002F0002AC1C0002F584",
+   "creationTimeSec": 1794781450,
+   "creationTime8601": "2026-11-16T03:54:10+05:30",
+   "expirationTimeSec": 1794954250,
+   "expirationTime8601": "2026-11-18T03:54:10+05:30",
+   "retentionTimeSec": 1794867851,
+   "retentionTime8601": "2026-11-17T03:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "b5133ada-bddb-4e38-a18a-836d3843dd7a",
+   "udid": 12060,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.16.03.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.16.03.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12061,
+   "name": "sv_CRV_LZ_Test_11.16.03.55.00",
+   "shortName": "sv_CRV_LZ_Test_11.16.03.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12073,
+   "roChildId": 12049,
+   "wwn": "60002AC00000000000002F1D0002F584",
+   "nguid": "60002AC00000002F0002AC1D0002F584",
+   "creationTimeSec": 1794781450,
+   "creationTime8601": "2026-11-16T03:54:10+05:30",
+   "expirationTimeSec": 1794954250,
+   "expirationTime8601": "2026-11-18T03:54:10+05:30",
+   "retentionTimeSec": 1794867851,
+   "retentionTime8601": "2026-11-17T03:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "03619b98-6f18-429e-82e7-d3683a8761af",
+   "udid": 12061,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.16.03.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.16.03.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12062,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.16.03.55.00",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12062",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12074,
+   "roChildId": 12050,
+   "wwn": "60002AC00000000000002F1E0002F584",
+   "nguid": "60002AC00000002F0002AC1E0002F584",
+   "creationTimeSec": 1794781450,
+   "creationTime8601": "2026-11-16T03:54:10+05:30",
+   "expirationTimeSec": 1794954250,
+   "expirationTime8601": "2026-11-18T03:54:10+05:30",
+   "retentionTimeSec": 1794867851,
+   "retentionTime8601": "2026-11-17T03:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "8e15ef00-ca11-4e85-a050-c30df7cb6dac",
+   "udid": 12062,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.16.03.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.16.03.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12071,
+   "name": "sv_CRV_LZ_Infra_11.16.07.55.01",
+   "shortName": "sv_CRV_LZ_Infra_11.16.07.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1518,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1648,
+   "parentId": 12083,
+   "roChildId": 12059,
+   "wwn": "60002AC00000000000002F270002F584",
+   "nguid": "60002AC00000002F0002AC270002F584",
+   "creationTimeSec": 1794795855,
+   "creationTime8601": "2026-11-16T07:54:15+05:30",
+   "expirationTimeSec": 1794968655,
+   "expirationTime8601": "2026-11-18T07:54:15+05:30",
+   "retentionTimeSec": 1794882255,
+   "retentionTime8601": "2026-11-17T07:54:15+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "85f6620d-7460-41ff-8ce3-ee6169acb4d1",
+   "udid": 12071,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.09
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.16.07.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.16.07.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12072,
+   "name": "sv_CRV_LZ_Prod1_11.16.07.55.01",
+   "shortName": "sv_CRV_LZ_Prod1_11.16.07.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12084,
+   "roChildId": 12060,
+   "wwn": "60002AC00000000000002F280002F584",
+   "nguid": "60002AC00000002F0002AC280002F584",
+   "creationTimeSec": 1794795855,
+   "creationTime8601": "2026-11-16T07:54:15+05:30",
+   "expirationTimeSec": 1794968655,
+   "expirationTime8601": "2026-11-18T07:54:15+05:30",
+   "retentionTimeSec": 1794882255,
+   "retentionTime8601": "2026-11-17T07:54:15+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "ef8e578c-becc-4eed-98fc-e3a8435459eb",
+   "udid": 12072,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.16.07.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.16.07.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12073,
+   "name": "sv_CRV_LZ_Test_11.16.07.55.01",
+   "shortName": "sv_CRV_LZ_Test_11.16.07.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12085,
+   "roChildId": 12061,
+   "wwn": "60002AC00000000000002F290002F584",
+   "nguid": "60002AC00000002F0002AC290002F584",
+   "creationTimeSec": 1794795855,
+   "creationTime8601": "2026-11-16T07:54:15+05:30",
+   "expirationTimeSec": 1794968655,
+   "expirationTime8601": "2026-11-18T07:54:15+05:30",
+   "retentionTimeSec": 1794882255,
+   "retentionTime8601": "2026-11-17T07:54:15+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "18954a41-7cea-4f9a-b61d-d9a79bfbe7d7",
+   "udid": 12073,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.16.07.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.16.07.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12074,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.16.07.55.01",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12074",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12086,
+   "roChildId": 12062,
+   "wwn": "60002AC00000000000002F2A0002F584",
+   "nguid": "60002AC00000002F0002AC2A0002F584",
+   "creationTimeSec": 1794795855,
+   "creationTime8601": "2026-11-16T07:54:15+05:30",
+   "expirationTimeSec": 1794968655,
+   "expirationTime8601": "2026-11-18T07:54:15+05:30",
+   "retentionTimeSec": 1794882255,
+   "retentionTime8601": "2026-11-17T07:54:15+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "36fa0408-fc4a-496a-8005-5dcd99834432",
+   "udid": 12074,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.16.07.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.16.07.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12083,
+   "name": "sv_CRV_LZ_Infra_11.16.11.55.00",
+   "shortName": "sv_CRV_LZ_Infra_11.16.11.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1461,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1468,
+   "parentId": 12095,
+   "roChildId": 12071,
+   "wwn": "60002AC00000000000002F330002F584",
+   "nguid": "60002AC00000002F0002AC330002F584",
+   "creationTimeSec": 1794810245,
+   "creationTime8601": "2026-11-16T11:54:05+05:30",
+   "expirationTimeSec": 1794983045,
+   "expirationTime8601": "2026-11-18T11:54:05+05:30",
+   "retentionTimeSec": 1794896644,
+   "retentionTime8601": "2026-11-17T11:54:04+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "f6d2c8c0-b878-4a67-adde-8bf9d3d00362",
+   "udid": 12083,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.16.11.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.16.11.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12084,
+   "name": "sv_CRV_LZ_Prod1_11.16.11.55.00",
+   "shortName": "sv_CRV_LZ_Prod1_11.16.11.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12096,
+   "roChildId": 12072,
+   "wwn": "60002AC00000000000002F340002F584",
+   "nguid": "60002AC00000002F0002AC340002F584",
+   "creationTimeSec": 1794810245,
+   "creationTime8601": "2026-11-16T11:54:05+05:30",
+   "expirationTimeSec": 1794983045,
+   "expirationTime8601": "2026-11-18T11:54:05+05:30",
+   "retentionTimeSec": 1794896644,
+   "retentionTime8601": "2026-11-17T11:54:04+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "b96ef31a-feb4-4af7-89cf-31ce55e2ce9a",
+   "udid": 12084,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.16.11.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.16.11.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12085,
+   "name": "sv_CRV_LZ_Test_11.16.11.55.00",
+   "shortName": "sv_CRV_LZ_Test_11.16.11.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12097,
+   "roChildId": 12073,
+   "wwn": "60002AC00000000000002F350002F584",
+   "nguid": "60002AC00000002F0002AC350002F584",
+   "creationTimeSec": 1794810245,
+   "creationTime8601": "2026-11-16T11:54:05+05:30",
+   "expirationTimeSec": 1794983045,
+   "expirationTime8601": "2026-11-18T11:54:05+05:30",
+   "retentionTimeSec": 1794896644,
+   "retentionTime8601": "2026-11-17T11:54:04+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "fe3acf85-a818-4e56-8cf3-d36bb51b5fd9",
+   "udid": 12085,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.16.11.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.16.11.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12086,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.16.11.55.00",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12086",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12098,
+   "roChildId": 12074,
+   "wwn": "60002AC00000000000002F360002F584",
+   "nguid": "60002AC00000002F0002AC360002F584",
+   "creationTimeSec": 1794810245,
+   "creationTime8601": "2026-11-16T11:54:05+05:30",
+   "expirationTimeSec": 1794983045,
+   "expirationTime8601": "2026-11-18T11:54:05+05:30",
+   "retentionTimeSec": 1794896644,
+   "retentionTime8601": "2026-11-17T11:54:04+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "46360259-2862-4bd5-b00c-3964d82d7fb6",
+   "udid": 12086,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.16.11.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.16.11.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12095,
+   "name": "sv_CRV_LZ_Infra_11.16.15.55.00",
+   "shortName": "sv_CRV_LZ_Infra_11.16.15.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1590,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1599,
+   "parentId": 12107,
+   "roChildId": 12083,
+   "wwn": "60002AC00000000000002F3F0002F584",
+   "nguid": "60002AC00000002F0002AC3F0002F584",
+   "creationTimeSec": 1794824646,
+   "creationTime8601": "2026-11-16T15:54:06+05:30",
+   "expirationTimeSec": 1794997446,
+   "expirationTime8601": "2026-11-18T15:54:06+05:30",
+   "retentionTimeSec": 1794911046,
+   "retentionTime8601": "2026-11-17T15:54:06+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "b4703b4a-bceb-4f53-8425-2907bfdedbfb",
+   "udid": 12095,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.01
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.16.15.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.16.15.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12096,
+   "name": "sv_CRV_LZ_Prod1_11.16.15.55.00",
+   "shortName": "sv_CRV_LZ_Prod1_11.16.15.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12108,
+   "roChildId": 12084,
+   "wwn": "60002AC00000000000002F400002F584",
+   "nguid": "60002AC00000002F0002AC400002F584",
+   "creationTimeSec": 1794824646,
+   "creationTime8601": "2026-11-16T15:54:06+05:30",
+   "expirationTimeSec": 1794997446,
+   "expirationTime8601": "2026-11-18T15:54:06+05:30",
+   "retentionTimeSec": 1794911046,
+   "retentionTime8601": "2026-11-17T15:54:06+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "a85e9d7e-07e0-419d-8a51-6e5ba233ff59",
+   "udid": 12096,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.16.15.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.16.15.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12097,
+   "name": "sv_CRV_LZ_Test_11.16.15.55.00",
+   "shortName": "sv_CRV_LZ_Test_11.16.15.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12109,
+   "roChildId": 12085,
+   "wwn": "60002AC00000000000002F410002F584",
+   "nguid": "60002AC00000002F0002AC410002F584",
+   "creationTimeSec": 1794824646,
+   "creationTime8601": "2026-11-16T15:54:06+05:30",
+   "expirationTimeSec": 1794997446,
+   "expirationTime8601": "2026-11-18T15:54:06+05:30",
+   "retentionTimeSec": 1794911046,
+   "retentionTime8601": "2026-11-17T15:54:06+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "bf53c91a-07a0-4e99-9dc5-bd4928ab2e53",
+   "udid": 12097,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.16.15.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.16.15.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12098,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.16.15.55.00",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12098",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12110,
+   "roChildId": 12086,
+   "wwn": "60002AC00000000000002F420002F584",
+   "nguid": "60002AC00000002F0002AC420002F584",
+   "creationTimeSec": 1794824646,
+   "creationTime8601": "2026-11-16T15:54:06+05:30",
+   "expirationTimeSec": 1794997446,
+   "expirationTime8601": "2026-11-18T15:54:06+05:30",
+   "retentionTimeSec": 1794911046,
+   "retentionTime8601": "2026-11-17T15:54:06+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "7978ca78-7c3b-458d-9e70-58f8a421096c",
+   "udid": 12098,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.16.15.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.16.15.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12107,
+   "name": "sv_CRV_LZ_Infra_11.16.19.55.01",
+   "shortName": "sv_CRV_LZ_Infra_11.16.19.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 1613,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1617,
+   "parentId": 12119,
+   "roChildId": 12095,
+   "wwn": "60002AC00000000000002F4B0002F584",
+   "nguid": "60002AC00000002F0002AC4B0002F584",
+   "creationTimeSec": 1794839051,
+   "creationTime8601": "2026-11-16T19:54:11+05:30",
+   "expirationTimeSec": 1795011851,
+   "expirationTime8601": "2026-11-18T19:54:11+05:30",
+   "retentionTimeSec": 1794925451,
+   "retentionTime8601": "2026-11-17T19:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "3d9527cc-0474-4f30-a660-35d9a8706f07",
+   "udid": 12107,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.16.19.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.16.19.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12108,
+   "name": "sv_CRV_LZ_Prod1_11.16.19.55.01",
+   "shortName": "sv_CRV_LZ_Prod1_11.16.19.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 6,
+   "parentId": 12120,
+   "roChildId": 12096,
+   "wwn": "60002AC00000000000002F4C0002F584",
+   "nguid": "60002AC00000002F0002AC4C0002F584",
+   "creationTimeSec": 1794839051,
+   "creationTime8601": "2026-11-16T19:54:11+05:30",
+   "expirationTimeSec": 1795011851,
+   "expirationTime8601": "2026-11-18T19:54:11+05:30",
+   "retentionTimeSec": 1794925451,
+   "retentionTime8601": "2026-11-17T19:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "5e695f15-e0a0-4d38-9550-b356dddfc784",
+   "udid": 12108,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.16.19.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.16.19.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12109,
+   "name": "sv_CRV_LZ_Test_11.16.19.55.01",
+   "shortName": "sv_CRV_LZ_Test_11.16.19.55.01",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 12121,
+   "roChildId": 12097,
+   "wwn": "60002AC00000000000002F4D0002F584",
+   "nguid": "60002AC00000002F0002AC4D0002F584",
+   "creationTimeSec": 1794839051,
+   "creationTime8601": "2026-11-16T19:54:11+05:30",
+   "expirationTimeSec": 1795011851,
+   "expirationTime8601": "2026-11-18T19:54:11+05:30",
+   "retentionTimeSec": 1794925451,
+   "retentionTime8601": "2026-11-17T19:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "913efa1a-6141-4c1f-83b2-ebca4621d23b",
+   "udid": 12109,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.16.19.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.16.19.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12110,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.16.19.55.01",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12110",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 7,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 6,
+   "parentId": 12122,
+   "roChildId": 12098,
+   "wwn": "60002AC00000000000002F4E0002F584",
+   "nguid": "60002AC00000002F0002AC4E0002F584",
+   "creationTimeSec": 1794839051,
+   "creationTime8601": "2026-11-16T19:54:11+05:30",
+   "expirationTimeSec": 1795011851,
+   "expirationTime8601": "2026-11-18T19:54:11+05:30",
+   "retentionTimeSec": 1794925451,
+   "retentionTime8601": "2026-11-17T19:54:11+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "b5e3744b-5bfc-450c-b8a5-f726f36dcb34",
+   "udid": 12110,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.0
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.16.19.55.01",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.16.19.55.01",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12119,
+   "name": "sv_CRV_LZ_Infra_11.16.23.55.00",
+   "shortName": "sv_CRV_LZ_Infra_11.16.23.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Infra",
+   "baseId": 20,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 2,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 1,
+   "parentId": 20,
+   "roChildId": 12107,
+   "wwn": "60002AC00000000000002F570002F584",
+   "nguid": "60002AC00000002F0002AC570002F584",
+   "creationTimeSec": 1794853444,
+   "creationTime8601": "2026-11-16T23:54:04+05:30",
+   "expirationTimeSec": 1795026244,
+   "expirationTime8601": "2026-11-18T23:54:04+05:30",
+   "retentionTimeSec": 1794939844,
+   "retentionTime8601": "2026-11-17T23:54:04+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "b5cebb33-d0b1-4ad9-8b10-66cb2c278bcf",
+   "udid": 12119,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "capacityEfficiency": {
+    "compression": 1.08
+   },
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Infra_11.16.23.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Infra_11.16.23.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12120,
+   "name": "sv_CRV_LZ_Prod1_11.16.23.55.00",
+   "shortName": "sv_CRV_LZ_Prod1_11.16.23.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Prod1",
+   "baseId": 21,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 21,
+   "roChildId": 12108,
+   "wwn": "60002AC00000000000002F580002F584",
+   "nguid": "60002AC00000002F0002AC580002F584",
+   "creationTimeSec": 1794853444,
+   "creationTime8601": "2026-11-16T23:54:04+05:30",
+   "expirationTimeSec": 1795026244,
+   "expirationTime8601": "2026-11-18T23:54:04+05:30",
+   "retentionTimeSec": 1794939844,
+   "retentionTime8601": "2026-11-17T23:54:04+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "19ae1a46-4024-44ec-ae91-8ef2e9684b97",
+   "udid": 12120,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Prod1_11.16.23.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Prod1_11.16.23.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12121,
+   "name": "sv_CRV_LZ_Test_11.16.23.55.00",
+   "shortName": "sv_CRV_LZ_Test_11.16.23.55.00",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_Test",
+   "baseId": 22,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 10485760,
+   "hostWriteMiB": 0,
+   "parentId": 22,
+   "roChildId": 12109,
+   "wwn": "60002AC00000000000002F590002F584",
+   "nguid": "60002AC00000002F0002AC590002F584",
+   "creationTimeSec": 1794853444,
+   "creationTime8601": "2026-11-16T23:54:04+05:30",
+   "expirationTimeSec": 1795026244,
+   "expirationTime8601": "2026-11-18T23:54:04+05:30",
+   "retentionTimeSec": 1794939844,
+   "retentionTime8601": "2026-11-17T23:54:04+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "6def3a21-9840-4c48-becc-050bb9ca0d2e",
+   "udid": 12121,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_Test_11.16.23.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_Test_11.16.23.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  },
+  {
+   "id": 12122,
+   "name": "sv_CRV_LZ_ESXi_Backup_11.16.23.55.00",
+   "shortName": "sv_CRV_LZ_ESXi_Backu~12122",
+   "deduplicationState": 3,
+   "compressionState": 4,
+   "provisioningType": 3,
+   "copyType": 3,
+   "copyOf": "CRV_LZ_ESXi_Backup",
+   "baseId": 26,
+   "readOnly": true,
+   "state": 1,
+   "failedStates": [],
+   "degradedStates": [],
+   "additionalStates": [],
+   "totalUsedMiB": 0,
+   "sizeMiB": 1048576,
+   "hostWriteMiB": 0,
+   "parentId": 26,
+   "roChildId": 12110,
+   "wwn": "60002AC00000000000002F5A0002F584",
+   "nguid": "60002AC00000002F0002AC5A0002F584",
+   "creationTimeSec": 1794853444,
+   "creationTime8601": "2026-11-16T23:54:04+05:30",
+   "expirationTimeSec": 1795026244,
+   "expirationTime8601": "2026-11-18T23:54:04+05:30",
+   "retentionTimeSec": 1794939844,
+   "retentionTime8601": "2026-11-17T23:54:04+05:30",
+   "usrSpcAllocWarningPct": 0,
+   "usrSpcAllocLimitPct": 0,
+   "policies": {
+    "staleSS": true,
+    "oneHost": false,
+    "zeroDetect": false,
+    "system": false,
+    "caching": true,
+    "rware": false
+   },
+   "userCPG": "SSD_r6",
+   "uuid": "e4b6e899-7e3c-4379-b4cb-40c5352d432c",
+   "udid": 12122,
+   "comment": "Remote Copy snapshot created for target 'MPB10K-E24U21-LZ' of group 'LZ_RcopyGroup1.r194089'.",
+   "rcopyStatus": 1,
+   "links": [
+    {
+     "href": "https://10.64.122.140/api/v1/volumes/sv_CRV_LZ_ESXi_Backup_11.16.23.55.00",
+     "rel": "self"
+    },
+    {
+     "href": "https://10.64.122.140/api/v1/volumespacedistribution/sv_CRV_LZ_ESXi_Backup_11.16.23.55.00",
+     "rel": "volumeSpaceDistribution"
+    }
+   ]
+  }
+ ],
+ "links": [
+  {
+   "href": "https://10.64.122.140/api/v1/volumes",
+   "rel": "self"
+  },
+  {
+   "href": "https://10.64.122.140/api/v1/volumespacedistribution",
+   "rel": "volumeSpaceDistribution"
+  }
+ ]
+}

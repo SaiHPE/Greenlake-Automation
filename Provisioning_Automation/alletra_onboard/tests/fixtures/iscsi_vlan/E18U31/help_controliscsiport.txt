@@ -1,0 +1,157 @@
+# help controliscsiport
+controliscsiport - Control the characteristics of an iscsi port
+
+SYNTAX
+    The syntax for the controliscsiport command can be one of the following:
+        controliscsiport addr <IP_address> <netmask|prefix_len> [-vlan <vlan_tag>] [-f] <node:slot:port>
+        controliscsiport allowpeer [-f] <false/true> <node:slot:port>
+        controliscsiport delete [-vlan <vlan_tag>] [-f] <node:slot:port>
+        controliscsiport discovery add [-vlan <vlan_tag>] [-f] <portal> <node:slot:port>
+        controliscsiport discovery remove [-vlan <vlan_tag>] [-f] <portal> <node:slot:port>
+        controliscsiport discovery rescan [-vlan <vlan_tag>] [<portal>] <node:slot:port>
+        controliscsiport discovery show [<portal>] [<node:slot:port>]
+        controliscsiport gw <gw_address> [-vlan <vlan_tag>] [-f] <node:slot:port>
+        controliscsiport iqn {show|update}
+        controliscsiport mtu <mtusz_bytes> [-f] <node:slot:port>
+        controliscsiport ping [<count>] <ipaddr> [-vlan <vlan_tag>] <node:slot:port>
+        controliscsiport session login [-vlan <vlan_tag>] [-f] <portal> <iqn> <node:slot:port>
+        controliscsiport session logout [-vlan <vlan_tag>] [-f] <portal> <iqn> <node:slot:port>
+        controliscsiport session rescan [-vlan <vlan_tag>] [<portal> <iqn>] <node:slot:port>
+        controliscsiport session show [<node:slot:port>]
+        controliscsiport stgt  <sendtgt_grp> [-vlan <vlan_tag>] [-f] <node:slot:port>
+
+SUBCOMMANDS
+    allowpeer
+        Allows the iSCSI port to be used for iSCSI initiator.
+    addr
+        Sets the IPv4 address and netmask, or IPv6 address and prefix length
+        of the iSCSI port.
+    discovery
+        add
+            Adds an iSCSI discovery portal for use by the iSCSI initiator.
+        remove
+            Removes an iSCSI discovery portal and discovered targets.
+        rescan
+            Perform a SendTargets discovery with the iSCSI initiator.
+        show
+            Shows iSCSI targets discovered by the iSCSI initiator
+    gw
+        Sets the gateway address of the iSCSI port.
+    iqn
+        show
+            Displays the target iqn.
+        update
+            Updates the target iqn to the standard format.
+    mtu
+        Sets the maximum transmission unit (MTU) size for the iSCSI port.
+    delete
+        Deletes the iSCSI port configuration.
+    ping
+        Pings the specified IP address a specified number of times from the
+        iSCSI port.
+    session
+        login
+            Login to an iSCSI target with the iSCSI initiator.
+        logout
+            Logout of an iSCSI target with the iSCSI initiator.
+        rescan
+            Rescans active iSCSI initiator session(s).
+        show
+            Shows active iSCSI initiator session(s).
+    stgt
+        Sets the SendTargets Group Tag (STGT) for the iSCSI port.
+
+DESCRIPTION
+    The controliscsiport command is used to set properties of an iSCSI port.
+
+AUTHORITY
+    Super, Service
+    Any role granted the port_control right
+
+OPTIONS
+    -f
+        Do not ask for confirmation. The default is to ask for confirmation.
+
+SPECIFIERS
+    <IP_address>
+        Indicates the IP address of the iSCSI target.
+
+    <netmask>
+        Indicates the IP netmask of the IPv4 iSCSI target.
+
+    <prefix_len>
+        Indicates the IP prefix length of the IPv6 iSCSI target.
+
+    <gw_address>
+        Indicates the IP address of the gateway.
+
+    <mtusz_bytes>
+        Indicates the MTU size in bytes.
+
+    <count>
+        Indicates the number of ping packets to send. If a value is specified,
+        it should be an integer from 1 through 64. If a value is not specified,
+        the default is one packet.
+
+    <sendtgt_grp>
+        Indicates the STGT of the iSCSI target.
+        <sendtgt_grp> is an integer in the range [0-65535].
+
+    <vlan_tag>
+        Indicates the VLAN tag number (1 to 4094).
+
+    <portal>
+        Indicates the IP:port of the iSCSI target.
+        The IP address is an IPv4 address.
+        The port is an integer in the range [0-65535].
+
+    <iqn>
+        Indicates the iSCSI IQN of the iSCSI target.
+
+    <node:slot:port>
+        The physical location of the iSCSI target port.
+
+NOTES
+    Access to all domains is required to run this command.
+
+EXAMPLES
+    In the following example, iSCSI port configuration is deleted:
+
+        cli% controliscsiport delete -f 1:1:1
+
+    In the following example, iSCSI port 0:4:1 is given permission to act as an iSCSI initiator:
+
+        cli% controliscsiport allowpeer true -f 0:4:1
+
+    In the following example, a new portal for iSCSI initiator discovery is added on port 0:4:1:
+
+        cli% controliscsiport discovery add -f 172.19.0.2:3260 0:4:1
+
+    In the following example, an iSCSI initiator SendTargets discovery for portal 172.19.0.2:3260 is performed on port 0:4:1:
+
+        cli% controliscsiport discovery rescan 172.19.0.2:3260 0:4:1
+
+    In the following example, a portal for iSCSI initiator discovery is removed on port 0:4:1:
+
+        cli% controliscsiport discovery remove -f 172.19.0.2:3260 0:4:1
+
+    In the following example, the targets discovered by the iSCSI initiator are shown:
+
+        cli% controliscsiport discovery show
+
+    In the following example, a previously discovered iSCSI target is logged into on port 0:4:1:
+
+        cli% controliscsiport session login -f 172.19.0.3:3260 iqn.2007-11.com.example:iqn 0:4:1
+
+    In the following example, an active iSCSI initiator session is logged out of on port 0:4:1:
+
+        cli% controliscsiport session logout -f 172.19.0.3:3260 iqn.2007-11.com.example:iqn 0:4:1
+
+    In the following example, an active iSCSI initiator session is rescanned on port 0:4:1:
+
+        cli% controliscsiport session rescan 172.19.0.3:3260 iqn.2007-11.com.example:iqn 0:4:1
+
+    In the following examples, the active iSCSI initiator sessions are shown:
+
+        cli% controliscsiport session show
+

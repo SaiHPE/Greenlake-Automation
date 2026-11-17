@@ -73,6 +73,8 @@ const VERDICT: Record<GroupVerdict, { state: StepState; label: string }> = {
   not_replicating: { state: 'failed', label: 'Not replicating' },
 };
 const mono = { fontFamily: 'Consolas, "Courier New", monospace' } as const;
+/** An empty table cell, read as "No value" (Design System tables). */
+const noValue = <Text size="small" color="text-weak" a11yTitle="No value">--</Text>;
 
 function latest<T>(events: RunEvent[], types: string[], key: string): T | null {
   const event = [...events].reverse().find((item) => types.includes(item.event_type));
@@ -243,15 +245,22 @@ function LinkLatency({ check, worstMs, overLimit, aName, bName }: {
                 : <StatusIndicator state="failed" label="Not measured" />
             ) },
             { property: 'lost', header: 'Pings lost', render: (r: LinkCheckResult) => (
-              <Text size="small" color={(r.pings_lost_pct ?? 0) > 0 ? 'status-warning' : 'text-weak'}>
-                {r.pings_lost_pct === null ? '—' : `${r.pings_lost_pct} %`}
-              </Text>
+              r.pings_lost_pct === null ? noValue : (
+                <Text size="small" color={r.pings_lost_pct > 0 ? 'status-warning' : 'text-weak'}>{r.pings_lost_pct} %</Text>
+              )
             ) },
-            { property: 'detail', header: 'Detail', render: (r: LinkCheckResult) => <Text size="small" color="text-weak">{r.detail || '—'}</Text> },
+            { property: 'verdict', header: 'Against the limit', render: (r: LinkCheckResult) => {
+              // A check that ended in an error (links Down afterwards) gates the apply whatever the latency.
+              if (check.error || r.status !== 'measured' || r.latency_ms === null || !check.modes.length) return noValue;
+              const over = check.modes.filter((m) => (r.latency_ms as number) > (RTT_LIMIT_MS[m] ?? 0));
+              const label = check.modes.map((m) => `${over.includes(m) ? 'over' : 'within'} ${m} (${RTT_LIMIT_MS[m]} ms)`).join(', ');
+              return <StatusIndicator state={over.length ? 'action_required' : 'complete'} label={label.charAt(0).toUpperCase() + label.slice(1)} />;
+            } },
+            { property: 'detail', header: 'Detail', render: (r: LinkCheckResult) => (r.detail ? <Text size="small" color="text-weak">{r.detail}</Text> : noValue) },
           ]}
           data={check.results.map((r, i) => ({ ...r, key: i }))}
           primaryKey="key"
-          a11yTitle="Link latency: one row per Remote Copy link, with the measured latency and pings lost"
+          a11yTitle="Link latency: one row per Remote Copy link, with the measured latency, the pings lost and whether the latency is within the limit for each mode"
         />
       )}
       {check.unchecked.length > 0 && <InlineNotification tone="info" title="Not checked" message={<NotesList notes={check.unchecked} />} />}
@@ -268,12 +277,15 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const { nextTitle } = useStepContext();
   const [error, setError] = useState<string | null>(null);
   const [showCalls, setShowCalls] = useState(false);
-  const [authorised, setAuthorised] = useState(false);
+  // The tick belongs to one plan: a new read has a new id, so it starts unticked.
+  const [authorisedFor, setAuthorisedFor] = useState<string | null>(null);
   const [acceptLatency, setAcceptLatency] = useState(false);
   const running = run?.status === 'running';
 
   const report = latest<ReplicationReport>(events, ['replication.previewed', 'replication.preview.failed'], 'report');
   const plan = latest<ReplicationPlan>(events, ['replication.previewed', 'replication.preview.failed'], 'plan');
+  const planId = plan?.plan_id ?? '';
+  const authorised = !!plan && authorisedFor === planId;
   // A result reflects the plan on screen only while it is newer than the newest preview: a re-read after
   // an apply must offer Configure again (if anything is left to create), not leave the operator stuck.
   const applied = latestIndex(events, ['replication.applied', 'replication.apply.failed']);
@@ -291,7 +303,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const partnershipPlan = setsUpPartnership(plan);
   const partnershipDone = !!result && !result.error && isPartnershipResult(result);
   // An approval is for the plan on screen: a new read or an apply spends it.
-  useEffect(() => setAuthorised(false), [previewed, applied]);
+  useEffect(() => setAuthorisedFor(null), [previewed, applied]);
   const allRemovals = mergedRemovals(events
     .filter((e) => ['replication.applied', 'replication.apply.failed'].includes(e.event_type) && e.data?.result)
     .map((e) => e.data!.result as ReplicationResult));
@@ -332,7 +344,8 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const configure: FooterAction = {
     label: partnershipPlan ? 'Set up the partnership' : 'Configure replication',
     busy: running,
-    onClick: call(() => replicationApply(runId, acceptLatency)),
+    // The server checks the tick too: it gets the plan's id only when this plan was ticked.
+    onClick: call(() => replicationApply(runId, authorised ? planId : null, acceptLatency)),
     blocked:
       rcip && !measured
         ? 'Check the link first: HPE asks for the latency between the arrays before Remote Copy over RCIP.'
@@ -410,7 +423,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
                 ? `I have reviewed this plan and authorise setting up the replication ports and the partnership on ${aName} and ${bName}.`
                 : `I have reviewed this plan and authorise configuring replication on ${aName} and ${bName}.`,
               checked: authorised,
-              onChange: setAuthorised,
+              onChange: (on: boolean) => setAuthorisedFor(on ? planId : null),
             }
           : undefined
       }

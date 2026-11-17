@@ -1,0 +1,18 @@
+PASS  rack13 10.132.30.121: SSH login
+      rack13: rack13-ARCUS, Release version 10.6.0
+      rack13: array clock: Node Date
+      rack13: showalert     9 alert(s); state New 9; severity Major 3, Critical 2, Informational 2, Degraded 2; times 2026-11-11 23:22:51 IST to 2026-11-16 23:25:20 IST
+      rack13: showalert -d  9 alert(s); state New 9; severity Major 3, Critical 2, Informational 2, Degraded 2; times 2026-11-11 23:22:51 IST to 2026-11-16 23:25:20 IST
+      rack13: srstatcpu (plain)            answered, 145 line(s)
+      rack13: srstatcpu (24-hour form)     answered, 9 line(s)
+      rack13: srstatport (plain)           answered, 148 line(s)
+      rack13: srstatport (24-hour form)    answered, 16 line(s)
+      rack13: srstatvv (plain)             answered, 148 line(s)
+      rack13: srstatvv (24-hour form)      answered, 7 line(s)
+      rack13: srstatrcvv (plain)           answered, 4 line(s)
+      rack13: srstatrcvv (24-hour form)    answered, 4 line(s)
+PASS  rack13: System Reporter answered every report - 8 of 8
+PASS  rack13: no command refused by the array
+PASS  rack13: CLI help read for every report
+
+0 FAIL

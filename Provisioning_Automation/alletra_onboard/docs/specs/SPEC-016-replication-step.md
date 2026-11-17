@@ -103,6 +103,8 @@ set covers exactly what was created up to that point.
 **R5 — Approval gate.** Nothing is written until the operator ticks *"I have reviewed this plan and
 authorise configuring replication on both arrays"* and clicks *Configure replication* — the same gate
 as *Create storage objects*. A plan with a conflict or a blocker cannot be applied (409).
+The server checks the tick as well: the apply body carries the previewed plan's `plan_id` as
+`approved_plan`, and the server refuses a missing or stale id (BL-52, SPEC-001 addendum).
 
 **R6 — Verify (read-only, both arrays).** After apply and on demand (*Verify replication*):
 - The target's links `Up` on both arrays.

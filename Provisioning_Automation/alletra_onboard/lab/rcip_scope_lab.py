@@ -116,7 +116,7 @@ def mixed(password):
     blockers = (ev["data"].get("plan") or {}).get("blockers", [])
     check("mixed: refused at the first read, with the reason",
           any("mixes sync and async rows, and the partnership the tool sets up" in b for b in blockers), " | ".join(blockers)[:400])
-    status, resp = api("POST", "/runs/%s/replication/apply" % run_id, {})
+    status, resp = api("POST", "/runs/%s/replication/apply" % run_id, {"approved_plan": (ev["data"].get("plan") or {}).get("plan_id")})
     check("mixed: configure is refused", status == 409, "HTTP %s %s" % (status, str(resp)[:160]))
     check("mixed: nothing was written", not tl.console_writes(run_id))
 
@@ -132,7 +132,8 @@ def half(password):
         check("half: planned without a blocker", not plan.get("blockers"), " | ".join(plan.get("blockers", []))[:300])
         if plan.get("blockers"):
             return
-        ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "half-apply")
+        ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "half-apply",
+                  body={"approved_plan": plan.get("plan_id")})
         res = ev["data"].get("result") or {}
         check("half: stopped at the ping, nothing after the addresses",
               ev["event_type"] == "replication.apply.failed" and "ping from 0:4:4 to 10.93.18.19" in (res.get("error") or "")
@@ -160,11 +161,12 @@ def gateway(password):
         return
     run_id = run_from_sheet(password, "gateway")
     try:
-        step(run_id, "/replication/preview", ["replication.previewed", "replication.preview.failed"], "gateway-preview-1")
-        ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "gateway-apply-1")
+        ev = step(run_id, "/replication/preview", ["replication.previewed", "replication.preview.failed"], "gateway-preview-1")
+        ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "gateway-apply-1",
+                  body={"approved_plan": (ev["data"].get("plan") or {}).get("plan_id")})
         if not check("gateway: partnership set up, links Up", ev["event_type"] == "replication.applied", ev["message"][:200]):
             return
-        step(run_id, "/replication/preview", ["replication.previewed", "replication.preview.failed"], "gateway-preview-2")
+        preview2 = step(run_id, "/replication/preview", ["replication.previewed", "replication.preview.failed"], "gateway-preview-2")
         ev = step(run_id, "/replication/link-check", ["replication.link_checked", "replication.link_check.failed"], "gateway-link-check",
                   body={"duration_s": 600})
         lc = ev["data"].get("link_check") or {}
@@ -177,7 +179,8 @@ def gateway(password):
         check("gateway: the links it broke are an error with the way back",
               "these Remote Copy links are Down, and they were Up before it" in (lc.get("error") or "")
               and "controlport rcip state down -f" in (lc.get("error") or ""), (lc.get("error") or "")[:400])
-        status, resp = api("POST", "/runs/%s/replication/apply" % run_id, {})
+        status, resp = api("POST", "/runs/%s/replication/apply" % run_id,
+                           {"approved_plan": (preview2["data"].get("plan") or {}).get("plan_id")})
         check("gateway: configure is refused", status == 409, "HTTP %s %s" % (status, str(resp)[:200]))
         fl.banner("3b. The way back the tool printed: state down / up on the Primera's ports")
         p = fl.ssh(P_HOST, password)
@@ -275,7 +278,8 @@ def peer(password):
               and not plan.get("blockers"), json.dumps(rows) + " " + " | ".join(plan.get("blockers", []))[:300])
         if plan.get("blockers"):
             return
-        ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "peer-apply-1")
+        ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "peer-apply-1",
+                  body={"approved_plan": plan.get("plan_id")})
         res = ev["data"].get("result") or {}
         kinds = [o["kind"] + o["where"] for o in res.get("outcomes", [])]
         check("peer: 4 addresses, 2 pings, Remote Copy started on both, 2 targets, links Up",
@@ -288,10 +292,11 @@ def peer(password):
               json.dumps(res.get("removals_b")))
         if res.get("error"):
             return
-        step(run_id, "/replication/preview", ["replication.previewed", "replication.preview.failed"], "peer-preview-2")
+        preview2 = step(run_id, "/replication/preview", ["replication.previewed", "replication.preview.failed"], "peer-preview-2")
         step(run_id, "/replication/link-check", ["replication.link_checked", "replication.link_check.failed"], "peer-link-check",
              body={"duration_s": 600})
-        ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "peer-apply-2")
+        ev = step(run_id, "/replication/apply", ["replication.applied", "replication.apply.failed"], "peer-apply-2",
+                  body={"approved_plan": (preview2["data"].get("plan") or {}).get("plan_id")})
         res = ev["data"].get("result") or {}
         if not check("peer: groups created", GROUP in res.get("groups_created", []), res.get("error") or ""):
             return

@@ -66,9 +66,9 @@ def wait_event(run_id, since, done):
     return None
 
 
-def api_step(run_id, path, done, name):
+def api_step(run_id, path, done, name, body=None):
     since = len(events(run_id))
-    status, resp = api("POST", "/runs/%s%s" % (run_id, path), {})
+    status, resp = api("POST", "/runs/%s%s" % (run_id, path), body if body is not None else {})
     if status >= 300:
         raise RuntimeError("POST %s -> HTTP %s: %s" % (path, status, resp))
     ev = wait_event(run_id, since, done)
@@ -337,7 +337,7 @@ def main():
         fl.save("error.txt", traceback.format_exc())
         if applied is None:
             # The browser may have stopped after the apply: take the result from the run itself
-            done = [e for e in events(run_id) if e["event_type"] == "storage.applied"]
+            done = [e for e in events(run_id) if e["event_type"] in ("storage.applied", "storage.apply.failed")]
             applied = done[-1] if done else None
     finally:
         cleanup(applied)

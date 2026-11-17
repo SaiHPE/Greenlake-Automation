@@ -1,0 +1,167 @@
+# help createsv
+createsv - Create a snapshot copy of a virtual volume (VV).
+
+SYNTAX
+    createsv [options] <SV_name> <copy_of_VV | VV_set | RC_group>
+
+DESCRIPTION
+    The createsv command creates a point-in-time (snapshot) copy of a VV.
+    Create snapshots to perform such tasks as backing up data on the base volume
+    and allowing multiple copies of a base volume to be modified without
+    affecting the original base volume.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the sv_create right
+
+OPTIONS
+    -ro
+        Specifies that the copied volume is read-only. If not specified, the
+        volume is read/write.
+
+    -i <VV_ID>
+        Specifies the ID of the copied VV set. This option cannot be used when VV
+        set is specified.
+
+    -rcopy
+        Specifies that synchronous snapshots be taken of a volume in a remote
+        copy group. The same snapshot <SV_name> will be applied on both the
+        primary and secondary arrays.
+
+    -noerror
+        Specifies that the command will not return an error when executed on
+        secondary array. Rather it will return a success. This option will do
+        nothing on primary array. It can only be used with Remote Copy groups
+        or -rcopy option.
+
+    -exp <time>{d|D|h|H|m|M}
+        Specifies the relative time from the current time that volume will
+        expire. <time> is a positive integer value and in the range of
+        1 minute - 1825 days. Time can be specified in days, hours, or minutes.
+        Use "d" or "D" for days, "h" or "H" for hours, or "m" or "M" for minutes
+        following the entered time value.
+
+    -comment <comment>
+        Specifies any additional information up to 511 characters for the
+        volume.
+
+    -f
+        Do not ask for confirmation before creating a volume with retention time
+        (-retain).
+
+    -retain <time>{d|D|h|H|m|M}
+        Specifies the amount of time, relative to the current time, that the
+        volume will be retained. <time> is a positive integer value and in the
+        range of 1 minute - 1825 days. Time can be specified in days, hours, or
+        minutes.  Use "d" or "D" for days, "h" or "H" for hours, or "m" or "M"
+        for minutes following the entered time value.
+
+        Note: If the volume is not in any domain, then its retention time
+        cannot exceed the value of the system's VVRetentionTimeMax. The default
+        value for the system's VVRetentionTimeMax is 14 days. If the volume
+        belongs to a domain, then its retention time cannot exceed the value of
+        the domain's VVRetentionTimeMax, if set. The retention time cannot be
+        removed or reduced once it is set. If the volume has its retention time
+        set, it cannot be removed within its retention time. If both expiration
+        time and retention time are specified, then the retention time cannot
+        be longer than the expiration time.
+
+    -addtoset <VV_set>
+        Specifies that the VVs will be added to the specified set. The set
+        will be created if it does not exist. <VV_set> can contain various
+        patterns that are used to form the specified set. See
+        "help sub,vvnamepat" for details.
+
+    -noblock
+        When a read-only snapshot is taken, the storage system blocks host i/o
+        to the parent virtual volume while the snapshot is being created. If
+        the noblock option is specified then the storage system will not block
+        host i/o to the parent virtual volume during snapshot creation. This
+        option is only applicable for read-only snapshots.
+
+SPECIFIERS
+    <SV_name>
+        Specifies the snapshot name, using up to 255 characters in length.
+    <copy_of_VV | VV_set>
+        Specifies the parent volume name or volume set name, using up to 255
+        characters. The VV_set name must start with "set:". If copy_of VV is a
+        VV set then svname can contain various patterns that are used to form
+        the snapshot volume name. See "help sub,vvnamepat" for details. For
+        remote copy groups, the group name should begin with "rcgroup:". For
+        this setting, @vvname@ replacements can be used.  If a pattern is not
+        given, the <SV_name> field is used as a prefix, to which the VV_name is
+        appended. This should be used in conjunction with the -rcopy flag.
+
+NOTES
+    If the volume is not in any domain, then its retention time cannot exceed
+    the value of the system's VVRetentionTimeMax. The default value for the
+    system's VVRetentionTimeMax is 14 days. If the volume belongs to a domain,
+    then its retention time cannot exceed the value of the domain's
+    VVRetentionTimeMax, if set. The retention time cannot be removed or reduced
+    once it is set. If the volume has its retention time set, it cannot be
+    removed within its retention time. If both expiration time and retention
+    time are specified, then the retention time cannot be longer than the
+    expiration time.
+
+    A maximum of 2048 virtual copies per volume are allowed.
+    RW snapshots made directly against a base volume or another RW snapshot
+    will reduce the available amount by one for each.
+    RO snapshots made directly against another RO snapshot will also reduce
+    the available amount by one for each.
+
+    For a vv set the createsv command creates consistent group snapshots of
+    the virtual volumes in the set. Consistent group snapshots are all created
+    at the same point in time so that related structures on different volumes
+    in the set remain consistent.
+
+    For remote copy (-rcopy), identical snapshots are created on both the
+    primary and secondary arrays. Only read-only snapshots may be taken with
+    the -rcopy flag. Group level coordinated snapshots are applicable to
+    synchronous and periodic replication groups, but volume level coordinated
+    snapshots are supported on sync groups only.
+
+    If the remote copy volume pair has different names on the primary and
+    secondary arrays, any automatic @vvname@ substitution will reflect the
+    name of the primary array volume.
+
+EXAMPLES
+    The following example creates a read-only snapshot volume svro_vv0 from volume vv0:
+
+        cli% createsv -ro svr0_vv0 vv0
+
+    The following example creates snapshot volume svrw_vv0 from the snapshot svro_vv0:
+
+        cli% createsv svrw_vv0 svro_vv0
+
+    The following example creates a snapshot volume for each member of the
+    VV set vvcopies. Each snapshot will be named svro-<name of parent volume>:
+
+        cli% createsv -ro svro-@vvname@ set:vvcopies
+
+    If vvcopies contained VVs named vv.0, vv.1 and vv.2 this would result in snapshots
+    named svro-vv.0, svro-vv.1 and svro-vv.2.
+
+    The following example creates the snapshots sv-vv.0, sv-vv.1, and sv-vv.2 and adds
+    them to the VV set vvsnaps:
+
+        cli% createsv -addtoset vvsnaps sv-@vvname@ set:vvcopies
+
+    The following example creates identical readonly snapshot volumes on both
+    the primary and secondary arrays (synchronous replication groups only):
+
+        cli% createsv -rcopy -ro sv_vv0 vv0
+
+    createsv can also be used to create coordinated snapshots across a full
+    remote copy group:
+
+        cli% createsv -rcopy -ro sv_@vvname@_1 rcgroup:group1
+
+    If there are vv.1, vv.2 ...,vv.n within group1, this will result in
+    sv_vv.1_1, sv_vv.2_1, ..., sv_vv.n_1.  If however, there is no pattern
+    included, the <SV_name> is used as a prefix, appended with a '.':
+
+        cli% createsv -rcopy -ro sv rcgroup:group1
+
+    Assuming the same VVs as before, sv.vv.1, sv.vv.2, sv.vv.n will be
+    created.
+

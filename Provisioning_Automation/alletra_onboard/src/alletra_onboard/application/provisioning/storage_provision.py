@@ -654,78 +654,118 @@ def apply_plan(
 
     personas = _persona_by_host(discovery, intent, zoning_plan)
     iqns_of = _iqns_by_host(discovery, intent, zoning_plan)
+    # SPEC-007 R6: a failed apply has a removal set too. Writes stop at the first error, inside the
+    # array session, so the undo can still be read for what was made before it.
+    doing = ("", "")                              # (kind, name) of the object being written, named in the error
+    templates: list[VlunTemplate] | None = None   # the exports before this apply's; None = not reached
+    export_outcomes: list[ActionOutcome] = []
+    failure_notes: list[str] = []
     try:
         with wsapi_factory(intent.array) as array:
-            for host_name, wwns in hosts.items():
-                persona = personas.get(host_name, "VMware")
-                if wwns or not iqns_of.get(host_name):
-                    # FC, or an array host with only an NVMe NQN (ensure_host with no WWN = exists, no write)
-                    status = array.ensure_host(host_name, wwns, persona=persona)
-                else:
-                    status = array.ensure_iscsi_host(host_name, iqns_of[host_name], persona=persona)
-                result.outcomes.append(ActionOutcome(kind="host", name=host_name, status=status))
+            try:
+                for host_name, wwns in hosts.items():
+                    doing = ("host", host_name)
+                    persona = personas.get(host_name, "VMware")
+                    if wwns or not iqns_of.get(host_name):
+                        # FC, or an array host with only an NVMe NQN (ensure_host with no WWN = exists, no write)
+                        status = array.ensure_host(host_name, wwns, persona=persona)
+                    else:
+                        status = array.ensure_iscsi_host(host_name, iqns_of[host_name], persona=persona)
+                    result.outcomes.append(ActionOutcome(kind="host", name=host_name, status=status))
 
-            for hs in intent.host_sets:
-                status = array.ensure_host_set(hs.name, _members_for(hs, hosts))
-                result.outcomes.append(ActionOutcome(kind="hostset", name=hs.name, status=status))
+                for hs in intent.host_sets:
+                    doing = ("hostset", hs.name)
+                    status = array.ensure_host_set(hs.name, _members_for(hs, hosts))
+                    result.outcomes.append(ActionOutcome(kind="hostset", name=hs.name, status=status))
 
-            for v in intent.volumes:
-                status = array.ensure_volume(v.name, v.cpg, v.size_mib, v.provisioning_type)
-                result.outcomes.append(ActionOutcome(kind="volume", name=v.name, status=status))
+                for v in intent.volumes:
+                    doing = ("volume", v.name)
+                    status = array.ensure_volume(v.name, v.cpg, v.size_mib, v.provisioning_type)
+                    result.outcomes.append(ActionOutcome(kind="volume", name=v.name, status=status))
 
-            for vvset, vols in _vvsets(intent).items():
-                status = array.ensure_volume_set(vvset, vols)
-                result.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
+                for vvset, vols in _vvsets(intent).items():
+                    doing = ("vvset", vvset)
+                    status = array.ensure_volume_set(vvset, vols)
+                    result.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
 
-            # SPEC-012 R1 (P-8): the Result row names the object the array holds, not only the verb.
-            # One read-back of hosts and volumes; sets are described from what was sent.
-            _describe_outcomes(result.outcomes, array.hosts(), array.volumes(),
-                               {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}, _vvsets(intent))
+                # SPEC-012 R1 (P-8): the Result row names the object the array holds, not only the verb.
+                # One read-back of hosts and volumes; sets are described from what was sent.
+                doing = ("", "")
+                _describe_outcomes(result.outcomes, array.hosts(), array.volumes(),
+                                   {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}, _vvsets(intent))
 
-            # SPEC-001 R11 (P-21, live 2026-09-14 12:39): judge every export against the templates BEFORE
-            # sending it, exactly as the plan did. `createVLUN(auto=True)` never raises EXISTENT_VLUN —
-            # the array just picks the next LUN — so the conflict-swallow that makes the other ensure_*
-            # idempotent never fired here, and an export the approved plan called Exists (LUN 0, 1) was
-            # presented a second time at LUN 3, 4. One read; skip what exists, refuse what conflicts,
-            # complete a partial set member by member (never re-sending the whole set).
-            vvsets = _vvsets(intent)
-            members_of = {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}
-            templates = array.vlun_templates()
-            export_outcomes: list[ActionOutcome] = []
-            for ex in exports:
-                verdict, reason = _judge_export(ex, vvsets, templates, members_of.get(ex.target_name, []))
-                if verdict == "exists":
-                    export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status="exists", detail=reason))
-                    continue
-                if verdict == "conflict":
-                    export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status="failed", detail=reason))
-                    continue
-                if verdict == "update":
-                    volumes = list(vvsets.get(ex.source_name, []))
-                    present = {t.volume for t in templates if t.target == ex.target_ref and t.volume in volumes}
-                    statuses = [
-                        array.ensure_vlun(v, ex.target_ref, lun=None if ex.lun is None else ex.lun + volumes.index(v))
-                        for v in volumes if v not in present
-                    ]
-                    status = "created" if "created" in statuses else "exists"
-                else:
-                    status = array.ensure_vlun(ex.source_ref, ex.target_ref, lun=ex.lun)
-                export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status=status))
+                # SPEC-001 R11 (P-21, live 2026-09-14 12:39): judge every export against the templates BEFORE
+                # sending it, exactly as the plan did. `createVLUN(auto=True)` never raises EXISTENT_VLUN —
+                # the array just picks the next LUN — so the conflict-swallow that makes the other ensure_*
+                # idempotent never fired here, and an export the approved plan called Exists (LUN 0, 1) was
+                # presented a second time at LUN 3, 4. One read; skip what exists, refuse what conflicts,
+                # complete a partial set member by member (never re-sending the whole set).
+                vvsets = _vvsets(intent)
+                members_of = {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}
+                templates = array.vlun_templates()
+                for ex in exports:
+                    doing = ("vlun", f"{ex.source_name} to {ex.target_name}")
+                    verdict, reason = _judge_export(ex, vvsets, templates, members_of.get(ex.target_name, []))
+                    if verdict == "exists":
+                        export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status="exists", detail=reason))
+                        continue
+                    if verdict == "conflict":
+                        export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status="failed", detail=reason))
+                        continue
+                    if verdict == "update":
+                        volumes = list(vvsets.get(ex.source_name, []))
+                        present = {t.volume for t in templates if t.target == ex.target_ref and t.volume in volumes}
+                        statuses = [
+                            array.ensure_vlun(v, ex.target_ref, lun=None if ex.lun is None else ex.lun + volumes.index(v))
+                            for v in volumes if v not in present
+                        ]
+                        status = "created" if "created" in statuses else "exists"
+                    else:
+                        status = array.ensure_vlun(ex.source_ref, ex.target_ref, lun=ex.lun)
+                    export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status=status))
 
-            # R8: "created" is the array's word; read the templates back ONCE and hold it to it.
-            after = array.vlun_templates() if exports else templates
-            if exports:
-                _confirm_exports(exports, export_outcomes, vvsets, after)
+                # R8: "created" is the array's word; read the templates back ONCE and hold it to it.
+                doing = ("", "")
+                after = array.vlun_templates() if exports else templates
+                if exports:
+                    _confirm_exports(exports, export_outcomes, vvsets, after)
+            except Exception as exc:  # noqa: BLE001 - stop at the first failure; the undo still covers what was made
+                kind, name = doing
+                result.error = f"Stopped while creating {_LABEL[kind]} {name}: {exc}" if kind else str(exc)
+                if kind in _REMOVE:
+                    # The array may have made it before the answer was lost (a timeout, a 5xx). It is not
+                    # put in the set: it may have been there before this run, and nothing here can tell.
+                    failure_notes.append(_maybe_made_note(kind, name))
+                after = templates or []
+                if templates is not None:
+                    # Stopped among the exports: what the array presents now is the only record of
+                    # which LUNs this apply made, the failed call's included.
+                    try:
+                        after = array.vlun_templates()
+                    except Exception:  # noqa: BLE001
+                        failure_notes.append("The exports could not be read back after the failure. Check `showvlun -t` "
+                                             "on the array for exports this apply made; they are not in this removal set.")
             result.outcomes.extend(export_outcomes)
             # SPEC-007: the undo for exactly what this apply created, from the same reads.
-            result.removals, result.removal_notes = removal_set(result.outcomes, templates, after)
-    except Exception as exc:  # noqa: BLE001 - record what we got, surface the failure
-        result.error = str(exc)
+            result.removals, notes = removal_set(result.outcomes, templates or [], after)
+            result.removal_notes = notes + failure_notes
+    except Exception as exc:  # noqa: BLE001 - no session (nothing was written), or it failed to close
+        result.error = result.error or str(exc)
     return result
 
 
 # The paste order that never trips over a dependency: exports, then sets, then their members.
 _REMOVAL_ORDER = {"vlun": 0, "vvset": 1, "volume": 2, "hostset": 3, "host": 4}
+# How each object is named on screen, read on the array and removed (`-f` where the CLI prompts).
+_LABEL = {"host": "host", "hostset": "host set", "volume": "volume", "vvset": "volume set", "vlun": "export of"}
+_SHOW = {"host": "showhost {n}", "hostset": "showhostset {n}", "volume": "showvv {n}", "vvset": "showvvset {n}"}
+_REMOVE = {"host": "removehost {n}", "hostset": "removehostset -f {n}", "volume": "removevv -f {n}", "vvset": "removevvset -f {n}"}
+
+
+def _maybe_made_note(kind: str, name: str) -> str:
+    """SPEC-007 R6: the object whose write failed, for the operator to check by hand."""
+    return (f"The array may have made {_LABEL[kind]} {name} before the error. If `{_SHOW[kind].format(n=name)}` lists it "
+            f"and it was not there before this run, `{_REMOVE[kind].format(n=name)}` removes it.")
 
 
 def _describe_outcomes(
@@ -775,10 +815,9 @@ def removal_set(
         if (t.volume, t.target, t.lun) not in seen:
             items.append(RemovalItem(kind="vlun", name=f"{t.volume} LUN {t.lun} → {t.target}",
                                      command=f"removevlun -f {t.volume} {t.lun} {t.target}"))
-    cmd = {"vvset": "removevvset -f {n}", "volume": "removevv -f {n}", "hostset": "removehostset -f {n}", "host": "removehost {n}"}
     for o in outcomes:
-        if o.status == "created" and o.kind in cmd:
-            items.append(RemovalItem(kind=o.kind, name=o.name, command=cmd[o.kind].format(n=o.name)))
+        if o.status == "created" and o.kind in _REMOVE:
+            items.append(RemovalItem(kind=o.kind, name=o.name, command=_REMOVE[o.kind].format(n=o.name)))
     touched = [f"{o.kind} {o.name}" for o in outcomes if o.status == "updated"]
     notes = ["Not reverted — members, WWNs or iSCSI names were added to: " + ", ".join(touched) + ". They existed before this run."] if touched else []
     # S-12 (2026-09-14): the runner pasted the raw list and removed hosts before their set. The LIST

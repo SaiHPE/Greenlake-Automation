@@ -1,0 +1,40 @@
+# help showsharesetting
+showsharesetting - Display information of all sharesettings or a specific sharesetting in a filesystem.
+
+SYNTAX
+    showsharesetting [sharesetting_name]
+
+DESCRIPTION
+    The showsharesetting command displays information about all the sharesettings
+    or a specific sharesetting in a filesystem.
+
+AUTHORITY
+    Any role in the system
+
+OPTIONS
+    -allnames
+        Shows both the shortened and full sharesetting names.
+
+SPECIFIERS
+    <sharesetting_name>
+        Specifies the sharesetting name whose information will be displayed.
+        If not specified, information of all sharesettings
+        in the system is displayed.
+
+NOTES
+    Long names can cause the display to be very wide. Use -shortnames
+    to display shortened 31 character names for objects. Use the setclienv
+    command to set shortnames to 1. The -shortnames option is also set to 1
+    if the CLI was started with the -shortnames option, or if the CLI was
+    started with the TPDSHORTNAMES environment variable set. Run "cli -h"
+    and "setclienv -h" for details of the environment variables.
+
+EXAMPLES
+    The following example displays all the sharesettings on the system.
+
+       cli% showsharesetting
+
+    The following example displays settings1 sharesetting specifically.
+
+       cli% showsharesetting settings1
+

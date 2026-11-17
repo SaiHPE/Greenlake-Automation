@@ -202,6 +202,7 @@ class DiscoveredHost(BaseModel):
     # SPEC-014 R4: the outcome of logging in to the server itself ("" = no login on the sheet).
     host_read: str = ""
     multipath: str = ""                # the server's own multipath summary, when it was read
+    multipath_state: str = ""          # Linux: ok | uneven | degraded | none | not_set_up | not_permitted | timed_out
 
     @property
     def transports(self) -> list[str]:
@@ -238,6 +239,7 @@ class HostRead(BaseModel):
     wwpns: list[str] = Field(default_factory=list)
     iqns: list[str] = Field(default_factory=list)
     multipath: str = ""
+    multipath_state: str = ""          # see DiscoveredHost.multipath_state; "" for Windows
     notes: list[str] = Field(default_factory=list)
     error: str = ""
 

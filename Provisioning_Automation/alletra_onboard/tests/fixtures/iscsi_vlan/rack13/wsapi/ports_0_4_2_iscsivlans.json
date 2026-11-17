@@ -1,0 +1,10 @@
+{
+ "iSCSIVlans": [],
+ "total": 0,
+ "links": [
+  {
+   "href": "https://10.132.30.121/api/v1/ports/0:4:2/iSCSIVlans",
+   "rel": "self"
+  }
+ ]
+}

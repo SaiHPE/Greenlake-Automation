@@ -1,0 +1,34 @@
+# help removesharesetting
+removesharesetting - Remove a sharesetting.
+
+SYNTAX
+    removesharesetting <sharesetting_name>
+
+DESCRIPTION
+    The removesharesetting command removes the share setting from the system.
+
+AUTHORITY
+    Super, Edit
+    Any role granted the sharesetting_remove right
+
+OPTIONS
+    -f
+        Specifies that the command is forced. If this option is not used, the
+        command requires confirmation before proceeding with its operation.
+
+SPECIFIERS
+    <sharesetting_name>
+        Specifies a share setting name to be removed.
+
+NOTES
+    Issuing the removesharesetting command with invalid share setting name causes the
+    command to fail.
+
+    Issuing the removesharesetting command if there is any file share object associated
+    with this setting causes the command to fail without removing that share setting.
+
+EXAMPLES
+    The following example removes sharesetting setting_demo
+
+       cli% removesharesetting setting_demo
+

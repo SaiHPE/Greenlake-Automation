@@ -44,6 +44,20 @@ class StepPreconditionError(RuntimeError):
     """A step was requested before its prerequisite ran (e.g. zoning/provision before discovery)."""
 
 
+def new_plan_id() -> str:
+    return uuid4().hex
+
+
+def check_approval(approved_plan: str | None, held_plan_id: str) -> None:
+    """The apply names the plan the operator ticked (LESSONS 7); the server checks it, not only the
+    screen. Not authentication: any local caller can read the id from the run's events. It makes the
+    approval explicit and tied to one plan, so a plan rebuilt between the tick and the click is caught."""
+    if not approved_plan:
+        raise StepPreconditionError("Tick the approval for this plan first.")
+    if approved_plan != held_plan_id:
+        raise StepPreconditionError("The plan changed since it was approved. Review the new plan and tick again.")
+
+
 class PendingSheetNotFoundError(LookupError):
     """A complete sheet was uploaded but its server-side hold is gone (already turned into a run, or
     the state DB was reset) — the operator should re-upload the Initialisation sheet."""

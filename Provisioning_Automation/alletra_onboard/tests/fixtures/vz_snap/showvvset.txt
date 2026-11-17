@@ -1,0 +1,9 @@
+# showvvset
+Id Name     Members           
+ 0 Test     Test              
+ 1 VZ_VVSet CRV_LZ_ESXi_Backup
+            CRV_LZ_Infra      
+            CRV_LZ_Prod1      
+            CRV_LZ_Test       
+------------------------------
+ 2 total    5                 
