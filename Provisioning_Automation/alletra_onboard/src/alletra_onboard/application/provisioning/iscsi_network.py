@@ -6,6 +6,11 @@ here writes. The lines are the array's own forms (`help controliscsiport`, the s
 1 to 4094: without it `addr` changes and `delete` removes the port's untagged address, the one the
 hosts already logged in use. The switch side is a sentence for the network team; the tool never
 writes a switch (ADR 0012).
+
+The address goes in without its gateway (ADR 0017, amended 2026-11-17, the owner's decision after the
+live check): the array sets a VLAN gateway only while the port is offline, and offline stops every
+iSCSI session on the port. A gateway the sheet gives is printed in a separate set for a change window
+agreed with the customer, with the sessions the port carries now; the tool never sends it.
 """
 
 from __future__ import annotations
@@ -19,8 +24,10 @@ from alletra_onboard.application.provisioning.discovery import (
     parse_file_ports,
     parse_iscsi_untagged_ports,
     parse_iscsi_vlans,
+    parse_showhost,
     parse_showport_iscsi,
 )
+from alletra_onboard.application.provisioning.peer_ports import OFFLINE_ASKS
 from alletra_onboard.application.replication.read import (
     parse_showport_rcip,
     parse_showport_roles,
@@ -78,6 +85,16 @@ def gw_line(req: IscsiVlanRequest) -> str:
     return f"controliscsiport gw {req.gateway} -vlan {req.vlan_id} -f {req.nsp}"
 
 
+def offline_line(nsp: str) -> str:
+    """`controlport offline <node:slot:port>...`: no -f in any captured help; it asks y, n or q every time."""
+    return f"controlport offline {nsp}"
+
+
+def rst_line(nsp: str) -> str:
+    """`controlport rst [-m <mode>|-l|-i] [-f] <node:slot:port>...`: brings a held-offline port back."""
+    return f"controlport rst -f {nsp}"
+
+
 def delete_line(nsp: str, vlan_id: int) -> str:
     """R5. Never without `-vlan`: `controliscsiport delete -f <port>` deletes the port's whole iSCSI
     configuration, untagged address included (the help's own example)."""
@@ -86,14 +103,16 @@ def delete_line(nsp: str, vlan_id: int) -> str:
 
 def differences(have: IscsiVlanInterface, req: IscsiVlanRequest) -> list[str]:
     """How an interface on the array differs from a sheet row with the same port and VLAN, one
-    "field: array value, sheet value" entry each. The gateway counts only when the row names one.
-    The plan's *exists* and Verify's *present* are both "no difference" (LESSONS 41)."""
+    "field: array value, sheet value" entry each. The gateway counts only when the row and the array
+    both have one: the tool adds the address without it (ADR 0017, amended 2026-11-17), so an array
+    without the sheet's gateway is what the tool's own lines leave. The plan's *exists* and Verify's
+    *present* are both "no difference" (LESSONS 41)."""
     out = []
     if have.ip != req.ip:
         out.append(f"address: {have.ip} on the array, {req.ip} on the sheet")
     if not _mask_matches(have.netmask, req.netmask):
         out.append(f"netmask: {have.netmask} on the array, {req.netmask} on the sheet")
-    if req.gateway and have.gateway != req.gateway:
+    if req.gateway and have.gateway and have.gateway != req.gateway:
         out.append(f"gateway: {have.gateway or 'none'} on the array, {req.gateway} on the sheet")
     return out
 
@@ -131,6 +150,9 @@ def _action(req: IscsiVlanRequest, view: PortNetworkView) -> IscsiVlanAction:
     if have is not None:
         if not differences(have, req):
             action.state, action.reason = "exists", f"{req.ip} {have.netmask} already set"
+            if req.gateway and not have.gateway:
+                action.gateway_cli = gw_line(req)
+                action.reason += f"; gateway {req.gateway} not set yet (a change window's job)"
             return action
         action.reason = (f"{array} {req.nsp} already has VLAN {req.vlan_id} with {have.ip} {have.netmask} "
                          f"(gateway {have.gateway or 'none'}); the sheet says {req.ip} {req.netmask} "
@@ -148,11 +170,42 @@ def _action(req: IscsiVlanRequest, view: PortNetworkView) -> IscsiVlanAction:
         if net is not None and net == _network(ip, mask):
             action.reason = f"{net} is already the network of {label} on {array}; a VLAN needs a network of its own."
             return action
-    lines = [addr_line(req)] + ([gw_line(req)] if req.gateway else [])
-    action.state, action.cli = "create", "\n".join(lines)
-    action.reason = (f"{req.ip} {req.netmask}" + (f", gateway {req.gateway}" if req.gateway else "")
-                     + f" on VLAN {req.vlan_id} ({role.state})")
+    action.state, action.cli, action.undo = "create", addr_line(req), delete_line(req.nsp, req.vlan_id)
+    action.reason = f"{req.ip} {req.netmask} on VLAN {req.vlan_id} ({role.state})"
+    if req.gateway:
+        action.gateway_cli = gw_line(req)
+        action.reason += f"; gateway {req.gateway} not set by the tool (a change window's job)"
     return action
+
+
+GATEWAY_WINDOW = ("The tool does not set these gateways. The array sets a VLAN gateway only while the port is "
+                  "offline, and taking a port offline stops every iSCSI session on it. Hosts on the VLAN's own "
+                  "subnet need no gateway. Run these lines only in a change window agreed with the customer.")
+
+
+def sessions_sentence(nsp: str, count: int | None) -> str:
+    """How many iSCSI sessions the change-window lines would stop on one port, from `showhost -d`."""
+    if count is None:
+        return f"{nsp}: its iSCSI sessions were not read. Check `showhost -d` before the change window."
+    if count == 0:
+        return f"{nsp} has no iSCSI session now (showhost -d). Check again just before the change window."
+    return (f"{nsp} carries {count} iSCSI session{'s' if count != 1 else ''} now (showhost -d): "
+            f"{'all of them stop' if count != 1 else 'it stops'} while the port is offline.")
+
+
+def gateway_window(actions: list[IscsiVlanAction]) -> list[str]:
+    """The change-window set: per port in port order, `controlport offline`, the port's gw lines, then
+    `controlport rst -f`, the forms of `help controlport` and `help controliscsiport` (OS 10.5.0 to
+    10.6.0). The array asked for exactly this (*To modify the Gateway IP, please use controlport to
+    offline the port first*, rack13-ARCUS, 2026-11-17). Never sent by the tool."""
+    by_port: dict[str, list[str]] = {}
+    for action in actions:
+        if action.gateway_cli:
+            by_port.setdefault(action.nsp, []).append(action.gateway_cli)
+    lines: list[str] = []
+    for nsp in sorted(by_port, key=_nsp_key):
+        lines += [offline_line(nsp), *by_port[nsp], rst_line(nsp)]
+    return lines
 
 
 def switch_sentence(array: str, nsp: str, vlan_ids: list[int]) -> str:
@@ -183,6 +236,16 @@ def plan_iscsi_vlans(requests: list[IscsiVlanRequest], view: PortNetworkView) ->
             note = f"{action.nsp} is {role.state}: the address is set, but no host reaches it until the link is up."
             if note not in plan.notes:
                 plan.notes.append(note)
+    for action, req in zip(actions, requests, strict=True):
+        if action.gateway_cli:
+            plan.notes.append(f"{action.nsp} VLAN {action.vlan_id}: the tool adds the address without the gateway "
+                              f"{req.gateway}. The gateway needs the port offline, so it is in a separate set for a "
+                              "change window.")
+    plan.removal_lines = [a.undo for a in reversed(actions) if a.state == "create"]
+    plan.gateway_window = gateway_window(actions)
+    if plan.gateway_window:
+        ports = sorted({a.nsp for a in actions if a.gateway_cli}, key=_nsp_key)
+        plan.gateway_notes = [GATEWAY_WINDOW] + [sessions_sentence(nsp, view.sessions.get(nsp)) for nsp in ports]
 
     # R3: a line per sheet port with a planned or existing VLAN. A conflict row keeps its port's line when
     # the array already has a VLAN there (live 2026-11-17: VLAN 2999 on 0:4:2 with another gateway).
@@ -196,6 +259,34 @@ def plan_iscsi_vlans(requests: list[IscsiVlanRequest], view: PortNetworkView) ->
         if tags:
             plan.switch_handoff.append(switch_sentence(view.name, nsp, tags))
     return plan
+
+
+REMOVAL_HEADER = "Removing an interface ends every iSCSI session on it. Check `showhost -d` first."
+
+
+def command_set_text(plan: IscsiNetworkPlan) -> str:
+    """The lines a consultant pastes now, as one text for Copy and Download: no gateway, no offline."""
+    lines = [(f"# iSCSI VLAN addresses on {plan.array}: paste on the array's CLI, then read the array again in "
+              "the tool. No gateway and no port offline: the hosts logged in keep their sessions.")]
+    lines += [a.cli for a in plan.actions if a.state == "create"]
+    return "\n".join(lines) + "\n"
+
+
+def removal_set_text(plan: IscsiNetworkPlan) -> str:
+    """R5 before the paste: each create's removal line, last first, with the R5 header. Never run by the tool."""
+    head = [f"# Undo the iSCSI VLAN addresses this plan adds on {plan.array}. {REMOVAL_HEADER}",
+            "# Review before pasting. The tool never runs these."]
+    return "\n".join(head + plan.removal_lines) + "\n"
+
+
+def gateway_set_text(plan: IscsiNetworkPlan) -> str:
+    """The change-window set, its own text: why, the sessions per port, the offline prompt. "" when none."""
+    if not plan.gateway_window:
+        return ""
+    head = [(f"# CHANGE WINDOW ONLY: the VLAN gateways on {plan.array}. This stops every iSCSI session on each "
+             "port below while it is offline.")]
+    head += [f"# {n}" for n in plan.gateway_notes] + [f"# {OFFLINE_ASKS}"]
+    return "\n".join(head + plan.gateway_window) + "\n"
 
 
 def removal_lines(outcomes: list[IscsiVlanOutcome]) -> list[str]:
@@ -213,8 +304,10 @@ def verify_iscsi_vlans(requests: list[IscsiVlanRequest], vlans: list[IscsiVlanIn
             checks.append(IscsiVlanCheck(nsp=req.nsp, vlan_id=req.vlan_id, status="missing"))
             continue
         diff = differences(have, req)
+        note = (f"The gateway {req.gateway} is not set: the tool leaves it to a change window (it needs the port "
+                "offline)." if not diff and req.gateway and not have.gateway else "")
         checks.append(IscsiVlanCheck(nsp=req.nsp, vlan_id=req.vlan_id, status="different" if diff else "present",
-                                     differences=diff))
+                                     differences=diff, note=note))
     return checks
 
 
@@ -261,6 +354,16 @@ def untagged_addresses(
     return out
 
 
+def sessions_by_port(showhost_d: str) -> dict[str, int]:
+    """`showhost -d` -> {n:s:p: iSCSI initiators logged in}, claimed or not (`-- --`)."""
+    out: dict[str, int] = {}
+    for host in parse_showhost(showhost_d):
+        for ports in host.iqns.values():
+            for port in ports:
+                out[port] = out.get(port, 0) + 1
+    return out
+
+
 def read_port_network(creds: EndpointCreds, *, array_cli_factory: Callable = make_array_cli) -> PortNetworkView:
     """R2: one SSH session over the read-only client (ADR 0001), every read already allowed. A failed
     login or read raises: the plan is not built on half a read."""
@@ -274,6 +377,7 @@ def read_port_network(creds: EndpointCreds, *, array_cli_factory: Callable = mak
         rcip = parse_showport_rcip(_read(cli, "showport -rcip"))
         files = parse_file_ports(_read(cli, "showport -file"))
         mgmt_ip, mgmt_netmask = parse_shownet_mgmt(_read(cli, "shownet"))
+        sessions = sessions_by_port(_read(cli, "showhost -d"))
     other: dict[str, str] = {}
     for port in rcip:
         if port.ip:
@@ -284,6 +388,7 @@ def read_port_network(creds: EndpointCreds, *, array_cli_factory: Callable = mak
     return PortNetworkView(
         name=sysinfo.get("name", "") or creds.host, mgmt_ip=mgmt_ip, mgmt_netmask=mgmt_netmask,
         roles=roles, iscsi_ports=iscsi_ports, vlans=vlans, other_addresses=other,
+        sessions={nsp: sessions.get(nsp, 0) for nsp in (p.nsp for p in iscsi_ports)},
     )
 
 

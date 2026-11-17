@@ -58,6 +58,9 @@ class PortParams(BaseModel):
     nsp: str
     connmode: str = ""          # host | disk | peer | rcfc | iscsi | …
     conntype: str = ""          # point | loop | eth
+    # enabled | disabled | "" (n/a). A mode change can reset it: live on rack13-ARCUS (2026-11-17) 1:3:1
+    # came back from peer to host with IntCoal `disabled`, read `enabled` before.
+    intcoal: str = ""
 
 
 class PeerPortView(BaseModel):
@@ -86,6 +89,9 @@ class PeerPortAction(BaseModel):
     reason: str = ""
     commands: list[str] = Field(default_factory=list)
     undo: list[str] = Field(default_factory=list)
+    # The other port of its card's port pair (ports 1-2, 3-4): a mode change on one can change the other
+    # (`help controlport`, port pair protection). "" when the array has no such FC port.
+    partner: str = ""
 
 
 class PeerPortPlan(BaseModel):

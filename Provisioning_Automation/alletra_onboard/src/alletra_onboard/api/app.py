@@ -436,7 +436,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                 targets["peer_host"], targets["peer_user"] = intent.replication.peer.host, intent.replication.peer.username
                 ports = [f"{'this array' if r.side == 'A' else 'peer'} {r.nsp} {r.ip}" for r in intent.replication.network]
             if intent.snapshots is not None:
-                snapshot_rows = [f"{r.source}: {r.summary()}" for r in intent.snapshots.requests]
+                snapshot_rows = [f"{r.source}: {r.summary(named=True)}" for r in intent.snapshots.requests]
         return InitSheetUploadResponse(
             token=token, work_item=data, credentials_saved=credentials_saved, targets=targets, replication_ports=ports,
             snapshot_rows=snapshot_rows,

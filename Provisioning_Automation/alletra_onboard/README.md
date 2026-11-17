@@ -340,13 +340,22 @@ the app's step registry, so it is always current).
    *iSCSI network* tab asks for (one row per port and VLAN: port N:S:P, VLAN ID 1 to 4094, address,
    netmask, optional gateway; put each VLAN on a port of both nodes). *Read the array and plan* reads
    the array (read-only) and shows each row as add, already there or conflict, the array's
-   `controliscsiport` lines for the adds (each with `-vlan`) and one sentence per port for the network
-   team (carry the VLANs tagged, keep the native VLAN). The tool does not add the addresses yet: paste
-   the lines on the array's CLI yourself, then *Read the array again*. The same step plans the
+   `controliscsiport addr` lines for the adds (each with `-vlan`), their removal set to keep before you
+   paste, and one sentence per port for the network team (carry the VLANs tagged, keep the native
+   VLAN). The tool does not add the addresses yet: paste the lines on the array's CLI yourself, then
+   *Read the array again*. The lines add each address **without its gateway**: the array sets a VLAN
+   gateway only while the port is offline, and taking a port offline stops every iSCSI session on it.
+   Hosts on the VLAN's own subnet need no gateway. When the sheet gives one, the page prints a separate
+   *Gateways, for a change window only* set (`controlport offline`, the `gw` line, `controlport rst
+   -f`) with the number of iSCSI sessions each port carries now: run it only in a change window agreed
+   with the customer, never during the run. The same step plans the
    *Peer ports* tab for a data migration (one row per free FC port, at least one on each of two nodes,
    with the source array's port WWPNs to zone to it): it shows each port as to set, already peer or
-   conflict (a port with a login or an export is never offered), the `controlport offline` and
-   `controlport config peer -ct point -f` lines and the removal set to keep before you paste. Paste
+   conflict (a port with a login or an export is never offered, nor a port whose card pair partner,
+   ports 1-2 or 3-4 of the card, serves hosts, has exports or is a peer or Remote Copy port: a mode
+   change on one port of a pair can change the other), the `controlport offline` and
+   `controlport config peer -ct point -f` lines and the removal set to keep before you paste.
+   `controlport offline` asks *y/n/q* every time: paste the lines one at a time and answer `y`. Paste
    the lines on the array's CLI, then *Read the array again*: the tool checks each port is now a peer
    port and that no other port changed, and gives the removal set for what changed. *SAN Zoning* then
    drafts the peer-port zones, with the WWPN read after the change, as a command set of their own.

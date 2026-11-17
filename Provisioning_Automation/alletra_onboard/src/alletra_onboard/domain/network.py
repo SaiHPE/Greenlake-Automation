@@ -66,6 +66,9 @@ class PortNetworkView(BaseModel):
     vlans: list[IscsiVlanInterface] = Field(default_factory=list)
     # Addresses the array already uses elsewhere: address -> "RCIP port 0:4:3" / "file port 0:4:1".
     other_addresses: dict[str, str] = Field(default_factory=dict)
+    # iSCSI initiators logged in per port now (`showhost -d`, one row per initiator and port): the
+    # sessions a change-window gateway line would stop (ADR 0017, amended 2026-11-17).
+    sessions: dict[str, int] = Field(default_factory=dict)
 
 
 class IscsiVlanAction(BaseModel):
@@ -75,8 +78,13 @@ class IscsiVlanAction(BaseModel):
     vlan_id: int
     state: Literal["create", "exists", "conflict"]
     reason: str = ""
-    # The array's own lines, each with -vlan: the addr line, then the gw line when the row has one.
+    # The array's own line the tool prints (and its apply will send): the addr line, with -vlan. Never
+    # a gateway: the array sets a VLAN gateway only with the port offline (ADR 0017, amended 2026-11-17).
     cli: str = ""
+    # A create's removal line, with -vlan.
+    undo: str = ""
+    # The gw line for the change-window set, when the row gives a gateway the array does not have yet.
+    gateway_cli: str = ""
 
 
 class IscsiNetworkPlan(BaseModel):
@@ -86,6 +94,12 @@ class IscsiNetworkPlan(BaseModel):
     notes: list[str] = Field(default_factory=list)
     # One sentence per port for the network team (R3). Never a switch command.
     switch_handoff: list[str] = Field(default_factory=list)
+    # R5 before any paste: each create's removal line, last first.
+    removal_lines: list[str] = Field(default_factory=list)
+    # The separate change-window set for the sheet's gateways, per port: offline, the gw lines, rst.
+    # The tool never sends it; `gateway_notes` say why and how many sessions each port carries now.
+    gateway_window: list[str] = Field(default_factory=list)
+    gateway_notes: list[str] = Field(default_factory=list)
 
 
 class IscsiVlanOutcome(BaseModel):
@@ -106,3 +120,5 @@ class IscsiVlanCheck(BaseModel):
     status: Literal["present", "missing", "different"]
     # For `different`: one "field: array value, sheet value" entry per field that differs.
     differences: list[str] = Field(default_factory=list)
+    # For `present`: the sheet's gateway when the array has none yet (the tool leaves it to a change window).
+    note: str = ""

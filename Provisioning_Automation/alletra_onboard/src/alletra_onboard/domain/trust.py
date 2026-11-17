@@ -10,6 +10,9 @@ The sentences the operator reads live here too, so every client says the same th
 
 from __future__ import annotations
 
+import base64
+import binascii
+import ssl
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal
@@ -105,6 +108,32 @@ def _the(device: str) -> str:
     return device if device == "vCenter" else f"the {device}"
 
 
+def key_readable(key: DeviceKey) -> bool:
+    """Whether a stored key still decodes: an SSH key's base64 holds a blob that names its own type, a
+    certificate's PEM holds DER. Only a damaged run state (`state.db`) holds one that does not."""
+    try:
+        if key.kind == TrustKind.SSH:
+            blob = base64.b64decode(key.data, validate=True)
+            size = int.from_bytes(blob[:4], "big")
+            return blob[4:4 + size] == key.key_type.encode()
+        return bool(ssl.PEM_cert_to_DER_cert(key.data))
+    except (binascii.Error, ValueError, TypeError):
+        return False
+
+
+#: How the operator trusts a device again, in every sentence that asks for it.
+RETRUST_STEPS = ("compare the new fingerprint with the device's own console, then trust it again on the run "
+                 "overview, under Trusted devices")
+
+
+def _sentence_start(text: str) -> str:
+    return f"T{text[1:]}" if text.startswith("the ") else text
+
+
+def _presented(key: DeviceKey) -> str:
+    return f"{key.fingerprint}{f' ({key.key_type})' if key.kind == TrustKind.SSH else ''}"
+
+
 def trusted_message(pin: DevicePin) -> str:
     return (f"Trusted {_the(pin.device)} at {address(pin.kind, pin.host, pin.port)} on first contact: "
             f"{describe(pin.key)}. Compare it with the device's own console if you want to be sure.")
@@ -112,19 +141,31 @@ def trusted_message(pin: DevicePin) -> str:
 
 def mismatch_message(pin: DevicePin, offered: DeviceKey) -> str:
     """Names the device and both fingerprints, says nothing was sent, and says what to do next."""
-    device = _the(pin.device)
-    device = f"T{device[1:]}" if device.startswith("the ") else device
+    device = _sentence_start(_the(pin.device))
     where = address(pin.kind, pin.host, pin.port)
     return (
         f"{device} at {where} presented a different {_what(pin.kind)} from the one "
-        f"this run trusted. Trusted: {pin.key.fingerprint}"
-        f"{f' ({pin.key.key_type})' if pin.kind == TrustKind.SSH else ''}. "
-        f"Presented now: {offered.fingerprint}"
-        f"{f' ({offered.key_type})' if offered.kind == TrustKind.SSH else ''}. "
-        "The password was not sent. If the device was replaced or reset on purpose, compare the new "
-        "fingerprint with the device's own console, then trust it again on the run overview, under "
-        "Trusted devices. If nobody changed it, stop and ask the customer's network team."
+        f"this run trusted. Trusted: {_presented(pin.key)}. Presented now: {_presented(offered)}. "
+        f"The password was not sent. If the device was replaced or reset on purpose, {RETRUST_STEPS}. "
+        "If nobody changed it, stop and ask the customer's network team."
     )
+
+
+def unreadable_message(pin: DevicePin, offered: DeviceKey) -> str:
+    """The run's stored key does not decode, so nothing could be compared and nothing was sent."""
+    device = _the(pin.device)
+    whose = "vCenter's" if device == "vCenter" else f"{device}'s"
+    return (
+        f"This run's record of {whose} {_what(pin.kind)} at {address(pin.kind, pin.host, pin.port)} cannot "
+        f"be read, so it could not be compared with the one {device} presented now: {_presented(offered)}. "
+        "Nothing was sent to the device, not even the password. Only a damaged run state can cause this. "
+        f"To go on, {RETRUST_STEPS}."
+    )
+
+
+def refusal_message(pin: DevicePin, offered: DeviceKey) -> str:
+    """Why a device was refused: the run's record of its key cannot be read, or it presented another."""
+    return mismatch_message(pin, offered) if key_readable(pin.key) else unreadable_message(pin, offered)
 
 
 def retrusted_message(pin: DevicePin) -> str:

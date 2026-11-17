@@ -115,3 +115,22 @@ Free FC ports by SPEC-025's rule: 0:3:2, 0:3:3, 1:3:3.
 | `wsapi_ports.json` | All 20 ports. RCIP ports `type` 7; cluster ports `linkState` 4 `ready` |
 
 Free FC ports by SPEC-025's rule: 0:3:3, 0:3:4, 1:3:3, 1:3:4.
+
+## rack13_live/: rack13-ARCUS, one port set to peer and back, 2026-11-17 evening
+
+The first live change of a port's mode (BL-26 live run after the owner's decisions; record in
+`docs/validation/2026-11-17-rack13-live-w2.md`, *2026-11-17 evening*). Read over SSH from the
+developer's Mac with `show*` commands only, between the consultant's pastes. Each `.txt` starts with
+`# <command>`; nothing was replaced (lab names only, as in `rack13/`).
+
+| Folder or file | When | What it shows |
+|---|---|---|
+| `before/` | 19:24 IST, before any paste | as in `rack13/`: every slot-3 FC port `target`, Connmode `host point`; 0:3:1, 0:3:2, 1:3:1, 1:3:2 Type `free`, `loss_sync` (no SFP); 0:3:4 and 1:3:3 serve the unclaimed ESXi HBA |
+| `paste_0_3_1.txt` | 19:29 | the consultant's paste of the plan's two lines for 0:3:1: `controlport offline 0:3:1` asked *Are you sure you want to run controlport offline on port 0:3:1? select q=quit y=yes n=no:*, answered `y`; `controlport config peer -ct point -f 0:3:1` answered nothing and asked nothing |
+| `after_config_peer_0_3_1/` | 19:29 | 0:3:1 mode `initiator`, state `loss_sync` (not held offline: no `rst` needed), **Type still `free`** (nothing attached), Connmode `peer point`, node WWN `2FF70202AC02D495`, port WWN `20310202AC02D495` (was `…0002…`); `showport -peer` lists it. Its pair partner 0:3:2 and every other port read as before: the HPE64004-B did not move a free partner |
+| `paste_removal_0_3_1.txt` | 19:33 | the removal set: `controlport offline 0:3:1` asked again (`y`); `controlport config host -ct point -f 0:3:1` answered nothing; `controlport rst -f 0:3:1` answered *controlport Error: Port 0:3:1 is being reset; please re-issue the command when reset is complete* (the `config` line's own reset) |
+| `after_removal_0_3_1/` | 19:34 | slot 3 equal to `before/` in `showport`, `-par` and `-c`, WWN back to `…0002…`; `showport -peer` empty again |
+| `paste_removal_both.txt` | 19:38 to 19:39 | the rerun (0:3:1 and 1:3:1 set to peer at 19:36 with the printed set, both partners unchanged) undone with the read after the paste's removal set: each `offline` asked (`y`), each `config host -ct point -f` answered nothing, each `rst -f` answered *is being reset* |
+| `after_removal_both_intcoal_1_3_1/` | 19:40 | every slot-3 row as in `before/` except **1:3:1 IntCoal `disabled`** (it read `enabled` before, and 0:3:1 came back `enabled`): the `config` back to host does not always keep interrupt coalescing |
+| `paste_intcoal_1_3_1.txt`, `after_intcoal_fix/` | 19:42 | `controlport intcoal enable -f 1:3:1` pasted by hand: no answer, no prompt; `showport -par` equal to `before/` again (whitespace aside: the IntCoal column widened by one space while a port read `disabled`) |
+| `rerun2/` | 19:49 to 19:54 | the second rerun, to paste the removal set with its IntCoal lines end to end. `paste_removal.txt`: each `controlport intcoal enable -f`, pasted straight after its port's `config host -ct point -f`, answered *is being reset* and did nothing, as did each `rst`. `after_removal_showport_par.txt`: **0:3:1 IntCoal `disabled`** this time (1:3:1 `enabled`). `paste_intcoal_0_3_1.txt`: the same line pasted by hand a minute later, no answer; `after_fix_showport_par.txt` equals `before_showport_par.txt` |

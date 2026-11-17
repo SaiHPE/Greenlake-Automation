@@ -2,7 +2,9 @@
 
 **Status:** first slice built 2026-11-17, pending live run (R1 to R3, R4's command set and read after
 the paste, R5's removal set as text, R6 to R9; work packet steps 1, 3, 3b and 6 to 10). The tool's
-write (R4 later, steps 4 and 5) is deferred by the owner. Proposed 2026-11-16; the read (R2) built
+write (R4 later, steps 4 and 5) is deferred by the owner. **Amended 2026-11-17** (the owner's decision
+after the live check, ADR 0018 *Amendment*): the plan refuses a port whose card pair partner is in use
+(R3), and the tool's own write, when built, sends no line that prompts (R4). Proposed 2026-11-16; the read (R2) built
 2026-11-16, pinned to rack13-ARCUS, and on 2026-11-17 to a port in peer mode (E18U31) and to OS
 10.5.0 and 10.5.51 ·
 **Decision:** ADR 0018 (accepted 2026-11-17: the command set first; the tool's write after the live
@@ -218,6 +220,22 @@ read fails as a whole: a half read could make a busy port look free. **Built:** 
   - mode change prohibited: *0:3:2: the array does not allow a mode change on this port (showport -c).*
   - persistent-port partner in use (Primera): *0:3:1 is the failover partner of 1:3:1 (state
     failed_over); changing it removes that path protection.*
+  - **pair partner in use** (ADR 0018 amended 2026-11-17, live finding 9). `help controlport`, *Port
+    pair protection* (OS 10.5.0 to 10.6.0): the two ports of a dual-port card, and ports 1-2 and 3-4 of
+    a quad-port card, are a pair, and a mode change on one changes the other, an online partner
+    included, which then goes offline. The partner of `n:s:p` is the other port of its pair when the
+    array has it as an FC port (`pair_partner`); every FC card is read this way, whether or not its
+    adapter enforces the rule (E18U31's HPE64004-M runs a host port beside a peer port). A port whose
+    partner has a login (`showhost -d`, its FC sessions) or an export (`showvlun -a`), is not Type
+    `free` (a host, peer, RCFC or other port in use), is a failover partner in use, or has its mode
+    change `prohibited` is a conflict naming the partner and why: *0:3:3 shares a port pair with 0:3:4,
+    which serves hosts (Type host; logged in: an unnamed initiator 10005CED8C5312A9). A mode change on
+    one port of a pair can change the other and take it offline, so the tool never sets 0:3:3 while
+    0:3:4 is in use: pick a port whose pair partner is free.* Each plan row carries its partner
+    (`PeerPortAction.partner`), shown on the page with the partner's Type and state; a create's reason
+    ends *"; its pair partner 0:3:2 is free too"*. On rack13 on 2026-11-16 the rule leaves 0:3:1, 0:3:2,
+    1:3:1 and 1:3:2 (both pairs free) and refuses 0:3:3 and 1:3:4 (partners 0:3:4 and 1:3:3 serve a
+    host).
 
   Plan-level **blocker**: fewer than two ports that are `exists` or `create` on two different nodes,
   with the same sentence as the sheet rule. **Notes** (not blockers): both peer ports end up on one
@@ -237,7 +255,8 @@ read fails as a whole: a half read could make a busy port look free. **Built:** 
 Download .txt), with the removal set (R5) beside them, so the undo exists before anything is pasted.
 The tool changes nothing, so there is no approval tick. The consultant pastes the lines on the array's
 CLI, then presses *Read the array again*. That read is judged exactly as the apply will judge its own
-read-back: each planned port must read Type `peer`, Connmode `peer`, ConnType `point`, **and every
+read-back: each planned port must read Connmode `peer`, ConnType `point` (a peer port with nothing
+attached reads Type `free`, live 2026-11-17: Type is not the test), **and every
 other port's mode and Type must be unchanged from the read the plan was made from** (the CLI help warns
 a mode change can move a partner port; LESSONS 44). Sentences: *"0:3:2 is now a peer port (port WWN
 20320202AC02DEF2)."* / *"0:3:2 did not come back as a peer port (Type free, state offline)."* /
@@ -246,7 +265,9 @@ read here is the one zoning uses (R7). One function judges both this read and th
 (LESSONS 41).
 
 *Later: the tool's write*, once the lab has answered ADR 0018's *Must confirm live before the write*
-and the owner has said yes; over the array-port client of ADR 0025 condition 7. Only after the operator
+and the owner has said yes, and only with forms that do not prompt (ADR 0025 condition 6; ADR 0018
+amended 2026-11-17): `controlport offline` asks *y/n/q* every time and has no `-f`, so it is fine in
+the consultant's paste and cannot be sent by the tool as it stands; over the array-port client of ADR 0025 condition 7. Only after the operator
 ticks the approval sentence *"I approve setting these N ports to peer mode on <array>. They stop
 serving anything else."* Port by port in sheet order, stopping at the first refusal: offline, config,
 (rst), then read back `showport` and `showport -par`. Each command's answer is checked like SPEC-021 R4
@@ -260,7 +281,15 @@ removal set before the port's first command (the write, ADR 0025 condition 4); a
 only the ports that changed. Per port, from the `showport -par` read before the change:
 `controlport offline <nsp>`, `controlport config <old connmode> -ct <old conntype> -f <nsp>`, then
 `controlport rst -f <nsp>`, kept on every port whatever the change needed, so a port left offline comes
-back. A port held offline in its old mode (the array refused its `config` with an `Error` line, or the
+back; and `controlport intcoal <enable|disable> -f <nsp>` with the IntCoal read before (live
+2026-11-17: the `config` back to host left 1:3:1's, then 0:3:1's, IntCoal `disabled`). The array takes
+the intcoal line only after the port's reset ends (pasted straight after `config` it answered *is being
+reset*), so the removal set puts every intcoal line after every port's restore, with a `#` line: paste
+it again until it answers nothing, then `showport -par` reads IntCoal as before. Seen live in that order
+(2026-11-17, 20:00): both lines went in the first time and every view equalled the baseline. Right after a `config` the `rst`
+answers *Port … is being reset; please re-issue the command when reset is complete* (live: `-ct`
+resets the port itself); a `#` line in the removal set says that answer means the port is already
+coming back. A port held offline in its old mode (the array refused its `config` with an `Error` line, or the
 read after the paste shows it so) gets `controlport rst -f <nsp>` only, the help's way back online.
 `rst` takes `-f` (`controlport rst [-m <mode>|-l|-i] [-f] <node:slot:port>...`, every captured help,
 OS 10.5.0 to 10.6.0); `offline` has none (`controlport offline <node:slot:port>...`) and asked *"Are you
@@ -276,8 +305,8 @@ read: without it the plan blocks, because the change could not be undone. Header
 ports this run set. Remove the SAN team's peer-port zones and any migration that uses these ports
 first."* BL-27's removal set goes above this block.
 
-**R6 — Verify** (read-only, runs again from the Verify step): per planned port, Type `peer`, Connmode
-`peer`, state `ready`. Sentences: *"0:3:2 is a peer port, link ready."* / *"0:3:2 is a peer port but its
+**R6 — Verify** (read-only, runs again from the Verify step): per planned port, Connmode `peer` (Type
+`peer` when `showport -par` has no row; `is_peer_port`), state `ready`. Sentences: *"0:3:2 is a peer port, link ready."* / *"0:3:2 is a peer port but its
 link is loss_sync: check the cable and the switch port."* / *"0:3:2 is not a peer port (Type free)."*
 Whether the source array's ports are visible through the peer port (after zoning) is BL-27's verify.
 
@@ -356,7 +385,10 @@ write, a peer port on the source array, running the removal set.
   the paste judged (R4), verify, the removal set pasted and the ports read back exactly as before.
   It also answers ADR 0018's *Must confirm live before the write* (a prompt despite `-f`, `rst` after
   `config`, the WWN at the three moments, every other port unchanged), which the tool's write waits
-  for. Checklist in the work packet. Candidate ports (the owner chooses): rack13-ARCUS `0:3:3` and
+  for. Checklist in the work packet. Candidate ports (the owner chooses): **since the pair rule
+  (2026-11-17) rack13-ARCUS `0:3:1` and `1:3:1`** (pair partners 0:3:2 and 1:3:2 free, all four with
+  no SFP), not `0:3:3` and `1:3:4` (their partners 0:3:4 and 1:3:3 serve a host). Before the pair
+  rule: rack13-ARCUS `0:3:3` and
   `1:3:4`, free, linked and in a fabric with nothing zoned to them, one per fabric by parity (they
   served host 10.132.30.136 until at least 2026-11-03); or E18U31's peer ports `0:3:2` and `1:3:2`,
   restored and set again (they see the source array). **On 2026-11-16 rack13's `0:3:2` and `1:3:2`
@@ -384,6 +416,9 @@ write, a peer port on the source array, running the removal set.
    `offline` and `-f`, and `-ct` resets the port. Only the first live change answers it.
    *2026-11-17:* the owner made it a condition: the tool's write waits for this answer (ADR 0018
    *Must confirm live before the write*); the first slice's pasted command set gives it.
+   *Answered 2026-11-17 evening (rack13-ARCUS, 0:3:1 and 1:3:1, no SFP):* `config peer -ct point -f`
+   asked nothing; the port came back `loss_sync` by itself (no `rst` needed; an `rst` right after is
+   refused as *being reset*). On a cabled port still to be seen.
 2. Does the port WWN change when the mode changes (E18U31 suggests yes)? *2026-11-16:* the CLI help's
    own `showport -peer` example has the same `0202` pattern as E18U31's peer ports, so very likely;
    the moment of the change is still to be seen live (R7 already takes the WWPN from the read-back).

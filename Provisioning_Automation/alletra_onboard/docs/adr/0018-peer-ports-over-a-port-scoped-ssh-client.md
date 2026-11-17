@@ -7,7 +7,9 @@ modes, BL-50)
 
 **Built:** the first slice (option C) on 2026-11-17, pending live run: the plan, the printed command
 set and removal set, the read after the paste, verify, zoning and the as-built. No write client and
-no allowlist change; option B waits as decided.
+no allowlist change; option B waits as decided. **Amended 2026-11-17** (the owner's decision after the
+live check, *Amendment* at the end): the plan checks each port's card pair partner, and the tool's own
+write, when built, sends no line that prompts.
 
 ## Context
 
@@ -138,8 +140,10 @@ refers to it.
 3. **The restore is a removal line**, never a client form (SPEC-007, ADR 0025 condition 4). Per port,
    from the `showport -par` read before the change, written to the run's removal set before the port's
    first command is sent: `controlport offline <nsp>`, `controlport config <old connmode> -ct <old
-   conntype> -f <nsp>`, `controlport rst -f <nsp>` (the help's `rst` takes `-f`; added 2026-11-17). A
-   plan without that read blocks.
+   conntype> -f <nsp>`, `controlport rst -f <nsp>` (the help's `rst` takes `-f`; added 2026-11-17),
+   then `controlport intcoal <enable|disable> -f <nsp>` with the IntCoal read before, which the removal
+   set puts after every port's restore (added 2026-11-17 evening, *Amendment*). A plan without that read
+   blocks.
 4. **Read back after each port** (ADR 0025 condition 5): Type and Connmode are the approved mode,
    ConnType `point`, and every other port's mode, Type and logins are as before; otherwise stop.
 5. **No prompts** (ADR 0025 condition 6): the `config` form goes on the client only after a live
@@ -199,3 +203,100 @@ their Device, so whoever uses it is asked first). The owner chooses. The answers
 - Nothing in the 2026-11-16 or 2026-11-17 captures contradicts option B. The help's example omits
   `-f`; the client form keeps it, since without it the command asks for a confirmation an SSH exec
   cannot give.
+
+## Amendment, 2026-11-17, owner's decision after the live check
+
+**What the live check showed** (rack13-ARCUS, OS 10.6.0; `docs/validation/2026-11-17-rack13-live-w2.md`,
+task 3, findings 8 and 9).
+
+- `controlport offline 0:3:1` asks *Are you sure you want to run controlport offline on port 0:3:1?
+  select q=quit y=yes n=no* every time, and its syntax has no `-f` (`controlport offline
+  <node:slot:port>...`, every captured help, OS 10.5.0 to 10.6.0). Over a non-interactive SSH exec it
+  waits until the session times out.
+- `help controlport`, *Port pair protection*: *"For dual-port LSI Fibre Channel adapters, both ports in
+  the pair must use the same mode. For quad-port LSI Fibre Channel adapters, each port pair (ports 1 and
+  2, ports 3 and 4) must use the same mode. Changing the mode of one port in a pair ... causes the other
+  port in the pair to undergo a mode [change] as well"*, and *"In the case where one port in the pair is
+  offline ... but the partner port is online, changing the mode of the offline port causes the online
+  partner port to undergo mode change as well. This results in loss of use of the partner port because
+  it is no longer online."* The plan looked at the port alone. On rack13 the candidates this ADR named,
+  0:3:3 and 1:3:4 (free, linked), have pair partners 0:3:4 and 1:3:3 that serve ESXi host
+  10.132.30.136. The cards: rack13's slot 3 is a quad-port HPE64004-B on each node (`showport -i`);
+  E18U31 and D22U27 have HPE64004-M, VZ HPE64004-B. E18U31 runs 0:3:1 in host mode beside its peer port
+  0:3:2, so the HPE64004-M may not enforce the rule; nothing shows that the HPE64004-B does not.
+
+**The owner's words:** *"do the sensible one, don't forget a consultant uses this tool in a customer
+environment."* Never disrupt the customer's running I/O; never take a port with sessions or logins
+offline; a prompt is acceptable only on a line a consultant pastes by hand, never on one the tool sends.
+
+**Decision.**
+
+1. **The first slice stays a command set a consultant pastes.** `controlport offline` asking for
+   confirmation is acceptable there: the plan, the command set and the removal set already say to paste
+   the lines one at a time and answer `y` (SPEC-025 R5).
+2. **The plan checks the port pair.** The partner of `n:s:p` is the other port of its card's pair:
+   ports 1 and 2, ports 3 and 4 (on a dual-port card, 1 and 2), when the array has that port and it is
+   FC. The tool reads every FC card the cautious way, whether or not its adapter enforces the rule. A
+   port whose partner has a login (`showhost -d`, claimed or not: for an FC port those are its sessions)
+   or an export (`showvlun -a`), is not Type `free` (a host, peer, RCFC or any other port in use), is a
+   failover partner in use, or does not allow a mode change (`showport -c`) is a **conflict**, with a
+   sentence naming the partner and why: *"0:3:3 shares a port pair with 0:3:4, which serves hosts (Type
+   host; logged in: an unnamed initiator 10005CED8C5312A9). A mode change on one port of a pair can
+   change the other and take it offline, so the tool never sets 0:3:3 while 0:3:4 is in use: pick a port
+   whose pair partner is free."* Every plan row shows its partner (the page's *Pair partner* column, with
+   the partner's Type and state). A partner that is itself on the sheet is judged like any partner: free
+   is fine, in use is not.
+3. **The read after the paste** already judges every other port's mode and Type against the read the
+   plan was made from (SPEC-025 R4), the partner included: a partner that moved anyway is named, and the
+   consultant is told to check the array before going on.
+4. **The tool's own write (work packet steps 4 and 5) stays deferred**, and when built it must send no
+   line that prompts (ADR 0025 condition 6). `controlport offline` cannot go on the client as it stands;
+   the write needs a path the lab shows to run without a question (for instance whether `controlport
+   config peer -ct point -f` is accepted on a port that is already offline with no link, or another
+   form). Until a live capture shows one, there is no write and no allowlist change.
+5. **Candidate ports change.** On rack13, 0:3:3 and 1:3:4 are refused (their partners serve a host).
+   The pairs 0:3:1/0:3:2 and 1:3:1/1:3:2 are free on both sides (no SFP, `loss_sync`), so 0:3:1 and
+   1:3:1 qualify; their change and undo can be tested, zones and BL-27 cannot until they are cabled.
+
+**Consequences.** SPEC-025 R3 gains the pair rule and §4's candidates change (amended the same day).
+`PeerPortAction` carries `partner`; `pair_partner` lives beside `is_free_fc_port` in
+`application/provisioning/peer_ports.py`. No allowlist change; `free_fc_ports` still answers for the
+port alone (the plan adds the pair).
+
+**Live, the same evening** (rack13-ARCUS, 0:3:1 and 1:3:1, the printed set pasted by hand; record in
+`docs/validation/2026-11-17-rack13-live-w2.md`, *2026-11-17 evening*; captures in
+`tests/fixtures/peer_ports/rack13_live/`). It answers *Must confirm live before the write* for a port
+with no SFP:
+
+1. `controlport config peer -ct point -f <nsp>` asked nothing (nor did `config host -ct point -f`).
+   `controlport offline` asked every time, as before.
+2. `controlport rst` is not needed after `config`: `-ct` resets the port itself, and the port came back
+   `loss_sync` (no SFP), not held offline. A `controlport rst -f` pasted right after `config` is refused:
+   *Port 0:3:1 is being reset; please re-issue the command when reset is complete*. The removal set
+   keeps `rst` for a port a `config` never reached, with a `#` line saying what that answer means.
+3. The WWNs change with the mode: node `2FF70002AC02D495` to `2FF70202AC02D495`, port `20310002…` to
+   `20310202…` (and `21310002…` to `21310202…`), and back after the restore.
+4. The pair partners 0:3:2 and 1:3:2, free, did not move (HPE64004-B); every other port read the same.
+   The restore brought Connmode and ConnType back, but **1:3:1 came back with IntCoal `disabled`** where
+   it read `enabled` (0:3:1 came back `enabled` both times). `controlport intcoal enable -f 1:3:1`,
+   pasted by hand, put it back with no prompt. Each restore now carries the IntCoal `showport -par` read
+   before (`controlport intcoal <enable|disable> -f <nsp>`); see the second rerun below for where it goes.
+5. A peer port with nothing attached reads Type `free` (mode `initiator`, Connmode `peer point`): the
+   read after the paste judged by Type and called 0:3:1 *not a peer port*. The plan, the read after the
+   paste, Verify and the zone pairs now judge a peer port by `showport -par` Connmode (`is_peer_port`),
+   Type only when `-par` has no row; a free-typed port in peer mode is never a candidate, nor a free
+   partner.
+
+Not answered here: the same on a cabled port (a link, a fabric login, zones), and whether the tool's
+own write can avoid `controlport offline`'s question (point 4 above).
+
+**Second rerun, the same evening** (19:49 to 19:54; `tests/fixtures/peer_ports/rack13_live/rerun2/`).
+The removal set with the IntCoal line, pasted end to end as printed: each `controlport intcoal enable
+-f`, pasted straight after its port's `config host -ct point -f`, answered *Port … is being reset;
+please re-issue the command when reset is complete* and did nothing. This time 0:3:1 came back with
+IntCoal `disabled` (1:3:1 kept `enabled`), so which port loses it varies. Pasted by hand a minute later
+the same line went in. So the removal set now puts every `controlport intcoal` line after every port's
+restore, and its header says: *paste it again until it answers nothing; `showport -par` then reads
+IntCoal as it did before*. **Seen live in a third rerun (19:57 to 20:01):** pasted as printed, both intcoal
+lines went in the first time, and every view equalled the baseline. A removal set with one port may
+still need the line pasted again.

@@ -19,7 +19,7 @@ from alletra_onboard.domain.trust import (
     DevicePin,
     DevicePinInfo,
     TrustKind,
-    mismatch_message,
+    refusal_message,
     trusted_message,
 )
 
@@ -71,7 +71,7 @@ class RunTrustBook:
             stored = self._coord.store.get_device_pin(self.run_id, pin.kind, pin.host, pin.port) or pin
             self._coord.emit(
                 self.run_id, self._phase(), event_type,
-                mismatch_message(pin, offered), data={"device": DevicePinInfo.of(stored).model_dump(mode="json")},
+                refusal_message(pin, offered), data={"device": DevicePinInfo.of(stored).model_dump(mode="json")},
             )
 
     def _phase(self):

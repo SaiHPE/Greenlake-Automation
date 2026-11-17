@@ -56,7 +56,10 @@ run, and the page keeps showing them after a rebuild: a retry calls the failed a
 page never showed its result.
 **Live 2026-11-16** on rack13-ARCUS, 21/0 ([validation record](../validation/2026-11-16-failed-apply-rack13.md)):
 stopped at a volume the array refused, three objects made, their removal set exactly those three, the
-page, the rebuild and the as-built as above, the array back as it was.
+page, the rebuild and the as-built as above, the array back as it was. Run again on 2026-11-17 (23/0), it
+stopped where the array refused the volume set name `zz_bl45_vvs+`, after four objects. Since BL-60 the
+sheet refuses a `+` in a volume set name too, so `lab/failed_apply_lab.py` makes the array refuse a volume
+set name of 256 characters, whose length the tool does not check (not yet seen live).
 
 ## 3. Data contract
 

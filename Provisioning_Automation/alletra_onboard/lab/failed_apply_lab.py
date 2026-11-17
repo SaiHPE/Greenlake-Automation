@@ -10,16 +10,19 @@ prompts. Needs both fixes: run it from a branch that has BL-45 and BL-46.
                                       host vCenter knows; the run makes it when the array does not have it)
 
 1. checks the array has no zz_bl45_* objects (stops before anything if it has)
-2. restarts the app on the latest code (Windows only); first two sheets the app must refuse on upload,
+2. restarts the app on the latest code (Windows only); first three sheets the app must refuse on upload,
    so nothing reaches the array: one with a 1 PiB volume (BL-55: above the array's 64 TiB), one with a
-   volume named zz_bl45_vol02+ (help createvv: letters, digits, '.', '-' and '_' only). Then a Provision
-   only run: host set zz_bl45_hs (the host: when the array does not have it yet the apply makes it, and
-   its removal set must remove it again) and two 1 GiB thin volumes, zz_bl45_vol01 and zz_bl45_vol02, in
-   the volume set zz_bl45_vvs+. The tool does not check a volume set name's characters (no captured help
-   states them); the array is expected to refuse the '+' there as it does in a volume name, so the apply
-   stops at the volume set. No export, so no host ever sees a volume.
+   volume named zz_bl45_vol02+ (help createvv: letters, digits, '.', '-' and '_' only), one with the
+   volume set zz_bl45_vvs+ (the array refused that '+' live, 2026-11-17, so the sheet checks it now,
+   BL-60). Then a Provision only run: host set zz_bl45_hs (the host: when the array does not have it yet
+   the apply makes it, and its removal set must remove it again) and two 1 GiB thin volumes,
+   zz_bl45_vol01 and zz_bl45_vol02, in a volume set whose name is zz_bl45_vvs_ and x's, 256 characters.
+   The tool does not check a volume set name's length (no captured help states it); 256 is longer than
+   any name the array's help allows (255, help createvv and help createsv), so the array is expected to
+   refuse it and the apply stops at the volume set. NOT YET SEEN LIVE. No export, so no host ever sees
+   a volume.
 3. in the browser, on the Provision storage page: Build plan, tick, Create. Expects the apply to stop
-   at zz_bl45_vvs+ with the host set and both volumes made (and the host, when it was new), and a
+   at the long volume set with the host set and both volumes made (and the host, when it was new), and a
    removal set of exactly those. Screenshots of the failed state at 1366 and 1080 wide. Then Rebuild
    plan: the made objects read Already there, the run's removal set is still on the page, and the
    approval tick is clear.
@@ -68,12 +71,14 @@ P_HOST, ARRAY_PW = TARGETS["prov_array_host"], TARGETS["prov_array_password"]
 HOST = os.environ.get("FA_HOST") or "ESX1"
 PREFIX = "zz_bl45"
 # The apply has to stop half-way at something only the array refuses. The sheet now refuses a 1 PiB
-# volume (BL-55) and a volume name with a '+' (help createvv), so the '+' moved to the volume set's name:
-# no captured help states the characters of a set name, so the tool does not check it, and the array
-# refused '+' in a volume name with "illegal character in input" (2026-11-17). Not yet seen live for a set.
-VOL1, VOL2, VVSET, HOSTSET = PREFIX + "_vol01", PREFIX + "_vol02", PREFIX + "_vvs+", PREFIX + "_hs"
+# volume (BL-55), a '+' in a volume name (help createvv) and a '+' in a volume set name (refused live on
+# 2026-11-17, BL-60). A volume set name's length is not checked: no captured help states it. So the set
+# gets a 256-character name, longer than any name the array's help allows (255). Not yet seen live.
+VOL1, VOL2, HOSTSET = PREFIX + "_vol01", PREFIX + "_vol02", PREFIX + "_hs"
+VVSET = PREFIX + "_vvs_" + "x" * (256 - len(PREFIX + "_vvs_"))
 TOO_BIG_GIB = 1024 * 1024          # 1 PiB thin: above the array's 64 TiB, refused by the sheet (BL-55)
 BAD_VOLUME_NAME = PREFIX + "_vol02+"   # refused by the sheet (help createvv)
+BAD_VVSET_NAME = PREFIX + "_vvs+"      # refused by the sheet (the array refused it live, BL-60)
 # What the apply makes before it stops, and its undo in paste order. The host joins both when the plan
 # says the array does not have it yet (rack13, 2026-11-16: it did not).
 EXPECTED_MADE = ["hostset " + HOSTSET, "volume " + VOL1, "volume " + VOL2]
@@ -149,7 +154,7 @@ def leftovers(c):
     return sorted(set(found))
 
 
-def compose(vol2_gib=1, vol2_name=VOL2):
+def compose(vol2_gib=1, vol2_name=VOL2, vvset=VVSET):
     body = {
         "init": {
             "gl_client_id": "not-used", "gl_client_secret": "not-used", "gl_token_url": "https://not-used",
@@ -161,9 +166,9 @@ def compose(vol2_gib=1, vol2_name=VOL2):
             "secret_name": "b10000-admin", "secret_username": "3paradm", "customer_name": "Lab failed apply check",
         },
         "targets": TARGETS,
-        "volumes": [{"name": VOL1, "size_gib": "1", "provisioning_type": "tpvv", "cpg": "SSD_r6", "vvset": VVSET},
+        "volumes": [{"name": VOL1, "size_gib": "1", "provisioning_type": "tpvv", "cpg": "SSD_r6", "vvset": vvset},
                     {"name": vol2_name, "size_gib": str(vol2_gib), "provisioning_type": "tpvv", "cpg": "SSD_r6",
-                     "vvset": VVSET}],
+                     "vvset": vvset}],
         "hostsets": [{"name": HOSTSET, "members": ""}],
         "hosts": [{"name": HOST, "os": "esxi"}],
     }
@@ -180,6 +185,11 @@ def compose(vol2_gib=1, vol2_name=VOL2):
         fl.save("upload-bad-name.txt", "HTTP %s\n%s" % (status, up))
         check("a sheet with the volume name %s is refused on upload, before any run" % BAD_VOLUME_NAME,
               status == 422 and "in a volume name, not '+'" in str(up), "HTTP %s: %s" % (status, str(up)[:240]))
+        return None
+    if vvset == BAD_VVSET_NAME:
+        fl.save("upload-bad-set-name.txt", "HTTP %s\n%s" % (status, up))
+        check("a sheet with the volume set name %s is refused on upload, before any run" % BAD_VVSET_NAME,
+              status == 422 and "in a volume set name, not '+'" in str(up), "HTTP %s: %s" % (status, str(up)[:240]))
         return None
     if status != 200:
         raise RuntimeError("upload -> HTTP %s: %s" % (status, up))
@@ -285,7 +295,7 @@ def drive(run_id):
             shot("03-did-not-fail")
             b.close()
             return applied
-        check("the error names the object it stopped at (%s)" % VVSET,
+        check("the error names the object it stopped at (the %d-character volume set)" % len(VVSET),
               (res.get("error") or "").startswith("Stopped while creating volume set %s: " % VVSET), (res.get("error") or "")[:240])
         check("what was made before it stopped is what the plan said (%s)" % ", ".join(EXPECTED_MADE),
               made == sorted(EXPECTED_MADE), ", ".join(made) or "none")
@@ -413,6 +423,7 @@ def main():
     fl.banner("2. A Provision only run: discovery and zoning check over the API")
     compose(TOO_BIG_GIB)
     compose(vol2_name=BAD_VOLUME_NAME)
+    compose(vvset=BAD_VVSET_NAME)
     run_id = compose()
     print("run " + run_id)
     fl.save("run-id.txt", run_id)

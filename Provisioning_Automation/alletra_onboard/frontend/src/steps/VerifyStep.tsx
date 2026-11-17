@@ -292,6 +292,8 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
                       <Text size="small">Missing: not on the array.</Text>
                     ) : c.differences.length ? (
                       <Text size="small">{c.differences.join('; ')}</Text>
+                    ) : c.note ? (
+                      <Text size="small">{c.note}</Text>
                     ) : (
                       <NoValue />
                     )

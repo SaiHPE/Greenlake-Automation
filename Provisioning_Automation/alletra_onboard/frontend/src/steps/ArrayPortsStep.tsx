@@ -77,6 +77,8 @@ function PlanTables({ section }: { section: IscsiSection }) {
   const rows = plan.actions.map((action: IscsiVlanAction, i: number) => ({ ...action, request: section.requests[i] }));
   const adds = plan.actions.filter((a) => a.state === 'create');
   const lines = adds.flatMap((a) => a.cli.split('\n'));
+  const removals = plan.removal_lines ?? [];
+  const gateways = plan.gateway_window ?? [];
   const count = (state: IscsiVlanActionState) => plan.actions.filter((a) => a.state === state).length;
   // Section reads `open` once: keyed, so each opens by itself only while it holds something to act on
   const toAct = adds.length > 0 || count('conflict') > 0;
@@ -103,13 +105,30 @@ function PlanTables({ section }: { section: IscsiSection }) {
         />
       </Section>
       {lines.length > 0 && (
-        <Section title="The array's command lines" summary={`${lines.length} line${lines.length === 1 ? '' : 's'}, each with -vlan`} right={<CopyButton text={lines.join('\n') + '\n'} />}>
+        <PasteBlock title="The array's command lines" text={section.commands_text ?? lines.join('\n') + '\n'} file="iscsi-vlan-commands.txt" bare>
           <Text size="small" color="text-weak">
-            The tool does not send these yet. Pasted on the array&apos;s CLI they add the addresses above. Each line carries -vlan: without it
-            the line would change the port&apos;s untagged address and cut off the hosts logged in on it.
+            The tool does not send these yet. Pasted on the array&apos;s CLI they add the addresses above, without a gateway and without taking
+            a port offline, so the hosts logged in keep their sessions. Each line carries -vlan: without it the line would change the
+            port&apos;s untagged address and cut off the hosts logged in on it.
           </Text>
-          <CodeBlock lines={lines} label="Command lines for the array" />
-        </Section>
+        </PasteBlock>
+      )}
+      {removals.length > 0 && (
+        <PasteBlock title="Removal set, to keep before you paste" text={section.removals_text ?? removals.join('\n') + '\n'} file="iscsi-vlan-removal.txt" bare>
+          <Text size="small" color="text-weak">
+            Removes each address above again, last first. Removing an address ends every iSCSI session on it: check showhost -d first. The
+            tool never runs these.
+          </Text>
+        </PasteBlock>
+      )}
+      {gateways.length > 0 && (
+        <PasteBlock title="Gateways, for a change window only" text={section.gateway_text ?? gateways.join('\n') + '\n'} file="iscsi-vlan-gateways-change-window.txt" bare>
+          <InlineNotification
+            tone="warning"
+            title="These lines stop every iSCSI session on the port"
+            message={<NotesList notes={plan.gateway_notes ?? []} />}
+          />
+        </PasteBlock>
       )}
       {plan.switch_handoff.length > 0 && (
         <Section
@@ -145,9 +164,12 @@ const PEER_STATE: Record<PeerPortActionState, ResultWord> = {
 
 const lines = (text?: string) => (text ?? '').split('\n').filter((line) => line !== '');
 
-/** A block of lines to paste, with Copy and Download .txt; the comment lines stay in the copy only. */
-function PasteBlock({ title, text, file, open, children }: { title: string; text: string; file: string; open?: boolean; children?: ReactNode }) {
-  const shown = lines(text).filter((line) => !line.startsWith('# Peer ports on') && !line.startsWith('# Undo') && !line.startsWith('# Review'));
+/** A block of lines to paste, with Copy and Download .txt; the comment lines stay in the copy only
+ *  (`bare`: every comment line, its words said beside the block). */
+function PasteBlock({ title, text, file, open, bare, children }: { title: string; text: string; file: string; open?: boolean; bare?: boolean; children?: ReactNode }) {
+  const shown = lines(text).filter((line) => (bare
+    ? !line.startsWith('#')
+    : !line.startsWith('# Peer ports on') && !line.startsWith('# Undo') && !line.startsWith('# Review')));
   const count = shown.filter((line) => !line.startsWith('#')).length;
   return (
     <Section
@@ -210,6 +232,12 @@ function PeerPortsPanel({ intent, section, error }: { intent: PeerPortIntent | n
             {
               property: 'now', header: 'Now',
               render: (a: PeerPortAction) => (ports[a.nsp] ? <Text size="small">{`${ports[a.nsp].type} · ${ports[a.nsp].protocol} · ${ports[a.nsp].state}`}</Text> : <NoValue />),
+            },
+            {
+              property: 'partner', header: 'Pair partner',
+              render: (a: PeerPortAction) => (a.partner
+                ? <Text size="small"><Text size="small" style={mono}>{a.partner}</Text>{ports[a.partner] ? ` · ${ports[a.partner].type} · ${ports[a.partner].state}` : ''}</Text>
+                : <NoValue />),
             },
             {
               property: 'after', header: 'After',

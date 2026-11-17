@@ -32,7 +32,9 @@ from alletra_onboard.domain.provisioning import (
     RemovalItem,
     VlunTemplate,
     VolumeRequest,
+    host_name_problem,
     volume_name_problem,
+    volume_set_name_problem,
     volume_too_large,
 )
 from alletra_onboard.domain.shared import normalize_wwpn
@@ -437,7 +439,7 @@ def build_plan(
         persona = personas.get(host_name, "VMware")
         if wwns:
             add("host", host_name, f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona}",
-                _judge_host(host_name, wwns, persona, state.hosts),
+                _new_host_name(_judge_host(host_name, wwns, persona, state.hosts), host_name, sources.get(host_name, "")),
                 {"wwns": wwns, "persona": persona, "source": sources.get(host_name, "")})
             continue
         iqns = iqns_of.get(host_name, [])
@@ -448,7 +450,7 @@ def build_plan(
                 {"wwns": [], "persona": persona, "source": sources.get(host_name, "")})
             continue
         add("host", host_name, f"Host {host_name} — iSCSI {', '.join(iqns)}, persona {persona}",
-            _judge_iscsi_host(host_name, iqns, persona, state.hosts),
+            _new_host_name(_judge_iscsi_host(host_name, iqns, persona, state.hosts), host_name, sources.get(host_name, "")),
             {"wwns": [], "iqns": iqns, "persona": persona, "source": sources.get(host_name, "")})
 
     for hs in intent.host_sets:
@@ -468,7 +470,7 @@ def build_plan(
     vvsets = _vvsets(intent)
     for vvset, vols in vvsets.items():
         add("vvset", vvset, f"Volume set {vvset} — {len(vols)} volume(s)",
-            _judge_set(vvset, vols, state.volume_sets, "volume"), {"members": vols})
+            _judge_volume_set(vvset, vols, state.volume_sets), {"members": vols})
 
     # Presentation: the operator-composed exports (source volume|vvset x target host|hostset x LUN),
     # or the single-host-set default (each volume -> the set, auto LUN). Multiple host sets with no
@@ -578,6 +580,24 @@ def _judge_set(name: str, members: list[str], on_array: dict[str, list[str]], no
     if missing:
         return "update", f"adds {len(missing)} {noun}(s): {', '.join(missing)}"
     return "exists", f"has all {len(members)} {noun}(s)"
+
+
+def _new_host_name(verdict: tuple[PlanState, str], name: str, source: str) -> tuple[PlanState, str]:
+    """A host the plan would create under a name the array refuses is a conflict. Only the sheet's name
+    can be changed by the operator; a name vCenter, the array or the fabric gave cannot."""
+    state, _ = verdict
+    if state == "create" and (bad := host_name_problem(name)):
+        fix = ("Give it a shorter name on the sheet's Hosts tab." if source == "sheet"
+               else "Leave it out of the host set: the tool cannot create it under this name.")
+        return "conflict", f"{bad}. {fix}"
+    return verdict
+
+
+def _judge_volume_set(name: str, volumes: list[str], on_array: dict[str, list[str]]) -> tuple[PlanState, str]:
+    """A new volume set with a name the array refuses is a conflict; otherwise as `_judge_set`."""
+    if name not in on_array and (bad := volume_set_name_problem(name)):
+        return "conflict", f"{bad}. Rename it on the sheet's Volumes tab."
+    return _judge_set(name, volumes, on_array, "volume")
 
 
 def _judge_volume(v: VolumeRequest, on_array: list[ArrayVolumeRecord]) -> tuple[PlanState, str]:

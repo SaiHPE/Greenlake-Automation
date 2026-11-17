@@ -506,19 +506,104 @@ def _plan(requests, view=None):
 
 
 def test_one_vlan_on_an_iscsi_port_of_each_node_is_planned_as_two_adds():
-    plan = _plan([_req(), _req("1:4:1", ip="192.0.2.12")])
+    plan = _plan([_req(gw=""), _req("1:4:1", ip="192.0.2.12", gw="")])
     assert [(a.nsp, a.vlan_id, a.state) for a in plan.actions] == [("0:4:1", 120, "create"), ("1:4:1", 120, "create")]
     assert plan.blockers == [] and plan.notes == []
     # The CLI lines are printed, the array's own forms, each with -vlan: without it they would change
     # the port's untagged address and cut off the hosts logged in on it (ADR 0017).
-    assert [a.cli.splitlines() for a in plan.actions] == [
-        ["controliscsiport addr 192.0.2.11 255.255.255.0 -vlan 120 -f 0:4:1",
-         "controliscsiport gw 192.0.2.1 -vlan 120 -f 0:4:1"],
-        ["controliscsiport addr 192.0.2.12 255.255.255.0 -vlan 120 -f 1:4:1",
-         "controliscsiport gw 192.0.2.1 -vlan 120 -f 1:4:1"],
+    assert [a.cli for a in plan.actions] == [
+        "controliscsiport addr 192.0.2.11 255.255.255.0 -vlan 120 -f 0:4:1",
+        "controliscsiport addr 192.0.2.12 255.255.255.0 -vlan 120 -f 1:4:1",
     ]
-    (no_gateway,) = _plan([_req(gw="")]).actions
-    assert no_gateway.cli == "controliscsiport addr 192.0.2.11 255.255.255.0 -vlan 120 -f 0:4:1"
+    assert plan.gateway_window == [] and plan.gateway_notes == []
+
+
+def test_the_main_set_adds_the_address_without_its_gateway_and_prints_the_gateway_for_a_change_window():
+    """ADR 0017, amended 2026-11-17 (owner, after the live check): the array set `gw ... -vlan` only on an
+    offline port (*Port 0:4:2 is not in offline state. To modify the Gateway IP, please use controlport to
+    offline the port first.*), and offline stops every iSCSI session on the port. So the main set has no
+    gw line and no offline; a row's gateway goes in a separate change-window set, per port: offline, the
+    port's gw lines, rst. The plan says why, and how many sessions each port carries now."""
+    from alletra_onboard.application.provisioning.iscsi_network import (
+        command_set_text,
+        gateway_set_text,
+    )
+
+    view = _view()
+    view.sessions = {"0:4:1": 3, "1:4:1": 0}
+    plan = _plan([_req(), _req("1:4:1", ip="192.0.2.12"), _req("0:4:1", vlan=130, ip="198.51.100.11", gw="198.51.100.1")],
+                 view)
+    assert [a.state for a in plan.actions] == ["create", "create", "create"]
+    main = command_set_text(plan).splitlines()
+    assert main[1:] == ["controliscsiport addr 192.0.2.11 255.255.255.0 -vlan 120 -f 0:4:1",
+                        "controliscsiport addr 192.0.2.12 255.255.255.0 -vlan 120 -f 1:4:1",
+                        "controliscsiport addr 198.51.100.11 255.255.255.0 -vlan 130 -f 0:4:1"]
+    assert not [ln for ln in main if " gw " in ln or "offline" in ln.split("#")[0]]
+    assert plan.gateway_window == [
+        "controlport offline 0:4:1",
+        "controliscsiport gw 192.0.2.1 -vlan 120 -f 0:4:1",
+        "controliscsiport gw 198.51.100.1 -vlan 130 -f 0:4:1",
+        "controlport rst -f 0:4:1",
+        "controlport offline 1:4:1",
+        "controliscsiport gw 192.0.2.1 -vlan 120 -f 1:4:1",
+        "controlport rst -f 1:4:1",
+    ]
+    assert plan.actions[0].reason.endswith("; gateway 192.0.2.1 not set by the tool (a change window's job)")
+    assert ("0:4:1 VLAN 120: the tool adds the address without the gateway 192.0.2.1. The gateway needs the port "
+            "offline, so it is in a separate set for a change window.") in plan.notes
+    assert plan.gateway_notes[0].startswith("The tool does not set these gateways. The array sets a VLAN gateway only "
+                                            "while the port is offline, and taking a port offline stops every iSCSI "
+                                            "session on it.")
+    assert plan.gateway_notes[0].endswith("Run these lines only in a change window agreed with the customer.")
+    assert plan.gateway_notes[1:] == [
+        "0:4:1 carries 3 iSCSI sessions now (showhost -d): all of them stop while the port is offline.",
+        "1:4:1 has no iSCSI session now (showhost -d). Check again just before the change window."]
+    text = gateway_set_text(plan).splitlines()
+    assert text[0].startswith("# CHANGE WINDOW ONLY: the VLAN gateways on AlletraMP_E18U31.")
+    assert "# 0:4:1 carries 3 iSCSI sessions now (showhost -d): all of them stop while the port is offline." in text
+    assert any(ln.startswith("# `controlport offline` asks the array's own question") for ln in text)
+    assert text[-7:] == plan.gateway_window
+    # The help forms the change-window set uses, on every captured OS
+    for folder in (RACK13, *OS_10_5.values()):
+        help_port = (folder / "help_controlport.txt").read_text()
+        assert "controlport offline <node:slot:port>...\n" in help_port
+        assert "controlport rst [-m <mode>|-l|-i] [-f] <node:slot:port>..." in help_port
+
+
+def test_a_row_without_a_gateway_has_no_change_window_set_and_one_port_says_one_session():
+    from alletra_onboard.application.provisioning.iscsi_network import gateway_set_text
+
+    view = _view()
+    view.sessions = {"0:4:1": 1}
+    assert gateway_set_text(_plan([_req(gw="")], view)) == ""
+    plan = _plan([_req()], view)
+    assert plan.gateway_notes[1:] == ["0:4:1 carries 1 iSCSI session now (showhost -d): it stops while the port is offline."]
+
+
+def test_the_plan_prints_the_undo_of_each_add_last_first_and_never_a_gateway_undo():
+    """Live 2026-11-17 (finding 6): the page printed the add lines and no undo. Each create's removal line
+    is in the plan before anything is pasted, with -vlan, last first; a row that exists has none. The
+    gateway has no line of its own: the delete takes the VLAN address with whatever gateway it has."""
+    from alletra_onboard.application.provisioning.iscsi_network import removal_set_text
+    from alletra_onboard.domain.network import IscsiVlanInterface
+
+    there = IscsiVlanInterface(nsp="0:4:2", vlan_id=120, ip="192.0.2.13", netmask="255.255.255.0")
+    plan = _plan([_req(), _req("0:4:2", ip="192.0.2.13"), _req("1:4:1", ip="192.0.2.12")], _view(vlans=[there]))
+    assert [a.state for a in plan.actions] == ["create", "exists", "create"]
+    assert [a.undo for a in plan.actions] == ["controliscsiport delete -vlan 120 -f 0:4:1", "",
+                                              "controliscsiport delete -vlan 120 -f 1:4:1"]
+    assert plan.removal_lines == ["controliscsiport delete -vlan 120 -f 1:4:1",
+                                  "controliscsiport delete -vlan 120 -f 0:4:1"]
+    text = removal_set_text(plan).splitlines()
+    assert text[0].endswith("Removing an interface ends every iSCSI session on it. Check `showhost -d` first.")
+    assert text[2:] == plan.removal_lines
+    # The exists row still lacks its gateway on the array: it is in the change-window set, not the removal set
+    assert plan.gateway_window == ["controlport offline 0:4:1", "controliscsiport gw 192.0.2.1 -vlan 120 -f 0:4:1",
+                                   "controlport rst -f 0:4:1", "controlport offline 0:4:2",
+                                   "controliscsiport gw 192.0.2.1 -vlan 120 -f 0:4:2", "controlport rst -f 0:4:2",
+                                   "controlport offline 1:4:1", "controliscsiport gw 192.0.2.1 -vlan 120 -f 1:4:1",
+                                   "controlport rst -f 1:4:1"]
+    assert not [ln for ln in plan.removal_lines if " gw " in ln or "-vlan" not in ln]
 
 
 @pytest.mark.parametrize("nsp, words", [
@@ -621,6 +706,8 @@ _READS = {
     "showsys": "showsys.txt", "showport": "showport.txt", "showport -iscsi": "showport_iscsi.txt",
     "showport -iscsivlans": "showport_iscsivlans.txt", "showport -rcip": "showport_rcip.txt",
     "showport -file": "showport_file.txt", "shownet": "shownet.txt",
+    # 2026-11-17 (ADR 0017 amended): the sessions a change-window gateway line would stop
+    "showhost -d": "showhost_d.txt",
 }
 
 
@@ -669,11 +756,24 @@ def test_the_read_builds_the_view_from_each_capture_in_one_read_only_session(fol
     from alletra_onboard.application.provisioning.discovery import parse_showport_iscsi
 
     view, commands = _read(folder)
-    assert sorted(commands) == sorted(_READS)                    # each once, no write, no showhost -d
+    assert sorted(commands) == sorted(_READS)                    # each once, no write
     assert (view.name, (view.mgmt_ip, view.mgmt_netmask)) == (name, mgmt)
     assert view.roles == parse_showport_roles((folder / "showport.txt").read_text())[0]
     assert view.iscsi_ports == parse_showport_iscsi((folder / "showport_iscsi.txt").read_text())
     assert view.vlans == [] and view.other_addresses == others
+    assert set(view.sessions) == {p.nsp for p in view.iscsi_ports}
+
+
+@pytest.mark.parametrize("folder, sessions", [
+    # rack13-ARCUS, 2026-11-16: two VME hosts on 0:4:1, the same two and an unclaimed Windows initiator on 1:4:1
+    (RACK13, {"0:4:1": 2, "0:4:2": 0, "1:4:1": 3, "1:4:2": 0}),
+    (TAGGED, {"0:4:1": 2, "0:4:2": 0, "1:4:1": 3, "1:4:2": 0}),
+    # E18U31, OS 10.5.60, 2026-11-17: three lab hosts on every iSCSI port; its FC logins are not counted
+    (E18U31_NOW, {"0:4:1": 3, "0:4:2": 3, "1:4:1": 3, "1:4:2": 3}),
+])
+def test_the_read_counts_the_iscsi_sessions_on_each_port_from_showhost_d(folder, sessions):
+    view, _ = _read(folder)
+    assert view.sessions == sessions
 
 
 def test_a_read_the_array_refused_fails_the_read_instead_of_reading_as_nothing_there():
@@ -687,8 +787,11 @@ def test_the_plan_on_rack13_adds_on_a_ready_and_an_offline_port_and_says_the_off
     assert [(a.nsp, a.state) for a in plan.actions] == [("0:4:1", "create"), ("1:4:2", "create"), ("1:4:1", "conflict")]
     assert plan.actions[2].reason == ("10.93.18.0/23 is already the network of iSCSI port 1:4:1 on rack13-ARCUS; "
                                       "a VLAN needs a network of its own.")
-    assert plan.notes == ["VLAN 130 is only on node 1. If that node stops, hosts on VLAN 130 lose every path.",
-                          "1:4:2 is offline: the address is set, but no host reaches it until the link is up."]
+    assert plan.notes[:2] == ["VLAN 130 is only on node 1. If that node stops, hosts on VLAN 130 lose every path.",
+                              "1:4:2 is offline: the address is set, but no host reaches it until the link is up."]
+    # the two rows with a gateway: added without it (ADR 0017 amended 2026-11-17); 0:4:1 has two VME hosts on it
+    assert [n.split(":")[0:2] for n in plan.notes[2:]] == [["0", "4"], ["1", "4"]]
+    assert "0:4:1 carries 2 iSCSI sessions now (showhost -d): all of them stop while the port is offline." in plan.gateway_notes
     assert [s.split(":")[0] for s in plan.switch_handoff] == ["Switch port cabled to rack13-ARCUS 0", "Switch port cabled to rack13-ARCUS 1"]
 
 
@@ -712,7 +815,9 @@ def test_a_conflict_row_keeps_the_switch_sentence_for_the_vlan_already_on_its_po
     became a conflict and the plan dropped the network team's sentence. R3 asks for one per port with a
     planned or existing VLAN; the as-built printed it."""
     view, _ = _read(TAGGED)
-    plan = _plan([_req("0:4:2", vlan=2999, ip="192.0.2.10", gw="192.0.2.1"), _req("1:4:1", vlan=7, ip="10.93.18.12", gw="")],
+    # The row asked for another address than the one on the array (the live row, gateway 192.0.2.1, is now
+    # `exists`: the tool no longer sets a gateway, ADR 0017 amended 2026-11-17).
+    plan = _plan([_req("0:4:2", vlan=2999, ip="192.0.2.11", gw="192.0.2.1"), _req("1:4:1", vlan=7, ip="10.93.18.12", gw="")],
                  view)
     assert [a.state for a in plan.actions] == ["conflict", "conflict"]
     assert plan.switch_handoff == [
@@ -810,6 +915,11 @@ async def test_the_preview_reads_the_array_plans_and_holds_the_plan_until_a_new_
         "controliscsiport addr 192.0.2.12 255.255.255.0 -vlan 120 -f 1:4:1"]
     assert service.get_ports(run.run_id)["iscsi_plan_held"] is True
     assert "password" not in str(event.data)
+    # The page's three texts: the lines to paste now (no gw), their undo, and the change-window set apart
+    section = event.data["iscsi"]
+    assert " gw " not in section["commands_text"] and "delete -vlan 120 -f 1:4:1" in section["removals_text"]
+    assert section["gateway_text"].startswith("# CHANGE WINDOW ONLY: the VLAN gateways on rack13-ARCUS.")
+    assert "# 0:4:1 carries 2 iSCSI sessions now (showhost -d)" in section["gateway_text"]
 
     service.start_ports_preview(run.run_id)            # a new read withdraws the plan, even when it fails
     await service.wait(run.run_id)
@@ -858,8 +968,16 @@ def test_verify_says_present_missing_or_different_for_each_sheet_row():
     assert [(c.nsp, c.status) for c in checks] == [("0:4:1", "present"), ("1:4:1", "missing")]
     (check,) = verify_iscsi_vlans([_req(ip="192.0.2.50", gw="192.0.2.1")], vlans)
     assert check.status == "different"
-    assert check.differences == ["address: 192.0.2.11 on the array, 192.0.2.50 on the sheet",
-                                 "gateway: none on the array, 192.0.2.1 on the sheet"]
+    assert check.differences == ["address: 192.0.2.11 on the array, 192.0.2.50 on the sheet"]
+    # ADR 0017 amended 2026-11-17: the tool adds the address without the sheet's gateway, so an interface
+    # without it is present, with a note; a gateway on the array that differs from the sheet's still differs.
+    (check,) = verify_iscsi_vlans([_req(gw="192.0.2.1")], vlans)
+    assert (check.status, check.differences) == ("present", [])
+    assert check.note == ("The gateway 192.0.2.1 is not set: the tool leaves it to a change window (it needs the "
+                          "port offline).")
+    with_gw = [vlans[0].model_copy(update={"gateway": "192.0.2.254"})]
+    (check,) = verify_iscsi_vlans([_req(gw="192.0.2.1")], with_gw)
+    assert check.differences == ["gateway: 192.0.2.254 on the array, 192.0.2.1 on the sheet"] and not check.note
 
 
 async def test_the_verify_step_compares_the_sheets_iscsi_rows_read_only(tmp_path):
@@ -873,9 +991,11 @@ async def test_the_verify_step_compares_the_sheets_iscsi_rows_read_only(tmp_path
     service.start_verify(run.run_id)
     await service.wait(run.run_id)
     (event,) = _events(service, run, "verify.completed")
-    assert seen == ["10.64.154.190"] and event.message.endswith("iSCSI VLAN addresses: 0 of 2 present.")
+    assert seen == ["10.64.154.190"] and event.message.endswith("iSCSI VLAN addresses: 1 of 2 present.")
     statuses = [(c["nsp"], c["status"]) for c in event.data["report"]["iscsi_vlans"]]
-    assert statuses == [("0:4:1", "different"), ("1:4:1", "missing")]       # the sheet gives gateway 192.0.2.1
+    # The sheet gives gateway 192.0.2.1 and the array has none: present, the gateway left to a change window
+    # (was `different` before ADR 0017's amendment of 2026-11-17).
+    assert statuses == [("0:4:1", "present"), ("1:4:1", "missing")]
 
     def refused(creds):
         raise RuntimeError("connection reset")
@@ -921,6 +1041,31 @@ def test_the_as_built_lists_every_vlan_interface_with_its_port_state_and_the_swi
     assert ("Switch port cabled to DHCI_B10K 0:4:1: carry VLAN 120 tagged (802.1Q); keep the untagged (native) "
             "VLAN as it is.") in text
     assert not [w for w in warnings if "iscsivlans" in w]
+
+
+def test_the_as_built_keeps_the_change_window_lines_for_a_gateway_the_array_does_not_have(tmp_path):
+    """ADR 0017 amended 2026-11-17: the sheet's gateway is not on the array (the tool never sets it), so the
+    as-built says why and keeps the change-window lines; a row without a gateway adds nothing."""
+    import docx
+    from docx.oxml.ns import qn
+
+    from alletra_onboard.application.documents.asbuilt import AsBuiltData, generate_asbuilt
+
+    data = AsBuiltData(
+        name="DHCI_B10K", showport=(E18U31_NOW / "showport.txt").read_text(), showport_iscsivlans=_tagged_e18u31(),
+        iscsi_network_rows=[_req().model_dump()], iscsi_set_up_in_run=[("0:4:1", 120)],
+    )
+    out, _warnings = generate_asbuilt(data, tmp_path / "asbuilt.docx")
+    text = "".join(t.text or "" for t in docx.Document(str(out)).element.body.iter(qn("w:t")))
+    assert "Gateways for a change window" in text
+    assert "The sheet gives a gateway for 0:4:1 VLAN 120, and the array has none. The tool does not set these gateways." in text
+    assert ("controlport offline 0:4:1" in text and "controliscsiport gw 192.0.2.1 -vlan 120 -f 0:4:1" in text
+            and "controlport rst -f 0:4:1" in text)
+
+    data.iscsi_network_rows = [_req(gw="").model_dump()]
+    out, _warnings = generate_asbuilt(data, tmp_path / "asbuilt2.docx")
+    text = "".join(t.text or "" for t in docx.Document(str(out)).element.body.iter(qn("w:t")))
+    assert "change window" not in text
 
 
 def test_the_as_built_names_a_failed_iscsivlans_read_and_the_run_records_take_the_plans_adds():

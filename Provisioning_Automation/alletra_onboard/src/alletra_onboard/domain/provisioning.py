@@ -53,23 +53,46 @@ def volume_too_large(size_gib: int) -> str:
     return f"{size_gib} GiB is more than the array can create in one volume, at most {VOLUME_MAX_GIB} GiB"
 
 
-# The volume name the array takes, as its own `help createvv` states it: "a VV name up to 255 characters
-# in length. Valid characters include alphanumeric characters, periods, dashes, and underscores."
-# (rack13-ARCUS, OS 10.6.0, captured 2026-11-17, tests/fixtures/rack13_snap/help_createvv.txt). No captured
-# help states the characters of a host, host set or volume set name, so only volume names are checked.
+# The names the array takes, each checked only as far as the array itself has stated it:
+# - a volume: `help createvv`, "a VV name up to 255 characters in length. Valid characters include
+#   alphanumeric characters, periods, dashes, and underscores." (rack13-ARCUS, OS 10.6.0, captured
+#   2026-11-17, tests/fixtures/rack13_snap/help_createvv.txt).
+# - a volume set: no `help createvvset` is captured. Live on rack13-ARCUS (2026-11-17) the array refused
+#   `zz_bl45_vvs+` with "illegal character in input" (HTTP 400, code 69), as it refused `zz_bl45_vol02+`, so
+#   the volume's characters are checked. The length waits for a capture: `help createsv`'s "up to 255"
+#   is about its own argument, not the set's limit.
+# - a host: `help createhost`, "the name of the host using up to 31 characters" (D22U27, OS 10.5.0,
+#   captured 2026-10-26, tests/fixtures/d22u27_iscsi/help_createhost.txt). It states no characters, so
+#   only the length is checked.
+# - a host set: no captured help, so nothing is checked.
 VOLUME_NAME_MAX = 255
-_VOLUME_NAME_CHARS = re.compile(r"[A-Za-z0-9._-]")
+HOST_NAME_MAX = 31
+_NAME_CHARS = re.compile(r"[A-Za-z0-9._-]")
+
+
+def _name_problem(name: str, noun: str, most: int | None, chars: bool) -> str:
+    if most is not None and len(name) > most:
+        return f"the array takes at most {most} characters in a {noun} name, this one has {len(name)}"
+    bad = sorted({c for c in name if not _NAME_CHARS.fullmatch(c)}) if chars else []
+    if bad:
+        shown = ", ".join("a space" if c == " " else f"'{c}'" for c in bad)
+        return f"the array takes only letters, digits, '.', '-' and '_' in a {noun} name, not {shown}"
+    return ""
 
 
 def volume_name_problem(name: str) -> str:
     """Why the array would refuse this volume name, or '' when it takes it."""
-    if len(name) > VOLUME_NAME_MAX:
-        return f"the array takes at most {VOLUME_NAME_MAX} characters in a volume name, this one has {len(name)}"
-    bad = sorted({c for c in name if not _VOLUME_NAME_CHARS.fullmatch(c)})
-    if bad:
-        shown = ", ".join("a space" if c == " " else f"'{c}'" for c in bad)
-        return f"the array takes only letters, digits, '.', '-' and '_' in a volume name, not {shown}"
-    return ""
+    return _name_problem(name, "volume", VOLUME_NAME_MAX, chars=True)
+
+
+def volume_set_name_problem(name: str) -> str:
+    """Why the array would refuse this volume set name, or '' when nothing captured says it would."""
+    return _name_problem(name, "volume set", None, chars=True)
+
+
+def host_name_problem(name: str) -> str:
+    """Why the array would refuse this host name, or '' when nothing captured says it would."""
+    return _name_problem(name, "host", HOST_NAME_MAX, chars=False)
 
 
 class VolumeRequest(BaseModel):

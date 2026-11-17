@@ -39,7 +39,7 @@ export interface HealthIssue {
   details?: HealthDetail[];                     // SPEC-011 R1: the array's Detail rows for this component
 }
 /** SPEC-024 R6: one row of the sheet's iSCSI network tab against the array's VLAN interfaces. */
-export interface IscsiVlanCheck { nsp: string; vlan_id: number; status: 'present' | 'missing' | 'different'; differences: string[]; }
+export interface IscsiVlanCheck { nsp: string; vlan_id: number; status: 'present' | 'missing' | 'different'; differences: string[]; note?: string; }
 export interface VerificationReport {
   reachable: boolean;
   error: string | null;
@@ -153,7 +153,7 @@ export interface InitSheetUploadResult {
   targets?: Record<string, string>;
   // SPEC-021: the Replication network tab, one line per port ("this array 0:4:4 10.93.18.11"); empty without the tab.
   replication_ports?: string[];
-  // SPEC-023 R9: the Snapshots tab, one line per row ("zz_sn_vvs: Snapshot now · every 4 hours …"); empty without it.
+  // SPEC-023 R9: the Snapshots tab, one line per row ("zz_sn_vvs: Snapshot now · schedule zz_sn_vvs_snap, every 4 hours …"); empty without it.
   snapshot_rows?: string[];
 }
 // Upload the filled Initialisation_sheet.xlsx (base64). The server validates it is COMPLETE, writes
@@ -520,12 +520,17 @@ export interface PortNetworkView {
   other_addresses: Record<string, string>;
 }
 export type IscsiVlanActionState = 'create' | 'exists' | 'conflict';
-export interface IscsiVlanAction { nsp: string; vlan_id: number; state: IscsiVlanActionState; reason: string; cli: string; }
+// `cli` is the addr line only; a gateway goes in the separate change-window set (`gateway_window`), never sent.
+export interface IscsiVlanAction { nsp: string; vlan_id: number; state: IscsiVlanActionState; reason: string; cli: string; undo?: string; gateway_cli?: string; }
 export interface IscsiNetworkPlan {
   array: string; actions: IscsiVlanAction[]; blockers: string[]; notes: string[]; switch_handoff: string[];
+  removal_lines?: string[]; gateway_window?: string[]; gateway_notes?: string[];
 }
 /** The iSCSI section of a ports.* event: the rows read, and (after a read) the view and the plan. */
-export interface IscsiSection { requests: IscsiVlanRequest[]; view?: PortNetworkView; plan?: IscsiNetworkPlan; error?: string; }
+export interface IscsiSection {
+  requests: IscsiVlanRequest[]; view?: PortNetworkView; plan?: IscsiNetworkPlan; error?: string;
+  commands_text?: string; removals_text?: string; gateway_text?: string;
+}
 // SPEC-025: peer ports for a migration, the second section of the Array ports step. The first slice prints
 // the commands and their undo for a consultant to paste; the tool sends none.
 export interface PeerPortRequest { nsp: string; source_wwpns: string[]; }
@@ -536,7 +541,7 @@ export interface PeerPortState {
 }
 export interface PeerPortView { host: string; ports: Record<string, PeerPortState>; params: Record<string, { nsp: string; connmode: string; conntype: string }>; }
 export type PeerPortActionState = 'create' | 'exists' | 'conflict';
-export interface PeerPortAction { nsp: string; state: PeerPortActionState; reason: string; commands: string[]; undo: string[]; }
+export interface PeerPortAction { nsp: string; state: PeerPortActionState; reason: string; commands: string[]; undo: string[]; partner?: string; }
 export interface PeerPortPlan { actions: PeerPortAction[]; blockers: string[]; notes: string[]; }
 export interface PeerPortResult { changed: string[]; removals: string[]; error: string | null; sentences: string[]; }
 /** The peer section of a ports.* event: the rows, and after a read the view, the plan, the command set and

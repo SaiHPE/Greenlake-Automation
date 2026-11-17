@@ -37,6 +37,7 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningIntent,
     VolumeRequest,
     volume_name_problem,
+    volume_set_name_problem,
     volume_too_large,
 )
 from alletra_onboard.domain.replication import (
@@ -869,6 +870,8 @@ def _parse_provisioning_tab(workbook, *, volumes_required: bool = True) -> Provi
     for r in vol_rows:
         if bad_name := volume_name_problem(r["name"]):
             raise ValueError(f"Volume '{r['name']}' — Name: {bad_name}. Rename it.")
+        if r.get("vvset") and (bad_set := volume_set_name_problem(r["vvset"])):
+            raise ValueError(f"Volume '{r['name']}' — VV-set: {bad_set}. Rename it.")
         ptype = (r.get("provisioning_type") or default_type).strip().lower()
         if ptype not in ("tpvv", "reduce"):
             raise ValueError(f"Volume '{r['name']}' — Type must be 'tpvv' or 'reduce'.")

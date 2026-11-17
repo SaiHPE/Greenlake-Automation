@@ -332,7 +332,10 @@ class ArrayPortsSteps:
             else:
                 plan = iscsi_network.plan_iscsi_vlans(rows, view)
                 self._iscsi[run.run_id] = (plan, view, rows)
-                section.update(view=view.model_dump(mode="json"), plan=plan.model_dump(mode="json"))
+                section.update(view=view.model_dump(mode="json"), plan=plan.model_dump(mode="json"),
+                               commands_text=iscsi_network.command_set_text(plan),
+                               removals_text=iscsi_network.removal_set_text(plan),
+                               gateway_text=iscsi_network.gateway_set_text(plan))
                 name = plan.array or name
                 adds = sum(1 for a in plan.actions if a.state == "create")
                 conflicts = sum(1 for a in plan.actions if a.state == "conflict")

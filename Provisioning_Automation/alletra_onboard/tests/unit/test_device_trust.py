@@ -204,3 +204,24 @@ def test_the_run_lists_its_devices_and_retrust_is_a_separate_logged_action(tmp_p
     [event] = [e for e in service.list_events(run.run_id) if e.event_type == "device.retrusted"]
     assert (event.data["was"], event.data["now"]) == (KEY_A.fingerprint, KEY_B.fingerprint)
     assert KEY_A.fingerprint in event.message and KEY_B.fingerprint in event.message
+
+
+def test_a_pin_whose_key_cannot_be_read_is_refused_with_its_own_sentence(book):
+    """Only a damaged state.db holds one; the TLS clients and the SSH first-contact path read it here."""
+    cert = DeviceKey(kind=TrustKind.TLS, key_type="certificate", data="-----BEGIN CERTIFICATE-----\nnot base64!\n",
+                     fingerprint="AB:CD")
+    book.pins[(TrustKind.TLS, "10.0.0.9", 443)] = DevicePin(kind=TrustKind.TLS, host="10.0.0.9", port=443,
+                                                           device="vCenter", key=cert)
+    with pytest.raises(DeviceTrustError) as caught:
+        device_trust.check(TrustKind.TLS, "10.0.0.9", 443, "vCenter", cert)     # same fingerprint, still refused
+    assert str(caught.value) == (
+        "This run's record of vCenter's certificate at 10.0.0.9 cannot be read, so it could not be compared with "
+        "the one vCenter presented now: AB:CD. Nothing was sent to the device, not even the password. Only a "
+        "damaged run state can cause this. To go on, compare the new fingerprint with the device's own console, "
+        "then trust it again on the run overview, under Trusted devices.")
+    assert book.refused == [(book.pins[(TrustKind.TLS, "10.0.0.9", 443)], cert)]
+    broken = KEY_A.model_copy(update={"data": "AAAA not base64"})
+    book.pins[(TrustKind.SSH, "10.0.0.5", 22)] = DevicePin(kind=TrustKind.SSH, host="10.0.0.5", port=22,
+                                                          device="array", key=broken)
+    with pytest.raises(DeviceTrustError, match=r"^This run's record of the array's SSH host key at 10\.0\.0\.5 cannot"):
+        device_trust.check(TrustKind.SSH, "10.0.0.5", 22, "array", KEY_A)
