@@ -2,7 +2,9 @@
 
 **Status:** first slice built 2026-11-17, pending live run (R1 to R3 and R6 to R8: the sheet, the read,
 the plan with its printed lines, the *Array ports* step, Verify and the as-built; work packet steps 1
-to 7). R4 and R5's removal lines wait on the live confirmation (§6) and the owner's yes. Proposed
+to 7). R4 waits on the live confirmation (§6) and the owner's yes. **Amended 2026-11-17** (the owner's
+decision after the live check, ADR 0017 *Amendment*): the lines add the address without its gateway; a
+sheet gateway goes in a separate change-window set the tool never sends (R3, R5 to R7). Proposed
 2026-11-16; the read-side parsers are built on the captures of rack13-ARCUS (OS 10.6.0, 2026-11-16)
 and three OS 10.5 arrays (2026-11-17), §9 ·
 **Decision:** [ADR 0017](../adr/0017-iscsi-vlan-write-plane.md) (accepted 2026-11-17: the CLI forms
@@ -86,7 +88,9 @@ lenient. They are refusals because a sheet that breaks them is almost always a t
 (base address, netmask, gateway, `Peer_Enabled`), `showport -iscsivlans` (the VLAN interfaces),
 `showport -rcip`, `showport -file`, `shownet` (management address and mask), `showhost -d` (which
 IQNs are logged in on which port). Every one is already allowed by `ALLOWED_COMMANDS` (base word
-`showport`, `shownet`, `showhost`); **no read allowlist change**. The `showport -iscsivlans` layout
+`showport`, `shownet`, `showhost`); **no read allowlist change**. `showhost -d` gives the number of
+iSCSI sessions on each port (one row per logged-in initiator and port, claimed or not), which the
+change-window set states (R3; read since 2026-11-17). The `showport -iscsivlans` layout
 is **confirmed (rack13-ARCUS, OS 10.6.0, 2026-11-16; E18U31, OS 10.5.60, 2026-11-17)**: `N:S:P VLAN
 IPAddr Netmask/PrefixLen Gateway MTU TPGT STGT iSNS_Addr iSNS_Port`, no State column, and it also
 lists each port's untagged address as a row with VLAN `untagged` (the same values as `showport
@@ -106,15 +110,20 @@ has no `iSCSIVlans` field). It waits for ADR 0017's later option A.
 **R3 — The plan.** One action per sheet row, in sheet order, with the plan state words of SPEC-001:
 
 - **exists**: the port already has that VLAN with the same address and prefix length (and the same
-  gateway when the row names one). No call.
+  gateway when the row and the array both have one: an interface without the row's gateway is what the
+  tool's own line leaves, ADR 0017 amended 2026-11-17). No call. A row whose gateway the array lacks
+  stays in the change-window set below.
 - **create**: the port is an iSCSI port, has no interface on that VLAN, and nothing below applies.
   The action carries its CLI lines, printed as in SPEC-016: in the first slice for the engineer to
   read, and later the very lines the apply sends (ADR 0017). The CLI forms are the array's own (`help controliscsiport`, rack13-ARCUS, OS 10.6.0, 2026-11-16, and the
-  same on OS 10.5.0, 10.5.51 and 10.5.60, 2026-11-17): the
-  address is `controliscsiport addr <ip> <netmask> -vlan <vlan> -f <port>`; a gateway is a second
-  line, `controliscsiport gw <gw> -vlan <vlan> -f <port>`. Both always carry `-vlan` with the row's
-  tag (1 to 4094): without it they change the port's untagged address, which the tool never touches,
-  and cut off the hosts already logged in on it.
+  same on OS 10.5.0, 10.5.51 and 10.5.60, 2026-11-17): one line per row,
+  `controliscsiport addr <ip> <netmask> -vlan <vlan> -f <port>`, **with no gateway**, and the row's
+  removal line (R5). It always carries `-vlan` with the row's tag (1 to 4094): without it the line
+  changes the port's untagged address, which the tool never touches, and cuts off the hosts already
+  logged in on it. When the row gives a gateway, the reason says so (*"…; gateway 192.0.2.1 not set by
+  the tool (a change window's job)"*) and a note says why: *"0:4:2 VLAN 2999: the tool adds the address
+  without the gateway 192.0.2.1. The gateway needs the port offline, so it is in a separate set for a
+  change window."*
 - **conflict**, with the reason, which blocks apply:
 
 | Case | Reason |
@@ -130,6 +139,21 @@ Notes, not blockers: a VLAN on ports of one node only (*"VLAN 120 is only on nod
 stops, hosts on VLAN 120 lose every path."*); a port whose link is not `ready` (*"0:4:2 is offline:
 the address is set, but no host reaches it until the link is up."*).
 
+**The gateways, for a change window** (ADR 0017, amended 2026-11-17). Live on rack13-ARCUS, the
+array refused `controliscsiport gw … -vlan 2999 -f 0:4:2` on a port that was up: *Port 0:4:2 is not in
+offline state. To modify the Gateway IP, please use controlport to offline the port first.* Offline
+stops every iSCSI session on the port, so the tool never sets a gateway. For every sheet gateway the
+array does not have, the plan prints a separate, clearly labelled set, per port in port order:
+`controlport offline <port>`, then `controliscsiport gw <gw> -vlan <vlan> -f <port>` for each such row
+on that port, then `controlport rst -f <port>` (the forms of `help controlport` and `help
+controliscsiport`, OS 10.5.0 to 10.6.0). Above it: *"The tool does not set these gateways. The array
+sets a VLAN gateway only while the port is offline, and taking a port offline stops every iSCSI session
+on it. Hosts on the VLAN's own subnet need no gateway. Run these lines only in a change window agreed
+with the customer."*, then per port *"0:4:1 carries 3 iSCSI sessions now (showhost -d): all of them
+stop while the port is offline."* or *"0:4:2 has no iSCSI session now (showhost -d). Check again just
+before the change window."*, and the note that `controlport offline` asks *y/n/q* (paste one line at a
+time, answer `y`). The tool never sends this set; a consultant pastes it, by hand, in that window.
+
 **The switch side, as a sentence.** The plan ends with one line per sheet port that has a planned or
 existing VLAN, whatever its row's state (a conflict row on a port that already carries a VLAN keeps the
 line; live 2026-11-17 it was dropped), for the network team: *"Switch port cabled to `<array>` 0:4:1: carry VLAN 120, 130
@@ -143,18 +167,21 @@ the owner's yes. Only from a plan the operator approved with a tick, and only wh
 a new read, a sheet change or a restart withdraws it (LESSONS 6). The apply first reads again (R2)
 and refuses if any action's judgement would now differ (LESSONS 37). Then, per *create* action in
 sheet order, stopping at the first refusal: the action's removal line (R5) goes into the run's removal
-set, the `addr` line is sent, then the `gw` line when the row has a gateway. These two forms are all
-it sends, both with `-vlan`, over the one array-port write client of ADR 0025, built from the approved
-plan's (port, iSCSI VLAN) pairs: it never sends a `delete`, never takes a port offline and never
-changes a port's role. After each write, read `showport -iscsivlans` and check the interface is there
+set, then the `addr` line is sent. That one form is all it sends, with `-vlan`, over the one array-port
+write client of ADR 0025, built from the approved plan's (port, iSCSI VLAN) pairs: it never sends a
+`gw` (ADR 0017 amended 2026-11-17: it needs the port offline), a `delete` or a `controlport` line,
+never takes a port offline and never changes a port's role. After each write, read `showport -iscsivlans` and check the interface is there
 with the planned values and the port's untagged row is unchanged; a write the array accepted but the
 read does not show is a failure. Every write and every read goes through `command_log.record` with
 the client's secrets.
 
-**R5 — The removal set.** One line per *create* action whose `addr` the apply sent, last sent first,
+**R5 — The removal set.** First slice (2026-11-17, live finding 6): the plan prints one line per
+*create* action, last first, with the command set, so the undo is kept before anything is pasted. With
+the apply: one line per *create* action whose `addr` the apply sent, last sent first,
 as CLI lines the operator pastes (SPEC-007); the apply never runs one. Each line is written into the
-run's removal set before its `addr` goes (ADR 0025: the undo comes before the write), so an interface
-the array took only in part (address set, gateway refused) is still covered. The delete form is the array's own, taken from
+run's removal set before its `addr` goes (ADR 0025: the undo comes before the write). The delete
+takes the VLAN address with whatever gateway it has, so the change-window set has no undo line of its
+own. The delete form is the array's own, taken from
 `help controliscsiport` (**confirmed, rack13-ARCUS, OS 10.6.0, 2026-11-16; the same on OS 10.5.0,
 10.5.51 and 10.5.60, 2026-11-17**):
 `controliscsiport delete -vlan <vlan> -f <port>`. A line without `-vlan` deletes the port's whole
@@ -163,12 +190,16 @@ configuration, untagged address included (the help's own example, `controliscsip
 every iSCSI session on it. Check `showhost -d` first."* Interfaces that existed are never in it.
 
 **R6 — Verify.** The *Verify configuration* step compares each sheet row with `showport -iscsivlans`:
-*present*, *missing* or *different (field: array value, sheet value)*. Read-only.
+*present*, *missing* or *different (field: array value, sheet value)*. Read-only. The gateway is
+compared only when the sheet and the array both have one (the rule of R3's *exists*); a row whose
+gateway the array lacks is *present* with the note *"The gateway <gw> is not set: the tool leaves it to
+a change window (it needs the port offline)."*
 
 **R7 — The as-built.** A section *iSCSI network* when the array has any VLAN interface or the sheet
 has the tab: every VLAN interface on every iSCSI port (port, VLAN, address/prefix, gateway, MTU,
 and the port's state from `showport`, since `showport -iscsivlans` has no State column), each marked
-*set up by this run* or *already there*, then the switch sentences of R3, then
+*set up by this run* or *already there*; *Gateways for a change window* with R3's sentence and lines
+for any sheet gateway the array does not have; then the switch sentences of R3, then
 the run's removal lines in the provisioning record's removal block.
 
 **R8 — The page.** A step *Array ports* (key `ports`, kind `provision`) between *Discovery* and *SAN
@@ -211,10 +242,13 @@ class PortNetworkView(BaseModel):         # what R2 read, one array
     other_addresses: dict[str, str]       # address -> "RCIP port 0:4:3" / "file port 0:4:1"
 class IscsiVlanAction(BaseModel):
     nsp: str; vlan_id: int; state: Literal["create", "exists", "conflict"]
-    reason: str = ""; cli: str = ""       # the addr line, then the gw line when the row has one: each with -vlan
+    reason: str = ""; cli: str = ""       # the addr line, with -vlan; never a gateway (ADR 0017 amended 2026-11-17)
+    undo: str = ""; gateway_cli: str = "" # a create's removal line; the gw line for the change-window set
 class IscsiNetworkPlan(BaseModel):
     array: str = ""; actions: list[IscsiVlanAction]; blockers: list[str]; notes: list[str]
     switch_handoff: list[str]
+    removal_lines: list[str]              # each create's undo, last first (R5, first slice)
+    gateway_window: list[str]; gateway_notes: list[str]   # the change-window set and why (R3), never sent
 class IscsiVlanOutcome(BaseModel):
     nsp: str; vlan_id: int; status: Literal["created", "exists", "failed"]; detail: str = ""
     # failed: sent, then refused or not seen in the read-back; its removal line stays (R5)
@@ -262,7 +296,7 @@ after. It must show:
 - `controliscsiport addr ... -vlan N` leaves the untagged address and its sessions alone: `showport
   -iscsi` and `showhost -d` are the same before and after;
 - `controliscsiport delete -vlan N` removes VLAN N only;
-- `-f` never prompts, on `addr`, `gw` and `delete`;
+- `-f` never prompts, on `addr` and `delete` (`gw` is no longer the tool's: ADR 0017 amended 2026-11-17);
 - a tagged row of `showport -iscsivlans`, its WSAPI record, and `showport -iscsi` with the `*` marker
   (§9), so the parsers are pinned to it before the apply.
 

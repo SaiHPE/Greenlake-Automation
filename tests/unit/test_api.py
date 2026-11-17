@@ -572,10 +572,15 @@ def test_upload_lists_the_snapshot_rows_for_the_review(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     client = _client(tmp_path)
     base_b64 = _fill_template(client.get("/init-sheet/template").content, _COMPLETE_MAIN, _COMPLETE_PROV)
+    # BL-60: a row that asks for a schedule names it (live 2026-11-17: the line did not say which schedule).
     rows = [{"source": "zz_sn_vvs", "snapshot_now": "yes", "every": "4", "unit": "hours", "expire_hours": "24"},
-            {"source": "zz_sn_vol03", "kind": "volume", "snapshot_now": "yes", "expire_hours": "2", "read_only": "no"}]
-    for snapshots, want in ((rows, ["zz_sn_vvs: Snapshot now · every 4 hours from 00:00, every day, kept 24 hours, read-only",
-                                    "zz_sn_vol03: Snapshot now · kept 2 hours, read-write"]), ([], [])):
+            {"source": "zz_sn_vol03", "kind": "volume", "snapshot_now": "yes", "expire_hours": "2", "read_only": "no"},
+            {"source": "zz_snap_vvs", "every": "1", "unit": "hours", "expire_hours": "2", "schedule_name": "zz_snap_sched"}]
+    for snapshots, want in ((rows, [("zz_sn_vvs: Snapshot now · schedule zz_sn_vvs_snap, every 4 hours from 00:00, every "
+                                     "day, kept 24 hours, read-only"),
+                                    "zz_sn_vol03: Snapshot now · kept 2 hours, read-write",
+                                    "zz_snap_vvs: schedule zz_snap_sched, every hour, every day, kept 2 hours, read-only"]),
+                            ([], [])):
         composed = client.post("/init-sheet/compose", json={"base_b64": base_b64, "snapshots": snapshots}).json()["content_b64"]
         up = client.post("/init-sheet/upload", json={"content_b64": composed})
         assert up.status_code == 200, up.text

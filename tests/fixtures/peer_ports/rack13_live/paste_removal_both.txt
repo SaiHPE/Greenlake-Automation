@@ -1,0 +1,15 @@
+rack13-ARCUS cli% controlport offline 1:3:1
+Are you sure you want to run controlport offline on port 1:3:1?
+select q=quit y=yes n=no: [answered y]
+y
+rack13-ARCUS cli% controlport config host -ct point -f 1:3:1
+rack13-ARCUS cli% controlport rst -f 1:3:1
+controlport Error: Port 1:3:1 is being reset; please re-issue the command when reset is complete
+rack13-ARCUS cli% controlport offline 0:3:1
+Are you sure you want to run controlport offline on port 0:3:1?
+select q=quit y=yes n=no: [answered y]
+y
+rack13-ARCUS cli% controlport config host -ct point -f 0:3:1
+rack13-ARCUS cli% controlport rst -f 0:3:1
+controlport Error: Port 0:3:1 is being reset; please re-issue the command when reset is complete
+rack13-ARCUS cli% 

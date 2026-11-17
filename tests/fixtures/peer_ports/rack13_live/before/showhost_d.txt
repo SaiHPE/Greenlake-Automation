@@ -1,0 +1,18 @@
+# showhost -d
+Id Name                            Persona      ---------------------WWN/iSCSI_Name/NQN--------------------- Port  IP/IP:Port                             
+ 4 HPE_VM_0f9ed8c8c6ce061e96e060ae Generic-ALUA iqn.2024-12.com.hpe:vmenode2:59615                           ---   f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff
+ 5 HPE_VM_4f730dfc5418336fc646279e Generic-ALUA iqn.2024-12.com.hpe:vmenode3:41592                           ---   f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff
+ 8 HPE_VM_8cf519a8c8ca95051c3e4a28 Generic-ALUA iqn.2024-12.com.hpe:vmenode2:59721                           1:4:1 10.132.28.11                           
+ 8 HPE_VM_8cf519a8c8ca95051c3e4a28 Generic-ALUA iqn.2024-12.com.hpe:vmenode2:59721                           0:4:1 10.132.28.11                           
+ 1 HPE_VM_589813aa9975debcd7c48217 Generic-ALUA iqn.2024-12.com.hpe:vmenode2:47012                           ---   f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff
+ 0 HPE_VM_bb3202a986f1faa7609e72e3 Generic-ALUA iqn.2024-12.com.hpe:vmenode1:3754                            ---   f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff
+ 7 HPE_VM_cf14699733393ef51e2ebbce Generic-ALUA iqn.2024-12.com.hpe:vmenode3:23880                           ---   f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff
+ 2 HPE_VM_d6c02c9c2c1d03cf38ebe384 Generic-ALUA iqn.2024-12.com.hpe:vmenode3:21739                           ---   f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff
+ 6 HPE_VM_d416da3543a37663497979aa Generic-ALUA iqn.2024-12.com.hpe:vmenode1:13851                           1:4:1 10.132.28.10                           
+ 6 HPE_VM_d416da3543a37663497979aa Generic-ALUA iqn.2024-12.com.hpe:vmenode1:13851                           0:4:1 10.132.28.10                           
+ 3 HPE_VM_e14e0a358a9e8cdf541e8f57 Generic-ALUA iqn.2024-12.com.hpe:vmenode1:8671                            ---   f6ff:ffff:ffff:ffff:f6ff:ffff:ffff:ffff
+-- --                              --           10005CED8C5312A9                                             1:3:3 n/a                                    
+-- --                              --           10005CED8C5312A9                                             0:3:4 n/a                                    
+-- --                              --           iqn.1991-05.com.microsoft:eljr0nb1uv.asiapacific.hpqcorp.net 1:4:1 10.132.26.26                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+14 total

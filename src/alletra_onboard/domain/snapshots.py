@@ -205,11 +205,15 @@ class SnapshotRequest(BaseModel):
         mode = "read-only" if self.read_only else "read-write"
         return f"{when}, {days}, kept {self.expire_hours} hours, {mode}"
 
-    def summary(self) -> str:
-        """The row in words, for the sheet review and the step page: "Snapshot now · every 4 hours from
-        00:00, every day, kept 24 hours, read-only"."""
+    def summary(self, *, named: bool = False) -> str:
+        """The row in words, for the step page: "Snapshot now · every 4 hours from 00:00, every day, kept
+        24 hours, read-only". `named` puts the schedule's name first, for the sheet review, which has no
+        column for it: "Snapshot now · schedule zz_sn_vvs_snap, every 4 hours …"."""
         mode = "read-only" if self.read_only else "read-write"
-        rest = self.schedule_words() if self.has_schedule else f"kept {self.expire_hours} hours, {mode}"
+        if self.has_schedule:
+            rest = f"schedule {self.name}, {self.schedule_words()}" if named else self.schedule_words()
+        else:
+            rest = f"kept {self.expire_hours} hours, {mode}"
         return " · ".join(part for part in ("Snapshot now" if self.snapshot_now else "", rest) if part)
 
     def createsv_command(self) -> str:

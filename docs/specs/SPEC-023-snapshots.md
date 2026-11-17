@@ -7,8 +7,12 @@ Snapshots out). **Live on rack13-ARCUS (OS 10.6.0), 2026-11-17, through the API*
 (`@vvname@.initial`, live check 2), the schedule over the tool's own SSH session with `createsched -f`
 and its read-back (live check 1, after `showsched` was read by its header for OS 10.6.0's `Id` and
 `Rebal` columns), the plan, Check snapshots, a second plan that creates nothing, the as-built's
-Snapshots section and the removal set. Still owed: live checks 3 and 4 on an array DSCC manages, check
-5, a snapshot taken by the schedule, and the closing run through the screens on D22U27 (work packet,
+Snapshots section and the removal set. **A snapshot taken by the schedule, live the same evening**
+(run `f92eba58`, [validation](../validation/2026-11-17-rack13-live-w2.md#bl-21-schedule-firing)): an
+every-15-minutes schedule fired at 19:15:00 IST and made `<member>.261117191500`, read-only, expiring
+after its 2 hours; R7's name match counted it (*Taking snapshots (1 so far)*), R8 named it in the
+as-built and its removal set, and that set, schedule first, removed it. Still owed: live checks 3 and 4
+on an array DSCC manages, check 5, and the closing run through the screens on D22U27 (work packet,
 *The live run that closes BL-21*). PROPOSED 2026-11-16, amended 2026-11-17 for ADR 0016 as accepted — spec, tests (expected
 to fail until built) and work packet. The
 read-only capture ran on rack13-ARCUS (OS 10.6.0) the same night (`tests/fixtures/rack13_snap/`, §2.1)
@@ -184,6 +188,11 @@ packet *First slice*): the quoted `createsched -f` over the tool's own SSH sessi
 and the WSAPI snapshot body; whether DSCC or the array UI shows a CLI-made schedule; whether DSCC made
 `Pol-999` and `Test`; whether read-only snapshots of the base count toward 2048. Then the live run
 (§6), and a schedule running on OS 10.6.
+*2026-11-17:* a schedule ran on OS 10.6.0 (rack13-ARCUS, `0,15,30,45 * * * *`): `showtask` recorded a
+`scheduled_task` done at 19:15:00, the snapshot was created at 19:15:00 with seconds `00` in its name,
+and its expiry was exactly `-exp` later. For over a minute after the run `showsched` still printed
+19:15:00 as `NextRunTime`, then 19:30:00, so a read just after a run can show a next run that has
+just passed.
 
 ## 3. Requirements
 
@@ -352,7 +361,11 @@ read (each *not configured by this run*) and the snapshots taken now.
 **R9 — Step and modes.** `WorkflowPhase.STORAGE_SNAPSHOT`; registry entry `snapshots`
 ("Snapshots", kind `snapshot`) after `failover_test`, before `verify`. Presets unchanged: the step is
 picked in *Custom* (open question 1). When the tab is filled and the chosen mode lacks the step, the
-sheet review says *"The Snapshots tab is filled in; pick the Snapshots step to apply it."*
+sheet review says *"The Snapshots tab is filled in; pick the Snapshots step to apply it."* The upload
+answer lists the tab's rows in words (`snapshot_rows`), one line each, and names the schedule a row asks
+for: *zz_sn_vvs: Snapshot now · schedule zz_sn_vvs_snap, every 4 hours from 00:00, every day, kept 24
+hours, read-only* (BL-60; until then the line did not say which schedule). The step page keeps the name
+in its own *Schedule name* column.
 
 **R10 — UI (one page, `StepShell` / `useStepState`).**
 ```

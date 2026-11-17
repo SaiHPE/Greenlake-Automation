@@ -192,8 +192,9 @@ class InitSheetUploadResponse(BaseModel):
     targets: dict[str, str] = Field(default_factory=dict)
     # SPEC-021 R1: the Replication network tab's rows, one line each ("this array 0:4:4 10.93.18.11"), for review.
     replication_ports: list[str] = Field(default_factory=list)
-    # SPEC-023 R9: the Snapshots tab's rows, one line each ("zz_sn_vvs: Snapshot now · every 4 hours …"),
-    # so the review can say the tab is filled when the chosen mode lacks the step.
+    # SPEC-023 R9: the Snapshots tab's rows, one line each, with the schedule a row asks for named
+    # ("zz_sn_vvs: Snapshot now · schedule zz_sn_vvs_snap, every 4 hours …"), so the review can say the
+    # tab is filled when the chosen mode lacks the step.
     snapshot_rows: list[str] = Field(default_factory=list)
 
 

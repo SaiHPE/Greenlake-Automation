@@ -1036,8 +1036,14 @@ def _add_iscsi_network_section(doc, data: AsBuiltData, warnings: list[str]) -> N
     whether this run set it up, then the sentences for the network team."""
     # Imported here: replication.read imports this module (through asbuilt_parse) at load time.
     from alletra_onboard.application.provisioning.discovery import parse_iscsi_vlans
-    from alletra_onboard.application.provisioning.iscsi_network import switch_handoff_for
+    from alletra_onboard.application.provisioning.iscsi_network import (
+        GATEWAY_WINDOW,
+        gateway_window,
+        gw_line,
+        switch_handoff_for,
+    )
     from alletra_onboard.application.replication.read import parse_showport_roles
+    from alletra_onboard.domain.network import IscsiVlanAction, IscsiVlanRequest
 
     command = "showport -iscsivlans"
     rows = data.iscsi_network_rows
@@ -1077,6 +1083,21 @@ def _add_iscsi_network_section(doc, data: AsBuiltData, warnings: list[str]) -> N
     if absent:
         _para(doc, "Asked for on the sheet but not on the array: "
                    + ", ".join(f"{r.get('nsp')} VLAN {r.get('vlan_id')} ({r.get('ip')})" for r in absent) + ".")
+    # ADR 0017, amended 2026-11-17: the tool adds the address without its gateway; a gateway the sheet gives
+    # and the array does not have yet is the change window's, printed here with its lines.
+    gateways = {(v.nsp, v.vlan_id): v.gateway for v in vlans}
+    pending = []
+    for row in rows:
+        key = (row.get("nsp"), row.get("vlan_id"))
+        if row.get("gateway") and key in gateways and not gateways[key]:
+            req = IscsiVlanRequest.model_validate(row)
+            pending.append(IscsiVlanAction(nsp=req.nsp, vlan_id=req.vlan_id, state="exists", gateway_cli=gw_line(req)))
+    if pending:
+        _para(doc, "Gateways for a change window", bold=True)
+        _para(doc, "The sheet gives a gateway for "
+                   + ", ".join(f"{a.nsp} VLAN {a.vlan_id}" for a in pending)
+                   + f", and the array has none. {GATEWAY_WINDOW} The lines, kept for that window:")
+        _mono(doc, gateway_window(pending))
     sentences = switch_handoff_for(name, vlans)
     if sentences:
         _para(doc, "For the network team", bold=True)

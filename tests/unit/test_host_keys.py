@@ -188,3 +188,61 @@ def test_a_linux_host_key_change_stops_before_the_password(ssh, book):
     assert str(caught.value).startswith("The Linux host at 10.0.2.7 presented a different SSH host key")
     assert "The password was not sent." in str(caught.value)
     assert ssh.logins == [("10.0.2.7", "root", PW)]
+
+
+# ------------------------------------------------------------------ a pin whose stored key cannot be read
+
+# Seen live on rack13-ARCUS (2026-11-17): a pin whose stored key was not valid base64 read as "Could not
+# reach the array (Error)". Only a damaged state.db holds one.
+CORRUPT = "this is not base64!"
+
+
+def _unreadable(device: str, host: str, key) -> str:
+    whose = f"the {device}'s"
+    return (f"This run's record of {whose} SSH host key at {host} cannot be read, so it could not be compared with "
+            f"the one the {device} presented now: {key.fingerprint} ({key.get_name()}). Nothing was sent to the "
+            "device, not even the password. Only a damaged run state can cause this. To go on, compare the new "
+            "fingerprint with the device's own console, then trust it again on the run overview, under Trusted "
+            "devices.")
+
+
+@pytest.mark.parametrize("make, error, device, host", [
+    (lambda h: ArrayCliClient(h, "3paradm", PW), ArrayCliError, "array", "10.0.0.5"),
+    (lambda h: ArrayRcCliClient(h, "3paradm", PW, objects=RcPlanObjects()), ArrayCliError, "array", "10.0.0.6"),
+    (lambda h: BrocadeClient(h, "admin", PW), BrocadeError, "switch", "10.0.1.2"),
+    (lambda h: LinuxHostClient(h, "root", PW), LinuxHostError, "Linux host", "10.0.2.7"),
+])
+def test_a_pin_whose_key_cannot_be_read_says_so_and_sends_nothing(ssh, book, make, error, device, host):
+    key = fake_ssh.new_key()
+    ssh.devices[host] = key
+    _connect(make(host))
+    pin = book.pins[(TrustKind.SSH, host, 22)]
+    book.pins[(TrustKind.SSH, host, 22)] = pin.model_copy(update={"key": pin.key.model_copy(update={"data": CORRUPT})})
+    with pytest.raises(error) as caught:
+        make(host).connect()
+    assert str(caught.value) == _unreadable(device, host, key)
+    assert len(ssh.logins) == 1                                   # only the first, trusted, login
+    [(refused_pin, offered)] = book.refused                       # what the overview offers to trust again
+    assert refused_pin.key.data == CORRUPT and offered.fingerprint == key.fingerprint
+
+
+async def test_a_corrupt_pin_in_state_db_is_refused_on_the_run_and_can_be_trusted_again(ssh, tmp_path):
+    import sqlite3
+
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(Settings(), store, InMemoryEventBus())
+    run = service.create_run(_item())
+    key = fake_ssh.new_key()
+    ssh.devices["10.0.0.5"] = key
+    await service.console.run(run.run_id, "showsys")              # first contact
+    with sqlite3.connect(tmp_path / "state.db") as db:            # the damage: the key's base64 is gone
+        db.execute("UPDATE run_device_pins SET payload = json_set(payload, '$.key.data', ?)", (CORRUPT,))
+    answer = await service.console.run(run.run_id, "showsys")
+    assert not answer["ok"] and _unreadable("array", "10.0.0.5", key) in answer["output"]
+    assert len(ssh.logins) == 1
+    last = service.list_events(run.run_id)[-1]
+    assert (last.event_type, last.message) == ("device.refused", _unreadable("array", "10.0.0.5", key))
+    service.retrust_device(run.run_id, kind=TrustKind.SSH, host="10.0.0.5", port=22, fingerprint=key.fingerprint)
+    answer = await service.console.run(run.run_id, "showsys")
+    assert "cannot be read" not in answer["output"] and len(ssh.logins) == 2

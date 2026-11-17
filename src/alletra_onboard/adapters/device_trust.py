@@ -3,7 +3,9 @@
 A run binds its pins for the length of a step, the way it binds the command log. Before a client
 sends a password it hands over what the device presented, and `check()` decides: on the run's first
 contact the key is recorded, the same key goes through, and a different key is refused with a
-sentence that names the device and both fingerprints. Nothing is sent to a refused device.
+sentence that names the device and both fingerprints. Nothing is sent to a refused device. A pin whose
+stored key does not decode (only a damaged `state.db` holds one) is refused the same way, with its own
+sentence, so the operator can trust the device again from the run overview.
 
 With no run bound (the lab scripts, the command line) there is nothing to compare with and nothing to
 record; the client goes on with what it saw, and keeps it for the rest of its own session.
@@ -19,7 +21,14 @@ import ssl
 from contextvars import ContextVar, Token
 from typing import Protocol
 
-from alletra_onboard.domain.trust import DeviceKey, DevicePin, TrustKind, mismatch_message
+from alletra_onboard.domain.trust import (
+    DeviceKey,
+    DevicePin,
+    TrustKind,
+    key_readable,
+    mismatch_message,
+    refusal_message,
+)
 
 try:
     import paramiko
@@ -106,10 +115,10 @@ def check(kind: TrustKind, host: str, port: int, device: str, offered: DeviceKey
     pin = book.pin(kind, host, port)
     if pin is None:
         pin = book.first_contact(DevicePin(kind=kind, host=host, port=port, device=device, key=offered))
-    if pin.key.same_as(offered):
+    if key_readable(pin.key) and pin.key.same_as(offered):
         return pin.key
     book.refuse(pin, offered)
-    raise DeviceTrustError(mismatch_message(pin, offered), pin=pin, offered=offered)
+    raise DeviceTrustError(refusal_message(pin, offered), pin=pin, offered=offered)
 
 
 # ------------------------------------------------------------------ SSH
@@ -126,8 +135,9 @@ def _known_hosts_name(host: str, port: int) -> str:
 
 
 class FirstContactPolicy(paramiko.MissingHostKeyPolicy if paramiko is not None else object):
-    """Called by paramiko only when no key is known for the host: the run's first contact. The key is
-    recorded through `check()`; if another read pinned a different key meanwhile, it is refused."""
+    """Called by paramiko only when no key is known for the host: the run's first contact, or a pin
+    whose key does not decode. The key goes through `check()`: recorded on first contact, refused when
+    another read pinned a different key meanwhile or the pin cannot be read."""
 
     def __init__(self, host: str, port: int, device: str) -> None:
         self.host, self.port, self.device = host, port, device
@@ -147,9 +157,11 @@ def open_ssh(host: str, port: int, *, device: str, username: str, password: str,
     client = paramiko.SSHClient()
     book = current()
     pin = book.pin(TrustKind.SSH, host, port) if book is not None else None
-    if pin is not None:
-        client.get_host_keys().add(_known_hosts_name(host, port), pin.key.key_type,
-                                   paramiko.PKey.from_type_string(pin.key.key_type, base64.b64decode(pin.key.data)))
+    stored = _stored_ssh_key(pin) if pin is not None else None
+    if stored is not None:
+        client.get_host_keys().add(_known_hosts_name(host, port), pin.key.key_type, stored)
+    else:
+        pin = None    # nothing preloaded: the policy meets the key, and `check()` compares it with the pin
     client.set_missing_host_key_policy(FirstContactPolicy(host, port, device))
     try:
         client.connect(host, port=port, username=username, password=password, timeout=timeout,
@@ -165,6 +177,16 @@ def open_ssh(host: str, port: int, *, device: str, username: str, password: str,
         client.close()
         raise
     return client
+
+
+def _stored_ssh_key(pin: DevicePin):
+    """The pinned key as paramiko compares it, or None when the run's record of it cannot be read."""
+    if not key_readable(pin.key):
+        return None
+    try:
+        return paramiko.PKey.from_type_string(pin.key.key_type, base64.b64decode(pin.key.data))
+    except (ValueError, paramiko.SSHException):
+        return None
 
 
 # ------------------------------------------------------------------ TLS

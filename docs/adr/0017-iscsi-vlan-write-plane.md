@@ -7,7 +7,9 @@ go on its one array-port write client) · **Keeps:** ADR 0001 (the read client s
 0012 (no switch writes), ADR 0015 (`ArrayRcCliClient` is not widened)
 
 **Built:** the first slice (point 4) on 2026-11-17, pending live run: no write client, no tick, no
-apply button, no allowlist change. Points 5 and 6 are not started.
+apply button, no allowlist change. Points 5 and 6 are not started. **Amended 2026-11-17** (the
+owner's decision after the live check, *Amendment* at the end): the tool's lines add the VLAN address
+without a gateway; a gateway goes in a separate change-window set the tool never sends.
 
 Proposed on 2026-11-16 as *"A, if a live probe confirms it; otherwise C"*. On 2026-11-17 the owner
 took C now, with the changes a review recommended: the forms go on ADR 0025's one array-port client,
@@ -129,3 +131,69 @@ untagged address (SPEC-024 R3). VLANs on RCIP ports stay out of scope (owner, 20
   each send (ADR 0025 condition 4), and §6 starts with the live confirmation.
 - If A is taken later, the client's two forms give way to WSAPI calls; the plan, the printed lines,
   the read-back, the removal set, verify and the as-built stay as they are.
+
+## Amendment, 2026-11-17, owner's decision after the live check
+
+**What the live check showed** (rack13-ARCUS, OS 10.6.0, port 0:4:2;
+`docs/validation/2026-11-17-rack13-live-w2.md`, task 2 and finding 3). `controliscsiport addr
+192.0.2.10 255.255.255.0 -vlan 2999 -f 0:4:2` went in with no prompt and brought the port up. The next
+line, `controliscsiport gw 192.0.2.1 -vlan 2999 -f 0:4:2`, was refused: *Port 0:4:2 is not in offline
+state. To modify the Gateway IP, please use controlport to offline the port first.* So the array sets a
+VLAN gateway only while the port is offline, and offline stops every iSCSI session on the port: the
+untagged address's hosts and every other VLAN's hosts alike. Point 6's two-form apply cannot set a
+gateway on a working port without breaking point 2 (*a VLAN apply can never take a port offline*).
+
+**The owner's words:** *"do the sensible one, don't forget a consultant uses this tool in a customer
+environment."* The tool never disrupts the customer's running I/O, never takes a port with sessions or
+logins offline, and a prompt is acceptable only on a line a consultant pastes by hand, never on one the
+tool sends.
+
+**Decision.**
+
+1. **The tool's lines add the VLAN address without a gateway.** The command set (first slice) and,
+   later, the apply carry one form per row: `controliscsiport addr <ip> <netmask> -vlan <tag> -f
+   <n:s:p>`. Hosts on the VLAN's own subnet need no gateway, which is the usual iSCSI design.
+2. **A gateway the sheet gives stays on the plan row**, and the plan says plainly that the tool does
+   not set it and why. The page prints it in a **separate, clearly labelled set for a change window**,
+   per port in port order, in the forms of the captured help (`help controlport`, `help
+   controliscsiport`, OS 10.5.0, 10.5.51, 10.5.60 and 10.6.0):
+
+   ```
+   controlport offline <n:s:p>
+   controliscsiport gw <gw> -vlan <tag> -f <n:s:p>     (one per VLAN row on that port)
+   controlport rst -f <n:s:p>
+   ```
+
+   with the sentence that it stops every iSCSI session on that port and must be run in a change window
+   agreed with the customer, and, per port, how many iSCSI sessions it carries now (`showhost -d`, one
+   row per logged-in initiator and port, claimed or not; already on the read allowlist). `controlport
+   offline` asks *y/n/q* and has no `-f`: acceptable here, because only a consultant pastes this set,
+   and it says so. The tool never sends this set, in the first slice or in the apply. It was not run on
+   the lab either: the decision is that the tool never does it, whatever the port carries.
+3. **Point 6 changes**: the apply's client takes the one `addr` form. No `gw` form, no `controlport
+   offline`, no `rst` on the client; the near-miss tests refuse all three. Point 5's *`-f` never
+   prompts on `gw`* is no longer a condition (the tool sends no `gw`).
+4. **The plan's *exists* and Verify's *present* compare the gateway only when the sheet and the
+   array both have one.** An interface without the sheet's gateway is what the tool's own lines leave:
+   *exists* in the plan (with the gateway still in the change-window set), *present* in Verify with the
+   note *"The gateway <gw> is not set: the tool leaves it to a change window (it needs the port
+   offline)."* A gateway on the array that differs from the sheet's is still a difference.
+5. **The removal set is printed with the plan** (live finding 6): each create's
+   `controliscsiport delete -vlan <tag> -f <n:s:p>`, last first, before anything is pasted. It removes
+   the VLAN address with whatever gateway it has, so the change-window set needs no undo of its own
+   (live: `delete -vlan` ran on the up port 0:4:2 with no prompt; with a gateway set it is not yet seen).
+6. **The as-built** keeps the change-window lines for any sheet gateway the array does not have, with
+   the same sentence.
+
+**Consequences.** SPEC-024 R3, R4, R5, R6 and R7 follow (amended the same day); the read (R2) adds
+`showhost -d`. Point 5's live confirmation is reduced to `addr` and `delete` (both seen live on
+2026-11-17 on a port without sessions; a port that carries an untagged address and sessions is still
+owed). Unchanged: `-vlan` on every form (point 3), no switch write, B on record.
+
+**Live, the same evening** (rack13-ARCUS, 0:4:2; record in `docs/validation/2026-11-17-rack13-live-w2.md`,
+*2026-11-17 evening*): the plan printed the `addr` line alone in the main set, its removal line, and the
+gateway in the change-window set with *0:4:2 has no iSCSI session now*. The `addr` line, pasted by
+hand, asked nothing; `showport -iscsivlans` showed VLAN 2999 without a gateway; the read after the paste
+called it *exists*, Verify *present* with the gateway note, and the as-built kept the change-window
+lines. The printed removal line put `showport -iscsivlans` and `showport -iscsi` back as they were. The
+change-window set was not run, by decision.

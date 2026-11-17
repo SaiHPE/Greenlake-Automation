@@ -780,10 +780,16 @@ SSH and TLS client to an on-site device asks:
   (`add_device_pin` is insert-if-absent, so two reads racing to the same device keep one), lets the
   same key through, and refuses a different one with `DeviceTrustError`, whose message
   (`domain/trust.py` `mismatch_message`) names the device and both fingerprints and says the password
-  was not sent. Each client turns it into its own error type with the same text.
+  was not sent. Each client turns it into its own error type with the same text. A pin whose stored
+  key does not decode (`key_readable`; only a damaged `state.db` holds one) is refused the same way,
+  even when the fingerprints agree, with `unreadable_message`: the run's record of the key cannot be
+  read, nothing was sent, and the re-trust steps (`RETRUST_STEPS`, shared with `mismatch_message`).
+  `refusal_message` picks the sentence, for the error and for the run's events.
 - SSH: `open_ssh(host, port, device=..., username=..., password=..., timeout=...)` preloads a pinned key
   (under `[host]:port` when the port is not 22) and sets `FirstContactPolicy`; paramiko compares the
-  key before it authenticates. Keys are kept as type, base64 and `SHA256:` fingerprint.
+  key before it authenticates. Keys are kept as type, base64 and `SHA256:` fingerprint. A pin that
+  cannot be read is not preloaded: the policy meets the presented key and `check()` refuses it, so the
+  pin records what was presented and the overview can trust it again.
 - TLS: `probe_tls` reads the leaf certificate in a handshake that sends nothing (direct, never through
   the proxy); `check_tls` compares it. `tls_key` keeps the PEM and the SHA-256 as colon hex.
   `pinned_context` is an `ssl.SSLContext` that compares the certificate after every handshake made
@@ -889,8 +895,22 @@ One workbook is one array.
   (*Volume 'x+' — Name: the array takes only letters, digits, '.', '-' and '_' in a volume name, not
   '+'. Rename it.*); in the plan a new volume with such a name is a conflict, so a blocker. Live on
   2026-11-17 the array refused `zz_bl45_vol02+` only at apply (HTTP 400 code 69), after three other
-  objects were made. Host, host set and volume set names are not checked: no captured help states
-  their characters (`help createhost` states only *up to 31 characters*).
+  objects were made.
+- A volume set name (the Volumes tab's *VV-set* column) must be letters, digits, `.`, `-` and `_`
+  (`volume_set_name_problem`; BL-60): *Volume 'x' — VV-set: the array takes only letters, digits, '.',
+  '-' and '_' in a volume set name, not '+'. Rename it.* The plan blocks a new set with such a name the
+  same way (*… Rename it on the sheet's Volumes tab.*), for a set composed on the page. No `help
+  createvvset` is captured; the rule is the array's own answer: on 2026-11-17 it refused
+  `zz_bl45_vvs+` with code 69, as it refused the volume name. Its length is not checked until that help
+  is captured (`help createsv`'s *up to 255* is about its own argument).
+- A host name must be at most `HOST_NAME_MAX` (31) characters (`host_name_problem`; BL-60), the
+  only rule `help createhost` states (D22U27, OS 10.5.0, captured 2026-10-26). Checked in the plan
+  only, on a host the plan would create: a name on the Hosts tab may be a lookup that discovery
+  resolves to the name vCenter or the array uses. A sheet host reads *the array takes at most 31
+  characters in a host name, this one has 34. Give it a shorter name on the sheet's Hosts tab.*; a
+  host named by vCenter, the array or the fabric says to leave it out of the host set. A host name's
+  characters wait for a captured help that states them; host set names are not checked (no captured
+  help).
 
 On upload, the API saves the sheet's GreenLake credentials to `.env`, stashes the parsed sheet under a
 token, and returns the work item without the DSCC password. Device passwords never return to the

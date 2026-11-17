@@ -471,7 +471,10 @@ def test_wsapi_and_the_cli_read_every_rack13_port_alike():
 
     states, params = parse_port_states(json.loads(_text(RACK13 / "wsapi_ports.json")))
     assert states == parse_showport_ports(_text(RACK13 / "showport.txt"))
-    assert params == parse_showport_par(_text(RACK13 / "showport_par.txt"))
+    # IntCoal (read from -par since 2026-11-17) is left out: WSAPI's interruptCoalesce 1 on an FC port is
+    # `enabled`, but no capture shows its `disabled` value, so the WSAPI read does not map it.
+    mode = lambda ps: {n: (x.connmode, x.conntype) for n, x in ps.items()}
+    assert mode(params) == mode(parse_showport_par(_text(RACK13 / "showport_par.txt")))
     assert len(states) == 28 and states["0:3:3"].type == "free" and states["0:3:4"].type == "host"
 
 
@@ -515,7 +518,8 @@ def test_wsapi_and_the_cli_read_the_10_5_arrays_alike(folder, left_out):
     cli = parse_showport_ports(_text(folder / "showport.txt"))
     assert sorted(set(cli) - set(states)) == left_out and set(states) <= set(cli)
     assert {n: cli[n] for n in states} == states
-    assert params == parse_showport_par(_text(folder / "showport_par.txt"))
+    mode = lambda ps: {n: (x.connmode, x.conntype) for n, x in ps.items()}
+    assert mode(params) == mode(parse_showport_par(_text(folder / "showport_par.txt")))
     assert all(cli[n].protocol == "IP" and cli[n].type in ("free", "file") for n in left_out)
 
 
@@ -601,6 +605,82 @@ def _by_port(plan):
     return {a.nsp: a for a in plan.actions}
 
 
+def _partners_free(view, *nsps):
+    """`view` with these ports read as free with nothing on them: a model input, said where it is used."""
+    out = view.model_copy(deep=True)
+    for nsp in nsps:
+        out.ports[nsp] = out.ports[nsp].model_copy(update={"type": "free"})
+        out.logins.pop(nsp, None)
+        out.exports.pop(nsp, None)
+    return out
+
+
+def test_each_fc_port_has_its_card_pair_partner_from_the_help():
+    """`help controlport`, *Port pair protection* (every capture, OS 10.5.0 to 10.6.0): ports 1 and 2, and 3
+    and 4, of a quad-port FC card are a pair; a mode change on one changes the other. rack13's slot 3 is a
+    quad-port HPE64004-B on each node (`showport -i`)."""
+    from alletra_onboard.application.provisioning.peer_ports import pair_partner
+
+    for folder in (RACK13, E18U31, D22U27, VZ):
+        help_text = " ".join(_text(folder / "help_controlport.txt").split())
+        assert ("For quad-port LSI Fibre Channel adapters, each port pair (ports 1 and 2, ports 3 and 4) must use the "
+                "same mode.") in help_text
+        assert "changing the mode of the offline port causes the online partner port to undergo mode change as well" in help_text
+    assert [line.split()[2] for line in _text(RACK13 / "showport_i.txt").splitlines() if ":3:" in line] == ["HPE64004-B"] * 8
+    view = _rack13_now()
+    assert {n: pair_partner(view, n) for n in view.ports if view.ports[n].is_fc} == {
+        "0:3:1": "0:3:2", "0:3:2": "0:3:1", "0:3:3": "0:3:4", "0:3:4": "0:3:3",
+        "1:3:1": "1:3:2", "1:3:2": "1:3:1", "1:3:3": "1:3:4", "1:3:4": "1:3:3"}
+    assert pair_partner(view, "0:4:1") == ""            # an iSCSI port: no FC pair
+    assert pair_partner(view, "0:9:1") == ""
+
+
+def test_a_free_port_whose_pair_partner_serves_a_host_is_a_conflict_naming_the_partner():
+    """rack13-ARCUS on 2026-11-16 (live finding 9, 2026-11-17): 0:3:3 and 1:3:4 are free, linked, nothing on
+    them, the candidates ADR 0018 named; but their pair partners 0:3:4 and 1:3:3 serve the ESXi HBA
+    (an unclaimed login, 10005CED8C5312A9). A mode change could move the partner too, so both are refused,
+    each naming its partner and why. 0:3:1 and 1:3:1, whose partners are free, stay creates."""
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+
+    plan = plan_peer_ports(_intent("0:3:3", "1:3:4", "0:3:1", "1:3:1"), _rack13_now())
+    acts = _by_port(plan)
+    assert [(a.nsp, a.state, a.partner) for a in plan.actions] == [
+        ("0:3:3", "conflict", "0:3:4"), ("1:3:4", "conflict", "1:3:3"),
+        ("0:3:1", "create", "0:3:2"), ("1:3:1", "create", "1:3:2")]
+    assert acts["0:3:3"].reason == (
+        "0:3:3 shares a port pair with 0:3:4, which serves hosts (Type host; logged in: an unnamed initiator "
+        "10005CED8C5312A9). A mode change on one port of a pair can change the other and take it offline, so the "
+        "tool never sets 0:3:3 while 0:3:4 is in use: pick a port whose pair partner is free.")
+    assert acts["1:3:4"].reason.startswith("1:3:4 shares a port pair with 1:3:3, which serves hosts")
+    assert not acts["0:3:3"].commands and acts["0:3:3"].reason in plan.blockers
+    assert acts["0:3:1"].reason == "free, nothing logged in, no exports; its pair partner 0:3:2 is free too"
+
+
+def test_a_partner_with_exports_or_in_peer_or_rcfc_use_is_a_conflict_too():
+    """E18U31 (2026-11-17): 0:3:2 is a peer port in use (a source array's port as its Device), so its
+    partner 0:3:1 is refused for it, even read free; D22U27's 0:3:2 is free but its partner 0:3:1 serves
+    ESX1. An export on a partner, or a partner in RCFC use, is a model input on rack13's capture."""
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+
+    e18 = _partners_free(_now(E18U31), "0:3:1")
+    act = _by_port(plan_peer_ports(_intent("0:3:1", "1:3:3"), e18))["0:3:1"]
+    assert act.state == "conflict" and act.partner == "0:3:2"
+    assert act.reason.startswith("0:3:1 shares a port pair with 0:3:2, which is a peer port (ready).")
+
+    act = _by_port(plan_peer_ports(_intent("0:3:2", "1:3:3"), _now(D22U27)))["0:3:2"]
+    assert act.state == "conflict" and act.reason.startswith("0:3:2 shares a port pair with 0:3:1, which serves hosts")
+    assert "ESX1" in act.reason
+
+    view = _rack13_now()
+    view.exports["0:3:2"] = ["zz_pp_vol"]
+    act = _by_port(plan_peer_ports(_intent("0:3:1", "1:3:1"), view))["0:3:1"]
+    assert act.state == "conflict" and "which serves hosts (Type free; exported: zz_pp_vol)" in act.reason
+    view = _rack13_now()
+    view.ports["1:3:2"] = view.ports["1:3:2"].model_copy(update={"type": "rcfc", "state": "ready"})
+    act = _by_port(plan_peer_ports(_intent("0:3:1", "1:3:1"), view))["1:3:1"]
+    assert act.state == "conflict" and act.reason.startswith("1:3:1 shares a port pair with 1:3:2, which is a Remote Copy port (ready).")
+
+
 def test_two_free_fc_ports_on_two_nodes_are_planned_with_their_undo():
     from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
 
@@ -680,7 +760,10 @@ def test_a_free_port_still_in_an_effective_zone_gets_a_note_and_without_a_switch
     from alletra_onboard.application.provisioning.zoning import parse_active_zones
 
     zones, _cfg = parse_active_zones(_text(FIX / "rack13_fabric" / "F2_cfgshow.txt"))
-    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now(), zones={"the F2 switch": zones})
+    # Their pair partners 0:3:4 and 1:3:3 serve the ESXi HBA on 2026-11-16, which makes both a conflict
+    # since 2026-11-17 (the pair check); here the partners read free, a model input on top of the capture.
+    view = _partners_free(_rack13_now(), "0:3:4", "1:3:3")
+    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), view, zones={"the F2 switch": zones})
     assert [a.state for a in plan.actions] == ["create", "create"] and not plan.blockers
     note = next(n for n in plan.notes if n.startswith("0:3:3 (20330002AC02D495) is still in zones "))
     assert "arcus__windows137_zone1" in note and "Vmware_Alletra" in note and note.endswith(
@@ -688,7 +771,7 @@ def test_a_free_port_still_in_an_effective_zone_gets_a_note_and_without_a_switch
     assert any(n.startswith("1:3:4 (21340002AC02D495) is still in zones ") for n in plan.notes)
     assert not any("one fabric" in n or "both on the" in n for n in plan.notes)      # 3 odd, 4 even: two fabrics
 
-    unchecked = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now())
+    unchecked = plan_peer_ports(_intent("0:3:3", "1:3:4"), view)
     assert "The zones on 0:3:3's WWPN were not checked (no switch read): ask the SAN team before setting it." in unchecked.notes
 
 
@@ -710,13 +793,20 @@ def test_the_printed_command_set_and_removal_set_before_the_paste():
         removal_set_text,
     )
 
-    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now())
+    # 0:3:1 and 1:3:1: their pair partners are free (0:3:3 and 1:3:4, used here before 2026-11-17, are refused
+    # since: their partners serve a host)
+    plan = plan_peer_ports(_intent("0:3:1", "1:3:1"), _rack13_now())
     assert command_set_text(plan, "rack13-ARCUS").splitlines()[2:] == [
-        "# 0:3:3", "controlport offline 0:3:3", "controlport config peer -ct point -f 0:3:3",
-        "# 1:3:4", "controlport offline 1:3:4", "controlport config peer -ct point -f 1:3:4"]
-    assert planned_removals(plan) == [
-        "controlport offline 1:3:4", "controlport config host -ct point -f 1:3:4", "controlport rst -f 1:3:4",
-        "controlport offline 0:3:3", "controlport config host -ct point -f 0:3:3", "controlport rst -f 0:3:3"]
+        "# 0:3:1", "controlport offline 0:3:1", "controlport config peer -ct point -f 0:3:1",
+        "# 1:3:1", "controlport offline 1:3:1", "controlport config peer -ct point -f 1:3:1"]
+    assert planned_removals(plan) == ["controlport offline 1:3:1",
+                                      "controlport config host -ct point -f 1:3:1",
+                                      "controlport rst -f 1:3:1",
+                                      "controlport offline 0:3:1",
+                                      "controlport config host -ct point -f 0:3:1",
+                                      "controlport rst -f 0:3:1",
+                                      "controlport intcoal enable -f 1:3:1",
+                                      "controlport intcoal enable -f 0:3:1"]
     assert removal_set_text(planned_removals(plan), "rack13-ARCUS").startswith(
         "# Undo the peer ports this run set on rack13-ARCUS. Remove the SAN team's peer-port zones")
 
@@ -738,14 +828,148 @@ def test_rst_takes_f_and_offline_has_none_so_the_offline_line_says_it_asks(folde
     assert "controlport rst [-m <mode>|-l|-i] [-f] <node:slot:port>..." in syntax
     assert "controlport offline <node:slot:port>...\n" in syntax
 
-    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now())
+    plan = plan_peer_ports(_intent("0:3:1", "1:3:1"), _rack13_now())
     removals = planned_removals(plan)
-    assert [r for r in removals if r.startswith("controlport rst")] == ["controlport rst -f 1:3:4", "controlport rst -f 0:3:3"]
-    assert [r for r in removals if r.startswith("controlport offline")] == ["controlport offline 1:3:4",
-                                                                             "controlport offline 0:3:3"]
+    assert [r for r in removals if r.startswith("controlport rst")] == ["controlport rst -f 1:3:1", "controlport rst -f 0:3:1"]
+    assert [r for r in removals if r.startswith("controlport offline")] == ["controlport offline 1:3:1",
+                                                                             "controlport offline 0:3:1"]
     assert OFFLINE_ASKS in plan.notes and "paste the lines one at a time and answer y" in OFFLINE_ASKS
     assert command_set_text(plan, "rack13-ARCUS").splitlines()[1] == f"# {OFFLINE_ASKS}"
     assert f"# {OFFLINE_ASKS}" in removal_set_text(removals, "rack13-ARCUS").splitlines()
+
+
+# ------------------------------------------------------------------ live, rack13-ARCUS 2026-11-17 evening: 0:3:1 to peer and back
+
+LIVE = PEER_FIX / "rack13_live"
+
+
+def test_a_peer_port_with_no_link_reads_type_free_and_connmode_peer_and_is_judged_a_peer_port():
+    """Live: `controlport config peer -ct point -f 0:3:1` on a port with no SFP left it mode initiator,
+    `loss_sync`, Type `free` (nothing attached) and Connmode `peer point`, with the `0202` WWNs. The read
+    after the paste judged it by Type and said *0:3:1 did not come back as a peer port (Type free, state
+    loss_sync)*; Connmode decides now. Nothing else moved, its pair partner 0:3:2 included."""
+    from alletra_onboard.application.provisioning.peer_ports import (
+        build_view,
+        free_fc_ports,
+        is_peer_port,
+        plan_peer_ports,
+        read_back_peer_ports,
+        verify_peer_ports,
+    )
+
+    before = _now(LIVE / "before")
+    after = build_view(_text(LIVE / "after_config_peer_0_3_1" / "showport.txt"),
+                       showhost_d=_text(LIVE / "before" / "showhost_d.txt"),
+                       showvlun_a=_text(LIVE / "before" / "showvlun_a.txt"),
+                       showport_par=_text(LIVE / "after_config_peer_0_3_1" / "showport_par.txt"),
+                       showport_c=_text(LIVE / "after_config_peer_0_3_1" / "showport_c.txt"),
+                       showport_peer=_text(LIVE / "after_config_peer_0_3_1" / "showport_peer.txt"))
+    p = after.ports["0:3:1"]
+    assert (p.mode, p.state, p.type, p.node_wwn, p.port_wwn) == (
+        "initiator", "loss_sync", "free", "2FF70202AC02D495", "20310202AC02D495")
+    assert (after.params["0:3:1"].connmode, after.params["0:3:1"].conntype) == ("peer", "point")
+    assert is_peer_port(after, "0:3:1") and "0:3:1" not in free_fc_ports(after)
+    assert [r.nsp for r in after.peer_listing] == ["0:3:1"]
+    assert {n: after.ports[n] for n in after.ports if n != "0:3:1"} == {n: before.ports[n] for n in before.ports if n != "0:3:1"}
+    assert after.params["0:3:2"] == before.params["0:3:2"]           # the pair partner did not move
+
+    plan = plan_peer_ports(_intent("0:3:1", "1:3:1"), before)
+    assert [(a.nsp, a.state, a.partner) for a in plan.actions] == [("0:3:1", "create", "0:3:2"), ("1:3:1", "create", "1:3:2")]
+    result = read_back_peer_ports(plan, before=before, after=after)
+    assert result.changed == ["0:3:1"]
+    assert result.sentences[0] == "0:3:1 is now a peer port (port WWPN 20310202AC02D495)."
+    assert result.error == "1:3:1 did not come back as a peer port (Type free, state loss_sync)."    # not pasted yet
+    assert result.removals == ["controlport offline 0:3:1",
+                               "controlport config host -ct point -f 0:3:1",
+                               "controlport rst -f 0:3:1",
+                               "controlport intcoal enable -f 0:3:1"]
+    assert [(a.nsp, a.state) for a in plan_peer_ports(_intent("0:3:1", "1:3:1"), after).actions] == [
+        ("0:3:1", "exists"), ("1:3:1", "create")]
+    # a partner in peer mode with nothing attached still reads Type free: its Connmode refuses 0:3:2
+    act = plan_peer_ports(_intent("0:3:2", "1:3:1"), after).actions[0]
+    assert act.state == "conflict" and act.reason.startswith(
+        "0:3:2 shares a port pair with 0:3:1, which is in peer mode (showport -par), though nothing is attached now.")
+    assert [c.sentence for c in verify_peer_ports(_intent("0:3:1"), after)] == [
+        "0:3:1 is a peer port but its link is loss_sync: check the cable and the switch port."]
+
+
+def test_the_removal_set_brought_0_3_1_back_and_says_what_an_rst_refusal_means():
+    """Live: the removal set restored 0:3:1 exactly (slot 3 equal to the read before, WWN back to 0002);
+    `config host -ct point -f` reset the port itself, so the `rst` right after it was refused with *is
+    being reset*. The removal set's header says what that answer means."""
+    from alletra_onboard.application.provisioning.peer_ports import RST_BUSY, removal_set_text
+
+    for name in ("showport.txt", "showport_par.txt", "showport_c.txt"):
+        rows = [[ln for ln in _text(LIVE / folder / name).splitlines() if ln.startswith(("0:3:", "1:3:"))]
+                for folder in ("before", "after_removal_0_3_1")]
+        assert rows[0] == rows[1] and rows[0], name
+    paste = _text(LIVE / "paste_removal_0_3_1.txt")
+    assert "Port 0:3:1 is being reset; please re-issue the command when reset is complete" in paste
+    assert "select q=quit y=yes n=no:" in _text(LIVE / "paste_0_3_1.txt")
+    assert f"# {RST_BUSY}" in removal_set_text(["controlport rst -f 0:3:1"], "rack13-ARCUS").splitlines()
+
+
+def test_the_restore_puts_back_interrupt_coalescing_which_the_config_back_to_host_dropped_on_1_3_1():
+    """Live rerun: after the removal set, 1:3:1 read Connmode `host point` as before but IntCoal `disabled`
+    where it read `enabled`; `controlport intcoal enable -f 1:3:1`, pasted by hand, put it back with no
+    prompt. So each restore carries the IntCoal `showport -par` read before, in the help's own form."""
+    from alletra_onboard.application.provisioning.peer_ports import (
+        parse_showport_par,
+        plan_peer_ports,
+    )
+
+    before = parse_showport_par(_text(LIVE / "before" / "showport_par.txt"))
+    dropped = parse_showport_par(_text(LIVE / "after_removal_both_intcoal_1_3_1" / "showport_par.txt"))
+    fixed = parse_showport_par(_text(LIVE / "after_intcoal_fix" / "showport_par.txt"))
+    assert (before["1:3:1"].intcoal, dropped["1:3:1"].intcoal, fixed["1:3:1"].intcoal) == ("enabled", "disabled", "enabled")
+    assert {n: p for n, p in dropped.items() if n != "1:3:1"} == {n: p for n, p in before.items() if n != "1:3:1"}
+    assert fixed == before
+    assert before["0:4:1"].intcoal == "" and before["0:1:1"].intcoal == ""          # n/a on iSCSI and NVMe
+    assert "controlport intcoal <intcoalval> [-f] <node:slot:port>..." in _text(RACK13 / "help_controlport.txt")
+    assert _text(LIVE / "paste_intcoal_1_3_1.txt").strip().splitlines() == [
+        "rack13-ARCUS cli% controlport intcoal enable -f 1:3:1", "rack13-ARCUS cli%"]
+
+    plan = plan_peer_ports(_intent("0:3:1", "1:3:1"), _now(LIVE / "before"))
+    assert plan.actions[1].undo == ["controlport offline 1:3:1",
+                                    "controlport config host -ct point -f 1:3:1",
+                                    "controlport rst -f 1:3:1",
+                                    "controlport intcoal enable -f 1:3:1"]
+
+
+def test_the_intcoal_lines_come_after_every_reset_and_the_set_says_to_paste_one_again_when_it_is_refused():
+    """Live, second rerun: pasted straight after `config host -ct point -f`, `controlport intcoal enable -f
+    0:3:1` answered *is being reset* and did nothing; 0:3:1 came back IntCoal `disabled` (1:3:1 kept
+    `enabled`, so which port loses it varies). Pasted again a minute later it went in. So the removal set
+    puts every intcoal line after every port's restore, and its header says to paste one again until the
+    array takes it. This order has not been pasted live yet."""
+    from alletra_onboard.application.provisioning.peer_ports import (
+        INTCOAL_LAST,
+        parse_showport_par,
+        plan_peer_ports,
+        planned_removals,
+        removal_set_text,
+    )
+
+    rerun = LIVE / "rerun2"
+    paste = _text(rerun / "paste_removal.txt").splitlines()
+    at = paste.index("rack13-ARCUS cli% controlport intcoal enable -f 0:3:1")
+    assert paste[at - 1] == "rack13-ARCUS cli% controlport config host -ct point -f 0:3:1"
+    assert paste[at + 1] == ("controlport Error: Port 0:3:1 is being reset; please re-issue the command when reset "
+                             "is complete")
+    before, dropped, fixed = (parse_showport_par(_text(rerun / f"{n}_showport_par.txt"))
+                              for n in ("before", "after_removal", "after_fix"))
+    assert (before["0:3:1"].intcoal, dropped["0:3:1"].intcoal, dropped["1:3:1"].intcoal) == ("enabled", "disabled", "enabled")
+    assert fixed == before
+    assert _text(rerun / "paste_intcoal_0_3_1.txt").strip().splitlines() == [
+        "rack13-ARCUS cli% controlport intcoal enable -f 0:3:1", "rack13-ARCUS cli%"]
+
+    removals = planned_removals(plan_peer_ports(_intent("0:3:1", "1:3:1"), _now(LIVE / "before")))
+    first_intcoal = next(i for i, line in enumerate(removals) if line.startswith("controlport intcoal"))
+    assert removals[first_intcoal:] == ["controlport intcoal enable -f 1:3:1", "controlport intcoal enable -f 0:3:1"]
+    assert not any(line.startswith("controlport intcoal") for line in removals[:first_intcoal])
+    head = removal_set_text(removals, "rack13-ARCUS").splitlines()
+    assert f"# {INTCOAL_LAST}" in head and "paste it again until it answers nothing" in INTCOAL_LAST
+    assert f"# {INTCOAL_LAST}" not in removal_set_text(["controlport rst -f 0:3:1"], "rack13-ARCUS").splitlines()
 
 
 # ------------------------------------------------------------------ R4/R5: read after the paste, apply, removal set
@@ -786,14 +1010,18 @@ def test_the_read_after_the_paste_finds_the_peer_ports_and_keeps_their_undo():
     plan = plan_peer_ports(_intent("0:3:2", "1:3:2"), view)
     result = read_back_peer_ports(plan, before=view, after=_after(view, "0:3:2", "1:3:2"))
     assert result.error is None and result.changed == ["0:3:2", "1:3:2"]
-    assert result.removals == [
-        "controlport offline 1:3:2", "controlport config host -ct point -f 1:3:2", "controlport rst -f 1:3:2",
-        "controlport offline 0:3:2", "controlport config host -ct point -f 0:3:2", "controlport rst -f 0:3:2",
-    ]
+    assert result.removals == ["controlport offline 1:3:2",
+                               "controlport config host -ct point -f 1:3:2",
+                               "controlport rst -f 1:3:2",
+                               "controlport offline 0:3:2",
+                               "controlport config host -ct point -f 0:3:2",
+                               "controlport rst -f 0:3:2",
+                               "controlport intcoal enable -f 1:3:2",
+                               "controlport intcoal enable -f 0:3:2"]
 
 
 def test_the_read_after_a_paste_that_stopped_after_offline_gives_rst_only_and_says_so():
-    """R5: 1:3:4 was taken offline, its `config` never landed: it is held offline in its old mode, and
+    """R5: 1:3:1 was taken offline, its `config` never landed: it is held offline in its old mode, and
     only `controlport rst` brings it back (the help's way). A read with nothing changed is no paste."""
     from alletra_onboard.application.provisioning.peer_ports import (
         changed_since,
@@ -802,17 +1030,20 @@ def test_the_read_after_a_paste_that_stopped_after_offline_gives_rst_only_and_sa
     )
 
     view = _rack13_now()
-    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), view)
+    plan = plan_peer_ports(_intent("0:3:1", "1:3:1"), view)
     assert not changed_since(plan, view, view.model_copy(deep=True))
-    after = _after(view, "0:3:3")
-    after.ports["1:3:4"] = after.ports["1:3:4"].model_copy(update={"state": "offline"})
+    after = _after(view, "0:3:1")
+    after.ports["1:3:1"] = after.ports["1:3:1"].model_copy(update={"state": "offline"})
     assert changed_since(plan, view, after)
     result = read_back_peer_ports(plan, before=view, after=after)
-    assert result.changed == ["0:3:3"]
-    assert result.error == "1:3:4 did not come back as a peer port (Type free, state offline)."
-    assert result.removals == ["controlport rst -f 1:3:4", "controlport offline 0:3:3",
-                               "controlport config host -ct point -f 0:3:3", "controlport rst -f 0:3:3"]
-    assert result.sentences[0] == "0:3:3 is now a peer port (port WWPN 20330002AC02D495)."
+    assert result.changed == ["0:3:1"]
+    assert result.error == "1:3:1 did not come back as a peer port (Type free, state offline)."
+    assert result.removals == ["controlport rst -f 1:3:1",
+                               "controlport offline 0:3:1",
+                               "controlport config host -ct point -f 0:3:1",
+                               "controlport rst -f 0:3:1",
+                               "controlport intcoal enable -f 0:3:1"]
+    assert result.sentences[0] == "0:3:1 is now a peer port (port WWPN 20310002AC02D495)."
 
 
 def test_the_read_after_the_paste_names_another_port_that_changed():
@@ -822,12 +1053,13 @@ def test_the_read_after_the_paste_names_another_port_that_changed():
     )
 
     view = _rack13_now()
-    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), view)
-    after = _after(view, "0:3:3", "1:3:4")
-    after.ports["0:3:4"] = after.ports["0:3:4"].model_copy(update={"mode": "initiator"})
+    plan = plan_peer_ports(_intent("0:3:1", "1:3:1"), view)
+    after = _after(view, "0:3:1", "1:3:1")
+    # the pair partner moving with the change, as the help's port pair protection says it may
+    after.ports["0:3:2"] = after.ports["0:3:2"].model_copy(update={"mode": "initiator"})
     result = read_back_peer_ports(plan, before=view, after=after)
-    assert result.changed == ["0:3:3", "1:3:4"]
-    assert result.error == "0:3:4 changed as well (mode target, now initiator): check the array before going on."
+    assert result.changed == ["0:3:1", "1:3:1"]
+    assert result.error == "0:3:2 changed as well (mode target, now initiator): check the array before going on."
 
 
 def test_verify_says_a_peer_port_without_a_link_needs_its_cable():
@@ -1043,8 +1275,14 @@ async def test_after_a_partial_paste_each_port_keeps_its_undo_from_the_read_that
         results.append(last.data["peer"]["result"])
     assert results[0] is None
     assert results[1]["changed"] == ["0:3:2"] and "1:3:2 did not come back as a peer port" in results[1]["error"]
-    both = ["controlport offline 1:3:2", "controlport config host -ct point -f 1:3:2", "controlport rst -f 1:3:2",
-            "controlport offline 0:3:2", "controlport config host -ct point -f 0:3:2", "controlport rst -f 0:3:2"]
+    both = ["controlport offline 1:3:2",
+            "controlport config host -ct point -f 1:3:2",
+            "controlport rst -f 1:3:2",
+            "controlport offline 0:3:2",
+            "controlport config host -ct point -f 0:3:2",
+            "controlport rst -f 0:3:2",
+            "controlport intcoal enable -f 1:3:2",
+            "controlport intcoal enable -f 0:3:2"]
     for result in results[2:]:                              # the read after the second paste, and a second look
         assert result["changed"] == ["0:3:2", "1:3:2"] and result["error"] is None and result["removals"] == both
 
@@ -1076,11 +1314,11 @@ def test_a_switch_the_zoning_plan_could_not_read_leaves_its_zones_unchecked(tmp_
     steps: ArrayPortsSteps = service.ports
     service.store.save_artifact(run.run_id, ACTIVE_ZONES_ARTIFACT, json.dumps(plan.active_zones).encode())
     assert steps._active_zones(run.run_id) is None
-    zones = {"the F1 switch sw-f1": None, "the F2 switch sw-f2": {"z": {"20330002AC02D495"}}}
-    notes = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now(), zones=zones).notes
-    assert ("The zones on 1:3:4's WWPN were not checked on the F1 switch sw-f1 (it could not be read): ask the SAN "
+    zones = {"the F1 switch sw-f1": None, "the F2 switch sw-f2": {"z": {"20310002AC02D495"}}}
+    notes = plan_peer_ports(_intent("0:3:1", "1:3:1"), _rack13_now(), zones=zones).notes
+    assert ("The zones on 1:3:1's WWPN were not checked on the F1 switch sw-f1 (it could not be read): ask the SAN "
             "team before setting it.") in notes
-    assert any(n.startswith("0:3:3 (20330002AC02D495) is still in zone z on the F2 switch sw-f2") for n in notes)
+    assert any(n.startswith("0:3:1 (20310002AC02D495) is still in zone z on the F2 switch sw-f2") for n in notes)
 
 
 async def test_a_failed_peer_port_read_plans_nothing(tmp_path, monkeypatch):

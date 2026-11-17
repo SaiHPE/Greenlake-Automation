@@ -1,6 +1,6 @@
 # ADR 0026 — Certificates and host keys: check the cloud, trust on-site devices on first contact
 
-**Status:** accepted 2026-11-17 (owner's decision); steps 1 to 8 built 2026-11-17 (BL-53), each pending the live run of step 9 (*Build notes*, below) ·
+**Status:** accepted 2026-11-17 (owner's decision); steps 1 to 8 built 2026-11-17 (BL-53), each pending the live run of step 9; step 10, a pin that cannot be read, built 2026-11-17 (BL-60), pending live run (*Build notes*, below) ·
 **Issue:** BL-53 · **Relates to:** [ADR 0013](0013-one-array-credential-per-run.md) (where the pin is
 kept), [ADR 0008](0008-proxy-auto-detect-with-override.md) (on-site devices bypass the proxy),
 [ADR 0015](0015-tool-configures-remote-copy-write-scoped-ssh.md) (the Remote Copy write client connects
@@ -169,6 +169,19 @@ test, paramiko's own host-key check over an offline transport), and no device ha
 9. **Live run.** Not done. Until it is, whether the array's certificate or SSH key changes after
    initial setup (the setup wizard, DSCC setup, a restart) is unknown, and a run that trusts the array
    before the change would stop at it; the re-trust action is the way through meanwhile.
+10. **A pin that cannot be read** (BL-60, 2026-11-17). Built, pending live run. Seen live on
+    rack13-ARCUS: a pin whose stored SSH key was not valid base64 (only a damaged `state.db` holds one)
+    read as *Could not reach the array (Error)*. Every load of a pin in `device_trust` now checks that
+    the stored key decodes (`domain/trust.py` `key_readable`: an SSH key's base64 holds a blob naming
+    its own type, a certificate's PEM holds DER). One that does not is refused like a changed key: the
+    device's key is read in the handshake, before any login, kept on the pin as presented, and the
+    step stops with *This run's record of the array's SSH host key at … cannot be read, so it could not
+    be compared with the one the array presented now: … Nothing was sent to the device, not even the
+    password. Only a damaged run state can cause this. To go on, compare the new fingerprint with the
+    device's own console, then trust it again on the run overview, under Trusted devices.* The last
+    clause is the re-trust guidance of the changed-key sentence, word for word (`RETRUST_STEPS`). Every
+    SSH client (array, Remote Copy, switch, Linux host), the TLS clients through `check()` and the run's
+    `device.trust_failed` / `device.refused` events say the same (`refusal_message`).
 
 **What the operator sees.** The run overview has a *Trusted devices* section: each device, its address,
 the fingerprint and when it was trusted. A device that presented a different key shows both

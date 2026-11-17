@@ -1,0 +1,6 @@
+rack13-ARCUS cli% controlport offline 0:3:1
+Are you sure you want to run controlport offline on port 0:3:1?
+select q=quit y=yes n=no: [answered y]
+y
+rack13-ARCUS cli% controlport config peer -ct point -f 0:3:1
+rack13-ARCUS cli% 

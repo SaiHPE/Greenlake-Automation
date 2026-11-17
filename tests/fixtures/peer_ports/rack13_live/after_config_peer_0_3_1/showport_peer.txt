@@ -1,0 +1,5 @@
+# showport -peer
+N:S:P      Mode     State ----Node_WWN---- ----Port_WWN---- Rate VPI
+0:3:1 initiator loss_sync 2FF70202AC02D495 20310202AC02D495  n/a   0
+--------------------------------------------------------------------
+    1
