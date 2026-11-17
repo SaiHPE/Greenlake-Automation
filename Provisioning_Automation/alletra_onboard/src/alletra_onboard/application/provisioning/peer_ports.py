@@ -231,6 +231,18 @@ def read_view(
 
 # ------------------------------------------------------------------ R3: the plan
 
+# `help controlport` (OS 10.5.0 to 10.6.0, tests/fixtures/peer_ports/): `controlport offline
+# <node:slot:port>...` has no -f, and it asked "Are you sure ...? select q=quit y=yes n=no" every time on
+# rack13-ARCUS (2026-11-17); `controlport rst [-m <mode>|-l|-i] [-f] <node:slot:port>...` takes -f.
+OFFLINE_ASKS = ("`controlport offline` asks the array's own question (y, n or q) every time and has no option "
+                "to skip it: paste the lines one at a time and answer y when it asks. Pasted as a block, the next "
+                "line is taken as the answer.")
+
+
+def rst_line(nsp: str) -> str:
+    return f"controlport rst -f {nsp}"
+
+
 def set_commands(nsp: str) -> list[str]:
     """ADR 0018: the help refuses a mode change on an online port, so offline first; `peer` takes only
     `point`. `controlport rst` joins only if the live capture shows the port stays offline."""
@@ -241,7 +253,7 @@ def restore_lines(nsp: str, before: PortParams) -> list[str]:
     """R5: back to the connection mode `showport -par` read before the change. The `rst` line stays on
     every port, so a port left offline by a hung `config` comes back."""
     return [f"controlport offline {nsp}", f"controlport config {before.connmode} -ct {before.conntype} -f {nsp}",
-            f"controlport rst {nsp}"]
+            rst_line(nsp)]
 
 
 def _pairs_sentence(usable: list[str]) -> str:
@@ -312,6 +324,8 @@ def plan_peer_ports(
     if len(usable) >= 2 and len(fabrics) == 1:
         plan.notes.append(f"{' and '.join(usable)} are {'both' if len(usable) == 2 else 'all'} on the "
                           f"{fabrics.pop()} by port number; a fabric failure stops the migration.")
+    if any(act.state == "create" for act in plan.actions):
+        plan.notes.append(OFFLINE_ASKS)
     for act in plan.actions:
         if act.state != "create":
             continue
@@ -338,7 +352,8 @@ def plan_peer_ports(
 
 def command_set_text(plan: PeerPortPlan, array: str) -> str:
     """R4, first slice: the lines a consultant pastes, in sheet order, as one text for Copy and Download."""
-    lines = [f"# Peer ports on {array}: paste on the array's CLI, then read the array again in the tool."]
+    lines = [f"# Peer ports on {array}: paste on the array's CLI, then read the array again in the tool.",
+             f"# {OFFLINE_ASKS}"]
     for act in plan.actions:
         if act.state == "create":
             lines += [f"# {act.nsp}", *act.commands]
@@ -349,7 +364,8 @@ def removal_set_text(removals: list[str], array: str) -> str:
     """R5: the removal set as text, with its header. The tool never runs it."""
     head = [(f"# Undo the peer ports this run set on {array}. Remove the SAN team's peer-port zones and any "
              "migration that uses these ports first."),
-            "# Review before pasting. The tool never runs these."]
+            "# Review before pasting. The tool never runs these.",
+            f"# {OFFLINE_ASKS}"]
     return "\n".join(head + removals) + "\n"
 
 
@@ -402,7 +418,7 @@ def read_back_peer_ports(plan: PeerPortPlan, *, before: PeerPortView, after: Pee
         if not same_mode:
             blocks.append(act.undo)
         elif a.state == "offline" and b.state != "offline":
-            blocks.append([f"controlport rst {act.nsp}"])
+            blocks.append([rst_line(act.nsp)])
     planned_nsps = {a.nsp for a in planned}
     for nsp, b in before.ports.items():
         if nsp in planned_nsps:

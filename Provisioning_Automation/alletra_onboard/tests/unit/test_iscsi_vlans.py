@@ -7,8 +7,9 @@ The plan tests stand on E18U31's real captures (tests/fixtures/rc_pair/E18U31/, 
 management address from `shownet`. The parser tests stand on the captures in
 tests/fixtures/iscsi_vlan/: rack13-ARCUS (OS 10.6.0, 2026-11-16) and, from 2026-11-17, D22U27 (OS
 10.5.0, no iSCSI port), VZ (OS 10.5.51, four offline iSCSI ports) and E18U31 (OS 10.5.60, four ready
-iSCSI ports, MTU 9000). None has a tagged interface. Sheet addresses use the documentation range
-192.0.2.0/24.
+iSCSI ports, MTU 9000). None of those has a tagged interface; `tagged/` (rack13-ARCUS, 2026-11-17) holds
+VLAN 2999 on 0:4:2, set for the live confirmation and removed again. Sheet addresses use the
+documentation range 192.0.2.0/24.
 """
 
 from __future__ import annotations
@@ -34,13 +35,13 @@ D22U27 = VLAN_FIX / "D22U27"           # AlletraMP_D22U27, OS 10.5.0, 2026-11-17
 VZ = VLAN_FIX / "VZ"                   # MPB10K-D24U21-VZ, OS 10.5.51, 2026-11-17: four iSCSI ports, all offline
 E18U31_NOW = VLAN_FIX / "E18U31"       # E18U31, now named DHCI_B10K, OS 10.5.60, 2026-11-17: four ready, MTU 9000
 OS_10_5 = {"10.5.0": D22U27, "10.5.51": VZ, "10.5.60": E18U31_NOW}
-TAGGED = VLAN_FIX / "tagged"           # owed: the same capture while a port carries a tagged interface
+TAGGED = VLAN_FIX / "tagged"           # rack13-ARCUS, OS 10.6.0, 2026-11-17: VLAN 2999 on 0:4:2 (no untagged address)
 
 NOT_BUILT = pytest.mark.xfail(reason="BL-25: not built yet, see docs/workpackets/BL-25.md", strict=True)
-NOT_CAPTURED = pytest.mark.xfail(
-    reason="BL-25: needs a capture with a VLAN-tagged iSCSI interface in tests/fixtures/iscsi_vlan/tagged/ "
-           "(lab/iscsi_vlan_capture.py run during the live confirmation, SPEC-024 §6); the captures of "
-           "rack13-ARCUS (2026-11-16) and D22U27, VZ and E18U31 (2026-11-17) have untagged addresses only",
+NO_STARRED_ROW = pytest.mark.xfail(
+    reason="BL-25: needs showport -iscsi with a '*' after an address, from a port that has an untagged address "
+           "and a VLAN address; the tagged capture of 2026-11-17 (tests/fixtures/iscsi_vlan/tagged/) put the VLAN "
+           "on 0:4:2, which had no untagged address, and printed no '*'",
     strict=True)
 
 HEADER = ["Port (N:S:P) *", "VLAN ID *", "iSCSI address *", "Netmask *", "Gateway (optional)"]
@@ -344,7 +345,6 @@ def test_a_second_array_with_ready_ports_mtu_9000_and_no_gateway():
     assert all(sum(1 for r in logins if r[4] == nsp) == 3 for nsp in nsps)
 
 
-@NOT_CAPTURED
 def test_a_tagged_row_of_showport_iscsivlans_parses():
     """Edit the expected values to what the capture shows; never write the capture to fit this test."""
     from alletra_onboard.application.provisioning.discovery import parse_iscsi_vlans
@@ -352,6 +352,8 @@ def test_a_tagged_row_of_showport_iscsivlans_parses():
     vlans = parse_iscsi_vlans((TAGGED / "showport_iscsivlans.txt").read_text())
     assert vlans
     assert all(re.fullmatch(r"\d+:\d+:\d+", v.nsp) and 1 <= v.vlan_id <= 4094 and v.ip and v.netmask for v in vlans)
+    assert [(v.nsp, v.vlan_id, v.ip, v.netmask, v.gateway, v.mtu) for v in vlans] == [
+        ("0:4:2", 2999, "192.0.2.10", "255.255.255.0", "", "1500")]
 
 
 def test_wsapi_iscsivlans_answer_has_its_own_envelope_and_leaves_out_the_untagged_address():
@@ -405,7 +407,7 @@ def test_wsapi_on_os_10_5_60_lists_the_untagged_address_as_vlan_tag_0_and_the_pa
         parse_iscsi_vlans_wsapi("1:4:2", {"iSCSIVlans": [{**real, "vlanTag": 4095}]})
 
 
-@NOT_CAPTURED
+@NO_STARRED_ROW
 def test_discovery_reads_a_starred_iscsi_address_without_its_star():
     """`help showport`: an address shown with `*` has more addresses configured with VLANs beside it.
     Discovery's address column (`parse_iscsi_ips`) keeps the star today, so once a port carries a VLAN
@@ -419,7 +421,6 @@ def test_discovery_reads_a_starred_iscsi_address_without_its_star():
     assert ips and not any("*" in ip for ip in ips.values())
 
 
-@NOT_CAPTURED
 def test_a_tagged_wsapi_iscsivlans_record_parses():
     """The record's field names are seen on E18U31's untagged record (OS 10.5.60); this pins a tagged one."""
     from alletra_onboard.adapters.array.wsapi_client import parse_iscsi_vlans_wsapi
@@ -429,6 +430,7 @@ def test_a_tagged_wsapi_iscsivlans_record_parses():
         nsp = ":".join(path.name.split("_")[1:4])
         found += parse_iscsi_vlans_wsapi(nsp, json.loads(path.read_text()))
     assert found and all(1 <= v.vlan_id <= 4094 and v.ip and v.netmask for v in found)
+    assert [(v.nsp, v.vlan_id, v.ip, v.netmask) for v in found] == [("0:4:2", 2999, "192.0.2.10", "255.255.255.0")]
 
 
 _VLAN_FORMS = (
@@ -688,6 +690,33 @@ def test_the_plan_on_rack13_adds_on_a_ready_and_an_offline_port_and_says_the_off
     assert plan.notes == ["VLAN 130 is only on node 1. If that node stops, hosts on VLAN 130 lose every path.",
                           "1:4:2 is offline: the address is set, but no host reaches it until the link is up."]
     assert [s.split(":")[0] for s in plan.switch_handoff] == ["Switch port cabled to rack13-ARCUS 0", "Switch port cabled to rack13-ARCUS 1"]
+
+
+def test_a_vlan_only_address_is_not_read_as_the_ports_untagged_address():
+    """Live on rack13-ARCUS, 2026-11-17 (`tagged/`): with VLAN 2999 the only address on 0:4:2, `showport
+    -iscsi` prints 192.0.2.10 in 0:4:2's base columns, no `*`. Only `showport -iscsivlans` says it is
+    tagged (no `untagged` row for 0:4:2). Read as untagged, a second VLAN in 192.0.2.0/24 on that port was
+    refused as the port's own network, and the address was named as the port's base address."""
+    view, _ = _read(TAGGED)
+    base = {p.nsp: p.ip for p in view.iscsi_ports}
+    assert base == {"0:4:1": "10.93.18.10", "0:4:2": "", "1:4:1": "10.93.18.12", "1:4:2": ""}
+    assert [(v.nsp, v.vlan_id, v.ip) for v in view.vlans] == [("0:4:2", 2999, "192.0.2.10")]
+
+    plan = _plan([_req("0:4:2", vlan=3000, ip="192.0.2.20", gw=""), _req("1:4:2", vlan=3000, ip="192.0.2.10", gw="")], view)
+    assert [(a.nsp, a.state) for a in plan.actions] == [("0:4:2", "create"), ("1:4:2", "conflict")]
+    assert plan.actions[1].reason == "192.0.2.10 is already in use on rack13-ARCUS: iSCSI port 0:4:2 VLAN 2999."
+
+
+def test_a_conflict_row_keeps_the_switch_sentence_for_the_vlan_already_on_its_port():
+    """Live on rack13-ARCUS, 2026-11-17 (`tagged/`): VLAN 2999 was on 0:4:2 without its gateway, so the row
+    became a conflict and the plan dropped the network team's sentence. R3 asks for one per port with a
+    planned or existing VLAN; the as-built printed it."""
+    view, _ = _read(TAGGED)
+    plan = _plan([_req("0:4:2", vlan=2999, ip="192.0.2.10", gw="192.0.2.1"), _req("1:4:1", vlan=7, ip="10.93.18.12", gw="")],
+                 view)
+    assert [a.state for a in plan.actions] == ["conflict", "conflict"]
+    assert plan.switch_handoff == [
+        "Switch port cabled to rack13-ARCUS 0:4:2: carry VLAN 2999 tagged (802.1Q); keep the untagged (native) VLAN as it is."]
 
 
 def test_the_plan_on_d22u27_refuses_its_file_ports_and_on_vz_names_the_rcip_addresses():

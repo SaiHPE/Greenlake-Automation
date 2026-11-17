@@ -1,0 +1,173 @@
+# help createvv
+createvv - Create a virtual volume from a common provisioning group.
+
+SYNTAX
+    createvv {-tpvv|-reduce} [options] <usr_cpg> <vvname>[.<index>]
+    <size>[g|G|t|T]
+
+DESCRIPTION
+    The createvv command creates volumes that are provisioned from one or more
+    common provisioning groups.  Volumes can be thinly provisioned from a CPG.
+    Users can optionally specify a CPG for snapshot space. Users must specify
+    either -tpvv or -reduce to create a thin provisioned volume or a thin
+    provisioned volume with compression and dedup technologies. 
+
+AUTHORITY
+    Super, Edit
+    Any role granted the vv_create right
+
+OPTIONS
+    -i <ID>
+        Specifies the ID of the volume. By default, the next available ID is
+        chosen.
+
+    -cnt <count>
+        Specifies the number of identical VVs to create.  This must be an
+        integer from 1 through 999. If <id> is specified with -i option, it is
+        used as the id of the first VV and incremented by 1 for each
+        subsequent volume.
+
+    -exp <time>{d|D|h|H|m|M}
+        Specifies the relative time from the current time that volume will
+        expire. <time> is a positive integer value and in the range of
+        1 minute - 1825 days. Time can be specified in days, hours, or minutes.
+        Use "d" or "D" for days, "h" or "H" for hours, or "m" or "M" for minutes
+        following the entered time value.
+
+    -comment <comment>
+        Specifies any additional information up to 511 characters for the
+        volume.
+
+    -f
+        Do not ask for confirmation before creating a volume with retention time
+        (-retain).
+
+    -retain <time>{d|D|h|H|m|M}
+        Specifies the amount of time, relative to the current time, that the
+        volume will be retained. <time> is a positive integer value and in the
+        range of 1 minute - 1825 days. Time can be specified in days, hours, or
+        minutes.  Use "d" or "D" for days, "h" or "H" for hours, or "m" or "M"
+        for minutes following the entered time value.
+
+        Note: If the volume is not in any domain, then its retention time
+        cannot exceed the value of the system's VVRetentionTimeMax. The default
+        value for the system's VVRetentionTimeMax is 14 days. If the volume
+        belongs to a domain, then its retention time cannot exceed the value of
+        the domain's VVRetentionTimeMax, if set. The retention time cannot be
+        removed or reduced once it is set. If the volume has its retention time
+        set, it cannot be removed within its retention time. If both expiration
+        time and retention time are specified, then the retention time cannot
+        be longer than the expiration time.
+
+    -spt <sectors_per_track>
+        Defines the virtual volume geometry sectors per track value that is
+        reported to the hosts through the SCSI mode pages. The valid range is
+        between 4 to 8192 and the default value is 304.
+
+    -hpc <heads_per_cylinder>
+        Allows you to define the virtual volume geometry heads per cylinder
+        value that is reported to the hosts though the SCSI mode pages. The
+        valid range is between 1 to 255 and the default value is 8.
+
+    -pol <pol>[,<pol>...]
+
+        Specifies the following policies that the created virtual volume follows.
+
+        one_host
+            This constrains the export of a volume to one host or one host
+            cluster (when cluster names may be used as a host name).
+        no_one_host
+            This policy should only be used when exporting a virtual
+            volume to multiple hosts for use by a cluster-aware application,
+            or when "port presents" VLUNs are used. This is the default policy
+            setting.
+        rware
+            The virtual volume will enable ransomware detection.
+        no_rware
+            The virtual volume will disable ransomware detection (default).
+
+
+    The following options can be used when creating thinly provisioned volumes:
+
+    -tpvv
+        Specifies that the volume should be a thinly provisioned volume.
+
+    -reduce
+        Specifies that the volume should be a thinly deduplicated and compressed
+        volume. This option is automatically applied by default.
+
+    -minalloc <size>
+        This option specifies the default allocation size (in MB) to be set.
+        Allocation size specified should be at least (number-of-nodes * 256) and
+        less than the CPG grow size.
+
+    -usr_aw <percent>
+        This option enables user space allocation warning. Generates a warning
+        alert when the allocated data space of the TPVV exceeds the specified
+        percentage of the virtual volume size. Space allocated for snapshots
+        related to this VV do count against the warning. Therefore, the
+        percentage can be greater than 100.
+
+    -usr_al <percent>
+        Indicates the user space allocation limit. Generates a limit alert when
+        the allocated data space of the TPVV exceeds the specified percentage of
+        the virtual volume size. Space allocated for snapshots related to this
+        VV do count against the warning. Therefore, the percentage can be
+        greater than 100.
+
+SPECIFIERS
+    <usr_cpg>
+        Specifies the name of the CPG from which the volume user space will be
+        allocated. If the -tpvv option is specified, the volume is thinly provisioned.
+        If the -reduce option is specified, the volume is thinly provisioned with
+        compression and dedup technologies.
+
+    <vvname>[.<index>]
+        Specifies a VV name up to 255 characters in length. Valid characters
+        include alphanumeric characters, periods, dashes, and underscores. If
+        the -cnt option is used, the optional decimal number <index> specifies
+        the name of the first VV(<vvname>.<index>). The <index> is incremented
+        by 1 for each subsequent VV. The <index> must be an integer from 0 to
+        999999. All VV names have the same length constraint.
+
+    <size>[g|G|t|T]
+        Specifies the size for the volume in MB. The volume size is rounded up
+        to the next multiple of 256 MB. The size should be an integer. An
+        optional suffix (with no whitespace before the suffix) will modify the
+        units to GB (g or G suffix) or TB (t or T suffix).  If the size is to
+        be taken from a template, this field should be "-".
+
+NOTES
+    Access to all domains is required to run this command with logical disks
+    specified.
+
+    -minalloc can be used only with -tpvv.
+
+    Verify the creation of virtual volumes by issuing the showvv command.
+
+    Maximum size of reduced Volumes is 64 TiB.
+
+    Maximum size of Thin Provisioned Volumes is 64 TiB.
+
+    For this command MB = 1048576 bytes, GB = 1024MB, and TB = 1024GB.
+
+EXAMPLES
+    The following example creates a 10G TPVV named tpvv1 whose user space is
+    allocated from the common provisioning group cpg1. The user space allocation
+    warning is set to 50 and the user space allocation limit is set to 200:
+
+        cli% createvv -tpvv -usr_aw 50 -usr_al 200 cpg1 tpvv1 10G
+
+    The following example creates 3 TPVVs vv1.2, vv1.3, vv1.4:
+
+        cli% createvv -cnt 3 -tpvv cpg1 vv1.2 1g
+
+    The following example creates a TPVV with default allocation size of 2GB:
+
+        cli% createvv -tpvv -minalloc 2048 cpg2 tpvv1 1g
+
+    The following example creates a thinly deduplicated and compressed volume
+    of size 16GB:
+
+       cli% createvv -reduce cpg2 vv1 16g
+

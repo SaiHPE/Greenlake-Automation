@@ -1,14 +1,23 @@
-"""BL-43 live check: the redesigned Provision storage screen creating real objects on D22U27, driven
+"""BL-43 live check: the redesigned Provision storage screen creating real objects on the array, driven
 by its own buttons in a headless browser. Removes everything it created at the end. No prompts.
 
-    python lab\\ui_provision_lab.py
+    python lab\\ui_provision_lab.py                     (jump box: D22U27 and ESX1, lab passwords from .env)
+    UI_SHEET=<workbook> UI_HOST=<host> python lab/ui_provision_lab.py
+                                     (anywhere the array is reachable, the app already running: the array,
+                                      vCenter, switches and their passwords come from that initialisation
+                                      workbook, read by the app's parser and never printed; UI_HOST is a
+                                      host vCenter knows. FA_SHEET and FA_HOST work too)
 
-1. checks D22U27 has no zz_ui_* objects (stops before anything if it has)
-2. restarts the app on the latest code; composes the lab sheet (ESX1, one 1 GiB volume in zz_ui_vvs,
-   host set zz_ui_hs) and creates a "Provision only" run; discovery and the zoning check over the API
+1. checks the array has no zz_ui_* objects (stops before anything if it has)
+2. restarts the app on the latest code (Windows only); composes the lab sheet (the host, one 1 GiB
+   volume in zz_ui_vvs, host set zz_ui_hs) and creates a "Provision only" run; discovery and the zoning
+   check over the API
 3. in the browser, on the Provision storage page: Build plan; Create without the tick (must be refused
-   with a message and nothing sent); tick; Create; Verify paths; Continue; then Run overview and Finish
-4. runs the run's own removal set over SSH and checks nothing zz_ui_* is left
+   with a message and nothing sent); tick; Create; Verify paths; Continue; then Run overview and Finish.
+   A host zoned on one fabric only: the plan holds its export back and says so, the rest is created,
+   and Verify paths must not call it live. A host the array does not have yet is created, and the
+   run's removal set removes it again.
+4. runs the run's own removal set over SSH and checks nothing zz_ui_* (or the host it made) is left
 Writes PASS/FAIL lines to report.txt; screenshots and evidence go in ~\\Downloads\\ui_provision.zip.
 """
 import json
@@ -25,9 +34,28 @@ import rc_failover_lab as fl
 
 OUT = os.path.join(os.path.expanduser("~"), "Downloads", "ui_provision")
 fl.OUT = OUT
-ARRAY_PW, LAB_PW = fl.lab_secret("LAB_ARRAY_PW"), fl.lab_secret("LAB_DEFAULT_PW")
-P_HOST = "10.64.122.99"
-HOST = "ESX1"
+SHEET = os.environ.get("UI_SHEET") or os.environ.get("FA_SHEET")
+if SHEET:
+    SERIAL, NETWORK, TARGETS = fl.sheet_targets(SHEET)
+    ARRAY_PW, LAB_PW = TARGETS["prov_array_password"], None
+    HOST = os.environ.get("UI_HOST") or os.environ.get("FA_HOST") or "ESX1"
+else:
+    ARRAY_PW, LAB_PW = fl.lab_secret("LAB_ARRAY_PW"), fl.lab_secret("LAB_DEFAULT_PW")
+    SERIAL = "CZ2D320BT1"
+    NETWORK = {"mask": "255.255.248.0", "gateway": "10.64.127.254", "dns1": "10.64.122.1", "ntp": "not-used",
+               "timezone": "Asia/Kolkata"}
+    TARGETS = {
+        "prov_array_host": "10.64.122.99", "prov_array_user": "3paradm", "prov_array_password": ARRAY_PW,
+        "prov_vcenter_host": "10.54.154.226", "prov_vcenter_user": "administrator@vsphere.local",
+        "prov_vcenter_password": LAB_PW,
+        # D22U27's own F1 switch runs FOS 7.0.2c and refuses the SSH client; any switch of the fabric reads it
+        "prov_sw1_host": "10.64.122.146", "prov_sw1_user": "admin", "prov_sw1_password": LAB_PW,
+        "prov_sw2_host": "10.64.127.244", "prov_sw2_user": "admin", "prov_sw2_password": LAB_PW,
+    }
+    HOST = "ESX1"
+P_HOST = TARGETS["prov_array_host"]
+# What the zoning check and the plan said: whether the export can be made, and whether the run makes the host.
+SEEN = {"zoned": True, "made_host": False}
 VOL, VVSET, HOSTSET = "zz_ui_vol01", "zz_ui_vvs", "zz_ui_hs"
 CEILING_S = 15 * 60
 RESULTS = []
@@ -79,10 +107,14 @@ def api_step(run_id, path, done, name, body=None):
 
 
 def leftovers(c):
+    reads = [(cmd, lambda x: x.startswith(("zz_ui", "set:zz_ui")))
+             for cmd in ("showvv zz_ui*", "showvvset zz_ui*", "showhostset zz_ui*", "showvlun -t -v zz_ui*")]
+    if SEEN["made_host"]:
+        reads.append(("showhost " + HOST, lambda x: x == HOST))
     found = []
-    for cmd in ("showvv zz_ui*", "showvvset zz_ui*", "showhostset zz_ui*", "showvlun -t -v zz_ui*"):
+    for cmd, mine in reads:
         for line in fl.run(c, cmd).splitlines():
-            hit = next((x for x in line.split() if x.startswith(("zz_ui", "set:zz_ui"))), None)
+            hit = next((x for x in line.split() if mine(x)), None)
             if hit and not line.lower().startswith(("error", "no ")):
                 found.append("%s (%s)" % (hit, cmd.split()[0]))
     return sorted(set(found))
@@ -92,23 +124,14 @@ def compose():
     body = {
         "init": {
             "gl_client_id": "not-used", "gl_client_secret": "not-used", "gl_token_url": "https://not-used",
-            "serial_number": "CZ2D320BT1", "part_number": "not-used", "subscription_key": "not-used",
-            "service_catalog_region_id": "ap-northeast", "dscc_region_code": "jp1",
-            "mgmt_ipv4": P_HOST, "mask": "255.255.248.0", "gateway": "10.64.127.254", "dns1": "10.64.122.1",
-            "ntp": "not-used", "timezone": "Asia/Kolkata",
+            "serial_number": SERIAL, "part_number": "not-used", "subscription_key": "not-used",
+            "service_catalog_region_id": "ap-northeast", "dscc_region_code": "jp1", "mgmt_ipv4": P_HOST, **NETWORK,
             "contact_first_name": "Sai", "contact_last_name": "Roopesh", "contact_language": "English",
             "contact_company": "HPE", "contact_phone": "0", "contact_email": "not-used@hpe.com",
-            "dscc_system_name": "AlletraMP_D22U27", "dscc_country": "India",
+            "dscc_system_name": "lab-array", "dscc_country": "India",
             "secret_name": "b10000-admin", "secret_username": "3paradm", "customer_name": "Lab provisioning UI check",
         },
-        "targets": {
-            "prov_array_host": P_HOST, "prov_array_user": "3paradm", "prov_array_password": ARRAY_PW,
-            "prov_vcenter_host": "10.54.154.226", "prov_vcenter_user": "administrator@vsphere.local",
-            "prov_vcenter_password": LAB_PW,
-            # D22U27's own F1 switch runs FOS 7.0.2c and refuses the SSH client; any switch of the fabric reads it
-            "prov_sw1_host": "10.64.122.146", "prov_sw1_user": "admin", "prov_sw1_password": LAB_PW,
-            "prov_sw2_host": "10.64.127.244", "prov_sw2_user": "admin", "prov_sw2_password": LAB_PW,
-        },
+        "targets": TARGETS,
         "volumes": [{"name": VOL, "size_gib": "1", "provisioning_type": "tpvv", "cpg": "SSD_r6", "vvset": VVSET}],
         "hostsets": [{"name": HOSTSET, "members": ""}],
         "hosts": [{"name": HOST, "os": "esxi"}],
@@ -135,8 +158,8 @@ def writes(run_id):
 def browser(pw):
     try:
         return pw.chromium.launch()
-    except Exception:  # noqa: BLE001 - no bundled Chromium on this box: Edge is always there on Windows
-        return pw.chromium.launch(channel="msedge")
+    except Exception:  # noqa: BLE001 - no bundled Chromium: Edge is always there on Windows, Chrome usually elsewhere
+        return pw.chromium.launch(channel="msedge" if os.name == "nt" else "chrome")
 
 
 def drive(run_id):
@@ -174,10 +197,14 @@ def drive(run_id):
         def until(text, seconds=120):
             page.get_by_text(text).first.wait_for(timeout=seconds * 1000)
 
-        # A step not reached yet is not clickable in the rail: go on from SAN zoning like the operator
+        # A step not reached yet is not clickable in the rail: go on from SAN zoning like the operator.
+        # SAN zoning offers "Continue with" only when a host is zoned; else the rail opens the step.
         rail.get_by_text(re.compile(r"^SAN zoning$", re.I)).first.click(timeout=10000)
         shot("00-zoning")
-        footer.get_by_role("button", name=re.compile(r"^Continue with ")).first.click(timeout=10000)
+        if SEEN["zoned"]:
+            footer.get_by_role("button", name=re.compile(r"^Continue with ")).first.click(timeout=10000)
+        else:
+            rail.get_by_text(re.compile(r"^Provision storage$", re.I)).first.click(timeout=10000)
         page.wait_for_timeout(1500)
         page_ok("Provision storage, no plan", shot("01-no-plan"), "Provision storage", "No plan yet")
 
@@ -188,13 +215,23 @@ def drive(run_id):
         plan = (ev or {}).get("data", {}).get("plan") or {}
         rows = {(a["kind"], a["name"]): a["state"] for a in plan.get("actions", [])}
         mine = {k: v for k, v in rows.items() if k[1].startswith("zz_ui")}
-        check("Build plan: volume, VV set, host set and export are 'create', 0 blockers",
-              ev is not None and ev["event_type"] == "storage.previewed" and len(mine) == 4
-              and all(v == "create" for v in mine.values()) and not plan.get("blockers"),
-              "; ".join("%s %s=%s" % (k[0], k[1], v) for k, v in rows.items()) + " | " + "; ".join(plan.get("blockers", [])))
+        if SEEN["zoned"]:
+            check("Build plan: volume, VV set, host set and export are 'create', 0 blockers",
+                  ev is not None and ev["event_type"] == "storage.previewed" and len(mine) == 4
+                  and all(v == "create" for v in mine.values()) and not plan.get("blockers"),
+                  "; ".join("%s %s=%s" % (k[0], k[1], v) for k, v in rows.items()) + " | " + "; ".join(plan.get("blockers", [])))
+        else:
+            notes = plan.get("notes", [])
+            check("Build plan: volume, VV set and host set are 'create', the export held back and named, 0 blockers",
+                  ev is not None and ev["event_type"] == "storage.previewed" and len(mine) == 3
+                  and all(v == "create" for v in mine.values()) and ("vlun", VVSET) not in rows
+                  and any("held back" in n and HOSTSET in n for n in notes) and not plan.get("blockers"),
+                  "; ".join("%s %s=%s" % (k[0], k[1], v) for k, v in rows.items()) + " | " + " | ".join(notes)[:400])
         if not ev or plan.get("blockers") or ev["event_type"] != "storage.previewed":
             b.close()
             return None
+        SEEN["made_host"] = rows.get(("host", HOST)) == "create"
+        print("  the plan %s %s" % ("creates" if SEEN["made_host"] else "keeps", HOST))
         until("Review the plan, then approve creation")
         text = shot("02-plan")
         page_ok("Provision storage, plan to review", text, "Review the plan", VOL, VVSET, HOSTSET, "I have reviewed this plan")
@@ -237,8 +274,13 @@ def drive(run_id):
         created = sum(1 for o in res["outcomes"] if o["status"] == "created")
         page_ok("Provision storage, created", text, "%d created" % created, "What the array answered", "Verify the paths next")
         sent = writes(run_id)
-        check("every write this run sent names a zz_ui object", sent and all("zz_ui" in c for c in sent),
-              "%d write(s): %s" % (len(sent), "; ".join(sent)[:400]))
+        ours = ("zz_ui", '"%s"' % HOST) if SEEN["made_host"] else ("zz_ui",)
+        check("every write this run sent names a zz_ui object%s" % (" or the new host " + HOST if SEEN["made_host"] else ""),
+              sent and all(any(name in c for name in ours) for c in sent), "%d write(s): %s" % (len(sent), "; ".join(sent)[:400]))
+        removals = [r["command"] for r in res.get("removals", [])]
+        check("the removal set %s the host" % ("removes" if SEEN["made_host"] else "keeps"),
+              any(r.startswith("removehost ") and r.split()[-1] == HOST for r in removals) == SEEN["made_host"],
+              " | ".join(removals))
 
         since = len(events(run_id))
         press("Verify paths")
@@ -246,9 +288,13 @@ def drive(run_id):
         fl.save("api-paths.json", json.dumps(ev, indent=2))
         ver = (ev or {}).get("data", {}).get("verification") or {}
         ph = next((x for x in ver.get("hosts", []) if x["host"] == HOST), None)
-        check("Verify paths: %s is live with 1 LUN on 2 or more paths" % HOST,
-              bool(ph and ph["verdict"] == "live" and ph.get("lun_count", 0) >= 1 and (ph.get("paths_per_lun") or 0) >= 2),
-              json.dumps({k: ph.get(k) for k in ("verdict", "lun_count", "paths_per_lun", "esxi_state", "detail")}) if ph else (ev or {}).get("message", "no answer"))
+        seen = json.dumps({k: ph.get(k) for k in ("verdict", "lun_count", "paths_per_lun", "esxi_state", "detail")}) if ph else (ev or {}).get("message", "no answer")
+        if SEEN["zoned"]:
+            check("Verify paths: %s is live with 1 LUN on 2 or more paths" % HOST,
+                  bool(ph and ph["verdict"] == "live" and ph.get("lun_count", 0) >= 1 and (ph.get("paths_per_lun") or 0) >= 2), seen)
+        else:
+            check("Verify paths: the read finished and does not call %s live (its export was held back)" % HOST,
+                  ev is not None and ev["event_type"] == "storage.paths.verified" and not (ph and ph["verdict"] == "live"), seen)
         page.wait_for_timeout(2000)
         text = shot("05-paths")
         page_ok("Provision storage, paths read back", text, "read back", HOST, "Continue to")
@@ -284,17 +330,19 @@ def cleanup(applied):
         print("  $ %s  -> %s" % (cmd, answer.splitlines()[-1] if answer else "(no output)"))
     left = leftovers(c)
     if left:
-        # The run's removal set missed something (a stopped apply): the fixed names are ours, D22U27 had none before.
+        # The run's removal set missed something (a stopped apply): the fixed names are ours, the array had none before.
         extra = ["removevlun -f %s %s %s" % (VOL, t[0], t[2]) for t in
                  (line.split() for line in fl.run(c, "showvlun -t -v %s" % VOL).splitlines()) if len(t) > 2 and t[1] == VOL]
         extra += ["removevvset -f " + VVSET, "removevv -f " + VOL, "removehostset -f " + HOSTSET]
+        if SEEN["made_host"]:
+            extra.append("removehost " + HOST)
         for cmd in extra:
             answer = fl.run(c, cmd).strip()
             log.append("(fallback) $ %s\n%s" % (cmd, answer))
         left = leftovers(c)
     fl.save("cleanup.txt", "\n".join(log))
     check("the run's removal set was run (%d commands)" % len(lines), bool(lines) or applied is None)
-    check("no zz_ui_* object left on D22U27", not left, "; ".join(left))
+    check("no zz_ui_* object%s left on the array" % (" or host " + HOST if SEEN["made_host"] else ""), not left, "; ".join(left))
     c.close()
 
 
@@ -302,13 +350,16 @@ def main():
     if os.path.isdir(OUT):
         shutil.rmtree(OUT)
     os.makedirs(OUT)
-    fl.banner("1. D22U27 before")
+    fl.banner("1. The array before (%s)" % P_HOST)
     c = fl.ssh(P_HOST, ARRAY_PW)
     left = leftovers(c)
     c.close()
     if left:
-        sys.exit("zz_ui_* objects are already on D22U27, nothing was done:\n  " + "\n  ".join(left))
-    fl.restart_app()
+        sys.exit("zz_ui_* objects are already on the array, nothing was done:\n  " + "\n  ".join(left))
+    if os.name == "nt":
+        fl.restart_app()
+    else:
+        fl.get("/app/profile")      # the app must already be running on this machine
 
     fl.banner("2. A Provision only run: discovery and zoning check over the API")
     run_id = compose()
@@ -321,8 +372,14 @@ def main():
         check("discovery: %s is in the run and identified" % HOST, bool(hosts.get(HOST, {}).get("identified")), ev["message"][:160])
         ev = api_step(run_id, "/zoning/preview", ["zoning.previewed", "zoning.proper"], "zoning-check")
         zoned = ev["data"].get("report", {}).get("zoned_hosts", [])
-        if not check("zoning check: %s is zoned on both fabrics" % HOST, HOST in zoned, ", ".join(zoned) or "none"):
-            return
+        SEEN["zoned"] = HOST in zoned
+        if not SEEN["zoned"]:
+            if not SHEET:
+                check("zoning check: %s is zoned on both fabrics" % HOST, False, ", ".join(zoned) or "none")
+                return
+            # A lab fact, not a result: the export is held back and the check below expects that.
+            print("  %s is not zoned on both fabrics (%s): its export is held back" % (
+                HOST, " | ".join(n for n in ev["data"].get("report", {}).get("notes", []) if HOST in n)[:200]))
         status, resp = api("POST", "/runs/%s/storage/builder" % run_id, {
             "host_sets": [{"name": HOSTSET, "members": [HOST]}],
             "exports": [{"source_kind": "vvset", "source_name": VVSET, "target_kind": "hostset", "target_name": HOSTSET, "lun": None}],

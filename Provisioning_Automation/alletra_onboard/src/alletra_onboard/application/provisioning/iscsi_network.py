@@ -17,6 +17,7 @@ from collections.abc import Callable
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.provisioning.discovery import (
     parse_file_ports,
+    parse_iscsi_untagged_ports,
     parse_iscsi_vlans,
     parse_showport_iscsi,
 )
@@ -27,6 +28,7 @@ from alletra_onboard.application.replication.read import (
 )
 from alletra_onboard.domain.network import (
     IscsiNetworkPlan,
+    IscsiPortAddress,
     IscsiVlanAction,
     IscsiVlanCheck,
     IscsiVlanInterface,
@@ -182,13 +184,17 @@ def plan_iscsi_vlans(requests: list[IscsiVlanRequest], view: PortNetworkView) ->
             if note not in plan.notes:
                 plan.notes.append(note)
 
+    # R3: a line per sheet port with a planned or existing VLAN. A conflict row keeps its port's line when
+    # the array already has a VLAN there (live 2026-11-17: VLAN 2999 on 0:4:2 with another gateway).
     wanted: dict[str, list[int]] = {}
     for action in actions:
+        tags = wanted.setdefault(action.nsp, [])
         if action.state in ("create", "exists"):
-            wanted.setdefault(action.nsp, []).append(action.vlan_id)
+            tags.append(action.vlan_id)
     for nsp in sorted(wanted, key=_nsp_key):
         tags = wanted[nsp] + [v.vlan_id for v in view.vlans if v.nsp == nsp]
-        plan.switch_handoff.append(switch_sentence(view.name, nsp, tags))
+        if tags:
+            plan.switch_handoff.append(switch_sentence(view.name, nsp, tags))
     return plan
 
 
@@ -241,6 +247,20 @@ def _read(cli, command: str) -> str:
     return text
 
 
+def untagged_addresses(
+    ports: list[IscsiPortAddress], untagged: set[str], vlans: list[IscsiVlanInterface],
+) -> list[IscsiPortAddress]:
+    """Each port's base address only when it is untagged. A port with no `untagged` row in `showport
+    -iscsivlans` whose base columns hold one of its own VLAN addresses has no untagged address: read as
+    one, a second VLAN in that network would be refused as the port's own (live 2026-11-17)."""
+    out = []
+    for port in ports:
+        if port.ip and port.nsp not in untagged and port.ip in {v.ip for v in vlans if v.nsp == port.nsp}:
+            port = port.model_copy(update={"ip": "", "netmask": "", "gateway": ""})
+        out.append(port)
+    return out
+
+
 def read_port_network(creds: EndpointCreds, *, array_cli_factory: Callable = make_array_cli) -> PortNetworkView:
     """R2: one SSH session over the read-only client (ADR 0001), every read already allowed. A failed
     login or read raises: the plan is not built on half a read."""
@@ -248,7 +268,9 @@ def read_port_network(creds: EndpointCreds, *, array_cli_factory: Callable = mak
         sysinfo = parse_showsys(_read(cli, "showsys"))
         roles, _node_wwn = parse_showport_roles(_read(cli, "showport"))
         iscsi_ports = parse_showport_iscsi(_read(cli, "showport -iscsi"))
-        vlans = parse_iscsi_vlans(_read(cli, "showport -iscsivlans"))
+        vlans_text = _read(cli, "showport -iscsivlans")
+        vlans = parse_iscsi_vlans(vlans_text)
+        iscsi_ports = untagged_addresses(iscsi_ports, parse_iscsi_untagged_ports(vlans_text), vlans)
         rcip = parse_showport_rcip(_read(cli, "showport -rcip"))
         files = parse_file_ports(_read(cli, "showport -file"))
         mgmt_ip, mgmt_netmask = parse_shownet_mgmt(_read(cli, "shownet"))

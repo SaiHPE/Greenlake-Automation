@@ -826,7 +826,11 @@ SSH and TLS client to an on-site device asks:
   `BrocadeRefused`, `VCenterError`, `LinuxHostError`, `WindowsHostError`, `DsccSetupError`,
   `GreenLakeAsyncOperationError`, `httpx.HTTPStatusError`, `TimeoutError`.
   `WsapiClient._translate` turns SDK errors into sentences: not ready (503), wedged WSAPI (timeout,
-  restart it with `stopwsapi` and `startwsapi`), subscription not finished.
+  restart it with `stopwsapi` and `startwsapi`), subscription not finished. Every other refusal reads
+  *Could not <what the tool was doing>. The array said: <the array's reason> (HTTP <status>, code <n>)*.
+  The caller passes `where` in plain words (*create volume x*, *add 1 host(s) to host set y*), never an
+  API call name, and no sentence says *WSAPI* (SPEC-030 R10; live 2026-11-17 the failed apply read
+  *WSAPI createVolume zz_bl45_vol02+ failed: …*). Pinned by `test_no_array_error_names_an_api_call`.
 - GreenLake: retryable status codes are retried in the HTTP client; a phase failure ends the
   pipeline with that phase recorded as failed.
 
@@ -876,10 +880,17 @@ One workbook is one array.
   sync, SLD, 3DC, streaming, app); the network tab checks IPv4 addresses and masks, and pairs ports with `pair_ports`.
 - A replication step selected without a Replication tab is refused.
 - A volume size must be a whole number of GiB above 0, and not above `VOLUME_MAX_GIB`
-  (`domain/provisioning.py`, BL-55). That limit is `None` until the array's `help createvv` is
-  captured (`lab/snap_capture.py`); while it is `None` no size is refused and the array has the last
-  word. The plan applies the same check (`_judge_volume`: a new volume over the limit is a conflict,
+  (`domain/provisioning.py`, BL-55): 65536 GiB, the 64 TiB the array's own `help createvv` states
+  for thin and reduced volumes (rack13-ARCUS, OS 10.6.0, captured 2026-11-17). The plan applies the same check (`_judge_volume`: a new volume over the limit is a conflict,
   so a blocker), for intents that did not come through the sheet.
+- A volume name must be at most `VOLUME_NAME_MAX` (255) characters of letters, digits, `.`, `-` and
+  `_` (`volume_name_problem`, `domain/provisioning.py`), the rule the array's own `help createvv`
+  states (rack13-ARCUS, OS 10.6.0, captured 2026-11-17). Refused on the sheet with one sentence
+  (*Volume 'x+' — Name: the array takes only letters, digits, '.', '-' and '_' in a volume name, not
+  '+'. Rename it.*); in the plan a new volume with such a name is a conflict, so a blocker. Live on
+  2026-11-17 the array refused `zz_bl45_vol02+` only at apply (HTTP 400 code 69), after three other
+  objects were made. Host, host set and volume set names are not checked: no captured help states
+  their characters (`help createhost` states only *up to 31 characters*).
 
 On upload, the API saves the sheet's GreenLake credentials to `.env`, stashes the parsed sheet under a
 token, and returns the work item without the DSCC password. Device passwords never return to the

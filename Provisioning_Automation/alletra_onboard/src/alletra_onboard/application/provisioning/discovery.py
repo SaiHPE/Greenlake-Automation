@@ -142,6 +142,16 @@ def parse_iscsi_vlans(text: str) -> list[IscsiVlanInterface]:
     return out
 
 
+def parse_iscsi_untagged_ports(text: str) -> set[str]:
+    """`showport -iscsivlans` -> the ports that have an untagged address (a row with VLAN `untagged`).
+
+    On a port with only a VLAN address, `showport -iscsi` prints that address in its base columns, with
+    no `*` (rack13-ARCUS, OS 10.6.0, 2026-11-17, VLAN 2999 on 0:4:2: tests/fixtures/iscsi_vlan/tagged/).
+    This view is the one that tells the two apart."""
+    required = ("VLAN", "IPAddr", "Netmask/PrefixLen", "Gateway")
+    return {row["N:S:P"] for row in _header_rows(text, "showport -iscsivlans", required) if row.get("VLAN") == "untagged"}
+
+
 #: Slot-4 card ports 1-2 carry data services (file OR iSCSI); 3-4 are the RCIP-capable ports. A
 #: convention, not a law: it holds on every array measured (rack13arcus, AlletraMP_D22U27, and the
 #: two Panduranga sampled), but Type is the array's own answer and always wins. Position is used

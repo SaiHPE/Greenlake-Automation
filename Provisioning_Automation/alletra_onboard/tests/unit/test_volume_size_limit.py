@@ -2,10 +2,9 @@
 
 Live on rack13-ARCUS (OS 10.6.0), 2026-11-16: a 1 PiB volume passed the sheet and the plan, and only the
 array refused it (HTTP 400 code 28, "client request contains value that is too large"). The limit comes
-from the array's own `help createvv`, which is not captured yet, so `VOLUME_MAX_GIB` is None and nothing
-is refused. The mechanism is pinned here with a stand-in limit. The tests marked NOT_CAPTURED pin the
-real limit; each turns green, and must then lose its marker, once `lab/snap_capture.py` has saved
-`help_createvv.txt` under tests/fixtures/ and `VOLUME_MAX_GIB` holds the size that page states.
+from the array's own `help createvv`, captured on rack13-ARCUS 2026-11-17
+(tests/fixtures/rack13_snap/help_createvv.txt): 64 TiB for thin and for reduced volumes. The mechanism is
+pinned with a stand-in limit; the last tests pin the captured one.
 """
 
 from __future__ import annotations
@@ -24,11 +23,6 @@ from tests.unit.test_plan_truth import TruthfulFakeWsapi, _intent, _plan, _row
 FIX = Path(__file__).resolve().parents[1] / "fixtures"
 ONE_PIB_GIB = 1024 * 1024          # the size rack13-ARCUS refused on 2026-11-16
 STAND_IN_GIB = 2048                # not the array's limit: a value to exercise the check with
-
-NOT_CAPTURED = pytest.mark.xfail(
-    reason="BL-55: needs the array's `help createvv` in tests/fixtures/ (help_createvv.txt, saved by "
-           "lab/snap_capture.py) and VOLUME_MAX_GIB set to the size it states; until then nothing is refused",
-    strict=True)
 
 
 def _sheet(size_gib: int):
@@ -50,9 +44,9 @@ def stand_in_limit(monkeypatch):
 
 # ------------------------------------------------------------------ the mechanism, with a stand-in limit
 
-def test_without_a_captured_limit_nothing_is_refused():
-    """The state today: the 1 PiB volume of 2026-11-16 still passes, and the array has the last word."""
-    assert provisioning.VOLUME_MAX_GIB is None
+def test_without_a_captured_limit_nothing_is_refused(monkeypatch):
+    """With no limit set, the 1 PiB volume of 2026-11-16 passes, and the array has the last word."""
+    monkeypatch.setattr(provisioning, "VOLUME_MAX_GIB", None)
     assert _sheet(ONE_PIB_GIB).volumes[0].size_gib == ONE_PIB_GIB
     plan = _big_plan(ONE_PIB_GIB)
     assert _row(plan, "volume", "vol01").state == "create" and plan.blockers == []
@@ -86,7 +80,6 @@ def test_a_volume_already_on_the_array_is_judged_as_before(stand_in_limit):
 
 # ------------------------------------------------------------------ the real limit, once captured
 
-@NOT_CAPTURED
 def test_the_arrays_createvv_help_is_captured_and_its_limit_is_set():
     """Set VOLUME_MAX_GIB to the size the captured page states; never edit the capture to fit."""
     pages = sorted(FIX.glob("**/help_createvv.txt"))
@@ -95,13 +88,17 @@ def test_the_arrays_createvv_help_is_captured_and_its_limit_is_set():
     assert isinstance(provisioning.VOLUME_MAX_GIB, int) and provisioning.VOLUME_MAX_GIB > 0
 
 
-@NOT_CAPTURED
 def test_the_one_pib_volume_of_2026_11_16_is_refused_on_the_sheet():
     with pytest.raises(ValueError, match="more than the array can create in one volume"):
         _sheet(ONE_PIB_GIB)
 
 
-@NOT_CAPTURED
 def test_the_one_pib_volume_of_2026_11_16_is_blocked_in_the_plan():
     plan = _big_plan(ONE_PIB_GIB)
     assert _row(plan, "volume", "vol01").state == "conflict" and len(plan.blockers) == 1
+
+
+def test_exactly_64_tib_passes_and_one_gib_more_is_refused():
+    assert _sheet(64 * 1024).volumes[0].size_gib == 64 * 1024
+    with pytest.raises(ValueError, match="more than the array can create in one volume"):
+        _sheet(64 * 1024 + 1)

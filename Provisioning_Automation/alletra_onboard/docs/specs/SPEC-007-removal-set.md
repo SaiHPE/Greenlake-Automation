@@ -46,7 +46,7 @@ created nothing."*
 array refuses, but what it made before that stays on the array. The set is still built, inside the
 array session: objects by `created` outcome, exports by a fresh read of the templates when the failure
 came among the exports (the failed call may have presented a LUN). If that read fails too, a note says
-to check `showvlun -t`. The error names the object it was creating. When that object is a host, host
+to check `showvlun -t`. The error names the object it was creating, in plain words, then the array's own reason (*Stopped while creating volume x: Could not create volume x. The array said: illegal character in input (HTTP 400, code 69, ref name)*). When that object is a host, host
 set, volume or volume set, a note names it with the command to check for it and the command to remove it:
 a timeout can lose the answer after the array made it, but it stays out of the set, since it may have
 been there before this run (tested against fakes, not yet seen live). The page, the as-built and the lab

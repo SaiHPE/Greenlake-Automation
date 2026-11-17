@@ -514,8 +514,9 @@ class _Ssh:
 
     def __init__(self, schedules: list[ArraySchedule], *, refuse: str = "", suspend: bool = False,
                  touch_other: bool = False, lose_answer: bool = False, drop_before: bool = False,
-                 busy_after_write: bool = False) -> None:
+                 busy_after_write: bool = False, os_10_6: bool = False) -> None:
         self.schedules = list(schedules)
+        self.os_10_6 = os_10_6
         self.refuse, self.suspend, self.touch_other, self.lose_answer = refuse, suspend, touch_other, lose_answer
         self.drop_before, self.busy_after_write, self.written = drop_before, busy_after_write, False
         self.sent: list[str] = []
@@ -539,6 +540,10 @@ class _Ssh:
         rows = [f"{s.name} {s.command} {s.interval} {s.minute} {s.hour} {s.dom} {s.month} {s.dow} {s.created_by} "
                 f"{s.status} {s.alert} {s.next_run}" for s in self.schedules]
         head = "SchedName File/Command Interval Min Hour DOM Month DOW CreatedBy Status Alert NextRunTime"
+        if self.os_10_6:        # Id first and Rebal before NextRunTime, as tests/fixtures/rack13_snap/showsched_one.txt
+            rows = [f" {i} {r}".replace(f" {s.alert} {s.next_run}", f" {s.alert} Y {s.next_run}")
+                    for i, (r, s) in enumerate(zip(rows, self.schedules, strict=True), start=6)]
+            head = "Id " + head.replace(" NextRunTime", " Rebal NextRunTime")
         return "\n".join([head, *rows, "-" * 40, f"{len(rows)} total", ""])
 
     def exec_command(self, command: str, timeout=None):
@@ -640,9 +645,10 @@ def test_when_the_array_cannot_be_read_after_a_failed_write_the_names_to_check_a
 
 # ------------------------------------------------------------------ R5, R6: schedules over the write client (ADR 0016)
 
-def test_the_schedule_goes_through_the_bound_client_after_the_snapshots_and_is_read_back():
+@pytest.mark.parametrize("os_10_6", [False, True])
+def test_the_schedule_goes_through_the_bound_client_after_the_snapshots_and_is_read_back(os_10_6):
     others = [_showsched_row("Compact-Task", "compactcpg SSD_r6", "0 0,5,10,15,20 * * *")]
-    ssh = _Ssh(others)
+    ssh = _Ssh(others, os_10_6=os_10_6)
     _plan, result = _apply([_req(snapshot_now=True, every=4, unit="hours", expire_hours=24)], _ArrayWsapi(_base(), _SETS),
                            ssh=ssh)
     assert result.error is None

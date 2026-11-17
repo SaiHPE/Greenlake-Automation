@@ -786,7 +786,7 @@ def test_subscription_refusal_is_translated_to_the_onboarding_gate():
 
     err = WsapiClient("h", "u", "p")._translate(
         Exception("Error: Array has not yet completed the subscription process"),
-        where="createVolume CRV_Prod01",
+        where="create volume CRV_Prod01",
     )
     assert isinstance(err, WsapiError) and "GreenLake" in str(err)
 
@@ -808,11 +808,54 @@ def test_a_refused_write_says_the_arrays_reason_once():
     assert type(exc) is hpe_exc.HTTPBadRequest
     assert str(exc) == f"Bad request (HTTP 400) 28 - {reason}"
 
-    err = WsapiClient("h", "u", "p")._translate(exc, where="createVolume zz_bl45_vol02")
+    err = WsapiClient("h", "u", "p")._translate(exc, where="create volume zz_bl45_vol02")
 
     assert type(err) is WsapiError
-    assert str(err) == f"WSAPI createVolume zz_bl45_vol02 failed: {reason} (HTTP 400, code 28)"
+    assert str(err) == f"Could not create volume zz_bl45_vol02. The array said: {reason} (HTTP 400, code 28)"
     assert str(err).count(reason) == 1
+
+
+def test_a_refused_volume_name_reads_in_plain_words_with_the_arrays_reason():
+    # Live on rack13-ARCUS, 2026-11-17: the failed apply read "Stopped while creating volume zz_bl45_vol02+:
+    # WSAPI createVolume zz_bl45_vol02+ failed: illegal character in input (HTTP 400, code 69, ref name)".
+    # WSAPI and the API's call names are not words for the screen (SPEC-030 R10); the array's reason stays.
+    from types import SimpleNamespace
+
+    from hpe3parclient import exceptions as hpe_exc
+
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiError
+
+    class Refusing:
+        def createVolume(self, name, cpg, size_mib, optional=None):
+            raise hpe_exc.from_response(SimpleNamespace(status=400),
+                                        {"code": 69, "desc": "illegal character in input", "ref": "name"})
+
+    client = WsapiClient("h", "u", "p")
+    client._client = Refusing()
+    with pytest.raises(WsapiError) as exc:
+        client.ensure_volume("zz_bl45_vol02+", "SSD_r6", 1024, "tpvv")
+    assert str(exc.value) == ("Could not create volume zz_bl45_vol02+. The array said: illegal character in input "
+                              "(HTTP 400, code 69, ref name)")
+
+
+def test_no_array_error_names_an_api_call():
+    """Every message `_translate` builds names what the tool was doing in plain words: no call name
+    (createVolume, modifyHostSet, ...) is passed as `where`, and no message says WSAPI."""
+    import ast
+    import inspect
+    import re
+
+    from alletra_onboard.adapters.array import wsapi_client
+
+    tree = ast.parse(inspect.getsource(wsapi_client))
+    wheres = [ast.unparse(kw.value) for node in ast.walk(tree) if isinstance(node, ast.Call)
+              for kw in node.keywords if kw.arg == "where"]
+    assert len(wheres) >= 20
+    assert not [w for w in wheres if re.search(r"\b[a-z]+[A-Z][a-z]", w)], wheres
+    client = wsapi_client.WsapiClient("h", "u", "p")
+    for exc in (RuntimeError("connection reset"), TimeoutError("timed out"), Exception("not ready"),
+                Exception("Array has not yet completed the subscription process")):
+        assert "WSAPI" not in str(client._translate(exc, where="create volume v1"))
 
 
 def test_a_volume_the_array_finds_too_large_is_refused_with_a_sentence():
@@ -841,8 +884,8 @@ def test_a_volume_the_array_finds_too_large_is_refused_with_a_sentence():
 def test_an_error_without_the_arrays_reason_keeps_its_type_and_text():
     from alletra_onboard.adapters.array.wsapi_client import WsapiClient
 
-    err = WsapiClient("h", "u", "p")._translate(RuntimeError("connection reset"), where="login")
-    assert str(err) == "WSAPI login failed: RuntimeError: connection reset"
+    err = WsapiClient("h", "u", "p")._translate(RuntimeError("connection reset"), where="log in to the array")
+    assert str(err) == "Could not log in to the array: RuntimeError: connection reset"
 
 
 def test_a_refusal_that_mentions_a_timeout_keeps_the_arrays_reason():
@@ -855,16 +898,16 @@ def test_a_refusal_that_mentions_a_timeout_keeps_the_arrays_reason():
 
     client = WsapiClient("h", "u", "p")
     refused = hpe_exc.from_response(SimpleNamespace(status=400), {"desc": "invalid timeout value"})
-    err = client._translate(refused, where="createVolume v1")
+    err = client._translate(refused, where="create volume v1")
     assert not isinstance(err, WsapiNotReady)
-    assert str(err) == "WSAPI createVolume v1 failed: invalid timeout value (HTTP 400)"
+    assert str(err) == "Could not create volume v1. The array said: invalid timeout value (HTTP 400)"
 
     # A status the SDK does not map: the bare ClientException, which drops the status.
     unmapped = hpe_exc.from_response(SimpleNamespace(status=422), {"desc": "invalid timeout value"})
     assert type(unmapped) is hpe_exc.ClientException
-    err = client._translate(unmapped, where="createVolume v1")
+    err = client._translate(unmapped, where="create volume v1")
     assert not isinstance(err, WsapiNotReady)
-    assert str(err) == "WSAPI createVolume v1 failed: invalid timeout value"
+    assert str(err) == "Could not create volume v1. The array said: invalid timeout value"
 
 
 def test_the_sdks_own_timeout_still_says_wsapi_did_not_respond():
@@ -906,8 +949,8 @@ def test_a_long_error_body_is_cut_short():
     assert len(page) > 5000
     exc = hpe_exc.from_response(SimpleNamespace(status=500), page)
 
-    err = str(WsapiClient("h", "u", "p")._translate(exc, where="createVolume v1"))
-    assert err.startswith("WSAPI createVolume v1 failed: <html><body>Internal error.")
+    err = str(WsapiClient("h", "u", "p")._translate(exc, where="create volume v1"))
+    assert err.startswith("Could not create volume v1. The array said: <html><body>Internal error.")
     assert err.endswith("… (HTTP 500)")
     assert len(err) < 360
 

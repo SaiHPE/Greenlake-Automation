@@ -58,7 +58,10 @@ array port pair: host, HBA WWPN, alias, array port n:s:p, array WWPN, alias, zon
 (*already zoned* / *command set delivered* / *not selected*). The command set handed to the SAN team
 is reproduced verbatim (monospace) under the sentence *"Delivered to the SAN team for application;
 confirm against the fabric before relying on it."* The zoning check result (hosts zoned on both
-fabrics / not verified) closes the section. No zoning event → one sentence: *This run did not
+fabrics / not verified) closes the section. An iSCSI host is never called zoned: one logged in on the
+array reads *iSCSI, no zoning needed: <host> (logged in on <ports>)*, one not logged in *iSCSI, not
+logged in on the array yet, so nothing is exported to it: <host>* (live 2026-11-17, rack13-ARCUS: the
+document called the iSCSI-only host `zz_is_eljr` zoned on both fabrics). No zoning event → one sentence: *This run did not
 include the SAN zoning step.*
 
 *The record R4 needs did not exist:* `/zoning/render` was pure and stateless, so the command set the

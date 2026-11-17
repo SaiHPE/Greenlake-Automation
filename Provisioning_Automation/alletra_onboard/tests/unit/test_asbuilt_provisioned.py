@@ -440,6 +440,23 @@ def test_zoning_section_says_the_check_ran_when_only_the_check_ran(tmp_path):
     assert "10.132.30.47, 10.132.30.86" in text
 
 
+def test_an_iscsi_host_is_never_called_zoned(tmp_path):
+    """Live on rack13-ARCUS, 2026-11-17: the as-built read *Zoned on both fabrics: zz_is_eljr* for an
+    iSCSI-only host on no fabric. The check puts a logged-in iSCSI host in its gate list (`zoned_hosts`)."""
+    report = {"proper": True, "zoned_hosts": ["zz_is_eljr"], "unverified_hosts": [], "expected": [],
+              "iscsi_hosts": {"zz_is_eljr": ["1:4:1"], "zz_is_new": []}, "remediations": [], "notes": []}
+    out, _ = generate_asbuilt(_array_data(zoning_report=report), tmp_path / "iscsi.docx")
+    _, text = _read(out)
+    assert "zoned on both fabrics: zz_is_eljr" not in text.lower()
+    assert "iSCSI, no zoning needed: zz_is_eljr (logged in on 1:4:1)." in text
+    assert "iSCSI, not logged in on the array yet, so nothing is exported to it: zz_is_new." in text
+
+    fc_too = {**report, "zoned_hosts": ["10.132.30.136", "zz_is_eljr"], "proper": False}
+    out, _ = generate_asbuilt(_array_data(zoning_report=fc_too, zoning_plan=_zoning_plan()), tmp_path / "both.docx")
+    _, text = _read(out)
+    assert "Zoning check on the array: zoned on both fabrics — 10.132.30.136. iSCSI, no zoning needed: zz_is_eljr" in text
+
+
 def test_compression_column_reads_yes_no_or_dash(tmp_path):
     out, _ = generate_asbuilt(_array_data(), tmp_path / "compr.docx")
     doc, _ = _read(out)

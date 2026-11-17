@@ -120,6 +120,38 @@ def test_showsched_on_rack13_with_no_schedules_is_an_empty_list():
     assert parse_showsched(text) == []
 
 
+def test_showsched_on_rack13_os_10_6_reads_the_id_and_rebal_layout():
+    """Captured 2026-11-17 on rack13-ARCUS (OS 10.6.0) right after the live check's createsched -f;
+    the schedule was removed with removesched -f straight after (docs/validation/2026-11-17-rack13-live-w2.md).
+    OS 10.6.0 starts each row with an Id column and adds Rebal before NextRunTime; the columns are
+    taken by header word, so neither shifts the others."""
+    from alletra_onboard.application.snapshots.read import parse_showsched, showsched_readable
+
+    text = _snap("showsched_one.txt")
+    assert showsched_readable(text)
+    rows = parse_showsched(text)
+    assert [(r.name, r.command, r.cron) for r in rows] == [
+        ("zz_snap_probe", "createsv -f -ro -exp 1h @vvname@.@y@@m@@d@@H@@M@@S@ set:zz_snap_vvs", "0 3 * * *")]
+    assert (rows[0].interval, rows[0].created_by, rows[0].status, rows[0].alert, rows[0].next_run) == (
+        "0", "3paradm", "active", "Y", "2026-11-18 03:00:00 IST")
+
+
+@pytest.mark.parametrize("folder", ["d22u27_snap", "vz_snap", "rack13_snap"])
+def test_a_showsched_table_with_a_row_or_header_it_cannot_read_is_not_a_read(folder):
+    """A layout not seen before must fail the read, never read as "no schedule" or drop a row: the apply
+    would then lose the removal line of a schedule it made."""
+    from alletra_onboard.application.snapshots.read import showsched_readable
+
+    name = "showsched_one.txt" if folder == "rack13_snap" else "showsched.txt"
+    lines = _fix(folder, name).splitlines()
+    head = next(i for i, ln in enumerate(lines) if "SchedName" in ln.split()[:2])
+    assert showsched_readable("\n".join(lines))
+    cut_short = lines[:head + 1] + [" ".join(lines[head + 1].split()[:5])] + lines[head + 2:]
+    assert not showsched_readable("\n".join(cut_short))
+    no_status_column = lines[:head] + [lines[head].replace(" Status ", " ")] + lines[head + 1:]
+    assert not showsched_readable("\n".join(no_status_column))
+
+
 def test_showvv_snapshot_columns_of_the_rack13_capture():
     from alletra_onboard.adapters.array.wsapi_client import parse_volumes
     from alletra_onboard.application.snapshots.read import SHOWVV_SNAPCOLS, parse_showvv_snapcols

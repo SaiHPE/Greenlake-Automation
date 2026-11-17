@@ -50,10 +50,16 @@ from alletra_onboard.domain.discovery import ArrayPort
 from alletra_onboard.domain.network import IscsiVlanInterface
 from alletra_onboard.domain.peer_ports import PeerPortState, PortParams
 from alletra_onboard.domain.provisioning import ArrayHostRecord, ArrayVolumeRecord, VlunTemplate
+from alletra_onboard.domain.replication import (
+    DR_ACTION_FAILOVER,
+    DR_ACTION_RECOVER,
+    DR_ACTION_RESTORE,
+)
 from alletra_onboard.domain.shared import normalize_wwpn
 
 # A request that got no answer, known by its type. socket.timeout is TimeoutError.
 _TIMEOUT_TYPES: tuple[type[BaseException], ...] = (TimeoutError,)
+_DR_ACTION = {DR_ACTION_FAILOVER: "failover", DR_ACTION_RECOVER: "recover", DR_ACTION_RESTORE: "restore"}
 if hpe_exc is not None:
     _TIMEOUT_TYPES += (hpe_exc.Timeout,)
 try:
@@ -424,7 +430,7 @@ class WsapiClient:
         except device_trust.DeviceTrustError as exc:
             raise WsapiError(str(exc)) from exc
         except Exception as exc:
-            raise self._translate(exc, where="login") from exc
+            raise self._translate(exc, where="log in to the array") from exc
         try:
             if trusted is None:
                 client = HPE3ParClient(self.api_url, secure=self._ca_bundle, timeout=self.timeout)
@@ -436,7 +442,7 @@ class WsapiClient:
             _record_calls(client, self.host, self.api_url, self.password)
             client.login(self.username, self.password)  # the readiness gate
         except Exception as exc:
-            raise self._translate(exc, where="login") from exc
+            raise self._translate(exc, where="log in to the array") from exc
         self._client = client
 
     def close(self) -> None:
@@ -609,7 +615,7 @@ class WsapiClient:
                 return "created"
             except Exception as exc:
                 if not self._is_conflict(exc):
-                    raise self._translate(exc, where=f"createHost {name}") from exc
+                    raise self._translate(exc, where=f"create host {name}") from exc
                 # EXISTENT_HOST race: someone created the name since our read — fall through and add.
         # The host object exists but lacks some of these WWNs. Reporting "exists" here would be the
         # silent single-path trap: the object looks green while the unregistered HBAs' paths never
@@ -625,7 +631,7 @@ class WsapiClient:
         except Exception as exc:
             # No conflict-swallow here: `missing` excludes WWNs already on this host, so a 409 now
             # means a real race or another owner — masking it as 'exists' is how the live bug hid.
-            raise self._translate(exc, where=f"modifyHost {name} (add {len(missing)} WWN)") from exc
+            raise self._translate(exc, where=f"add {len(missing)} WWN(s) to host {name}") from exc
 
     def ensure_iscsi_host(self, name: str, iqns: list[str], persona: str = "VMware") -> str:
         """The iSCSI twin of ensure_host: ONE host carrying these iSCSI names (`createhost -iscsi`).
@@ -663,7 +669,7 @@ class WsapiClient:
                 return "created"
             except Exception as exc:
                 if not self._is_conflict(exc):
-                    raise self._translate(exc, where=f"createHost -iscsi {name}") from exc
+                    raise self._translate(exc, where=f"create iSCSI host {name}") from exc
                 # EXISTENT_HOST race, as in ensure_host: add the names to the host someone just made.
         try:
             self._require().modifyHost(
@@ -672,7 +678,7 @@ class WsapiClient:
             )
             return "updated"
         except Exception as exc:
-            raise self._translate(exc, where=f"modifyHost {name} (add {len(missing)} iSCSI name)") from exc
+            raise self._translate(exc, where=f"add {len(missing)} iSCSI name(s) to host {name}") from exc
 
     def _existing_set_members(self, getter, name: str) -> list[str] | None:
         """The set's current members, or None if the set does not exist. Sets share ensure_host's
@@ -695,7 +701,7 @@ class WsapiClient:
                 return "created"
             except Exception as exc:
                 if not self._is_conflict(exc):
-                    raise self._translate(exc, where=f"createHostSet {name}") from exc
+                    raise self._translate(exc, where=f"create host set {name}") from exc
                 existing = self._existing_set_members(self._require().getHostSet, name) or []
         missing = [m for m in members if m not in existing]
         if not missing:
@@ -708,7 +714,7 @@ class WsapiClient:
         except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
-            raise self._translate(exc, where=f"modifyHostSet {name} (add {len(missing)})") from exc
+            raise self._translate(exc, where=f"add {len(missing)} host(s) to host set {name}") from exc
 
     def ensure_volume(self, name: str, cpg: str, size_mib: int, provisioning_type: str) -> str:
         # Data reduction is ONE flag on the Alletra MP WSAPI: `reduce`. The legacy 3PAR pair
@@ -733,7 +739,7 @@ class WsapiClient:
                     f"sheet's Volumes tab, then build the plan again. Array said: "
                     f"{self._array_reason(exc) or self._safe_str(exc)}"
                 ) from exc
-            raise self._translate(exc, where=f"createVolume {name}") from exc
+            raise self._translate(exc, where=f"create volume {name}") from exc
 
     def ensure_volume_set(self, name: str, members: list[str]) -> str:
         """Create the VV set, or ADD any missing members to an existing one (additive only)."""
@@ -744,7 +750,7 @@ class WsapiClient:
                 return "created"
             except Exception as exc:
                 if not self._is_conflict(exc):
-                    raise self._translate(exc, where=f"createVolumeSet {name}") from exc
+                    raise self._translate(exc, where=f"create volume set {name}") from exc
                 existing = self._existing_set_members(self._require().getVolumeSet, name) or []
         missing = [m for m in members if m not in existing]
         if not missing:
@@ -757,7 +763,7 @@ class WsapiClient:
         except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
-            raise self._translate(exc, where=f"modifyVolumeSet {name} (add {len(missing)})") from exc
+            raise self._translate(exc, where=f"add {len(missing)} volume(s) to volume set {name}") from exc
 
     def ensure_vlun(self, volume_name: str, host_name: str, lun: int | None = None) -> str:
         """Export a source to a target as a VLUN. ``volume_name`` is a bare volume or ``set:<vvset>``;
@@ -772,7 +778,7 @@ class WsapiClient:
         except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
-            raise self._translate(exc, where=f"createVLUN {volume_name}->{host_name}") from exc
+            raise self._translate(exc, where=f"export {volume_name} to {host_name}") from exc
 
     # ------------------------------------------------------------------ snapshots (SPEC-023 R5)
     # hpe3parclient 4.5 `createSnapshot` and `createSnapshotOfVolumeSet` (read 2026-11-17, LESSONS 29):
@@ -786,14 +792,14 @@ class WsapiClient:
         try:
             self._require().createSnapshot(name, volume, optional={"readOnly": read_only, "expirationHours": expire_hours})
         except Exception as exc:
-            raise self._translate(exc, where=f"createSnapshot {name} of {volume}") from exc
+            raise self._translate(exc, where=f"create snapshot {name} of volume {volume}") from exc
 
     def create_set_snapshot(self, vvset: str, pattern: str, *, read_only: bool, expire_hours: int) -> None:
         try:
             self._require().createSnapshotOfVolumeSet(
                 pattern, vvset, optional={"readOnly": read_only, "expirationHours": expire_hours})
         except Exception as exc:
-            raise self._translate(exc, where=f"createSnapshotOfVolumeSet {pattern} of set {vvset}") from exc
+            raise self._translate(exc, where=f"create snapshots {pattern} of volume set {vvset}") from exc
 
     # ------------------------------------------------------------------ Remote Copy groups (SPEC-016 R4)
     # The `/remotecopygroups` resource, confirmed on WSAPI 1.15 (B10000, OS 10.5.0, both lab
@@ -805,7 +811,7 @@ class WsapiClient:
         try:
             return _members(self._require().getRemoteCopyGroups())
         except Exception as exc:
-            raise self._translate(exc, where="getRemoteCopyGroups") from exc
+            raise self._translate(exc, where="read the Remote Copy groups") from exc
 
     def remote_copy_group(self, name: str) -> dict | None:
         try:
@@ -814,7 +820,7 @@ class WsapiClient:
         except Exception as exc:
             if hpe_exc is not None and isinstance(exc, hpe_exc.HTTPNotFound):
                 return None
-            raise self._translate(exc, where=f"getRemoteCopyGroup {name}") from exc
+            raise self._translate(exc, where=f"read Remote Copy group {name}") from exc
 
     def create_remote_copy_group(self, name: str, *, target: str, mode: str, peer_cpg: str, local_cpg: str = "") -> str:
         """`creatercopygroup -usr_cpg <local> <target>:<peer_cpg> <name> <target>:<sync|periodic>`."""
@@ -826,7 +832,7 @@ class WsapiClient:
         except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
-            raise self._translate(exc, where=f"createRemoteCopyGroup {name}") from exc
+            raise self._translate(exc, where=f"create Remote Copy group {name}") from exc
 
     def set_remote_copy_group(
         self, name: str, *, target: str, period_seconds: int | None, auto_recover: bool, auto_synchronize: bool,
@@ -839,7 +845,7 @@ class WsapiClient:
             try:
                 self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "syncPeriod": period_seconds}]})
             except Exception as exc:
-                raise self._translate(exc, where=f"modifyRemoteCopyGroup {name} (period)") from exc
+                raise self._translate(exc, where=f"set the sync period of Remote Copy group {name}") from exc
         policies = {"autoRecover": auto_recover, "autoSynchronize": auto_synchronize}
         try:
             self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": policies}]})
@@ -847,12 +853,12 @@ class WsapiClient:
         except Exception as exc:
             detail = self._safe_str(exc).lower()
             if "autosynchronize" not in detail and "unrecognized" not in detail:
-                raise self._translate(exc, where=f"modifyRemoteCopyGroup {name} (policies)") from exc
+                raise self._translate(exc, where=f"set the policies of Remote Copy group {name}") from exc
         try:
             self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": {"autoRecover": auto_recover}}]})
         except Exception as exc:
-            raise self._translate(exc, where=f"modifyRemoteCopyGroup {name} (policies)") from exc
-        return (f"The array did not accept 'autoSynchronize' over WSAPI for {name}; auto_recover and the "
+            raise self._translate(exc, where=f"set the policies of Remote Copy group {name}") from exc
+        return (f"The array did not accept 'autoSynchronize' for {name}; auto_recover and the "
                 f"period were set. Set it on the array: setrcopygroup pol {'auto_synchronize' if auto_synchronize else 'no_auto_synchronize'} {name}")
 
     def admit_remote_copy_volume(self, group: str, volume: str, *, target: str, secondary: str | None = None) -> str:
@@ -864,7 +870,7 @@ class WsapiClient:
         except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
-            raise self._translate(exc, where=f"addVolumeToRemoteCopyGroup {group} {volume}") from exc
+            raise self._translate(exc, where=f"add volume {volume} to Remote Copy group {group}") from exc
 
     def start_remote_copy_group(self, name: str) -> str:
         try:
@@ -873,7 +879,7 @@ class WsapiClient:
         except Exception as exc:
             if self._is_conflict(exc) or "already" in self._safe_str(exc).lower():
                 return "exists"
-            raise self._translate(exc, where=f"startRemoteCopy {name}") from exc
+            raise self._translate(exc, where=f"start Remote Copy group {name}") from exc
 
     def stop_remote_copy_group(self, name: str) -> str:
         try:
@@ -882,7 +888,7 @@ class WsapiClient:
         except Exception as exc:
             if self._is_conflict(exc) or "already" in self._safe_str(exc).lower():
                 return "exists"
-            raise self._translate(exc, where=f"stopRemoteCopy {name}") from exc
+            raise self._translate(exc, where=f"stop Remote Copy group {name}") from exc
 
     def remote_copy_dr_action(self, name: str, action: int) -> None:
         """`setrcopygroup failover|recover|restore -f <name>` as the WSAPI disaster-recovery action
@@ -891,7 +897,7 @@ class WsapiClient:
         try:
             self._require().recoverRemoteCopyGroupFromDisaster(name, action)
         except Exception as exc:
-            raise self._translate(exc, where=f"recoverRemoteCopyGroupFromDisaster {name} action {action}") from exc
+            raise self._translate(exc, where=f"run {_DR_ACTION.get(action, f'action {action}')} on Remote Copy group {name}") from exc
 
     # ------------------------------------------------------------------ internals
 
@@ -939,6 +945,8 @@ class WsapiClient:
         return text or f"{type(exc).__name__} (no detail available)"
 
     def _translate(self, exc: Exception, *, where: str) -> WsapiError:
+        """The error the operator reads. `where` is what the tool was doing, in plain words ("create
+        volume x"): the API's call names and the word WSAPI stay off the screen (SPEC-030 R10)."""
         if hpe_exc is not None and isinstance(exc, hpe_exc.SSLCertFailed):
             if self._ca_bundle:
                 return WsapiError(device_trust.ca_bundle_refusal("array", self.host, self._ca_bundle))
@@ -952,31 +960,32 @@ class WsapiClient:
         status = getattr(exc, "http_status", None) or getattr(exc, "code", None)
         if status == 503 or "not ready" in lowered:
             return WsapiNotReady(
-                f"The array's WSAPI is reachable but not ready (during {where}). This tracks array "
-                "health, not config — check `checkhealth -svc -detail` and retry once it clears."
+                f"The array answered but is not ready to take requests yet (while trying to {where}). This "
+                "is the array's own state, not the sheet: check `checkhealth -svc -detail` on the array and "
+                "try again once it is clear."
             )
         # A wedged WSAPI: the TLS connection is ACCEPTED and then nothing answers, so this looks
         # like a network fault while `showwsapi` still reports Enabled/Active. Seen live on the LZ
         # array. Name the remedy, because "timed out" sends people to check firewalls for an hour.
         if self._is_timeout(exc, lowered):
             return WsapiNotReady(
-                f"The array accepted the connection but its WSAPI did not respond during {where}. "
-                "The service is listening yet not serving — `showwsapi` will still say "
+                f"The array accepted the connection but did not respond while trying to {where}. Its "
+                "management service is listening yet not serving — `showwsapi` will still say "
                 "Enabled/Active. Restart it on the array over SSH (`stopwsapi` then `startwsapi`), "
-                "then retry."
+                "then try again."
             )
         # The GreenLake gate, hit live on a fresh B10000: every create is refused with "Array has
         # not yet completed the subscription process" until onboarding (Component A/B/C) finishes.
         # Without this translation it reads like a WSAPI defect instead of a sequencing problem.
         if "subscri" in lowered:
             return WsapiError(
-                f"The array refused {where}: it has not completed GreenLake subscription/onboarding. "
-                "Finish the onboarding steps (GreenLake registration → cloud connection) and retry — "
-                f"array said: {reason or detail[:200]}"
+                f"Could not {where}: the array has not finished its GreenLake subscription. "
+                "Finish the onboarding steps (GreenLake registration → cloud connection) and try again. "
+                f"The array said: {reason or detail[:200]}"
             )
         if reason:
-            return WsapiError(f"WSAPI {where} failed: {reason}")
-        return WsapiError(f"WSAPI {where} failed: {type(exc).__name__}: {detail[:200]}")
+            return WsapiError(f"Could not {where}. The array said: {reason}")
+        return WsapiError(f"Could not {where}: {type(exc).__name__}: {detail[:200]}")
 
     def _certificate_changed(self, where: str) -> WsapiError:
         """A connection after login met a certificate other than the pinned one; the request was not
@@ -988,7 +997,7 @@ class WsapiClient:
         except Exception:  # noqa: BLE001 - the array went away as well; the sentence below still holds
             pass
         return WsapiError(
-            f"The array at {self.host} presented a different certificate during {where}, so the tool "
+            f"The array at {self.host} presented a different certificate while the tool tried to {where}, so it "
             "stopped before sending the request. Run the step again; if it stops again, the run "
             "overview shows the fingerprints under Trusted devices."
         )

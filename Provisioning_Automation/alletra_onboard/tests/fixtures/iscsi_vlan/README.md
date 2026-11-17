@@ -79,10 +79,23 @@ and 10.5.60):
 | `help_controlport.txt` | Equal to `../rc_pair/help/help_controlport.txt`. `controlport rcip` takes no `-vlan` on any form (10.6.0's does); `file` and `nvme` do |
 | `help_showport.txt` | `-iscsivlans` and the `*` note as on 10.6.0 |
 
-Owed: the same capture while a port carries a tagged interface, saved as `tagged/` (the live
-confirmation before the apply is built, ADR 0017 and SPEC-024 §6; rack13-ARCUS is the candidate). It
-pins the tagged row of `showport -iscsivlans`, the values of a tagged WSAPI iSCSIVlans record, and the
-`*` that `showport -iscsi` puts after a starred address; the three tests that need it stay strict
-xfail until then.
+## tagged/ — rack13-ARCUS while 0:4:2 carried VLAN 2999, 2026-11-17 about 18:08 IST
+
+The same script, run from the developer's Mac during the live confirmation
+(`docs/validation/2026-11-17-rack13-live-w2.md`, task 2), between the pasted
+`controliscsiport addr 192.0.2.10 255.255.255.0 -vlan 2999 -f 0:4:2` and
+`controliscsiport delete -vlan 2999 -f 0:4:2`. The gateway line had been refused, so the interface
+has no gateway. `report.txt` is the script's summary. No password, token or customer name; the host
+names are the lab's own, as in `rack13/`.
+
+| File | What it shows |
+|---|---|
+| `showport_iscsivlans.txt` | A tagged row: `0:4:2 2999 192.0.2.10 255.255.255.0 0.0.0.0 1500 1024 0 0.0.0.0 3205`. TPGT 1024, not the port's 42. The untagged rows of 0:4:1 and 1:4:1 as before |
+| `showport_iscsi.txt` | 0:4:2 `ready 192.0.2.10 255.255.255.0 0.0.0.0`, VLANs 1. The port had no untagged address, so the VLAN address shows in the base columns with **no `*`**; the star is still not captured |
+| `showport.txt` | 0:4:2 `target ready 192.0.2.10 … free iSCSI`: setting the address brought the link up (it read `offline` before, with no address) |
+| `wsapi/ports_0_4_2_iscsivlans.json` | One record, `vlanTag` 2999, `IPAddr` 192.0.2.10, `netmask` 255.255.255.0, `gateway` 0.0.0.0, `mtu` 1500, `tpgt` 1024, `stgt` 0: the field names E18U31's untagged record showed |
+
+Still owed: `showport -iscsi` with a `*`, from a port that has an untagged address and a VLAN
+address; `test_discovery_reads_a_starred_iscsi_address_without_its_star` stays strict xfail until then.
 
 Pinned by `tests/unit/test_iscsi_vlans.py`.

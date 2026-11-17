@@ -7,17 +7,22 @@ prompts. Needs both fixes: run it from a branch that has BL-45 and BL-46.
                                      (anywhere the array is reachable, the app already running: the array,
                                       vCenter, switches and their passwords come from that initialisation
                                       workbook, read by the app's parser and never printed; FA_HOST is a
-                                      host that already exists on the array)
+                                      host vCenter knows; the run makes it when the array does not have it)
 
 1. checks the array has no zz_bl45_* objects (stops before anything if it has)
-2. restarts the app on the latest code (Windows only); composes a Provision only run: host set
-   zz_bl45_hs (the host: when the array does not have it yet the apply makes it, and its removal set
-   must remove it again) and two thin volumes in zz_bl45_vvs: zz_bl45_vol01 (1 GiB) and zz_bl45_vol02 (1 PiB, which
-   no array accepts, so the apply stops there). No export, so no host ever sees a volume.
+2. restarts the app on the latest code (Windows only); first two sheets the app must refuse on upload,
+   so nothing reaches the array: one with a 1 PiB volume (BL-55: above the array's 64 TiB), one with a
+   volume named zz_bl45_vol02+ (help createvv: letters, digits, '.', '-' and '_' only). Then a Provision
+   only run: host set zz_bl45_hs (the host: when the array does not have it yet the apply makes it, and
+   its removal set must remove it again) and two 1 GiB thin volumes, zz_bl45_vol01 and zz_bl45_vol02, in
+   the volume set zz_bl45_vvs+. The tool does not check a volume set name's characters (no captured help
+   states them); the array is expected to refuse the '+' there as it does in a volume name, so the apply
+   stops at the volume set. No export, so no host ever sees a volume.
 3. in the browser, on the Provision storage page: Build plan, tick, Create. Expects the apply to stop
-   at zz_bl45_vol02 with the host set and zz_bl45_vol01 made, and a removal set of exactly those two.
-   Screenshots of the failed state at 1366 and 1080 wide. Then Rebuild plan: the made objects read
-   Exists, the run's removal set is still on the page, and the approval tick is clear.
+   at zz_bl45_vvs+ with the host set and both volumes made (and the host, when it was new), and a
+   removal set of exactly those. Screenshots of the failed state at 1366 and 1080 wide. Then Rebuild
+   plan: the made objects read Already there, the run's removal set is still on the page, and the
+   approval tick is clear.
 4. in the Console pane: types `showtarget -rescan` (must be refused, nothing sent to the array); over
    the API, `showtarget` still runs and the refusal is in the command log
 5. the as-built: the provisioning section carries the error and the removal lines
@@ -44,27 +49,8 @@ OUT = os.path.join(BASE, "failed_apply")
 fl.OUT = OUT
 
 
-def sheet_targets(path):
-    """The array, vCenter and switches with their passwords, from an initialisation workbook read by the
-    app's own parser. The passwords go to the local app only; nothing here prints them."""
-    from alletra_onboard.application.platform.init_sheet import parse_workbook_bytes
-    from alletra_onboard.domain.workflow import RunMode
-
-    with open(path, "rb") as f:
-        parsed = parse_workbook_bytes(f.read(), mode=RunMode.PROVISION_ONLY)
-    intent, net = parsed.provisioning_intent, parsed.work_item.network
-    targets = {}
-    for prefix, creds in (("prov_array", intent.array), ("prov_vcenter", intent.vcenter),
-                          ("prov_sw1", intent.switch_f1), ("prov_sw2", intent.switch_f2)):
-        targets.update({prefix + "_host": creds.host, prefix + "_user": creds.username,
-                        prefix + "_password": creds.password.get_secret_value()})
-    network = {"mask": net.mask, "gateway": net.gateway, "dns1": (net.dns or ["not-used"])[0], "ntp": net.ntp,
-               "timezone": net.timezone}
-    return parsed.work_item.serial_number, network, targets
-
-
 if os.environ.get("FA_SHEET"):
-    SERIAL, NETWORK, TARGETS = sheet_targets(os.environ["FA_SHEET"])
+    SERIAL, NETWORK, TARGETS = fl.sheet_targets(os.environ["FA_SHEET"])
 else:
     _array_pw, _lab_pw = fl.lab_secret("LAB_ARRAY_PW"), fl.lab_secret("LAB_DEFAULT_PW")
     SERIAL = "CZ2D320BT1"
@@ -81,12 +67,17 @@ else:
 P_HOST, ARRAY_PW = TARGETS["prov_array_host"], TARGETS["prov_array_password"]
 HOST = os.environ.get("FA_HOST") or "ESX1"
 PREFIX = "zz_bl45"
-VOL1, VOL2, VVSET, HOSTSET = PREFIX + "_vol01", PREFIX + "_vol02", PREFIX + "_vvs", PREFIX + "_hs"
-TOO_BIG_GIB = 1024 * 1024          # 1 PiB thin: above any array's volume size limit
+# The apply has to stop half-way at something only the array refuses. The sheet now refuses a 1 PiB
+# volume (BL-55) and a volume name with a '+' (help createvv), so the '+' moved to the volume set's name:
+# no captured help states the characters of a set name, so the tool does not check it, and the array
+# refused '+' in a volume name with "illegal character in input" (2026-11-17). Not yet seen live for a set.
+VOL1, VOL2, VVSET, HOSTSET = PREFIX + "_vol01", PREFIX + "_vol02", PREFIX + "_vvs+", PREFIX + "_hs"
+TOO_BIG_GIB = 1024 * 1024          # 1 PiB thin: above the array's 64 TiB, refused by the sheet (BL-55)
+BAD_VOLUME_NAME = PREFIX + "_vol02+"   # refused by the sheet (help createvv)
 # What the apply makes before it stops, and its undo in paste order. The host joins both when the plan
 # says the array does not have it yet (rack13, 2026-11-16: it did not).
-EXPECTED_MADE = ["hostset " + HOSTSET, "volume " + VOL1]
-EXPECTED_REMOVALS = ["removevv -f " + VOL1, "removehostset -f " + HOSTSET]
+EXPECTED_MADE = ["hostset " + HOSTSET, "volume " + VOL1, "volume " + VOL2]
+EXPECTED_REMOVALS = ["removevv -f " + VOL1, "removevv -f " + VOL2, "removehostset -f " + HOSTSET]
 CEILING_S = 15 * 60
 RESULTS = []
 BAD = re.compile(r"\bundefined\b|\bNaN\b|\[object Object\]")
@@ -158,7 +149,7 @@ def leftovers(c):
     return sorted(set(found))
 
 
-def compose():
+def compose(vol2_gib=1, vol2_name=VOL2):
     body = {
         "init": {
             "gl_client_id": "not-used", "gl_client_secret": "not-used", "gl_token_url": "https://not-used",
@@ -171,7 +162,8 @@ def compose():
         },
         "targets": TARGETS,
         "volumes": [{"name": VOL1, "size_gib": "1", "provisioning_type": "tpvv", "cpg": "SSD_r6", "vvset": VVSET},
-                    {"name": VOL2, "size_gib": str(TOO_BIG_GIB), "provisioning_type": "tpvv", "cpg": "SSD_r6", "vvset": VVSET}],
+                    {"name": vol2_name, "size_gib": str(vol2_gib), "provisioning_type": "tpvv", "cpg": "SSD_r6",
+                     "vvset": VVSET}],
         "hostsets": [{"name": HOSTSET, "members": ""}],
         "hosts": [{"name": HOST, "os": "esxi"}],
     }
@@ -179,6 +171,16 @@ def compose():
     if status != 200:
         raise RuntimeError("compose -> HTTP %s: %s" % (status, resp))
     status, up = api("POST", "/init-sheet/upload", {"content_b64": resp["content_b64"]})
+    if vol2_gib == TOO_BIG_GIB:
+        fl.save("upload-1pib.txt", "HTTP %s\n%s" % (status, up))
+        check("BL-55: a sheet with a 1 PiB volume is refused on upload, before any run",
+              status == 422 and "more than the array can create in one volume" in str(up), "HTTP %s: %s" % (status, str(up)[:240]))
+        return None
+    if vol2_name == BAD_VOLUME_NAME:
+        fl.save("upload-bad-name.txt", "HTTP %s\n%s" % (status, up))
+        check("a sheet with the volume name %s is refused on upload, before any run" % BAD_VOLUME_NAME,
+              status == 422 and "in a volume name, not '+'" in str(up), "HTTP %s: %s" % (status, str(up)[:240]))
+        return None
     if status != 200:
         raise RuntimeError("upload -> HTTP %s: %s" % (status, up))
     status, r = api("POST", "/runs/from-sheet", {"token": up["token"], "mode": "PROVISION_ONLY", "selected_steps": []})
@@ -254,7 +256,7 @@ def drive(run_id):
         plan = (ev or {}).get("data", {}).get("plan") or {}
         rows = {(a["kind"], a["name"]): a["state"] for a in plan.get("actions", [])}
         mine = {k: v for k, v in rows.items() if k[1].startswith(PREFIX)}
-        check("Build plan: host set, two volumes and the VV set are 'create', 0 blockers",
+        check("Build plan: host set, two volumes and the volume set are 'create', 0 blockers",
               ev is not None and ev["event_type"] == "storage.previewed" and len(mine) == 4
               and all(v == "create" for v in mine.values()) and not plan.get("blockers"),
               "; ".join("%s %s=%s" % (k[0], k[1], v) for k, v in rows.items()) + " | " + "; ".join(plan.get("blockers", [])))
@@ -283,8 +285,8 @@ def drive(run_id):
             shot("03-did-not-fail")
             b.close()
             return applied
-        check("the error names the object it stopped at (%s)" % VOL2,
-              (res.get("error") or "").startswith("Stopped while creating volume %s: " % VOL2), (res.get("error") or "")[:240])
+        check("the error names the object it stopped at (%s)" % VVSET,
+              (res.get("error") or "").startswith("Stopped while creating volume set %s: " % VVSET), (res.get("error") or "")[:240])
         check("what was made before it stopped is what the plan said (%s)" % ", ".join(EXPECTED_MADE),
               made == sorted(EXPECTED_MADE), ", ".join(made) or "none")
         check("the failed apply's removal set is exactly that, in paste order",
@@ -296,7 +298,7 @@ def drive(run_id):
 
         until("Creation reported an error")
         text = shot("03-failed-1366")
-        page_ok("Provision storage, failed apply", text, "Creation reported an error", "Stopped while creating volume " + VOL2,
+        page_ok("Provision storage, failed apply", text, "Creation reported an error", "Stopped while creating volume set " + VVSET,
                 "%d objects were created before it stopped" % len(EXPECTED_MADE), "Removal command set", *EXPECTED_REMOVALS)
         check("the footer offers Rebuild plan, not Create",
               footer.get_by_role("button", name=re.compile(r"^Rebuild plan$")).count() == 1
@@ -311,9 +313,9 @@ def drive(run_id):
         fl.save("api-storage-preview-2.json", json.dumps(ev, indent=2))
         plan = (ev or {}).get("data", {}).get("plan") or {}
         rows = {(a["kind"], a["name"]): a["state"] for a in plan.get("actions", [])}
-        check("Rebuild plan: what the failed apply made now reads Exists, the rest Create",
+        check("Rebuild plan: what the failed apply made now reads Already there (exists), the rest Create",
               rows.get(("hostset", HOSTSET)) == "exists" and rows.get(("volume", VOL1)) == "exists"
-              and rows.get(("volume", VOL2)) == "create",
+              and rows.get(("volume", VOL2)) == "exists" and rows.get(("vvset", VVSET)) == "create",
               "; ".join("%s %s=%s" % (k[0], k[1], v) for k, v in rows.items() if k[1].startswith(PREFIX)))
         until("Undo what this run created")
         check("the approval tick is clear on the new plan", not tick_label().locator("input[type=checkbox]").first.is_checked())
@@ -409,6 +411,8 @@ def main():
         fl.get("/app/profile")      # the app must already be running on this machine
 
     fl.banner("2. A Provision only run: discovery and zoning check over the API")
+    compose(TOO_BIG_GIB)
+    compose(vol2_name=BAD_VOLUME_NAME)
     run_id = compose()
     print("run " + run_id)
     fl.save("run-id.txt", run_id)

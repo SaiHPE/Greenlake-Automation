@@ -58,5 +58,15 @@ Settled since on OS 10.5 by the captures of 2026-11-17 (`../d22u27_snap/`, `../v
 SPEC-023 §2.2): the cron hour is the array's local time, a suspended schedule prints `suspended` and
 NextRunTime `--`, and the WSAPI retention field is `retentionTime8601`.
 
+## showsched_one.txt — one schedule on OS 10.6.0, 2026-11-17 about 18:02 IST
+
+`showsched` read right after BL-21's live check 1 sent
+`createsched -f "createsv -f -ro -exp 1h @vvname@.@y@@m@@d@@H@@M@@S@ set:zz_snap_vvs" "0 3 * * *" zz_snap_probe`
+through the tool's `ArraySnapCliClient` (`docs/validation/2026-11-17-rack13-live-w2.md`). The
+schedule was removed with `removesched -f zz_snap_probe` straight after. CreatedBy is `3paradm`, the
+array's own account. On OS 10.6.0 the table starts each row with an `Id` column and has a `Rebal`
+column before NextRunTime, which the OS 10.5 captures do not have. The parser takes the columns by
+header word, so both layouts read.
+
 Pinned by `tests/unit/test_snapshots_read.py`; `tests/unit/test_snap_cli_client.py` reads the help
 files once the write client exists.
