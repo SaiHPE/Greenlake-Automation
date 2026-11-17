@@ -1,0 +1,4 @@
+# showsys
+                                                                           ---------------(MiB)----------------
+     ID ----Name---- ------------Model------------ --Serial-- Nodes Master TotalCap AllocCap  FreeCap FailedCap
+0x2D495 rack13-ARCUS HPE Alletra Storage MP B10230 CZ2D2K014S     2      0 21958656   540672 18957312         0

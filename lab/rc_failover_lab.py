@@ -22,7 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(os.path.expanduser("~"), "Downloads", "rc_failover")
 P_HOST, S_HOST = "10.64.122.99", "10.64.154.190"
 GROUP, PEER_GROUP = "zz_rc_test_rcg", "zz_rc_test_rcg.r188150"
-APP = "http://127.0.0.1:8765"
+APP = os.environ.get("LAB_APP", "http://127.0.0.1:8765")  # another local app instance, if set
 OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
@@ -41,6 +41,25 @@ def lab_secret(name):
     if not value:
         sys.exit("%s is not set. Add this line once to %s and run again:\n  %s=<the lab password>" % (name, env, name))
     return value
+
+
+def sheet_targets(path):
+    """The array, vCenter and switches with their passwords, from an initialisation workbook read by the
+    app's own parser. The passwords go to the local app only; nothing here prints them."""
+    from alletra_onboard.application.platform.init_sheet import parse_workbook_bytes
+    from alletra_onboard.domain.workflow import RunMode
+
+    with open(path, "rb") as f:
+        parsed = parse_workbook_bytes(f.read(), mode=RunMode.PROVISION_ONLY)
+    intent, net = parsed.provisioning_intent, parsed.work_item.network
+    targets = {}
+    for prefix, creds in (("prov_array", intent.array), ("prov_vcenter", intent.vcenter),
+                          ("prov_sw1", intent.switch_f1), ("prov_sw2", intent.switch_f2)):
+        targets.update({prefix + "_host": creds.host, prefix + "_user": creds.username,
+                        prefix + "_password": creds.password.get_secret_value()})
+    network = {"mask": net.mask, "gateway": net.gateway, "dns1": (net.dns or ["not-used"])[0], "ntp": net.ntp,
+               "timezone": net.timezone}
+    return parsed.work_item.serial_number, network, targets
 
 
 def ssh(host, pw):

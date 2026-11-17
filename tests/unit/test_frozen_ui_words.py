@@ -26,7 +26,7 @@ SCRIPTS = ("failed_apply_lab.py", "ui_live_lab.py", "ui_provision_lab.py")
 
 # Read by a script but made elsewhere, or built from parts: what to find instead, where, and why.
 ELSEWHERE: dict[str, tuple[str, str, str]] = {
-    "Stopped while creating volume": (
+    "Stopped while creating volume set": (
         "Stopped while creating", "src/alletra_onboard/application/provisioning/storage_provision.py",
         "the apply's own error: the backend makes it from the object's kind and name"),
     "The console runs the tool's read-only commands": (
@@ -226,7 +226,7 @@ def test_the_reader_finds_the_words_spec_030_freezes():
         "Documents and logs", "Hand-over package", "Start a new run", "discover", "No plan yet",
         "Review the plan, then approve creation", "Review the plan", "Tick the box first", "%d created",
         "What the array answered", "Verify the paths next", "read back", "Creation reported an error",
-        "%d objects were created before it stopped", "Removal command set", "Stopped while creating volume",
+        "%d objects were created before it stopped", "Removal command set", "Stopped while creating volume set",
         "The console runs the tool's read-only commands",
     }
     assert frozen <= {w.text for w in ALL}, sorted(frozen - {w.text for w in ALL})

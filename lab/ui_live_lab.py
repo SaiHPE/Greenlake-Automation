@@ -1,11 +1,17 @@
 """BL-43 live check: the redesigned screens against the real lab arrays. READ-ONLY: nothing is created,
 applied or tested on any array or switch. No prompts.
 
-    python lab\\ui_live_lab.py
+    python lab\\ui_live_lab.py                     (jump box: D22U27, ESX1, a sync row to E18U31)
+    UI_SHEET=<workbook> UI_HOST=<host> python lab/ui_live_lab.py
+                                     (anywhere the array is reachable, the app already running: the array,
+                                      vCenter, switches and their passwords come from that initialisation
+                                      workbook, read by the app's parser and never printed; UI_HOST is a
+                                      host vCenter knows; no Replication tab, so a "Provision only" run)
 
-1. restarts the app on the latest code and checks the browser is served the new bundle
+1. restarts the app on the latest code (Windows only) and checks the browser is served the new bundle
 2. composes the lab sheet (D22U27, ESX1, the two lab switches, a sync Replication row to E18U31)
-   and creates a "Provision, then replicate" run
+   and creates a "Provision, then replicate" run; with UI_SHEET, that workbook's array, vCenter and
+   switches, UI_HOST, and a "Provision only" run
 3. runs only the read-only parts over the app's API: discovery, zoning check, zoning plan (switches
    read), provisioning plan, replication read, verify configuration, as-built document
 4. opens the app in a headless browser and visits every page of that run (Home, Run overview, every
@@ -27,8 +33,24 @@ import rc_failover_lab as fl
 
 OUT = os.path.join(os.path.expanduser("~"), "Downloads", "ui_live")
 fl.OUT = OUT
-ARRAY_PW, LAB_PW = fl.lab_secret("LAB_ARRAY_PW"), fl.lab_secret("LAB_DEFAULT_PW")
-P_HOST, S_HOST = "10.64.122.99", "10.64.154.190"
+SHEET = os.environ.get("UI_SHEET")
+if SHEET:
+    SERIAL, NETWORK, TARGETS = fl.sheet_targets(SHEET)
+    P_HOST, S_HOST, HOST = TARGETS["prov_array_host"], None, os.environ.get("UI_HOST") or "ESX1"
+else:
+    ARRAY_PW, LAB_PW = fl.lab_secret("LAB_ARRAY_PW"), fl.lab_secret("LAB_DEFAULT_PW")
+    P_HOST, S_HOST, HOST = "10.64.122.99", "10.64.154.190", "ESX1"
+    SERIAL = "CZ2D320BT1"
+    NETWORK = {"mask": "255.255.248.0", "gateway": "10.64.127.254", "dns1": "10.64.122.1", "ntp": "not-used",
+               "timezone": "Asia/Kolkata"}
+    TARGETS = {
+        "prov_array_host": P_HOST, "prov_array_user": "3paradm", "prov_array_password": ARRAY_PW,
+        "prov_vcenter_host": "10.54.154.226", "prov_vcenter_user": "administrator@vsphere.local",
+        "prov_vcenter_password": LAB_PW,
+        # D22U27's own F1 switch runs FOS 7.0.2c and refuses the SSH client; any switch of the fabric reads it
+        "prov_sw1_host": "10.64.122.146", "prov_sw1_user": "admin", "prov_sw1_password": LAB_PW,
+        "prov_sw2_host": "10.64.127.244", "prov_sw2_user": "admin", "prov_sw2_password": LAB_PW,
+    }
 CEILING_S = 15 * 60
 RESULTS = []
 
@@ -39,6 +61,7 @@ READS = [
     ("zoning-plan", "/zoning/plan", ["zoning.plan"]),
     ("provision-plan", "/storage/preview", ["storage.previewed", "storage.preview.failed"]),
     ("replication-read", "/replication/preview", ["replication.previewed", "replication.preview.failed"]),
+    ("array-ports", "/ports/preview", ["ports.previewed", "ports.preview.failed", "ports.completed"]),
     ("verify", "/verify", ["verify.completed", "verify.failed"]),
     ("asbuilt", "/asbuilt", ["asbuilt.generated", "asbuilt.failed"]),
 ]
@@ -48,6 +71,7 @@ STEP_PAGES = [
     ("Initialisation sheet", "Initialisation sheet"),
     ("Mode", "What do you want to do"),
     ("Discovery", "Fibre Channel port"),
+    ("Array ports", "port"),
     ("SAN zoning", ("the array can reach", "Fabrics", "No host is zoned")),
     ("Provision storage", "plan"),
     ("Replication", "Read both arrays"),
@@ -79,31 +103,25 @@ def compose():
     body = {
         "init": {
             "gl_client_id": "not-used", "gl_client_secret": "not-used", "gl_token_url": "https://not-used",
-            "serial_number": "CZ2D320BT1", "part_number": "not-used", "subscription_key": "not-used",
+            "serial_number": SERIAL, "part_number": "not-used", "subscription_key": "not-used",
             "service_catalog_region_id": "ap-northeast", "dscc_region_code": "jp1",
-            "mgmt_ipv4": P_HOST, "mask": "255.255.248.0", "gateway": "10.64.127.254", "dns1": "10.64.122.1",
-            "ntp": "not-used", "timezone": "Asia/Kolkata",
-            "contact_first_name": "Sai", "contact_last_name": "Roopesh", "contact_language": "English",
+            "mgmt_ipv4": P_HOST, "ntp": "not-used", **NETWORK,
+            "contact_first_name": "Lab", "contact_last_name": "User", "contact_language": "English",
             "contact_company": "HPE", "contact_phone": "0", "contact_email": "not-used@hpe.com",
-            "dscc_system_name": "AlletraMP_D22U27", "dscc_country": "India",
+            "dscc_system_name": "DEMO-ARRAY-01", "dscc_country": "India",
             "secret_name": "b10000-admin", "secret_username": "3paradm", "customer_name": "Lab UI check",
         },
-        "targets": {
-            "prov_array_host": P_HOST, "prov_array_user": "3paradm", "prov_array_password": ARRAY_PW,
-            "prov_vcenter_host": "10.54.154.226", "prov_vcenter_user": "administrator@vsphere.local",
-            "prov_vcenter_password": LAB_PW,
-            # D22U27's own F1 switch runs FOS 7.0.2c and refuses the SSH client; any switch of the fabric reads it
-            "prov_sw1_host": "10.64.122.146", "prov_sw1_user": "admin", "prov_sw1_password": LAB_PW,
-            "prov_sw2_host": "10.64.127.244", "prov_sw2_user": "admin", "prov_sw2_password": LAB_PW,
-        },
+        "targets": TARGETS,
         "volumes": [{"name": "zz_ui_vol01", "size_gib": "1", "provisioning_type": "tpvv", "cpg": "SSD_r6", "vvset": "zz_ui_vvs"}],
-        "hostsets": [{"name": "zz_ui_hs", "members": "ESX1"}],
-        "hosts": [{"name": "ESX1", "os": "esxi"}],
-        "replication": {
-            "fields": {"peer_host": S_HOST, "peer_user": "3paradm", "peer_password": ARRAY_PW, "rtt_ms": "1"},
-            "rows": [{"vvset": "zz_ui_vvs", "peer_cpg": "SSD_r6", "mode": "sync"}],
-        },
+        "hostsets": [{"name": "zz_ui_hs", "members": HOST}],
+        "hosts": [{"name": HOST, "os": "esxi"}],
     }
+    if S_HOST:
+        body["replication"] = {
+            "fields": {"peer_host": S_HOST, "peer_user": "3paradm", "peer_password": TARGETS["prov_array_password"],
+                       "rtt_ms": "1"},
+            "rows": [{"vvset": "zz_ui_vvs", "peer_cpg": "SSD_r6", "mode": "sync"}],
+        }
     status, resp = api("POST", "/init-sheet/compose", body)
     if status != 200:
         raise RuntimeError("compose -> HTTP %s: %s" % (status, resp))
@@ -114,7 +132,8 @@ def new_run(sheet_b64):
     status, up = api("POST", "/init-sheet/upload", {"content_b64": sheet_b64})
     if status != 200:
         raise RuntimeError("upload -> HTTP %s: %s" % (status, up))
-    status, r = api("POST", "/runs/from-sheet", {"token": up["token"], "mode": "REPLICATE", "selected_steps": []})
+    status, r = api("POST", "/runs/from-sheet", {"token": up["token"], "mode": "REPLICATE" if S_HOST else "PROVISION_ONLY",
+                                                     "selected_steps": []})
     if status != 200:
         raise RuntimeError("from-sheet -> HTTP %s: %s" % (status, r))
     return r["run"]["run_id"]
@@ -147,10 +166,12 @@ def served_bundle():
 
 
 def browser(pw):
-    try:
-        return pw.chromium.launch()
-    except Exception:  # noqa: BLE001 - no bundled Chromium on this box: Edge is always there on Windows
-        return pw.chromium.launch(channel="msedge")
+    for channel in (None, "msedge", "chrome"):  # bundled Chromium, else Edge (Windows), else Chrome
+        try:
+            return pw.chromium.launch(channel=channel) if channel else pw.chromium.launch()
+        except Exception:  # noqa: BLE001
+            continue
+    raise RuntimeError("no browser: install Playwright's Chromium, Edge or Chrome")
 
 
 def visit_pages(run_id, width, height, tag):
@@ -187,6 +208,8 @@ def visit_pages(run_id, width, height, tag):
                 "" if not step or footer else " no footer button"))
 
         for label, phrase in STEP_PAGES:
+            if not S_HOST and label in ("Replication", "Failover test"):
+                continue
             try:
                 rail.get_by_text(re.compile("^%s$" % re.escape(label), re.I)).first.click(timeout=10000)
                 look(label, phrase)
@@ -215,7 +238,10 @@ def main():
     if os.path.isdir(OUT):
         shutil.rmtree(OUT)
     os.makedirs(OUT)
-    fl.restart_app()
+    if os.name == "nt":
+        fl.restart_app()
+    else:
+        fl.get("/app/profile")  # the app must already be running on this machine
     served_bundle()
 
     fl.banner("3. A run from the lab sheet, read-only steps only")
@@ -223,6 +249,8 @@ def main():
     print("run " + run_id)
     fl.save("run-id.txt", run_id)
     for name, path, done in READS:
+        if not S_HOST and name == "replication-read":
+            continue
         read_step(run_id, name, path, done)
 
     fl.banner("4. The screens, in a headless browser")

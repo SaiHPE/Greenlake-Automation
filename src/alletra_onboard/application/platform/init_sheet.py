@@ -36,6 +36,7 @@ from alletra_onboard.domain.provisioning import (
     HostSetRequest,
     ProvisioningIntent,
     VolumeRequest,
+    volume_name_problem,
     volume_too_large,
 )
 from alletra_onboard.domain.replication import (
@@ -866,6 +867,8 @@ def _parse_provisioning_tab(workbook, *, volumes_required: bool = True) -> Provi
         )
     volumes: list[VolumeRequest] = []
     for r in vol_rows:
+        if bad_name := volume_name_problem(r["name"]):
+            raise ValueError(f"Volume '{r['name']}' — Name: {bad_name}. Rename it.")
         ptype = (r.get("provisioning_type") or default_type).strip().lower()
         if ptype not in ("tpvv", "reduce"):
             raise ValueError(f"Volume '{r['name']}' — Type must be 'tpvv' or 'reduce'.")

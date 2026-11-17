@@ -863,6 +863,31 @@ def _add_presentations_section(doc, data: AsBuiltData, warnings: list[str]) -> N
     _table(doc, ["LUN", "Volume", "Presented to", "Active paths"], rows, widths=[0.08, 0.30, 0.30, 0.32])
 
 
+def _zoning_check_text(report: dict, *, check_only: bool) -> str:
+    """What the zoning check found, host by host. The check's gate list (`zoned_hosts`) also holds iSCSI
+    hosts logged in on the array, which need no zone and are on no fabric: they are named apart, so the
+    document never calls one zoned (live 2026-11-17: *Zoned on both fabrics: zz_is_eljr*, an iSCSI host)."""
+    iscsi: dict[str, list[str]] = report.get("iscsi_hosts") or {}
+    fc_zoned = [h for h in report.get("zoned_hosts", []) if h not in iscsi]
+    unverified = report.get("unverified_hosts", [])
+    logged_in = [f"{h} (logged in on {', '.join(ports)})" for h, ports in sorted(iscsi.items()) if ports]
+    waiting = sorted(h for h, ports in iscsi.items() if not ports)
+    parts = []
+    if fc_zoned or unverified or report.get("expected") or not iscsi:
+        if check_only:
+            parts.append("Zoned on both fabrics: " + (", ".join(fc_zoned) or "none") + ".")
+        else:
+            parts.append(f"zoned on both fabrics — {', '.join(fc_zoned)}." if fc_zoned else "no host zoned on both fabrics.")
+    if logged_in:
+        parts.append("iSCSI, no zoning needed: " + ", ".join(logged_in) + ".")
+    if waiting:
+        parts.append("iSCSI, not logged in on the array yet, so nothing is exported to it: " + ", ".join(waiting) + ".")
+    if unverified:
+        parts.append(f"Not seen by the array on either fabric: {', '.join(unverified)}." if check_only
+                     else f"Not verified — {', '.join(unverified)}.")
+    return " ".join(parts)
+
+
 def _add_zoning_section(doc, data: AsBuiltData) -> None:
     _h1(doc, "SAN zoning designed in this run")
     plan = data.zoning_plan
@@ -872,12 +897,9 @@ def _add_zoning_section(doc, data: AsBuiltData) -> None:
         return
     if not plan:
         # The check ran (array-side) but no plan was built: say what the check found, plainly.
-        zoned_hosts = report.get("zoned_hosts", [])
-        unverified = report.get("unverified_hosts", [])
         _para(doc, "The zoning check ran against the array's logins; no zoning plan was built and no "
                    "command set was generated in this run.")
-        _para(doc, "Zoned on both fabrics: " + (", ".join(zoned_hosts) or "none") + "."
-                   + (f" Not seen by the array on either fabric: {', '.join(unverified)}." if unverified else ""))
+        _para(doc, _zoning_check_text(report, check_only=True))
         return
     rendered = data.zoning_rendered or {}
     aliases: dict[str, str] = rendered.get("aliases") or {}
@@ -927,11 +949,7 @@ def _add_zoning_section(doc, data: AsBuiltData) -> None:
     if not rendered:
         _para(doc, "No command set was generated in this run.")
     if report:
-        zoned_hosts = report.get("zoned_hosts", [])
-        unverified = report.get("unverified_hosts", [])
-        _para(doc, "Zoning check on the array: "
-                   + (f"zoned on both fabrics — {', '.join(zoned_hosts)}. " if zoned_hosts else "no host zoned on both fabrics. ")
-                   + (f"Not verified — {', '.join(unverified)}." if unverified else ""))
+        _para(doc, "Zoning check on the array: " + _zoning_check_text(report, check_only=False))
     else:
         _para(doc, "The zoning check was not run.")
 

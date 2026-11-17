@@ -92,7 +92,11 @@ IPAddr Netmask/PrefixLen Gateway MTU TPGT STGT iSNS_Addr iSNS_Port`, no State co
 lists each port's untagged address as a row with VLAN `untagged` (the same values as `showport
 -iscsi`; a port with no address has no row, and with no address on any port the answer is `no ports
 listed`). `parse_iscsi_vlans` leaves the untagged rows out: they are the port's base address, not VLAN
-interfaces. A tagged row is not captured yet (§9). WSAPI offers the same read
+interfaces. A tagged row is captured (rack13-ARCUS, OS 10.6.0, 2026-11-17, `tests/fixtures/iscsi_vlan/tagged/`):
+on a port whose only address is a VLAN address, `showport -iscsi` prints that address in the base
+columns with no `*`. So the read takes a port's base address as untagged only when `showport
+-iscsivlans` has an `untagged` row for that port, or the address is none of the port's VLAN addresses
+(`untagged_addresses`); otherwise the port has no untagged address. WSAPI offers the same read
 (`GET /ports/<n:s:p>/iSCSIVlans/`, confirmed by python-3parclient 4.5 `_getIscsiVlan` and answered
 on rack13-ARCUS, VZ and E18U31, §9; OS 10.5.60 lists the untagged address in it as `vlanTag` 0, which
 the parser leaves out). The tool does not use it: ADR 0017 took the CLI forms, and the answer differs
@@ -126,8 +130,9 @@ Notes, not blockers: a VLAN on ports of one node only (*"VLAN 120 is only on nod
 stops, hosts on VLAN 120 lose every path."*); a port whose link is not `ready` (*"0:4:2 is offline:
 the address is set, but no host reaches it until the link is up."*).
 
-**The switch side, as a sentence.** The plan ends with one line per port that has a planned or
-existing VLAN, for the network team: *"Switch port cabled to `<array>` 0:4:1: carry VLAN 120, 130
+**The switch side, as a sentence.** The plan ends with one line per sheet port that has a planned or
+existing VLAN, whatever its row's state (a conflict row on a port that already carries a VLAN keeps the
+line; live 2026-11-17 it was dropped), for the network team: *"Switch port cabled to `<array>` 0:4:1: carry VLAN 120, 130
 tagged (802.1Q); keep the untagged (native) VLAN as it is."* The second half matters: the hosts already
 logged in use the port's untagged address, and a trunk port with no native VLAN would drop them. No
 command: the tool reads no Ethernet switch, does not know its vendor, and

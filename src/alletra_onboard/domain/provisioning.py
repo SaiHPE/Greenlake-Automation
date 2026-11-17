@@ -4,6 +4,7 @@ palette/composition, the tier-1 plan + result, and tier-2 path verification (ADR
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field, SecretStr
@@ -39,10 +40,10 @@ def persona_for_os(os: str | None) -> PersonaName:
 
 # ------------------------------------------------------------------ provisioning intent (the sheet)
 
-# The largest volume the array creates, in GiB, as its own `help createvv` states it. None until that
-# help page is captured (lab/snap_capture.py saves help_createvv.txt); while None, no size is refused here
-# and the array alone answers (HTTP 400 code 28 for 1 PiB on rack13-ARCUS, 2026-11-16). Do not guess it.
-VOLUME_MAX_GIB: int | None = None
+# The largest volume the array creates, in GiB, as its own `help createvv` states it: "Maximum size of
+# reduced Volumes is 64 TiB. Maximum size of Thin Provisioned Volumes is 64 TiB." (rack13-ARCUS, OS 10.6.0,
+# captured 2026-11-17, tests/fixtures/rack13_snap/help_createvv.txt). The tool creates only those two kinds.
+VOLUME_MAX_GIB: int | None = 64 * 1024
 
 
 def volume_too_large(size_gib: int) -> str:
@@ -50,6 +51,25 @@ def volume_too_large(size_gib: int) -> str:
     if VOLUME_MAX_GIB is None or size_gib <= VOLUME_MAX_GIB:
         return ""
     return f"{size_gib} GiB is more than the array can create in one volume, at most {VOLUME_MAX_GIB} GiB"
+
+
+# The volume name the array takes, as its own `help createvv` states it: "a VV name up to 255 characters
+# in length. Valid characters include alphanumeric characters, periods, dashes, and underscores."
+# (rack13-ARCUS, OS 10.6.0, captured 2026-11-17, tests/fixtures/rack13_snap/help_createvv.txt). No captured
+# help states the characters of a host, host set or volume set name, so only volume names are checked.
+VOLUME_NAME_MAX = 255
+_VOLUME_NAME_CHARS = re.compile(r"[A-Za-z0-9._-]")
+
+
+def volume_name_problem(name: str) -> str:
+    """Why the array would refuse this volume name, or '' when it takes it."""
+    if len(name) > VOLUME_NAME_MAX:
+        return f"the array takes at most {VOLUME_NAME_MAX} characters in a volume name, this one has {len(name)}"
+    bad = sorted({c for c in name if not _VOLUME_NAME_CHARS.fullmatch(c)})
+    if bad:
+        shown = ", ".join("a space" if c == " " else f"'{c}'" for c in bad)
+        return f"the array takes only letters, digits, '.', '-' and '_' in a volume name, not {shown}"
+    return ""
 
 
 class VolumeRequest(BaseModel):

@@ -7,7 +7,8 @@ Schedules are read with `showsched` because WSAPI has none: `GET /api/v1/schedul
 code 9, "unsupported operation for the resource" (rack13-ARCUS, OS 10.6.0, 2026-11-16).
 
 Pinned to `tests/fixtures/rc_pair/*/showsched.txt` (seven schedules, OS 10.5, 2026-10-07),
-`tests/fixtures/rack13_snap/` (no schedules, no snapshots, OS 10.6.0, 2026-11-16) and the OS 10.5
+`tests/fixtures/rack13_snap/` (no schedules, no snapshots, OS 10.6.0, 2026-11-16; `showsched_one.txt`,
+one schedule in the OS 10.6.0 layout, 2026-11-17) and the OS 10.5
 captures of 2026-11-17: `d22u27_snap/` (seven schedules, 105 snapshots), `vz_snap/` (a suspended
 schedule, 66 snapshots) and `e18u31_snap/` (no schedule, three snapshots).
 """
@@ -28,16 +29,20 @@ SHOWVV_SNAPCOLS = (
     "showvv -showcols Id,Name,Prov,Type,CopyOf,Rd,CPG,CreationTime,ExpirationTime,RetentionEndTime"
 )
 
-# Name, then the command (it has spaces), then nine single-token columns (Interval, Min, Hour, DOM,
-# Month, DOW, CreatedBy, Status, Alert), then NextRunTime: "2026-10-07 20:00:00 IST" on an active
-# schedule. A suspended one prints "--" (VZ, OS 10.5.51, 2026-11-17); it is kept as printed rather
-# than shifting every other column.
-_SCHED_ROW = re.compile(
-    r"^(?P<name>\S+)\s+(?P<command>\S.*?)"
-    r"\s+(?P<interval>\S+)\s+(?P<minute>\S+)\s+(?P<hour>\S+)\s+(?P<dom>\S+)\s+(?P<month>\S+)"
-    r"\s+(?P<dow>\S+)\s+(?P<created_by>\S+)\s+(?P<status>\S+)\s+(?P<alert>\S+)"
-    r"\s+(?P<next_run>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d \S+|\S+)\s*$"
-)
+# `showsched` columns by header word, because two layouts are real. OS 10.5 (D22U27, E18U31, VZ):
+# `SchedName File/Command Interval Min Hour DOM Month DOW CreatedBy Status Alert NextRunTime`. OS 10.6.0
+# (rack13-ARCUS, 2026-11-17) adds `Id` before SchedName and `Rebal` before NextRunTime; neither is kept.
+# Every column is one token except the command (it has spaces) and NextRunTime: "2026-10-07 20:00:00
+# IST" on an active schedule, "--" on a suspended one (VZ, OS 10.5.51), kept as printed.
+_SCHED_COLUMNS = {
+    "SchedName": "name", "File/Command": "command", "Interval": "interval", "Min": "minute",
+    "Hour": "hour", "DOM": "dom", "Month": "month", "DOW": "dow", "CreatedBy": "created_by",
+    "Status": "status", "Alert": "alert", "NextRunTime": "next_run",
+}
+_SCHED_CELL = {
+    "command": r"(?P<command>\S.*?)",
+    "next_run": r"(?P<next_run>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d \S+|\S+)",
+}
 _RULE = re.compile(r"^\s*-{4,}")
 _DATE = re.compile(r"^\d{4}-\d\d-\d\d$")
 _EMPTY = ("-", "--", "---")
@@ -47,28 +52,55 @@ _EMPTY = ("-", "--", "---")
 _CREATESV_VALUE_OPTIONS = {"-exp", "-retain", "-addtoset", "-comment", "-i"}
 
 
-def parse_showsched(text: str) -> list[ArraySchedule]:
-    """`showsched` -> one schedule per row. "No scheduled tasks listed" (and no output) is []."""
+def _sched_row_pattern(header: list[str]) -> re.Pattern[str] | None:
+    """The row pattern for a `showsched` header, or None when the header lacks a column the
+    schedule needs or repeats one."""
+    if len(set(header)) != len(header) or not set(_SCHED_COLUMNS) <= set(header):
+        return None
+    cells = []
+    for column in header:
+        field = _SCHED_COLUMNS.get(column)
+        cells.append(_SCHED_CELL.get(field, rf"(?P<{field}>\S+)") if field else r"\S+")
+    return re.compile(r"^" + r"\s+".join(cells) + r"\s*$")
+
+
+def _sched_table(text: str) -> list[ArraySchedule] | None:
+    """The rows under `showsched`'s header, up to the rule. None when there is no header with every
+    column, or when a row under it does not read: a layout this code has not seen must not read as
+    "no schedule"."""
+    pattern: re.Pattern[str] | None = None
     out: list[ArraySchedule] = []
-    in_table = False
     for line in (text or "").splitlines():
-        if not in_table:
-            in_table = line.split()[:1] == ["SchedName"]
+        if pattern is None:
+            tokens = line.split()
+            if "SchedName" in tokens[:2] and "File/Command" in tokens:
+                pattern = _sched_row_pattern(tokens)
+                if pattern is None:
+                    return None
             continue
         if _RULE.match(line):
-            break
-        m = _SCHED_ROW.match(line.strip())
-        if m:
-            out.append(ArraySchedule(**m.groupdict()))
-    return out
+            return out
+        if not line.strip():
+            continue
+        m = pattern.match(line.strip())
+        if m is None:
+            return None
+        out.append(ArraySchedule(**m.groupdict()))
+    return out if pattern is not None else None
+
+
+def parse_showsched(text: str) -> list[ArraySchedule]:
+    """`showsched` -> one schedule per row. "No scheduled tasks listed" (and no output, or anything
+    that is not its table) is []; `showsched_readable` tells the two apart."""
+    return _sched_table(text) or []
 
 
 def showsched_readable(text: str) -> bool:
-    """`showsched` printed its table, or said it has none ("No scheduled tasks listed"). An error, or
-    anything else, is not a read: parse_showsched would make it an empty list, which would read as "no
-    schedule"."""
+    """`showsched` printed its table and every row of it reads, or said it has none ("No scheduled
+    tasks listed"). An error, or anything else, is not a read: parse_showsched would make it an empty
+    list, which would read as "no schedule"."""
     t = text or ""
-    return "No scheduled tasks listed" in t or any(line.split()[:1] == ["SchedName"] for line in t.splitlines())
+    return "No scheduled tasks listed" in t or _sched_table(t) is not None
 
 
 def parse_createsv(command: str) -> dict:

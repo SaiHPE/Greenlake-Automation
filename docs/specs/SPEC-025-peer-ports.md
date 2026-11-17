@@ -259,9 +259,17 @@ reverse order. Printed with the command set for every create (first slice), or w
 removal set before the port's first command (the write, ADR 0025 condition 4); after the read it keeps
 only the ports that changed. Per port, from the `showport -par` read before the change:
 `controlport offline <nsp>`, `controlport config <old connmode> -ct <old conntype> -f <nsp>`, then
-`controlport rst <nsp>`, kept on every port whatever the change needed, so a port left offline comes
+`controlport rst -f <nsp>`, kept on every port whatever the change needed, so a port left offline comes
 back. A port held offline in its old mode (the array refused its `config` with an `Error` line, or the
-read after the paste shows it so) gets `controlport rst <nsp>` only, the help's way back online. A port
+read after the paste shows it so) gets `controlport rst -f <nsp>` only, the help's way back online.
+`rst` takes `-f` (`controlport rst [-m <mode>|-l|-i] [-f] <node:slot:port>...`, every captured help,
+OS 10.5.0 to 10.6.0); `offline` has none (`controlport offline <node:slot:port>...`) and asked *"Are you
+sure you want to run controlport offline on port 0:3:1? select q=quit y=yes n=no"* on rack13-ARCUS
+(2026-11-17). The line stays, with a plain note on the page and as a `#` line at the head of the
+command set and the removal set: *"`controlport offline` asks the array's own question (y, n or q)
+every time and has no option to skip it: paste the lines one at a time and answer y when it asks.
+Pasted as a block, the next line is taken as the answer."* Whether the tool's own write can send it
+without a prompt is ADR 0018's open question (ADR 0025 condition 6). A port
 whose `config` gave no answer in the exec timeout gets the whole restore, since its mode is unknown. A
 create needs the `showport -par`
 read: without it the plan blocks, because the change could not be undone. Header: *"Undo the peer

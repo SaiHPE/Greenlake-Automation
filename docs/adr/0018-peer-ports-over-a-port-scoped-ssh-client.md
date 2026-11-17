@@ -138,7 +138,8 @@ refers to it.
 3. **The restore is a removal line**, never a client form (SPEC-007, ADR 0025 condition 4). Per port,
    from the `showport -par` read before the change, written to the run's removal set before the port's
    first command is sent: `controlport offline <nsp>`, `controlport config <old connmode> -ct <old
-   conntype> -f <nsp>`, `controlport rst <nsp>`. A plan without that read blocks.
+   conntype> -f <nsp>`, `controlport rst -f <nsp>` (the help's `rst` takes `-f`; added 2026-11-17). A
+   plan without that read blocks.
 4. **Read back after each port** (ADR 0025 condition 5): Type and Connmode are the approved mode,
    ConnType `point`, and every other port's mode, Type and logins are as before; otherwise stop.
 5. **No prompts** (ADR 0025 condition 6): the `config` form goes on the client only after a live
@@ -157,7 +158,7 @@ where ADR 0024 item 3 puts them, on the Remote Copy client.
   switch read (SPEC-025 R3).
 - **A `config` that hangs leaves the port offline.** `offline` worked, then `config` gave no answer
   (or the paste stopped there): the port is held offline in a mode nobody saw. So every port's restore
-  keeps the `controlport rst <nsp>` line, and a port whose `config` did not answer gets the whole
+  keeps the `controlport rst -f <nsp>` line, and a port whose `config` did not answer gets the whole
   restore, since its mode is unknown. A `config` the array refused (an `Error` line) gets `rst` only.
 - **The WWPN changes.** The captures point that way (`0202` on every peer port, `0002` on every
   host-mode port). Zones use the WWPN read back after the change (SPEC-025 R7); a zone that names the

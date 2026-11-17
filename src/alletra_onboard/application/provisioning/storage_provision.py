@@ -32,6 +32,7 @@ from alletra_onboard.domain.provisioning import (
     RemovalItem,
     VlunTemplate,
     VolumeRequest,
+    volume_name_problem,
     volume_too_large,
 )
 from alletra_onboard.domain.shared import normalize_wwpn
@@ -582,9 +583,11 @@ def _judge_set(name: str, members: list[str], on_array: dict[str, list[str]], no
 def _judge_volume(v: VolumeRequest, on_array: list[ArrayVolumeRecord]) -> tuple[PlanState, str]:
     """R2: a name match is not a match. Size, CPG and provisioning type must all agree, or the row is
     a conflict apply cannot fix (the array has no 'resize to intent' that is safe to do unasked).
-    A new volume larger than the array can create is a conflict too (BL-55)."""
+    A new volume larger than the array can create, or with a name it refuses, is a conflict too."""
     found = next((r for r in on_array if r.name == v.name), None)
     if found is None:
+        if bad_name := volume_name_problem(v.name):
+            return "conflict", f"{bad_name}. Rename it on the sheet's Volumes tab."
         if too_large := volume_too_large(v.size_gib):
             return "conflict", f"{too_large}. Make it smaller on the sheet's Volumes tab."
         return "create", ""

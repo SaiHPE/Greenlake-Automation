@@ -711,14 +711,41 @@ def test_the_printed_command_set_and_removal_set_before_the_paste():
     )
 
     plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now())
-    assert command_set_text(plan, "rack13-ARCUS").splitlines()[1:] == [
+    assert command_set_text(plan, "rack13-ARCUS").splitlines()[2:] == [
         "# 0:3:3", "controlport offline 0:3:3", "controlport config peer -ct point -f 0:3:3",
         "# 1:3:4", "controlport offline 1:3:4", "controlport config peer -ct point -f 1:3:4"]
     assert planned_removals(plan) == [
-        "controlport offline 1:3:4", "controlport config host -ct point -f 1:3:4", "controlport rst 1:3:4",
-        "controlport offline 0:3:3", "controlport config host -ct point -f 0:3:3", "controlport rst 0:3:3"]
+        "controlport offline 1:3:4", "controlport config host -ct point -f 1:3:4", "controlport rst -f 1:3:4",
+        "controlport offline 0:3:3", "controlport config host -ct point -f 0:3:3", "controlport rst -f 0:3:3"]
     assert removal_set_text(planned_removals(plan), "rack13-ARCUS").startswith(
         "# Undo the peer ports this run set on rack13-ARCUS. Remove the SAN team's peer-port zones")
+
+
+@pytest.mark.parametrize("folder", [RACK13, E18U31, D22U27, VZ])
+def test_rst_takes_f_and_offline_has_none_so_the_offline_line_says_it_asks(folder):
+    """Live on rack13-ARCUS, 2026-11-17: `controlport offline 0:3:1` asked *Are you sure ...? select q=quit
+    y=yes n=no* and has no -f; the removal set's `controlport rst` had none though `rst` takes one. The
+    forms are each captured help's own, on OS 10.5.0 to 10.6.0."""
+    from alletra_onboard.application.provisioning.peer_ports import (
+        OFFLINE_ASKS,
+        command_set_text,
+        plan_peer_ports,
+        planned_removals,
+        removal_set_text,
+    )
+
+    syntax = (folder / "help_controlport.txt").read_text()
+    assert "controlport rst [-m <mode>|-l|-i] [-f] <node:slot:port>..." in syntax
+    assert "controlport offline <node:slot:port>...\n" in syntax
+
+    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now())
+    removals = planned_removals(plan)
+    assert [r for r in removals if r.startswith("controlport rst")] == ["controlport rst -f 1:3:4", "controlport rst -f 0:3:3"]
+    assert [r for r in removals if r.startswith("controlport offline")] == ["controlport offline 1:3:4",
+                                                                             "controlport offline 0:3:3"]
+    assert OFFLINE_ASKS in plan.notes and "paste the lines one at a time and answer y" in OFFLINE_ASKS
+    assert command_set_text(plan, "rack13-ARCUS").splitlines()[1] == f"# {OFFLINE_ASKS}"
+    assert f"# {OFFLINE_ASKS}" in removal_set_text(removals, "rack13-ARCUS").splitlines()
 
 
 # ------------------------------------------------------------------ R4/R5: read after the paste, apply, removal set
@@ -760,8 +787,8 @@ def test_the_read_after_the_paste_finds_the_peer_ports_and_keeps_their_undo():
     result = read_back_peer_ports(plan, before=view, after=_after(view, "0:3:2", "1:3:2"))
     assert result.error is None and result.changed == ["0:3:2", "1:3:2"]
     assert result.removals == [
-        "controlport offline 1:3:2", "controlport config host -ct point -f 1:3:2", "controlport rst 1:3:2",
-        "controlport offline 0:3:2", "controlport config host -ct point -f 0:3:2", "controlport rst 0:3:2",
+        "controlport offline 1:3:2", "controlport config host -ct point -f 1:3:2", "controlport rst -f 1:3:2",
+        "controlport offline 0:3:2", "controlport config host -ct point -f 0:3:2", "controlport rst -f 0:3:2",
     ]
 
 
@@ -783,8 +810,8 @@ def test_the_read_after_a_paste_that_stopped_after_offline_gives_rst_only_and_sa
     result = read_back_peer_ports(plan, before=view, after=after)
     assert result.changed == ["0:3:3"]
     assert result.error == "1:3:4 did not come back as a peer port (Type free, state offline)."
-    assert result.removals == ["controlport rst 1:3:4", "controlport offline 0:3:3",
-                               "controlport config host -ct point -f 0:3:3", "controlport rst 0:3:3"]
+    assert result.removals == ["controlport rst -f 1:3:4", "controlport offline 0:3:3",
+                               "controlport config host -ct point -f 0:3:3", "controlport rst -f 0:3:3"]
     assert result.sentences[0] == "0:3:3 is now a peer port (port WWPN 20330002AC02D495)."
 
 
@@ -846,7 +873,7 @@ def test_a_refused_config_stops_and_the_removal_set_names_only_what_changed():
     # 0:3:2 is restored; 1:3:2 was only taken offline, so it is only brought back (help: "Issue
     # controlport rst to bring the port back online"), never re-configured.
     assert "controlport config host -ct point -f 0:3:2" in result.removals
-    assert "controlport rst 1:3:2" in result.removals
+    assert "controlport rst -f 1:3:2" in result.removals
     assert not any(r.startswith("controlport config") and r.endswith("1:3:2") for r in result.removals)
 
 
@@ -879,7 +906,7 @@ APPROVED = {("0:3:2", "peer"), ("1:3:2", "peer")}
 @pytest.mark.parametrize("command, allowed", [
     ("controlport offline 0:3:2", True),
     ("controlport config peer -ct point -f 0:3:2", True),
-    ("controlport rst 0:3:2", True),
+    ("controlport rst -f 0:3:2", True),
     ("controlport offline 0:3:3", False),                          # not an approved port
     ("controlport config host -ct point -f 0:3:2", False),         # restores are pasted, never run
     ("controlport config rcfc -ct point -f 0:3:2", False),         # approved for peer, not rcfc
@@ -1016,8 +1043,8 @@ async def test_after_a_partial_paste_each_port_keeps_its_undo_from_the_read_that
         results.append(last.data["peer"]["result"])
     assert results[0] is None
     assert results[1]["changed"] == ["0:3:2"] and "1:3:2 did not come back as a peer port" in results[1]["error"]
-    both = ["controlport offline 1:3:2", "controlport config host -ct point -f 1:3:2", "controlport rst 1:3:2",
-            "controlport offline 0:3:2", "controlport config host -ct point -f 0:3:2", "controlport rst 0:3:2"]
+    both = ["controlport offline 1:3:2", "controlport config host -ct point -f 1:3:2", "controlport rst -f 1:3:2",
+            "controlport offline 0:3:2", "controlport config host -ct point -f 0:3:2", "controlport rst -f 0:3:2"]
     for result in results[2:]:                              # the read after the second paste, and a second look
         assert result["changed"] == ["0:3:2", "1:3:2"] and result["error"] is None and result["removals"] == both
 
