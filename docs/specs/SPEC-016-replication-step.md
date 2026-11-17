@@ -58,7 +58,9 @@ primary: `GET /remotecopy`, `GET /remotecopygroups`. Parsers are pinned to the B
   target's name is what the tool passes as `targetName`. Otherwise: *"No Remote Copy partnership
   between <A> and <B>. The tool configures partnerships from v0.19 (ADR 0015); until then it has to
   exist before this step."* (plus one sentence if the only targets are RCFC — IP only in this
-  release). The partnership is read, never created, in this release. **A pair may have several
+  release; superseded by [SPEC-031](SPEC-031-rcfc.md) part A, built 2026-11-17: an FC partnership is
+  found by node and port WWN, and an FC pair is not sent to the Replication network tab). The
+  partnership is read, never created, in this release. **A pair may have several
   such targets** (HPE's layout for mixed modes: a target per mode over links of their own — a link
   belongs to one target, live 2026-10-09); each primary target is paired with the peer target that
   answers over the same ports, and the links finding is judged on the target(s) this run uses.
@@ -145,7 +147,8 @@ dismantling it; R2's blocker says so.
 
 ## 4. Non-goals
 
-Peer Persistence, Active Sync, SLD, 3DC, MxN; RCFC; Quorum Witness; snapshot schedules (BL-21);
+Peer Persistence, Active Sync, SLD, 3DC, MxN; RCFC (an existing RCFC partnership is SPEC-031 part A,
+built 2026-11-17; setting one up is its deferred part B); Quorum Witness; snapshot schedules (BL-21);
 DSCC protection-policy API (dropped — its one advantage, the snapshot schedule, left with BL-21);
 changing an existing group (remove and recreate); replicating from the peer back.
 

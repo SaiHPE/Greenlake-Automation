@@ -28,7 +28,7 @@ function Stopped() {
             items={[
               { title: 'Why it stops', body: 'The apply stops at the first write the array refuses. Nothing after it is attempted, so the array is never half-configured without you knowing exactly where it stands.' },
               { title: 'Undo', body: 'The removal commands undo only what this run created, in the right order. Paste them on the array yourself; the tool never deletes.' },
-              { title: 'Try again', body: 'Read both arrays again to build a new plan. Objects already created show as Exists and are not created twice.' },
+              { title: 'Try again', body: 'Read both arrays again to build a new plan. Objects already created show as Already there and are not created twice.' },
             ]}
           />
         }
@@ -45,7 +45,7 @@ function Stopped() {
         <Section title="What was done before the stop" summary="3 of 12 writes, all on AlletraMP_D22U27" open>
           {DONE.map((c) => (
             <Box key={c} direction="row" gap="small" align="center">
-              <StatusIndicator state="complete" label="Done" />
+              <StatusIndicator state="complete" label="Created" />
               <Text size="small" style={mono}>{c}</Text>
             </Box>
           ))}

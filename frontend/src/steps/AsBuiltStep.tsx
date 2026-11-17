@@ -1,11 +1,12 @@
 import { Box, Button, FormField, Grid, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
 import { Document } from 'grommet-icons';
 import { useState } from 'react';
-import { AsBuiltResult, CredentialOverride, RunEvent, RunRecord, asbuiltDownloadUrl, startAsbuilt } from '../api';
+import { AsBuiltResult, CredentialOverride, HandoverStatus, RunEvent, RunRecord, asbuiltDownloadUrl, startAsbuilt } from '../api';
 import { ArrayCredentialCard, credentialReady, useArrayCredential } from '../ui/ArrayCredentialCard';
-import { DocList, EmptyState, Guidance, Panel, StatusLine } from '../ui/blocks';
+import { DocList, EmptyState, Guidance, Panel, Section } from '../ui/blocks';
+import { StatusIndicator, StepState } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
-import { FooterAction, StepShell } from '../ui/StepShell';
+import { FooterAction, StepShell, StepStatus } from '../ui/StepShell';
 
 interface Props {
   runId: string;
@@ -19,6 +20,63 @@ const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-di
 /** A value on the cover, or "--" read as "No value" (Design System name-value list). */
 function CoverValue({ value }: { value?: string }) {
   return value ? <Text size="small">{value}</Text> : <Text size="small" color="text-weak" a11yTitle="No value">--</Text>;
+}
+
+const dateTime = (iso: string) =>
+  new Date(iso).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+
+/** The alert verdict as a status: words from the same reads as the document's section. */
+function alertStatus(status: HandoverStatus): { state: StepState; label: string } {
+  const count = status.alerts_new;
+  if (count === null) return { state: 'action_required', label: 'The alerts could not be read.' };
+  if (count === 0) return { state: 'complete', label: 'No new alerts.' };
+  const major = status.alerts_major ? ` (${status.alerts_major} Major or worse)` : '';
+  const oldest = status.oldest_alert ? `; the oldest first occurred on ${status.oldest_alert}` : '';
+  return { state: 'action_required', label: `${count} new alert${count === 1 ? '' : 's'}${major}${oldest}.` };
+}
+
+/** What the array said about itself when the document was made: alerts, the window, peak CPU, host I/O. */
+function HandoverBlock({ status }: { status: HandoverStatus }) {
+  const verdict = alertStatus(status);
+  const failed = Object.keys(status.read_errors ?? {}).length;
+  const window = status.window_from ? `${dateTime(status.window_from)} to ${status.window_to ? dateTime(status.window_to) : 'the read'}` : undefined;
+  const alerts = status.alerts_new === null ? 'alerts not read' : `${status.alerts_new} new alert${status.alerts_new === 1 ? '' : 's'}`;
+  const summary = [
+    alerts,
+    status.cpu_max_pct !== null && `busiest CPU ${status.cpu_max_pct.toFixed(1)} %`,
+    status.iops_avg !== null && `${status.iops_avg.toFixed(1)} IO/s on the host ports`,
+  ].filter(Boolean).join(' · ');
+  return (
+    <Section title="Status at handover" summary={summary} open>
+      <StatusIndicator state={verdict.state} label={verdict.label} />
+      {status.cloud_alert !== null && (
+        <Text size="small">The array reports it is disconnected from Data Services Cloud Console (alert {status.cloud_alert}).</Text>
+      )}
+      {!!status.alerts_new && (
+        <Text size="small" color="text-weak">
+          Alerts record an event, not the current state: compare each with the array’s status check before acting. The document lists them.
+        </Text>
+      )}
+      <NameValueList pairProps={{ direction: 'column' }}>
+        <NameValuePair name="Performance window">
+          <CoverValue value={window} />
+        </NameValuePair>
+        <NameValuePair name="Busiest CPU sample">
+          <CoverValue value={status.cpu_max_pct === null ? undefined : `${status.cpu_max_pct.toFixed(1)} % busy`} />
+        </NameValuePair>
+        <NameValuePair name="Host port I/O, average">
+          <CoverValue value={status.iops_avg === null ? undefined : `${status.iops_avg.toFixed(1)} IO/s`} />
+        </NameValuePair>
+      </NameValueList>
+      {window && <Text size="small">These figures are the load seen in this window, not what the array can do.</Text>}
+      {status.idle && <Text size="small">The array carried almost no host I/O in this window: an idle baseline for later comparison.</Text>}
+      {failed > 0 && (
+        <Text size="xsmall" color="text-weak">
+          {failed === 1 ? '1 read' : `${failed} reads`} could not be made. The document names each one, and so does Check before sending.
+        </Text>
+      )}
+    </Section>
+  );
 }
 
 export function AsBuiltStep({ runId, run, events, onDone }: Props) {
@@ -69,52 +127,59 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
   const primary: FooterAction | undefined = running ? undefined : result ? { label: next, onClick: onDone } : generateAction;
   const buttons: FooterAction[] = running ? [] : result ? [generateAction] : [{ label: `${next} without the document`, onClick: onDone }];
 
+  const size = `${Math.max(1, Math.round((result?.size ?? 0) / 1024))} KB`;
+  // one status line (SPEC-030 R2): writing, could not, or the document and what to check
+  const status: StepStatus | undefined = running
+    ? { state: 'running', title: 'Writing the document', message: 'Reading the array once more and filling the HPE template; about 30 seconds.' }
+    : failure
+      ? { state: 'action_required', title: 'The document could not be generated', message: failure }
+      : result
+        ? {
+            state: warnings.length ? 'action_required' : 'complete',
+            title: warnings.length ? `${fileName} is ready; check ${warnings.length} item${warnings.length === 1 ? '' : 's'} first` : `${fileName} is ready`,
+            message: `${size}, formatted to the HPE template, with the inventory and status tables.`,
+            time: terminal ? hhmm(terminal.created_at) : undefined,
+          }
+        : undefined;
+
   const field = (id: string, label: string, value: string, set: (v: string) => void, placeholder: string) => (
     <FormField key={id} label={label} htmlFor={`asbuilt-${id}`} name={id} margin="none">
       <TextInput id={`asbuilt-${id}`} name={id} value={value} onChange={(event) => set(event.target.value)} placeholder={placeholder} />
     </FormField>
   );
 
+  const coverForm = (
+    <Grid columns={{ count: 'fit', size: 'medium' }} gap="small">
+      {field('customer', 'Customer name', customer, setCustomer, 'Defaults to the workbook value')}
+      {field('site', 'Site / location', site, setSite, 'Defaults to the workbook value')}
+      {field('workload', 'Application / workload', workload, setWorkload, 'e.g. VMware vSphere cluster')}
+      {field('purpose', 'Purpose of using Block storage', purpose, setPurpose, 'e.g. primary datastore for the vault zone')}
+    </Grid>
+  );
+
   return (
     <StepShell
       title="As-built document"
-      description="Reads the array's final configuration and writes it into the HPE Word template: the hand-over document for the customer. Changes nothing."
-      stateDetail={result ? (warnings.length ? `${warnings.length} item${warnings.length === 1 ? '' : 's'} to check` : 'document ready') : undefined}
+      description="Reads the array's final configuration and writes it into the HPE Word template: the hand-over document for the customer."
       error={error}
       onDismissError={() => setError(null)}
+      status={status}
       primary={primary}
       buttons={buttons}
-      guideOpen={!result}
       guidance={
         <Guidance
           items={[
-            { title: 'What goes in', body: 'System, network and time settings; the ports, hosts, volumes and exports; replication and the failover test with its timings; the verification result; the array status.' },
+            { title: 'What goes in', body: 'System, network and time settings; the ports, hosts, volumes and exports; replication and the failover test with its timings; the verification result; the array status: its new alerts, capacity in use and 24 hours of performance. Making it changes nothing on the array.' },
             { title: 'Cover details', body: 'Customer and site come from the workbook; type here to change them. Workload and purpose are yours to fill. None of it is stored on the array.' },
             { title: 'Check before sending', body: 'The document is always produced. Anything that did not fill is listed here so it cannot be missed; this is the last screen before the document goes to the customer.' },
           ]}
         />
       }
     >
-      {running && (
-        <StatusLine state="running" title="Writing the document">
-          Reading the array once more and filling the HPE template. About 30 seconds.
-        </StatusLine>
-      )}
-
-      {!running && failure && (
-        <StatusLine state="action_required" title="The document could not be generated">
-          {failure}
-        </StatusLine>
-      )}
-
-      {result && !running && (
-        <StatusLine
-          state={warnings.length ? 'action_required' : 'complete'}
-          title={warnings.length ? `${fileName} is ready. Check ${warnings.length} item${warnings.length === 1 ? '' : 's'} before you send it.` : `${fileName} is ready`}
-          time={terminal ? hhmm(terminal.created_at) : undefined}
-        >
-          {`${Math.max(1, Math.round((result.size ?? 0) / 1024))} KB, formatted to the HPE template, with the inventory and status tables.`}
-        </StatusLine>
+      {!running && !result && !failure && (
+        <EmptyState icon={<Document size="large" color="icon-weak" />} title="Not generated yet">
+          Generate document reads the array once more and fills the HPE template. Nothing is written to the array.
+        </EmptyState>
       )}
 
       {result && warnings.length > 0 && (
@@ -135,43 +200,25 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
             {
               icon: <Document />,
               name: fileName,
-              detail: `${Math.max(1, Math.round((result.size ?? 0) / 1024))} KB${terminal ? ` · generated ${hhmm(terminal.created_at)}` : ''} · for the customer`,
+              detail: `${size}${terminal ? ` · generated ${hhmm(terminal.created_at)}` : ''} · for the customer`,
               action: <Button size="small" as="a" href={asbuiltDownloadUrl(runId)} download label="Download" />,
             },
           ]}
         />
       )}
 
+      {result?.handover && <HandoverBlock status={result.handover} />}
+
       <ArrayCredentialCard info={credential} serial={run?.serial_number} override={override} onOverride={setOverride} />
 
-      <Panel title="Cover details" description="Not stored on the array. Customer and site default to the workbook when left empty.">
-        <Grid columns={{ count: 'fit', size: 'medium' }} gap="small">
-          {field('customer', 'Customer name', customer, setCustomer, 'Defaults to the workbook value')}
-          {field('site', 'Site / location', site, setSite, 'Defaults to the workbook value')}
-          {field('workload', 'Application / workload', workload, setWorkload, 'e.g. VMware vSphere cluster')}
-          {field('purpose', 'Purpose of using Block storage', purpose, setPurpose, 'e.g. primary datastore for the vault zone')}
-        </Grid>
-      </Panel>
-
-      {!running && !result && !failure && (
-        <EmptyState icon={<Document size="large" color="icon-weak" />} title="Not generated yet">
-          Generate document reads the array once more and fills the HPE template. Nothing is written to the array.
-        </EmptyState>
-      )}
-
-      {result && (
-        <Panel title="On the cover">
-          <NameValueList pairProps={{ direction: 'column' }}>
-            <NameValuePair name="System name">
-              <CoverValue value={result.name} />
-            </NameValuePair>
-            <NameValuePair name="Serial number">
-              <CoverValue value={result.serial} />
-            </NameValuePair>
-            <NameValuePair name="Customer">
-              <CoverValue value={result.customer} />
-            </NameValuePair>
-          </NameValueList>
+      {/* a field to fill before the document; once it is made, the form folds under the same title (the lab reads it) */}
+      {result ? (
+        <Section title="Cover details" summary="Not stored on the array. Customer and site default to the workbook when left empty.">
+          {coverForm}
+        </Section>
+      ) : (
+        <Panel title="Cover details" description="Not stored on the array. Customer and site default to the workbook when left empty.">
+          {coverForm}
         </Panel>
       )}
     </StepShell>

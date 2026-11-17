@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import time
 
-from alletra_onboard.adapters import command_log
+from alletra_onboard.adapters import command_log, device_trust
 
 try:
     import paramiko
@@ -30,6 +30,11 @@ ALLOWED_COMMANDS = (
     "showhostset", "showvvset",
     # replication read (SPEC-016 R1): the RCIP links with their peer addresses
     "showrctransport",
+    # SPEC-026: alerts and System Reporter reports (read-only)
+    "showalert", "srstatcpu", "srstatport", "srstatvv",
+    # snapshot schedules (SPEC-023 R3). Its help (OS 10.5.x, 10.6.0) lists -all, -window and -sortcol,
+    # all of which only change what is shown: no option acts.
+    "showsched",
 )
 # Options that make an allowed command act instead of read. The name check alone let these through.
 # `showtarget -rescan` makes the peer ports rescan for targets (HPE CLI reference, showtarget). When a
@@ -116,19 +121,14 @@ class ArrayCliClient:
     def connect(self) -> None:
         if paramiko is None:
             raise ArrayCliError("SSH support (paramiko) is not available in this build.")
-        client = paramiko.SSHClient()
-        # Fresh array — no known_hosts to pin against (accepted; local mgmt network). See the ADR.
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # ADR 0026: a fresh array has no known_hosts entry, so the run trusts its host key on first contact
+        # and refuses a different one before the password is sent. The Remote Copy write client, the link
+        # check and the console all connect here.
         try:
-            client.connect(
-                self.host,
-                port=self.port,
-                username=self.username,
-                password=self.password,
-                timeout=self.timeout,
-                allow_agent=False,
-                look_for_keys=False,
-            )
+            client = device_trust.open_ssh(self.host, self.port, device="array", username=self.username,
+                                           password=self.password, timeout=self.timeout)
+        except device_trust.DeviceTrustError as exc:
+            raise ArrayCliError(str(exc)) from exc
         except paramiko.AuthenticationException as exc:
             raise ArrayCliError(
                 f"Login failed for {self.username}@{self.host} — check the admin username/password "

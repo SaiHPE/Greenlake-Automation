@@ -4,9 +4,10 @@
 Reads only the fixtures: the array's own help pages in `tests/fixtures/handover/<array>/help_<command>.txt`,
 captured read-only on rack13 (OS 10.6.0), D22U27 (10.5.0), E18U31 (10.5.60) and VZ (10.5.51). An option
 a later OS adds fails here until someone reads its help and either adds it to the reviewed list below
-(it filters, windows, sorts or formats) or refuses it in the client. The allowlist pins themselves join
-this file when the four commands are added (work packet BL-24, step 2). `srstatrcvv` is reviewed here
-but stays off the allowlist until a started Remote Copy group is captured (ADR 0019).
+(it filters, windows, sorts or formats) or refuses it in the client. The allowlist pins follow the help
+review: `showalert`, `srstatcpu`, `srstatport` and `srstatvv` are allowed (work packet BL-24, step 2).
+`srstatrcvv` is reviewed here but stays off the allowlist until a started Remote Copy group is captured
+(ADR 0019).
 """
 
 from __future__ import annotations
@@ -15,6 +16,8 @@ import re
 from pathlib import Path
 
 import pytest
+
+from alletra_onboard.adapters.array.cli_client import ALLOWED_COMMANDS, refusal
 
 HANDOVER = Path(__file__).resolve().parents[1] / "fixtures" / "handover"
 ARRAYS = ("rack13", "D22U27", "E18U31", "VZ")
@@ -133,3 +136,50 @@ def test_an_option_that_acts_fails_the_review():
 
 def test_alternatives_on_one_line_are_each_read():
     assert {"-both", "-ctl", "-data"} <= help_options(_help("srstatport", "VZ"))
+
+
+# ---- the allowlist (work packet BL-24 step 2) -------------------------------------------------------
+
+# The five reads the as-built makes for SPEC-026 R3, exactly as the tool sends them.
+HANDOVER_READS = (
+    "showalert -d",
+    "showsys -space",
+    "srstatcpu -hires -btsecs -24h -groupby NODE -summary min,avg,5%,95%,max,per_group",
+    "srstatport -hires -btsecs -24h -port_type host,iscsi -groupby PORT_N,PORT_S,PORT_P -summary avg,95%,max,per_group",
+    "srstatvv -hires -btsecs -24h -summary avg,95%,max",
+)
+
+
+@pytest.mark.parametrize("command", ["showalert", "srstatcpu", "srstatport", "srstatvv"])
+def test_the_four_reads_are_on_the_allowlist(command):
+    assert command in ALLOWED_COMMANDS
+    assert refusal(command) is None
+
+
+@pytest.mark.parametrize("command", HANDOVER_READS)
+def test_every_handover_read_passes_as_the_tool_sends_it(command):
+    assert refusal(command) is None
+
+
+@pytest.mark.parametrize("command", [
+    # SPEC-026 R7: until rows from a started Remote Copy group are captured
+    "srstatrcvv", "srstatrcvv -hires -btsecs -24h -groupby GROUP_NAME -summary avg,max,per_group",
+    # live samplers: without -iter they never end
+    "statcpu", "statport", "statvv", "statvv -iter 1",
+    # System Reporter's writes, and the alert writes the section only names as text
+    "setsr", "startsr", "stopsr", "createsralertcrit", "setsralertcrit", "removesralertcrit",
+    "setalert", "removealert", "setalert ack 40", "removealert -a",
+])
+def test_never_added_commands_are_refused(command):
+    assert refusal(command) == f"refused: '{command.split()[0]}' is not a read-only show command"
+
+
+def test_a_second_command_after_an_allowed_report_is_refused():
+    assert refusal("srstatvv; removevv x") == "refused: command contains a forbidden shell metacharacter"
+    assert refusal("showalert -d [removealert -a]") == "refused: command contains a forbidden shell metacharacter"
+
+
+def test_an_allowed_name_with_an_acting_option_is_still_refused():
+    """LESSONS 46: growing the list of names does not let an allowed name act."""
+    assert refusal("showtarget -rescan") is not None
+    assert refusal("showtarget") is None

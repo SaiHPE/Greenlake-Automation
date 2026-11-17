@@ -12,12 +12,12 @@ from collections.abc import Iterable
 from alletra_onboard.application.replication.partnership import plan_partnership
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
-    RTT_LIMIT_MS,
     TEST_GROUP,
     TEST_PEER_VVSET,
     TEST_VOLUME,
     TEST_VOLUME_GIB,
     TEST_VVSET,
+    TRANSPORT_WORDS,
     Partnership,
     PartnerTarget,
     PlannedCall,
@@ -30,6 +30,9 @@ from alletra_onboard.domain.replication import (
     ReplicationIntent,
     ReplicationPlan,
     ReplicationReport,
+    Transport,
+    rtt_limit_ms,
+    rtt_limit_text,
 )
 
 #: Support Matrix, 2-node system (research 2026-10-07 §3). Checked per mode; practically never hit.
@@ -38,18 +41,53 @@ GROUP_LIMIT = {"sync": 800, "async": 2400}
 WSAPI_MODE = {"sync": 1, "async": 2}
 
 
-# ------------------------------------------------------------------ the partnership (by address)
+# ------------------------------------------------------------------ the partnership (by address or WWN)
+
+def _outbound(view: ReplicationArrayView, target: RcTarget) -> list[RcLink]:
+    return [link for link in view.links if link.target == target.name and not link.inbound]
+
+
+def _addresses(links: list[RcLink]) -> set[str]:
+    """What the links address: RCIP addresses, or port WWNs (upper case, as `showport` prints them)."""
+    return {link.address.upper() for link in links}
+
+
+def _transport(target: RcTarget) -> Transport:
+    return "FC" if target.is_fc else "IP"
+
 
 def _targets_towards(view: ReplicationArrayView, other: ReplicationArrayView) -> list[tuple[RcTarget, list[RcLink]]]:
-    """Every target on `view` whose outbound links all point at `other`'s RCIP addresses."""
-    if not other.rcip_addresses:
-        return []
+    """Every target on `view` that points at `other`: an IP target whose outbound links all point at
+    `other`'s RCIP addresses (SPEC-016 R2); an FC target whose Options carry one of `other`'s FC node WWNs
+    and whose outbound links all address `other`'s FC port WWNs (SPEC-031 R3)."""
     out = []
     for target in view.targets:
-        links = [link for link in view.links if link.target == target.name and not link.inbound]
-        if links and {link.address for link in links} <= other.rcip_addresses:
+        links = _outbound(view, target)
+        if not links:
+            continue
+        if target.is_fc:
+            resolves = target.options.upper() in other.fc_node_wwns and _addresses(links) <= other.fc_port_wwns
+        else:
+            resolves = _addresses(links) <= other.rcip_addresses
+        if resolves:
             out.append((target, links))
     return out
+
+
+def _fc_targets_naming(view: ReplicationArrayView, other: ReplicationArrayView) -> list[RcTarget]:
+    """Every FC target on `view` that names `other`, resolved or not: its Options carry one of `other`'s FC
+    node WWNs, or one of its links addresses one of `other`'s FC port WWNs."""
+    return [t for t in view.targets if t.is_fc and (
+        t.options.upper() in other.fc_node_wwns or _addresses(_outbound(view, t)) & other.fc_port_wwns)]
+
+
+def _local_addresses(view: ReplicationArrayView, links: list[RcLink], transport: Transport) -> set[str]:
+    """What the other array's links address when they point back over the same ports: the RCIP address of
+    each port the links use, or its port WWN over Fibre Channel."""
+    if transport == "FC":
+        return {view.ports[link.nsp].port_wwn for link in links if link.nsp in view.ports} - {""}
+    port_ip = {p.nsp: p.ip for p in view.rcip_ports}
+    return {port_ip.get(link.nsp, "").upper() for link in links} - {""}
 
 
 def _assign(targets: list[PartnerTarget], modes: Iterable[str]) -> dict[str, str]:
@@ -72,24 +110,29 @@ def _assign(targets: list[PartnerTarget], modes: Iterable[str]) -> dict[str, str
 
 def find_partnership(primary: ReplicationArrayView, peer: ReplicationArrayView, *,
                      modes: Iterable[str] = (), own_groups: Iterable[str] = ()) -> Partnership | None:
-    """The target(s) on each array whose outbound links point at the OTHER array's RCIP addresses.
-    Names are never compared: on the lab pair E18U31's target for D22U27 is named AlletraMP_E18U31.
-    Each primary target is paired with the peer target that answers over the same ports (its links
-    point back at the addresses of the ports the primary target uses)."""
+    """The target(s) on each array that point at the OTHER array: by RCIP address over IP, by node WWN and
+    port WWNs over Fibre Channel (SPEC-031 R3). Names are never compared: on the lab pair E18U31's target
+    for D22U27 is named AlletraMP_E18U31. Each primary target is paired with the peer target that answers
+    over the same ports (its links point back at the addresses or WWNs of the ports the primary target
+    uses). A pair has one transport: when the targets found are IP and FC both, there is no partnership to
+    use (SPEC-031 R3; `check` says why)."""
     forward, backward = _targets_towards(primary, peer), _targets_towards(peer, primary)
     if not forward or not backward:
         return None
+    transports = {_transport(t) for t, _ in forward + backward}
+    if len(transports) != 1:
+        return None
+    transport = transports.pop()
     own = set(own_groups)
-    port_ip = {p.nsp: p.ip for p in primary.rcip_ports}
     targets: list[PartnerTarget] = []
     for t, links in forward:
-        local = {port_ip.get(link.nsp, "") for link in links} - {""}
-        pair = (next((bt for bt in backward if {link.address for link in bt[1]} == local), None)
-                or next((bt for bt in backward if {link.address for link in bt[1]} & local), None)
+        local = _local_addresses(primary, links, transport)
+        pair = (next((bt for bt in backward if _addresses(bt[1]) == local), None)
+                or next((bt for bt in backward if _addresses(bt[1]) & local), None)
                 or backward[0])
         on_target = [g for g in primary.groups if g.target == t.name]
         targets.append(PartnerTarget(
-            name=t.name, peer_name=pair[0].name,
+            name=t.name, peer_name=pair[0].name, transport=transport,
             links_up=sum(1 for link in links if link.up), links_total=len(links),
             peer_links_up=sum(1 for link in pair[1] if link.up), peer_links_total=len(pair[1]),
             mirror_config=t.mirror_config,
@@ -100,14 +143,95 @@ def find_partnership(primary: ReplicationArrayView, peer: ReplicationArrayView, 
     chosen = _assign(targets, set(modes))
     first = next((t for t in targets if t.name in chosen.values()), targets[0])
     return Partnership(
-        target_on_primary=first.name, target_on_peer=first.peer_name,
+        target_on_primary=first.name, target_on_peer=first.peer_name, transport=transport,
         links_primary_up=first.links_up, links_primary_total=first.links_total,
         links_peer_up=first.peer_links_up, links_peer_total=first.peer_links_total,
         mirror_config=first.mirror_config, targets=targets, target_by_mode=chosen,
     )
 
 
+def _name(view: ReplicationArrayView) -> str:
+    return view.name or view.host
+
+
+def _state(view: ReplicationArrayView, target: RcTarget) -> tuple[str, bool]:
+    """(what shows the target's state, whether it is dead). Dead on SPEC-031 R5's terms, which BL-57 set
+    for an FC target: status failed, no link Up, no started group. Only a dead target is offered for removal."""
+    links = _outbound(view, target)
+    up = sum(1 for link in links if link.up)
+    started = [g.name for g in view.groups if g.target == target.name and g.status.lower() == "started"]
+    text = f"{'Fibre Channel' if target.is_fc else 'IP'}, status {target.status or 'unknown'}, {up} of {len(links)} links Up"
+    if started:
+        text += f", started group{'s' if len(started) != 1 else ''} {', '.join(started)}"
+    return text, target.status.lower() == "failed" and not up and not started
+
+
+def _mixed_transports(primary: ReplicationArrayView, peer: ReplicationArrayView) -> str:
+    """SPEC-031 R3, one pair one transport: the sentence when the two arrays show IP and FC targets towards
+    each other, else ''. An older target in one transport stops a newer one in the other from working,
+    without an error (LESSONS 44), so the step does not pick one. A target in use is never offered for removal."""
+    sides = ((primary, peer), (peer, primary))
+    ip = [(v, t) for v, o in sides for t, _ in _targets_towards(v, o) if not t.is_fc]
+    fc = [(v, t) for v, o in sides for t in _fc_targets_naming(v, o)]
+    if not ip or not fc:
+        return ""
+    named = "; ".join(f"{_name(v)} target '{t.name}' ({_state(v, t)[0]})" for v, t in ip + fc)
+    text = (f"{_name(primary)} and {_name(peer)} show Remote Copy targets towards each other over IP and over Fibre "
+            f"Channel: {named}. The arrays keep one partnership per pair, and a target in one transport stops one in "
+            "the other from working, so the tool will not use either and plans nothing.")
+    dead = [(v, t) for v, t in ip + fc if _state(v, t)[1]]
+    if dead:
+        text += (" Remove the failed one first: " + "; ".join(f"on {_name(v)}, `removercopytarget -cleargroups -f {t.name}`"
+                                                             for v, t in dead)
+                 + " (this also removes the groups on that target; their volumes stay). Save `showrcopy -d groups` before.")
+    else:
+        text += " None of them is failed, so the tool offers no removal: agree with the array owners which transport stays."
+    return text
+
+
+def _fc_unresolved(view: ReplicationArrayView, other: ReplicationArrayView) -> list[str]:
+    """SPEC-031 R4: an FC target that names `other` but does not resolve to it, one sentence each with the
+    WWN that did not match."""
+    resolved = {t.name for t, _ in _targets_towards(view, other)}
+    out = []
+    for t in _fc_targets_naming(view, other):
+        if t.name in resolved:
+            continue
+        misses = []
+        if t.options.upper() not in other.fc_node_wwns:
+            misses.append(f"its node WWN {t.options or '(none)'} is not one of {_name(other)}'s "
+                          f"({', '.join(sorted(other.fc_node_wwns))})")
+        links = _outbound(view, t)
+        stray = [f"{link.nsp} → {link.address}" for link in links if link.address.upper() not in other.fc_port_wwns]
+        if stray:
+            misses.append(f"link{'s' if len(stray) != 1 else ''} {', '.join(stray)} address{'' if len(stray) != 1 else 'es'} "
+                          f"no port of {_name(other)}")
+        if not links:
+            misses.append("it has no outbound link")
+        out.append(f"{_name(view)} has Fibre Channel target '{t.name}' that does not resolve to {_name(other)}: "
+                   + "; ".join(misses) + ".")
+    return out
+
+
+def _fc_one_way(view: ReplicationArrayView, other: ReplicationArrayView) -> list[str]:
+    """An FC target that resolves to `other` while `other` has none that resolves back."""
+    if any(t.is_fc for t, _ in _targets_towards(other, view)):
+        return []
+    return [f"{_name(view)} has target '{t.name}' for {_name(other)} over Fibre Channel, found by node WWN and port "
+            f"WWN ({_state(view, t)[0]}); {_name(other)} has no Fibre Channel target that points back at {_name(view)}."
+            for t, _ in _targets_towards(view, other) if t.is_fc]
+
+
 # ------------------------------------------------------------------ R2: findings
+
+def run_modes(intent: ReplicationIntent) -> list[str]:
+    """The modes this run's groups replicate in: the rows', or the failover test group's alone (it takes the
+    first row's mode, and a default row's without one)."""
+    modes = {row.mode for row in intent.protections}
+    if not modes and intent.failover_test and not intent.failover_group:
+        modes = {ProtectionRequest(vvset=TEST_VVSET, peer_cpg="").mode}
+    return sorted(modes)
+
 
 def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: ReplicationIntent) -> ReplicationReport:
     report = ReplicationReport(primary=primary, peer=peer)
@@ -122,18 +246,32 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
     a, b = primary.name or primary.host, peer.name or peer.host
     row_modes = {row.mode for row in intent.protections}
     planned = {row.group_name for row in intent.protections} | {TEST_GROUP}
+    report.rtt_ms, report.modes = intent.rtt_ms, run_modes(intent)
+    mixed = _mixed_transports(primary, peer)
+    if mixed:
+        # SPEC-031 R3: one pair, one transport. The step does not pick one, and plans nothing.
+        report.mixed_transports = True
+        f.append(mixed)
+        return report
     report.partnership = find_partnership(primary, peer, modes=row_modes, own_groups=planned)
     sets_up = bool(intent.network) and report.partnership is None   # SPEC-021: the tool makes it
     if report.partnership is None and not sets_up:
-        f.append(
-            f"No Remote Copy partnership between {a} and {b}: neither array has a target whose links point at "
-            f"the other's RCIP addresses. Name the replication ports on the Replication network tab and the tool "
-            "sets it up, or set it up on the arrays first."
-        )
-        fc = [t.name for v in (primary, peer) for t in v.targets if t.type.upper() == "FC"]
+        fc = [*_fc_one_way(primary, peer), *_fc_one_way(peer, primary),
+              *_fc_unresolved(primary, peer), *_fc_unresolved(peer, primary)]
         if fc:
-            f.append(f"Remote Copy over Fibre Channel target(s) found ({', '.join(sorted(set(fc)))}); this tool "
-                     "supports Remote Copy over IP only.")
+            # SPEC-031 R4: the Replication network tab sets up RCIP only; an FC pair is never sent there.
+            f.append(
+                f"No Remote Copy partnership between {a} and {b}: no two targets point at each other, by RCIP address "
+                "or by Fibre Channel WWN. Fix the Fibre Channel partnership on the arrays (what each target shows is "
+                "below), then read both arrays again."
+            )
+            f.extend(fc)
+        else:
+            f.append(
+                f"No Remote Copy partnership between {a} and {b}: neither array has a target whose links point at "
+                f"the other's RCIP addresses. Name the replication ports on the Replication network tab and the tool "
+                "sets it up, or set it up on the arrays first."
+            )
     elif report.partnership is not None:
         p = report.partnership
         used = [p.target_for(m) for m in sorted(row_modes)]
@@ -144,6 +282,9 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                     f"{t.links_up} of {t.links_total} Up, {b} → {a} via '{t.peer_name}' has {t.peer_links_up} of "
                     f"{t.peer_links_total} Up."
                 )
+        if p.transport == "FC":
+            # An extra FC target that half-matches does not stop the pair the step found; say so, do not block.
+            report.notes.extend([*_fc_unresolved(primary, peer), *_fc_unresolved(peer, primary)])
     if sets_up and len(row_modes) > 1:
         # SPEC-021 makes one target per pair, and every group on a target must replicate in one mode: say
         # so before the partnership is set up, not after.
@@ -164,11 +305,13 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
     # (a link belongs to one target, live 2026-10-09), so a pair with such targets serves mixed rows.
     if report.partnership is not None:
         p = report.partnership
+        spare = ("spare RCIP ports (a link belongs to one target; set it up on the arrays, the tool makes only the "
+                 "first target of a pair)" if p.transport == "IP" else
+                 "spare Fibre Channel ports (a link belongs to one target; set it up on the arrays)")
         for mode in sorted(row_modes):
             if mode in p.target_by_mode:
                 continue
-            tail = ("Use {have} on the Replication tab, or a second target over spare RCIP ports (a link belongs "
-                    "to one target; set it up on the arrays, the tool makes only the first target of a pair).")
+            tail = "Use {have} on the Replication tab, or a second target over " + spare + "."
             if len(p.targets) == 1 and p.targets[0].modes:
                 t = p.targets[0]
                 have = t.modes[0]
@@ -192,8 +335,7 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                 f.append(
                     f"The Replication tab mixes sync and async rows and {a} → {b} has one target ('{p.targets[0].name}'); "
                     "every group on one target must replicate in the same mode (HPE Support Matrix). Make all rows one "
-                    "mode, or add a second target over spare RCIP ports (a link belongs to one target; set it up on "
-                    "the arrays, the tool makes only the first target of a pair)."
+                    f"mode, or add a second target over {spare}."
                 )
             else:
                 other = next((m for m, n in p.target_by_mode.items() if m != mode), None)
@@ -208,14 +350,15 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
                 f.append(
                     f"None of the {len(p.targets)} targets from {a} to {b} can carry a {mode} group ({'; '.join(parts)}); "
                     "every group on one target must replicate in the same mode (HPE Support Matrix). Use that mode on "
-                    "the Replication tab, or a target of its own over spare RCIP ports (a link belongs to one target; "
-                    "set it up on the arrays, the tool makes only the first target of a pair)."
+                    f"the Replication tab, or a target of its own over {spare}."
                 )
+    # Over RCIP a typed RTT over the limit is a finding. Over Fibre Channel the typed RTT stands in for the
+    # measurement, so the apply holds it to the limit with the 'Continue anyway' tick instead (SPEC-031 R6).
+    transport = report.partnership.transport if report.partnership is not None else "IP"
     for row in intent.protections:
-        limit = RTT_LIMIT_MS[row.mode]
-        if rtt is not None and rtt > limit:
-            f.append(f"Volume set '{row.vvset}': the measured round-trip time is {rtt:g} ms; {row.mode} replication "
-                     f"over RCIP needs {limit:g} ms or less.")
+        if transport == "IP" and rtt is not None and rtt > rtt_limit_ms("IP", row.mode):
+            f.append(f"Volume set '{row.vvset}': the measured round-trip time is {rtt:g} ms; "
+                     f"{rtt_limit_text('IP', row.mode)}.")
         members = primary.vvsets.get(row.vvset)
         if members is None:
             f.append(f"Volume set '{row.vvset}' does not exist on {a}. Create it first (Volumes tab and "
@@ -299,10 +442,12 @@ def _group_calls(row: ProtectionRequest, members: list[str], target: str, local_
 
 
 def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisioning: ProvisioningIntent) -> ReplicationPlan:
-    plan = ReplicationPlan(blockers=list(report.findings))
+    plan = ReplicationPlan(blockers=list(report.findings), notes=list(report.notes))
     if report.error:
         plan.error = report.error
         return plan
+    if report.mixed_transports:
+        return plan     # SPEC-031 R3: a pair with IP and FC targets towards each other plans nothing
     primary, peer = report.primary, report.peer
     partnership = report.partnership
     a, b = primary.name or primary.host, peer.name or peer.host
@@ -442,7 +587,7 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
             f"({t.peer_links_up}/{t.peer_links_total} Up), policy " + ("mirror_config" if t.mirror_config else "no_mirror_config")
             + ("" if not t.modes else f", carries {t.groups} {'/'.join(t.modes)} group(s)")
             for t in p.targets)
-        plan.notes.append(f"Partnership: {legs}.")
+        plan.notes.append(f"Partnership {TRANSPORT_WORDS[p.transport]}: {legs}.")
         if len(p.targets) > 1 and p.target_by_mode:
             plan.notes.append("Target per mode this run: " + ", ".join(f"{m} → '{n}'" for m, n in sorted(p.target_by_mode.items())) + ".")
     if primary.system_id is not None:

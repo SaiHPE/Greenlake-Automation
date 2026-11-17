@@ -3,14 +3,26 @@ rack13/ (rack13-ARCUS, OS 10.6.0, 2026-11-16: no File ports, the service off, no
 d22u27/ (AlletraMP_D22U27, OS 10.5.0, 2026-11-17: four File ports, the service on, three file
 systems, client groups and shares). See each fixtures README for the facts asserted here."""
 
+import copy
 import json
 from pathlib import Path
 
 import pytest
 
+from alletra_onboard.adapters.array.wsapi_v3_client import (
+    V3Answer,
+    WsapiV3Error,
+    WsapiV3LoginRefused,
+)
 from alletra_onboard.application.replication.read import parse_showsys, parse_showversion
 from alletra_onboard.application.unified_file.read import (
+    NO_ANSWER,
+    OTHER_ARRAY,
+    SERVICE_OFF,
+    SESSION_REFUSED,
+    UNREADABLE,
     UnexpectedAnswer,
+    file_os,
     parse_array_serial,
     parse_fileservice,
     parse_fileshares,
@@ -18,6 +30,8 @@ from alletra_onboard.application.unified_file.read import (
     parse_help_syntax,
     parse_sharesettings,
     parse_showport_file,
+    read_array_file,
+    read_file_report,
 )
 from alletra_onboard.domain.unified_file import (
     FILE_CLI_SYNTAX,
@@ -269,3 +283,249 @@ def test_the_capture_keeps_no_session_value_and_no_contact(array):
         "sessionToken", "hpeWsapiSentryLineage", "hpeWsapiSentryUsername"]
     assert sorted(login["body"]) == ["arrayPrivileges", "key", "sessionId", "username"]
     assert _answer(array, "wsapi_v1_system")["body"]["contact"].startswith("<removed")
+
+
+# ---- SPEC-028 R1-R2: read_file_report, against the captures -----------------------------------------
+
+_CLI_FILES = {"showsys": "showsys", "showversion": "showversion", "showport -file": "showport_file",
+              "showport": "showport", "shownet": "shownet"}
+
+
+class CapturedCli:
+    """The run's read-only SSH session, answering from one capture; any other command answers ""."""
+
+    def __init__(self, array: str, **override: str) -> None:
+        self.array, self.override, self.sent = array, override, []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def run(self, command: str, timeout: float | None = None) -> str:
+        self.sent.append(command)
+        if command in self.override:
+            return self.override[command]
+        name = _CLI_FILES.get(command)
+        return _text(self.array, name) if name else ""
+
+
+class CapturedV3:
+    """Stands in for WsapiV3Client and replays one capture's four answers, with what the client
+    does: `with` logs in (or raises what a failed login raises) and always logs out; `get` returns
+    any HTTP status as an answer. `answers` replaces a resource's answer (a V3Answer, or an
+    exception to raise); `edit` changes a copy of a captured body."""
+
+    def __init__(self, array: str, *, login_error: Exception | None = None,
+                 answers: dict | None = None, edit: dict | None = None) -> None:
+        self.array, self.login_error = array, login_error
+        self.answers, self.edit = answers or {}, edit or {}
+        self.gets: list[str] = []
+        self.withheld: list[str] = []   # what `withhold` said of each answer: "" = logged in full
+        self.logins = self.logouts = 0
+
+    def __enter__(self):
+        self.logins += 1
+        if self.login_error is not None:
+            raise self.login_error
+        return self
+
+    def __exit__(self, *exc_info):
+        self.logouts += 1
+        return False
+
+    def get(self, path: str, *, withhold=None) -> V3Answer:
+        self.gets.append(path)
+        resource = path.strip("/")
+        if resource in self.answers:
+            answer = self.answers[resource]
+            if isinstance(answer, Exception):
+                raise answer
+        else:
+            captured = _answer(self.array, f"wsapi_v3_{resource}")
+            body = copy.deepcopy(captured["body"])
+            if resource in self.edit:
+                body = self.edit[resource](body)
+            answer = V3Answer(status=captured["status"], body=body)
+        self.withheld.append(withhold(answer) if withhold else "")
+        return answer
+
+
+def _ports(array: str):
+    return parse_showport_file(_text(array, "showport_file"))
+
+
+def _d22u27(**v3):
+    v3 = CapturedV3("d22u27", **v3)
+    return read_file_report(CapturedCli("d22u27"), v3, "10.5.0", _ports("d22u27")), v3
+
+
+@pytest.mark.parametrize(("version", "capable"), [
+    ("10.5.0", True), ("10.5.60", True), ("10.6.0", True), ("11.0.1", True),
+    ("10.4.2", False), ("9.5.3", False), ("", None), ("unknown", None),
+])
+def test_unified_file_needs_os_10_5(version, capable):
+    assert file_os(version) is capable
+
+
+def test_d22u27_gives_the_whole_file_side_and_closes_its_session():
+    report, v3 = _d22u27()
+    assert report is not None and report.notes == []
+    assert (report.os_version, report.array_serial) == ("10.5.0", "CZ2D320BT1")
+    assert report.service.running and [n.status for n in report.service.nodes] == ["normal", "normal"]
+    assert [fs.name for fs in report.file_systems] == ["fs01", "lab_100", "testfile"]
+    assert [g.name for g in report.client_groups] == ["test1", "fs01", "lab_100"]
+    assert [s.name for s in report.shares] == ["share01", "Lab_test", "test1"]
+    star = [ClientRule(address="*", access="rw", options="root_squash")]
+    assert all(report.clients_of(share) == star for share in report.shares)
+    assert v3.gets == ["/fileservice", "/filesystems", "/filesharesettings", "/fileshares"]
+    assert (v3.logins, v3.logouts) == (1, 1)
+
+
+def test_rack13_shows_nothing_although_its_file_api_answers():
+    """No File ports and the service off: R2's "most block arrays", read and still not shown."""
+    v3 = CapturedV3("rack13")
+    assert read_file_report(CapturedCli("rack13"), v3, "10.6.0", _ports("rack13")) is None
+    assert len(v3.gets) == 4 and v3.logouts == 1
+
+
+def test_no_file_ports_below_10_5_or_on_an_unread_os_is_not_read_at_all():
+    for version in ("10.4.2", ""):
+        v3 = CapturedV3("rack13")
+        assert read_file_report(CapturedCli("rack13"), v3, version, []) is None
+        assert v3.logins == 0
+
+
+def test_file_ports_on_an_os_below_10_5_say_so_and_read_nothing():
+    v3 = CapturedV3("d22u27")
+    report = read_file_report(CapturedCli("d22u27"), v3, "10.4.2", _ports("d22u27"))
+    assert report.notes == ["This array runs OS 10.4.2. File shares need OS 10.5 or later."]
+    assert report.service is None and v3.logins == 0
+
+
+def test_no_answer_from_the_file_api_is_a_note_not_a_failure():
+    report, v3 = _d22u27(login_error=WsapiV3Error("POST /api/v3/credentials: no answer"))
+    assert report.notes == [NO_ANSWER] and report.service is None and v3.gets == []
+    report, _ = _d22u27(answers={"filesystems": WsapiV3Error("GET /api/v3/filesystems: no answer")})
+    assert report.notes == [NO_ANSWER] and report.service is None and report.file_systems == []
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_session_turned_down_after_a_good_login_is_the_session_note(status):
+    report, v3 = _d22u27(answers={"filesharesettings": V3Answer(status, {"message": {"key": "INVALID_SESSION_KEY"}})})
+    assert report.notes == [SESSION_REFUSED] and report.service is None and report.shares == []
+    assert v3.gets == ["/fileservice", "/filesystems", "/filesharesettings"] and v3.logouts == 1
+
+
+def test_a_refused_login_is_the_session_note():
+    refused = WsapiV3LoginRefused(V3Answer(401, {"code": 5, "desc": "invalid username or password"}))
+    report, _ = _d22u27(login_error=refused)
+    assert report.notes == [SESSION_REFUSED]
+
+
+def test_another_arrays_file_api_is_refused_and_nothing_of_it_is_kept():
+    other = _body("rack13", "fileservice")["arraySerialNumber"]
+    report, v3 = _d22u27(edit={"fileshares": lambda b: {**b, "arraySerialNumber": other}})
+    assert report.notes == [OTHER_ARRAY.format(found="CZ2D2K014S", expected="CZ2D320BT1")]
+    # The run's own three answers are logged; the other array's is kept out of the command log.
+    assert v3.withheld == ["", "", "", ("(not recorded: the answer names array CZ2D2K014S, not this "
+                                        "run's array CZ2D320BT1)")]
+    assert report.notes[0] == (
+        "The file API at this address belongs to array CZ2D2K014S, not to this run's array CZ2D320BT1, "
+        "so file details are not shown. Check the array address in the workbook.")
+    assert (report.service, report.file_systems, report.client_groups, report.shares) == (None, [], [], [])
+
+
+def test_a_collection_that_names_no_array_is_refused_at_once():
+    report, v3 = _d22u27(edit={"filesystems": lambda b: {k: v for k, v in b.items() if k != "arraySerialNumber"}})
+    assert report.notes == [OTHER_ARRAY.format(found="(no serial given)", expected="CZ2D320BT1")]
+    assert report.service is None and report.file_systems == []
+    assert v3.gets == ["/fileservice", "/filesystems"] and v3.withheld[1].startswith("(not recorded")
+    assert v3.logouts == 1
+
+
+def test_a_showsys_without_a_serial_refuses_the_read():
+    v3 = CapturedV3("d22u27")
+    report = read_file_report(CapturedCli("d22u27", showsys=""), v3, "10.5.0", _ports("d22u27"))
+    assert report.notes == [OTHER_ARRAY.format(found="CZ2D320BT1", expected="(no serial given)")]
+    assert report.service is None
+
+
+def test_an_answer_the_tool_cannot_read_is_a_note_and_shows_nothing_of_the_read():
+    def drop_mountpath(body):
+        del next(iter(body["members"].values()))["mountpath"]
+        return body
+    report, _ = _d22u27(edit={"fileshares": drop_mountpath})
+    assert report.notes == [UNREADABLE] and report.service is None and report.file_systems == []
+    report, _ = _d22u27(answers={"fileservice": V3Answer(404, {"message": {"key": "NON_EXISTENT_RESOURCE"}})})
+    assert report.notes == [UNREADABLE] and report.service is None
+
+
+def test_without_file_ports_a_failed_read_shows_nothing():
+    for v3 in (CapturedV3("rack13", login_error=WsapiV3Error("no answer")),
+               CapturedV3("rack13", answers={"fileservice": V3Answer(401, {})}),
+               CapturedV3("rack13", edit={"fileshares": lambda b: {**b, "arraySerialNumber": "CZ2D320BT1"}})):
+        assert read_file_report(CapturedCli("rack13"), v3, "10.6.0", []) is None
+
+
+def test_file_ports_with_the_service_off_show_the_service_and_say_it_is_off():
+    """rack13's stopped service, read as if its array had D22U27's File ports."""
+    report = read_file_report(CapturedCli("rack13"), CapturedV3("rack13"), "10.6.0", _ports("d22u27"))
+    assert report.notes == [SERVICE_OFF] and report.notes[0] == (
+        "The file service is off on this array. Turn it on in the array's UI before shares can be made.")
+    assert report.service is not None and not report.service.enabled and report.shares == []
+
+
+def test_no_file_ports_with_the_service_on_is_shown():
+    """D22U27's running service, read as if the array listed no File port: the service decides."""
+    report = read_file_report(CapturedCli("d22u27"), CapturedV3("d22u27"), "10.5.0", [])
+    assert report is not None and report.service.running and report.notes == []
+
+
+def test_the_as_built_read_takes_the_os_and_ports_from_the_array():
+    ports, report = read_array_file(CapturedCli("d22u27"), CapturedV3("d22u27"))
+    assert [p.label for p in ports] == ["0:4:1", "0:4:2", "1:4:1", "1:4:2"]
+    assert report.os_version == "10.5.0" and len(report.shares) == 3
+    cli = CapturedCli("rack13")
+    assert read_array_file(cli, CapturedV3("rack13")) == ([], None)
+    assert cli.sent == ["showversion", "showport -file", "showsys"]
+
+
+def test_the_as_built_read_refuses_a_showport_file_it_cannot_read_from_10_5():
+    with pytest.raises(UnexpectedAnswer):
+        read_array_file(CapturedCli("d22u27", **{"showport -file": "Error: unknown option"}), CapturedV3("d22u27"))
+    old = CapturedCli("d22u27", **{"showport -file": "Error: unknown option", "showversion": "Release version 10.4.2\n"})
+    assert read_array_file(old, CapturedV3("d22u27")) == ([], None)
+
+
+# ---- Discovery reads the file side after `showport -file` ------------------------------------------
+
+def _discover(array: str, v3):
+    from alletra_onboard.application.provisioning import discovery as disc
+    from tests.unit.test_storage_services import FakeVCenter, _intent
+
+    return disc.discover(_intent(), array_cli_factory=lambda c: CapturedCli(array),
+                         vcenter_factory=lambda c: FakeVCenter([]), wsapi_v3_factory=lambda c: v3)
+
+
+def test_discovery_carries_the_file_report_beside_the_file_ports():
+    report = _discover("d22u27", CapturedV3("d22u27"))
+    assert report.error is None
+    assert [p.label for p in report.file_ports] == ["0:4:1", "0:4:2", "1:4:1", "1:4:2"]
+    assert report.file is not None and [s.name for s in report.file.shares] == ["share01", "Lab_test", "test1"]
+    assert "file" in report.model_dump(mode="json")
+
+
+def test_discovery_of_a_block_only_array_has_no_file_report():
+    report = _discover("rack13", CapturedV3("rack13"))
+    assert report.error is None and report.file_ports == [] and report.file is None
+
+
+def test_a_file_side_that_breaks_never_breaks_discovery():
+    class Broken(CapturedV3):
+        def get(self, path):
+            raise RuntimeError("a bug in the file read")
+    report = _discover("d22u27", Broken("d22u27"))
+    assert report.error is None and report.file.notes == [UNREADABLE]
+    assert [p.label for p in report.file_ports] == ["0:4:1", "0:4:2", "1:4:1", "1:4:2"]

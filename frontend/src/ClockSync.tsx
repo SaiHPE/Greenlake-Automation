@@ -76,7 +76,8 @@ export function ClockSync({ consoleUrl, title = 'System clock', note }: Props) {
         </Text>
       ) : null}
       <Box direction="row" gap="small" align="center" wrap>
-        <Button size="small" primary={skewOff} busy={busy} label="Sync system clock" onClick={sync} />
+        {/* a default button: the step's one primary is in its footer */}
+        <Button size="small" busy={busy} label="Sync system clock" onClick={sync} />
         <Text size="small" color="text-weak">
           {note ?? 'Uses an HTTPS time source, which works where NTP is blocked.'}
         </Text>

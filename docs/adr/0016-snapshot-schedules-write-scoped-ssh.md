@@ -1,6 +1,8 @@
 # ADR 0016 — How the tool creates snapshot schedules
 
 **Status:** accepted 2026-11-17 (owner's decision), with the changes below; follows ADR 0025 ·
+**Built:** 2026-11-17, `adapters/array/snap_cli_client.py` and `application/snapshots/apply.py`
+(BL-21 step 9A), pending the live checks under *First slice* and the live run ·
 **Amends:** ADR 0001 (SSH is read-only), through ADR 0025's rule for SSH writes ·
 **Departs from:** ADR 0006 (snapshots cloud-first) and the SCOPE line that names the DSCC client as
 needed for snapshots · **Keeps:** ADR 0012 (no switch writes), ADR 0015 (its client and forms are not

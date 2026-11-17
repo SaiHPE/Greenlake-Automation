@@ -52,10 +52,10 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
   const actions: Action[] = !verified && state !== 'configured' ? [{ label: 'Continue without replication' }] : [];
 
   const done: { text: string; again?: string; detail?: React.ReactNode }[] = [];
-  if (at > 0) done.push({ text: 'Read both arrays: partnered over 2 of 2 links each way.', again: 'Read again',
+  if (at > 0) done.push({ text: 'Read both arrays: partnered over 2 of 2 links each way.', again: 'Read both arrays again',
     detail: <Text size="small">Target AlletraMP_E18U31 on both arrays, policy mirror_config, found by link address. Remote Copy started on both.</Text> });
   if (at > 1) done.push({ text: over || accept ? 'Link: 12 ms, over the 10 ms sync limit. You chose to continue.' : 'Link: 0.4 ms on 2 links. Sync allows 10 ms.',
-    again: 'Check again', detail: <LinkTable ms={over || accept ? '12' : '0.4'} /> });
+    again: 'Check the link again', detail: <LinkTable ms={over || accept ? '12' : '0.4'} /> });
   if (at > 2) done.push({ text: 'Plan approved at 19:31: 6 objects, 12 commands.', detail: <Text size="small" style={mono}>{PLAN.map((p) => p.name).join(' · ')}</Text> });
   if (at > 3) done.push({ text: 'Configured at 19:32: 12 writes done, both groups started.',
     detail: <Box direction="row" gap="small"><Button size="small" label="Copy the removal commands for A" /><Button size="small" label="Copy the removal commands for B" /></Box> });
@@ -90,13 +90,6 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
           />
         }
       >
-        {done.length > 0 && (
-          <Box flex={false}>
-            <DoneList items={done} />
-            <Mark n={2} />
-          </Box>
-        )}
-
         {state === 'read' && (
           <EmptyState icon={<Connect size="large" color="icon-weak" />} title="Not read yet">
             Read both arrays to see the partnership, the links and the groups already there. Reading changes nothing.
@@ -135,7 +128,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
             />
             <Text size="xsmall" color="text-weak">A = AlletraMP_D22U27 (this array), B = AlletraMP_E18U31 (the peer).</Text>
             <Box direction="row" gap="small" align="center">
-              <Button size="small" label={showCalls ? 'Hide the commands' : 'Show the 12 commands'} onClick={() => setShowCalls((v) => !v)} aria-expanded={showCalls} />
+              <Button size="small" label={showCalls ? 'Hide 12 commands' : 'Show 12 commands'} onClick={() => setShowCalls((v) => !v)} aria-expanded={showCalls} />
             </Box>
             {showCalls && <CodeBlock lines={COMMANDS} a11yTitle="The 12 commands of the plan" />}
             <Text size="small" color="text-weak">When you have reviewed the plan, tick the box next to the green button.<Mark n={4} /></Text>
@@ -148,11 +141,11 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
             <Section title="What each array answered" summary="12 writes, in the order they were made">
               {COMMANDS.slice(0, 6).map((c) => (
                 <Box key={c} direction="row" gap="small" align="center">
-                  <StatusIndicator state="complete" label="Done" />
+                  <StatusIndicator state="complete" label="Created" />
                   <Text size="small" style={mono}>{c}</Text>
                 </Box>
               ))}
-              <Text size="small" color="text-weak">6 more, all done.</Text>
+              <Text size="small" color="text-weak">6 more, all created.</Text>
             </Section>
             <Section title="To remove what this run created" summary="Paste on A first, then on B">
               <Box direction="row" gap="small">
@@ -177,8 +170,16 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
           </Panel>
         )}
 
+        {/* finished parts sit under the part at hand, so its start stays above the fold at 1080 x 720 (as built, SPEC-030 R13) */}
+        {done.length > 0 && (
+          <Box flex={false}>
+            <DoneList items={done} />
+            <Mark n={2} />
+          </Box>
+        )}
+
         {at > 0 && (
-          <Section title={<>Replication already on AlletraMP_D22U27<Mark n={3} /></>} summary={`${EXISTING_GROUPS.length} groups, not touched by this run`}>
+          <Section title={<>Other groups on AlletraMP_D22U27 ({EXISTING_GROUPS.length}), never touched<Mark n={3} /></>}>
             <Text size="small" style={mono}>{EXISTING_GROUPS.join(' · ')}</Text>
             <Text size="small" color="text-weak">All sync, Started, Synced.</Text>
           </Section>
@@ -201,22 +202,23 @@ export const replication: Screen = {
   ],
   notes: [
     'The step is split into five parts done in order. The bar shows where you are, and the green button is always the next part: Read, Check the link, Configure, Verify. Today this page has 9 buttons at once.',
-    'Finished parts fold to one line each, with Show for the detail and the part\'s own Read again or Check again. The footer keeps only Continue without replication and the green button.',
-    'Groups already on the array fold into one line at the bottom.',
+    'Finished parts are one list, one line each, with Show detail and the part\'s own Read both arrays again or Check the link again. As built, the list sits under the part at hand, not above it: above, the plan\'s start fell under the footer at 1080 × 720 (SPEC-030 R13). The footer keeps Continue without replication, at most one more button and the green button.',
+    'Groups already on the array fold into one line at the bottom: Other groups on <array> (N), never touched.',
     'The authorisation tick sits in the footer, right next to the button it unlocks, so it is always on screen. The button stays active: press it before the tick and it tells you what is missing, as the Design System asks, instead of a greyed button that says nothing.',
     'Latency over the limit: same rule as today. The Continue anyway tick is in the footer next to the green button, and the choice goes into the result and the as-built.',
+    'As built (2026-11-17), unlike this screen: no description under the title (the parts bar sits there; the sentence is in About this step); the status line is the step\'s one status, other notices fold into N notes; with the latency over the limit, the Continue anyway tick and the plan tick are both in the footer, in that order, on the plan; the plan\'s commands are behind Show 12 commands.',
   ],
   keeps: [
-    ['Read both arrays / Read both arrays again', 'Footer (green) first, then Read again on the finished line'],
-    ['Check the link / Check again', 'Part 2, then Check again on the finished line'],
+    ['Read both arrays / Read both arrays again', 'Footer (green) first, then Read both arrays again on the finished line'],
+    ['Check the link / Check again', 'Footer (green) in part 2, then Check the link again on the finished line'],
     ['Continue anyway tick', 'Footer, next to the green button, when the latency is over the limit'],
     ['Plan table, Show N commands', 'Part 3'],
     ['Authorise tick', 'Footer, next to Configure replication'],
     ['Configure replication', 'Footer, right (green) in part 3'],
     ['Result table, removal sets with Copy and Download', 'Part 4'],
     ['Verify replication and its table', 'Part 5'],
-    ['Replication already present table', 'Folded section at the bottom'],
-    ['Continue without configuring replication', 'Footer, beside the green button'],
+    ['Replication already present table', 'Folded section at the bottom, Other groups on <array> (N), never touched'],
+    ['Continue without configuring replication', 'Footer, beside the green button, as Continue to Failover test without replication'],
   ],
   render: (state, setState) => <Replication state={state} setState={setState} />,
 };

@@ -1,9 +1,10 @@
 import { Box, Button, Heading, NameValueList, NameValuePair, Text } from 'grommet';
 import { useState } from 'react';
 import { markComplete, ProvisioningResult, RunEvent, RunRecord } from '../api';
-import { DocList, Section, StatusLine } from '../ui/blocks';
-import { ActivityTimeline, NotesList } from '../ui/primitives';
+import { DocList, Section } from '../ui/blocks';
+import { ActivityTimeline } from '../ui/primitives';
 import { PlainPage, runDocuments, when } from '../ui/RunPages';
+import { NoValue } from '../ui/status';
 
 interface Props {
   runId: string | null;
@@ -78,26 +79,18 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
           )}
         </Box>
       }
-    >
-      {error && (
-        <StatusLine state="failed" title="The run could not be marked complete" onClose={() => setError(null)}>
-          {error}
-        </StatusLine>
-      )}
-      <StatusLine
-        state={complete ? 'complete' : 'action_required'}
-        title={complete ? `${run?.serial_number ?? 'The array'} is complete` : 'This run is not closed yet'}
-      >
-        {complete
+      error={error ? { title: 'The run could not be marked complete', message: error } : null}
+      onDismissError={() => setError(null)}
+      status={{
+        state: complete ? 'complete' : 'action_required',
+        title: complete ? `${run?.serial_number ?? 'The array'} is complete` : 'This run is not closed yet',
+        message: complete
           ? 'Everything this run was asked to do is recorded. The run stays in Your runs with its documents.'
-          : 'Go back to any step marked Action required, or mark the run complete if nothing is outstanding.'}
-      </StatusLine>
-
-      {run?.warnings?.length ? (
-        <StatusLine state="action_required" title="Warnings recorded during this run">
-          <NotesList notes={run.warnings} />
-        </StatusLine>
-      ) : null}
+          : 'Go back to any step marked Action required, or mark the run complete if nothing is outstanding.',
+      }}
+      // warnings recorded during the run are notes under the status line (SPEC-030 R2)
+      notes={run?.warnings ?? []}
+    >
 
       {runId && (
         <Box gap="small" flex={false}>
@@ -111,10 +104,10 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
       <Section title="Summary" summary={`${run?.serial_number ?? '--'} · ${modeLabel}`} open>
         <NameValueList nameProps={{ width: 'small' }}>
           <NameValuePair name="Array">
-            <Text>{run?.serial_number ?? '--'}</Text>
+            {run?.serial_number ? <Text>{run.serial_number}</Text> : <NoValue />}
           </NameValuePair>
           <NameValuePair name="Mode">
-            <Text>{modeLabel || '--'}</Text>
+            {modeLabel ? <Text>{modeLabel}</Text> : <NoValue />}
           </NameValuePair>
           <NameValuePair name="Storage provisioned">
             <Text>{provisioned}</Text>

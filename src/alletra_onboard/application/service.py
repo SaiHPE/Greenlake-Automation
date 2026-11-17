@@ -24,10 +24,15 @@ from alletra_onboard.application.onboarding.steps import (
     default_dscc_factory,
     default_provision_factory,
 )
-from alletra_onboard.application.provisioning.steps import DiscoveryZoningSteps, ProvisioningSteps
+from alletra_onboard.application.provisioning.steps import (
+    ArrayPortsSteps,
+    DiscoveryZoningSteps,
+    ProvisioningSteps,
+)
 from alletra_onboard.application.replication.steps import ReplicationSteps
 from alletra_onboard.application.runs.console import ConsoleService
 from alletra_onboard.application.runs.coordinator import (
+    DevicePinNotFoundError,
     PendingSheetNotFoundError,
     RunBusyError,
     RunCoordinator,
@@ -35,6 +40,7 @@ from alletra_onboard.application.runs.coordinator import (
     StepPreconditionError,
 )
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+from alletra_onboard.application.snapshots.steps import SnapshotSteps
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.models import (
     ArrayCredentialInfo,
@@ -52,8 +58,10 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningIntent,
     ProvisioningObjects,
 )
+from alletra_onboard.domain.trust import DevicePinInfo, TrustKind
 
 __all__ = [
+    "DevicePinNotFoundError",
     "OnboardingService",
     "PendingSheetNotFoundError",
     "RunBusyError",
@@ -86,7 +94,9 @@ class OnboardingService:
         )
         self.discovery_zoning = DiscoveryZoningSteps(self.coordinator)
         self.provisioning = ProvisioningSteps(self.coordinator, self.discovery_zoning)
+        self.ports = ArrayPortsSteps(self.coordinator)
         self.replication = ReplicationSteps(self.coordinator)
+        self.snapshots = SnapshotSteps(self.coordinator)
         self.documents = DocumentSteps(self.coordinator, verify_fn=verify_fn)
         self.console = ConsoleService(self.coordinator)
 
@@ -136,17 +146,20 @@ class OnboardingService:
     def record_zoning_render(
         self, run_id: str, *, commands: dict[str, list[str]], skipped: dict[str, list[str]],
         aliases: dict[str, str], selected_pairs: list[tuple[str, str]],
+        peer_commands: dict[str, list[str]] | None = None,
     ) -> None:
-        """Put the generated zoning command set on the run's record (SPEC-002 R4). Raises
-        RunNotFoundError for an unknown run; never touches the run's status."""
+        """Put the generated zoning command set on the run's record (SPEC-002 R4), with the peer-port
+        block (SPEC-025 R7) when there is one. Raises RunNotFoundError for an unknown run; never
+        touches the run's status."""
         self.coordinator.get_run(run_id)
-        total = sum(len(c) for c in commands.values())
-        fabrics = sorted(f for f, c in commands.items() if c)
+        peer_commands = peer_commands or {}
+        total = sum(len(c) for c in commands.values()) + sum(len(c) for c in peer_commands.values())
+        fabrics = sorted({f for f, c in [*commands.items(), *peer_commands.items()] if c})
         self.coordinator.emit(
             run_id, WorkflowPhase.STORAGE_ZONING, "zoning.rendered",
             f"Zoning command set generated — {total} command(s) for {', '.join(fabrics) or 'no fabric'}.",
             data={"commands": commands, "skipped": skipped, "aliases": aliases,
-                  "selected_pairs": [list(p) for p in selected_pairs]},
+                  "selected_pairs": [list(p) for p in selected_pairs], "peer_commands": peer_commands},
         )
 
     def mark_complete(self, run_id: str) -> RunRecord:
@@ -178,6 +191,16 @@ class OnboardingService:
         return self.discovery_zoning.start_zoning_plan(run_id)
 
     # ------------------------------------------------------------------ provisioning tiers + builder
+
+    def start_ports_preview(self, run_id: str) -> RunRecord:
+        return self.ports.start_ports_preview(run_id)
+
+    def get_ports(self, run_id: str) -> dict:
+        """The Array ports step's sheet rows, and whether each plan last shown is still held (LESSONS 6)."""
+        return {"iscsi_network": self.ports.iscsi_rows(run_id),
+                "iscsi_plan_held": self.ports.held_iscsi_plan(run_id) is not None,
+                "peer_ports": self.ports.peer_rows(run_id),
+                "peer_plan_held": self.ports.held_peer_plan(run_id) is not None}
 
     def start_storage_preview(self, run_id: str) -> RunRecord:
         return self.provisioning.start_storage_preview(run_id)
@@ -214,6 +237,20 @@ class OnboardingService:
     def start_failover_test(self, run_id: str, *, group: str | None = None, confirm: str | None = None) -> RunRecord:
         return self.replication.start_failover_test(run_id, group=group, confirm=confirm)
 
+    # ------------------------------------------------------------------ snapshots (SPEC-023)
+
+    def get_snapshots(self, run_id: str) -> dict:
+        return self.snapshots.tab(run_id)
+
+    def start_snapshots_preview(self, run_id: str) -> RunRecord:
+        return self.snapshots.start_snapshots_preview(run_id)
+
+    def start_snapshots_apply(self, run_id: str, *, approved_plan: str | None) -> RunRecord:
+        return self.snapshots.start_snapshots_apply(run_id, approved_plan=approved_plan)
+
+    def start_snapshots_verify(self, run_id: str) -> RunRecord:
+        return self.snapshots.start_snapshots_verify(run_id)
+
     # ------------------------------------------------------------------ documents (verify + as-built)
 
     def start_verify(self, run_id: str, *, username: str | None = None, password: str | None = None) -> RunRecord:
@@ -234,6 +271,18 @@ class OnboardingService:
 
     def get_asbuilt(self, run_id: str) -> bytes | None:
         return self.documents.get_asbuilt(run_id)
+
+    # ------------------------------------------------------------------ device trust (ADR 0026)
+
+    def trusted_devices(self, run_id: str) -> list[DevicePinInfo]:
+        return [DevicePinInfo.of(pin) for pin in self.coordinator.device_pins(run_id)]
+
+    def device_ca_bundle(self) -> str | None:
+        return self.coordinator.device_ca_bundle()
+
+    def retrust_device(self, run_id: str, *, kind: TrustKind, host: str, port: int, fingerprint: str) -> DevicePinInfo:
+        return DevicePinInfo.of(self.coordinator.retrust_device(
+            run_id, kind=kind, host=host, port=port, fingerprint=fingerprint))
 
     # ------------------------------------------------------------------ test seam
 

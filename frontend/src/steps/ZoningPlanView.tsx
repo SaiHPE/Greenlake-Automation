@@ -1,16 +1,18 @@
-import { Box, Button, CheckBox, DataTable, Text, TextInput } from 'grommet';
-import { AddCircle, StatusGood, StatusUnknown, StatusWarning } from 'grommet-icons';
-import { useMemo, useState } from 'react';
+import { Box, Button, CheckBox, DataTable, Heading, Text, TextInput } from 'grommet';
+import { StatusGood } from 'grommet-icons';
+import { ComponentProps, ReactNode, useMemo, useState } from 'react';
 import { AliasedWwpn, FabricZonePlan, ZoningPlan, ZoningRenderResult, renderZoningCommands } from '../api';
+import { DoneList, Section } from '../ui/blocks';
 import { InlineNotification, NotesList, Surface, TableSummary } from '../ui/primitives';
+import { NoValue, RESULT, ResultWord, StatusIndicator } from '../ui/status';
 
 // ADR 0004 + ADR 0012: the zoning screen, redesigned after the 2026-09-12 live test
-// (docs/ux/ZONING-REDESIGN.md). Five panels, one step:
-//   A  Fabrics          — what each declared switch is, and which array ports sit on it
-//   B  Current zoning   — one row per host HBA port: what it can reach today, and by which zone
-//   C  Design new zones — only HBA ports that need zones; array ports grouped by controller node
-//   D  Names            — only the WWPNs that take part in a selected new zone
-//   E  Command set      — the deliverable, per fabric; activation kept apart
+// (docs/ux/ZONING-REDESIGN.md), then calmed by SPEC-030 (BL-59 P8a). One step, in parts:
+//   A  Fabrics          — what each declared switch is, and which array ports sit on it   } folded: What the
+//   B  Current zoning   — one row per host HBA port: what it can reach today, and by which zone } switches hold
+//   C  Design new zones — only HBA ports that need zones; array ports grouped by controller node  } Draft zones,
+//   D  Names            — only the WWPNs that take part in a selected new zone             } until generated
+//   E  Command set      — the deliverable, per fabric; activation kept apart               (Hand off)
 // The data is exactly what the backend plan carries; commands are rendered by POST /zoning/render so
 // the grammar has one implementation. The tool has no switch write path at any layer.
 
@@ -107,20 +109,28 @@ function download(filename: string, text: string) {
 
 type PairState = 'zoned' | 'partial' | 'unzoned' | 'offline' | 'new';
 
-const PAIR_STATE: Record<PairState, { label: string; color: string; Icon: typeof StatusGood }> = {
-  zoned: { label: 'Zoned', color: 'status-ok', Icon: StatusGood },
-  partial: { label: 'Partly zoned', color: 'status-warning', Icon: StatusWarning },
-  unzoned: { label: 'Not zoned', color: 'status-warning', Icon: StatusWarning },
-  offline: { label: 'Not on fabric', color: 'status-unknown', Icon: StatusUnknown },
-  new: { label: 'New zone', color: 'brand', Icon: AddCircle },
+const PAIR: Record<PairState, ResultWord> = {
+  zoned: RESULT.zoned,
+  partial: RESULT.partly_zoned,
+  unzoned: RESULT.not_zoned,
+  offline: RESULT.not_on_fabric,
+  new: { state: 'not_started', label: 'New zone' },
 };
 
-function PairStatus({ state, detail }: { state: PairState; detail?: string }) {
-  const { label, color, Icon } = PAIR_STATE[state];
+/** A block inside the folded section: its heading is an h3 under the section's h2. */
+function SubPanel({ title, description, right, children }: { title: string; description: ReactNode; right?: ReactNode; children: ReactNode }) {
   return (
-    <Box direction="row" gap="xsmall" align="center" flex={false}>
-      <Icon size="small" color={color} a11yTitle={label} />
-      <Text size="small" weight={500}>{detail ? `${label} · ${detail}` : label}</Text>
+    <Box gap="small" flex={false}>
+      <Box direction="row" justify="between" align="center" gap="small" wrap>
+        <Heading level={3} size="xsmall" weight={500} margin="none">
+          {title}
+        </Heading>
+        {right}
+      </Box>
+      <Text size="small" color="text-weak">
+        {description}
+      </Text>
+      {children}
     </Box>
   );
 }
@@ -129,7 +139,7 @@ function PairStatus({ state, detail }: { state: PairState; detail?: string }) {
 
 function FabricOverview({ plan }: { plan: ZoningPlan }) {
   return (
-    <Surface title="Fabrics" description="The two switches named on the sheet, read read-only. Every array port is cabled to exactly one of them; a zone only works inside one fabric.">
+    <SubPanel title="Fabrics" description="The two switches named on the sheet, read read-only. Every array port is cabled to exactly one of them; a zone only works inside one fabric.">
       <Box gap="small">
         {plan.fabrics.map((fab) => (
           <Box key={fab.fabric} gap="xxsmall" pad={{ bottom: 'xsmall' }} border={{ side: 'bottom', color: 'border' }}>
@@ -150,11 +160,8 @@ function FabricOverview({ plan }: { plan: ZoningPlan }) {
             </Text>
           </Box>
         ))}
-        {plan.notes.length > 0 && (
-          <InlineNotification tone="info" title="Cabling and fabric notes" message={<NotesList notes={plan.notes} />} />
-        )}
       </Box>
-    </Surface>
+    </SubPanel>
   );
 }
 
@@ -216,7 +223,7 @@ function exportText(plan: ZoningPlan, rows: HbaRow[]): string {
   lines.push('', 'Host | HBA port | Fabric | Zoned to array ports | Zone(s) | Status');
   rows.forEach((r) => lines.push([
     r.host, r.wwpn, r.fabric ? `${r.fabric}${r.placed ? ` (on ${r.placed})` : ''}` : '-',
-    r.zonedPorts.join(' ') || '-', r.zones.join(' ') || '-', PAIR_STATE[r.state].label,
+    r.zonedPorts.join(' ') || '-', r.zones.join(' ') || '-', PAIR[r.state].label,
   ].join(' | ')));
   return lines.join('\n') + '\n';
 }
@@ -230,10 +237,10 @@ function CurrentZoningTable({ plan }: { plan: ZoningPlan }) {
   const fullyZonedHosts = [...hosts].filter((h) => rows.filter((r) => r.host === h).every((r) => r.state === 'zoned'));
 
   return (
-    <Surface
+    <SubPanel
       title="Current zoning"
       description="One row per host HBA port. “Zoned” is read from the array (a login is only possible through an effective zone) and the zone name from the switch's effective configuration."
-      actions={<Button size="small" label="Export .txt" onClick={() => download('current-zoning.txt', exportText(plan, rows))} />}
+      right={<Button size="small" label="Export .txt" onClick={() => download('current-zoning.txt', exportText(plan, rows))} />}
     >
       {rows.length === 0 ? (
         <Text size="small" color="text-weak">No host HBA port is online on either fabric.</Text>
@@ -253,26 +260,27 @@ function CurrentZoningTable({ plan }: { plan: ZoningPlan }) {
                   </Box>
                 ),
               },
-              { property: 'wwpn', header: 'HBA port (WWPN)', render: (r: HbaRow) => <Text size="small" style={mono}>{r.wwpn || '--'}</Text> },
+              { property: 'wwpn', header: 'HBA port (WWPN)', render: (r: HbaRow) => (r.wwpn ? <Text size="small" style={mono}>{r.wwpn}</Text> : <NoValue />) },
               {
                 property: 'fabric', header: 'Fabric',
                 render: (r: HbaRow) => (
                   <Box>
-                    <Text size="small">{r.fabric || '--'}</Text>
+                    {r.fabric ? <Text size="small">{r.fabric}</Text> : <NoValue />}
                     {r.placed && <Text size="xsmall" color="text-weak">on {r.placed} via ISL</Text>}
                   </Box>
                 ),
               },
               {
                 property: 'zonedPorts', header: 'Zoned to array ports',
-                render: (r: HbaRow) => <Text size="small">{r.zonedPorts.length ? r.zonedPorts.join(', ') : '--'}</Text>,
+                render: (r: HbaRow) => (r.zonedPorts.length ? <Text size="small">{r.zonedPorts.join(', ')}</Text> : <NoValue />),
               },
-              { property: 'zones', header: 'Zone', render: (r: HbaRow) => <Text size="small" style={mono}>{r.zones.join(', ') || '--'}</Text> },
+              { property: 'zones', header: 'Zone', render: (r: HbaRow) => (r.zones.length ? <Text size="small" style={mono}>{r.zones.join(', ')}</Text> : <NoValue />) },
               {
                 property: 'state', header: 'Status',
                 render: (r: HbaRow) => (
-                  <PairStatus
-                    state={r.state}
+                  <StatusIndicator
+                    state={PAIR[r.state].state}
+                    label={PAIR[r.state].label}
                     detail={r.state === 'partial' ? `${r.zonedPorts.length} of ${r.totalPorts} ports` : undefined}
                   />
                 ),
@@ -291,7 +299,7 @@ function CurrentZoningTable({ plan }: { plan: ZoningPlan }) {
           </Box>
         </>
       )}
-    </Surface>
+    </SubPanel>
   );
 }
 
@@ -399,18 +407,21 @@ function ZoneDesigner({
 // ---------------------------------------------------------------- D. Names
 
 function AliasReview({
-  plan, selectedPairs, aliases, setAlias, clashes,
+  plan, selectedPairs, aliases, setAlias, clashes, children,
 }: {
   plan: ZoningPlan;
   selectedPairs: [string, string][];
   aliases: Record<string, string>;
   setAlias: (wwpn: string, v: string) => void;
   clashes: ReturnType<typeof nameClashes>;
+  /** Generate command set, at the foot of the panel (Q3: in the page, not the footer). */
+  children: ReactNode;
 }) {
   if (selectedPairs.length === 0) {
     return (
       <Surface title="Names for the new zones">
         <Text size="small" color="text-weak">Select a pair above. Only the WWPNs that take part in a new zone need a name.</Text>
+        {children}
       </Surface>
     );
   }
@@ -464,6 +475,7 @@ function AliasReview({
             </Box>
           );
         })}
+        {children}
       </Box>
     </Surface>
   );
@@ -543,7 +555,7 @@ function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[]
         <Button size="small" label="Download .txt (all three steps)" onClick={save} />
       </Box>
       {activation.length > 0 && (
-        <Box border={{ color: 'status-warning', side: 'left', size: '3px' }} pad={{ left: 'small', vertical: 'xsmall' }} gap="xxsmall">
+        <Box border={{ color: 'status-warning', side: 'left', size: 'medium' }} pad={{ left: 'small', vertical: 'xsmall' }} gap="xxsmall">
           <Text size="small" weight={600}>3. Save and activate — SAN team, in a window</Text>
           <Text size="small" color="text-weak">
             Not part of the paste above. <Text size="small" style={mono}>cfgsave</Text> commits the defined
@@ -554,7 +566,7 @@ function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[]
         </Box>
       )}
       {activation.length === 0 && additive.length > 0 && (
-        <Box border={{ color: 'status-critical', side: 'left', size: '3px' }} pad={{ left: 'small', vertical: 'xsmall' }} gap="xxsmall">
+        <Box border={{ color: 'status-critical', side: 'left', size: 'medium' }} pad={{ left: 'small', vertical: 'xsmall' }} gap="xxsmall">
           <Text size="small" weight={600}>3. Save and activate — cannot be generated for this switch</Text>
           <Text size="small">
             No effective zoning configuration was read on {fab.switch_host}, so there is no <Text size="small" style={mono}>cfgadd</Text> or{' '}
@@ -567,12 +579,100 @@ function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[]
   );
 }
 
+// ---------------------------------------------------------------- F. Peer ports (SPEC-025 R7)
+
+/** The pairs the sheet's Peer ports tab asks for, on the fabric where both ports are, with their names.
+ *  Every pair is drafted (the sheet chose them); a pair the fabric already zones is left out. */
+function PeerZones({ plan, aliases, setAlias }: {
+  plan: ZoningPlan; aliases: Record<string, string>; setAlias: (wwpn: string, v: string) => void;
+}) {
+  const fabrics = plan.fabrics.filter((f) => (f.peer_pairs ?? []).length > 0);
+  if (fabrics.length === 0) return null;
+  return (
+    <Surface
+      title="Peer ports for the migration"
+      description="From the sheet's Peer ports tab: each peer port of this array zoned to the source array's ports, using the peer port's WWPN read after it was set. The zones go in a command set of their own."
+    >
+      <Box gap="medium">
+        {fabrics.map((fab) => {
+          const zoned = new Set((fab.peer_already_zoned ?? []).map(([p, s]) => pairKey(p, s)));
+          const entries = [...(fab.peer_ports ?? []), ...(fab.sources ?? [])];
+          return (
+            <Box key={fab.fabric} gap="xsmall">
+              <Text size="small" weight={600}>{fabricTitle(fab)}</Text>
+              {entries.map((w) => {
+                const value = aliases[w.wwpn] ?? '';
+                const reused = value !== '' && w.existing_aliases.includes(value);
+                const check = reused ? { tone: 'ok' as const, text: 'Existing alias, reused' } : aliasProblem(value);
+                const colour = check.tone === 'critical' ? 'status-critical' : check.tone === 'warning' ? 'status-warning' : 'status-ok';
+                const peer = (fab.peer_ports ?? []).includes(w);
+                return (
+                  <Box key={w.wwpn} direction="row" gap="small" align="center" wrap pad={{ vertical: 'xxsmall' }}>
+                    <Box basis="small" flex={false}>
+                      <Text size="xsmall" color="text-weak">{peer ? `Peer port ${w.nsp}` : `Source port ${w.nsp || ''}`.trim()}</Text>
+                    </Box>
+                    <Box basis="small" flex={false}><Text size="small" style={mono}>{w.display}</Text></Box>
+                    <Box basis="medium" flex="shrink">
+                      <TextInput size="small" value={value} placeholder="alias name" onChange={(e) => setAlias(w.wwpn, e.target.value)} />
+                    </Box>
+                    <Text size="xsmall" color={colour}>{check.text}</Text>
+                  </Box>
+                );
+              })}
+              <Text size="xsmall" color="text-weak">
+                Zones: {(fab.peer_pairs ?? []).map(([p, s]) =>
+                  `${aliases[p] || '?'}_${aliases[s] || '?'}${zoned.has(pairKey(p, s)) ? ' (already zoned)' : ''}`).join(' · ')}
+              </Text>
+            </Box>
+          );
+        })}
+      </Box>
+    </Surface>
+  );
+}
+
 // ---------------------------------------------------------------- the step body
 
-export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: string }) {
+type DoneItem = ComponentProps<typeof DoneList>['items'][number];
+
+/** What was drafted, for the finished part's detail: the zones per fabric with the names they carry. */
+function Drafted({ plan, selectedPairs, aliases }: { plan: ZoningPlan; selectedPairs: [string, string][]; aliases: Record<string, string> }) {
+  const chosen = new Set(selectedPairs.map(([h, a]) => pairKey(h, a)));
+  const zone = ([h, a]: [string, string]) => `${aliases[h] || '?'}_${aliases[a] || '?'}`;
+  return (
+    <Box gap="xxsmall">
+      {plan.fabrics.map((fab) => {
+        const pairs = fab.pairs.filter(([h, a]) => chosen.has(pairKey(h, a)));
+        return pairs.length ? (
+          <Text key={fab.fabric} size="small">
+            {fabricTitle(fab)}: <Text size="small" style={mono}>{pairs.map(zone).join(' · ')}</Text>
+          </Text>
+        ) : null;
+      })}
+      {plan.fabrics.map((fab) => {
+        // a peer pair the fabric already zones is not in the command set (the backend leaves it out)
+        const zoned = new Set((fab.peer_already_zoned ?? []).map(([p, src]) => pairKey(p, src)));
+        const pairs = (fab.peer_pairs ?? []).filter(([p, src]) => !zoned.has(pairKey(p, src)));
+        return pairs.length ? (
+          <Text key={`peer-${fab.fabric}`} size="small">
+            Peer ports, {fabricTitle(fab)}: <Text size="small" style={mono}>{pairs.map(zone).join(' · ')}</Text>
+          </Text>
+        ) : null;
+      })}
+    </Box>
+  );
+}
+
+/**
+ * The plan's parts of SAN zoning (SPEC-030 R7): the finished parts in one list (the step's check row,
+ * handed in as `done`, and the drafting row once a command set exists), then the part at hand (the
+ * pairs and the names, or the command set), then what the switches hold, folded. The view keeps its
+ * own state: it is keyed on the plan event, so the alias fields are seeded once per plan.
+ */
+export function ZoningPlanView({ plan, runId, done = [] }: { plan: ZoningPlan; runId?: string; done?: DoneItem[] }) {
   const [aliases, setAliases] = useState<Record<string, string>>(() => {
     const seed: Record<string, string> = {};
-    plan.fabrics.forEach((f) => [...f.hosts, ...f.array_ports].forEach((w) => {
+    plan.fabrics.forEach((f) => [...f.hosts, ...f.array_ports, ...(f.peer_ports ?? []), ...(f.sources ?? [])].forEach((w) => {
       seed[w.wwpn] = w.suggested_alias || w.proposed_alias || '';
     }));
     return seed;
@@ -582,14 +682,17 @@ export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: stri
   const [result, setResult] = useState<ZoningRenderResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nothingSelected, setNothingSelected] = useState(false);
 
   const setAlias = (wwpn: string, v: string) => { setAliases((a) => ({ ...a, [wwpn]: v })); setResult(null); };
-  const toggle = (key: string, on: boolean) => { setSelected((s) => ({ ...s, [key]: on })); setResult(null); };
+  const toggle = (key: string, on: boolean) => { setSelected((s) => ({ ...s, [key]: on })); setResult(null); setNothingSelected(false); };
 
   const selectedPairs: [string, string][] = plan.fabrics.flatMap((f) =>
     f.pairs.filter(([h, a]) => selected[pairKey(h, a)]),
   );
   const totalZoned = plan.fabrics.reduce((n, f) => n + f.already_zoned.length, 0);
+  const peerToZone = plan.fabrics.reduce((n, f) => n + (f.peer_pairs ?? []).length - (f.peer_already_zoned ?? []).length, 0);
+  const newZones = selectedPairs.length + peerToZone;
   // Say it BEFORE the click: a selected pair whose member has no acceptable name cannot be zoned
   // (the rc.1 live test ticked an alias-less port and got an unchanged preview with no explanation).
   const clashes = nameClashes(plan, selectedPairs, aliases);
@@ -597,7 +700,14 @@ export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: stri
     aliasProblem(aliases[h] ?? '').tone === 'critical' || aliasProblem(aliases[a] ?? '').tone === 'critical'
     || clashes.port[h] || clashes.port[a] || clashes.zone[pairKey(h, a)]).length;
 
+  // Q3: never disabled. With nothing to zone, or a name the switch would refuse, the click says why
+  // (the sentence beside the button) and sends nothing.
   const generate = async () => {
+    if (newZones === 0) {
+      setNothingSelected(true);
+      return;
+    }
+    if (blocked > 0) return;
     setBusy(true);
     setError(null);
     try {
@@ -609,26 +719,41 @@ export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: stri
     }
   };
 
+  const items: DoneItem[] = [
+    ...done,
+    ...(result
+      ? [{
+          text: `Drafted ${newZones} new zone${newZones === 1 ? '' : 's'} for the SAN team`,
+          detail: <Drafted plan={plan} selectedPairs={selectedPairs} aliases={aliases} />,
+          // back to the pairs and names, as they were; generating again makes a new command set
+          again: { label: 'Change', onClick: () => setResult(null) },
+        }]
+      : []),
+  ];
+
   return (
     <Box gap="medium">
-      {error && <InlineNotification tone="critical" title="The request failed" message={error} />}
+      {items.length > 0 && <DoneList items={items} />}
 
-      <FabricOverview plan={plan} />
-      <CurrentZoningTable plan={plan} />
-      <ZoneDesigner plan={plan} selected={selected} toggle={toggle} />
-      <AliasReview plan={plan} selectedPairs={selectedPairs} aliases={aliases} setAlias={setAlias} clashes={clashes} />
-
-      <Box direction="row" gap="small" align="center" wrap>
-        <Button
-          busy={busy}
-          disabled={selectedPairs.length === 0 || blocked > 0}
-          primary
-          label={`Generate command set (${selectedPairs.length} new zone${selectedPairs.length === 1 ? '' : 's'})`}
-          onClick={generate}
-        />
-        {totalZoned > 0 && <Text size="small" color="text-weak">{totalZoned} pair(s) already zoned — excluded automatically.</Text>}
-        {blocked > 0 && <Text size="small" color="status-critical">{blocked} selected pair(s) have a missing, invalid or clashing name.</Text>}
-      </Box>
+      {!result && <ZoneDesigner plan={plan} selected={selected} toggle={toggle} />}
+      {!result && <PeerZones plan={plan} aliases={aliases} setAlias={setAlias} />}
+      {!result && (
+        <AliasReview plan={plan} selectedPairs={selectedPairs} aliases={aliases} setAlias={setAlias} clashes={clashes}>
+          {error && <InlineNotification tone="critical" title="The request failed" message={error} />}
+          <Box direction="row" gap="small" align="center" wrap>
+            <Button
+              busy={busy}
+              label={`Generate command set (${newZones} new zone${newZones === 1 ? '' : 's'})`}
+              onClick={generate}
+            />
+            {totalZoned > 0 && <Text size="small" color="text-weak">{totalZoned} pair(s) already zoned — excluded automatically.</Text>}
+            {blocked > 0 && <Text size="small" color="status-critical">{blocked} selected pair(s) have a missing, invalid or clashing name.</Text>}
+            {nothingSelected && newZones === 0 && (
+              <Text size="small" color="status-critical">Nothing is selected: tick a pair above first.</Text>
+            )}
+          </Box>
+        </AliasReview>
+      )}
 
       {result && (
         <Surface
@@ -636,7 +761,7 @@ export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: stri
           description="This tool never writes to a switch. The SAN team reviews the paste block, applies it on the named switch, then saves and activates in a window. Re-check zoning afterwards: the array shows each new login."
         >
           <Box gap="medium">
-            {plan.fabrics.map((fab) => (
+            {plan.fabrics.filter((fab) => selectedPairs.length > 0 || (result.commands[fab.fabric] ?? []).length > 0).map((fab) => (
               <Box key={fab.fabric} gap="xsmall">
                 <CommandSet fab={fab} commands={result.commands[fab.fabric] ?? []} />
                 {(result.skipped[fab.fabric] ?? []).length > 0 && (
@@ -647,9 +772,30 @@ export function ZoningPlanView({ plan, runId }: { plan: ZoningPlan; runId?: stri
                 )}
               </Box>
             ))}
+            {Object.keys(result.peer_commands ?? {}).length > 0 && (
+              <Box gap="small">
+                <Text weight={600}>Peer ports for the migration</Text>
+                {plan.fabrics.filter((fab) => fab.fabric in (result.peer_commands ?? {})).map((fab) => (
+                  <Box key={`peer-${fab.fabric}`} gap="xsmall">
+                    <CommandSet fab={fab} commands={result.peer_commands?.[fab.fabric] ?? []} />
+                    {(result.peer_skipped?.[fab.fabric] ?? []).length > 0 && (
+                      <InlineNotification tone="warning" title="Not included" message={<NotesList notes={result.peer_skipped![fab.fabric]} />} />
+                    )}
+                  </Box>
+                ))}
+              </Box>
+            )}
           </Box>
         </Surface>
       )}
+
+      <Section
+        title="What the switches hold"
+        summary={plan.fabrics.map((fab) => `${fabricTitle(fab)} on ${fab.switch_name || fab.switch_host}`).join(' · ')}
+      >
+        <FabricOverview plan={plan} />
+        <CurrentZoningTable plan={plan} />
+      </Section>
     </Box>
   );
 }

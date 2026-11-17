@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from alletra_onboard.domain.shared import Fabric
+from alletra_onboard.domain.unified_file import FileReport
 
 
 class ArrayPort(BaseModel):
@@ -269,6 +270,9 @@ class DiscoveryReport(BaseModel):
     array_ports: list[ArrayPort] = Field(default_factory=list)
     replication_ports: list[EthernetPort] = Field(default_factory=list)  # RCIP (showport / -rcip)
     file_ports: list[EthernetPort] = Field(default_factory=list)         # file services (showport -file)
+    # SPEC-028 R1: the file service, file systems, client groups and shares (WSAPI v3). None on an
+    # array with no File ports and the file service off, which is most block arrays.
+    file: FileReport | None = None
     host_hbas: list[HostHba] = Field(default_factory=list)
     host_identities: list[HostIdentity] = Field(default_factory=list)  # vCenter: serial + IQNs per host
     host_reads: list[HostRead] = Field(default_factory=list)           # sheet hosts read over SSH/WinRM

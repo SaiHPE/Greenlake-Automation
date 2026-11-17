@@ -130,3 +130,30 @@ class FileShareRecord(BaseModel):
     mount_path: str                     # mountpath: "/file/<file system>/<share>"
     protocols: list[str] = Field(default_factory=list)   # protocol: ["NFS"]
     host_ip: str = ""                   # hostip: the File port address the share is served on
+
+
+class FileReport(BaseModel):
+    """SPEC-028 R1: the file side of the run's own array, read over its WSAPI v3 (Discovery's
+    `DiscoveryReport.file`; the as-built and Verify read it again when they run).
+
+    The File ports are not in here. They are read once, from `showport -file`, and kept where
+    Discovery has always kept them (`DiscoveryReport.file_ports`, lesson 41: one source per fact).
+    That also keeps this module free of `domain/discovery.py`, which imports it.
+
+    `service` is None when the file API was not read, did not answer, turned the session down, or
+    named another array; `notes` then says which, in SPEC-028 R2's sentence. Nothing read from
+    another array is kept: the records are empty whenever the serials disagree."""
+
+    os_version: str = ""                # showversion "Release version"
+    array_serial: str = ""              # the serial showsys prints; every collection named it
+    service: FileService | None = None  # GET /api/v3/fileservice
+    file_systems: list[FileSystemRecord] = Field(default_factory=list)   # GET /api/v3/filesystems
+    client_groups: list[ClientGroup] = Field(default_factory=list)       # GET /api/v3/filesharesettings
+    shares: list[FileShareRecord] = Field(default_factory=list)          # GET /api/v3/fileshares
+    notes: list[str] = Field(default_factory=list)                       # R2, one sentence each
+
+    def clients_of(self, share: FileShareRecord) -> list[ClientRule]:
+        """A share's clients, read from its client group by name. The share record repeats them;
+        the group is the one source (lesson 41). [] when the group is not in the read."""
+        group = next((g for g in self.client_groups if g.name == share.client_group), None)
+        return list(group.clients) if group else []

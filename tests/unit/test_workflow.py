@@ -18,7 +18,8 @@ def test_full_onboarding_steps_in_registry_order():
 
 
 def test_provision_only_excludes_init_steps():
-    assert _keys(RunMode.PROVISION_ONLY) == ["discover", "zoning", "provision", "verify", "asbuilt"]
+    # SPEC-024 R8 (BL-25): Array ports comes after Discovery, before SAN Zoning.
+    assert _keys(RunMode.PROVISION_ONLY) == ["discover", "ports", "zoning", "provision", "verify", "asbuilt"]
 
 
 def test_verify_only_is_verify_then_asbuilt():
@@ -56,7 +57,7 @@ def test_next_enabled_phase_falls_back_to_complete_when_no_more_init():
 
 def test_replicate_preset_runs_provisioning_then_replication_then_documents():
     assert _keys(RunMode.REPLICATE) == [
-        "discover", "zoning", "provision", "replicate", "failover_test", "verify", "asbuilt",
+        "discover", "ports", "zoning", "provision", "replicate", "failover_test", "verify", "asbuilt",
     ]
     assert initial_phase(RunMode.REPLICATE) == WorkflowPhase.STORAGE_DISCOVER
 
@@ -73,3 +74,24 @@ def test_replication_steps_have_their_own_kind_and_phases():
 
 def test_custom_can_pick_replication_steps_in_registry_order():
     assert _keys(RunMode.CUSTOM, ["failover_test", "replicate", "provision"]) == ["provision", "replicate", "failover_test"]
+
+
+# ---------------------------------------------------------------- SPEC-027 R3: the migration step
+
+def test_migrate_preset_reads_discovers_and_zones_then_migrates_with_no_provision_step():
+    assert _keys(RunMode.MIGRATE) == ["discover", "zoning", "migrate", "verify", "asbuilt"]
+    assert initial_phase(RunMode.MIGRATE) == WorkflowPhase.STORAGE_DISCOVER
+
+
+def test_the_migration_step_has_its_own_kind_and_phase_and_no_other_preset_has_it():
+    by_key = {s.key: s for s in STEP_REGISTRY}
+    assert (by_key["migrate"].label, by_key["migrate"].kind) == ("Migration", "migrate")
+    assert by_key["migrate"].phase == WorkflowPhase.STORAGE_MIGRATE
+    assert [s.key for s in STEP_REGISTRY if s.kind == "migrate"] == ["migrate"]
+    for mode in (RunMode.FULL_ONBOARDING, RunMode.PROVISION_ONLY, RunMode.BOTH, RunMode.REPLICATE, RunMode.VERIFY_ONLY):
+        assert "migrate" not in _keys(mode)
+
+
+def test_custom_can_pick_the_migration_step_in_registry_order():
+    assert _keys(RunMode.CUSTOM, ["asbuilt", "migrate", "discover"]) == ["discover", "migrate", "asbuilt"]
+    assert initial_phase(RunMode.CUSTOM, ["migrate"]) == WorkflowPhase.STORAGE_MIGRATE

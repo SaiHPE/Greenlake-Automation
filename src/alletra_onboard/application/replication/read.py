@@ -216,8 +216,10 @@ def parse_showvv_sizes(text: str) -> dict[str, int]:
 
 def parse_showport_roles(text: str) -> tuple[dict[str, PortRole], str]:
     """`showport`: N:S:P Mode State Node_WWN/IP Port_WWN/HW_Addr Type Protocol Label [Partner FailoverState]
-    -> ({n:s:p: role}, the array's FC node WWN). Columns are fixed on both lab arrays (Alletra MP OS
-    10.5.55, Primera OS 4.6.20, 2026-11-03); a row with fewer than 7 columns is not a port."""
+    -> ({n:s:p: role}, the first FC row's node WWN). Columns are fixed on both lab arrays (Alletra MP OS
+    10.5.55, Primera OS 4.6.20, 2026-11-03); a row with fewer than 7 columns is not a port. FC rows keep
+    their node WWN and their port WWN (SPEC-031 R1): every row's, since a peer port carries a node WWN of
+    its own (E18U31, 2026-11-17)."""
     roles: dict[str, PortRole] = {}
     node_wwn = ""
     for line in (text or "").splitlines():
@@ -228,6 +230,8 @@ def parse_showport_roles(text: str) -> tuple[dict[str, PortRole], str]:
         if role.protocol.upper() == "FC" and re.fullmatch(r"[0-9A-Fa-f]{16}", p[3]):
             role.node_wwn = p[3].upper()
             node_wwn = node_wwn or role.node_wwn
+        if role.protocol.upper() == "FC" and re.fullmatch(r"[0-9A-Fa-f]{16}", p[4]):
+            role.port_wwn = p[4].upper()
         roles[p[0]] = role
     return roles, node_wwn
 

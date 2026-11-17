@@ -2,8 +2,7 @@
 read allowlist gains `showsched`, and a write-scoped SSH client may run ONE form: `createsched -f` of a
 `createsv -f` on one source, with an expiry and no lock. The command inside the quotes is checked too:
 a schedule is a command the array runs later, so a check on the first word would let anything in.
-Not built yet: every test here is expected to fail until the work packet's step that names it is done
-(docs/workpackets/BL-21.md). The array's help is captured on four arrays: rack13-ARCUS (OS 10.6.0,
+Written 2026-11-16/17 as expected failures; built 2026-11-17 (docs/workpackets/BL-21.md steps 7 and 9A). The array's help is captured on four arrays: rack13-ARCUS (OS 10.6.0,
 2026-11-16), D22U27, E18U31 and VZ (OS 10.5.x, 2026-11-17)."""
 
 import re
@@ -18,10 +17,8 @@ CAPTURES = {"rack13_snap": "10.6.0", "d22u27_snap": "10.5.0", "e18u31_snap": "10
 PATTERN = "@vvname@.@y@@m@@d@@H@@M@@S@"
 GOOD = f'createsched -f "createsv -f -ro -exp 24h {PATTERN} set:zz_sn_vvs" "0 0,4,8,12,16,20 * * *" zz_sn_vvs_snap'
 NAME_31 = "zz_sn_" + "v" * 25
-CLIENT = "BL-21 step 9A: the write client is not built yet"
 
 
-@pytest.mark.xfail(reason="BL-21 step 7: showsched is not on the read allowlist yet", strict=True)
 def test_showsched_is_on_the_read_allowlist_and_its_writes_are_not():
     from alletra_onboard.adapters.array.cli_client import ALLOWED_COMMANDS
 
@@ -38,7 +35,6 @@ def test_showsched_is_on_the_read_allowlist_and_its_writes_are_not():
     f'createsched -f "createsv -f -ro -exp 2h {PATTERN} zz_sn_vol01" "0,15,30,45 * * * 1,2,3,4,5" zz_sn_vol01_snap',
     f'createsched -f "createsv -f -ro -exp 43800h {PATTERN} set:zz_sn_vvs" "0 0 * * 0" {NAME_31}',   # the limits
 ])
-@pytest.mark.xfail(reason=CLIENT, strict=True)
 def test_the_one_form_is_accepted(command):
     from alletra_onboard.adapters.array.snap_cli_client import snap_write_refusal
 
@@ -89,14 +85,12 @@ def test_the_one_form_is_accepted(command):
     "createsv -ro -exp 24h zz_sn_vol01.initial zz_sn_vol01",                       # snapshots now go over WSAPI
     "showsched",
 ])
-@pytest.mark.xfail(reason=CLIENT, strict=True)
 def test_everything_else_is_refused(command):
     from alletra_onboard.adapters.array.snap_cli_client import snap_write_refusal
 
     assert snap_write_refusal(command) is not None
 
 
-@pytest.mark.xfail(reason=CLIENT, strict=True)
 def test_the_client_writes_only_the_schedules_of_the_approved_plan():
     """ADR 0025 condition 3: a well-formed createsched on a name or a source the approved plan does not
     name is refused, and a client built without the plan's objects writes nothing."""
@@ -115,7 +109,6 @@ def test_the_client_writes_only_the_schedules_of_the_approved_plan():
 
 
 @pytest.mark.parametrize("folder", list(CAPTURES))
-@pytest.mark.xfail(reason=CLIENT, strict=True)
 def test_the_form_matches_the_arrays_own_help(folder):
     """Pinned to `help createsched` and `help createsv` from lab/snap_capture.py on all four lab arrays.
     On OS 10.5 createsched itself takes names of at most 31 characters (10.6.0: 127)."""
@@ -142,3 +135,13 @@ def test_the_form_matches_the_arrays_own_help(folder):
     form = GOOD.rsplit(" ", 1)[0]
     assert snap_write_refusal(f"{form} {'z' * min(limit, 31)}") is None
     assert snap_write_refusal(f"{form} {'z' * (min(limit, 31) + 1)}") is not None
+
+
+def test_a_name_that_could_read_as_an_option_is_refused():
+    """The schedule name is the command's last word: `-run_once` there could read as an option."""
+    from alletra_onboard.adapters.array.snap_cli_client import snap_write_refusal
+
+    form = GOOD.rsplit(" ", 1)[0]
+    for name in ("-run_once", "-f", "-x"):
+        assert snap_write_refusal(f"{form} {name}") is not None, name
+    assert snap_write_refusal(f"{form} _snap.v-1") is None

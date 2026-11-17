@@ -38,9 +38,11 @@ on the tab, and let the operator decide to go on or not.
 run uses, every outbound link on A toward B gives a pair *(A's port, A's address) → (B's port, B's
 address)*: A's address from `showport -rcip` for the link's port; B's port is the one whose RCIP
 address equals the link's address. A link that does not resolve on both sides is listed as not
-checkable with the reason, and the others are checked. RCIP only: a fibre-channel partnership gets
-the sentence *"The link check measures RCIP links; this pair replicates over fibre channel"* and
-no gate (R4).
+checkable with the reason, and the others are checked. RCIP only: a Fibre Channel partnership gets
+the sentence *"The link check measures RCIP links; this pair replicates over Fibre Channel. Type the
+round-trip time between the arrays on the Replication tab instead."*, the check is refused, and the
+apply's gate takes the typed round-trip time against the FC limit instead
+([SPEC-031](SPEC-031-rcfc.md) R6, built 2026-11-17).
 
 **R2 — The test, per pair, in this order, all over the run's SSH credentials.**
 1. On B: `checkrclink stopserver <B port>` (a server left by an earlier, interrupted check runs for

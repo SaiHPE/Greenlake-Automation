@@ -22,23 +22,41 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 from alletra_onboard.application.platform import prereqs
+from alletra_onboard.domain.migration import (
+    MIGRATION_PROVISIONING,
+    MIGRATION_TYPES,
+    MigrationHostRequest,
+    MigrationIntent,
+)
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, RunMode
+from alletra_onboard.domain.network import IscsiVlanRequest
+from alletra_onboard.domain.peer_ports import PeerPortIntent, PeerPortRequest
 from alletra_onboard.domain.provisioning import (
     DeclaredHost,
     HostSetRequest,
     ProvisioningIntent,
     VolumeRequest,
+    volume_too_large,
 )
 from alletra_onboard.domain.replication import (
     RPO_MINUTES_DEFAULT,
     RPO_MINUTES_MIN,
-    RTT_LIMIT_MS,
     ProtectionRequest,
     RcipPortRequest,
     ReplicationIntent,
     pair_ports,
+    rtt_limit_ms,
+    rtt_limit_text,
 )
 from alletra_onboard.domain.shared import EndpointCreds, normalize_wwpn
+from alletra_onboard.domain.snapshots import (
+    ALLOWED_EVERY,
+    HOURS_MAX,
+    SCHEDULE_NAME_MAX,
+    SNAPSHOTS_TAB_NEEDED,
+    SnapshotIntent,
+    SnapshotRequest,
+)
 from alletra_onboard.domain.workflow import enabled_steps
 
 SHEET_NAME = "Initialisation"
@@ -121,11 +139,16 @@ _STEP_REQUIRES: dict[str, tuple[str, ...]] = {
     # add no Initialisation-tab requirements beyond the always-required serial. Verify reuses the
     # onboarded network values, so it needs the array IP from the Initialisation tab.
     "discover": (),
+    "ports": (),
     "zoning": (),
     "provision": (),
     # Replication steps need the Replication tab (checked when the run is minted), nothing more here.
     "replicate": (),
     "failover_test": (),
+    # The Migration step needs the Migration tab (checked when the run is minted), nothing more here.
+    "migrate": (),
+    # The Snapshots step needs the Snapshots tab (checked when the run is minted), nothing more here.
+    "snapshots": (),
     "verify": ("mgmt_ipv4",),
 }
 
@@ -230,10 +253,85 @@ NETWORK_COLUMNS: list[tuple[str, str, bool]] = [
     ("netmask", "Netmask", True),
     ("gateway", "Gateway (optional)", False),
 ]
+# SPEC-024 R1: VLAN-tagged iSCSI addresses the tool adds to this array's iSCSI ports, one row per port and VLAN.
+ISCSI_NETWORK_SHEET_NAME = "iSCSI network"
+ISCSI_NETWORK_COLUMNS: list[tuple[str, str, bool]] = [
+    ("port", "Port (N:S:P)", True),
+    ("vlan", "VLAN ID", True),
+    ("ip", "iSCSI address", True),
+    ("netmask", "Netmask", True),
+    ("gateway", "Gateway (optional)", False),
+]
+# SPEC-025 R1: free FC ports of this array to set to peer mode for a migration, one row per port.
+PEER_PORTS_SHEET_NAME = "Peer ports"
+PEER_PORT_COLUMNS: list[tuple[str, str, bool]] = [
+    ("port", "Port (N:S:P)", True),
+    ("source_wwpns", "Source array ports to zone (WWPNs)", False),
+]
 _REPL_LABEL_TO_KEY = {label: key for _, fields in REPLICATION_SECTIONS for key, label, _, _ in fields}
 _REPL_KEY_TO_LABEL = {key: label for _, fields in REPLICATION_SECTIONS for key, label, _, _ in fields}
 _REPL_REQUIRED = [key for _, fields in REPLICATION_SECTIONS for key, _, required, _ in fields if required]
 _UNSUPPORTED_REPLICATION_TYPES = ("peer persistence", "active sync", "sld", "3dc", "streaming", "app")
+
+# The Migration tab (SPEC-027 R1): ONE optional tab, key/value sections on top (the source array, where
+# the import runs) and one row per host to migrate beneath. The run's array is the destination; the
+# source is only read. Name, model, serial and OS of the source are read from it, never asked.
+MIGRATION_SHEET_NAME = "Migration"
+MIGRATION_SECTIONS: list[tuple[str, list[tuple[str, str, bool, str]]]] = [
+    ("Source array — the array the data moves FROM (the tool only reads it)", [
+        ("source_host", "Source array management address", True,
+         "the 3PAR, Primera or Alletra 9000 the hosts move from; not this run's array"),
+        ("source_user", "Source array user", True,
+         "a read-only account is enough for this tool; Peer Motion asks for its own account in the array UI or DSCC"),
+        ("source_password", "Source array password", True, "used only to read the source array"),
+    ]),
+    ("Orchestration", [
+        ("orchestration", "Where the import runs (array UI / DSCC)", False,
+         "default array UI (this array's own UI); DSCC needs a newer OS on this array for a Primera or Alletra 9000 source"),
+    ]),
+]
+MIGRATION_HOST_COLUMNS: list[tuple[str, str, bool]] = [
+    ("host", "Host (its name on the source array)", True),
+    ("type", "Migration type (online / minimally disruptive / offline)", False),
+    ("cpg", "Destination CPG", True),
+    ("provisioning", "Provisioning (thin / reduce)", False),
+]
+_MIG_LABEL_TO_KEY = {label: key for _, fields in MIGRATION_SECTIONS for key, label, _, _ in fields}
+# What an operator may type for each list value; the key is the normalised text (lower case, single
+# spaces, '-' and '_' read as spaces).
+_MIGRATION_TYPE_WORDS: dict[str, str] = {
+    "online": "online", "minimally disruptive": "minimally disruptive", "mdm": "minimally disruptive",
+    "offline": "offline",
+}
+_MIGRATION_PROVISIONING_WORDS: dict[str, str] = {"thin": "thin", "tpvv": "thin", "reduce": "reduce"}
+_ORCHESTRATION_WORDS: dict[str, str] = {"array ui": "array UI", "array": "array UI", "dscc": "DSCC"}
+
+# The Snapshots tab (SPEC-023 R1): one row per volume set (or volume), a snapshot now and/or a
+# schedule. A tab, not columns on the Volumes tab: a schedule protects a set, and a row may name a set
+# that is already on the array.
+SNAPSHOTS_SHEET_NAME = "Snapshots"
+SNAPSHOT_COLUMNS: list[tuple[str, str, bool]] = [
+    ("source", "Volume set or volume", True),
+    ("kind", "Kind (set / volume)", False),
+    ("snapshot_now", "Snapshot now (yes / no)", False),
+    ("every", "Every", False),
+    ("unit", "Unit (minutes / hours / days)", False),
+    ("at_hour", "Start hour (0-23, array time)", False),
+    ("days", "Days (blank = every day)", False),
+    ("expire_hours", "Keep for (hours)", True),
+    ("retain_hours", "Lock for (hours, optional)", False),
+    ("read_only", "Read-only (yes / no)", False),
+    ("schedule_name", "Schedule name (optional)", False),
+]
+_DAY_NUMBERS = {
+    name: number
+    for number, full in enumerate(("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"))
+    for name in (full, full[:3])
+}
+_UNITS = {"minute": "minutes", "minutes": "minutes", "hour": "hours", "hours": "hours", "day": "days", "days": "days"}
+_SCHEDULE_NAME = re.compile(rf"[A-Za-z0-9._-]{{1,{SCHEDULE_NAME_MAX}}}")
+#: `help createsched` / `help removesched`: names the array keeps for itself.
+_RESERVED_SCHEDULE_NAMES = ("all", "upgrade")
 
 
 def required_keys_for(mode: RunMode, selected_steps: list[str] | None = None) -> set[str]:
@@ -264,11 +362,19 @@ class ParsedInitSheet:
 
 
 def _provisioning_selected(mode: RunMode, selected_steps: list[str] | None) -> bool:
-    return any(step.kind in ("provision", "replicate") for step in enabled_steps(mode, selected_steps))
+    return any(step.kind in ("provision", "replicate", "migrate", "snapshot") for step in enabled_steps(mode, selected_steps))
 
 
 def _replication_selected(mode: RunMode, selected_steps: list[str] | None) -> bool:
     return any(step.kind == "replicate" for step in enabled_steps(mode, selected_steps))
+
+
+def _migration_selected(mode: RunMode, selected_steps: list[str] | None) -> bool:
+    return any(step.kind == "migrate" for step in enabled_steps(mode, selected_steps))
+
+
+def _snapshots_selected(mode: RunMode, selected_steps: list[str] | None) -> bool:
+    return any(step.kind == "snapshot" for step in enabled_steps(mode, selected_steps))
 
 
 def _normalize_label(text: str) -> str:
@@ -326,6 +432,10 @@ def build_template_bytes(*, init_only: bool = False) -> bytes:
         _add_provisioning_sheet(wb)
         _add_replication_sheet(wb)
         _add_replication_network_sheet(wb)
+        _add_iscsi_network_sheet(wb)
+        _add_peer_ports_sheet(wb)
+        _add_migration_sheet(wb)
+        _add_snapshots_sheet(wb)
     _add_prereq_sheet(wb)
 
     buffer = io.BytesIO()
@@ -424,6 +534,71 @@ def _add_replication_network_sheet(wb: Workbook) -> None:
             cell.number_format = "@"          # text: Excel would turn 0:4:4 into a time
 
 
+def _add_migration_sheet(wb: Workbook) -> None:
+    """The optional 'Migration' tab (SPEC-027 R1): key/value sections, then the hosts to migrate on the
+    SAME tab, read the way the Replication tab is (labels above, the table found by its 'Host' column)."""
+    ws = wb.create_sheet(MIGRATION_SHEET_NAME)
+    _write_fillable_tab(ws, MIGRATION_SECTIONS)
+    ws.append([])
+    _write_table_tab(
+        ws, MIGRATION_HOST_COLUMNS, blank_rows=8,
+        intro=(
+            "Hosts to migrate — one per row, named as on the SOURCE array. Migration type blank = online; "
+            "Provisioning blank = thin. The tool reads the source array and checks it is ready; Peer Motion, "
+            "in this array's UI or DSCC, does the import. The tool never writes to the source array."
+        ),
+    )
+    ws.column_dimensions["A"].width = 44
+    ws.freeze_panes = "A2"
+
+
+def _add_snapshots_sheet(wb: Workbook) -> None:
+    """SPEC-023 R1: the optional 'Snapshots' tab. Blank -> no Snapshots step."""
+    _write_table_tab(
+        wb.create_sheet(SNAPSHOTS_SHEET_NAME), SNAPSHOT_COLUMNS, blank_rows=8,
+        intro=(
+            "Fill this only when the tool should take snapshots. One row per volume set (or volume, with Kind "
+            "'volume'): Snapshot now takes one read-only snapshot of each volume, named <volume>.initial; Every "
+            "and Unit set up a schedule on the array (15, 20 or 30 minutes; 1, 2, 3, 4, 6, 8 or 12 hours; 1 day). "
+            "Keep for is how long each snapshot lives. Start hour and Days are in the array's own time. "
+            "A schedule keeps taking snapshots after the run ends, until someone removes it."
+        ),
+    )
+
+
+def _add_iscsi_network_sheet(wb: Workbook) -> None:
+    """SPEC-024 R1: the optional 'iSCSI network' tab. Blank -> the Array ports step has nothing to do."""
+    ws = wb.create_sheet(ISCSI_NETWORK_SHEET_NAME)
+    _write_table_tab(
+        ws, ISCSI_NETWORK_COLUMNS, blank_rows=8,
+        intro=(
+            "Fill this only when the tool should add VLAN-tagged iSCSI addresses to this array's iSCSI ports. "
+            "One row per port and VLAN. Put each VLAN on a port of both nodes. The switch ports are not changed "
+            "by the tool."
+        ),
+    )
+    for row in ws.iter_rows(min_row=ws.max_row - 7, max_row=ws.max_row, min_col=1, max_col=1):
+        for cell in row:
+            cell.number_format = "@"          # text: Excel would turn 0:4:1 into a time
+
+
+def _add_peer_ports_sheet(wb: Workbook) -> None:
+    """SPEC-025 R1: the optional 'Peer ports' tab. Blank -> the Array ports step has no peer ports to set."""
+    ws = wb.create_sheet(PEER_PORTS_SHEET_NAME)
+    _write_table_tab(
+        ws, PEER_PORT_COLUMNS, blank_rows=8,
+        intro=(
+            "Fill this only when a data migration needs peer ports: free Fibre Channel ports of this array set to peer "
+            "mode. One row per port, at least one port on each of two nodes. Source array ports: the WWPNs of the "
+            "source array's ports to zone to this port, separated by spaces or commas. The switches are not changed "
+            "by the tool."
+        ),
+    )
+    for row in ws.iter_rows(min_row=ws.max_row - 7, max_row=ws.max_row, min_col=1, max_col=1):
+        for cell in row:
+            cell.number_format = "@"          # text: Excel would turn 0:3:2 into a time
+
+
 def _add_prereq_sheet(wb: Workbook) -> None:
     """A reference 'Prerequisites' tab: firewall rules to open + a short readiness checklist.
 
@@ -502,7 +677,10 @@ def parse_workbook_bytes(
     parsed = _build(values, required)
 
     if complete or _provisioning_selected(mode, selected_steps):
-        parsed.provisioning_intent = _parse_provisioning_tab(workbook)
+        volumes_required = complete or any(s.key == "provision" for s in enabled_steps(mode, selected_steps))
+        parsed.provisioning_intent = _parse_provisioning_tab(workbook, volumes_required=volumes_required)
+        parsed.provisioning_intent.iscsi_network = _parse_iscsi_network_tab(workbook)
+        parsed.provisioning_intent.peer_ports = _parse_peer_ports_tab(workbook)
         _reject_two_arrays(parsed)
         replication = _parse_replication_tab(workbook)
         if replication is None and _replication_selected(mode, selected_steps):
@@ -512,7 +690,33 @@ def parse_workbook_bytes(
             )
         parsed.provisioning_intent.replication = replication
         _reject_peer_is_this_array(parsed)
+        migration = _parse_migration_tab(workbook)
+        if migration is None and _migration_selected(mode, selected_steps):
+            raise ValueError(
+                "The Migration step needs the 'Migration' tab (the source array and the hosts to migrate), and "
+                "this workbook has none filled in."
+            )
+        parsed.provisioning_intent.migration = migration
+        _reject_source_is_this_array(parsed)
+        snapshots = _parse_snapshots_tab(workbook)
+        if snapshots is None and _snapshots_selected(mode, selected_steps):
+            raise ValueError(SNAPSHOTS_TAB_NEEDED)
+        parsed.provisioning_intent.snapshots = snapshots
+        _reject_a_port_with_two_roles(parsed.provisioning_intent)
     return parsed
+
+
+def _reject_source_is_this_array(parsed: ParsedInitSheet) -> None:
+    intent = parsed.provisioning_intent
+    if intent is None or intent.migration is None:
+        return
+    source = intent.migration.source.host.strip()
+    own = {ip.lower() for ip in ((intent.array.host or "").strip(), (parsed.work_item.network.mgmt_ipv4 or "").strip()) if ip}
+    if source.lower() in own:
+        raise ValueError(
+            f"Migration tab — the source array ({source}) is this run's own array. This run's array is the "
+            "destination: enter the address of the array the data moves from."
+        )
 
 
 def _reject_peer_is_this_array(parsed: ParsedInitSheet) -> None:
@@ -563,7 +767,7 @@ def _reject_two_arrays(parsed: ParsedInitSheet) -> None:
 #: Credential fields are used exactly as typed; every other field is trimmed.
 _VERBATIM_KEYS = frozenset({
     "gl_client_secret", "prov_array_password", "prov_vcenter_password",
-    "prov_sw1_password", "prov_sw2_password", "password", "peer_password",
+    "prov_sw1_password", "prov_sw2_password", "password", "peer_password", "source_password",
 })
 
 
@@ -590,11 +794,12 @@ def _read_tab(sheet, label_to_key: dict[str, str]) -> dict[str, str]:
     return values
 
 
-def _read_table(ws, columns: list[tuple[str, str, bool]]) -> list[dict[str, str]]:
+def _read_table(ws, columns: list[tuple[str, str, bool]], *, any_cell: bool = False) -> list[dict[str, str]]:
     """Read a row-table tab into a list of {key: value} dicts. Locates the header row as the first row
     that carries the NAME column (tolerant of the intro line and of the operator's column order);
     columns match on their leading phrase, never on the hint text after it (P-17). Then reads data
-    rows to the end, skipping any row whose name column is blank."""
+    rows to the end, skipping any row whose name column is blank (`any_cell`: only rows with no value
+    at all, so the tab's own "missing" rule can refuse a row whose first cell is blank)."""
     header_to_key = {_column_key(label): key for key, label, _ in columns}
     name_key = columns[0][0]
     rows = list(ws.iter_rows(values_only=True))
@@ -617,14 +822,15 @@ def _read_table(ws, columns: list[tuple[str, str, bool]]) -> list[dict[str, str]
             for ci, key in col_index.items()
             if ci < len(row) and row[ci] is not None and str(row[ci]).strip()
         }
-        if record.get(name_key):
+        if record.get(name_key) or (any_cell and record):
             records.append(record)
     return records
 
 
-def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
+def _parse_provisioning_tab(workbook, *, volumes_required: bool = True) -> ProvisioningIntent:
     """Read the provisioning input (Provisioning targets + Volumes + Host sets row-tables) into a plural
-    ProvisioningIntent (passwords included — customer-supplied). Exports are composed later in the UI."""
+    ProvisioningIntent (passwords included — customer-supplied). Exports are composed later in the UI.
+    `volumes_required` False: a run without the Provision step may leave Volumes and Host sets empty."""
     for name in (PROVISIONING_SHEET_NAME, VOLUMES_SHEET_NAME, HOSTSETS_SHEET_NAME):
         if name not in workbook.sheetnames:
             raise ValueError(f"The '{name}' tab is required for provisioning but was not found in the workbook.")
@@ -640,13 +846,23 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
         raise ValueError("Default provisioning type must be 'tpvv' or 'reduce'.")
 
     vol_rows = _read_table(workbook[VOLUMES_SHEET_NAME], VOLUME_COLUMNS)
-    # A workbook that only replicates sets already on the array may leave Volumes and Host sets
-    # empty; the run guard then refuses the Provision step (nothing to provision).
-    replicate_only = not vol_rows and _replication_rows_present(workbook)
+    # A workbook that provisions nothing may leave Volumes and Host sets empty: a run without the Provision
+    # step, or one that only replicates or snapshots sets already on the array, migrates hosts from another
+    # array (Peer Motion creates their volumes here) or sets up the array's own ports. The run guard then
+    # refuses the Provision step (nothing to provision).
+    replicate_only = not vol_rows and (
+        not volumes_required
+        or _replication_rows_present(workbook)
+        or _snapshot_rows_present(workbook)
+        or _migration_rows_present(workbook)
+        or _table_rows_present(workbook, ISCSI_NETWORK_SHEET_NAME, ISCSI_NETWORK_COLUMNS)
+        or _table_rows_present(workbook, PEER_PORTS_SHEET_NAME, PEER_PORT_COLUMNS)
+    )
     if not vol_rows and not replicate_only:
         raise ValueError(
-            "Volumes tab — add at least one volume (a name and a size). To replicate volume sets that "
-            "already exist on the array, leave Volumes and Host sets empty and fill the Replication tab."
+            "Volumes tab — add at least one volume (a name and a size). Or leave Volumes and Host sets empty and "
+            "fill the Replication tab or the Snapshots tab (volume sets already on the array), fill the Migration "
+            "tab (hosts from another array), or fill the iSCSI network or Peer ports tab (the array's own ports)."
         )
     volumes: list[VolumeRequest] = []
     for r in vol_rows:
@@ -660,6 +876,8 @@ def _parse_provisioning_tab(workbook) -> ProvisioningIntent:
         if size <= 0 or not size.is_integer():
             raise ValueError(f"Volume '{r['name']}' — Size (GiB) must be a whole number above 0 (got {r['size_gib']}).")
         size_gib = int(size)
+        if too_large := volume_too_large(size_gib):
+            raise ValueError(f"Volume '{r['name']}' — Size (GiB): {too_large}. Make it smaller.")
         volumes.append(VolumeRequest(
             name=r["name"], size_gib=size_gib,
             provisioning_type=ptype,  # type: ignore[arg-type]
@@ -728,6 +946,10 @@ def _yes_no(text: str | None, *, default: bool, where: str) -> bool:
     raise ValueError(f"{where} must be 'yes' or 'no' (got '{text}').")
 
 
+def _table_rows_present(workbook, name: str, columns: list[tuple[str, str, bool]]) -> bool:
+    return name in workbook.sheetnames and bool(_read_table(workbook[name], columns))
+
+
 def _replication_rows_present(workbook) -> bool:
     return REPLICATION_SHEET_NAME in workbook.sheetnames and bool(
         _read_table(workbook[REPLICATION_SHEET_NAME], PROTECTION_COLUMNS)
@@ -794,12 +1016,13 @@ def _parse_replication_tab(workbook) -> ReplicationIntent | None:
                 if not value.is_integer() or value < RPO_MINUTES_MIN:
                     raise ValueError(f"{where}: RPO must be a whole number of minutes, {RPO_MINUTES_MIN} or more (got '{raw}').")
                 rpo = int(value)
-        limit = RTT_LIMIT_MS[mode_text]
-        # SPEC-020: a blank RTT is fine for every mode — the Replication step measures it (checkrclink).
-        if rtt is not None and rtt > limit:
+        # SPEC-020: a blank RTT is fine here — the Replication step measures it (checkrclink), or over Fibre
+        # Channel asks for it (SPEC-031 R6). The sheet does not know the transport yet: it refuses only what RCIP,
+        # the looser limit, refuses, and the step holds a Fibre Channel pair to its own.
+        if rtt is not None and rtt > rtt_limit_ms("IP", mode_text):
             raise ValueError(
-                f"{where}: the measured round-trip time is {rtt:g} ms; {mode_text} replication over RCIP needs "
-                f"{limit:g} ms or less (HPE Support Matrix)."
+                f"{where}: the measured round-trip time is {rtt:g} ms; {rtt_limit_text('IP', mode_text)} "
+                "(HPE Support Matrix)."
             )
         peer_cpg = (r.get("peer_cpg") or "").strip()
         if not peer_cpg:
@@ -820,6 +1043,109 @@ def _parse_replication_tab(workbook) -> ReplicationIntent | None:
         failover_group=(fields.get("failover_group") or "").strip(),
         network=network,
     )
+
+
+def _snapshot_rows_present(workbook) -> bool:
+    return SNAPSHOTS_SHEET_NAME in workbook.sheetnames and bool(
+        _read_table(workbook[SNAPSHOTS_SHEET_NAME], SNAPSHOT_COLUMNS)
+    )
+
+
+def _whole(text: str) -> int | None:
+    """A whole number as typed or as Excel stores it ('24', 24.0); None for anything else."""
+    try:
+        value = float(text)
+    except (TypeError, ValueError):
+        return None
+    return int(value) if value.is_integer() else None
+
+
+def _parse_snapshots_tab(workbook) -> SnapshotIntent | None:
+    """SPEC-023 R1/R2. No tab, or a blank one -> None (an older workbook parses exactly as before).
+    Each row is checked in R2's order and the first rule it breaks is raised, one sentence each."""
+    if SNAPSHOTS_SHEET_NAME not in workbook.sheetnames:
+        return None
+    rows = _read_table(workbook[SNAPSHOTS_SHEET_NAME], SNAPSHOT_COLUMNS)
+    if not rows:
+        return None
+    requests: list[SnapshotRequest] = []
+    seen: set[str] = set()
+    names: set[str] = set()
+    for r in rows:
+        source = r["source"]
+        where = f"Snapshots tab — row '{source}'"
+        if source in seen:
+            raise ValueError(f"{where} appears twice; one row per volume set or volume.")
+        seen.add(source)
+        kind = (r.get("kind") or "set").strip().lower()
+        if kind not in ("set", "volume"):
+            raise ValueError(f"{where}: Kind must be 'set' or 'volume' (got '{r.get('kind')}').")
+        every_text, unit_text = (r.get("every") or "").strip(), (r.get("unit") or "").strip()
+        snapshot_now = _yes_no(r.get("snapshot_now"), default=False, where=f"{where}: Snapshot now")
+        if not snapshot_now and not every_text and not unit_text:
+            raise ValueError(f"{where} asks for nothing: set Snapshot now to yes, or fill Every and Unit.")
+        if bool(every_text) != bool(unit_text):
+            raise ValueError(f"{where}: Every and Unit go together; fill both or neither.")
+        every: int | None = None
+        unit: str | None = None
+        if every_text:
+            every, unit = _whole(every_text), _UNITS.get(unit_text.lower())
+            if every is None or unit is None or every not in ALLOWED_EVERY[unit]:
+                raise ValueError(
+                    f"{where}: every {every if every is not None else every_text} {unit_text} is not a period the "
+                    "array schedules; use 15, 20 or 30 minutes, 1, 2, 3, 4, 6, 8 or 12 hours, or 1 day."
+                )
+        hour_text = (r.get("at_hour") or "").strip()
+        if unit == "minutes" and hour_text:
+            raise ValueError(f"{where}: Start hour applies to hours and days; leave it blank for a schedule in minutes.")
+        at_hour = 0
+        if hour_text and unit is not None:
+            parsed_hour = _whole(hour_text)
+            if parsed_hour is None or not 0 <= parsed_hour <= 23:
+                raise ValueError(f"{where}: Start hour must be a whole number from 0 to 23 (got '{hour_text}').")
+            at_hour = parsed_hour
+        days_text = (r.get("days") or "").strip()
+        if days_text and unit is None:
+            raise ValueError(f"{where}: Days applies to a schedule; fill Every and Unit, or leave Days blank.")
+        days: set[int] = set()
+        for item in (d.strip().lower() for d in days_text.split(",")):
+            if not item:
+                continue
+            if item not in _DAY_NUMBERS:
+                raise ValueError(f"{where}: Days must be day names separated by commas, such as mon, tue (got '{days_text}').")
+            days.add(_DAY_NUMBERS[item])
+        expire = _whole((r.get("expire_hours") or "").strip())
+        if expire is None or not 1 <= expire <= HOURS_MAX:
+            raise ValueError(f"{where}: Keep for must be a whole number of hours from 1 to {HOURS_MAX}.")
+        retain: int | None = None
+        retain_text = (r.get("retain_hours") or "").strip()
+        if retain_text:
+            retain = _whole(retain_text)
+            if retain is None or not 1 <= retain <= HOURS_MAX:
+                raise ValueError(f"{where}: Lock for must be a whole number of hours from 1 to {HOURS_MAX}, or blank.")
+            if retain > expire:
+                raise ValueError(f"{where}: Lock for cannot be longer than Keep for; the array refuses it.")
+        schedule_name = (r.get("schedule_name") or "").strip()
+        if schedule_name and not _SCHEDULE_NAME.fullmatch(schedule_name):
+            raise ValueError(
+                f"{where}: Schedule name may use letters, digits, '.', '_' and '-' only, up to {SCHEDULE_NAME_MAX} characters."
+            )
+        if schedule_name.startswith("-"):
+            raise ValueError(f"{where}: Schedule name cannot start with '-'; the array would read it as an option.")
+        if schedule_name.lower() in _RESERVED_SCHEDULE_NAMES:
+            raise ValueError(f"{where}: Schedule name '{schedule_name}' is kept by the array for itself; choose another.")
+        read_only = _yes_no(r.get("read_only"), default=True, where=f"{where}: Read-only")
+        request = SnapshotRequest(
+            source=source, kind=kind, snapshot_now=snapshot_now, every=every, unit=unit,  # type: ignore[arg-type]
+            at_hour=at_hour, days=sorted(days), expire_hours=expire, retain_hours=retain, read_only=read_only,
+            schedule_name=schedule_name,
+        )
+        if request.has_schedule:
+            if request.name in names:
+                raise ValueError(f"{where}: schedule name '{request.name}' is used by two rows.")
+            names.add(request.name)
+        requests.append(request)
+    return SnapshotIntent(requests=requests)
 
 
 def _ipv4(text: str) -> bool:
@@ -883,6 +1209,189 @@ def _parse_network_tab(workbook) -> list[RcipPortRequest]:
         raise ValueError("Replication network tab — the partnership needs at least 2 links: name two ports on this "
                          "array and two on the peer, one per node.")
     return out
+
+
+def _migration_rows_present(workbook) -> bool:
+    return MIGRATION_SHEET_NAME in workbook.sheetnames and bool(
+        _read_table(workbook[MIGRATION_SHEET_NAME], MIGRATION_HOST_COLUMNS)
+    )
+
+
+def _list_word(text: str) -> str:
+    return " ".join(text.strip().lower().replace("-", " ").replace("_", " ").split())
+
+
+def _one_of(values: tuple[str, ...]) -> str:
+    return ", ".join(values[:-1]) + " or " + values[-1]
+
+
+def _parse_migration_tab(workbook) -> MigrationIntent | None:
+    """The optional Migration tab (SPEC-027 R1). Absent, or present but blank, -> None (an older
+    workbook parses exactly as before). Filled -> one sentence per refused rule. The source array's
+    name, model, serial and OS are read from it later, never taken from the sheet."""
+    if MIGRATION_SHEET_NAME not in workbook.sheetnames:
+        return None
+    ws = workbook[MIGRATION_SHEET_NAME]
+    fields = _read_tab(ws, _MIG_LABEL_TO_KEY)
+    rows = _read_table(ws, MIGRATION_HOST_COLUMNS)
+    if not fields and not rows:
+        return None
+
+    if not fields.get("source_host", "").strip():
+        raise ValueError("Migration tab — enter the source array's management address (the array the data moves from).")
+    if not fields.get("source_user", "").strip():
+        raise ValueError("Migration tab — enter a user for the source array; a read-only account is enough.")
+    if not fields.get("source_password"):
+        raise ValueError("Migration tab — enter the password of the source array's user.")
+    orchestration = _ORCHESTRATION_WORDS.get(_list_word(fields.get("orchestration") or "array UI"))
+    if orchestration is None:
+        raise ValueError(
+            f"Migration tab — 'Where the import runs' must be 'array UI' or 'DSCC' (got '{fields['orchestration']}')."
+        )
+    if not rows:
+        raise ValueError("Migration tab — add at least one host to migrate: its name on the source array and a destination CPG.")
+
+    hosts: list[MigrationHostRequest] = []
+    seen: set[str] = set()
+    for r in rows:
+        name = r["host"]
+        where = f"Migration tab — host '{name}'"
+        if name in seen:
+            raise ValueError(f"{where} appears twice; one row per host.")
+        seen.add(name)
+        kind = _MIGRATION_TYPE_WORDS.get(_list_word(r.get("type") or "online"))
+        if kind is None:
+            raise ValueError(f"{where}: Migration type must be {_one_of(MIGRATION_TYPES)} (got '{r['type']}').")
+        provisioning = _MIGRATION_PROVISIONING_WORDS.get(_list_word(r.get("provisioning") or "thin"))
+        if provisioning is None:
+            raise ValueError(
+                f"{where}: Provisioning must be {_one_of(MIGRATION_PROVISIONING)} (got '{r['provisioning']}')."
+            )
+        cpg = (r.get("cpg") or "").strip()
+        if not cpg:
+            raise ValueError(f"{where}: enter the destination CPG, the CPG on this array that receives its volumes.")
+        hosts.append(MigrationHostRequest(
+            host=name, type=kind, cpg=cpg, provisioning=provisioning,  # type: ignore[arg-type]
+        ))
+
+    return MigrationIntent(
+        source=EndpointCreds(
+            host=fields["source_host"].strip(), username=fields["source_user"].strip(), password=fields["source_password"],
+        ),
+        orchestration=orchestration,  # type: ignore[arg-type]
+        hosts=hosts,
+    )
+
+
+_PORT_RE = re.compile(r"(?:0|[1-9]\d?):(?:0|[1-9]\d?):(?:0|[1-9]\d?)")
+
+
+def _parse_iscsi_network_tab(workbook) -> list[IscsiVlanRequest]:
+    """SPEC-024 R1, one sentence per rule, the first that applies. No tab, or a blank one -> [].
+    The two cross-row rules are the tool's own (one VLAN is one IP network); the array may be more
+    lenient, but a sheet that breaks them is almost always a typing slip."""
+    if ISCSI_NETWORK_SHEET_NAME not in workbook.sheetnames:
+        return []
+    rows = _read_table(workbook[ISCSI_NETWORK_SHEET_NAME], ISCSI_NETWORK_COLUMNS, any_cell=True)
+    out: list[IscsiVlanRequest] = []
+    nets: list[ipaddress.IPv4Network] = []
+    seen_ports: set[tuple[str, int]] = set()
+    seen_ips: set[str] = set()
+    for r in rows:
+        port, vlan, ip, mask, gw = (r.get(k, "").strip() for k in ("port", "vlan", "ip", "netmask", "gateway"))
+        where = f"iSCSI network tab — row '{port} VLAN {vlan}'"
+        missing = [label for key, label, required in ISCSI_NETWORK_COLUMNS if required and not (r.get(key) or "").strip()]
+        if missing:
+            raise ValueError(f"{where}: missing {', '.join(missing)}.")
+        if not _PORT_RE.fullmatch(port):
+            raise ValueError(f"{where}: Port must be N:S:P, like 0:4:1 (got '{port}').")
+        if not (vlan.isdigit() and 1 <= int(vlan) <= 4094):
+            raise ValueError(f"{where}: VLAN ID must be a whole number from 1 to 4094 (got '{vlan}').")
+        if not _ipv4(ip):
+            raise ValueError(f"{where}: iSCSI address '{ip}' is not an IPv4 address.")
+        if not _netmask(mask):
+            raise ValueError(f"{where}: Netmask '{mask}' is not a netmask (like 255.255.255.0).")
+        if gw and not _ipv4(gw):
+            raise ValueError(f"{where}: Gateway '{gw}' is not an IPv4 address.")
+        net = ipaddress.ip_network(f"{ip}/{mask}", strict=False)
+        if gw and ipaddress.IPv4Address(gw) not in net:
+            raise ValueError(f"{where}: Gateway {gw} is not on the network {net} of {ip}.")
+        # A /31 or /32 has no network or broadcast address to avoid.
+        if net.prefixlen < 31 and ipaddress.IPv4Address(ip) in (net.network_address, net.broadcast_address):
+            raise ValueError(f"{where}: {ip} is the network or broadcast address of {net}.")
+        if (port, int(vlan)) in seen_ports:
+            raise ValueError(f"{where}: port {port} has VLAN {vlan} twice.")
+        if ip in seen_ips:
+            raise ValueError(f"{where}: address {ip} is used twice.")
+        seen_ports.add((port, int(vlan)))
+        seen_ips.add(ip)
+        nets.append(net)
+        out.append(IscsiVlanRequest(nsp=port, vlan_id=int(vlan), ip=ip, netmask=mask, gateway=gw))
+    first_of_vlan: dict[int, tuple[ipaddress.IPv4Network, str]] = {}
+    for req, net in zip(out, nets, strict=True):
+        net1, port1 = first_of_vlan.setdefault(req.vlan_id, (net, req.nsp))
+        if net != net1:
+            raise ValueError(f"iSCSI network tab — VLAN {req.vlan_id} is on two networks: {net1} on {port1} and "
+                             f"{net} on {req.nsp}. One VLAN is one network.")
+    vlan_of_net: dict[ipaddress.IPv4Network, int] = {}
+    for req, net in zip(out, nets, strict=True):
+        other = vlan_of_net.setdefault(net, req.vlan_id)
+        if other != req.vlan_id:
+            raise ValueError(f"iSCSI network tab — VLAN {other} and VLAN {req.vlan_id} are both on {net}. "
+                             "Give each VLAN a network of its own.")
+    return out
+
+
+_WWPN_SPLIT = re.compile(r"[\s,;]+")
+
+
+def _parse_peer_ports_tab(workbook) -> PeerPortIntent | None:
+    """SPEC-025 R1, one sentence per rule. No tab, or a blank one -> None (the workbook parses as before).
+    Port existence, Type and use are array facts, judged in the plan (R3), not here."""
+    if PEER_PORTS_SHEET_NAME not in workbook.sheetnames:
+        return None
+    rows = _read_table(workbook[PEER_PORTS_SHEET_NAME], PEER_PORT_COLUMNS)
+    if not rows:
+        return None
+    ports: list[PeerPortRequest] = []
+    for r in rows:
+        port = (r.get("port") or "").strip()
+        where = f"Peer ports tab — row '{port}'"
+        if not _PORT_RE.fullmatch(port):
+            raise ValueError(f"{where}: Port must be N:S:P, like 0:3:2 (got '{port}').")
+        wwpns: list[str] = []
+        for text in _WWPN_SPLIT.split((r.get("source_wwpns") or "").strip()):
+            if not text:
+                continue
+            wwpn = normalize_wwpn(text)
+            if not re.fullmatch(r"[0-9A-F]{16}", wwpn):
+                raise ValueError(f"{where}: '{text}' is not a WWPN (16 hex digits, colons allowed).")
+            if wwpn not in wwpns:
+                wwpns.append(wwpn)
+        if any(p.nsp == port for p in ports):
+            raise ValueError(f"Peer ports tab — port {port} is named twice.")
+        ports.append(PeerPortRequest(nsp=port, source_wwpns=wwpns))
+    nodes = {p.node for p in ports}
+    if len(nodes) < 2:
+        (node,) = nodes
+        raise ValueError(
+            f"Peer ports tab — peer ports go in pairs across nodes: name at least one port on each of two nodes "
+            f"(got {', '.join(p.nsp for p in ports)} only on node {node}), so the migration keeps a path when a "
+            "node restarts."
+        )
+    return PeerPortIntent(ports=ports)
+
+
+def _reject_a_port_with_two_roles(intent: ProvisioningIntent) -> None:
+    """SPEC-025 R1: a port on the Peer ports tab and on this array's rows of the Replication network
+    tab has two roles. (The Replication FC ports tab of BL-50 joins this rule when it exists.)"""
+    if intent.peer_ports is None or intent.replication is None:
+        return
+    rcip = {r.nsp for r in intent.replication.network if r.side == "A"}
+    for port in intent.peer_ports.ports:
+        if port.nsp in rcip:
+            raise ValueError(f"Peer ports tab — port {port.nsp} is also on the Replication network tab; a port "
+                             "has one role.")
 
 
 def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
@@ -1003,12 +1512,18 @@ def compose_workbook_bytes(
     hostsets: list[dict[str, str]] | None = None,
     hosts: list[dict[str, str]] | None = None,
     replication: dict | None = None,
+    migration: dict | None = None,
+    snapshots: list[dict[str, str]] | None = None,
+    iscsi_network: list[dict[str, str]] | None = None,
+    peer_ports: list[dict[str, str]] | None = None,
 ) -> bytes:
     """A filled Initialisation_sheet.xlsx from JSON (SPEC-006 R3): start from `base` (the operator's
     working sheet) or the blank template; fill the key/value tabs given; REPLACE each row table given.
     A table not given is left as it is. `replication` = {"fields": {...}, "rows": [...]} fills the
-    Replication tab (added to a base workbook that predates it). The result parses exactly as an
-    operator-edited sheet would."""
+    Replication tab and `migration` (same shape) the Migration tab, each added to a base workbook that
+    predates it; `snapshots`, `iscsi_network` (SPEC-024 R1) and `peer_ports` (SPEC-025 R1) replace the
+    rows of the Snapshots, iSCSI network and Peer ports tabs (each tab added the same way). The result
+    parses exactly as an operator-edited sheet would."""
     try:
         wb = load_workbook(io.BytesIO(base)) if base else load_workbook(io.BytesIO(build_template_bytes()))
     except (zipfile.BadZipFile, KeyError, OSError) as exc:
@@ -1038,6 +1553,25 @@ def compose_workbook_bytes(
             if REPLICATION_NETWORK_SHEET_NAME not in wb.sheetnames:
                 _add_replication_network_sheet(wb)
             _replace_row_table(wb[REPLICATION_NETWORK_SHEET_NAME], NETWORK_COLUMNS, replication["network"])
+    if iscsi_network is not None:
+        if ISCSI_NETWORK_SHEET_NAME not in wb.sheetnames:
+            _add_iscsi_network_sheet(wb)
+        _replace_row_table(wb[ISCSI_NETWORK_SHEET_NAME], ISCSI_NETWORK_COLUMNS, iscsi_network)
+    if peer_ports is not None:
+        if PEER_PORTS_SHEET_NAME not in wb.sheetnames:
+            _add_peer_ports_sheet(wb)
+        _replace_row_table(wb[PEER_PORTS_SHEET_NAME], PEER_PORT_COLUMNS, peer_ports)
+    if migration is not None:
+        if MIGRATION_SHEET_NAME not in wb.sheetnames:
+            _add_migration_sheet(wb)
+        ws = wb[MIGRATION_SHEET_NAME]
+        _fill_kv_tab(ws, _MIG_LABEL_TO_KEY, migration.get("fields") or {})
+        if migration.get("rows") is not None:
+            _replace_row_table(ws, MIGRATION_HOST_COLUMNS, migration["rows"])
+    if snapshots is not None:
+        if SNAPSHOTS_SHEET_NAME not in wb.sheetnames:
+            _add_snapshots_sheet(wb)
+        _replace_row_table(wb[SNAPSHOTS_SHEET_NAME], SNAPSHOT_COLUMNS, snapshots)
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()

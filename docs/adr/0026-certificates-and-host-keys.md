@@ -1,6 +1,6 @@
 # ADR 0026 — Certificates and host keys: check the cloud, trust on-site devices on first contact
 
-**Status:** accepted 2026-11-17 (owner's decision); built in the steps below, each pending a live run ·
+**Status:** accepted 2026-11-17 (owner's decision); steps 1 to 8 built 2026-11-17 (BL-53), each pending the live run of step 9 (*Build notes*, below) ·
 **Issue:** BL-53 · **Relates to:** [ADR 0013](0013-one-array-credential-per-run.md) (where the pin is
 kept), [ADR 0008](0008-proxy-auto-detect-with-override.md) (on-site devices bypass the proxy),
 [ADR 0015](0015-tool-configures-remote-copy-write-scoped-ssh.md) (the Remote Copy write client connects
@@ -106,6 +106,76 @@ a new connection for every call (it calls the module-level `requests.request`). 
 SDK's requests through urllib3's `assert_fingerprint`, which urllib3 2.8.0 still checks when
 certificate verification is off (`CERT_NONE`). Then every WSAPI connection is checked, not only the
 probe.
+
+### Build notes (BL-53, 2026-11-17)
+
+Every step below is *built, pending live run*: tests use fakes only (keys and certificates made in the
+test, paramiko's own host-key check over an offline transport), and no device has been reached.
+
+1. **Pin store and helper.** Built 2026-11-17, pending live run. Table `run_device_pins` in `state.db`
+   (run, address, port, kind; the key in JSON), kept with the run like its credentials. It is a table
+   of its own, not a field of the run record, because steps write back whole run records they read
+   earlier and would drop a pin taken in between. `domain/trust.py` holds the models and the sentences
+   the operator reads; `adapters/device_trust.py` `check()` records, compares and refuses. The
+   coordinator binds the run's pins (`application/runs/trust.py`) for every spawned step and every
+   route that reads a device (`recording()`), the way it binds the command log, so a client built
+   anywhere in that step gets them. First contact adds a `device.trusted` event in the step's phase. A
+   refusal is kept on the pin (the key presented, and when) and, when the step ends, adds a
+   `device.trust_failed` event in its phase, so the step shows as stopped even where its code carried
+   on (a host read that becomes a discovery note). A route that reads outside a step (the console, the
+   storage readiness check) answers with the refusal itself and adds a `device.refused` note. Re-trust is `POST /runs/{id}/trust/retrust`: it
+   accepts only the fingerprint the device presented when it was refused, so a key that changed again
+   is not trusted, and adds a `device.retrusted` event with both fingerprints. `GET /runs/{id}/trust`
+   lists what the run trusts, fingerprints only. With no run bound (lab scripts, the command line)
+   nothing is compared or recorded; a WSAPI or vCenter client still holds its own session to the
+   certificate it read first.
+2. **Array SSH.** Built 2026-11-17, pending live run. `device_trust.open_ssh` with
+   `FirstContactPolicy` (a paramiko `MissingHostKeyPolicy`); a pinned key is preloaded under
+   `[host]:port` when the port is not 22. `ArrayCliClient.connect` uses it, so the Remote Copy write
+   client, the link check and the console do too. `verification.py` still builds `ArrayCliClient`
+   itself and gets the run's pins through the binding; no change was needed in it.
+3. **Brocade and Linux SSH.** Built 2026-11-17, pending live run. Both connect through `open_ssh`; an
+   `ssh-rsa` key pins like any other. No SSH client in the tool uses `AutoAddPolicy` any more.
+4. **WSAPI.** Built 2026-11-17, pending live run, with the known gap closed. `probe_tls` reads the
+   certificate in a handshake that sends nothing, directly to the array, and `check()` compares it
+   before the SDK client exists. Each call the SDK makes for a pinned client binds the SHA-256, and a
+   stand-in for `requests` inside `hpe3parclient.http` sends it through a session whose connections
+   assert that fingerprint. A certificate that changes mid-session is read again, recorded and named.
+   Checked once on loopback only (a self-signed server on 127.0.0.1 in the same process): urllib3 2.8.0
+   refused the wrong fingerprint with verification off, and the server received no request.
+   The file side's WSAPI v3 client (BL-28, `wsapi_v3_client.py`, httpx) checks the same pin on the same
+   address and port: the certificate is compared before the login, and httpx gets the pinned SSL
+   context, so every later connection is compared too. A refusal reaches Discovery as the certificate
+   sentence, never as "did not answer".
+5. **vCenter.** Built 2026-11-17, pending live run, **by another mechanism than `serverPemCert`**.
+   pyVmomi 9.1.1.0 consults `serverPemCert` only after a verifying handshake fails
+   (`SoapAdapter._Connect`), and `SmartConnect` first fetches the version list with the given context
+   alone (`connect.__GetElementTree`). With an unverified context the pin is never consulted; with a
+   verifying one a self-signed vCenter fails that first fetch. So vCenter is probed and compared
+   first, like WSAPI, and pyVmomi gets an `ssl.SSLContext` subclass (`device_trust.pinned_context`)
+   that compares the pinned certificate after every handshake it makes, before anything is sent. The
+   PEM is kept, as decided.
+6. **Device CA bundle.** Built 2026-11-17, pending live run. `ALLETRA_DEVICE_CA_BUNDLE` (environment or
+   `.env`). WSAPI gets the path as `secure`; vCenter a context that checks chain and name against it;
+   WinRM on 5986 `server_cert_validation="validate"` with `ca_trust_path`. A failure says the bundle
+   does not vouch for the device; a path that cannot be read stops the connection. Neither falls back
+   to first-contact trust.
+7. **LESSONS 43.** Built 2026-11-17. A `# TRUST-OFF:` reason at each site that still turns a check off
+   (the setup wizard, WSAPI's `secure=False` behind the pin, the probe, the pinned context, WinRM);
+   `tests/unit/test_trust_checks_off.py` finds the sites from the code's syntax and fails on a new one
+   until it has a reason and a line in its list.
+8. **Docs.** HLD sections 7.5 and 8, the LLD and the README updated 2026-11-17. SCOPE is left to the
+   integrator of the parallel branches.
+9. **Live run.** Not done. Until it is, whether the array's certificate or SSH key changes after
+   initial setup (the setup wizard, DSCC setup, a restart) is unknown, and a run that trusts the array
+   before the change would stop at it; the re-trust action is the way through meanwhile.
+
+**What the operator sees.** The run overview has a *Trusted devices* section: each device, its address,
+the fingerprint and when it was trusted. A device that presented a different key shows both
+fingerprints there, with the re-trust behind a tick that the new fingerprint was compared with the
+device's own console. The step that stopped shows the sentence naming the device and both
+fingerprints, with no button. First contact is a line in the step's activity. The as-built has a
+*Device fingerprints* table.
 
 ## Consequences
 

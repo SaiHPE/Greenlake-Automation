@@ -193,3 +193,18 @@ Still open: which session value the reads need (both captures sent the key heade
 the client sends both until the two-GET probe); every write body and its task, and whether a share
 create makes its own client group (*Before the write plane*); whether `portStatus[]` follows
 `showport -file`.
+
+## Built
+
+**The read plane, 2026-11-17 (BL-28 slice 1), pending live run.** `adapters/array/wsapi_v3_client.py`
+(`WsapiV3Client`, built by `make_wsapi_v3`) has `login`, `get` and `logout` and no write method; the one
+place a request is built refuses anything but a GET under `/api/v3/`, the login and the deletion of
+its own session. Every request carries `Content-Type: application/json`; every GET sends the body
+`key` as `X-HP3PAR-WSAPI-SessionKey` and the three cookies together (*Consequences*); the context
+manager deletes the session also when a read fails or raises. Any HTTP status comes back as an
+answer, only no answer raises (lesson 27). Each call is in the command log without the password,
+key or cookies. `application/unified_file/read.py` (`read_file_report`) reads the serial `showsys`
+prints first and checks each collection's `arraySerialNumber` as it arrives (item 1): the first
+that is missing or names another array stops the read, and its body stays out of the command log
+(the call and its status are logged), so none of another array's records is shown or stored. No SSH
+command was added to an allowlist and no write path was added.

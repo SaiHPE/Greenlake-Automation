@@ -947,6 +947,11 @@ async def test_start_asbuilt_reads_array_and_produces_downloadable_docx(tmp_path
 
     service = _service(tmp_path)
     run = service.create_run(_item())
+    # ADR 0026: what the run trusted on first contact goes into the document
+    from alletra_onboard.domain.trust import DeviceKey, DevicePin, TrustKind
+    service.coordinator.store.add_device_pin(run.run_id, DevicePin(
+        kind=TrustKind.SSH, host="10.0.0.10", port=22, device="array",
+        key=DeviceKey(kind=TrustKind.SSH, key_type="ssh-ed25519", data="AAAA", fingerprint="SHA256:runkey")))
     service.start_asbuilt(run.run_id, username="3paradm", password="pw", customer="ACME Corp")
     await service.wait(run.run_id)
 
@@ -954,6 +959,54 @@ async def test_start_asbuilt_reads_array_and_produces_downloadable_docx(tmp_path
     assert ev.data["customer"] == "ACME Corp" and ev.data["serial"] == "SGH1"
     docx_bytes = service.get_asbuilt(run.run_id)
     assert docx_bytes and docx_bytes[:2] == b"PK"  # a .docx is a zip
+    import io
+
+    import docx
+    text = "\n".join(p.text for p in docx.Document(io.BytesIO(docx_bytes)).paragraphs)
+    assert "Device fingerprints" in text
+
+
+async def test_asbuilt_generated_carries_the_status_at_handover(tmp_path, monkeypatch):
+    """SPEC-026 R10: the page's summary travels in the event, from the same reads as the document
+    (VZ's captures, OS 10.5.51, 2026-11-17, and its showport from the same day)."""
+    from pathlib import Path
+
+    from alletra_onboard.application.documents import handover
+    from alletra_onboard.application.documents import steps as doc_steps
+
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures"
+
+    def capture(path: Path) -> str:
+        return path.read_text(encoding="utf-8").split("\n", 1)[1]
+
+    names = ("showalert_d.txt", "showsys_space.txt", "srstatcpu_24h_v2.txt", "srstatport_24h_v2.txt", "srstatvv_24h.txt")
+    outputs = {cmd: capture(fixtures / "handover" / "VZ" / name)
+               for (_attr, cmd), name in zip(handover.READS, names, strict=True)}
+    outputs["showport"] = capture(fixtures / "peer_ports" / "VZ" / "showport.txt")
+
+    class FakeCli:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def run(self, cmd, timeout=None):
+            return outputs.get(cmd, "")
+
+    monkeypatch.setattr(doc_steps, "make_array_cli", lambda creds: FakeCli())
+    service = _service(tmp_path)
+    run = service.create_run(_item())
+    service.start_asbuilt(run.run_id, username="3paradm", password="pw")
+    await service.wait(run.run_id)
+
+    ev = next(e for e in service.list_events(run.run_id) if e.event_type == "asbuilt.generated")
+    status = ev.data["handover"]
+    assert (status["alerts_new"], status["alerts_major"], status["cloud_alert"]) == (31, 8, 11)
+    assert (status["cpu_max_pct"], status["iops_avg"], status["idle"]) == (11.0, 0.9, True)
+    assert status["window_from"] == "2026-11-15T18:39:27+00:00" and status["read_errors"] == {}
+    assert status["oldest_alert"] == "2026-06-24 08:57:17 IST" and status["read_at"]
+    assert sum(w.startswith("The array has a new Major alert") for w in ev.data["warnings"]) == 8
 
 
 async def test_pending_sheet_stash_mints_run_and_preserves_intent(tmp_path):

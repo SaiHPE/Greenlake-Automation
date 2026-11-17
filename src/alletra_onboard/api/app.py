@@ -6,8 +6,10 @@ Exposes the onboarding flow the UI drives:
     POST /config/check      live GreenLake readiness check
     GET  /work-items/template                                POST /work-items/parse
     POST /runs              create a run from a work item    GET /runs, /runs/{id}
-    POST /runs/{id}/provision | /cloudinit | /dscc | /complete      (the A -> B -> C steps)
+    POST /runs/{id}/provision | /cloudinit | /dscc | /complete      (the A -> B -> C steps;
+                            /provision is GreenLake device registration, not storage provisioning)
     GET  /runs/{id}/events  stored timeline                  GET /runs/{id}/stream   live SSE
+    GET  /runs/{id}/trust   devices the run trusts           POST /runs/{id}/trust/retrust
     POST /browser/launch    CDP debug Chrome for the attach-mode wizards
 
 Steps run as background tasks (see OnboardingService); the UI follows along via SSE.
@@ -40,6 +42,7 @@ from alletra_onboard.adapters.system.clock import (
 )
 from alletra_onboard.adapters.system.discovery_tool import launch_discovery_tool
 from alletra_onboard.api.schemas import (
+    ArrayPortsResponse,
     AsBuiltStepRequest,
     BrowserLaunchRequest,
     BrowserLaunchResponse,
@@ -70,11 +73,16 @@ from alletra_onboard.api.schemas import (
     ProxySaveRequest,
     ProxyStatusResponse,
     ReplicationApplyRequest,
+    RetrustRequest,
+    RetrustResponse,
     RunDetailResponse,
     RunFromSheetRequest,
     RunListResponse,
     RunResponse,
+    SnapshotApplyRequest,
+    SnapshotsResponse,
     StorageApplyRequest,
+    TrustedDevicesResponse,
     VerifyStepRequest,
 )
 from alletra_onboard.application.onboarding.health import greenlake_check
@@ -102,10 +110,12 @@ from alletra_onboard.application.platform.proxy import (
 from alletra_onboard.application.provisioning.zoning_plan import (
     alias_name_warnings,
     render_commands,
+    render_peer_commands,
 )
 from alletra_onboard.application.runs.console import console_text
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.service import (
+    DevicePinNotFoundError,
     OnboardingService,
     PendingSheetNotFoundError,
     RunBusyError,
@@ -120,7 +130,7 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningComposition,
     ProvisioningObjects,
 )
-from alletra_onboard.domain.workflow import STEP_REGISTRY, mode_steps
+from alletra_onboard.domain.workflow import NOT_BUILT_STEPS, STEP_REGISTRY, mode_steps
 from alletra_onboard.domain.zoning import ZoningPlan
 
 SSE_HEARTBEAT_S = 15.0
@@ -159,6 +169,9 @@ class ZoningRenderResponse(BaseModel):
     skipped: dict[str, list[str]]
     # Legal-but-non-portable alias names (need FOS 8.1.0+ fabric-wide), per fabric. Advisory only.
     warnings: dict[str, list[str]] = {}
+    # SPEC-025 R7: the peer-port block, its own command set per fabric (every pair the sheet asks for).
+    peer_commands: dict[str, list[str]] = {}
+    peer_skipped: dict[str, list[str]] = {}
 
 
 def create_app(service: OnboardingService | None = None) -> FastAPI:
@@ -218,8 +231,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             "profile": settings.alletra_profile,
             "init_only": settings.init_only,
             "title": settings.app_title,
+            # `unavailable` is the sentence for a step whose work is not built yet ("" otherwise): the
+            # mode chooser greys out every mode that includes it, and minting such a run is refused.
             "steps": [
-                {"key": s.key, "label": s.label, "kind": s.kind, "phase": s.phase.value}
+                {"key": s.key, "label": s.label, "kind": s.kind, "phase": s.phase.value,
+                 "unavailable": NOT_BUILT_STEPS.get(s.key, "")}
                 for s in STEP_REGISTRY
             ],
             "modes": {mode.value: list(keys) for mode, keys in mode_steps().items()},
@@ -368,7 +384,8 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             content = compose_workbook_bytes(
                 base=base, init=request.init, targets=request.targets,
                 volumes=request.volumes, hostsets=request.hostsets, hosts=request.hosts,
-                replication=request.replication,
+                replication=request.replication, migration=request.migration, snapshots=request.snapshots,
+                iscsi_network=request.iscsi_network, peer_ports=request.peer_ports,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -409,6 +426,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         data["dscc_setup"].pop("password", None)  # never echo the admin password to the UI
         targets: dict[str, str] = {}
         ports: list[str] = []
+        snapshot_rows: list[str] = []
         if parsed.provisioning_intent is not None:
             intent = parsed.provisioning_intent
             for key, ep in (("array", intent.array), ("vcenter", intent.vcenter),
@@ -417,8 +435,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             if intent.replication is not None:
                 targets["peer_host"], targets["peer_user"] = intent.replication.peer.host, intent.replication.peer.username
                 ports = [f"{'this array' if r.side == 'A' else 'peer'} {r.nsp} {r.ip}" for r in intent.replication.network]
+            if intent.snapshots is not None:
+                snapshot_rows = [f"{r.source}: {r.summary()}" for r in intent.snapshots.requests]
         return InitSheetUploadResponse(
             token=token, work_item=data, credentials_saved=credentials_saved, targets=targets, replication_ports=ports,
+            snapshot_rows=snapshot_rows,
         )
 
     # ------------------------------------------------------------------ runs + steps
@@ -478,6 +499,12 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.post("/runs/{run_id}/provision", response_model=RunResponse)
     async def run_provision(run_id: str, request: ProvisionStepRequest) -> RunResponse:
+        """GreenLake device registration (the `greenlake` step): register, assign, subscribe.
+
+        Not storage provisioning; that is `/runs/{id}/storage/preview` and `/storage/apply`. The
+        path predates the storage steps. It is documented rather than renamed so the UI, and any
+        script written against it, keep working.
+        """
         return _start_step(run_id, lambda: service.start_provision(run_id, dry_run=request.dry_run))
 
     @app.post("/runs/{run_id}/cloudinit", response_model=RunResponse)
@@ -539,6 +566,20 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     async def run_discover(run_id: str) -> RunResponse:
         return _start_step(run_id, lambda: service.start_discover(run_id))
 
+    @app.get("/runs/{run_id}/ports", response_model=ArrayPortsResponse)
+    async def array_ports(run_id: str) -> ArrayPortsResponse:
+        _get_run_or_404(run_id)
+        try:
+            return ArrayPortsResponse(**service.get_ports(run_id))
+        except RunNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="this run has no provisioning sheet") from exc
+
+    @app.post("/runs/{run_id}/ports/preview", response_model=RunResponse)
+    async def run_ports_preview(run_id: str) -> RunResponse:
+        # SPEC-024 R2/R3, read-only: the array's ports, iSCSI addresses and VLANs, and the plan for the
+        # sheet's iSCSI network tab. Its CLI lines are printed for the engineer; nothing is sent.
+        return _start_step(run_id, lambda: service.start_ports_preview(run_id))
+
     @app.post("/runs/{run_id}/zoning/preview", response_model=RunResponse)
     async def run_zoning_preview(run_id: str) -> RunResponse:
         return _start_step(run_id, lambda: service.start_zoning_preview(run_id))
@@ -558,17 +599,20 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # tool never RUNS these commands (ADR 0004, ADR 0012) — this is the script the SAN team
         # applies by hand, and it is the deliverable, not a rehearsal.
         commands, skipped = render_commands(request.plan, request.aliases, request.selected_pairs)
+        peer_commands, peer_skipped = render_peer_commands(request.plan, request.aliases)
         if request.run_id:
             try:
                 service.record_zoning_render(
                     request.run_id, commands=commands, skipped=skipped,
                     aliases=request.aliases, selected_pairs=request.selected_pairs,
+                    peer_commands=peer_commands,
                 )
             except RunNotFoundError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
         return ZoningRenderResponse(
             commands=commands, skipped=skipped,
             warnings=alias_name_warnings(request.plan, request.aliases),
+            peer_commands=peer_commands, peer_skipped=peer_skipped,
         )
 
     @app.get("/runs/{run_id}/storage/preflight", response_model=PreflightReport)
@@ -647,6 +691,54 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         # the UI's own tick-box and button gate it (R4). Role changes on two arrays: never implicit.
         req = request or FailoverTestRequest()
         return _start_step(run_id, lambda: service.start_failover_test(run_id, group=req.group, confirm=req.confirm))
+
+    @app.get("/runs/{run_id}/snapshots", response_model=SnapshotsResponse)
+    async def snapshots_tab(run_id: str) -> SnapshotsResponse:
+        # SPEC-023 R10: what the workbook asks for, in words, and whether the plan last shown is still held.
+        _get_run_or_404(run_id)
+        try:
+            return SnapshotsResponse(**service.get_snapshots(run_id))
+        except RunNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="this run has no provisioning sheet") from exc
+
+    @app.post("/runs/{run_id}/snapshots/preview", response_model=RunResponse)
+    async def run_snapshots_preview(run_id: str) -> RunResponse:
+        # SPEC-023 R3/R4, read-only: showsched, showdate, showcpg over SSH; volumes, sets, /system over WSAPI.
+        return _start_step(run_id, lambda: service.start_snapshots_preview(run_id))
+
+    @app.post("/runs/{run_id}/snapshots/apply", response_model=RunResponse)
+    async def run_snapshots_apply(run_id: str, request: SnapshotApplyRequest | None = None) -> RunResponse:
+        # SPEC-023 R5/R6: the snapshots now over WSAPI, then the schedules: only the held plan, named by
+        # the id the operator ticked.
+        req = request or SnapshotApplyRequest()
+        return _start_step(run_id, lambda: service.start_snapshots_apply(run_id, approved_plan=req.approved_plan))
+
+    @app.post("/runs/{run_id}/snapshots/verify", response_model=RunResponse)
+    async def run_snapshots_verify(run_id: str) -> RunResponse:
+        # SPEC-023 R7, read-only: the snapshots now and each schedule, read back.
+        return _start_step(run_id, lambda: service.start_snapshots_verify(run_id))
+
+    # ------------------------------------------------------------------ device trust (ADR 0026)
+
+    @app.get("/runs/{run_id}/trust", response_model=TrustedDevicesResponse)
+    async def trusted_devices(run_id: str) -> TrustedDevicesResponse:
+        # The key or certificate each on-site device presented on this run's first contact: fingerprints only.
+        _get_run_or_404(run_id)
+        return TrustedDevicesResponse(devices=service.trusted_devices(run_id), device_ca_bundle=service.device_ca_bundle())
+
+    @app.post("/runs/{run_id}/trust/retrust", response_model=RetrustResponse)
+    async def retrust_device(run_id: str, request: RetrustRequest) -> RetrustResponse:
+        # A separate, logged action on the run (never a button on the error): trust the key the device
+        # presented when it was refused, named by the fingerprint the operator compared.
+        _get_run_or_404(run_id)
+        try:
+            device = service.retrust_device(run_id, kind=request.kind, host=request.host, port=request.port,
+                                            fingerprint=request.fingerprint)
+        except DevicePinNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except StepPreconditionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return RetrustResponse(device=device)
 
     # ------------------------------------------------------------------ events
 

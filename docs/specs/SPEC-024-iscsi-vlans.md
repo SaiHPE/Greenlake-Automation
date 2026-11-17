@@ -1,7 +1,10 @@
 # SPEC-024 — VLAN-tagged iSCSI addresses on the array's ports, set up by the tool
 
-**Status:** PROPOSED 2026-11-16; the read-side parsers are built on the captures of rack13-ARCUS
-(OS 10.6.0, 2026-11-16) and three OS 10.5 arrays (2026-11-17), §9; the rest is not ·
+**Status:** first slice built 2026-11-17, pending live run (R1 to R3 and R6 to R8: the sheet, the read,
+the plan with its printed lines, the *Array ports* step, Verify and the as-built; work packet steps 1
+to 7). R4 and R5's removal lines wait on the live confirmation (§6) and the owner's yes. Proposed
+2026-11-16; the read-side parsers are built on the captures of rack13-ARCUS (OS 10.6.0, 2026-11-16)
+and three OS 10.5 arrays (2026-11-17), §9 ·
 **Decision:** [ADR 0017](../adr/0017-iscsi-vlan-write-plane.md) (accepted 2026-11-17: the CLI forms
 on ADR 0025's one array-port write client; a first slice without the apply) ·
 **Tracker:** BL-25 (issue #11) · **Work packet:** [workpackets/BL-25.md](../workpackets/BL-25.md) · **Tests:** `tests/unit/test_iscsi_vlans.py` (strict

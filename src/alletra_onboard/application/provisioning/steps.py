@@ -1,7 +1,8 @@
 """Step services for the storage-provisioning context, over the RunCoordinator.
 
-Two services: DiscoveryZoningSteps (discovery + zoning verify/plan — the shared read-only
-foundation) and ProvisioningSteps (tier-1 preview/apply, the Stage-2 builder, tier-2 path
+Three services: DiscoveryZoningSteps (discovery + zoning verify/plan — the shared read-only
+foundation), ArrayPortsSteps (the Array ports step: the array's own ports, set from the sheet before
+zoning, SPEC-024) and ProvisioningSteps (tier-1 preview/apply, the Stage-2 builder, tier-2 path
 verification). Provisioning CONSUMES discovery/zoning (ADR 0010), so ProvisioningSteps depends on
 DiscoveryZoningSteps for the per-run discovery artifact.
 
@@ -12,12 +13,14 @@ monkeypatch the modules themselves.
 from __future__ import annotations
 
 import asyncio
+import json
 from functools import partial
 
 from alletra_onboard.application.provisioning import discovery as storage_discovery
+from alletra_onboard.application.provisioning import iscsi_network, storage_provision
 from alletra_onboard.application.provisioning import path_verify as storage_path_verify
+from alletra_onboard.application.provisioning import peer_ports as storage_peer_ports
 from alletra_onboard.application.provisioning import preflight as storage_preflight
-from alletra_onboard.application.provisioning import storage_provision
 from alletra_onboard.application.provisioning import zoning as storage_zoning
 from alletra_onboard.application.provisioning import zoning_plan as storage_zoning_plan
 from alletra_onboard.application.runs.coordinator import (
@@ -28,6 +31,13 @@ from alletra_onboard.application.runs.coordinator import (
 )
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
+from alletra_onboard.domain.network import IscsiNetworkPlan, IscsiVlanRequest, PortNetworkView
+from alletra_onboard.domain.peer_ports import (
+    PeerPortAction,
+    PeerPortIntent,
+    PeerPortPlan,
+    PeerPortView,
+)
 from alletra_onboard.domain.provisioning import (
     PreflightReport,
     ProvisioningBuilder,
@@ -193,7 +203,14 @@ class DiscoveryZoningSteps:
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
         coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "step.started",
                    "Reading both fabric switches (read-only) to build the zoning plan…")
-        plan = await asyncio.to_thread(storage_zoning_plan.build_zoning_plan, intent, discovery)
+        peer_pairs, peer_nsps = self._peer_zone_input(run.run_id, intent)
+        plan = await asyncio.to_thread(partial(
+            storage_zoning_plan.build_zoning_plan, intent, discovery, peer_pairs=peer_pairs, peer_nsps=peer_nsps))
+        try:
+            # The Array ports step's peer-port plan names a free port still zoned (SPEC-025 R3) from this read.
+            coord.store.save_artifact(run.run_id, ACTIVE_ZONES_ARTIFACT, json.dumps(plan.active_zones).encode("utf-8"))
+        except Exception:  # noqa: BLE001 - the plan stands; failing to keep the zones only loses a note
+            pass
         pairs = sum(len(f.pairs) for f in plan.fabrics)
         coord.set_state(run, RunStatus.READY, WorkflowPhase.STORAGE_ZONING)
         coord.emit(
@@ -203,6 +220,215 @@ class DiscoveryZoningSteps:
             + (f"; {len(plan.notes)} note(s)" if plan.notes else ""),
             data={"plan": plan.model_dump(mode="json")},
         )
+
+
+    def _peer_zone_input(self, run_id: str, intent) -> tuple[list[tuple[str, str]], dict[str, str]]:
+        """SPEC-025 R7: the (peer WWPN, source WWPN) pairs from the latest read of the Array ports step,
+        the read after the change, and each peer WWPN's port. None before a peer port exists."""
+        if intent.peer_ports is None:
+            return [], {}
+        view = latest_peer_view(self._coord, run_id)
+        if view is None:
+            return [], {}
+        pairs = storage_peer_ports.peer_zone_pairs(intent.peer_ports, view)
+        nsps = {p.port_wwn: nsp for nsp, p in view.ports.items() if p.port_wwn}
+        return pairs, {wwpn: nsps[wwpn] for wwpn, _source in pairs if wwpn in nsps}
+
+
+#: The switches' effective zones from the run's zoning plan read: {switch: {zone: [WWPNs]}}.
+ACTIVE_ZONES_ARTIFACT = "active_zones"
+
+
+def latest_peer_view(coord: RunCoordinator, run_id: str) -> PeerPortView | None:
+    """The peer-port read of the newest Array ports event that holds one, or None."""
+    for event in reversed(coord.list_events(run_id)):
+        view = ((event.data or {}).get("peer") or {}).get("view") if event.event_type.startswith("ports.") else None
+        if view:
+            try:
+                return PeerPortView.model_validate(view)
+            except Exception:  # noqa: BLE001 - an unreadable stored view means "read the array again"
+                return None
+    return None
+
+
+class ArrayPortsSteps:
+    """The Array ports step (SPEC-024 R8, SPEC-025 R8): read the array and plan what the sheet asks of
+    its ports, one section per tab: the iSCSI VLAN addresses (iSCSI network tab) and the peer ports
+    (Peer ports tab). The first slices of ADR 0017 and ADR 0018: each plan prints the commands for the
+    engineer; nothing here writes, and there is no apply yet. A read after the engineer pasted the
+    peer-port commands is judged as the apply will judge its read-back (SPEC-025 R4)."""
+
+    def __init__(self, coord: RunCoordinator) -> None:
+        self._coord = coord
+        # Each plan, held with the read and the sheet rows it came from (LESSONS 6): in memory only, so a
+        # restart withdraws it, a new read replaces it, and rows that differ from the run's sheet void it.
+        # The applies (the later slices) act only on a plan this still holds.
+        self._iscsi: dict[str, tuple[IscsiNetworkPlan, PortNetworkView, list[IscsiVlanRequest]]] = {}
+        self._peer: dict[str, tuple[PeerPortPlan, PeerPortView, PeerPortIntent]] = {}
+
+    def iscsi_rows(self, run_id: str) -> list[IscsiVlanRequest]:
+        return list(self._coord.get_provisioning_intent(run_id).iscsi_network)
+
+    def peer_rows(self, run_id: str) -> PeerPortIntent | None:
+        return self._coord.get_provisioning_intent(run_id).peer_ports
+
+    def held_iscsi_plan(self, run_id: str) -> IscsiNetworkPlan | None:
+        entry = self._iscsi.get(run_id)
+        if entry is None:
+            return None
+        plan, _view, rows = entry
+        if rows != self.iscsi_rows(run_id):
+            self._iscsi.pop(run_id, None)
+            return None
+        return plan
+
+    def held_peer_plan(self, run_id: str) -> PeerPortPlan | None:
+        entry = self._peer.get(run_id)
+        if entry is None:
+            return None
+        plan, _view, rows = entry
+        if rows != self.peer_rows(run_id):
+            self._peer.pop(run_id, None)
+            return None
+        return plan
+
+    def start_ports_preview(self, run_id: str) -> RunRecord:
+        coord = self._coord
+        run = coord.get_run(run_id)
+        intent = coord.get_provisioning_intent(run_id)
+        self._iscsi.pop(run_id, None)
+        self._peer.pop(run_id, None)
+        if not intent.iscsi_network and intent.peer_ports is None:
+            # R8: nothing to read, and the step is complete. The run stays where it is.
+            coord.emit(run_id, WorkflowPhase.STORAGE_PORTS, "ports.completed",
+                       "The sheet asks for no iSCSI VLANs and no peer ports. Nothing to set up here.",
+                       data={"iscsi": None, "peer": None})
+            return run
+        coord.spawn(run_id, self._run_ports_preview(run, intent))
+        return run
+
+    async def _run_ports_preview(self, run: RunRecord, intent) -> None:
+        coord = self._coord
+        phase = WorkflowPhase.STORAGE_PORTS
+        coord.set_state(run, RunStatus.RUNNING, phase)
+        coord.emit(run.run_id, phase, "step.started",
+                   f"Reading {intent.array.host} (read-only): its ports"
+                   + (", iSCSI addresses and VLANs" if intent.iscsi_network else "")
+                   + (", connection modes, logins and exports" if intent.peer_ports is not None else "") + "…")
+        failures: list[str] = []
+        pending, summary, done = False, [], []
+        name = intent.array.host
+        data: dict = {"iscsi": None, "peer": None}
+
+        if intent.iscsi_network:
+            rows = list(intent.iscsi_network)
+            section: dict = {"requests": [r.model_dump(mode="json") for r in rows]}
+            data["iscsi"] = section
+            try:
+                view = await asyncio.to_thread(iscsi_network.read_port_network, intent.array)
+            except Exception as exc:  # noqa: BLE001 - the step reports; nothing is planned on half a read
+                section["error"] = f"Could not read {intent.array.host}: {exc}. Nothing was planned. Read the array again."
+                failures.append(section["error"])
+            else:
+                plan = iscsi_network.plan_iscsi_vlans(rows, view)
+                self._iscsi[run.run_id] = (plan, view, rows)
+                section.update(view=view.model_dump(mode="json"), plan=plan.model_dump(mode="json"))
+                name = plan.array or name
+                adds = sum(1 for a in plan.actions if a.state == "create")
+                conflicts = sum(1 for a in plan.actions if a.state == "conflict")
+                there = len(plan.actions) - adds - conflicts
+                pending = pending or bool(adds or conflicts)
+                summary.append(f"{adds} to add, {conflicts} conflict(s), {there} already there")
+                done.append(f"all {there} iSCSI address(es) the sheet asks for are on the array")
+
+        if intent.peer_ports is not None:
+            peer = intent.peer_ports
+            section = {"requests": [r.model_dump(mode="json") for r in peer.ports]}
+            data["peer"] = section
+            view = await asyncio.to_thread(storage_peer_ports.read_view, intent.array)
+            if view.read_error:
+                section["error"] = f"{view.read_error}. Nothing was planned for the peer ports. Read the array again."
+                failures.append(section["error"])
+            else:
+                zones = self._active_zones(run.run_id)
+                plan = storage_peer_ports.plan_peer_ports(peer, view, zones)
+                result = None
+                before = self._before_the_paste(run.run_id, peer)
+                if before is not None and storage_peer_ports.changed_since(before[0], before[1], view):
+                    result = storage_peer_ports.read_back_peer_ports(before[0], before=before[1], after=view)
+                self._peer[run.run_id] = (plan, view, peer)
+                removals = storage_peer_ports.planned_removals(plan)
+                section.update(
+                    view=view.model_dump(mode="json"), plan=plan.model_dump(mode="json"),
+                    result=result.model_dump(mode="json") if result else None, removals=removals,
+                    zones_checked=zones is not None,
+                    commands_text=storage_peer_ports.command_set_text(plan, name),
+                    removals_text=storage_peer_ports.removal_set_text(removals, name),
+                    result_removals_text=storage_peer_ports.removal_set_text(result.removals, name) if result else "",
+                )
+                sets = sum(1 for a in plan.actions if a.state == "create")
+                peers = sum(1 for a in plan.actions if a.state == "exists")
+                conflicts = sum(1 for a in plan.actions if a.state == "conflict")
+                pending = pending or bool(sets or plan.blockers or (result and result.error))
+                summary.append(f"peer ports: {sets} to set, {peers} already peer, {conflicts} conflict(s)"
+                               + (f", {len(result.changed)} set since the plan" if result else ""))
+                done.append(f"all {peers} peer port(s) the sheet asks for are in peer mode")
+
+        if failures:
+            coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
+            coord.emit(run.run_id, phase, "ports.preview.failed", " ".join(failures), data=data)
+            return
+        if not pending:
+            coord.set_state(run, RunStatus.READY, phase)
+            coord.emit(run.run_id, phase, "ports.completed", f"Read {name}: {'; '.join(done)}.", data=data)
+            return
+        coord.set_state(run, RunStatus.WAITING_FOR_OPERATOR, phase)
+        coord.emit(run.run_id, phase, "ports.previewed", f"Read {name}: plan ready, {'; '.join(summary)}.", data=data)
+
+    def _active_zones(self, run_id: str) -> dict[str, dict[str, set[str]] | None] | None:
+        """The switches' effective zones from this run's zoning plan read ({switch: None} for a switch it
+        could not read), or None when no switch was read at all."""
+        raw = self._coord.store.load_artifact(run_id, ACTIVE_ZONES_ARTIFACT)
+        if not raw:
+            return None
+        try:
+            stored = json.loads(raw)
+            zones = {switch: None if active is None else {zone: set(members) for zone, members in active.items()}
+                     for switch, active in stored.items()}
+        except Exception:  # noqa: BLE001 - unreadable: say the zones were not checked
+            return None
+        return zones if any(active is not None for active in zones.values()) else None
+
+    def _before_the_paste(self, run_id: str, peer: PeerPortIntent) -> tuple[PeerPortPlan, PeerPortView] | None:
+        """SPEC-025 R4: what a read is judged against as the read after the paste. Each port is judged
+        against the FIRST read of this run (same sheet rows) that planned to set it, so a port set by an
+        earlier paste keeps its restore while a later paste sets the others; every other port against
+        the first read that planned any. None before any read planned a port to set."""
+        rows = [r.model_dump(mode="json") for r in peer.ports]
+        first: PeerPortView | None = None
+        creates: dict[str, tuple[PeerPortAction, PeerPortView]] = {}
+        for event in self._coord.list_events(run_id):
+            section = (event.data or {}).get("peer") if event.event_type.startswith("ports.") else None
+            if not section or not section.get("plan") or section.get("requests") != rows:
+                continue
+            try:
+                plan = PeerPortPlan.model_validate(section["plan"])
+                view = PeerPortView.model_validate(section["view"])
+            except Exception:  # noqa: BLE001 - an unreadable stored plan is no plan to judge against
+                continue
+            for action in plan.actions:
+                if action.state == "create" and action.nsp not in creates:
+                    creates[action.nsp] = (action, view)
+                    first = first or view
+        if first is None:
+            return None
+        before = first.model_copy(deep=True)
+        for nsp, (_action, view) in creates.items():
+            before.ports[nsp] = view.ports[nsp]
+            if nsp in view.params:
+                before.params[nsp] = view.params[nsp]
+        actions = [creates[r.nsp][0] for r in peer.ports if r.nsp in creates]
+        return PeerPortPlan(actions=actions), before
 
 
 class ProvisioningSteps:

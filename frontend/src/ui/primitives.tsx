@@ -8,7 +8,7 @@ import { StatusIcon, StepState } from './status';
  * Many notes, one per line (SPEC-004 R3). A single note renders as plain text; the " · "-joined
  * paragraph the register called X-6 is what this replaces.
  */
-export function NotesList({ notes }: { notes: string[] }) {
+export function NotesList({ notes }: { notes: ReactNode[] }) {
   if (notes.length <= 1) return <>{notes[0] ?? ''}</>;
   return (
     <Box as="ul" margin="none" pad={{ left: 'medium' }} gap="xxsmall">

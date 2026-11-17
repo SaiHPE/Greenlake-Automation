@@ -36,6 +36,10 @@ to the peer blocks with a sentence and no command. SPEC-031 R5 records it as don
 
 Part A stays *built, pending live run* until the lab has a working RCFC pair (research §4).
 
+*Note 2026-11-17: part A built (BL-50, branch `feat/bl-50-rcfc-part-a`; SPEC-031 §6a). No write path, no
+allowlist entry and no port-mode change were added. SPEC-031 §6 question 2 has no answer yet: the typed
+round-trip time is required, as proposed.*
+
 ### Part B — deferred
 
 The tool does not set RCFC up. Option B below stays the design to start from; nothing of it is built,

@@ -8,6 +8,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, SecretStr
 
+from alletra_onboard.domain.migration import MigrationIntent
+from alletra_onboard.domain.network import IscsiVlanRequest
+from alletra_onboard.domain.peer_ports import PeerPortIntent
 from alletra_onboard.domain.replication import ReplicationIntent
 from alletra_onboard.domain.shared import EndpointCreds
 
@@ -35,6 +38,19 @@ def persona_for_os(os: str | None) -> PersonaName:
 
 
 # ------------------------------------------------------------------ provisioning intent (the sheet)
+
+# The largest volume the array creates, in GiB, as its own `help createvv` states it. None until that
+# help page is captured (lab/snap_capture.py saves help_createvv.txt); while None, no size is refused here
+# and the array alone answers (HTTP 400 code 28 for 1 PiB on rack13-ARCUS, 2026-11-16). Do not guess it.
+VOLUME_MAX_GIB: int | None = None
+
+
+def volume_too_large(size_gib: int) -> str:
+    """Why the array cannot create a volume this big, or '' when it can (or the limit is not captured)."""
+    if VOLUME_MAX_GIB is None or size_gib <= VOLUME_MAX_GIB:
+        return ""
+    return f"{size_gib} GiB is more than the array can create in one volume, at most {VOLUME_MAX_GIB} GiB"
+
 
 class VolumeRequest(BaseModel):
     """One volume to create — its OWN name, size, provisioning type, CPG, and optional VV-set membership.
@@ -136,6 +152,15 @@ class ProvisioningIntent(BaseModel):
     default_cpg: str = "SSD_r6"
     # The Replication tab (SPEC-015), when the workbook has one. None = no replication steps possible.
     replication: ReplicationIntent | None = None
+    # The Migration tab (SPEC-027), when the workbook has one. None = no Migration step possible.
+    migration: MigrationIntent | None = None
+    # The Snapshots tab (SPEC-023), when the workbook has one filled in. None = no Snapshots step.
+    snapshots: SnapshotIntent | None = None
+    # The iSCSI network tab (SPEC-024 R1): VLAN-tagged addresses for the array's iSCSI ports. Empty =
+    # nothing to set up; the Array ports step then reads nothing.
+    iscsi_network: list[IscsiVlanRequest] = Field(default_factory=list)
+    # The Peer ports tab (SPEC-025 R1): free FC ports to set to peer mode for a migration. None = no tab.
+    peer_ports: PeerPortIntent | None = None
 
     @classmethod
     def from_simple(
@@ -284,7 +309,7 @@ class PreflightReport(BaseModel):
 
 # ------------------------------------------------------------------ provisioning plan + result
 
-ActionKind = Literal["host", "hostset", "volume", "vvset", "vlun"]
+ActionKind = Literal["host", "hostset", "volume", "vvset", "vlun", "schedule", "snapshot"]
 
 # What the plan predicts apply will do to one object (SPEC-001 R1). `conflict` blocks apply.
 PlanState = Literal["create", "exists", "update", "conflict"]
@@ -314,6 +339,14 @@ class ActionOutcome(BaseModel):
     name: str
     status: Literal["created", "exists", "updated", "failed"]
     detail: str = ""
+
+
+#: SPEC-007 R3 and SPEC-023 R6: the order a removal set pastes in, top to bottom. A schedule first, so it
+#: takes no more snapshots; snapshots before their base volume (`removevv` refuses a volume that still
+#: has snapshots); exports, sets and members after. The one order every renderer sorts by (LESSONS 19).
+REMOVAL_ORDER: dict[str, int] = {
+    "schedule": 0, "snapshot": 1, "vlun": 2, "vvset": 3, "volume": 4, "hostset": 5, "host": 6,
+}
 
 
 class RemovalItem(BaseModel):
@@ -445,3 +478,10 @@ class PathVerification(BaseModel):
     hosts: list[HostPathStatus] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
+
+
+# domain/snapshots.py reads ArrayVolumeRecord and PlanState from this module, so it is imported once
+# they exist; the intent's `snapshots` field is resolved then.
+from alletra_onboard.domain.snapshots import SnapshotIntent
+
+ProvisioningIntent.model_rebuild()

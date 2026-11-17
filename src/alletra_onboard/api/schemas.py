@@ -13,6 +13,9 @@ from alletra_onboard.domain.models import (
     RunMode,
     RunRecord,
 )
+from alletra_onboard.domain.network import IscsiVlanRequest
+from alletra_onboard.domain.peer_ports import PeerPortIntent
+from alletra_onboard.domain.trust import DevicePinInfo, TrustKind
 
 
 class HealthResponse(BaseModel):
@@ -49,6 +52,16 @@ class CreateRunRequest(BaseModel):
 
 class RunResponse(BaseModel):
     run: RunRecord
+
+
+class ArrayPortsResponse(BaseModel):
+    """The Array ports step's inputs: the sheet's iSCSI network rows and Peer ports rows, and whether each
+    plan the page last showed is still held (a new read, a sheet change or a restart withdraws it, LESSONS 6)."""
+
+    iscsi_network: list[IscsiVlanRequest] = Field(default_factory=list)
+    iscsi_plan_held: bool = False
+    peer_ports: PeerPortIntent | None = None
+    peer_plan_held: bool = False
 
 
 class RunDetailResponse(BaseModel):
@@ -153,6 +166,14 @@ class InitSheetComposeRequest(BaseModel):
     hosts: list[dict[str, str]] | None = None
     # SPEC-015 R6: {"fields": {peer_host, peer_user, peer_password, rtt_ms, …}, "rows": [{vvset, mode, …}]}
     replication: dict | None = None
+    # SPEC-027 R1: {"fields": {source_host, source_user, source_password, orchestration}, "rows": [{host, type, cpg, provisioning}]}
+    migration: dict | None = None
+    # SPEC-023 R1: the Snapshots tab's rows, [{source, kind, snapshot_now, every, unit, …}]
+    snapshots: list[dict[str, str]] | None = None
+    # SPEC-024 R1: the iSCSI network tab's rows, [{port, vlan, ip, netmask, gateway}]
+    iscsi_network: list[dict[str, str]] | None = None
+    # SPEC-025 R1: the Peer ports tab's rows, [{port, source_wwpns}]
+    peer_ports: list[dict[str, str]] | None = None
 
 
 class InitSheetComposeResponse(BaseModel):
@@ -171,6 +192,9 @@ class InitSheetUploadResponse(BaseModel):
     targets: dict[str, str] = Field(default_factory=dict)
     # SPEC-021 R1: the Replication network tab's rows, one line each ("this array 0:4:4 10.93.18.11"), for review.
     replication_ports: list[str] = Field(default_factory=list)
+    # SPEC-023 R9: the Snapshots tab's rows, one line each ("zz_sn_vvs: Snapshot now · every 4 hours …"),
+    # so the review can say the tab is filled when the chosen mode lacks the step.
+    snapshot_rows: list[str] = Field(default_factory=list)
 
 
 class RunFromSheetRequest(BaseModel):
@@ -277,3 +301,47 @@ class ReplicationApplyRequest(BaseModel):
 
     accept_latency: bool = False
     approved_plan: str | None = None
+
+
+class TrustedDevicesResponse(BaseModel):
+    """ADR 0026: what this run trusts, device by device: fingerprints only, never key material. With a
+    device CA bundle set, the TLS devices are checked against it instead of being trusted on first contact."""
+
+    devices: list[DevicePinInfo]
+    device_ca_bundle: str | None = None
+
+
+class RetrustRequest(BaseModel):
+    """The operator's re-trust of one device: `fingerprint` is the new one they compared with the
+    device's own console. Refused if the device has presented anything else since."""
+
+    kind: TrustKind
+    host: str
+    port: int
+    fingerprint: str
+
+
+class RetrustResponse(BaseModel):
+    device: DevicePinInfo
+
+
+class SnapshotApplyRequest(BaseModel):
+    """`approved_plan` is the `plan_id` of the plan the operator ticked, from the `snapshots.previewed`
+    event. The server refuses the apply without it, or when it is not the plan it holds."""
+
+    approved_plan: str | None = None
+
+
+class SnapshotRow(BaseModel):
+    source: str
+    kind: str
+    schedule: str = ""          # the schedule's name; "" when the row asks for no schedule
+    summary: str
+
+
+class SnapshotsResponse(BaseModel):
+    """The Snapshots step's inputs: the tab's rows in words, and the id of the plan the server holds ("" when
+    none: a new read, an apply or a restart withdraws it, LESSONS 6)."""
+
+    rows: list[SnapshotRow] = Field(default_factory=list)
+    held_plan_id: str = ""

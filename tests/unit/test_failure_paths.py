@@ -12,6 +12,7 @@ from alletra_onboard.adapters.vcenter import vcenter_client
 from alletra_onboard.application.provisioning import discovery as disc
 from alletra_onboard.application.provisioning import zoning
 from alletra_onboard.domain.discovery import DiscoveryReport, HostHba
+from tests.unit import fake_tls
 from tests.unit.test_storage_services import _ARRAY_BLOCKS, FakeArrayCli, FakeVCenter, _intent
 
 
@@ -66,6 +67,8 @@ def test_vcenter_invalid_login_reads_as_one_sentence(monkeypatch):
         raise InvalidLogin()
 
     monkeypatch.setattr(vcenter_client, "SmartConnect", _connect)
+    # BL-53: the certificate is read and compared before login; a made-up one stands in for vCenter's
+    fake_tls.install(monkeypatch).devices[("vc", 443)] = fake_tls.self_signed_der("vc")
     client = vcenter_client.VCenterClient("vc", "zz_nobody@vsphere.local", "x")
     try:
         client.connect()

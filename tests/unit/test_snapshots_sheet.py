@@ -1,7 +1,6 @@
 """SPEC-023 R1/R2 — the Snapshots tab: parsed only when filled, one sentence per validation rule, the
-step refused without it. Back-compat: a workbook without the tab parses exactly as before. Not built
-yet: every test here is expected to fail until the work packet's step that names it is done
-(docs/workpackets/BL-21.md)."""
+step refused without it. Back-compat: a workbook without the tab parses exactly as before. Written
+2026-11-16 as expected failures; built 2026-11-17 (docs/workpackets/BL-21.md step 4)."""
 
 import io
 
@@ -13,10 +12,6 @@ from alletra_onboard.application.platform.init_sheet import (
     parse_workbook_bytes,
 )
 from alletra_onboard.domain.models import RunMode
-
-pytestmark = pytest.mark.xfail(
-    reason="BL-21: not built yet, see docs/workpackets/BL-21.md", strict=True,
-)
 
 _INIT = {"serial_number": "CZ2D320BT1", "mgmt_ipv4": "10.64.122.99"}
 _TARGETS = {
@@ -142,3 +137,36 @@ def test_each_rule_refuses_with_its_sentence(rows, sentence):
     with pytest.raises(ValueError) as caught:
         _parse(rows)
     assert str(caught.value) == sentence
+
+
+def test_a_run_with_the_snapshots_step_is_refused_without_the_tab(tmp_path):
+    """R2's last sentence also holds when the run is minted (HTTP 422 from POST /runs/from-sheet)."""
+    from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
+    from alletra_onboard.application.runs.coordinator import RunCoordinator
+    from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+    from alletra_onboard.config import Settings
+
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    coord = RunCoordinator(Settings(), store, InMemoryEventBus())
+    without = parse_workbook_bytes(_sheet([]), mode=RunMode.PROVISION_ONLY)
+    with pytest.raises(ValueError, match="The Snapshots step needs the 'Snapshots' tab"):
+        coord.create_run(without.work_item, mode=RunMode.CUSTOM, selected_steps=_SNAP_STEPS,
+                         provisioning_intent=without.provisioning_intent)
+    filled = _parse([_row(every="4", unit="hours")])
+    run = coord.create_run(filled.work_item, mode=RunMode.CUSTOM, selected_steps=_SNAP_STEPS,
+                           provisioning_intent=filled.provisioning_intent)
+    assert store.get_provisioning_intent(run.run_id).snapshots.requests[0].name == "zz_sn_vvs_snap"
+
+
+def test_a_workbook_that_only_snapshots_sets_on_the_array_may_leave_volumes_empty():
+    sheet = compose_workbook_bytes(base=None, init=_INIT, targets=_TARGETS, volumes=[], hostsets=[],
+                                   snapshots=[_row(source="existing_vvs")])
+    parsed = parse_workbook_bytes(sheet, mode=RunMode.CUSTOM, selected_steps=["snapshots", "asbuilt"])
+    assert parsed.provisioning_intent.volumes == []
+    assert parsed.provisioning_intent.snapshots.requests[0].source == "existing_vvs"
+
+
+def test_a_schedule_name_starting_with_a_dash_is_refused():
+    with pytest.raises(ValueError, match="Schedule name cannot start with '-'"):
+        _parse([_row(every="4", unit="hours", schedule_name="-run_once")])

@@ -1,9 +1,9 @@
 import { Box, Button, FormField, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
 import { useState } from 'react';
 import { launchDiscoveryTool, RunEvent, RunRecord, startCloudinit } from '../api';
-import { Guidance, Panel, StatusLine } from '../ui/blocks';
+import { Guidance, Panel } from '../ui/blocks';
 import { StatusIndicator } from '../ui/status';
-import { StepShell } from '../ui/StepShell';
+import { StepShell, StepStatus } from '../ui/StepShell';
 import { useStepContext } from '../ui/StepContext';
 import { useStepState } from '../ui/useStepState';
 import { WorkItemForm } from '../workItem';
@@ -62,6 +62,14 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
     .join(', ');
   const proxy = form.proxy_host ? `${form.proxy_host}:${form.proxy_port || '8080'}` : 'None';
 
+  // one status: running > connected; while the wizard waits for Submit, the gate says so instead
+  const status: StepStatus | undefined =
+    running && !awaitingSubmit
+      ? { state: 'running', title: 'Filling in the array wizard', message: 'Each screen appears in Activity, below.' }
+      : connected
+        ? { state: 'complete', title: 'The array is connected to HPE GreenLake', message: 'Cloud connectivity is established.' }
+        : undefined;
+
   const start = async () => {
     setError(null);
     try {
@@ -94,6 +102,7 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
       description="Fills the array's own setup wizard with the network values from the workbook, then connects the array to HPE GreenLake."
       error={error}
       onDismissError={() => setError(null)}
+      status={status}
       gate={
         awaitingSubmit
           ? {
@@ -126,13 +135,6 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
         />
       }
     >
-      {connected && (
-        <StatusLine state="complete" title="The array is connected to HPE GreenLake">
-          Cloud connectivity is established.
-        </StatusLine>
-      )}
-      {running && !awaitingSubmit && <StatusLine state="running">Filling in the array wizard. Each screen appears in Activity, below.</StatusLine>}
-
       <Panel
         title="Array wizard address"
         description="The link-local address changes on every boot; paste the current one."

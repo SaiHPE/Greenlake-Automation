@@ -7,6 +7,7 @@ read emits JSON so the parse never depends on the host's display formatting or l
 from __future__ import annotations
 
 import json
+import time
 
 try:
     import winrm
@@ -15,6 +16,7 @@ except ImportError:  # pragma: no cover - bundled in the .exe
     winrm = None
     InvalidCredentialsError = Exception
 
+from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.domain.discovery import HostRead
 from alletra_onboard.domain.shared import normalize_wwpn
 
@@ -92,22 +94,33 @@ class WindowsHostClient:
         self.host, self.username, self.password, self.timeout = host, username, password, timeout
         self._session = None
 
-    def _session_for(self, url: str):
+    def _session_for(self, url: str, ca_bundle: str | None = None):
+        if ca_bundle:
+            # ADR 0026: the customer's device CA bundle makes 5986 a full check, with no fallback
+            checks = {"server_cert_validation": "validate", "ca_trust_path": ca_bundle}
+        else:
+            # TRUST-OFF: NTLM never sends the password; on 5985 every message is encrypted with the NTLM
+            # session, and this client only runs a fixed set of reads. 5985 has no certificate to pin, and
+            # an impostor could at most collect an NTLM response or return false reads (ADR 0026).
+            checks = {"server_cert_validation": "ignore"}
         return winrm.Session(
             url, auth=(self.username, self.password), transport="ntlm",
-            server_cert_validation="ignore",   # lab hosts carry self-signed WinRM listeners
             proxy=None,                        # never tunnel an on-prem host through the lab proxy
-            read_timeout_sec=self.timeout, operation_timeout_sec=self.timeout - 10,
+            read_timeout_sec=self.timeout, operation_timeout_sec=self.timeout - 10, **checks,
         )
 
     def connect(self) -> None:
         if winrm is None:
             raise WindowsHostError("WinRM support (pywinrm) is not available in this build.")
+        try:
+            ca_bundle = device_trust.device_ca_bundle()
+        except device_trust.DeviceTrustError as exc:
+            raise WindowsHostError(str(exc)) from exc
         last: Exception | None = None
         for url in (f"http://{self.host}:5985/wsman", f"https://{self.host}:5986/wsman"):
-            session = self._session_for(url)
+            session = self._session_for(url, ca_bundle)
             try:
-                session.run_ps(SCRIPTS["hostname"])
+                self._run_ps(session, "hostname")
             except InvalidCredentialsError as exc:
                 hint = "" if ("\\" in self.username or "@" in self.username) else (
                     " (a domain-joined server needs COMPUTERNAME\\user for a local account, or DOMAIN\\user)"
@@ -130,10 +143,25 @@ class WindowsHostClient:
         if self._session is None:
             raise WindowsHostError("not connected")
         try:
-            response = self._session.run_ps(SCRIPTS[key])
+            response = self._run_ps(self._session, key)
         except Exception:  # noqa: BLE001 - one failed read must not sink the host read
             return ""
         return response.std_out.decode("utf-8", "replace") if response.status_code == 0 else ""
+
+    def _run_ps(self, session, key: str):
+        """Run the fixed script named `key` on `session`, recording it in the command log."""
+        script = SCRIPTS[key]
+        started = time.monotonic()
+        try:
+            response = session.run_ps(script)
+        except Exception as exc:
+            command_log.record(target=self.host, transport="winrm", command=script, started=started, ok=False,
+                               result=type(exc).__name__, secrets=[self.password])
+            raise
+        command_log.record(target=self.host, transport="winrm", command=script, started=started,
+                           ok=response.status_code == 0, result=f"exit {response.status_code}",
+                           output=response.std_out.decode("utf-8", "replace"), secrets=[self.password])
+        return response
 
     def close(self) -> None:
         self._session = None

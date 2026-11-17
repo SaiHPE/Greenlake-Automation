@@ -29,6 +29,6 @@ A quirk of the script, not of the arrays: the `array clock:` line in every `repo
 `console.txt`) prints `Node Date`, the heading of `showdate`, not the clock. `showdate.txt` has the
 time and the zone.
 
-Pinned by `tests/unit/test_handover_parse.py` (the reports) and `tests/unit/test_cli_allowlist.py`
-(every option in the `help_*.txt` of `showalert` and the four `srstat*` reports is reviewed
-read-only, LESSONS 46). What the captures confirmed and contradicted is in SPEC-026 §2a.
+Pinned by `tests/unit/test_handover_parse.py` (the reports), `tests/unit/test_asbuilt_handover.py`
+(the as-built section built from them) and `tests/unit/test_cli_allowlist.py` (every option in the
+`help_*.txt` of `showalert` and the four `srstat*` reports is reviewed read-only, LESSONS 46). What the captures confirmed and contradicted is in SPEC-026 §2a.

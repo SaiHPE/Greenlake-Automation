@@ -1,12 +1,13 @@
 # SPEC-026 — Array status and performance at handover
 
-**Status:** APPROVED 2026-11-17 with [ADR 0019](../adr/0019-handover-report-from-the-array.md)
-(the owner's decision, with the review's changes folded in below; proposed 2026-11-16, BL-24). The
-owner's answers to §2a items 8 to 10 are in R7, R6 and R4. The R2 captures are in: rack13-ARCUS on
-OS 10.6.0 (2026-11-16), and D22U27, E18U31 and VZ on OS 10.5.0, 10.5.60 and 10.5.51 (2026-11-17),
-with the corrected CPU and port forms (§2a). The parsers are built against them
-(`application/documents/handover.py`, work packet step 3): *built, pending live run*. Nothing reads
-from the array yet; the allowlist grows in work packet step 2.
+**Status:** first slice **built 2026-11-17, pending live run** (work packet steps 2 to 7: R1, R3 to
+R6 and R8 to R11; R7 is a later slice). APPROVED 2026-11-17 with
+[ADR 0019](../adr/0019-handover-report-from-the-array.md) (the owner's decision, with the review's
+changes folded in below; proposed 2026-11-16, BL-24). The owner's answers to §2a items 8 to 10 are in
+R7, R6 and R4. The R2 captures are in: rack13-ARCUS on OS 10.6.0 (2026-11-16), and D22U27, E18U31 and
+VZ on OS 10.5.0, 10.5.60 and 10.5.51 (2026-11-17), with the corrected CPU and port forms (§2a). The
+allowlist has the four commands; the as-built reads, parses and renders them, and the page shows the
+summary, all pinned to those captures (§2b). Not yet run on an array (§5).
 **Research:** [2026-11-16-health-performance-reporting.md](../research/2026-11-16-health-performance-reporting.md) ·
 **ADRs:** [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (allowlist addendum) · 0019 ·
 **Builds on:** SPEC-002 (as-built sections, failed reads), SPEC-011 (status wording), SPEC-019
@@ -142,7 +143,9 @@ Replication tab.
 
 **R8 — Failed and unknown reads.** A command refused, timed out or unknown on this OS is recorded in
 `AsBuiltData.read_errors` and shown in its subsection as *"Could not read: <command> — <the array's
-words>"*, plus an as-built warning, exactly like SPEC-002 R6. The other subsections still render.
+words>"*, plus an as-built warning, exactly like SPEC-002 R6 (built with SPEC-002's own line, ``
+`<command>` could not be read: <the array's words> ``, and its warning; the packet says reuse it). A
+read whose text the parser cannot read (the array's refusal, or nothing) counts as failed the same way. The other subsections still render.
 A report with no rows (no host ports, nothing in the window) says so in a sentence without a warning.
 
 **R9 — The document section.** A new Heading 1 *Array status and performance at handover*, placed
@@ -229,6 +232,10 @@ below means confirmed on that array, that OS and that date.
 3. *Host ports (R3).* The help says `-port_type host` is "Host Fibre channel port" only; iSCSI host
    ports are `iscsi`. Proposed: `-port_type host,iscsi`. rack13's four rows are FC ports. **Confirmed
    2026-11-17**, now in R3: on E18U31 it adds four iSCSI ports that carry most of its host I/O.
+   *Corrected 2026-11-17 (build):* rack13's four rows were not all FC. Its `showport` from 23:20 IST
+   the same night (`tests/fixtures/peer_ports/rack13/`, BL-26) has 0:3:4 and 1:3:3 as FC host ports and
+   0:4:1 and 1:4:1 as iSCSI host ports: on OS 10.6.0 `-port_type host` printed iSCSI host ports too,
+   against its help. The R3 form asks for both types anyway.
 4. *Alerts not fixed (R4).* `showalert -d` shows New alerts only, so Acknowledged alerts are not in
    the table. Either R4 says "New alerts", or the form becomes `showalert -all -d` (includes Fixed;
    the parser keeps State so they can be dropped). Owner's choice; capture the form first.
@@ -319,7 +326,39 @@ LZ did not answer; needed before R7 and `srstatrcvv`); an older OS refusing a co
 alerts` on 10.6.0; `showport` on the night of a handover capture (R6's port rule can be pinned on
 E18U31's `rc_pair/E18U31/showport.txt` of 2026-10-07, where its four iSCSI ports are `ready`; VZ's
 offline ones have no committed `showport`). The first-slice live run (§5) confirms the second and
-third.
+third. *Update 2026-11-17 (build):* BL-26's peer-port captures took `showport` on all four arrays the
+same nights (`tests/fixtures/peer_ports/<array>/showport.txt`: rack13 at 23:20 IST on 2026-11-16, the
+other three on 2026-11-17). R6's port rule is pinned on them: VZ's four iSCSI ports are `offline`
+with type `free` there, and the section names them in one line.
+
+## 2b. How the first slice was built (2026-11-17)
+
+Work packet BL-24 steps 2 to 7. Choices the requirements left open, made in the build:
+
+- *Where.* `application/documents/handover.py` holds the reads (`READS`, the R3 forms), the parsers,
+  the summary and the sentences; `asbuilt.py` renders the section (`_add_handover_section`) right after
+  the `checkhealth` section, before SPEC-002's sections; `documents/steps.py` makes the reads. The
+  section is left out only when the reads were not made at all (`handover_read_at` unset), which the
+  as-built step never does.
+- *R4.* "Newest first" is by the alert's `Time` (its latest occurrence). The grouped rows are ordered
+  the same way, by each group's newest occurrence. The section names `setalert` and `removealert` as
+  the operator's commands after the pointer to `showalert -d`. One warning per Major, Critical or Fatal
+  alert, naming its id, severity, first occurrence and message.
+- *R5.* Both the raw and the usable lines: raw total, allocated and free (equal to `showsys`'s
+  columns), usable total, used and free, each in TiB with the array's MiB beside it; data reduction as
+  printed (`8.46`, `>25`).
+- *R6.* The performance sentence is printed whenever one System Reporter report was read: with none,
+  there is no figure for it to qualify, and each report's failed-read line stands alone. Each cell
+  of the port and volume tables is average / 95th percentile / maximum; MB/s is KBytes/s over 1024.
+  `idle` and the host I/O figure are unknown (null), not false or 0, when the port report was not
+  read or printed no port (no host port, or no sample in the window): no sample is not an idle window. A port missing from
+  `showport` is named as "not listed by showport"; a port of type `free` reads "not configured".
+- *R9.* The read time is printed in UTC and, when the offset is known, on the array's clock with its
+  offset (`2026-11-17 00:10 on the array's clock, UTC+05:30`).
+- *R10.* `window_from`, `window_to` and `read_at` are ISO times in UTC (the page shows them in the
+  browser's zone); `oldest_alert` is the array's own text (`2025-12-26 21:11:20 IST`).
+- *Page.* A folded section *Status at handover*, open once generated. It says "the array's status
+  check" where the document says `checkhealth`: the word *health* stays off the screen.
 
 ## 3. Non-goals
 

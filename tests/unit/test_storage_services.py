@@ -815,6 +815,29 @@ def test_a_refused_write_says_the_arrays_reason_once():
     assert str(err).count(reason) == 1
 
 
+def test_a_volume_the_array_finds_too_large_is_refused_with_a_sentence():
+    # BL-55: the same live refusal, as the apply meets it. The size is the one number in the body.
+    from types import SimpleNamespace
+
+    from hpe3parclient import exceptions as hpe_exc
+
+    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiError
+
+    reason = "client request contains value that is too large"
+
+    class Refusing:
+        def createVolume(self, name, cpg, size_mib, optional=None):
+            raise hpe_exc.from_response(SimpleNamespace(status=400), {"code": 28, "desc": reason})
+
+    client = WsapiClient("h", "u", "p")
+    client._client = Refusing()
+    with pytest.raises(WsapiError) as exc:
+        client.ensure_volume("zz_bl45_vol02", "SSD_r6", 1024 * 1024 * 1024, "tpvv")
+    assert str(exc.value) == (
+        "the array says 1048576 GiB is more than it can create in one volume. Make it smaller on the sheet's "
+        f"Volumes tab, then build the plan again. Array said: {reason} (HTTP 400, code 28)")
+
+
 def test_an_error_without_the_arrays_reason_keeps_its_type_and_text():
     from alletra_onboard.adapters.array.wsapi_client import WsapiClient
 

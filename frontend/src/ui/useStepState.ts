@@ -47,6 +47,8 @@ const SIGNALS: Record<string, Signals> = {
   cloudinit: { complete: ['step.completed'], gate: ['operator.review_ready'] },
   dscc: { complete: [], gate: ['operator.credentials_ready'] },
   discover: { complete: ['discover.completed'], gate: [] },
+  // SPEC-024 R8: complete when the sheet asks for nothing, or everything it asks for is on the array.
+  ports: { complete: ['ports.completed'], gate: ['ports.previewed'] },
   // The plan and the rendered command set are artifacts of a step whose outcome the check decided;
   // Z-6 (2026-09-16): after "Generate command set" the header read Running because the newest event
   // matched nothing and the run was mid-phase.
@@ -68,11 +70,22 @@ const SIGNALS: Record<string, Signals> = {
     ignore: ['replication.verify.started', 'replication.verified', 'replication.verify.failed'],
   },
   failover_test: { complete: ['failover.completed'], gate: [] },
+  // SPEC-023: like replication, the preview is the gate and apply completes the step; the read-back
+  // (Check snapshots) is a report.
+  snapshots: {
+    complete: ['snapshots.applied'],
+    gate: ['snapshots.previewed'],
+    ignore: ['snapshots.verify.started', 'snapshots.verified', 'snapshots.verify.failed'],
+  },
 };
 const DEFAULT_SIGNALS: Signals = { complete: ['step.completed'], gate: [] };
 
 const FAILURE = /(failed|crashed|stalled)/;
 const ACTIVE = /(started|progress|checking)/;
+// A device trusted on first contact (or again, by the operator), or refused while the console or a
+// readiness check read it, is a note in the step's activity; it never decides the step. A device
+// refused during a step does: `device.trust_failed` matches FAILURE.
+const REPORT_ONLY = /^device\.(trusted|retrusted|refused)$/;
 
 /**
  * The one mapping from a persisted run status to the shared vocabulary. Used for the run as a whole
@@ -103,6 +116,7 @@ export function deriveStepState(step: ServedStep, run: RunRecord | null, events:
   for (let i = mine.length - 1; i >= 0; i -= 1) {
     const event = mine[i];
     const type = event.event_type;
+    if (REPORT_ONLY.test(type)) continue;
     if (signals.ignore?.includes(type)) {
       if (type === 'zoning.rendered') handedOff = true;
       // a finished report (replication verify, path check) closes the progress lines that led to it
@@ -169,6 +183,30 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       const inRun = hosts.filter((h) => h.in_run ?? (h.sources ?? []).some((s) => s === 'vcenter' || s === 'sheet')).length;
       return `${fc} ports · ${inRun} host${inRun === 1 ? '' : 's'} in this run`;
     }
+    case 'ports.completed': {
+      const iscsi = list(deciding.data?.iscsi?.plan?.actions).length;
+      const peers = list(deciding.data?.peer?.plan?.actions).length;
+      const parts = [
+        iscsi ? `${iscsi} iSCSI address${iscsi === 1 ? '' : 'es'}` : '',
+        peers ? `${peers} peer port${peers === 1 ? '' : 's'}` : '',
+      ].filter(Boolean);
+      return parts.length ? `${parts.join(' · ')} in place` : 'nothing to set up';
+    }
+    case 'ports.previewed': {
+      const actions = [
+        ...list(deciding.data?.iscsi?.plan?.actions),
+        ...list(deciding.data?.peer?.plan?.actions),
+      ] as { state: string }[];
+      // a peer plan's blockers already include its conflicts
+      const findings =
+        (list(deciding.data?.iscsi?.plan?.actions) as { state: string }[]).filter((a) => a.state === 'conflict').length +
+        list(deciding.data?.peer?.plan?.blockers).length +
+        (deciding.data?.peer?.result?.error ? 1 : 0);
+      const todo = actions.filter((a) => a.state === 'create').length;
+      return findings ? `${findings} finding${findings === 1 ? '' : 's'} to resolve` : `${todo} to set up`;
+    }
+    case 'ports.preview.failed':
+      return 'array could not be read';
     case 'zoning.proper':
       return 'verified on both fabrics';
     case 'zoning.previewed': {
@@ -189,7 +227,12 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       return blockers ? `${blockers} blocker${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
     }
     case 'verify.completed': {
-      const mismatches = list(report?.checks).filter((check: { status: string }) => check.status !== 'pass').length;
+      const mismatches =
+        list(report?.checks).filter((check: { status: string }) => check.status !== 'pass').length +
+        list(report?.iscsi_vlans).filter((check: { status: string }) => check.status !== 'present').length +
+        (report?.iscsi_vlans_error ? 1 : 0) +
+        list(report?.peer_ports).filter((check: { ok: boolean }) => !check.ok).length +
+        (report?.peer_ports_error ? 1 : 0);
       return mismatches ? `${mismatches} to review` : 'configuration matches';
     }
     case 'asbuilt.generated':
@@ -210,10 +253,22 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       return 'stopped during create';
     case 'failover.failed':
       return 'test failed';
+    case 'snapshots.previewed': {
+      const blockers = list(deciding.data?.plan?.blockers).length;
+      return blockers ? `${blockers} finding${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
+    }
+    case 'snapshots.applied':
+      return 'snapshots taken';
+    case 'snapshots.preview.failed':
+      return 'array could not be read';
+    case 'snapshots.apply.failed':
+      return 'stopped during create';
     case 'verify.failed':
       return 'array not reached';
     case 'asbuilt.failed':
       return 'not generated';
+    case 'device.trust_failed':
+      return 'a device key changed';
     default:
       return '';
   }

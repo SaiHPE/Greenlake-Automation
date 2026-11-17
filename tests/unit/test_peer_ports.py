@@ -107,7 +107,6 @@ ROWS = [{"port": "0:3:2", "source_wwpns": "20:31:00:02:ac:02:ac:38"},
         {"port": "1:3:2", "source_wwpns": "21310002AC02AC38"}]
 
 
-@NOT_BUILT
 def test_the_peer_ports_tab_parses_into_the_intent():
     from alletra_onboard.domain.peer_ports import PeerPortIntent, PeerPortRequest
 
@@ -117,12 +116,10 @@ def test_the_peer_ports_tab_parses_into_the_intent():
     ])
 
 
-@NOT_BUILT
 def test_a_workbook_without_the_tab_has_no_peer_ports():
     assert _sheet(None) is None
 
 
-@NOT_BUILT
 @pytest.mark.parametrize("rows, why", [
     ([{**ROWS[0], "port": "0-3-2"}, ROWS[1]], "Port must be N:S:P, like 0:3:2"),
     ([ROWS[0], ROWS[0], ROWS[1]], "port 0:3:2 is named twice"),
@@ -133,6 +130,50 @@ def test_a_workbook_without_the_tab_has_no_peer_ports():
 def test_a_wrong_peer_port_row_is_refused_with_a_sentence(rows, why):
     with pytest.raises(ValueError, match=re.escape(why)):
         _sheet(rows)
+
+
+def test_a_port_on_the_peer_ports_and_the_replication_network_tab_has_two_roles():
+    from alletra_onboard.application.platform import init_sheet
+    from alletra_onboard.domain.models import RunMode
+
+    network = [{"array": "this", "port": "0:4:4", "ip": "10.93.18.11", "netmask": "255.255.254.0"},
+               {"array": "this", "port": "1:4:4", "ip": "10.93.18.13", "netmask": "255.255.254.0"},
+               {"array": "peer", "port": "0:1:1", "ip": "10.93.18.19", "netmask": "255.255.254.0"},
+               {"array": "peer", "port": "1:1:1", "ip": "10.93.18.20", "netmask": "255.255.254.0"}]
+    data = init_sheet.compose_workbook_bytes(
+        base=None, init={"serial_number": "CZ2D2K014S", "mgmt_ipv4": A_HOST},
+        targets={"prov_array_host": A_HOST, "prov_array_user": "3paradm", "prov_array_password": "pw",
+                 "prov_vcenter_host": "vc", "prov_vcenter_user": "u", "prov_vcenter_password": "p"},
+        volumes=[], hostsets=[], hosts=[], peer_ports=[{"port": "0:4:4"}, ROWS[1]],
+        replication={"fields": {"peer_host": "10.64.154.190", "peer_user": "3paradm", "peer_password": "pw"},
+                     "rows": [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "mode": "sync"}], "network": network})
+    with pytest.raises(ValueError, match=re.escape(
+            "Peer ports tab — port 0:4:4 is also on the Replication network tab; a port has one role.")):
+        init_sheet.parse_workbook_bytes(data, mode=RunMode.CUSTOM, selected_steps=["ports", "replicate"])
+
+
+def test_the_template_has_the_peer_ports_tab_and_an_upload_with_only_peer_ports_parses():
+    """A workbook may ask only for peer ports: Volumes and Host sets empty, as for replicate-only."""
+    import io
+
+    from openpyxl import load_workbook
+
+    from alletra_onboard.application.platform import init_sheet
+
+    ws = load_workbook(io.BytesIO(init_sheet.build_template_bytes()))[init_sheet.PEER_PORTS_SHEET_NAME]
+    header = next(r for r in ws.iter_rows() if any(c.value == "Port (N:S:P) *" for c in r))
+    assert [c.value for c in header][:2] == ["Port (N:S:P) *", "Source array ports to zone (WWPNs)"]
+    assert ws.cell(row=header[0].row + 1, column=1).number_format == "@"
+    data = init_sheet.compose_workbook_bytes(
+        base=None, init={"serial_number": "CZ2D2K014S", "mgmt_ipv4": A_HOST},
+        targets={"prov_array_host": A_HOST, "prov_array_user": "3paradm", "prov_array_password": "pw",
+                 "prov_vcenter_host": "vc", "prov_vcenter_user": "u", "prov_vcenter_password": "p"},
+        volumes=[], hostsets=[], hosts=[], peer_ports=ROWS)
+    from alletra_onboard.domain.models import RunMode
+
+    # even with Provision storage selected: the run guard refuses that step later (nothing to provision)
+    intent = init_sheet.parse_workbook_bytes(data, mode=RunMode.PROVISION_ONLY).provisioning_intent
+    assert [p.nsp for p in intent.peer_ports.ports] == ["0:3:2", "1:3:2"] and intent.volumes == []
 
 
 # ------------------------------------------------------------------ R2: the read
@@ -560,7 +601,6 @@ def _by_port(plan):
     return {a.nsp: a for a in plan.actions}
 
 
-@NOT_BUILT
 def test_two_free_fc_ports_on_two_nodes_are_planned_with_their_undo():
     from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
 
@@ -575,7 +615,6 @@ def test_two_free_fc_ports_on_two_nodes_are_planned_with_their_undo():
     assert any("loss_sync" in n for n in plan.notes)          # both ports have no link on 2026-11-03
 
 
-@NOT_BUILT
 def test_a_port_that_serves_hosts_is_a_conflict_named_by_its_host():
     from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
 
@@ -584,7 +623,6 @@ def test_a_port_that_serves_hosts_is_a_conflict_named_by_its_host():
     assert "serves hosts" in act.reason and "10.132.30.136" in act.reason
 
 
-@NOT_BUILT
 def test_an_ip_port_is_not_a_peer_port_candidate():
     from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
 
@@ -592,7 +630,6 @@ def test_an_ip_port_is_not_a_peer_port_candidate():
     assert act.state == "conflict" and "is not a Fibre Channel port" in act.reason
 
 
-@NOT_BUILT
 def test_a_port_not_on_the_array_is_a_conflict():
     from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
 
@@ -600,7 +637,6 @@ def test_a_port_not_on_the_array_is_a_conflict():
     assert act.state == "conflict" and "is not on this array" in act.reason
 
 
-@NOT_BUILT
 def test_a_peer_label_on_a_host_port_never_makes_it_a_peer_port():
     """D22U27 1:3:2 is labelled `Peer_port`, Type host, with a login (LESSONS 42): a conflict, and with
     0:3:2 the only candidate the plan has one node and blocks."""
@@ -613,7 +649,6 @@ def test_a_peer_label_on_a_host_port_never_makes_it_a_peer_port():
     assert any("pairs across nodes" in b for b in plan.blockers)
 
 
-@NOT_BUILT
 def test_ports_already_in_peer_mode_exist_and_need_nothing():
     from alletra_onboard.application.provisioning.peer_ports import build_view, plan_peer_ports
 
@@ -622,7 +657,6 @@ def test_ports_already_in_peer_mode_exist_and_need_nothing():
     assert not plan.blockers and not any(a.commands for a in plan.actions)
 
 
-@NOT_BUILT
 def test_a_persistent_port_partner_that_failed_over_is_a_conflict():
     from alletra_onboard.application.provisioning.peer_ports import build_view, plan_peer_ports
 
@@ -630,13 +664,61 @@ def test_a_persistent_port_partner_that_failed_over_is_a_conflict():
     assert act.state == "conflict" and "failover partner of 1:3:1" in act.reason
 
 
-@NOT_BUILT
 def test_a_create_without_the_previous_connection_mode_is_blocked():
     """No `showport -par` read means no removal set; the plan must not offer a change it cannot undo."""
     from alletra_onboard.application.provisioning.peer_ports import build_view, plan_peer_ports
 
     plan = plan_peer_ports(_intent("0:3:2", "1:3:2"), build_view(_text(RACK13_SHOWPORT)))
     assert any("showport -par" in b for b in plan.blockers)
+
+
+def test_a_free_port_still_in_an_effective_zone_gets_a_note_and_without_a_switch_read_the_note_says_so():
+    """rack13 on 2026-11-16: 0:3:3 and 1:3:4 are free, ready and linked, the live run's candidates. The F2
+    switch's effective configuration (`rack13_fabric/F2_cfgshow.txt`, training fabric 2026-09-12) still
+    zoned both to hosts then. The array cannot see zones; only the switch read can say so."""
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+    from alletra_onboard.application.provisioning.zoning import parse_active_zones
+
+    zones, _cfg = parse_active_zones(_text(FIX / "rack13_fabric" / "F2_cfgshow.txt"))
+    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now(), zones={"the F2 switch": zones})
+    assert [a.state for a in plan.actions] == ["create", "create"] and not plan.blockers
+    note = next(n for n in plan.notes if n.startswith("0:3:3 (20330002AC02D495) is still in zones "))
+    assert "arcus__windows137_zone1" in note and "Vmware_Alletra" in note and note.endswith(
+        "on the F2 switch: a host that is switched off may use this port. Ask the SAN team before setting it.")
+    assert any(n.startswith("1:3:4 (21340002AC02D495) is still in zones ") for n in plan.notes)
+    assert not any("one fabric" in n or "both on the" in n for n in plan.notes)      # 3 odd, 4 even: two fabrics
+
+    unchecked = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now())
+    assert "The zones on 0:3:3's WWPN were not checked (no switch read): ask the SAN team before setting it." in unchecked.notes
+
+
+def test_two_peer_ports_on_one_fabric_by_port_number_is_a_note_not_a_blocker():
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+
+    plan = plan_peer_ports(_intent("0:3:2", "1:3:2"), _rack13_now())
+    assert not plan.blockers
+    assert ("0:3:2 and 1:3:2 are both on the even fabric (F2) by port number; a fabric failure stops the migration."
+            in plan.notes)
+
+
+def test_the_printed_command_set_and_removal_set_before_the_paste():
+    """R4/R5, first slice: the commands in sheet order, and the undo, last port first, before any paste."""
+    from alletra_onboard.application.provisioning.peer_ports import (
+        command_set_text,
+        plan_peer_ports,
+        planned_removals,
+        removal_set_text,
+    )
+
+    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now())
+    assert command_set_text(plan, "rack13-ARCUS").splitlines()[1:] == [
+        "# 0:3:3", "controlport offline 0:3:3", "controlport config peer -ct point -f 0:3:3",
+        "# 1:3:4", "controlport offline 1:3:4", "controlport config peer -ct point -f 1:3:4"]
+    assert planned_removals(plan) == [
+        "controlport offline 1:3:4", "controlport config host -ct point -f 1:3:4", "controlport rst 1:3:4",
+        "controlport offline 0:3:3", "controlport config host -ct point -f 0:3:3", "controlport rst 0:3:3"]
+    assert removal_set_text(planned_removals(plan), "rack13-ARCUS").startswith(
+        "# Undo the peer ports this run set on rack13-ARCUS. Remove the SAN team's peer-port zones")
 
 
 # ------------------------------------------------------------------ R4/R5: read after the paste, apply, removal set
@@ -664,7 +746,6 @@ def _after(view, *peer_nsps):
     return out
 
 
-@NOT_BUILT
 def test_the_read_after_the_paste_finds_the_peer_ports_and_keeps_their_undo():
     """First slice (ADR 0018 accepted, write deferred): a consultant pastes the printed command set; the
     tool reads the array again and judges it as the apply will judge its read-back. Each restore ends
@@ -682,6 +763,55 @@ def test_the_read_after_the_paste_finds_the_peer_ports_and_keeps_their_undo():
         "controlport offline 1:3:2", "controlport config host -ct point -f 1:3:2", "controlport rst 1:3:2",
         "controlport offline 0:3:2", "controlport config host -ct point -f 0:3:2", "controlport rst 0:3:2",
     ]
+
+
+def test_the_read_after_a_paste_that_stopped_after_offline_gives_rst_only_and_says_so():
+    """R5: 1:3:4 was taken offline, its `config` never landed: it is held offline in its old mode, and
+    only `controlport rst` brings it back (the help's way). A read with nothing changed is no paste."""
+    from alletra_onboard.application.provisioning.peer_ports import (
+        changed_since,
+        plan_peer_ports,
+        read_back_peer_ports,
+    )
+
+    view = _rack13_now()
+    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), view)
+    assert not changed_since(plan, view, view.model_copy(deep=True))
+    after = _after(view, "0:3:3")
+    after.ports["1:3:4"] = after.ports["1:3:4"].model_copy(update={"state": "offline"})
+    assert changed_since(plan, view, after)
+    result = read_back_peer_ports(plan, before=view, after=after)
+    assert result.changed == ["0:3:3"]
+    assert result.error == "1:3:4 did not come back as a peer port (Type free, state offline)."
+    assert result.removals == ["controlport rst 1:3:4", "controlport offline 0:3:3",
+                               "controlport config host -ct point -f 0:3:3", "controlport rst 0:3:3"]
+    assert result.sentences[0] == "0:3:3 is now a peer port (port WWPN 20330002AC02D495)."
+
+
+def test_the_read_after_the_paste_names_another_port_that_changed():
+    from alletra_onboard.application.provisioning.peer_ports import (
+        plan_peer_ports,
+        read_back_peer_ports,
+    )
+
+    view = _rack13_now()
+    plan = plan_peer_ports(_intent("0:3:3", "1:3:4"), view)
+    after = _after(view, "0:3:3", "1:3:4")
+    after.ports["0:3:4"] = after.ports["0:3:4"].model_copy(update={"mode": "initiator"})
+    result = read_back_peer_ports(plan, before=view, after=after)
+    assert result.changed == ["0:3:3", "1:3:4"]
+    assert result.error == "0:3:4 changed as well (mode target, now initiator): check the array before going on."
+
+
+def test_verify_says_a_peer_port_without_a_link_needs_its_cable():
+    from alletra_onboard.application.provisioning.peer_ports import verify_peer_ports
+
+    view = _after(_rack13_now(), "0:3:2", "1:3:2")
+    view.ports["0:3:2"] = view.ports["0:3:2"].model_copy(update={"state": "loss_sync"})
+    checks = verify_peer_ports(_intent("0:3:2", "1:3:2"), view)
+    assert [(c.ok, c.sentence) for c in checks] == [
+        (False, "0:3:2 is a peer port but its link is loss_sync: check the cable and the switch port."),
+        (True, "1:3:2 is a peer port, link ready.")]
 
 
 @NOT_BUILT
@@ -770,7 +900,6 @@ def test_the_port_client_runs_only_the_approved_mode_on_approved_ports(command, 
 
 # ------------------------------------------------------------------ R6: verify
 
-@NOT_BUILT
 def test_verify_reads_e18u31_peer_ports_as_ready():
     from alletra_onboard.application.provisioning.peer_ports import build_view, verify_peer_ports
 
@@ -779,7 +908,6 @@ def test_verify_reads_e18u31_peer_ports_as_ready():
     assert checks[0].sentence == "0:3:2 is a peer port, link ready."
 
 
-@NOT_BUILT
 def test_verify_says_a_free_port_is_not_a_peer_port():
     from alletra_onboard.application.provisioning.peer_ports import build_view, verify_peer_ports
 
@@ -787,9 +915,164 @@ def test_verify_says_a_free_port_is_not_a_peer_port():
     assert not checks[0].ok and checks[0].sentence == "0:3:2 is not a peer port (Type free)."
 
 
+def _service_run(tmp_path, rows, steps=("ports", "verify")):
+    from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
+    from alletra_onboard.application.platform import init_sheet
+    from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+    from alletra_onboard.application.service import OnboardingService
+    from alletra_onboard.config import Settings
+    from alletra_onboard.domain.models import RunMode
+
+    data = init_sheet.compose_workbook_bytes(
+        base=None, init={"serial_number": "CZ2D3209YV", "mgmt_ipv4": A_HOST},
+        targets={"prov_array_host": A_HOST, "prov_array_user": "3paradm", "prov_array_password": "pw",
+                 "prov_vcenter_host": "vc", "prov_vcenter_user": "u", "prov_vcenter_password": "p"},
+        volumes=[], hostsets=[], hosts=[], peer_ports=rows)
+    parsed = init_sheet.parse_workbook_bytes(data, mode=RunMode.CUSTOM, selected_steps=list(steps))
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    service = OnboardingService(Settings(), store, InMemoryEventBus())
+    run = service.create_run(parsed.work_item, mode=RunMode.CUSTOM, selected_steps=list(steps),
+                             provisioning_intent=parsed.provisioning_intent)
+    return service, run
+
+
+async def test_the_verify_step_reads_the_planned_peer_ports_read_only(tmp_path):
+    from alletra_onboard.application.provisioning.peer_ports import read_view
+    from alletra_onboard.domain.models import VerificationReport
+
+    service, run = _service_run(tmp_path, ROWS)
+    service.documents._verify_fn = lambda item, username, password: VerificationReport(reachable=True)
+    service.documents._read_peer_ports = lambda creds: read_view(creds, array_cli_factory=lambda c: _ReadCli(folder=E18U31))
+    service.start_verify(run.run_id)
+    await service.wait(run.run_id)
+    event = next(e for e in service.list_events(run.run_id) if e.event_type == "verify.completed")
+    assert event.message.endswith("Peer ports: 2 of 2 ready.")
+    assert [c["sentence"] for c in event.data["report"]["peer_ports"]] == [
+        "0:3:2 is a peer port, link ready.", "1:3:2 is a peer port, link ready."]
+
+    service.documents._read_peer_ports = lambda creds: read_view(
+        creds, array_cli_factory=lambda c: _ReadCli("showhost -d", folder=E18U31))
+    service.start_verify(run.run_id)
+    await service.wait(run.run_id)
+    event = [e for e in service.list_events(run.run_id) if e.event_type == "verify.completed"][-1]
+    assert "channel closed" in event.data["report"]["peer_ports_error"]
+
+
+async def test_the_array_ports_step_plans_the_peer_ports_then_judges_the_read_after_the_paste(tmp_path, monkeypatch):
+    """R4/R8, first slice, through the step service: a read and a plan with the commands and their undo;
+    the consultant pastes; the next read is judged against the read the plan was made from, and the zoning
+    plan then takes the peer WWPNs from it."""
+    import json
+
+    from alletra_onboard.application.provisioning import peer_ports
+    from alletra_onboard.application.provisioning.steps import ACTIVE_ZONES_ARTIFACT
+    from alletra_onboard.domain.models import RunStatus
+
+    before = _rack13_now()
+    reads = iter([before, _after(before, "0:3:2", "1:3:2")])
+    monkeypatch.setattr(peer_ports, "read_view", lambda creds: next(reads))
+    service, run = _service_run(tmp_path, ROWS)
+    service.store.save_artifact(run.run_id, ACTIVE_ZONES_ARTIFACT,
+                                json.dumps({"the F2 switch sw-f2": {"old_zone": ["20320002AC02D495"]}}).encode())
+
+    service.start_ports_preview(run.run_id)
+    await service.wait(run.run_id)
+    (event,) = [e for e in service.list_events(run.run_id) if e.event_type == "ports.previewed"]
+    assert event.message == "Read 10.132.30.121: plan ready, peer ports: 2 to set, 0 already peer, 0 conflict(s)."
+    peer = event.data["peer"]
+    assert [a["state"] for a in peer["plan"]["actions"]] == ["create", "create"] and peer["result"] is None
+    assert peer["removals"][:2] == ["controlport offline 1:3:2", "controlport config host -ct point -f 1:3:2"]
+    assert "0:3:2 (20320002AC02D495) is still in zone old_zone on the F2 switch sw-f2" in " ".join(peer["plan"]["notes"])
+    assert event.data["iscsi"] is None and service.get_ports(run.run_id)["peer_plan_held"] is True
+    assert service.get_run(run.run_id).status == RunStatus.WAITING_FOR_OPERATOR
+
+    service.start_ports_preview(run.run_id)                # the consultant pasted; read the array again
+    await service.wait(run.run_id)
+    (done,) = [e for e in service.list_events(run.run_id) if e.event_type == "ports.completed"]
+    assert done.message == "Read 10.132.30.121: all 2 peer port(s) the sheet asks for are in peer mode."
+    result = done.data["peer"]["result"]
+    assert result["changed"] == ["0:3:2", "1:3:2"] and result["error"] is None
+    assert result["sentences"][0] == "0:3:2 is now a peer port (port WWPN 20320002AC02D495)."
+    pairs, nsps = service.discovery_zoning._peer_zone_input(run.run_id, service.get_provisioning_intent(run.run_id))
+    assert pairs == [("20320002AC02D495", "20310002AC02AC38"), ("21320002AC02D495", "21310002AC02AC38")]
+    assert nsps == {"20320002AC02D495": "0:3:2", "21320002AC02D495": "1:3:2"}
+
+
+async def test_after_a_partial_paste_each_port_keeps_its_undo_from_the_read_that_first_planned_it(tmp_path, monkeypatch):
+    """The first paste sets 0:3:2 only; the second sets 1:3:2. Every later read is judged against the
+    first read that planned each port, so 0:3:2's restore never drops out of the removal set."""
+    from alletra_onboard.application.provisioning import peer_ports
+
+    before = _rack13_now()
+    reads = iter([before, _after(before, "0:3:2"), _after(before, "0:3:2", "1:3:2"), _after(before, "0:3:2", "1:3:2")])
+    monkeypatch.setattr(peer_ports, "read_view", lambda creds: next(reads))
+    service, run = _service_run(tmp_path, ROWS)
+    results = []
+    for _ in range(4):
+        service.start_ports_preview(run.run_id)
+        await service.wait(run.run_id)
+        last = [e for e in service.list_events(run.run_id) if e.event_type.startswith("ports.")][-1]
+        results.append(last.data["peer"]["result"])
+    assert results[0] is None
+    assert results[1]["changed"] == ["0:3:2"] and "1:3:2 did not come back as a peer port" in results[1]["error"]
+    both = ["controlport offline 1:3:2", "controlport config host -ct point -f 1:3:2", "controlport rst 1:3:2",
+            "controlport offline 0:3:2", "controlport config host -ct point -f 0:3:2", "controlport rst 0:3:2"]
+    for result in results[2:]:                              # the read after the second paste, and a second look
+        assert result["changed"] == ["0:3:2", "1:3:2"] and result["error"] is None and result["removals"] == both
+
+
+def test_a_switch_the_zoning_plan_could_not_read_leaves_its_zones_unchecked(tmp_path):
+    """A failed switch read is not a checked one: with no switch read the note says so, and with one switch
+    read the other switch's zones are named as not checked."""
+    import json
+
+    from alletra_onboard.application.provisioning import zoning_plan as zp
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+    from alletra_onboard.application.provisioning.steps import (
+        ACTIVE_ZONES_ARTIFACT,
+        ArrayPortsSteps,
+    )
+    from alletra_onboard.domain.discovery import DiscoveryReport
+    from alletra_onboard.domain.provisioning import ProvisioningIntent
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    def refuse(creds):
+        raise ConnectionError("no route")
+
+    creds = {k: EndpointCreds(host=k, username="u", password="p") for k in ("array", "vc", "sw-f1", "sw-f2")}
+    prov = ProvisioningIntent(array=creds["array"], vcenter=creds["vc"], switch_f1=creds["sw-f1"], switch_f2=creds["sw-f2"])
+    plan = zp.build_zoning_plan(prov, DiscoveryReport(), brocade_factory=refuse)
+    assert plan.active_zones == {"the F1 switch sw-f1": None, "the F2 switch sw-f2": None}
+
+    service, run = _service_run(tmp_path, ROWS)
+    steps: ArrayPortsSteps = service.ports
+    service.store.save_artifact(run.run_id, ACTIVE_ZONES_ARTIFACT, json.dumps(plan.active_zones).encode())
+    assert steps._active_zones(run.run_id) is None
+    zones = {"the F1 switch sw-f1": None, "the F2 switch sw-f2": {"z": {"20330002AC02D495"}}}
+    notes = plan_peer_ports(_intent("0:3:3", "1:3:4"), _rack13_now(), zones=zones).notes
+    assert ("The zones on 1:3:4's WWPN were not checked on the F1 switch sw-f1 (it could not be read): ask the SAN "
+            "team before setting it.") in notes
+    assert any(n.startswith("0:3:3 (20330002AC02D495) is still in zone z on the F2 switch sw-f2") for n in notes)
+
+
+async def test_a_failed_peer_port_read_plans_nothing(tmp_path, monkeypatch):
+    from alletra_onboard.application.provisioning import peer_ports
+    from alletra_onboard.domain.peer_ports import PeerPortView
+
+    monkeypatch.setattr(peer_ports, "read_view",
+                        lambda creds: PeerPortView(host=creds.host, read_error=f"Could not read {creds.host}: timed out"))
+    service, run = _service_run(tmp_path, ROWS)
+    service.start_ports_preview(run.run_id)
+    await service.wait(run.run_id)
+    (event,) = [e for e in service.list_events(run.run_id) if e.event_type == "ports.preview.failed"]
+    assert event.message == ("Could not read 10.132.30.121: timed out. Nothing was planned for the peer ports. "
+                             "Read the array again.")
+    assert "plan" not in event.data["peer"] and service.get_ports(run.run_id)["peer_plan_held"] is False
+
+
 # ------------------------------------------------------------------ R7: zoning
 
-@NOT_BUILT
 def test_peer_zones_use_the_wwpn_read_after_the_change():
     """E18U31's peer ports carry 2032 0202… where its host ports carry 2031 0002…; the zone takes the
     port WWN from the view it is given (the read-back), never from the read before the apply."""
@@ -802,9 +1085,179 @@ def test_peer_zones_use_the_wwpn_read_after_the_change():
     assert pairs == [("20320202AC02DEF2", "20310002AC02AC38"), ("21320202AC02DEF2", "21310002AC02AC38")]
 
 
+# The source array behind E18U31's peer ports (showportdev_ns_032/132.txt, 2026-11-17): an HPE 3PAR 20850,
+# serial 4UW0002142, its 0:3:2 and 1:3:2 in host mode. The switch answers below are written for the test,
+# in the layout of tests/unit/test_zoning_plan.py; the WWPNs are the arrays' own.
+_SRC_032, _SRC_132 = "20320002AC07E528", "21320002AC07E528"
+
+
+def _ns_entry(wwpn: str, kind: str, symb: str) -> str:
+    colons = ":".join(wwpn[i:i + 2] for i in range(0, 16, 2)).lower()
+    return f""" N    020{wwpn[2]}00;   3;{colons};2f:f7:00:02:ac:07:e5:28; 0x0
+    PortSymb: [10] "{symb}"
+    Device type: Physical {kind}
+"""
+
+
+class _Switch:
+    def __init__(self, ns: str, alis: str, cfg: str):
+        self.ns, self.alis, self.cfg = ns, alis, cfg
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def nsshow(self):
+        return self.ns
+
+    def nscamshow(self):
+        return ""
+
+    def alishow(self):
+        return self.alis
+
+    def cfgshow(self):
+        return self.cfg
+
+
+def _peer_zoning_plan():
+    from alletra_onboard.application.provisioning import zoning_plan as zp
+    from alletra_onboard.application.provisioning.peer_ports import build_view, peer_zone_pairs
+    from alletra_onboard.domain.discovery import ArrayPort, DiscoveryReport
+    from alletra_onboard.domain.peer_ports import PeerPortIntent, PeerPortRequest
+    from alletra_onboard.domain.provisioning import ProvisioningIntent
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    view = build_view(_text(E18U31 / "showport.txt"))
+    intent = PeerPortIntent(ports=[PeerPortRequest(nsp="0:3:2", source_wwpns=[_SRC_032]),
+                                   PeerPortRequest(nsp="1:3:2", source_wwpns=[_SRC_132])])
+    pairs = peer_zone_pairs(intent, view)
+    nsps = {view.ports[n].port_wwn: n for n in ("0:3:2", "1:3:2")}
+    f2_ns = (_ns_entry("20340002AC02DEF2", "Target", "CZ2D3209YV - 0:3:4 - x")
+             + _ns_entry("20320202AC02DEF2", "Initiator", "peer") + _ns_entry("21320202AC02DEF2", "Initiator", "peer")
+             + _ns_entry(_SRC_032, "Target", "4UW0002142 - 0:3:2 - HPE") + _ns_entry(_SRC_132, "Target", "4UW0002142 - 1:3:2 - HPE"))
+    switches = {"sw-f1": _Switch("", "", "Effective configuration:\n cfg:\tF1_CFG\n"),
+                "sw-f2": _Switch(f2_ns, " alias:\tsrc3par_032\n\t\t20:32:00:02:ac:07:e5:28\n",
+                                 "Effective configuration:\n cfg:\tF2_CFG\n")}
+    creds = {k: EndpointCreds(host=k, username="u", password="p") for k in ("array", "vc", "sw-f1", "sw-f2")}
+    prov = ProvisioningIntent(array=creds["array"], vcenter=creds["vc"], switch_f1=creds["sw-f1"], switch_f2=creds["sw-f2"])
+    discovery = DiscoveryReport(array_ports=[
+        ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC02DEF2", link_state="ready")])
+    return zp.build_zoning_plan(prov, discovery, brocade_factory=lambda c: switches[c.host],
+                                peer_pairs=pairs, peer_nsps=nsps)
+
+
+def test_the_zoning_plan_drafts_the_peer_block_on_the_fabric_where_both_ports_are():
+    plan = _peer_zoning_plan()
+    f1, f2 = plan.fabrics
+    assert f1.peer_pairs == [] and f2.peer_pairs == [("20320202AC02DEF2", _SRC_032), ("21320202AC02DEF2", _SRC_132)]
+    assert [(p.nsp, p.proposed_alias) for p in f2.peer_ports] == [
+        ("0:3:2", "CZ2D3209YV_N0S3P2_PEER"), ("1:3:2", "CZ2D3209YV_N1S3P2_PEER")]
+    assert [(s.suggested_alias, s.proposed_alias) for s in f2.sources] == [("src3par_032", ""), ("", "array_4UW0002142_N1S3P2")]   # FOS: a name starts with a letter
+    assert "active_zones" not in plan.model_dump(mode="json")          # kept off the event payload
+
+
+def test_the_peer_block_renders_zones_named_by_the_peer_alias_and_the_source_alias():
+    """The command set for the SAN team; `cfgenable` is a line of its own as for the host zones (ADR 0012)."""
+    from alletra_onboard.application.provisioning.zoning_plan import render_peer_commands
+
+    plan = _peer_zoning_plan()
+    aliases = {w.wwpn: w.suggested_alias or w.proposed_alias for f in plan.fabrics for w in f.peer_ports + f.sources}
+    commands, skipped = render_peer_commands(plan, aliases)
+    assert skipped == {"F2": []} and "F1" not in commands
+    zones = [c for c in commands["F2"] if c.startswith("zonecreate")]
+    assert zones == [
+        'zonecreate "CZ2D3209YV_N0S3P2_PEER_src3par_032","CZ2D3209YV_N0S3P2_PEER;src3par_032"',
+        'zonecreate "CZ2D3209YV_N1S3P2_PEER_array_4UW0002142_N1S3P2","CZ2D3209YV_N1S3P2_PEER;array_4UW0002142_N1S3P2"',
+    ]
+    assert 'alicreate "src3par_032","20:32:00:02:ac:07:e5:28"' not in commands["F2"]     # the switch has it
+    assert commands["F2"][0] == "cfgtransshow" and commands["F2"][-1] == "cfgenable F2_CFG"
+
+
+# ------------------------------------------------------------------ R9: the as-built
+
+def test_the_as_built_documents_the_peer_ports_how_they_were_set_their_zones_and_their_undo(tmp_path):
+    """Built from model objects: the plan and the read after the paste on rack13's 0:3:2 and 1:3:2, and the
+    array read when the document is made from E18U31's own reads (2026-11-17, its peer ports 0:3:2, 1:3:2)."""
+    import docx
+    from docx.oxml.ns import qn
+
+    from alletra_onboard.application.documents.asbuilt import AsBuiltData, generate_asbuilt
+    from alletra_onboard.application.provisioning.peer_ports import (
+        plan_peer_ports,
+        read_back_peer_ports,
+    )
+
+    view = _rack13_now()
+    plan = plan_peer_ports(_intent("0:3:2", "1:3:2"), view)
+    result = read_back_peer_ports(plan, before=view, after=_after(view, "0:3:2", "1:3:2"))
+    data = AsBuiltData(
+        name="DHCI_B10K", showport=_text(E18U31 / "showport.txt"), showport_par=_text(E18U31_SHOWPORT_PAR),
+        showport_peer=_text(E18U31_SHOWPORT_PEER),
+        peer_ports_rows=[{"nsp": "0:3:2", "source_wwpns": [_SRC_032]}, {"nsp": "1:3:2", "source_wwpns": [_SRC_132]}],
+        peer_ports_plan=plan.model_dump(mode="json"), peer_ports_result=result.model_dump(mode="json"),
+        zoning_rendered={"peer_commands": {"F2": ['zonecreate "a_PEER_b","a_PEER;b"', "cfgenable F2_CFG"]}},
+    )
+    out, warnings = generate_asbuilt(data, tmp_path / "asbuilt.docx")
+    doc = docx.Document(str(out))
+    text = "".join(t.text or "" for t in doc.element.body.iter(qn("w:t")))
+    assert "Peer ports" in [p.text for p in doc.paragraphs if p.style.name == "Heading 1"]
+    table = next([[c.text.strip() for c in r.cells] for r in t.rows] for t in doc.tables
+                 if [c.text.strip() for c in t.rows[0].cells][:3] == ["Port", "Type", "Connection"])
+    assert table[1] == ["0:3:2", "peer", "peer, point", "ready", "2FF70202AC02DEF2", "20320202AC02DEF2", _SRC_032]
+    assert "controlport config peer -ct point -f 0:3:2" in text and "a consultant pasted them" in text
+    assert 'zonecreate "a_PEER_b","a_PEER;b"' in text and "cfgenable F2_CFG" in text
+    assert "controlport config host -ct point -f 1:3:2" in text
+    assert not [w for w in warnings if "Peer ports" in w]
+
+
+def test_the_as_built_says_printed_not_pasted_when_no_read_saw_a_port_change(tmp_path):
+    import docx
+    from docx.oxml.ns import qn
+
+    from alletra_onboard.application.documents.asbuilt import AsBuiltData, generate_asbuilt
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+
+    plan = plan_peer_ports(_intent("0:3:2", "1:3:2"), _rack13_now())
+    data = AsBuiltData(name="rack13-ARCUS", showport=_text(RACK13 / "showport.txt"), showport_par=_text(RACK13 / "showport_par.txt"),
+                       peer_ports_rows=[{"nsp": "0:3:2"}, {"nsp": "1:3:2"}], peer_ports_plan=plan.model_dump(mode="json"))
+    out, _ = generate_asbuilt(data, tmp_path / "asbuilt.docx")
+    text = "".join(t.text or "" for t in docx.Document(str(out)).element.body.iter(qn("w:t")))
+    assert "for a consultant to paste; no port change was seen on the array in this run." in text
+    assert "a consultant pasted them" not in text
+
+
+def test_the_run_records_keep_the_last_plan_that_set_ports_and_the_last_read_after_the_paste():
+    from types import SimpleNamespace
+
+    from alletra_onboard.application.documents import steps as st
+    from alletra_onboard.application.documents.asbuilt import AsBuiltData
+
+    setting = {"actions": [{"nsp": "0:3:2", "state": "create", "commands": ["controlport offline 0:3:2"]}]}
+    done = {"actions": [{"nsp": "0:3:2", "state": "exists"}]}
+    result = {"changed": ["0:3:2"], "removals": ["controlport rst 0:3:2"], "error": None, "sentences": []}
+    events = [SimpleNamespace(event_type="ports.previewed", data={"peer": {"plan": setting}}, created_at="t1"),
+              SimpleNamespace(event_type="ports.completed", data={"peer": {"plan": done, "result": result}}, created_at="t2")]
+    data = AsBuiltData()
+    coord = SimpleNamespace(list_events=lambda run_id: events, list_commands=lambda run_id, since=0: [])
+    st.DocumentSteps(coord=coord)._run_records("r1", data)
+    assert data.peer_ports_plan == setting and data.peer_ports_result == result
+    assert ("showport_peer", "showport -peer") in st.DocumentSteps._ASBUILT_LISTINGS
+
+
+def test_the_as_built_has_no_peer_ports_section_without_the_tab(tmp_path):
+    import docx
+
+    from alletra_onboard.application.documents.asbuilt import AsBuiltData, generate_asbuilt
+
+    out, _ = generate_asbuilt(AsBuiltData(name="x", showport=_text(E18U31 / "showport.txt")), tmp_path / "a.docx")
+    assert "Peer ports" not in [p.text for p in docx.Document(str(out)).paragraphs if p.style.name == "Heading 1"]
+
+
 # ------------------------------------------------------------------ R8: the step
 
-@NOT_BUILT
 def test_peer_ports_are_a_section_of_the_shared_array_ports_step():
     """SPEC-024 (BL-25) proposes the `ports` step; peer ports add a section to it, not a step of their own."""
     from alletra_onboard.domain.workflow import STEP_REGISTRY

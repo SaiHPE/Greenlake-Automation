@@ -1,20 +1,29 @@
-"""SPEC-028 R1: read the array's file side. Pure parsers, no I/O.
+"""SPEC-028 R1-R2: read the array's file side.
 
-Pinned to `tests/fixtures/unified_file/`: `rack13/` (rack13-ARCUS, OS 10.6.0, WSAPI v3 2.6.0, no
-File ports, a stopped service and empty collections) and `d22u27/` (AlletraMP_D22U27, OS 10.5.0,
-WSAPI v3 2.5.0, four File ports, the service on, three file systems, client groups and shares). The
-fixtures READMEs list the facts each parser rests on. The v3 client and `read_file_report` come in
-later steps of work packet BL-28.
+The parsers are pure. Pinned to `tests/fixtures/unified_file/`: `rack13/` (rack13-ARCUS, OS 10.6.0,
+WSAPI v3 2.6.0, no File ports, a stopped service and empty collections) and `d22u27/`
+(AlletraMP_D22U27, OS 10.5.0, WSAPI v3 2.5.0, four File ports, the service on, three file systems,
+client groups and shares). The fixtures READMEs list the facts each parser rests on.
+
+`read_file_report` is the one read: the run's read-only SSH session for `showsys`, and a GET-only
+WSAPI v3 client (ADR 0021) for the four collections. It never raises for the file side: what went
+wrong is one of R2's sentences in `FileReport.notes`, and block storage is never affected.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from typing import Any
 
 from pydantic import ValidationError
 
-from alletra_onboard.application.provisioning.discovery import parse_file_ports
+from alletra_onboard.adapters.array.wsapi_v3_client import (
+    WsapiV3Error,
+    WsapiV3LoginRefused,
+    WsapiV3TrustError,
+)
+from alletra_onboard.application.replication.read import parse_showsys, parse_showversion
 from alletra_onboard.domain.discovery import EthernetPort
 from alletra_onboard.domain.unified_file import (
     ClientGroup,
@@ -22,6 +31,7 @@ from alletra_onboard.domain.unified_file import (
     FileCapacity,
     FileNodeStatus,
     FilePortStatus,
+    FileReport,
     FileService,
     FileShareRecord,
     FileSystemRecord,
@@ -153,6 +163,10 @@ def parse_showport_file(text: str) -> list[EthernetPort]:
     """`showport -file` -> the File ports, through Discovery's own `parse_file_ports` (one reader for
     one fact). The array's *"There is no specified port information."* means none. Any other answer
     without a port row is refused: an error or an empty reply is not "no File ports"."""
+    # Imported here, not at the top: Discovery imports this module to read the file side, and this
+    # is the one place the file context needs Discovery back.
+    from alletra_onboard.application.provisioning.discovery import parse_file_ports
+
     ports = parse_file_ports(text)
     if ports or NO_PORT_INFORMATION in (text or ""):
         return ports
@@ -173,3 +187,163 @@ def parse_help_syntax(text: str) -> list[str]:
         elif inside and line.strip() and not line.strip().startswith("The syntax for"):
             forms.append(" ".join(line.split()))
     return forms
+
+
+# ---- SPEC-028 R2: what Discovery says when there is nothing to read ---------------------------------
+
+#: R2's sentences, word for word. Each is a note, never an error that stops Discovery.
+OS_TOO_OLD = "This array runs OS {version}. File shares need OS 10.5 or later."
+NO_ANSWER = "The array did not answer on its file API, so only the File ports are shown."
+SESSION_REFUSED = (
+    "The array's file API turned down the tool's session, so only the File ports are shown. "
+    "Block storage is not affected; send the console log to the tool team."
+)
+OTHER_ARRAY = (
+    "The file API at this address belongs to array {found}, not to this run's array {expected}, so "
+    "file details are not shown. Check the array address in the workbook."
+)
+SERVICE_OFF = (
+    "The file service is off on this array. Turn it on in the array's UI before shares can be made."
+)
+#: Not one of R2's cases: an HTTP status other than 200, 401 or 403, or an answer in a shape no
+#: capture has shown (`UnexpectedAnswer`). In R2's form; the console log has the call and its answer.
+UNREADABLE = (
+    "The array's file API gave an answer the tool could not read, so only the File ports are shown. "
+    "Block storage is not affected; send the console log to the tool team."
+)
+#: In OTHER_ARRAY's place of a serial: a collection that names none, or a `showsys` that printed none.
+NO_SERIAL = "(no serial given)"
+
+#: The four collections of R1, in the order they are read.
+V3_READS = ("fileservice", "filesystems", "filesharesettings", "fileshares")
+_FILE_OS = (10, 5)
+_SESSION_STATUS = (401, 403)
+
+
+def file_os(os_version: str) -> bool | None:
+    """True from OS 10.5 (the first with Unified File), False below it, None when the version was
+    not read."""
+    numbers = [int(n) for n in re.findall(r"\d+", os_version or "")[:2]]
+    if len(numbers) < 2:
+        return None
+    return tuple(numbers) >= _FILE_OS
+
+
+class _NotRead(Exception):
+    def __init__(self, note: str) -> None:
+        super().__init__(note)
+        self.note = note
+
+
+def _same_serial(a: str, b: str) -> bool:
+    return bool(a.strip()) and a.strip().upper() == b.strip().upper()
+
+
+def _run_serial(cli) -> str:
+    try:
+        return parse_showsys(cli.run("showsys")).get("serial", "")
+    except Exception:  # noqa: BLE001 - a serial that cannot be read cannot match: the read is refused
+        return ""
+
+
+def _other_array(body: Any, expected: str) -> str:
+    """OTHER_ARRAY's sentence when a collection does not name the run's array, else ""."""
+    found = parse_array_serial(body)
+    if _same_serial(found, expected):
+        return ""
+    return OTHER_ARRAY.format(found=found or NO_SERIAL, expected=expected or NO_SERIAL)
+
+
+def _read_collections(v3, expected: str) -> dict[str, Any]:
+    """The four GETs in one session, each checked to name the run's array before the next is sent.
+    Another array's answer is refused at once and its body never reaches the command log. The
+    session is deleted on the way out, whatever happens."""
+
+    def withhold(answer) -> str:
+        if answer.status != 200 or not _other_array(answer.body, expected):
+            return ""
+        found = parse_array_serial(answer.body) or NO_SERIAL
+        return f"(not recorded: the answer names array {found}, not this run's array {expected or NO_SERIAL})"
+
+    try:
+        with v3:
+            bodies: dict[str, Any] = {}
+            for resource in V3_READS:
+                answer = v3.get(f"/{resource}", withhold=withhold)
+                if answer.status in _SESSION_STATUS:
+                    raise _NotRead(SESSION_REFUSED)
+                if answer.status != 200:
+                    raise _NotRead(UNREADABLE)
+                refused = _other_array(answer.body, expected)
+                if refused:
+                    raise _NotRead(refused)
+                bodies[resource] = answer.body
+            return bodies
+    except WsapiV3TrustError as exc:
+        raise _NotRead(str(exc)) from exc   # the certificate sentence itself, never "did not answer"
+    except WsapiV3Error as exc:
+        raise _NotRead(NO_ANSWER) from exc
+    except WsapiV3LoginRefused as exc:
+        note = SESSION_REFUSED if exc.answer.status in _SESSION_STATUS else UNREADABLE
+        raise _NotRead(note) from exc
+
+
+def read_file_report(cli, v3, os_version: str, file_ports: list[EthernetPort]) -> FileReport | None:
+    """SPEC-028 R1-R2: the file side of the run's array, or None when there is nothing to show.
+
+    `cli` is the run's read-only SSH session (it runs `showsys`); `v3` an unopened WSAPI v3 client,
+    whose session this opens and always deletes; `os_version` is what `showversion` printed and
+    `file_ports` what `showport -file` listed (read once, by the caller).
+
+    Whether anything is shown is decided by the File ports and `isFileServiceEnabled`, never by
+    whether v3 answered: rack13-ARCUS has no File ports and answers all four GETs with a stopped
+    service, and shows nothing. With no File ports the file API is read only when the OS is known
+    to be 10.5 or later, and anything but a running service read from the run's own array shows
+    nothing. With File ports, each failure is one of R2's sentences and nothing read is kept.
+    """
+    capable = file_os(os_version)
+    if capable is False or (capable is None and not file_ports):
+        if capable is False and file_ports:
+            return FileReport(os_version=os_version, notes=[OS_TOO_OLD.format(version=os_version)])
+        return None
+    expected = _run_serial(cli)
+    report = FileReport(os_version=os_version, array_serial=expected)
+    try:
+        bodies = _read_collections(v3, expected)
+        try:
+            service = parse_fileservice(bodies["fileservice"])
+            systems = parse_filesystems(bodies["filesystems"])
+            groups = parse_sharesettings(bodies["filesharesettings"])
+            shares = parse_fileshares(bodies["fileshares"])
+        except UnexpectedAnswer as exc:
+            raise _NotRead(UNREADABLE) from exc
+    except _NotRead as exc:
+        if not file_ports:
+            return None
+        report.notes.append(exc.note)
+        return report
+    if not file_ports and not (service and service.enabled):
+        return None
+    report.service, report.file_systems, report.client_groups, report.shares = service, systems, groups, shares
+    if service is None or not service.enabled:
+        report.notes.append(SERVICE_OFF)
+    return report
+
+
+def read_file_side(cli, v3, os_version: str, showport_file: str) -> tuple[list[EthernetPort], FileReport | None]:
+    """The File ports from a `showport -file` answer, then `read_file_report`, by Discovery's rules.
+    An answer that is neither a port list nor the no-port answer raises `UnexpectedAnswer`, except
+    below OS 10.5, which has no File view: there it is read as nothing about file."""
+    try:
+        ports = parse_showport_file(showport_file)
+    except UnexpectedAnswer:
+        if file_os(os_version) is False:
+            return [], None
+        raise
+    return ports, read_file_report(cli, v3, os_version, ports)
+
+
+def read_array_file(cli, v3) -> tuple[list[EthernetPort], FileReport | None]:
+    """`showversion` and `showport -file` on an open session, then `read_file_side`."""
+    return read_file_side(cli, v3, parse_showversion(cli.run("showversion")), cli.run("showport -file"))
+

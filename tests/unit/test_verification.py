@@ -93,6 +93,8 @@ def _outputs(*, gateway="10.64.159.254"):
             "Alert     hw_cage:1       Cage cage1 over temperature           Manual\n"
             "Security  SSH             Remote root access is enabled         Manual\n"
         ),
+        # An array with no File port answers this (rack13-ARCUS, E18U31): no file rows (SPEC-028 R3).
+        "showport -file": "There is no specified port information.\n",
     }
 
 
@@ -295,3 +297,77 @@ def test_each_check_says_how_it_matched():
     assert rule["System name"] == "exact"
     assert rule["DNS servers"] == "includes"
     assert rule["Support contact"] == "contains"
+
+
+# ------------------------------------------------------------------ SPEC-028 R3: the file service rows
+
+def _file_array(array: str = "d22u27", **override):
+    """The verify outputs with one Unified File capture's showversion, showsys and showport -file."""
+    from tests.unit.test_unified_file_read import _text
+
+    outputs = _outputs()
+    for command, name in (("showversion", "showversion"), ("showsys", "showsys"), ("showport -file", "showport_file")):
+        outputs[command] = _text(array, name)
+    outputs.update(override)
+    return outputs
+
+
+def _verify_file(outputs, v3, **client):
+    seen = []
+
+    def v3_factory(*, host, username, password):
+        seen.append((host, username, password))
+        return v3
+
+    report = verify(_item(), "3paradm", "pw", client_factory=_factory(_FakeClient(outputs, **client)),
+                    wsapi_v3_factory=v3_factory)
+    return _by_field(report), seen
+
+
+def test_an_array_with_file_ports_adds_the_service_and_ports_rows():
+    from tests.unit.test_unified_file_read import CapturedV3
+
+    v3 = CapturedV3("d22u27")
+    fields, seen = _verify_file(_file_array(), v3)
+    service, ports = fields["File service"], fields["File ports up"]
+    assert (service.expected, service.actual, service.status) == ("on", "on, 2 of 2 nodes running", FieldCheckStatus.PASS)
+    assert (ports.expected, ports.actual, ports.status) == ("4 of 4", "4 of 4", FieldCheckStatus.PASS)
+    assert seen == [("10.64.154.225", "3paradm", "pw")] and v3.logouts == 1   # the run's credential, read-only
+
+
+def test_a_stopped_service_or_a_port_down_is_a_mismatch():
+    from alletra_onboard.application.documents.verification import _file_checks
+    from alletra_onboard.application.unified_file.read import parse_showport_file, read_file_report
+    from tests.unit.test_unified_file_read import CapturedCli, CapturedV3, _text
+
+    ports = parse_showport_file(_text("d22u27", "showport_file"))
+    stopped = read_file_report(CapturedCli("rack13"), CapturedV3("rack13"), "10.6.0", ports)  # rack13's service
+    ports[2].link = "down"
+    service, up = _file_checks(ports, stopped)
+    assert (service.actual, service.status) == ("off", FieldCheckStatus.MISMATCH)
+    assert (up.expected, up.actual, up.status) == ("4 of 4", "3 of 4", FieldCheckStatus.MISMATCH)
+
+
+def test_a_file_service_that_could_not_be_read_is_not_readable_and_the_ports_still_count():
+    from alletra_onboard.adapters.array.wsapi_v3_client import V3Answer
+    from tests.unit.test_unified_file_read import CapturedV3
+
+    fields, _ = _verify_file(_file_array(), CapturedV3("d22u27", answers={"fileservice": V3Answer(401, {})}))
+    assert (fields["File service"].actual, fields["File service"].status) == (None, FieldCheckStatus.NOT_READABLE)
+    assert fields["File ports up"].status == FieldCheckStatus.PASS
+
+
+def test_a_showport_file_that_failed_makes_both_file_rows_not_readable():
+    from tests.unit.test_unified_file_read import CapturedV3
+
+    v3 = CapturedV3("d22u27")
+    fields, _ = _verify_file(_file_array(), v3, fail_commands={"showport -file"})
+    assert fields["File service"].status == fields["File ports up"].status == FieldCheckStatus.NOT_READABLE
+    assert v3.logins == 0
+
+
+def test_an_array_without_file_ports_and_its_service_off_has_no_file_rows():
+    from tests.unit.test_unified_file_read import CapturedV3
+
+    fields, _ = _verify_file(_file_array("rack13"), CapturedV3("rack13"))
+    assert "File service" not in fields and "File ports up" not in fields

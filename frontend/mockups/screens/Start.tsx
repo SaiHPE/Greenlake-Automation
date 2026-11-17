@@ -21,6 +21,18 @@ const VOCAB: { state: RunState; word: string; means: string; colour: string }[] 
   { state: 'complete', word: 'Done', means: 'Finished, with a one-line result.', colour: 'green' },
 ];
 
+// Round 2 (BL-59, SPEC-030), built 2026-11-17. Screens M1 to M15 are draft 3 and are not redrawn.
+const ROUND_2: { title: string; text: string }[] = [
+  { title: 'One question per screen', text: 'One status line under the header, with at most two links (See the commands). Every other notice folds into one line, N notes. A discovery over 12 hours old stays visible on SAN zoning and Provision storage.' },
+  { title: 'The header says the state, not the numbers', text: 'The step header shows the state word only; the counts are in the status line. On step pages the app header no longer repeats the mode: the wizard bar says it.' },
+  { title: 'Parts, not pages', text: 'A long step shows its parts bar under the title. The part at hand is the only open panel; finished parts are one list, a line each, with Show detail and their own "again"; later parts are not drawn. Replication puts the list under the part at hand, so its start stays above the fold at 1080 × 720; SAN zoning, Provision storage and Snapshots put it above.' },
+  { title: 'The footer holds at most three buttons', text: 'The green button and two others. Ticks sit on the button row on wide screens and above it on narrow ones; pressing the button early says Tick the box first. No greyed buttons, in the steps or the console.' },
+  { title: 'About this step starts closed', text: 'Opened with its button, it stays open for the rest of the browser session.' },
+  { title: 'One set of row words', text: 'Passed, Review, Failed, Not checked; Create, Update, Already there, Conflict; Created, Updated, Skipped; Live, Partial, No path; Matches, Differs, Not readable. An empty cell reads --.' },
+  { title: 'The log is one panel with two tabs', text: 'Activity and Console open it on their own tab. It is 40% of the window high, 70% after Taller, and the footer stays on screen. It never opens by itself.' },
+  { title: 'The words the lab scripts read stay', text: 'Button labels and page text that the lab scripts press or read do not change; a test in check.py guards them.' },
+];
+
 const DS_CHANGES: { title: string; text: string }[] = [
   { title: 'The wizard frame is the Design System\'s', text: 'A grey bar over each step: the previous step on the left by name, the run in the middle, Cancel run on the right. Cancel asks twice before it does anything. Under it: "Step X of Y", the title, one sentence.' },
   { title: 'Footer buttons sit together on the right', text: 'Plain buttons first, the one green button last, as the Design System orders wizard and dialog actions. Draft 2 split them left and right.' },
@@ -62,6 +74,12 @@ function Start({ screens, go }: { screens: Screen[]; go: (id: string) => void })
           <Text size="small">Every step, every check and every button keeps working the way it does today. All the prerequisites stay.</Text>
           <Text size="small">Only the layout, the wording and the order on each page change. The backend is not touched.</Text>
           <Text size="small">Each screen lists where every control from today now lives (Kept from today, in the notes panel).</Text>
+        </Box>
+
+        <Box gap="small" flex={false}>
+          <Heading level={2} size="small" margin="none">Round 2: one question per screen (built 17/11/2026)</Heading>
+          <Text size="small" color="text-weak">M16, M17 and M18 are drawn this way. M1 to M15 are draft 3 and are not redrawn: where they differ from the app, the app and SPEC-030 hold. M6 and M6b say where Replication was built differently.</Text>
+          {ROUND_2.map((c, i) => <Rule key={c.title} n={i + 1} title={c.title} text={c.text} />)}
         </Box>
 
         <Box gap="small" flex={false}>

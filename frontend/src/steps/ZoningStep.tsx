@@ -1,15 +1,15 @@
-import { DataTable, Text } from 'grommet';
+import { Box, DataTable, Text } from 'grommet';
 import { Connect } from 'grommet-icons';
-import { useEffect, useRef, useState } from 'react';
+import { ComponentProps, ReactNode, useEffect, useRef, useState } from 'react';
 import {
   RunEvent, RunRecord, zoningPlan, zoningPreview, ZoningPlan, ZoningReport,
 } from '../api';
-import { DiscoveryFreshness } from '../ui/discoveryAge';
-import { EmptyState, Guidance, Section, StatusLine } from '../ui/blocks';
-import { InlineNotification, NotesList, TableSummary } from '../ui/primitives';
-import { StatusIndicator } from '../ui/status';
+import { DiscoveryFreshness, discoveryReadAt, isDiscoveryStale } from '../ui/discoveryAge';
+import { DoneList, EmptyState, Guidance, PartsBar } from '../ui/blocks';
+import { TableSummary } from '../ui/primitives';
+import { NoValue, RESULT, StatusIndicator } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
-import { FooterAction, StepShell } from '../ui/StepShell';
+import { FooterAction, StepShell, StepStatus } from '../ui/StepShell';
 import { useStepState } from '../ui/useStepState';
 import { ZoningPlanView } from './ZoningPlanView';
 
@@ -54,8 +54,67 @@ function describeChange(before: HostRow[], after: HostRow[]): string | null {
   return [...gained, ...lost].join(' · ');
 }
 
+// SPEC-030 R7: the parts of this step, in order. The step keeps its one registry entry.
+const PARTS = ['Check the array', 'Draft zones', 'Hand off'];
+
+/** The check's detail: one row per host, as the array's logins show it (R9 words). */
+function HostTable({ rows, waiting }: { rows: HostRow[]; waiting: boolean }) {
+  const outstanding = rows.filter((row) => !row.odd || !row.even).length;
+  // while the command set is with the SAN team, a missing zone waits on them (grey), not on the operator
+  const notZoned = waiting ? { ...RESULT.not_zoned, state: 'waiting' as const } : RESULT.not_zoned;
+  const word = (on: boolean) => (on ? RESULT.zoned : notZoned);
+  return (
+    <Box gap="small" flex={false}>
+      <Text size="small" color="text-weak">
+        Read from the array&apos;s logins. A Fibre Channel host is provisioned in this run only when both fabric columns show Zoned; an
+        iSCSI host needs no zone, only its IQN logged in on the array.
+      </Text>
+      <DataTable
+        columns={[
+          { property: 'host', header: 'Host', render: (row: HostRow) => <Text size="small">{row.host}</Text> },
+          {
+            property: 'odd',
+            header: 'Fabric F1 (odd)',
+            render: (row: HostRow) =>
+              row.iscsi ? (
+                <StatusIndicator
+                  state={row.iscsi.length ? 'complete' : 'failed'}
+                  label={row.iscsi.length ? 'iSCSI, no zoning needed' : 'iSCSI, IQN not logged in'}
+                />
+              ) : (
+                <StatusIndicator state={word(row.odd).state} label={word(row.odd).label} />
+              ),
+          },
+          {
+            property: 'even',
+            header: 'Fabric F2 (even)',
+            render: (row: HostRow) =>
+              row.iscsi ? (
+                row.iscsi.length ? (
+                  <Text size="small" color="text-weak">
+                    logged in on {row.iscsi.join(', ')}
+                  </Text>
+                ) : (
+                  <NoValue />
+                )
+              ) : (
+                <StatusIndicator state={word(row.even).state} label={word(row.even).label} />
+              ),
+          },
+        ]}
+        data={rows}
+        primaryKey="host"
+        a11yTitle="Zoning check: one row per host with its state on each fabric, or its iSCSI login"
+      />
+      <TableSummary>
+        {rows.length - outstanding} of {rows.length} hosts can be provisioned
+      </TableSummary>
+    </Box>
+  );
+}
+
 export function ZoningStep({ runId, run, events, onDone }: Props) {
-  const { step } = useStepContext();
+  const { step, openLog } = useStepContext();
   const { state } = useStepState(step, run, events);
   const [error, setError] = useState<string | null>(null);
   const running = run?.status === 'running';
@@ -116,21 +175,86 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
   };
   const build: FooterAction = { label: plan ? 'Rebuild plan' : 'Build zoning plan', busy: running, onClick: call(() => zoningPlan(runId)) };
 
+  // The parts (R7): checking, until a check answers; drafting, until a command set is with the SAN team.
+  const at = !report || report.error ? 0 : waiting ? 2 : 1;
+  const checkedAt = hhmm(reportEvent?.created_at);
+
+  // One status line (R2): a check that failed, all zoned, waiting on the SAN team, or work to do.
+  let status: StepStatus | undefined;
+  if (report?.error) {
+    status = { state: 'failed', title: 'Zoning could not be checked', message: report.error };
+  } else if (report?.proper) {
+    status = {
+      state: 'complete',
+      title: 'Every expected host is zoned on both fabrics',
+      time: checkedAt,
+      message: 'Confirmed from the array\'s logins; no switch login was needed.',
+    };
+  } else if (report && waiting) {
+    status = {
+      state: 'waiting',
+      title: 'Waiting on the SAN team',
+      time: `since ${hhmm(renderedAt)}`,
+      message: `The command set was generated at ${hhmm(renderedAt)}. When the SAN team says it is applied, check zoning again: the array shows each new login.${
+        provisionable > 0 ? ` ${report.zoned_hosts.join(', ')} can go ahead now.` : ''
+      }`,
+      links: openLog ? [{ label: 'See the commands', onClick: () => openLog('commands') }] : undefined,
+    };
+  } else if (report) {
+    status = {
+      state: 'action_required',
+      title: provisionable ? `${provisionable} host${provisionable === 1 ? '' : 's'} can go ahead now` : 'No host is zoned on both fabrics yet',
+      time: checkedAt,
+      message: provisionable
+        ? `Provision ${report.zoned_hosts.join(', ')} now, or finish the missing zones and check zoning again; hosts that are not ready are left out of this run by name.`
+        : 'Build the plan, select the pairs, name the aliases and give the command set to your SAN team; after they apply and activate it, check zoning again.',
+    };
+  }
+
+  // Every other notice is a note (R2); a stale discovery stays a visible warning here (LESSONS 8).
+  const stale = isDiscoveryStale(events);
+  const readAt = discoveryReadAt(events);
+  const notes: ReactNode[] = [];
+  if (change) notes.push(`Since the previous check: ${change}`);
+  if (report && report.unverified_hosts.length > 0) {
+    notes.push(
+      `${report.unverified_hosts.length} host${report.unverified_hosts.length === 1 ? '' : 's'} not seen by the array: the array has no login from ${report.unverified_hosts.join(', ')}. From the array alone this is either "not zoned" or "powered off"; the zoning plan (which reads the switches) tells them apart.`,
+    );
+  }
+  if (report) notes.push(...report.notes);
+  if (plan) notes.push(...plan.notes);
+  if (readAt && !stale) notes.push(`Environment last read ${readAt.toLocaleString()}.`);
+
+  // The finished check, one row (R7); its "again" is in the footer, so the row has none (R3).
+  const done: ComponentProps<typeof DoneList>['items'] =
+    report && !report.error
+      ? [
+          {
+            text: `Checked the array at ${checkedAt}: ${rows.length} host${rows.length === 1 ? '' : 's'} the array can reach, ${
+              rows.length - outstanding
+            } of ${rows.length} can be provisioned`,
+            detail: rows.length > 0 ? <HostTable rows={rows} waiting={waiting} /> : undefined,
+          },
+        ]
+      : [];
+
   return (
     <StepShell
       title="SAN zoning"
-      description="Which hosts can reach the array through the fabrics, and the command set for the zones still missing. This tool never writes to a switch."
-      stateDetail={report ? (outstanding ? `${outstanding} host${outstanding === 1 ? '' : 's'} outstanding` : undefined) : undefined}
+      description="Which hosts can reach the array, and the commands your SAN team needs for the zones still missing."
       stateLabel={waiting ? 'Waiting on the SAN team' : undefined}
       error={error}
       onDismissError={() => setError(null)}
+      top={<PartsBar parts={PARTS} at={report?.proper ? 2 : at} doneAll={!!report?.proper} failed={!!report?.error} />}
+      status={status}
+      notes={notes}
+      staleNotice={stale ? <DiscoveryFreshness events={events} action="drafting commands for the SAN team" /> : undefined}
       buttons={provisionable > 0 ? [check, build] : [build]}
       primary={
         provisionable > 0
           ? { label: `Continue with ${provisionable} zoned host${provisionable === 1 ? '' : 's'}`, onClick: onDone }
           : check
       }
-      guideOpen={!report}
       guidance={
         <Guidance
           items={[
@@ -150,8 +274,6 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
         />
       }
     >
-      <DiscoveryFreshness events={events} action="drafting commands for the SAN team" />
-
       {!report && (
         <EmptyState icon={<Connect size="large" color="icon-weak" />} title="Zoning not checked yet">
           Check zoning reads the array only, with no switch login, and shows which hosts can be provisioned. Build zoning plan also reads both
@@ -159,104 +281,10 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
         </EmptyState>
       )}
 
-      {report?.error && (
-        <StatusLine state="failed" title="Zoning could not be checked">
-          {report.error}
-        </StatusLine>
-      )}
-      {report?.proper && (
-        <StatusLine state="complete" title="Every expected host is zoned on both fabrics" time={hhmm(reportEvent?.created_at)}>
-          Confirmed from the array&apos;s logins; no switch login was needed.
-        </StatusLine>
-      )}
-      {report && !report.proper && !report.error && waiting && (
-        <StatusLine state="waiting" title="Waiting on the SAN team" time={`since ${hhmm(renderedAt)}`}>
-          The command set was generated at {hhmm(renderedAt)}. When the SAN team says it is applied, Check zoning again: the array shows each new
-          login, and the hosts it confirms can be provisioned.
-          {provisionable > 0 ? ` ${report.zoned_hosts.join(', ')} can go ahead now.` : ''}
-        </StatusLine>
-      )}
-      {report && !report.proper && !report.error && !waiting && (
-        <StatusLine
-          state="action_required"
-          title={
-            provisionable
-              ? `${provisionable} host${provisionable === 1 ? '' : 's'} can go ahead; the rest will be skipped`
-              : 'No host is zoned on both fabrics yet'
-          }
-          time={hhmm(reportEvent?.created_at)}
-        >
-          {provisionable
-            ? `Continue to provision ${report.zoned_hosts.join(', ')} now, or finish the missing zones and Check zoning again first. Hosts that are not ready are left out of this run by name.`
-            : 'Build the plan, select the pairs, name the aliases and give the command set to your SAN team. After they apply and activate it, Check zoning again.'}
-        </StatusLine>
-      )}
-
-      {change && <InlineNotification tone="info" title="Since the previous check" message={change} />}
-
-      {rows.length > 0 && (
-        <Section
-          title={`${rows.length} host${rows.length === 1 ? '' : 's'} the array can reach`}
-          summary={`${rows.length - outstanding} of ${rows.length} can be provisioned`}
-          open
-        >
-          <Text size="small" color="text-weak">
-            Read from the array&apos;s logins. A Fibre Channel host is provisioned in this run only when both fabric columns show Zoned; an
-            iSCSI host needs no zone, only its IQN logged in on the array.
-          </Text>
-          <DataTable
-            columns={[
-              { property: 'host', header: 'Host', render: (row: HostRow) => <Text size="small">{row.host}</Text> },
-              {
-                property: 'odd',
-                header: 'Fabric F1 (odd)',
-                render: (row: HostRow) =>
-                  row.iscsi ? (
-                    <StatusIndicator
-                      state={row.iscsi.length ? 'complete' : 'failed'}
-                      label={row.iscsi.length ? 'iSCSI, no zoning needed' : 'iSCSI, IQN not logged in'}
-                    />
-                  ) : (
-                    <StatusIndicator state={row.odd ? 'complete' : waiting ? 'waiting' : 'failed'} label={row.odd ? 'Zoned' : 'Not zoned'} />
-                  ),
-              },
-              {
-                property: 'even',
-                header: 'Fabric F2 (even)',
-                render: (row: HostRow) =>
-                  row.iscsi ? (
-                    <Text size="small" color="text-weak">
-                      {row.iscsi.length ? `logged in on ${row.iscsi.join(', ')}` : '--'}
-                    </Text>
-                  ) : (
-                    <StatusIndicator state={row.even ? 'complete' : waiting ? 'waiting' : 'failed'} label={row.even ? 'Zoned' : 'Not zoned'} />
-                  ),
-              },
-            ]}
-            data={rows}
-            primaryKey="host"
-            a11yTitle="Zoning check: one row per host with its state on each fabric, or its iSCSI login"
-          />
-          <TableSummary>
-            {rows.length - outstanding} of {rows.length} hosts can be provisioned
-          </TableSummary>
-        </Section>
-      )}
-
-      {report && report.unverified_hosts.length > 0 && (
-        <InlineNotification
-          tone="warning"
-          title={`${report.unverified_hosts.length} host${report.unverified_hosts.length === 1 ? '' : 's'} not seen by the array`}
-          message={`The array has no login from ${report.unverified_hosts.join(', ')}. From the array alone this is either "not zoned" or "powered off"; the zoning plan (which reads the switches) tells them apart.`}
-        />
-      )}
-
-      {report && report.notes.length > 0 && <InlineNotification tone="info" title="Check notes" message={<NotesList notes={report.notes} />} />}
-
       {/* Keyed on the plan event: the alias fields are seeded once from the plan, so rebuilding must
           mount a fresh view. Otherwise new WWPNs show an empty alias field while the generated
           commands carry the suggested one; the SAN team would receive names shown nowhere. */}
-      {plan && <ZoningPlanView key={planEvent?.event_id} plan={plan} runId={runId} />}
+      {plan ? <ZoningPlanView key={planEvent?.event_id} plan={plan} runId={runId} done={done} /> : done.length > 0 && <DoneList items={done} />}
     </StepShell>
   );
 }

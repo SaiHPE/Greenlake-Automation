@@ -1,6 +1,6 @@
 # SPEC-030 — A calmer screen per step
 
-**Status:** accepted 2026-11-17 with changes, design only (nothing built) · **Decision:** [ADR 0023](../adr/0023-one-question-per-step-screen.md)
+**Status:** built 2026-11-17, pending live run, every slice (work packet *Progress*): S0 done; T1 (the frozen words test) built; S5a, S1 to S4, S5b, S6, the step pages P1 to P14 with the Array ports page (P8b dropped) and D1 built. The live run closes BL-59: `lab/ui_live_lab.py` (read-only), then `lab/ui_provision_lab.py` and `lab/failed_apply_lab.py`, on the owner's say-so. Accepted 2026-11-17 with changes · **Decision:** [ADR 0023](../adr/0023-one-question-per-step-screen.md)
 (accepted 2026-11-17, owner's decision; its *Changes on acceptance* are written into this spec)
 · **Tracker:** BL-59, *UI round 2: one question per screen* · **Work packet:** [`workpackets/BL-59.md`](../workpackets/BL-59.md)
 · **Builds on:** BL-43's October redesign (draft 3, built 2026-10-14, closed 2026-11-17)
@@ -55,11 +55,38 @@ four places: the app header (run state, for example *Waiting for you*), the rail
 *About this step* opens by default on most steps and takes a third of the width at 1366 (Grommet's
 `large` starts at 1081). Disabled buttons remain in the builder, the zoning view and the console.
 
-**Vertical budget, estimated** from the theme's spacing tokens (Chrome on Windows at 1366 x 768
-leaves about 640 px): app header ≈ 60, wizard bar ≈ 52, footer ≈ 64 (+ ≈ 48 with the tick row),
-console bar ≈ 44, so the scroll area is ≈ 420 px (≈ 370 with a tick). Step identifier with a
-two-line description ≈ 150, parts bar ≈ 64, status line ≈ 90: on Provision storage and Replication
-about 70 to 120 px of content shows before scrolling. These are estimates; slice S0 measures them.
+**Vertical budget, measured at 84d512ce** (slice S0, 2026-11-17; this replaces the estimate). The
+app from `main` as built (its `frontend/dist`), on one *Provision, then replicate* run made from the
+captured lab run of 2026-10-11 with every name replaced by a sample name (`DEMO-ARRAY-01`,
+`esx-demo-01`, `192.0.2.x`) and every device step faked: nothing was sent to a device. Headless
+Chrome; a size is the page's viewport, as the lab scripts set it. 1366 x 640 is what a Chrome window
+leaves for the page on a 1366 x 768 screen (the estimate assumed it). *About this step* as it opens
+today (closed on these four steps), the log closed. **Shown** is the height, in px, of the current
+part between the bottom of the status line and the top of the footer.
+
+Chrome, the same on every step: app header and wizard bar 109, log bar 41. Footer 61 with one row
+of buttons, 99 with the tick (Provision storage), 135 on Replication (the tick, then four buttons
+in two rows).
+
+| State | Shown at 1366 x 768 | 1080 x 720 | 1366 x 640 | Status line, footer, primary, tick on screen |
+|---|---|---|---|---|
+| 1. Provision storage, plan to approve (tick not ticked) | 185 | 93 | 57 | yes, at every size |
+| 2. Provision storage, failed apply | 199 | 107 | 71 | yes (no tick); *Removal command set* is below the fold at every size |
+| 3. Replication, plan to approve (both arrays read, link checked) | 141 | 17 | 13 | yes, at every size |
+| 4. SAN zoning, work left (checked, three hosts not zoned, plan built, no command set) | 255 | 163 | 127 | yes (no tick) |
+
+With the log open (states 1 and 3), the footer stays on screen at every size: `App.tsx` draws the
+footer host above the log bar, so the page above it shrinks instead.
+
+| State, log open | Log bar and panel | Step area above the footer (1366 x 768 / 1080 x 720 / 1366 x 640) | Shown |
+|---|---|---|---|
+| 1, *Activity (2)* | 112 | 448 / 400 / 320 | 114 / 22 / 0 |
+| 1, *Console (29 commands)* | 352 (terminal 210) | 208 / 160 / 80 | 0 at every size: the status line is under the footer |
+| 3, *Activity (4)* | 164 (180 at 1080 x 720) | 360 / 296 / 232 | 18 / 0 / 0 |
+| 3, *Console (45 commands)* | 352 (terminal 210) | 172 / 124 / 44 | 0 at every size |
+
+At 1080 x 720 and 1366 x 640, Provision storage shows 57 to 107 px, close to the estimate of 70 to
+120; Replication's plan shows 13 to 17 px. With the Console open, the step shows its header at most.
 
 ## 3. Requirements
 
@@ -282,8 +309,8 @@ Command set for the SAN team · fabric F2            [Copy paste block] [Downloa
 ```
 *Generate command set* stays in the page (Q3), so `ZoningPlanView` hands nothing up to the
 footer and keeps its own state and its keyed remount (aliases are seeded once per plan event).
-M16's *pick* and *names* states still draw *Name the aliases* and *Generate command set* as the
-footer primary; slice P8a brings M16 in line before any code.
+M16 was brought in line by slice P8a: *Generate command set* is a default button in the names panel, and the
+footer is the step's own three.
 
 ## 5. Shared blocks, built first
 

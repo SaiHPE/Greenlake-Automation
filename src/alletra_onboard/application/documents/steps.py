@@ -9,17 +9,27 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
 from types import MappingProxyType
 
+from alletra_onboard.application.documents import handover
 from alletra_onboard.application.documents.asbuilt import generate_asbuilt
 from alletra_onboard.application.documents.asbuilt_parse import parse_asbuilt
 from alletra_onboard.application.documents.verification import verify
-from alletra_onboard.application.provisioning.clients import make_array_cli
+from alletra_onboard.application.provisioning import iscsi_network
+from alletra_onboard.application.provisioning import peer_ports as peer_ports_read
+from alletra_onboard.application.provisioning.clients import make_array_cli, make_wsapi_v3
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
+from alletra_onboard.application.snapshots import read as snapshots_read
+from alletra_onboard.application.unified_file import read as file_read
 from alletra_onboard.domain.models import ArrayWorkItem, RunRecord, WorkflowPhase
+from alletra_onboard.domain.network import IscsiVlanRequest
+from alletra_onboard.domain.peer_ports import PeerPortIntent
 from alletra_onboard.domain.replication import ReplicationIntent
 from alletra_onboard.domain.shared import EndpointCreds
+from alletra_onboard.domain.snapshots import SnapshotIntent
+from alletra_onboard.domain.trust import DevicePinInfo
 
 
 class DocumentSteps:
@@ -41,6 +51,10 @@ class DocumentSteps:
         ("showvvset", "showvvset"),
         ("showvlun_t", "showvlun -t"),
         ("showvlun_a", "showvlun -a"),
+        # SPEC-024 R7: the VLAN-tagged iSCSI addresses
+        ("showport_iscsivlans", "showport -iscsivlans"),
+        # SPEC-025 R9: the array's own listing of its peer ports
+        ("showport_peer", "showport -peer"),
     )
     # SPEC-002 run sections: event type -> (AsBuiltData field, payload key). The LATEST event of
     # each type wins; the two zoning-check types share a field so whichever came last wins.
@@ -63,13 +77,27 @@ class DocumentSteps:
         # SPEC-017 R6: the failover test's record, passed or not
         "failover.completed": ("failover_record", "record"),
         "failover.failed": ("failover_record", "record"),
+        # SPEC-023 R8: the snapshot plan and what the latest apply did (a failed apply carries a result too)
+        "snapshots.previewed": ("snapshots_plan", "plan"),
+        "snapshots.applied": ("snapshots_result", "result"),
+        "snapshots.apply.failed": ("snapshots_result", "result"),
     })
 
     def __init__(self, coord: RunCoordinator, *, verify_fn: Callable = verify,
-                 read_replication: Callable = replication_read.read_array) -> None:
+                 read_replication: Callable = replication_read.read_array,
+                 read_file: Callable = file_read.read_array_file,
+                 wsapi_v3_factory: Callable = make_wsapi_v3,
+                 read_snapshots: Callable = snapshots_read.read_array,
+                 read_iscsi_vlans: Callable = iscsi_network.read_iscsi_vlans,
+                 read_peer_ports: Callable = peer_ports_read.read_view) -> None:
         self._coord = coord
         self._verify_fn = verify_fn
         self._read_replication = read_replication
+        self._read_file = read_file
+        self._wsapi_v3_factory = wsapi_v3_factory
+        self._read_snapshots = read_snapshots
+        self._read_iscsi_vlans = read_iscsi_vlans
+        self._read_peer_ports = read_peer_ports
         self._asbuilt: dict[str, bytes] = {}  # generated as-built .docx bytes, per run
 
     # ------------------------------------------------------------------ post-init verification
@@ -111,14 +139,46 @@ class DocumentSteps:
         if not report.reachable:
             coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, "verify.failed", report.error or "Could not reach the array over SSH.")
             return
+        iscsi = ""
+        rows = self._iscsi_rows(run.run_id)
+        creds = EndpointCreds(host=coord.array_host(run.run_id), username=username, password=password)
+        if rows:
+            # SPEC-024 R6, read-only: the sheet's iSCSI network rows against showport -iscsivlans.
+            try:
+                vlans = await asyncio.to_thread(self._read_iscsi_vlans, creds)
+                report.iscsi_vlans = iscsi_network.verify_iscsi_vlans(rows, vlans)
+                present = sum(1 for c in report.iscsi_vlans if c.status == "present")
+                iscsi = f" iSCSI VLAN addresses: {present} of {len(rows)} present."
+            except Exception as exc:  # noqa: BLE001 - one read failing costs its section, not the report
+                report.iscsi_vlans_error = f"`showport -iscsivlans` could not be read: {exc}"
+                iscsi = " The iSCSI VLAN addresses could not be read."
+        peer = self._peer_intent(run.run_id)
+        if peer is not None:
+            # SPEC-025 R6, read-only: the planned peer ports as the array reads them now.
+            view = await asyncio.to_thread(self._read_peer_ports, creds)
+            if view.read_error:
+                report.peer_ports_error = view.read_error
+                iscsi += " The peer ports could not be read."
+            else:
+                report.peer_ports = peer_ports_read.verify_peer_ports(peer, view)
+                ready = sum(1 for c in report.peer_ports if c.ok)
+                iscsi += f" Peer ports: {ready} of {len(report.peer_ports)} ready."
         coord.emit(
             run.run_id,
             WorkflowPhase.CONFIG_VERIFY,
             "verify.completed",
             f"Verified the array — {report.passed} OK, {report.mismatches} mismatch(es), "
-            f"{report.health_total} health issue(s).",
+            f"{report.health_total} health issue(s).{iscsi}",
             data={"report": report.model_dump(mode="json")},
         )
+
+    def _peer_intent(self, run_id: str) -> PeerPortIntent | None:
+        intent = self._coord.store.get_provisioning_intent(run_id)
+        return intent.peer_ports if intent is not None else None
+
+    def _iscsi_rows(self, run_id: str) -> list[IscsiVlanRequest]:
+        intent = self._coord.store.get_provisioning_intent(run_id)
+        return list(intent.iscsi_network) if intent is not None else []
 
     # ------------------------------------------------------------------ as-built document (last step)
 
@@ -146,7 +206,11 @@ class DocumentSteps:
                    f"Reading {host} (read-only) and building the as-built document…")
         try:
             data = await asyncio.to_thread(self._collect_asbuilt, host, username, password)
+            data.run_created_at = run.created_at
             self._run_records(run.run_id, data)
+            data.iscsi_network_rows = [r.model_dump(mode="json") for r in self._iscsi_rows(run.run_id)]
+            peer = self._peer_intent(run.run_id)
+            data.peer_ports_rows = [r.model_dump(mode="json") for r in peer.ports] if peer is not None else []
             replication = self._replication_intent(run.run_id)
             if replication is not None:
                 # SPEC-018 R3: the replication states are read from BOTH arrays now, not copied from the plan
@@ -154,13 +218,23 @@ class DocumentSteps:
                 data.replication_primary, data.replication_peer = await asyncio.to_thread(
                     self._collect_replication, EndpointCreds(host=host, username=username, password=password), replication.peer,
                 )
+            snapshots = self._snapshots_intent(run.run_id)
+            if snapshots is not None:
+                # SPEC-023 R8: schedules and snapshots are read now, not copied from the plan
+                data.snapshots_tab = [r.model_dump(mode="json") for r in snapshots.requests]
+                data.snapshots_view = await asyncio.to_thread(
+                    self._read_snapshots, EndpointCreds(host=host, username=username, password=password))
             # The step's own fields win over the workbook's — the operator is looking at the
             # document about to be produced, and the sheet may have been filled weeks earlier.
             data.customer = customer or item.customer_name or ""
             data.site = site or item.site or ""
             data.application_workload = application_workload or item.application_workload or ""
             data.purpose = purpose or item.storage_purpose or ""
+            # ADR 0026: after every read above, so a device first reached for this document is listed too
+            data.trusted_devices = [DevicePinInfo.of(pin).model_dump(mode="json")
+                                    for pin in coord.device_pins(run.run_id)]
             docx_bytes, warnings = await asyncio.to_thread(self._render_asbuilt, data)
+            status = self._handover_status(data)
         except Exception as exc:  # noqa: BLE001 - report, never propagate (would mark the run failed)
             coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.failed",
                        f"As-built generation failed: {type(exc).__name__}: {str(exc)[:200]}")
@@ -180,20 +254,40 @@ class DocumentSteps:
             summary += f" {len(warnings)} item(s) need attention before sending."
         coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.generated", summary,
                    data={"serial": data.serial_no, "name": data.name, "customer": data.customer,
-                         "size": len(docx_bytes), "warnings": warnings})
+                         "size": len(docx_bytes), "warnings": warnings, "handover": status})
+
+    @staticmethod
+    def _handover_status(data) -> dict | None:
+        """SPEC-026 R10: the page's Status at handover, from the same reads as the document. None when
+        the reads were not made."""
+        if data.handover_read_at is None:
+            return None
+        return handover.summarise(handover.read_from(data)).as_event()
 
     def _collect_asbuilt(self, host: str, username: str, password: str):
         creds = EndpointCreds(host=host, username=username, password=password)
         lines: list[str] = []
+        outputs: dict[str, str] = {}
         with make_array_cli(creds) as cli:
             for cmd in self._ASBUILT_COMMANDS:
+                outputs[cmd] = cli.run(cmd)
                 lines.append(f"===== $ {cmd} =====")
-                lines.append(cli.run(cmd))
+                lines.append(outputs[cmd])
             data = parse_asbuilt("\n".join(lines))
+            data.showport = outputs.get("showport", "")
             for attr, cmd in self._ASBUILT_LISTINGS:
                 try:
                     setattr(data, attr, cli.run(cmd))
                 except Exception as exc:  # noqa: BLE001 - R6: name it, keep going
+                    data.read_errors[cmd] = f"{type(exc).__name__}: {exc}"
+            # SPEC-028 R3: the file side, in the same session; no section on an array without one
+            data.file_ports, data.file_report, data.file_read_error = self._collect_file(cli, creds)
+            # SPEC-026 R3: alerts, capacity and System Reporter, each failing on its own (R8), read last
+            data.handover_read_at = datetime.now(UTC)
+            for attr, cmd in handover.READS:
+                try:
+                    setattr(data, attr, cli.run(cmd))
+                except Exception as exc:  # noqa: BLE001 - R8: name it, keep going
                     data.read_errors[cmd] = f"{type(exc).__name__}: {exc}"
         return data
 
@@ -201,8 +295,10 @@ class DocumentSteps:
         """Fill the run sections from the run's own events: the latest payload per event type, plus
         the union of every apply's removal items (SPEC-007 — a run may apply more than once)."""
         seen: dict[str, object] = {}
+        peer_sets: dict[str, dict] = {}     # each port's first planned set (SPEC-025 R9)
         rc_applies: list[dict] = []
         last_rc_plan: dict | None = None
+        last_snap_plan: dict | None = None
         for event in self._coord.list_events(run_id):
             # SPEC-007 R6: a failed apply's objects are undone too; a retry calls them Exists.
             if event.event_type in ("storage.applied", "storage.apply.failed"):
@@ -210,6 +306,24 @@ class DocumentSteps:
             if event.event_type in ("replication.applied", "replication.apply.failed"):
                 rc_applies.append(event.data.get("result") or {})
                 data.replication_applies.append({"plan": last_rc_plan, "result": rc_applies[-1]})
+            if event.event_type == "snapshots.previewed":
+                last_snap_plan = event.data.get("plan")
+            if event.event_type in ("snapshots.applied", "snapshots.apply.failed"):
+                data.snapshots_applies.append({"plan": last_snap_plan, "result": event.data.get("result") or {}})
+            if event.event_type in ("ports.previewed", "ports.completed"):
+                # SPEC-025 R9: the last plan that set ports (its commands) and the last read after the paste.
+                peer = event.data.get("peer") or {}
+                for action in (peer.get("plan") or {}).get("actions") or []:
+                    if action.get("state") == "create" and action.get("nsp") not in peer_sets:
+                        peer_sets[action.get("nsp")] = action
+                if peer.get("result"):
+                    data.peer_ports_result = peer["result"]
+                # SPEC-024 R7: an interface this run's plan had to add, found on the array now, was set up in this run.
+                plan = (event.data.get("iscsi") or {}).get("plan") or {}
+                for action in plan.get("actions") or []:
+                    key = (action.get("nsp", ""), action.get("vlan_id"))
+                    if action.get("state") == "create" and key not in data.iscsi_set_up_in_run:
+                        data.iscsi_set_up_in_run.append(key)
             if event.event_type == "replication.previewed":
                 last_rc_plan = event.data.get("plan")
                 if event.data.get("report") is not None:
@@ -223,6 +337,8 @@ class DocumentSteps:
                 continue
             setattr(data, attr, payload)
             seen[attr] = event.created_at
+        if peer_sets:
+            data.peer_ports_plan = {"actions": list(peer_sets.values())}
         for result in reversed(rc_applies):          # SPEC-021: newest apply first, each line once
             for key, merged in (("removals_a", data.replication_removals_a), ("removals_b", data.replication_removals_b)):
                 merged.extend(line for line in result.get(key) or [] if line not in merged)
@@ -232,7 +348,14 @@ class DocumentSteps:
         if "replication_result" in seen:
             ts = seen["replication_result"]
             data.replication_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        if "snapshots_result" in seen:
+            ts = seen["snapshots_result"]
+            data.snapshots_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
         data.commands = [{k: v for k, v in c.items() if k != "output"} for c in self._coord.list_commands(run_id)]
+
+    def _snapshots_intent(self, run_id: str) -> SnapshotIntent | None:
+        intent = self._coord.store.get_provisioning_intent(run_id)
+        return intent.snapshots if intent is not None else None
 
     def _replication_intent(self, run_id: str) -> ReplicationIntent | None:
         intent = self._coord.store.get_provisioning_intent(run_id)
@@ -245,12 +368,23 @@ class DocumentSteps:
             "rows": [{"vvset": r.vvset, "mode": r.mode, "rpo_minutes": r.rpo_minutes, "peer_cpg": r.peer_cpg}
                      for r in replication.protections],
             "failover_test": replication.failover_test,
+            "rtt_ms": replication.rtt_ms,       # SPEC-031 R7: over Fibre Channel the latency is the typed one
         }
 
     def _collect_replication(self, primary: EndpointCreds, peer: EndpointCreds):
         """Both arrays, read-only, at generation time. A read that fails is the view's `read_error`;
         the renderer names it and the document is still produced (R3)."""
         return self._read_replication(primary), self._read_replication(peer)
+
+    def _collect_file(self, cli, creds: EndpointCreds) -> tuple[list, object | None, str]:
+        """(File ports, FileReport or None, read error), over the open SSH session and, when the
+        array has a file side, one WSAPI v3 session with the run's credential. A failed read is
+        named in the section and the warnings; the document is still produced."""
+        try:
+            ports, report = self._read_file(cli, self._wsapi_v3_factory(creds))
+        except Exception as exc:  # noqa: BLE001 - R6 pattern: name it, keep going
+            return [], None, f"{type(exc).__name__}: {exc}"
+        return ports, report, ""
 
     def _render_asbuilt(self, data) -> tuple[bytes, list[str]]:
         import os

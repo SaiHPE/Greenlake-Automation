@@ -1,7 +1,8 @@
 """Component B — drive the on-array HPE Cloud Connectivity Wizard (Playwright).
 
 Launches its own Chromium, navigates to the array's ``https://169.254.x.x/cloudinit``
-(self-signed cert handled via ``ignore_https_errors``), and drives the wizard. No auth.
+(its self-signed certificate is accepted, for the reason written at the call), and drives the
+wizard. No auth.
 The operator supplies the cloudinit URL (from the HPE Discovery Tool); the frontend will
 pass it the same way. Steps mirror the live capture:
 
@@ -103,7 +104,11 @@ class CloudinitWizardAdapter:
                         return BrowserResultStatus.WAITING_FOR_OPERATOR  # no open tab to drive
                 else:
                     context = await browser.new_context(
-                        ignore_https_errors=True,  # the array serves a self-signed cert
+                        # TRUST-OFF: the wizard is reached only at a link-local address (checked in
+                        # domain/cloudinit_url.py), which is not routed, so in practice over the same cable
+                        # as the array; no password is typed here, only network values; and a fresh array
+                        # has no certificate anyone could have recorded before this moment (ADR 0026).
+                        ignore_https_errors=True,
                         no_viewport=not self.headless,
                     )
                     page = await context.new_page()

@@ -11,7 +11,7 @@ E18U31 on its iSCSI ports), Remote Copy group rows (VZ) and the corrected CPU an
 from __future__ import annotations
 
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -387,7 +387,7 @@ def test_cpu_min_and_5_percent_rows_on_d22u27():
     assert node0.stats["5%"] == h.CpuFigures(3.30, 0.10, 96.50)
 
 
-IDLE_IOPS = 10  # SPEC-026 R6; the named constant joins handover.py with summarise() in step 4
+IDLE_IOPS = h.IDLE_IOPS  # SPEC-026 R6
 
 
 def _avg_iops(ports: list[h.IoLoad]) -> dict[str, float]:
@@ -471,3 +471,234 @@ def test_remote_copy_summary_with_no_sample_on_os_10_5(folder):
 def test_os_10_5_time_series_reports_are_not_read_as_summaries(folder, name):
     with pytest.raises(h.UnreadableReport, match="not a System Reporter summary"):
         h.parse_srstat_summary(_capture(name, folder), name)
+
+
+# ---- At handover: the five reads together (work packet step 4) --------------------------------------
+
+PEER_PORTS = FIXTURES / "peer_ports"   # showport from the same lab arrays (BL-26, 2026-11-16 and 17)
+V2 = {RACK13: ("srstatcpu_24h.txt", "srstatport_24h.txt")}   # rack13 has no corrected forms
+
+
+def _reads(folder: Path, *, showport: str = "", errors: dict | None = None, run_created_at=None,
+           ports: str | None = None, **texts: str) -> h.HandoverReads:
+    """The five reads of one capture folder, as the as-built step would have them."""
+    cpu, port = V2.get(folder, ("srstatcpu_24h_v2.txt", "srstatport_24h_v2.txt"))
+    files = {h.ALERTS: "showalert_d.txt", h.SPACE: "showsys_space.txt", h.CPU: cpu, h.PORTS: ports or port,
+             h.VOLUMES: "srstatvv_24h.txt"}
+    captured = {cmd: _capture(name, folder) for cmd, name in files.items()}
+    captured.update(texts)
+    return h.read_handover(captured, errors or {}, showport=showport, run_created_at=run_created_at,
+                           read_at=datetime(2026, 11, 16, 18, 0, tzinfo=UTC))
+
+
+@pytest.mark.parametrize("folder, name", [
+    (RACK13, "srstatcpu_24h.txt"), (RACK13, "srstatvv_24h.txt"), (RACK13, "srstatrcvv_24h.txt"),
+    (D22U27, "srstatcpu_24h_v2.txt"), (E18U31, "srstatport_24h_v2.txt"), (VZ, "srstatvv_24h.txt"),
+])
+def test_the_arrays_utc_offset_comes_from_a_start_time_line(folder, name):
+    """Every lab array is in India: +05:30, from the local time and the epoch on one line, without
+    reading the zone's name (ADR 0019 change 5). An empty Remote Copy report still has a Start Time."""
+    offset = h.utc_offset(_summary(name, folder))
+    assert offset == timedelta(hours=5, minutes=30)
+    assert h.offset_text(offset) == "UTC+05:30"
+
+
+def test_no_system_reporter_read_means_no_offset():
+    assert h.utc_offset(None, None, None) is None
+    reads = _reads(RACK13, errors={h.CPU: "refused", h.PORTS: "refused", h.VOLUMES: "refused"})
+    assert reads.offset is None and reads.window is None
+
+
+def test_the_first_summary_that_parsed_gives_the_offset_and_the_window():
+    reads = _reads(VZ, errors={h.CPU: "ArrayCliError: refused"})
+    assert reads.window is reads.ports
+    assert reads.offset == timedelta(hours=5, minutes=30)
+
+
+def test_before_this_run_uses_the_first_occurrence_and_the_arrays_offset():
+    """rack13: alert 27 first happened 2026-11-11 23:22:51 IST (17:52:51 UTC), alert 40 at 23:54:31 IST
+    (18:24:31 UTC) though its Time is the capture minute. A run created at 18:00 UTC that day sits
+    between them."""
+    alerts = {a.id: a for a in h.parse_alerts(_capture("showalert_d.txt"))}
+    offset = timedelta(hours=5, minutes=30)
+    created = datetime(2026, 11, 11, 18, 0, tzinfo=UTC)
+    assert h.before_run(alerts[27], offset, created) is True
+    assert h.before_run(alerts[40], offset, created) is False
+    assert h.before_run(alerts[40], offset, datetime(2026, 11, 16, 17, 0, tzinfo=UTC)) is True
+    assert h.before_run(alerts[40], None, created) is None            # no System Reporter read: unknown
+    assert h.before_run(alerts[40], offset, None) is None
+
+
+@pytest.mark.parametrize("folder, alert_id", [(RACK13, 40), (D22U27, 10), (VZ, 11), (E18U31, None)])
+def test_the_cloud_alert_is_the_arrays_own(folder, alert_id):
+    alerts = h.parse_alerts(_capture("showalert_d.txt", folder))
+    cloud = h.cloud_alert(alerts)
+    assert (cloud.id if cloud else None) == alert_id
+    if cloud:
+        assert cloud.severity == "Major" and cloud.message_code == "0x060000a"
+        assert "disconnected from Data Services Cloud Console" in cloud.message
+
+
+@pytest.mark.parametrize("folder, full, groups", [(RACK13, 5, 2), (D22U27, 4, 1), (VZ, 8, 3), (E18U31, 0, 0)])
+def test_alert_table_lists_major_and_worse_in_full_and_groups_the_rest(folder, full, groups):
+    """SPEC-026 §4: rack13 5 rows in full and 2 groups, D22U27 4 and 1, VZ 8 and 3."""
+    alerts = h.parse_alerts(_capture("showalert_d.txt", folder))
+    rows, grouped = h.alert_table(alerts)
+    assert (len(rows), len(grouped)) == (full, groups)
+    assert {a.severity for a in rows} <= {"Major", "Critical", "Fatal"}
+    assert len(rows) + sum(g.count for g in grouped) == len(alerts)       # none dropped
+    assert [a.local_time for a in rows] == sorted((a.local_time for a in rows), reverse=True)
+
+
+def test_rack13_alert_groups():
+    rows, groups = h.alert_table(h.parse_alerts(_capture("showalert_d.txt")))
+    assert [a.id for a in rows] == [40, 34, 31, 28, 27]          # newest Time first; 27 and 28 share theirs
+    assert [(g.severity, g.message_code, g.count, [a.id for a in g.alerts]) for g in groups] == [
+        ("Degraded", "0x02900de", 2, [39, 38]), ("Informational", "0x02d0003", 2, [37, 36])]
+    degraded = groups[0]
+    assert (degraded.first_seen, degraded.latest) == ("2026-11-11 23:24:01 IST", "2026-11-11 23:24:37 IST")
+
+
+def test_d22u27_groups_521_task_failures_in_one_row():
+    rows, groups = h.alert_table(h.parse_alerts(_capture("showalert_d.txt", D22U27)))
+    assert {a.severity for a in rows} == {"Major"}
+    (tasks,) = groups
+    assert (tasks.severity, tasks.message_code, tasks.count) == ("Minor", "0x00e000a", 521)
+    assert tasks.first_seen == "2026-09-30 20:00:00 IST"                 # the earliest of the 521
+    assert tasks.latest == tasks.alerts[0].time and tasks.sample == tasks.alerts[0].message
+    assert tasks.alerts[0].local_time == max(a.local_time for a in tasks.alerts)
+
+
+def test_alerts_verdict_and_the_cloud_sentence():
+    rack13 = h.parse_alerts(_capture("showalert_d.txt"))
+    assert h.alerts_verdict(rack13) == (
+        "9 new alerts; the oldest first occurred on 2026-11-11 23:22:51 IST. Alerts record an event, not the "
+        "current state: compare each with checkhealth before acting. The array reports it is disconnected "
+        "from Data Services Cloud Console (alert 40).")
+    assert h.alerts_verdict([]) == "No new alerts."
+    no_cloud = [a for a in rack13 if a.id != 40]
+    assert "Data Services Cloud Console" not in h.alerts_verdict(no_cloud)
+    assert h.alerts_verdict(no_cloud[:1]).startswith("1 new alert; it first occurred on 2026-11-11 23:22:51 IST.")
+
+
+def test_the_three_cloud_lines():
+    rack13 = h.parse_alerts(_capture("showalert_d.txt"))
+    assert h.cloud_line(rack13) == (
+        'Cloud connection: the array reports it is disconnected from Data Services Cloud Console (alert 40: '
+        '"Storage system has been disconnected from Data Services Cloud Console for more than 7200 minutes."). '
+        "The tool did not read HPE's cloud view of this array (call-home).")
+    assert h.cloud_line([]) == ("Cloud connection: the array has no New alert about it. The tool did not read "
+                                "HPE's cloud view of this array (cloud connection, call-home).")
+    assert h.cloud_line(None) == ("Cloud connection: unknown, the alerts could not be read. The tool did not "
+                                  "read HPE's cloud view of this array (cloud connection, call-home).")
+
+
+def test_ports_showport_does_not_report_ready_are_named_in_one_line():
+    """VZ (SPEC-026 §2a item 9): its four iSCSI ports are offline with type free in showport and print
+    all-zero rows. They leave the table and are named, never dropped."""
+    loads = h.ports_by_port(_summary("srstatport_24h_v2.txt", VZ))
+    roles = _roles(PEER_PORTS / "VZ" / "showport.txt")
+    rows, lines = h.split_ports(loads, roles)
+    assert [(r.load.name, r.protocol) for r in rows] == [("0:3:1", "FC"), ("0:3:2", "FC"), ("1:3:1", "FC"), ("1:3:2", "FC")]
+    assert lines == ["4 iSCSI ports not configured, no I/O: 0:4:1, 0:4:2, 1:4:1, 1:4:2."]
+
+
+@pytest.mark.parametrize("folder, showport", [
+    (E18U31, FIXTURES / "rc_pair" / "E18U31" / "showport.txt"),
+    (E18U31, PEER_PORTS / "E18U31" / "showport.txt"),
+    (D22U27, PEER_PORTS / "D22U27" / "showport.txt"),
+])
+def test_ready_ports_all_stay_in_the_table(folder, showport):
+    """E18U31's four iSCSI ports are ready and carry most of its host I/O; D22U27's five FC ports are ready."""
+    loads = h.ports_by_port(_summary("srstatport_24h_v2.txt", folder))
+    rows, lines = h.split_ports(loads, _roles(showport))
+    assert [r.load.name for r in rows] == [p.name for p in loads] and lines == []
+
+
+def test_a_port_that_is_not_ready_but_carried_io_says_so():
+    loads = h.ports_by_port(_summary("srstatport_24h_v2.txt", E18U31))
+    roles = _roles(PEER_PORTS / "E18U31" / "showport.txt")
+    roles["0:4:1"] = roles["0:4:1"].model_copy(update={"state": "loss_sync"})
+    del roles["1:4:2"]
+    rows, lines = h.split_ports(loads, roles)
+    assert "0:4:1" not in [r.load.name for r in rows]
+    assert lines == ["1 iSCSI port with no link, with I/O: 0:4:1.", "1 port not listed by showport, with I/O: 1:4:2."]
+
+
+def test_without_port_states_every_port_is_listed_and_the_line_says_why():
+    loads = h.ports_by_port(_summary("srstatport_24h_v2.txt", VZ))
+    rows, lines = h.split_ports(loads, {})
+    assert len(rows) == 8 and lines == [
+        "The ports' states could not be read from showport, so every port System Reporter printed is listed."]
+
+
+@pytest.mark.parametrize("folder, ports, iops, idle", [
+    (RACK13, None, 0.0, True),
+    (VZ, None, 0.9, True),
+    (E18U31, "srstatport_24h.txt", 2.7, True),          # FC only: the first form called it idle
+    (E18U31, None, 26.3, False),                        # with its iSCSI ports: not idle
+    (D22U27, None, 44.2, False),
+])
+def test_idle_is_the_host_ports_summed_average_below_idle_iops(folder, ports, iops, idle):
+    reads = _reads(folder, ports=ports)
+    assert (reads.host_iops_avg, reads.idle) == (iops, idle)
+
+
+def test_idle_is_unknown_when_the_ports_could_not_be_read():
+    reads = _reads(RACK13, errors={h.PORTS: "ArrayCliError: refused"})
+    assert reads.host_iops_avg is None and reads.idle is None
+
+
+def test_idle_is_unknown_when_the_port_report_has_no_row():
+    """A report with no port (no host port, or no sample in the window) is not an idle baseline."""
+    text = _capture("srstatport_24h_v2.txt", VZ)
+    header_only = text[:text.index("\n", text.index("Summary")) + 1]
+    reads = _reads(VZ, **{h.PORTS: header_only})
+    assert reads.port_loads == [] and "srstatport" not in " ".join(reads.errors)
+    assert reads.host_iops_avg is None and reads.idle is None
+    assert (h.summarise(reads).iops_avg, h.summarise(reads).idle) == (None, None)
+
+
+def test_a_refused_or_unreadable_read_is_an_error_and_the_others_still_parse():
+    reads = _reads(VZ, errors={h.CPU: "ArrayCliError: refused: 'srstatcpu' is not a read-only show command"},
+                   **{h.SPACE: "Error: Invalid option -space\n", h.VOLUMES: ""})
+    assert reads.errors == {
+        h.CPU: "ArrayCliError: refused: 'srstatcpu' is not a read-only show command",
+        h.SPACE: "Error: Invalid option -space",
+        h.VOLUMES: "the array printed nothing",
+    }
+    assert reads.cpu is reads.cpu_nodes is reads.space is reads.volumes is reads.volume_load is None
+    assert len(reads.alerts) == 31 and len(reads.port_loads) == 8
+
+
+@pytest.mark.parametrize("folder, expected", [
+    (RACK13, {"alerts_new": 9, "alerts_major": 5, "oldest_alert": "2026-11-11 23:22:51 IST", "cloud_alert": 40,
+              "cpu_max_pct": None, "iops_avg": 0.0, "idle": True,
+              "window_from": "2026-11-15T17:58:34+00:00", "window_to": "2026-11-16T17:55:00+00:00"}),
+    (D22U27, {"alerts_new": 525, "alerts_major": 4, "oldest_alert": "2025-12-26 21:11:20 IST", "cloud_alert": 10,
+              "cpu_max_pct": 6.0, "iops_avg": 44.2, "idle": False}),
+    (E18U31, {"alerts_new": 0, "alerts_major": 0, "oldest_alert": None, "cloud_alert": None,
+              "cpu_max_pct": 6.3, "iops_avg": 26.3, "idle": False}),
+    (VZ, {"alerts_new": 31, "alerts_major": 8, "cloud_alert": 11, "cpu_max_pct": 11.0, "iops_avg": 0.9, "idle": True}),
+])
+def test_summarise_gives_the_event_fields(folder, expected):
+    """SPEC-026 R10. rack13 was captured with the first CPU form: its busiest sample is unknown, not 0."""
+    summary = h.summarise(_reads(folder)).as_event()
+    assert set(summary) == {"read_at", "window_from", "window_to", "alerts_new", "alerts_major", "oldest_alert",
+                            "cloud_alert", "cpu_max_pct", "iops_avg", "idle", "read_errors"}
+    assert summary["read_at"] == "2026-11-16T18:00:00+00:00" and summary["read_errors"] == {}
+    assert {k: summary[k] for k in expected} == expected
+
+
+def test_summarise_says_unknown_for_every_read_that_failed():
+    failed = {cmd: "ArrayCliError: timed out" for cmd in (h.ALERTS, h.CPU, h.PORTS, h.VOLUMES)}
+    summary = h.summarise(_reads(D22U27, errors=failed))
+    assert (summary.alerts_new, summary.alerts_major, summary.cloud_alert, summary.cpu_max_pct, summary.iops_avg,
+            summary.idle, summary.window_from) == (None, None, None, None, None, None, None)
+    assert summary.read_errors == failed
+
+
+def _roles(path: Path) -> dict:
+    from alletra_onboard.application.replication.read import parse_showport_roles
+
+    return parse_showport_roles(_capture(path.name, path.parent))[0]

@@ -1,13 +1,32 @@
 """Peer-port models (SPEC-025, BL-26): what the array says about its FC ports. No I/O.
 
 A peer port is an FC port in connection mode `peer`: it logs in to the fabric as an initiator so a
-data migration (BL-27) can read a source array through it. Only the read side is here so far; the
-sheet, plan, apply and verify models come with their work-packet steps.
+data migration (BL-27) can read a source array through it. The sheet's rows (`PeerPortIntent`), what
+the read found (`PeerPortView`), the plan (`PeerPortPlan`), the judgement of the read after the paste
+(`PeerPortResult`) and what Verify says (`PeerPortCheck`).
 """
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+
+class PeerPortRequest(BaseModel):
+    """One row of the workbook's *Peer ports* tab (R1): an FC port of this array to set to peer mode,
+    and the source array's port WWPNs to zone to it (normalised, 16 hex digits)."""
+
+    nsp: str
+    source_wwpns: list[str] = Field(default_factory=list)
+
+    @property
+    def node(self) -> int:
+        return int(self.nsp.split(":", 1)[0])
+
+
+class PeerPortIntent(BaseModel):
+    ports: list[PeerPortRequest] = Field(default_factory=list)
 
 
 class PeerPortState(BaseModel):
@@ -56,3 +75,38 @@ class PeerPortView(BaseModel):
     exports: dict[str, list[str]] = Field(default_factory=dict)          # `showvlun -a`, volumes per port
     peer_listing: list[PeerPortState] = Field(default_factory=list)      # `showport -peer`, for the as-built
     read_error: str = ""
+
+
+class PeerPortAction(BaseModel):
+    """One sheet row judged against the read (R3). `commands` are the lines that set the port (printed
+    for a consultant in the first slice); `undo` restores the connection mode `showport -par` read."""
+
+    nsp: str
+    state: Literal["create", "exists", "conflict"]
+    reason: str = ""
+    commands: list[str] = Field(default_factory=list)
+    undo: list[str] = Field(default_factory=list)
+
+
+class PeerPortPlan(BaseModel):
+    actions: list[PeerPortAction] = Field(default_factory=list)
+    blockers: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class PeerPortResult(BaseModel):
+    """The read after the paste (and later the apply's read-back), judged (R4). `removals` is the undo
+    of what changed, last port first (R5); `sentences` say per port what the read shows."""
+
+    changed: list[str] = Field(default_factory=list)
+    removals: list[str] = Field(default_factory=list)
+    error: str | None = None
+    sentences: list[str] = Field(default_factory=list)
+
+
+class PeerPortCheck(BaseModel):
+    """One planned port as Verify reads it (R6). Read-only."""
+
+    nsp: str
+    ok: bool
+    sentence: str

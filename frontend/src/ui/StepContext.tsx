@@ -2,6 +2,9 @@ import { createContext, ReactNode, useContext } from 'react';
 import { RunEvent, RunRecord } from '../api';
 import { ServedStep } from '../modes';
 
+/** The two tabs of the log panel under every step. */
+export type LogTab = 'activity' | 'commands';
+
 /**
  * What every step needs to know about the run it belongs to.
  *
@@ -21,6 +24,8 @@ export interface StepContextValue {
   onDone: () => void;
   /** Where the step's footer is drawn: under the scrolling page, so the actions are always on screen. */
   footerHost?: HTMLElement | null;
+  /** Opens the log panel on a tab, for a status line's link (*See the commands*). Never called by itself. */
+  openLog?: (tab: LogTab) => void;
 }
 
 const StepContext = createContext<StepContextValue | null>(null);

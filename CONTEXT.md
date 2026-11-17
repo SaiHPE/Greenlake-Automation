@@ -164,9 +164,52 @@ _Avoid_: conflating with **Post-init verification** (that checks onboarding conf
 Active-Optimized vs Active-Non-Optimized — whether a path leads to the controller node that owns
 the volume. Optimized paths carry I/O; non-optimized are standby until failover.
 
+**iSCSI VLAN interface** (VLAN-tagged iSCSI address):
+An extra IPv4 address on an array iSCSI port, carried on one VLAN tag (1 to 4094): port, VLAN,
+address, netmask, optional gateway. Not the port's **untagged address** (its base address, the one
+`showport -iscsi` prints), which the tool never changes: `showport -iscsivlans` lists that one as
+VLAN `untagged`, and a `controliscsiport` line without `-vlan` acts on it. The sheet's *iSCSI network*
+tab asks for interfaces; the *Array ports* step plans them (SPEC-024).
+_Avoid_: "VLAN" alone for the interface (a VLAN is the network; the interface is one port's address on it).
+
+**Array ports (step)**:
+The step between Discovery and SAN Zoning that sets the array's own ports up from the sheet, one
+section per kind: the iSCSI VLAN interfaces (SPEC-024) and the peer ports (SPEC-025). It comes before
+zoning because the zoning check is what sees an iSCSI host's login on the new address, and the peer
+ports' zones use the WWPN read after the change. The switch side is a sentence for the network team
+or a command set for the SAN team; the tool never writes a switch.
+
+**Peer port**:
+An FC port of the array in connection mode `peer` (`showport -par` Connmode `peer`, `showport` Type
+`peer`, mode `initiator`): it logs in to the fabric as an initiator so a data migration can read a
+source array through it. It has WWNs of its own (`0202` where a host-mode port has `0002`). Judged
+by Type and Connmode, never by its Label: on D22U27 three host ports are labelled "peer". The tool
+offers only `free` FC ports with no login and no export (SPEC-025).
+_Avoid_: calling an IP port in mode `peer` (RCIP or the node interconnect) a peer port.
+
 **Remote Copy group**:
 The unit of replication — a consistency group of VVs mirrored to a target array, preserving
 write order. Failover/failback (disaster recovery) act on the group.
+
+**Source array** (migration):
+The 3PAR, Primera or Alletra 9000 whose hosts and volumes move to this run's array, named on the
+workbook's *Migration* tab. A read-only step credential: the tool only reads it, never writes to it.
+This run's array is the **destination**. See SPEC-027, ADR 0020.
+_Avoid_: peer array (that is the replication partner), second run (a migration is one run)
+
+**Peer Motion**:
+HPE's data migration, run from the destination array's own UI or DSCC over FC peer ports zoned to
+the source's host ports. It does the import; the tool reads both arrays, checks they are ready and
+hands the import over.
+
+**Snapshot schedule**:
+A task the array runs by itself on a cron (minute, hour, day of week, in the array's own time zone).
+The tool's schedules always run `createsv` of one volume set or volume, and every snapshot they take
+expires after *Keep for*. A schedule keeps running after the run that made it, until someone removes
+it (`removesched`). WSAPI has no schedule resource: the tool reads schedules with `showsched` and
+writes one only through the snapshot-schedule SSH client (ADR 0016). The snapshot taken now is
+separate: one read-only `<volume>.initial` per volume, over WSAPI.
+_Avoid_: "protection policy" (DSCC's object, ADR 0016 option B); "backup".
 
 **Device naa**:
 The host-side identifier for a SAN disk. For this array family it deterministically encodes the
@@ -201,11 +244,29 @@ volumes or volume-sets on a schedule, with retention — the cloud-native way to
 *intent*. The direct-array equivalent is `createsv` / `createsched`.
 _Avoid_: "backup".
 
-**View** *(file — provisional)*:
-On the file side, an exported access path to a file system (an SMB/NFS export with an attached
-policy) — the file analogue of a block **Export (VLUN)**. Provisional: the file control plane is not
-yet researched; refine after the file research pass.
-_Avoid_: assuming it equals "share" (a view may front one or more shares/exports — confirm in file research).
+**File service** *(Unified File, SPEC-028)*:
+The array's NFS service, one per array, running on each controller node (OS 10.5 and later). The
+tool reads it over the array's WSAPI v3 and never turns it on or off. `normal` is the word a node
+prints when its file service runs.
+_Avoid_: "File Persona" (the 3PAR name; its commands have no help on a B10000).
+
+**File port**:
+An Ethernet host port in File mode (`showport` Type `file`), listed by `showport -file`. It sits on
+the same n:s:p as an iSCSI port, so only the array's own Type tells them apart. Moving a port into or
+out of File mode (`controlport config file`) reboots the array; the tool never does it.
+
+**File system**:
+Capacity for shares, with data reduction on or off. One share per file system on a B10000.
+
+**Client group**:
+The list of clients that may mount a share, each with its access (`rw` or `ro`) and options. The
+array calls it a *file share setting*; on screen and on the sheet it is a client group. A client of
+`*` is any host that can reach the File ports.
+
+**File share**:
+An NFS export of a folder in a file system, served on one File port, mounted as
+`<File port address>:/file/<file system>/<share>`. Its clients are its client group's.
+_Avoid_: "view" (the provisional word before the file research; on a B10000 the word is *share*).
 
 **As-built (document)**:
 The per-deployment record produced as the **final step** — the array's *actual initialised
@@ -234,6 +295,18 @@ HPE renamed "Alletra Inventory" to "HPE GreenLake for Block hardware Inventory" 
 revisions, and the exact match silently dropped the entire inventory section.
 _Avoid_: reading a generated document as complete without checking its warnings.
 
+**Status at handover**:
+What the array says about itself when the as-built is generated (SPEC-026): its **New alerts** (from
+`showalert -d`), its capacity in use (`showsys -space`) and 24 hours of performance from its own
+**System Reporter** (`srstatcpu`, `srstatport`, `srstatvv` summaries: average, 95th percentile and
+maximum per node, host port and for all volumes). A section of the as-built and a block on the
+As-built page; read-only. The figures are the load seen in the window, not what the array can do; an
+array whose host ports averaged under 10 IO/s is an **idle baseline**. Each alert of severity Major,
+Critical or Fatal is an as-built warning. *Before this run* says whether an alert first occurred
+before the run was created (its `Time` is the latest occurrence).
+_Avoid_: "health" on screen (write *status*); "open alerts" (the read gives the array's New alerts
+only); reading an idle baseline as the array's capability.
+
 ## Language — proxy / connectivity
 
 **System proxy**:
@@ -250,3 +323,12 @@ _Avoid_: "the proxy" (be specific — override vs system vs none).
 The hosts/subnets reached **directly**, never through the proxy — `localhost`, the cloudinit link-local
 `169.254.*`, and the **on-prem device IPs from the run** (array / vCenter / switches). Derived from the
 sheet, not hardcoded. See ADR 0008.
+
+**Trusted device** (trust on first contact):
+An on-site device (the array and its Remote Copy peer, vCenter, a SAN switch, a Linux host) whose SSH
+host key or TLS certificate the run recorded the first time it connected to it. Later connections
+compare against that **pin**; a different key stops the step before the password is sent, until the
+operator **re-trusts** the device on the run overview. Pins last one run. Cloud endpoints are never
+pinned: their certificates are checked against certificate authorities. See ADR 0026.
+_Avoid_: "known hosts" (the jump box keeps none), "accepting the certificate" (nothing is accepted
+blindly).

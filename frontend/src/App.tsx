@@ -1,15 +1,16 @@
 import { Box, Button, Heading, Layer, Main, ResponsiveContext, Text } from 'grommet';
 import { useContext, useEffect, useRef, useState } from 'react';
-import { createRunFromSheet, getAppProfile, getRun, InitSheetUploadResult } from './api';
+import { createRunFromSheet, getAppProfile, getRun, InitSheetUploadResult, snapshotsTabNotPicked } from './api';
 import { actionKeysFor, ActionKey, phaseToActionKey, RunMode, ServedStep, StepRegistry } from './modes';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
 import { AppHeader, RailItem, StepRail, WizardBar } from './ui/AppChrome';
-import { StepProvider } from './ui/StepContext';
-import { ConsolePane } from './ui/ConsolePane';
+import { LogTab, StepProvider } from './ui/StepContext';
+import { ConsolePane, LogPanel } from './ui/ConsolePane';
 import { Home, OverviewStep, RunOverview } from './ui/RunPages';
 import { StepState } from './ui/status';
 import { deriveStepHint, deriveStepState, runStatusToState, stepEvents } from './ui/useStepState';
+import { ArrayPortsStep } from './steps/ArrayPortsStep';
 import { AsBuiltStep } from './steps/AsBuiltStep';
 import { CloudinitStep } from './steps/CloudinitStep';
 import { DiscoveryStep } from './steps/DiscoveryStep';
@@ -21,6 +22,7 @@ import { ModeStep } from './steps/ModeStep';
 import { PrereqStep } from './steps/PrereqStep';
 import { ProvisionStep } from './steps/ProvisionStep';
 import { ReplicationStep } from './steps/ReplicationStep';
+import { SnapshotsStep } from './steps/SnapshotsStep';
 import { FailoverTestStep } from './steps/FailoverTestStep';
 import { VerifyStep } from './steps/VerifyStep';
 import { ZoningStep } from './steps/ZoningStep';
@@ -42,7 +44,9 @@ const PREPARE_KEYS = ['prereq', 'sheet', 'mode'];
 const RUN_ID_KEY = 'alletra.runId';
 
 // Registry step kinds, mapped to the deployment stages the rail groups by.
-const STAGE: Record<string, string> = { init: 'Initialize', provision: 'Provision', replicate: 'Replicate', verify: 'Document' };
+const STAGE: Record<string, string> = {
+  init: 'Initialize', provision: 'Provision', replicate: 'Replicate', migrate: 'Migrate', snapshot: 'Protect', verify: 'Document',
+};
 
 // Prerequisites -> sheet -> mode -> the steps the mode selected -> finish. The middle comes from the
 // served registry (GET /app/profile); the UI keeps no copy of the step list.
@@ -75,6 +79,8 @@ export default function App() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [footerHost, setFooterHost] = useState<HTMLDivElement | null>(null);
   const [view, setView] = useState<View>('wizard');
+  // the log panel under the steps: kept here so a step's status line can open it (never by itself)
+  const [log, setLog] = useState<LogPanel>({ open: false, tab: 'activity' });
   const size = useContext(ResponsiveContext);
   const pad = size === 'large' || size === 'xlarge' ? 'large' : 'medium';
 
@@ -163,6 +169,7 @@ export default function App() {
     setMaxStep(0);
     setConfirmCancel(false);
     setView('wizard');
+    setLog((current) => ({ ...current, open: false }));
   };
 
   // Choosing a mode is what mints the run from the held sheet. If a run already exists the operator
@@ -249,6 +256,7 @@ export default function App() {
     nextTitle: steps[stepIndex + 1]?.label,
     onDone: next,
     footerHost,
+    openLog: (tab: LogTab) => setLog({ open: true, tab }),
   };
 
   const finished = current.key === 'done';
@@ -262,7 +270,8 @@ export default function App() {
       <AppHeader
         appName={initOnly ? 'initialization' : 'onboarding'}
         serial={run?.serial_number}
-        mode={runId ? currentModeLabel : undefined}
+        // in the wizard its bar already reads "<mode> on <serial>"; Home, Run overview and Finish keep the mode
+        mode={runId && (view !== 'wizard' || finished) ? currentModeLabel : undefined}
         runState={runState}
         runLabel={runLabel}
         onHome={() => setView('home')}
@@ -340,9 +349,11 @@ export default function App() {
                         locked={Boolean(runId)}
                         initOnly={initOnly}
                         catalog={registry?.steps ?? []}
+                        modeSteps={registry?.modes ?? {}}
                         state={scaffoldState('mode')}
                         hasReplicationTab={Boolean(sheetResult?.targets?.peer_host) || Boolean(runId)}
                         runSteps={runSteps.map((item) => item.label)}
+                        snapshotsReminder={runId ? null : snapshotsTabNotPicked(sheetResult, runSteps.map((item) => item.key))}
                       />
                     )}
                     {current.key === 'greenlake' && runId && <GreenLakeStep runId={runId} run={run} events={events} onDone={next} />}
@@ -353,10 +364,12 @@ export default function App() {
                       <DsccStep runId={runId} run={run} events={events} dsccRegion={form.dscc_region_code} onDone={next} />
                     )}
                     {current.key === 'discover' && runId && <DiscoveryStep runId={runId} run={run} events={events} onDone={next} />}
+                    {current.key === 'ports' && runId && <ArrayPortsStep runId={runId} run={run} events={events} onDone={next} />}
                     {current.key === 'zoning' && runId && <ZoningStep runId={runId} run={run} events={events} onDone={next} />}
                     {current.key === 'provision' && runId && <ProvisionStep runId={runId} run={run} events={events} onDone={next} />}
                     {current.key === 'replicate' && runId && <ReplicationStep runId={runId} run={run} events={events} onDone={next} />}
                     {current.key === 'failover_test' && runId && <FailoverTestStep runId={runId} run={run} events={events} onDone={next} />}
+                    {current.key === 'snapshots' && runId && <SnapshotsStep runId={runId} run={run} events={events} onDone={next} />}
                     {current.key === 'verify' && runId && <VerifyStep runId={runId} run={run} events={events} onDone={next} />}
                     {current.key === 'asbuilt' && runId && <AsBuiltStep runId={runId} run={run} events={events} onDone={next} />}
                     {needsRun && <Text color="text-weak">Choose a mode first. That creates the run.</Text>}
@@ -366,7 +379,14 @@ export default function App() {
             </Main>
             {/* the current step's footer is drawn here (StepShell portals into it) */}
             <Box ref={setFooterHost} flex={false} />
-            {runId && <ConsolePane runId={runId} activity={current.served && view === 'wizard' ? stepEvents(current.served, events) : events} />}
+            {runId && (
+              <ConsolePane
+                runId={runId}
+                activity={current.served && view === 'wizard' ? stepEvents(current.served, events) : events}
+                log={log}
+                onLog={setLog}
+              />
+            )}
           </Box>
         </Box>
       )}
@@ -409,6 +429,7 @@ function modeLabel(mode: RunMode, initOnly: boolean): string {
       PROVISION_ONLY: 'Provision storage only',
       BOTH: 'Onboard, then provision',
       REPLICATE: 'Provision, then replicate',
+      MIGRATE: 'Migrate from another array',
       VERIFY_ONLY: 'Verify only',
       CUSTOM: 'Custom',
     }[mode] ?? mode

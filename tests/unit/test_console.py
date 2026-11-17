@@ -21,6 +21,7 @@ from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, Networ
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import ProtectionRequest, ReplicationIntent
 from alletra_onboard.domain.shared import EndpointCreds
+from tests.unit import fake_tls
 
 PW = "s3cret-pw"
 
@@ -336,3 +337,229 @@ def test_the_as_built_lists_every_change_and_counts_the_reads(tmp_path):
 
     out, _ = generate_asbuilt(_data(), tmp_path / "none.docx")
     assert "Commands run on the array" not in _h1(_read(out)[0])     # no log, no appendix
+
+
+# ------------------------------------------------------------------ vCenter, hosts and GreenLake
+
+SUB_KEY = "SUBKEY-7Q2X9"
+GL_SECRET = "gl-client-secret-value"
+JWT = "eyJhbGciOi.payload.signature"
+
+
+def test_the_redaction_policy_runs_over_every_record(recorded):
+    command_log.record(target="h", transport="ssh", command="x", started=0.0, ok=True,
+                       result="Authorization: Bearer abc.def-ghi",
+                       output=f"client_secret={GL_SECRET}\nsubscription_key: {SUB_KEY}")
+    [e] = recorded
+    assert "abc.def-ghi" not in e["result"] and GL_SECRET not in e["output"] and SUB_KEY not in e["output"]
+
+
+def _vcenter(monkeypatch, *, connect=None):
+    from types import SimpleNamespace as NS
+
+    from alletra_onboard.adapters.vcenter import vcenter_client
+    from tests.unit.test_esxi_paths import NAA1, _path, _storage_device
+
+    esxi = NS(name="esx1", config=NS(storageDevice=_storage_device(luns={NAA1: [_path("active", "vmhba1")]})))
+    view = NS(view=[esxi], Destroy=lambda: None)
+    content = NS(rootFolder=None, viewManager=NS(CreateContainerView=lambda *a: view))
+    monkeypatch.setattr(vcenter_client, "vim", NS(HostSystem=object))
+    monkeypatch.setattr(vcenter_client, "SmartConnect", connect or (lambda **kw: NS(RetrieveContent=lambda: content)))
+    # BL-53 reads and compares vCenter's certificate before login; a made-up one stands in for it
+    fake_tls.install(monkeypatch).devices[("vc.lab", 443)] = fake_tls.self_signed_der("vc.lab")
+    return vcenter_client.VCenterClient("vc.lab", "administrator@vsphere.local", PW)
+
+
+def test_vcenter_login_and_inventory_reads_are_recorded_without_the_password(monkeypatch, recorded):
+    client = _vcenter(monkeypatch)
+    client.connect()
+    luns = client.host_luns()
+    login, read = recorded
+    assert (login["target"], login["transport"], login["command"], login["ok"], login["write"]) == (
+        "vc.lab", "vcenter", "login {user, password: ********}", True, False)
+    assert read["command"].startswith("read HostSystem") and read["result"] == f"ok, {len(luns)} found"
+    assert '"host_name": "esx1"' in read["output"] and read["write"] is False
+    assert PW not in str(recorded)
+
+
+def test_a_refused_vcenter_login_is_recorded_and_still_raises(monkeypatch, recorded):
+    from alletra_onboard.adapters.vcenter import vcenter_client
+
+    class InvalidLogin(Exception):
+        msg = f"Cannot complete login for {PW}."
+
+    def refuse(**kwargs):
+        raise InvalidLogin()
+
+    with pytest.raises(vcenter_client.VCenterError):
+        _vcenter(monkeypatch, connect=refuse).connect()
+    [e] = recorded
+    assert e["ok"] is False and e["result"].startswith("InvalidLogin: Cannot complete login") and PW not in str(e)
+
+
+class _SshChannel:
+    def __init__(self, status: int) -> None:
+        self.status = status
+
+    def recv_exit_status(self) -> int:
+        return self.status
+
+
+class _SshOut(_Stream):
+    def __init__(self, text: str, status: int) -> None:
+        super().__init__(text)
+        self.channel = _SshChannel(status)
+
+
+class _LinuxSsh:
+    def __init__(self, answers: dict[str, tuple[int, str] | Exception]) -> None:
+        self.answers = answers
+
+    def exec_command(self, command, timeout=None):
+        answer = self.answers[command]
+        if isinstance(answer, Exception):
+            raise answer
+        return None, _SshOut(answer[1], answer[0]), _Stream("")
+
+
+def test_linux_host_reads_are_recorded_with_exit_status_and_output(recorded):
+    from alletra_onboard.adapters.hosts.linux_ssh import COMMANDS, LinuxHostClient
+
+    client = LinuxHostClient("10.0.0.20", "root", PW)
+    client._client = _LinuxSsh({COMMANDS["hostname"]: (0, "rhel92lab01\n"),
+                                COMMANDS["multipath"]: (1, f"need to be root {PW}\n"),
+                                COMMANDS["iqn"]: TimeoutError("timed out")})
+    assert client.read("hostname") == "rhel92lab01\n"
+    assert client.run("multipath") == (1, f"need to be root {PW}\n")      # the caller still gets the real text
+    assert client.run("iqn") == (-1, "")
+    ok, refused, failed = recorded
+    assert (ok["target"], ok["transport"], ok["command"], ok["ok"], ok["result"], ok["output"], ok["write"]) == (
+        "10.0.0.20", "host-ssh", "hostname", True, "exit 0", "rhel92lab01\n", False)
+    assert (refused["command"], refused["ok"], refused["result"]) == ("multipath -ll", False, "exit 1")
+    assert (failed["command"], failed["ok"], failed["result"]) == (COMMANDS["iqn"], False, "TimeoutError")
+    assert PW not in str(recorded)
+
+
+class _WinResponse:
+    def __init__(self, status: int, out: str) -> None:
+        self.status_code, self.std_out = status, out.encode()
+
+
+def test_windows_host_reads_and_the_login_probe_are_recorded(monkeypatch, recorded):
+    from alletra_onboard.adapters.hosts import windows_winrm
+
+    class Session:
+        def __init__(self, url, **kwargs):
+            self.url = url
+
+        def run_ps(self, script):
+            if ":5985/" in self.url:
+                raise ConnectionError("refused")
+            return _WinResponse(0, "WIN-LAB01" if script == windows_winrm.SCRIPTS["hostname"] else f"x {PW}")
+
+    monkeypatch.setattr(windows_winrm, "winrm", type("W", (), {"Session": Session}))
+    client = windows_winrm.WindowsHostClient("10.0.0.21", "administrator", PW)
+    client.connect()
+    assert client.read("serial") == f"x {PW}"
+    http_probe, https_probe, serial = recorded
+    assert (http_probe["transport"], http_probe["command"], http_probe["ok"], http_probe["result"]) == (
+        "winrm", "$env:COMPUTERNAME", False, "ConnectionError")
+    assert (https_probe["ok"], https_probe["output"]) == (True, "WIN-LAB01")
+    assert (serial["target"], serial["command"], serial["result"], serial["write"]) == (
+        "10.0.0.21", windows_winrm.SCRIPTS["serial"], "exit 0", False)
+    assert PW not in str(recorded)
+
+
+class _Token:
+    client_secret = GL_SECRET
+
+    async def token(self) -> str:
+        return JWT
+
+
+async def test_greenlake_calls_are_recorded_as_method_and_path_only(monkeypatch, recorded):
+    import httpx
+    import respx
+
+    from alletra_onboard.adapters.greenlake import http_client
+    from alletra_onboard.adapters.greenlake.devices import DevicesClient
+    from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
+
+    async def _no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(http_client.asyncio, "sleep", _no_sleep)
+    http = http_client.GreenLakeHttpClient("https://api.example", _Token())
+    with respx.mock:
+        respx.get("https://api.example/subscriptions/v1/subscriptions").mock(side_effect=[
+            httpx.Response(429), httpx.Response(200, json={"items": [{"key": SUB_KEY}]})])
+        respx.post("https://api.example/subscriptions/v1/subscriptions").mock(
+            return_value=httpx.Response(202, headers={"Location": "https://api.example/subscriptions/v1/async-operations/op-9"}))
+        respx.post("https://api.example/devices/v2beta1/devices").mock(return_value=httpx.Response(202))
+        respx.patch(url__startswith="https://api.example/devices/v1/devices").mock(return_value=httpx.Response(400))
+        await SubscriptionsClient(http).find_by_key(SUB_KEY)
+        await SubscriptionsClient(http).add_subscription(SUB_KEY)
+        await DevicesClient(http).add_storage_device("SGH123", "S0B84A", {}, dry_run=True)
+        with pytest.raises(httpx.HTTPStatusError):
+            await DevicesClient(http).assign_application("dev-1", "sm-1", "ap-northeast")
+    retried, read, subscribe, dry_run, assign = recorded
+    assert {e["target"] for e in recorded} == {"api.example"} and {e["transport"] for e in recorded} == {"greenlake"}
+    assert (retried["command"], retried["ok"], retried["result"]) == (
+        "GET /subscriptions/v1/subscriptions", False, "HTTP 429, retrying")
+    assert (read["result"], read["write"]) == ("HTTP 200", False)
+    assert (subscribe["command"], subscribe["write"], subscribe["output"]) == (
+        "POST /subscriptions/v1/subscriptions", True, "Location: /subscriptions/v1/async-operations/op-9")
+    assert (dry_run["command"], dry_run["write"]) == ("POST /devices/v2beta1/devices?dry-run=true", False)
+    assert (assign["command"], assign["ok"], assign["result"], assign["write"]) == (
+        "PATCH /devices/v1/devices", False, "HTTP 400", True)
+    text = str(recorded)
+    assert SUB_KEY not in text and JWT not in text and GL_SECRET not in text and "sm-1" not in text
+
+
+async def test_the_greenlake_token_request_shows_neither_the_secret_nor_the_token(recorded):
+    import httpx
+    import respx
+
+    from alletra_onboard.adapters.greenlake.auth import OAuthClientCredentials
+
+    url = "https://sso.example/authorization/v2/oauth2/ws-1/token"
+    provider = OAuthClientCredentials(url, "cid", GL_SECRET)
+    with respx.mock:
+        respx.post(url).mock(side_effect=[httpx.Response(200, json={"access_token": JWT, "expires_in": 900}),
+                                          httpx.Response(401, text=f"bad secret {GL_SECRET}")])
+        assert await provider.token() == JWT
+        provider._expires_at = provider._expires_at.replace(year=2000)
+        with pytest.raises(httpx.HTTPStatusError):
+            await provider.token()
+    ok, refused = recorded
+    assert (ok["target"], ok["transport"], ok["command"], ok["output"], ok["write"]) == (
+        "sso.example", "greenlake", "POST /authorization/v2/oauth2/ws-1/token (client credentials withheld)",
+        "(token withheld)", False)
+    assert (refused["ok"], refused["result"]) == (False, "HTTP 401")
+    assert GL_SECRET not in str(recorded) and JWT not in str(recorded)
+
+
+def test_the_as_built_names_vcenter_host_and_greenlake_calls(tmp_path):
+    from alletra_onboard.application.documents.asbuilt import generate_asbuilt
+    from tests.unit.test_asbuilt_replication import _data, _read, _tables
+
+    commands = [
+        {"at": "2026-11-17T08:00:00+00:00", "target": "global.api.greenlake.hpe.com", "transport": "greenlake",
+         "command": "PATCH /devices/v1/devices", "result": "HTTP 202", "write": True},
+        {"at": "2026-11-17T08:01:00+00:00", "target": "vc.lab", "transport": "vcenter",
+         "command": "login {user, password: ********}", "result": "ok", "write": False},
+        {"at": "2026-11-17T08:01:01+00:00", "target": "10.0.0.20", "transport": "host-ssh",
+         "command": "multipath -ll", "result": "exit 0", "write": False},
+        {"at": "2026-11-17T08:01:02+00:00", "target": "10.0.0.21", "transport": "winrm",
+         "command": "$env:COMPUTERNAME", "result": "exit 0", "write": False},
+    ]
+    out, _ = generate_asbuilt(_data(commands=commands), tmp_path / "c.docx")
+    doc, text = _read(out)
+    assert "1 change(s) and 3 read-only command(s)" in text
+    tables = _tables(doc)
+    assert tables[("Time", "Device", "Via", "Call", "Result")] == [
+        ["2026-11-17 08:00 UTC", "global.api.greenlake.hpe.com", "GreenLake API", "PATCH /devices/v1/devices", "HTTP 202"]]
+    assert tables[("Device", "Via", "Command", "Times")] == [
+        ["vc.lab", "vCenter", "login {user, password: ********}", "1"],
+        ["10.0.0.20", "Linux host (SSH)", "multipath -ll", "1"],
+        ["10.0.0.21", "Windows host (WinRM)", "$env:COMPUTERNAME", "1"]]

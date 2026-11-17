@@ -5,8 +5,12 @@
 > `application/replication/` (read, plan, apply, verify, link check and failover test for Remote
 > Copy, v0.17); `adapters/hosts/` (Linux over SSH, Windows over WinRM, SPEC-014);
 > `adapters/command_log.py` and `application/runs/console.py` (every device command recorded for the
-> console, SPEC-019); the Remote Copy write-scoped SSH client (ADR 0015); and the redesigned UI shell
+> console, SPEC-019); the Remote Copy write-scoped SSH client (ADR 0015); `application/snapshots/`
+> and the snapshot-schedule write-scoped SSH client (ADR 0016, BL-21); and the redesigned UI shell
 > in `frontend/src/ui/` (BL-43). The current folder map is in `AGENTS.md` at the repository root.
+> Unified File (BL-28 slice 1, SPEC-028 R1–R3): `application/unified_file/` reads the array's file
+> side for Discovery, Verify and the as-built over `adapters/array/wsapi_v3_client.py` (WSAPI v3, GET
+> only, ADR 0021); `domain/unified_file.py` holds its models, and `DiscoveryReport.file` the result.
 > Statements that had gone stale (§4 to §8) were checked against the code at v0.18.0 on 2026-11-16.
 
 > **Purpose.** A snapshot of the system *as built today* (v0.12.0), written as the baseline for a
@@ -54,14 +58,14 @@ Four layers, dependencies point inward (`api → application → domain`; `adapt
                                        ▼              ▼
                                     domain/        adapters/  (device/cloud/persistence I/O)
                                  (models, ports,   (array WSAPI+CLI, vCenter, brocade,
-                                  workflow, errors) greenlake, browser, persistence, system)
+                                  workflow)         greenlake, browser, persistence, system)
 ```
 
 - **`domain/`** — pure models + contracts, no I/O. `models.py` (onboarding: `ArrayWorkItem`, `RunRecord`,
   `WorkflowPhase`, `RunMode`); per-context storage models: `shared.py` (`EndpointCreds`, `Fabric`, WWPN
   helpers), `discovery.py`, `zoning.py`, `provisioning.py` (intent/builder/plan/`PathVerification`);
   `workflow.py` (the **step registry** + mode→steps), `ports.py` (`RunStore` interface),
-  `policies.py`, `errors.py`.
+  `policies.py`.
 - **`application/`** — services orchestrating domain + adapters, organized as bounded-context packages
   (ADR 0011): `runs/` (coordinator + event bus), `onboarding/` (A–C steps, GreenLake clients/preflight/
   health), `provisioning/` (discovery/zoning/provision/path-verify + their step services), `documents/`
@@ -89,6 +93,13 @@ Four layers, dependencies point inward (`api → application → domain`; `adapt
   `startrcopy`, targets and links from the *Replication network* tab via the write-scoped SSH client
   (`adapters/array/rc_cli_client.py`, `application/replication/partnership.py`; live since v0.18,
   BL-41). Paired runs (ADR 0014) deferred.
+- **Snapshots (ADR 0016, SPEC-023):** a Snapshots tab on the workbook and a Snapshots step (Custom
+  only). The snapshot taken now goes over **WSAPI** (`createSnapshot` on a volume or a volume set);
+  WSAPI has no schedule resource, so a schedule goes through the second write-scoped SSH client,
+  `ArraySnapCliClient` (`adapters/array/snap_cli_client.py`), which may run one form, `createsched -f`
+  of a `createsv -f` with an expiry, and only the schedules of the approved plan
+  (`application/snapshots/apply.py`). `showsched` is on the read allowlist. Built 2026-11-17, pending
+  live run.
 - **Switch (read-only, by decision):** Brocade FOS (`adapters/fabric/brocade_client.py`) — verify +
   the zoning *plan* → an emitted **command set** the consultant applies. The tool **never writes to
   the switch** (ADR 0012; the write path that shipped in v0.14–v0.15 was removed in v0.16).
@@ -97,7 +108,7 @@ Four layers, dependencies point inward (`api → application → domain`; `adapt
 (v0.18.0): Initialization ✅ · Host/array discovery ◐ (ESXi via vCenter, array, Windows over WinRM,
 Linux over SSH; no source array) · SAN/network ◐ (FC zoning as command set; RCIP ports for
 replication; no VLAN, no migration) · Block provisioning ✅ (FC and iSCSI) · Snapshots/replication ◐
-(replication ✅; no snapshots) · Unified File ◻︎ · GL4F ◻︎ · Reports ◐ (config, inventory, checkhealth;
+(replication ✅; snapshots built, pending live run) · Unified File ◻︎ · GL4F ◻︎ · Reports ◐ (config, inventory, checkhealth;
 no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 
 ## 5. LLD — module map (by layer)
@@ -112,7 +123,7 @@ no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 | `provisioning.py` | Provisioning context: **plural intent** (`ProvisioningIntent` = `volumes[]`+`host_sets[]`+`exports[]`, `from_simple`); `persona_for_os`→name; builder palette (`ProvisioningObjects`/`ProvisioningBuilder`); plan+result; tier-2 (`PathVerification`). (As-built's `AsBuiltData` is a dataclass in `application/documents/asbuilt.py`) |
 | `workflow.py` | **`STEP_REGISTRY`** (ordered `StepDef`s: greenlake, cloudinit, dscc, discover, zoning, provision, replicate, failover_test, verify, **asbuilt**) + `_MODE_STEPS` (preset mode→steps) + `enabled_steps`/`initial_phase`/`next_enabled_phase` |
 | `ports.py` | `RunStore` interface (persistence contract) |
-| `policies.py`, `errors.py` | Domain rules + typed errors |
+| `policies.py` | Domain rules: `redact()`, rate limits |
 
 ### 5.2 application/ (bounded-context packages, ADR 0011)
 | Module | Responsibility |
@@ -127,6 +138,7 @@ no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 | `documents/steps.py` | `DocumentSteps` — post-init verify + as-built (never touch run status) |
 | `documents/verification.py` | Read-only config+health verify (`verify(item, user, pw)` → `VerificationReport`) |
 | `documents/asbuilt.py`, `asbuilt_parse.py`, `asbuilt_docx.py` | As-built: fill the bundled HPE `.docx` / parse the CLI dump (CSV) / HPE house-style tables |
+| `documents/handover.py` | As-built *Array status and performance at handover* (SPEC-026): parse `showalert -d`, `showsys -space` and the `srstat*` summaries; the alert table, idle, the event's `handover` summary |
 | `platform/init_sheet.py` | The workbook: template build + `parse_workbook_bytes` → `ParsedInitSheet` |
 | `platform/intake.py`, `platform/configuring.py` | CSV intake, `.env` config I/O |
 | `platform/proxy.py`, `platform/prereqs.py` | `ProxyResolver` (ADR 0008), firewall rules + connectivity check |
@@ -135,7 +147,7 @@ no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 | Module | Responsibility |
 |---|---|
 | `steps.py` | `DiscoveryZoningSteps` (discover + zoning verify/plan; owns the durable discovery artifact behind `require_discovery`) and `ProvisioningSteps` (tier-1 preview/apply, Stage-2 builder, tier-2 path-verify; the previewed plan is held in memory on purpose, see §7) |
-| `clients.py` | Adapter **factories** (`make_wsapi`/`make_array_cli`/`make_rc_cli`/`make_vcenter`/`make_brocade`/`make_linux_host`/`make_windows_host`) — the injection seam for tests |
+| `clients.py` | Adapter **factories** (`make_wsapi`/`make_array_cli`/`make_rc_cli`/`make_snap_cli`/`make_vcenter`/`make_brocade`/`make_linux_host`/`make_windows_host`) — the injection seam for tests |
 | `discovery.py` | Read array ports + `showhost -d` + fabric resolution + vCenter HBAs → `DiscoveryReport` |
 | `zoning.py`, `zoning_plan.py` | Array-side zoning **verify** (report) + read-only zoning **plan** builder (ADR 0004) |
 | `storage_provision.py` | Tier-1 `build_plan`/`apply_plan` (plural/heterogeneous create; exports w/ default fallback) + builder palette reads (`read_array_objects`, `host_briefs`) |
@@ -146,6 +158,7 @@ no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 |---|---|
 | `array/wsapi_client.py` | WSAPI writes/reads via python-3parclient; persona-by-name→WSAPI enum (VMware=8); readiness gate; idempotent creates |
 | `array/cli_client.py` | Read-only SSH CLI, **command allowlist** (structurally read-only) — verify + as-built + discovery |
+| `array/rc_cli_client.py`, `array/snap_cli_client.py` | The two write-scoped SSH clients (ADR 0025): Remote Copy ports and targets (ADR 0015), snapshot schedules (ADR 0016). Each built only inside an approved apply, with that plan's objects |
 | `vcenter/vcenter_client.py` | Read-only ESXi HBA/WWPN discovery (pyvmomi) |
 | `fabric/brocade_client.py` | Brocade FOS reads (nsshow/cfgshow/…); read-only (write path removed) |
 | `greenlake/*` | GreenLake global API: `auth`, `devices`, `subscriptions`, `service_catalog`, `http_client` (Component A) |
@@ -156,9 +169,12 @@ no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 ### 5.5 api/ & frontend/
 - `api/app.py` — `create_app(service)` wires every route as an inline closure; helpers `_get_run_or_404`,
   `_start_step` (maps `StepPreconditionError`→409, `RunNotFound`→404). Routes: config, prereqs/proxy,
-  init-sheet upload/template, runs CRUD, per-step `POST`s (`/greenlake`…/`verify`/**`/asbuilt`** +
+  init-sheet upload/template, runs CRUD, per-step `POST`s (`/provision`…/`verify`/**`/asbuilt`** +
   `/asbuilt/download`), storage (`/discover`,`/zoning/*`,`/storage/{objects,builder,preview,apply,verify-paths}`),
   events + SSE.
+  **`POST /runs/{id}/provision` is GreenLake device registration** (the `greenlake` step: register,
+  assign, subscribe), not storage provisioning; storage provisioning is `/storage/preview` then
+  `/storage/apply`. The path predates the storage steps and is kept so existing callers still work.
 - `frontend/src/` — `App.tsx` (wizard shell + step render switch; the step list comes from the registry
   served by `GET /app/profile`), `modes.ts` (presentation only: step subtitles, mode labels and blurbs, and
   helpers over the served registry; no copy of the step list), `api.ts` (fetch client + all TS interfaces), `useRunEvents.ts`

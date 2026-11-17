@@ -1,5 +1,5 @@
 import { Anchor, Box, Button, DataTable, Heading, Text, TextInput } from 'grommet';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import {
   API,
   ConnectivityResult,
@@ -16,9 +16,9 @@ import { useClock } from '../ClockSync';
 import { Instructions } from '../components';
 import { Guidance, Section, StatusLine } from '../ui/blocks';
 import { TableSummary } from '../ui/primitives';
-import { StatusIndicator, StepState } from '../ui/status';
+import { RESULT, StatusIndicator, StepState } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
-import { FooterAction, StepShell } from '../ui/StepShell';
+import { FooterAction, StepShell, StepStatus } from '../ui/StepShell';
 
 /** A numbered task with its HPE walkthrough recording. */
 function TaskClip({ title, steps, src }: { title: string; steps: ReactNode[]; src: string }) {
@@ -34,6 +34,8 @@ function TaskClip({ title, steps, src }: { title: string; steps: ReactNode[]; sr
     </Box>
   );
 }
+
+const TEST_BUTTON = 'prereq-test-connectivity';
 
 const CHECKLIST =
   'https://infosight.hpe.com/welcomecenter/getting-started/checklist?connectopt=HPE%20Cloud%20Connectivity%20Wizard%2FDiscovery%20Tool&greenlakeplatform=HPE%20GreenLake%20Cloud%20Platform&model=B10140&opt=factory&product=alletraB10k';
@@ -57,6 +59,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
   const [region, setRegion] = useState('jp1');
   const clockCheck = useClock();
   const { clock, skewOff } = clockCheck;
+  const testPressed = useRef(false);
 
   useEffect(() => {
     getProxyStatus()
@@ -75,6 +78,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
   }, [region]);
 
   const test = async () => {
+    testPressed.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -106,9 +110,22 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
   const reachable = connectivity?.filter((result) => result.reachable).length ?? 0;
   const blocked = (connectivity?.length ?? 0) - reachable;
   const skew = Math.abs(Math.round(clock?.skew_seconds ?? 0));
+  const connBlocked = Boolean(connectivity && !allReachable);
 
-  const connState: StepState = !connectivity ? 'not_started' : allReachable ? 'complete' : 'action_required';
-  const clockState: StepState = clock === null ? 'running' : skewOff ? 'action_required' : clock.skew_seconds == null ? 'not_started' : 'complete';
+  // the connection section remounts to open itself on a blocked result; keep focus on the test button
+  useEffect(() => {
+    if (testPressed.current && document.activeElement === document.body) document.getElementById(TEST_BUTTON)?.focus();
+  }, [connBlocked]);
+
+  const connResult = !connectivity ? RESULT.not_checked : allReachable ? RESULT.passed : RESULT.failed;
+  const clockResult =
+    clock === null
+      ? { state: 'running' as const, label: 'Checking' }
+      : skewOff
+        ? RESULT.failed
+        : clock.skew_seconds == null
+          ? RESULT.not_checked
+          : RESULT.passed;
   const proxyText = !proxy
     ? 'Reading the system setting'
     : proxy.forced_direct
@@ -118,6 +135,27 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
         : proxy.source === 'system'
           ? `In use: detected system proxy ${proxy.detected}`
           : 'No proxy detected; connecting directly';
+
+  // one status at a time: clock off > endpoints blocked > tested > not tested
+  const status: StepStatus = skewOff
+    ? {
+        state: 'action_required',
+        title: `The clock is ${skew} seconds off`,
+        message: 'Sync it before you start: a clock that is off stops the array connecting to DSCC.',
+      }
+    : connectivity && !allReachable
+      ? {
+          state: 'action_required',
+          title: `${blocked} of ${connectivity.length} endpoints are blocked`,
+          message: 'Ask the network team to allow them on outbound TCP 443, or set the right proxy.',
+        }
+      : connectivity
+        ? {
+            state: 'complete',
+            title: `Connection tested: ${reachable} of ${connectivity.length} endpoints reachable`,
+            message: 'Confirm the items you do by hand, then continue.',
+          }
+        : { state: 'not_started', title: 'Connection not tested yet', message: 'Test it below, then confirm the items you do by hand.' };
 
   const continueAction: FooterAction = { label: nextTitle ? `Continue to ${nextTitle}` : 'Continue', onClick: onDone };
   const download: FooterAction = {
@@ -134,6 +172,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
       stateLabel={skewOff ? 'Clock needs a sync' : undefined}
       error={error}
       onDismissError={() => setError(null)}
+      status={status}
       primary={skewOff ? { label: clockCheck.busy ? 'Syncing' : 'Sync system clock', busy: clockCheck.busy, onClick: clockCheck.sync } : continueAction}
       buttons={skewOff ? [download, { label: 'Continue without syncing', onClick: onDone }] : [download]}
       guidance={
@@ -156,36 +195,20 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
         />
       }
     >
-      {skewOff ? (
-        <StatusLine state="action_required">
-          The clock is {skew} seconds off. Sync it before you start: a clock that is off stops the array connecting to DSCC.
-        </StatusLine>
-      ) : connectivity && !allReachable ? (
-        <StatusLine state="action_required">
-          {blocked} of {connectivity.length} endpoints are blocked. Ask the network team to allow them on outbound TCP 443, or set the
-          right proxy.
-        </StatusLine>
-      ) : connectivity ? (
-        <StatusLine state="complete">
-          Connection tested: {reachable} of {connectivity.length} endpoints reachable. Confirm the items you do by hand, then continue.
-        </StatusLine>
-      ) : (
-        <StatusLine state="not_started">Connection not tested yet. Test it below, then confirm the items you do by hand.</StatusLine>
-      )}
-
       <Box gap="small" flex={false}>
         <Heading level={2} size="small" margin="none">
           Checked by this tool
         </Heading>
         <Section
+          key={connBlocked ? 'connection-blocked' : 'connection'}
           level={3}
           title="Connection to HPE GreenLake"
           summary={connectivity ? `${reachable} of ${connectivity.length} endpoints reachable · region ${region}` : `Not tested · region ${region}`}
-          open={Boolean(connectivity && !allReachable)}
+          open={connBlocked}
           right={
             <Box direction="row" gap="small" align="center">
-              <Button size="small" busy={busy} label={connectivity ? 'Retest' : 'Test connectivity'} onClick={test} />
-              <StatusIndicator state={connState} label={!connectivity ? 'Not tested' : allReachable ? 'Passed' : 'Blocked'} />
+              <Button id={TEST_BUTTON} size="small" busy={busy} label={connectivity ? 'Retest' : 'Test connectivity'} onClick={test} />
+              <StatusIndicator {...connResult} />
             </Box>
           }
         >
@@ -218,7 +241,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
                     property: 'reachable',
                     header: 'Result',
                     render: (result: ConnectivityResult) => (
-                      <StatusIndicator state={result.reachable ? 'complete' : 'failed'} label={result.reachable ? 'Reachable' : 'Blocked'} />
+                      <StatusIndicator {...(result.reachable ? RESULT.reachable : RESULT.blocked)} />
                     ),
                   },
                   {
@@ -271,7 +294,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
           level={3}
           title="Proxy"
           summary={proxyText}
-          right={<StatusIndicator state={proxy ? 'complete' : 'running'} label={proxy ? 'Detected' : 'Reading'} />}
+          right={<Text size="small">{proxy ? 'Detected' : 'Reading'}</Text>}
         >
           <Text size="small" color="text-weak">
             Detected from the operating system, as a browser would resolve it. Enter an override if the detected value is wrong, or
@@ -301,8 +324,8 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
               <Button
                 size="small"
                 label="Connect directly (no proxy)"
-                disabled={savingProxy}
                 onClick={() => {
+                  if (savingProxy) return;
                   setProxyInput('');
                   applyProxy(PROXY_DIRECT);
                 }}
@@ -312,8 +335,8 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
               <Button
                 size="small"
                 label="Use detected setting"
-                disabled={savingProxy}
                 onClick={() => {
+                  if (savingProxy) return;
                   setProxyInput('');
                   applyProxy(null);
                 }}
@@ -323,6 +346,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
         </Section>
 
         <Section
+          key={skewOff ? 'clock-off' : 'clock'}
           level={3}
           title="Workstation clock"
           summary={
@@ -335,12 +359,7 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
                   : `In sync (±${skew} s against ${clock.source})`
           }
           open={skewOff}
-          right={
-            <StatusIndicator
-              state={clockState}
-              label={clock === null ? 'Checking' : skewOff ? 'Sync needed' : clock.skew_seconds == null ? 'Not checked' : 'Passed'}
-            />
-          }
+          right={<StatusIndicator {...clockResult} />}
         >
           <Text size="small">
             A clock that is off stops the array connecting to DSCC (the error says &quot;iat is in the future&quot;). Sync system clock
@@ -351,14 +370,17 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
               Run the app as Administrator for the sync to set the clock.
             </Text>
           )}
-          <Box direction="row" gap="small" align="center">
-            <Button size="small" busy={clockCheck.busy} label="Sync system clock" onClick={clockCheck.sync} />
-            {clockCheck.message && (
-              <Text size="small" color="text-weak">
-                {clockCheck.message}
-              </Text>
-            )}
-          </Box>
+          {/* while the clock is off the footer's primary is the sync; it is not drawn twice */}
+          {(!skewOff || clockCheck.message) && (
+            <Box direction="row" gap="small" align="center">
+              {!skewOff && <Button size="small" busy={clockCheck.busy} label="Sync system clock" onClick={clockCheck.sync} />}
+              {clockCheck.message && (
+                <Text size="small" color="text-weak">
+                  {clockCheck.message}
+                </Text>
+              )}
+            </Box>
+          )}
           {clockCheck.error && (
             <StatusLine state="failed" title="Sync failed" onClose={() => clockCheck.setError(null)}>
               {clockCheck.error}

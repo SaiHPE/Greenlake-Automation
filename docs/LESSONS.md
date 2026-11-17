@@ -382,7 +382,9 @@ the same push opened a Dependabot alert (*rsakey.py allows SHA-1*) with no 3.x f
 dismissed as tolerable risk (read-only switch logins) with the reason on the alert, at the pin in
 `pyproject.toml`, and in `test_dependencies.py`, which fails if the pin is loosened. Rule: when a
 dependency is held back for a device, say why in all three places a future "clear the alerts" pass
-will touch, and test the pin so that pass has to read the reason before it can undo it.
+will touch, and test the pin so that pass has to read the reason before it can undo it. The same rule
+covers a certificate or host-key check the tool turns off (BL-53, ADR 0026): a `# TRUST-OFF:` reason at
+the site, and a line in `tests/unit/test_trust_checks_off.py`, which fails on a new site until it has both.
 
 **44. A check can change the array, and an old object can block a new one without an error.**
 On 2026-11-03, on the Alletra MP → Primera pair, `checkrclink` measured the link and then left every

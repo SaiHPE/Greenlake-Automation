@@ -245,6 +245,8 @@ def parse_asbuilt(dump: str) -> AsBuiltData:
         dns=net["dns"],
         inventory=sec.get("showinventory -csvtable") or sec.get("showinventory", ""),
         checkhealth=sec.get("checkhealth -svc -detail", ""),
+        showport=sec.get("showport", ""),
+        showport_par=sec.get("showport -par", ""),
     )
 
 

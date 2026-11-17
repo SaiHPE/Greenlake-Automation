@@ -1,6 +1,9 @@
 # SPEC-023 — Snapshots and snapshot schedules for what the run provisions
 
-**Status:** PROPOSED 2026-11-16, amended 2026-11-17 for ADR 0016 as accepted — spec, tests (expected
+**Status:** built 2026-11-17, pending live run (work packet steps 1 to 11; the page was built
+against mockup M21 before the owner reviewed it; R9's sentence is the Mode page's status line while the
+chosen steps leave Snapshots out; the live checks of the work packet's *First slice* are still to
+run). PROPOSED 2026-11-16, amended 2026-11-17 for ADR 0016 as accepted — spec, tests (expected
 to fail until built) and work packet. The
 read-only capture ran on rack13-ARCUS (OS 10.6.0) the same night (`tests/fixtures/rack13_snap/`, §2.1)
 and the read side is built (work packet step 2: the `showsched`, `createsv` and `showvv` parsers and the

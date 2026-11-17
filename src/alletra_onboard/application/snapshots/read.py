@@ -1,5 +1,8 @@
 """SPEC-023 R3 — read one array's snapshots and snapshot schedules (read-only).
 
+`read_array` makes every read the step needs: `showversion`, `showdate`, `showsched` and `showcpg` over
+the read-only SSH client (ADR 0001), `GET /volumes`, `/volumesets` and `/system` over WSAPI.
+
 Schedules are read with `showsched` because WSAPI has none: `GET /api/v1/schedules` answers HTTP 501,
 code 9, "unsupported operation for the resource" (rack13-ARCUS, OS 10.6.0, 2026-11-16).
 
@@ -13,8 +16,12 @@ from __future__ import annotations
 
 import re
 import shlex
+from collections.abc import Callable
 
-from alletra_onboard.domain.snapshots import ArraySchedule
+from alletra_onboard.application.provisioning.clients import make_array_cli, make_wsapi
+from alletra_onboard.application.replication.read import parse_showcpg_free, parse_showversion
+from alletra_onboard.domain.shared import EndpointCreds
+from alletra_onboard.domain.snapshots import ArraySchedule, SnapshotArrayView
 
 #: The snapshot columns of `showvv`, as `lab/snap_capture.py` asked for them.
 SHOWVV_SNAPCOLS = (
@@ -54,6 +61,14 @@ def parse_showsched(text: str) -> list[ArraySchedule]:
         if m:
             out.append(ArraySchedule(**m.groupdict()))
     return out
+
+
+def showsched_readable(text: str) -> bool:
+    """`showsched` printed its table, or said it has none ("No scheduled tasks listed"). An error, or
+    anything else, is not a read: parse_showsched would make it an empty list, which would read as "no
+    schedule"."""
+    t = text or ""
+    return "No scheduled tasks listed" in t or any(line.split()[:1] == ["SchedName"] for line in t.splitlines())
 
 
 def parse_createsv(command: str) -> dict:
@@ -125,3 +140,50 @@ def _snapcols_row(header: list[str], tokens: list[str]) -> dict[str, str] | None
             row[column] = "" if tokens[i] in _EMPTY else tokens[i]
             i += 1
     return row if i == len(tokens) else None
+
+
+_SHOWDATE_ROW = re.compile(r"^\s*\d+\s+\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\s+(?P<zone>\S.*?)\s*$")
+
+
+def parse_showdate_zone(text: str) -> str:
+    """`showdate` -> the array's time zone as it prints it: "IST (Asia/Calcutta)". Both
+    Asia/Calcutta (D22U27, E18U31) and Asia/Kolkata (VZ, rack13-ARCUS) occur; nothing compares it with a
+    fixed name. "" when no node row reads."""
+    for line in (text or "").splitlines():
+        m = _SHOWDATE_ROW.match(line)
+        if m:
+            return m.group("zone")
+    return ""
+
+
+def read_array(
+    creds: EndpointCreds, *, wsapi_factory: Callable = make_wsapi, array_cli_factory: Callable = make_array_cli,
+    progress: Callable[[str], None] | None = None,
+) -> SnapshotArrayView:
+    """One SSH session and one WSAPI session, read-only. A failed login or read is the view's
+    `read_error`: the plan is never built from half a read."""
+    view = SnapshotArrayView(host=creds.host)
+    say = progress or (lambda _m: None)
+    try:
+        with array_cli_factory(creds) as cli:
+            say(f"Reading {creds.host}: version, time zone, snapshot schedules, CPGs…")
+            view.os_version = parse_showversion(cli.run("showversion"))
+            view.time_zone = parse_showdate_zone(cli.run("showdate"))
+            sched = cli.run("showsched")
+            if not showsched_readable(sched):
+                first = next((ln.strip() for ln in sched.splitlines() if ln.strip()), "nothing")
+                raise RuntimeError(f"showsched did not list the schedules; it answered: {first}")
+            view.schedules = parse_showsched(sched)
+            view.cpg_free_mib = parse_showcpg_free(cli.run("showcpg"))
+        with wsapi_factory(creds) as wsapi:
+            say(f"Reading {creds.host}: volumes, volume sets and their snapshots…")
+            system = wsapi.system_info()
+            view.name = str(system.get("name") or "")
+            view.time_zone = view.time_zone or str(system.get("timeZone") or "")
+            seconds = (system.get("parameters") or {}).get("VVRetentionTimeMax")
+            view.retention_max_hours = int(seconds) // 3600 if isinstance(seconds, int | float) else 0
+            view.volumes = wsapi.volumes()
+            view.vvsets = wsapi.volume_sets()
+    except Exception as exc:  # noqa: BLE001 - the step reports it; the operator fixes access and reads again
+        view.read_error = f"Could not read {creds.host}: {exc}"
+    return view

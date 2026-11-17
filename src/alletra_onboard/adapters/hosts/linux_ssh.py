@@ -7,6 +7,7 @@ is written; `sudo -n` is tried only for the two reads that need root and fails f
 from __future__ import annotations
 
 import re
+import time
 from collections import Counter
 from dataclasses import dataclass
 
@@ -15,6 +16,7 @@ try:
 except ImportError:  # pragma: no cover - bundled in the .exe
     paramiko = None
 
+from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.domain.discovery import HostRead
 from alletra_onboard.domain.shared import normalize_wwpn
 
@@ -184,11 +186,12 @@ class LinuxHostClient:
     def connect(self) -> None:
         if paramiko is None:
             raise LinuxHostError("SSH support (paramiko) is not available in this build.")
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # ADR 0026: trusted on first contact, pinned for the run.
         try:
-            client.connect(self.host, port=self.port, username=self.username, password=self.password,
-                           timeout=self.timeout, allow_agent=False, look_for_keys=False)
+            client = device_trust.open_ssh(self.host, self.port, device="Linux host", username=self.username,
+                                           password=self.password, timeout=self.timeout)
+        except device_trust.DeviceTrustError as exc:
+            raise LinuxHostError(str(exc)) from exc
         except paramiko.AuthenticationException as exc:
             raise LinuxHostError(f"login failed for {self.username}@{self.host} — check the Hosts tab login") from exc
         except Exception as exc:
@@ -201,12 +204,18 @@ class LinuxHostClient:
         if self._client is None:
             raise LinuxHostError("not connected")
         command = COMMANDS[key]
+        started = time.monotonic()
         try:
             _in, stdout, _err = self._client.exec_command(command, timeout=self.exec_timeout)
             out = stdout.read().decode("utf-8", "replace")
-            return stdout.channel.recv_exit_status(), out
-        except Exception:  # noqa: BLE001 - one unreadable file must not sink the host read
+            status = stdout.channel.recv_exit_status()
+        except Exception as exc:  # noqa: BLE001 - one unreadable file must not sink the host read
+            command_log.record(target=self.host, transport="host-ssh", command=command, started=started,
+                               ok=False, result=type(exc).__name__, secrets=[self.password])
             return -1, ""
+        command_log.record(target=self.host, transport="host-ssh", command=command, started=started,
+                           ok=status == 0, result=f"exit {status}", output=out, secrets=[self.password])
+        return status, out
 
     def read(self, key: str) -> str:
         """stdout of the fixed command named `key`, or '' when it failed."""
