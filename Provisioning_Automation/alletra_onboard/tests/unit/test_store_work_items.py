@@ -87,3 +87,29 @@ def test_list_events_in_order(tmp_path):
     events = store.list_events(run.run_id)
     assert [e.message for e in events] == ["event 0", "event 1", "event 2"]
     assert store.list_events("other-run") == []
+
+
+def test_a_stored_run_with_a_retired_status_still_loads_as_idle(tmp_path):
+    """`cancel_requested`, `cancelled` and `skipped` were removed from RunStatus; no release set them,
+    but a row carrying one must not make the list of runs fail."""
+    import json
+    import sqlite3
+
+    from alletra_onboard.domain.models import RunStatus
+
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    for status in ("cancel_requested", "cancelled", "skipped"):
+        run = RunRecord(serial_number=f"SGH-{status}")
+        store.upsert_run(run)
+        payload = json.loads(run.model_dump_json())
+        payload["status"] = status
+        with sqlite3.connect(tmp_path / "state.db") as connection:
+            connection.execute(
+                "UPDATE runs SET status = ?, payload = ? WHERE run_id = ?",
+                (status, json.dumps(payload), run.run_id),
+            )
+        loaded = store.get_run(run.run_id)
+        assert loaded is not None and loaded.status is RunStatus.READY
+
+    assert {r.status for r in store.list_runs()} == {RunStatus.READY}

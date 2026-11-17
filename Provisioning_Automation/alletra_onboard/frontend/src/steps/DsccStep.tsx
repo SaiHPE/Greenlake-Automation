@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { RunEvent, RunRecord, launchBrowser, markComplete, startDscc } from '../api';
 import { ClockSync } from '../ClockSync';
 import { Instructions } from '../components';
-import { Guidance, Panel, StatusLine } from '../ui/blocks';
+import { Guidance, Panel } from '../ui/blocks';
 import { StatusIndicator } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
-import { FooterAction, StepShell } from '../ui/StepShell';
+import { FooterAction, StepShell, StepStatus } from '../ui/StepShell';
 
 interface Props {
   runId: string;
@@ -40,6 +40,13 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
     }
   };
 
+  // one status: running > complete; the hand-over to the operator in the browser is the gate
+  const status: StepStatus | undefined = running
+    ? { state: 'running', title: 'Filling in the Set Up System wizard', message: 'Each screen appears in Activity, below.' }
+    : completed
+      ? { state: 'complete', title: 'DSCC setup is complete', message: 'The array is registered with Data Services Cloud Console.' }
+      : undefined;
+
   const runAutomation: FooterAction = {
     label: running ? 'Filling' : 'Run DSCC automation',
     busy: busy === 'dscc' || running,
@@ -50,9 +57,10 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
   return (
     <StepShell
       title="DSCC setup"
-      description="Fills the Data Services Cloud Console Set Up System wizard as far as the credential step. You finish it."
+      description="Fills the Data Services Cloud Console Set Up System wizard up to the credential step, then you finish it."
       error={error}
       onDismissError={() => setError(null)}
+      status={status}
       gate={
         credentialsReady && !completed
           ? {
@@ -80,13 +88,6 @@ export function DsccStep({ runId, run, events, dsccRegion, onDone }: Props) {
         />
       }
     >
-      {completed && (
-        <StatusLine state="complete" title="DSCC setup is complete">
-          The array is registered with Data Services Cloud Console.
-        </StatusLine>
-      )}
-      {running && <StatusLine state="running">Filling in the Set Up System wizard. Each screen appears in Activity, below.</StatusLine>}
-
       {/* DSCC sign-in fails on a skewed workstation clock, so it is checked again here. */}
       <ClockSync consoleUrl={consoleUrl} title="Workstation clock" />
 

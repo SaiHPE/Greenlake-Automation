@@ -23,8 +23,11 @@ from alletra_onboard.application.provisioning.clients import (
     make_linux_host,
     make_vcenter,
     make_windows_host,
+    make_wsapi_v3,
 )
 from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
+from alletra_onboard.application.replication.read import parse_showversion
+from alletra_onboard.application.unified_file.read import UNREADABLE, read_file_report
 from alletra_onboard.domain.discovery import (
     ArrayHost,
     ArrayPort,
@@ -40,6 +43,7 @@ from alletra_onboard.domain.discovery import (
 from alletra_onboard.domain.network import IscsiPortAddress, IscsiVlanInterface
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.shared import EndpointCreds, Fabric, normalize_wwpn
+from alletra_onboard.domain.unified_file import FileReport
 
 _LOGICAL_NAME_RE = re.compile(r"^\s*Logical Name:\s*(\S+)", re.IGNORECASE)
 
@@ -772,6 +776,23 @@ def _read_sheet_hosts(
     return out
 
 
+def _read_file_side(cli, intent: ProvisioningIntent, file_ports: list[EthernetPort],
+                    wsapi_v3_factory: Callable, progress: Callable[[str], None]) -> FileReport | None:
+    """SPEC-028 R1-R2: the file service, file systems, client groups and shares, over the array's
+    WSAPI v3 with the run's credential. Never Discovery's error: a failure is a note, and block
+    storage is not affected."""
+    try:
+        os_version = parse_showversion(cli.run("showversion"))
+    except Exception:  # noqa: BLE001 - without it the file API is read only when there are File ports
+        os_version = ""
+    if file_ports:
+        progress("Reading the file service, file systems and shares (read-only)…")
+    try:
+        return read_file_report(cli, wsapi_v3_factory(intent.array), os_version, file_ports)
+    except Exception:  # noqa: BLE001 - the file side must never sink discovery
+        return FileReport(os_version=os_version, notes=[UNREADABLE]) if file_ports else None
+
+
 def discover(
     intent: ProvisioningIntent,
     *,
@@ -779,6 +800,7 @@ def discover(
     vcenter_factory: Callable = make_vcenter,
     linux_host_factory: Callable = make_linux_host,
     windows_host_factory: Callable = make_windows_host,
+    wsapi_v3_factory: Callable = make_wsapi_v3,
     progress: Callable[[str], None] | None = None,
 ) -> DiscoveryReport:
     """Read the environment (array-side + vCenter), read-only. `progress(msg)`, if given, is called at
@@ -823,6 +845,7 @@ def discover(
                 report.file_ports = parse_file_ports(cli.run("showport -file"))
             except Exception:  # noqa: BLE001 - `showport -file` is unsupported on some releases
                 report.notes.append("Could not read 'showport -file' — file ports not reported.")
+            report.file = _read_file_side(cli, intent, report.file_ports, wsapi_v3_factory, _p)
             _p("Reading the array's host view (showhost)…")
             report.array_hosts = parse_showhost(cli.run("showhost -d"))
             fc = sum(1 for p in report.array_ports if p.protocol == "fc")

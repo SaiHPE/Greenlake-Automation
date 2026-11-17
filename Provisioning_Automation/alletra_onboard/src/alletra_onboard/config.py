@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # Manual proxy override (env ALLETRA_PROXY / .env). Blank -> the tool auto-detects the system
     # proxy (WinINET static + PAC/WPAD), like the browser. host:port or user:pass@host:port. ADR 0008.
     alletra_proxy: str | None = None
+    # ADR 0026: the customer's CA bundle (PEM) for their on-site devices, where they have one. Set, it
+    # replaces first-contact trust for array WSAPI, vCenter and WinRM over HTTPS with the full check
+    # (chain and name), with no fallback. Separate from ALLETRA_CA_BUNDLE, which is for the cloud.
+    alletra_device_ca_bundle: str | None = None
 
     @property
     def init_only(self) -> bool:

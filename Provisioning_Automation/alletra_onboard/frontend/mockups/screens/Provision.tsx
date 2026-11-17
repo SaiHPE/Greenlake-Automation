@@ -10,9 +10,9 @@ const PARTS = ['Compose', 'Review the plan', 'Create', 'Verify paths'];
 const PART_OF: Record<string, number> = { compose: 0, plan: 1, conflict: 1, created: 3, verified: 3 };
 
 type PlanState = 'create' | 'exists' | 'update' | 'conflict';
-// Exists, Update and Conflict are statuses of what is on the array; Create is an action, so it is words alone.
+// Already there, Update and Conflict are statuses of what is on the array; Create is an action, so it is words alone.
 const PLAN_STATE: Record<Exclude<PlanState, 'create'>, { state: StepState; label: string }> = {
-  exists: { state: 'complete', label: 'Exists' },
+  exists: { state: 'complete', label: 'Already there' },
   update: { state: 'action_required', label: 'Update' },
   conflict: { state: 'failed', label: 'Conflict' },
 };
@@ -31,7 +31,7 @@ const CONFLICT = PLAN.map((p) => (p.kind === 'Host set'
   : p));
 
 const RESULT = [
-  { kind: 'Host', name: 'ESX1', result: 'Exists', detail: 'left untouched' },
+  { kind: 'Host', name: 'ESX1', result: 'Already there', detail: 'left untouched' },
   { kind: 'Volume', name: 'zz_rc_vol01', result: 'Created', detail: 'WWN 60002AC0000000000000001B0002D5EF' },
   { kind: 'Volume set', name: 'zz_rc_vvs', result: 'Created', detail: '1 member' },
   { kind: 'Host set', name: 'zz_rc_hs', result: 'Created', detail: '1 member' },
@@ -137,7 +137,7 @@ function Provision({ state, setState }: { state: string; setState: (s: string) =
           columns={[
             { property: 'kind', header: 'Kind', render: (r) => <Text size="small">{r.kind}</Text> },
             { property: 'name', header: 'Name', render: (r) => <Text size="small" style={mono}>{r.name}</Text> },
-            { property: 'result', header: 'Result', render: (r) => <StatusIndicator state="complete" label={r.result} /> },
+            { property: 'result', header: 'Result', render: (r) => <StatusIndicator state={r.result === 'Already there' ? 'not_started' : 'complete'} label={r.result} /> },
             { property: 'detail', header: 'Detail', render: (r) => <Text size="small" color="text-weak">{r.detail}</Text> },
           ]}
           data={RESULT}
@@ -172,7 +172,7 @@ function Provision({ state, setState }: { state: string; setState: (s: string) =
         guidance={
           <Guidance
             items={[
-              { title: 'What this step writes', body: 'Only what the plan shows, and only after your tick. Objects marked Exists are left alone; Update adds to an existing object without removing anything.' },
+              { title: 'What this step writes', body: 'Only what the plan shows, and only after your tick. Objects marked Already there are left alone; Update adds to an existing object without removing anything.' },
               { title: 'Discovery feeds it', body: 'The hosts come from Discovery, read at 19:22. Run Discovery again if the hosts have changed since.' },
               { title: 'If something has the same name', body: 'An object on the array with the same name but different attributes is a conflict. The plan cannot be applied until it is resolved on the array or the plan is changed.' },
               { title: 'Path verification', body: "After creating, the array is read back per host: LUNs, HBAs, paths and fabrics. For ESXi hosts the host's own view from vCenter too (a new LUN needs a storage rescan). A report, never a gate." },
@@ -255,14 +255,14 @@ export const provision: Screen = {
   ],
   notes: [
     'Four parts in order: compose, review the plan, create, verify paths. The compose form is a form, so its buttons sit bottom left as the Design System places form actions; the step\'s own actions stay in the footer. Below the form, an empty state says there is no plan yet instead of a long paragraph.',
-    'The plan: one line with the counts, then the table. Objects already there are green Exists; a conflict is red with the reason under it, and the green button becomes Rebuild plan because Create cannot apply. The authorisation tick is in the footer next to Create storage objects.',
+    'The plan: one line with the counts, then the table. Objects already there are green Already there; a conflict is red with the reason under it, and the green button becomes Rebuild plan because Create cannot apply. The authorisation tick is in the footer next to Create storage objects.',
     'After creating: the result folds to one line with Show detail (the result table and the removal commands). Path verification is its own part with its own empty state, then a table per host with the array\'s view and the ESXi view side by side.',
   ],
   keeps: [
     ['Compose card (host-set members, export rows, LUN, Add export row, Save composition, Reload)', 'Part 1, Compose'],
     ['Discovery freshness note', 'Right panel, Discovery feeds it'],
     ['Build plan / Rebuild plan', 'Footer (green) in part 1; Rebuild plan beside the green button afterwards'],
-    ['Plan table with Create / Exists / Update / Conflict, counts, plan notes, "was …"', 'Part 2, Review the plan'],
+    ['Plan table with Create / Already there / Update / Conflict, counts, plan notes, "was …"', 'Part 2, Review the plan'],
     ['Authorise tick', 'Footer, next to Create storage objects'],
     ['Create storage objects', 'Footer, right (green) in part 2'],
     ['Result table, removal set with Copy and Download .txt', 'Finished line, Show detail'],

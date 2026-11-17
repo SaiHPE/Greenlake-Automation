@@ -5,6 +5,10 @@ captures below; follows ADR 0025 · **Spec:** SPEC-025 · **Tracker:** BL-26 · 
 switch writes), ADR 0015 (`ArrayRcCliClient` unchanged) · **Used by:** ADR 0024 item 1 (RCFC port
 modes, BL-50)
 
+**Built:** the first slice (option C) on 2026-11-17, pending live run: the plan, the printed command
+set and removal set, the read after the paste, verify, zoning and the as-built. No write client and
+no allowlist change; option B waits as decided.
+
 ## Context
 
 SPEC-025 sets chosen FC ports on this run's array to connection mode `peer`. Peer ports are needed

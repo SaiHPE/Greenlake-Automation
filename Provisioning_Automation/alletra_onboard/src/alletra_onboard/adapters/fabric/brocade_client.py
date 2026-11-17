@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import time
 
-from alletra_onboard.adapters import command_log
+from alletra_onboard.adapters import command_log, device_trust
 
 try:
     import paramiko
@@ -64,13 +64,13 @@ class BrocadeClient:
     def connect(self) -> None:
         if paramiko is None:
             raise BrocadeError("SSH support (paramiko) is not available in this build.")
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # ADR 0026: trusted on first contact, pinned for the run. The pin is the key itself, so the
+        # ssh-rsa key an old FOS offers pins like any other (LESSONS 43).
         try:
-            client.connect(
-                self.host, port=self.port, username=self.username, password=self.password,
-                timeout=self.timeout, allow_agent=False, look_for_keys=False,
-            )
+            client = device_trust.open_ssh(self.host, self.port, device="switch", username=self.username,
+                                           password=self.password, timeout=self.timeout)
+        except device_trust.DeviceTrustError as exc:
+            raise BrocadeError(str(exc)) from exc
         except paramiko.AuthenticationException as exc:
             raise BrocadeError(f"Login failed for {self.username}@{self.host} — check the switch credentials.") from exc
         except Exception as exc:

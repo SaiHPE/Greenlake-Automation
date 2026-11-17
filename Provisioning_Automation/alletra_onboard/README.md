@@ -311,9 +311,12 @@ the app's step registry, so it is always current).
 1. **Prepare.** *Prerequisites* (the GreenLake connection, the proxy, the workstation clock, and the
    workspace and DSCC set-up in GreenLake), then
    *Initialisation sheet* (download the template, fill it for **one** array, upload it; it carries
-   the GreenLake client, the array and target credentials, hosts, volumes and replication rows),
-   then *Mode*: Full onboarding, Provision only, Both, Provision then replicate, Verify only, or
-   Custom.
+   the GreenLake client, the array and target credentials, hosts, volumes, replication rows and,
+   on the *Migration* tab, the array the data moves from and the hosts to migrate), then *Mode*:
+   Full onboarding, Provision only, Both, Provision then replicate, Migrate from another array,
+   Verify only, or Custom. *Migrate from another array* is listed but greyed out: the Migration
+   step is not built yet. The Migration tab is read and checked at upload already (the source may
+   not be this run's array; one row per host; a destination CPG on every row).
 2. **Onboarding** (Full onboarding and Both) is steps 3 to 5.
 3. **GreenLake registration** — click **Run**; the live phase log streams in. A subscription-apply
    *warning* is non-fatal (register + assign are the success criteria).
@@ -333,7 +336,21 @@ the app's step registry, so it is always current).
      **Submit**.
    - Back in the app, click **mark complete**.
 6. **Storage steps** (Provision only, Both, Provision then replicate): *Discovery* reads the array,
-   vCenter, hosts and both fabrics; *SAN Zoning* checks zoning and writes the Brocade command set
+   vCenter, hosts and both fabrics; *Array ports* plans the VLAN-tagged iSCSI addresses the sheet's
+   *iSCSI network* tab asks for (one row per port and VLAN: port N:S:P, VLAN ID 1 to 4094, address,
+   netmask, optional gateway; put each VLAN on a port of both nodes). *Read the array and plan* reads
+   the array (read-only) and shows each row as add, already there or conflict, the array's
+   `controliscsiport` lines for the adds (each with `-vlan`) and one sentence per port for the network
+   team (carry the VLANs tagged, keep the native VLAN). The tool does not add the addresses yet: paste
+   the lines on the array's CLI yourself, then *Read the array again*. The same step plans the
+   *Peer ports* tab for a data migration (one row per free FC port, at least one on each of two nodes,
+   with the source array's port WWPNs to zone to it): it shows each port as to set, already peer or
+   conflict (a port with a login or an export is never offered), the `controlport offline` and
+   `controlport config peer -ct point -f` lines and the removal set to keep before you paste. Paste
+   the lines on the array's CLI, then *Read the array again*: the tool checks each port is now a peer
+   port and that no other port changed, and gives the removal set for what changed. *SAN Zoning* then
+   drafts the peer-port zones, with the WWPN read after the change, as a command set of their own.
+   With both tabs empty the step has nothing to do. *SAN Zoning* checks zoning and writes the Brocade command set
    for the SAN team (the tool never writes to a switch); *Provision storage* shows the plan and
    creates hosts, sets, volumes and exports only after you tick the confirmation; *Replication* and
    *Failover test* set up Remote Copy to the peer named on the sheet and prove a failover and back.
@@ -342,12 +359,59 @@ the app's step registry, so it is always current).
    networks), *Replication* first sets those addresses, starts Remote Copy and pairs the two arrays,
    as its own plan with its own confirmation; then *Read both arrays again*, *Check the link* and
    configure the groups. Leave the tab empty when the arrays are already paired.
+   Arrays already paired over **Fibre Channel** work too: the step finds the partnership by port WWN
+   and configures the groups the same way, but it cannot measure Fibre Channel links, so there is no
+   *Check the link*. Type the *Measured round-trip time (ms)* on the Replication tab before the run;
+   the limit over Fibre Channel is 10 ms for sync and async, and a typed time over it needs *Continue
+   anyway*. The tool does not set up a Fibre Channel partnership, and it stops when the two arrays
+   show targets towards each other over both IP and Fibre Channel.
+   *Snapshots* (picked in Custom; needs the sheet's *Snapshots* tab) takes a read-only snapshot of
+   each volume now, named `<volume>.initial`, and sets up a snapshot schedule on the array, both
+   from one plan you approve. The schedule keeps taking snapshots after the run ends, until someone
+   removes it: the removal set starts with its `removesched -f` line. The page reads the array,
+   shows the plan (with the array's own time zone, and any other schedule that starts in the same
+   minute), creates after you tick *I have reviewed this plan and authorise creating these snapshots
+   and schedules on <array>. The schedules keep running after this run ends.*, then checks them
+   back; *Check snapshots* reads them again at any time. Built, not yet run on a lab array.
 7. **Verify configuration** and **As-built document** — read-only: the array's settings against
-   what was onboarded, its status check, and the Word document for the hand-over. **Finish**
-   collects the documents and the run's timeline.
+   what was onboarded, its status check, and the Word document for the hand-over. The document also
+   records the array's status at handover: its new alerts (each Major or worse is listed under
+   *Check before sending*), capacity in use and 24 hours of performance; the page shows a short
+   summary. **Finish** collects the documents and the run's timeline.
+   On an array with File ports (OS 10.5 or later), *Discovery* shows a **File service** section
+   (the service on each node, the File ports, file systems, and shares with their clients),
+   *Verify configuration* adds two rows (the file service, File ports up), and the as-built gains a
+   *File service* section. They are read over the array's own file API (WSAPI v3, GETs only, with the
+   array credential); the console shows each GET and never the password or session. Nothing on the
+   file side is changed, and an array without File ports shows nothing about file. If the section
+   says the file API turned the session down, block storage is not affected: send the console log
+   to the tool team.
 
 > Two reminders: run the app **as Administrator** (for the clock-sync button), and **hard-refresh**
 > the browser after every update.
+
+### Device keys and certificates
+
+Arrays, vCenter, SAN switches and Linux hosts come with keys and certificates nobody has recorded, so
+the tool trusts each one **the first time a run connects to it** and records what it presented.
+
+- **Where to see them.** *Run overview, Trusted devices* lists every device the run has reached, with
+  its fingerprint and when it was trusted. The step's activity shows the same line, and the as-built
+  has a *Device fingerprints* table. The customer can compare them with each device's own console.
+- **When a device presents a different key**, the step stops before the password is sent. Its
+  message names the device and both fingerprints. If the device was replaced or reset on purpose,
+  check the new fingerprint on the device's own console, then on *Run overview, Trusted devices*
+  tick the box and press **Trust the new key** (or certificate), and run the step again. The re-trust
+  is recorded on the run. If nobody changed the device, stop and ask the customer's network team.
+- **A new run** starts with nothing trusted and trusts again on its own first contact.
+- **A customer CA bundle.** Where the customer has signed their devices' certificates, set
+  `ALLETRA_DEVICE_CA_BUNDLE=C:\path\to\customer-ca.pem` in the app's `.env` and restart. The array's
+  WSAPI, vCenter and WinRM over HTTPS are then checked against it (chain and name); a failure stops
+  the step and never falls back. SSH keys are still trusted on first contact. This is separate from
+  `ALLETRA_CA_BUNDLE`, which is for GreenLake and other cloud endpoints.
+- Two links stay unchecked on purpose: the array's setup wizard (a link-local address on the same
+  cable, and no password is typed there) and WinRM to Windows hosts (NTLM never sends the password,
+  and the tool only reads).
 
 ### CLI
 
@@ -399,6 +463,23 @@ The initialisation sheet replaced the older `arrays.csv` (its template is still 
 - **The subscription key** is the GreenLake activation key (from the activation email's
   attachment), **not** the EON order number and **not** the AutoPass on-array `.dat` license keys.
 - **The cloudinit URL** changes on every boot: paste the fresh `169.254.x` URL in the app.
+- **The iSCSI network tab's Port column is text.** Excel turns `0:4:1` typed in a General cell into a
+  time; the template formats the column as text and the parser reads a time back as N:S:P anyway. One
+  VLAN is one network: a VLAN on two networks, or two VLANs on one network, is refused at upload.
+
+The *Snapshots* tab (optional, one row per volume set or volume):
+
+- **Kind** is `set` (the default) or `volume`. A set's snapshot now is one point in time for every
+  volume in it. The set may be on the Volumes tab or already on the array.
+- **Every** and **Unit** go together: 15, 20 or 30 minutes; 1, 2, 3, 4, 6, 8 or 12 hours; or 1 day.
+  Leave both blank for a snapshot now only. **Start hour** (hours and days only) and **Days** are in
+  the array's own time zone, which the step shows.
+- **Keep for** (hours) is required: every snapshot expires then, so a schedule cannot fill the CPG
+  without bound.
+- **Lock for**: leave it blank. A locked snapshot cannot be removed until the lock ends, so the plan
+  refuses a row that fills it in this version.
+- **Schedule name** blank is `<volume set>_snap`; at most 31 characters, letters, digits, `.`, `_`
+  and `-`.
 
 ---
 

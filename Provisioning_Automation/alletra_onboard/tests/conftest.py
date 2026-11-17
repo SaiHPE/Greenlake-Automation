@@ -18,5 +18,6 @@ def _isolate_settings_from_dotenv(monkeypatch):
         "GL_MEMBER_WORKSPACE_ID",
         "GL_TOKEN_URL",
         "GL_BASE_URL",
+        "ALLETRA_DEVICE_CA_BUNDLE",
     ):
         monkeypatch.delenv(key, raising=False)

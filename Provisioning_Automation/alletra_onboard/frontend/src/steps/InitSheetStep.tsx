@@ -1,10 +1,10 @@
 import { Anchor, Box, FileInput, NameValueList, NameValuePair, Text } from 'grommet';
 import { useState } from 'react';
 import { API, CheckReport, checkConfig, InitSheetUploadResult, uploadInitSheet } from '../api';
-import { Guidance, Panel, StatusLine } from '../ui/blocks';
+import { Disclosure, Guidance, Panel } from '../ui/blocks';
 import { StepState } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
-import { StepShell } from '../ui/StepShell';
+import { StepShell, StepStatus } from '../ui/StepShell';
 import { fromParsedWorkItem, WorkItemForm } from '../workItem';
 
 interface Props {
@@ -71,35 +71,55 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
     }
   };
 
-  const reportState: StepState = !report ? 'not_started' : report.ok && report.ready ? 'complete' : report.ok ? 'action_required' : 'failed';
+  const reportPassed = Boolean(report?.ok && report.ready);
+  const reportState: StepState = !report ? 'not_started' : reportPassed ? 'complete' : report.ok ? 'action_required' : 'failed';
   const reportTitle = !report
     ? ''
     : !report.ok
       ? report.tls_trust_failure
         ? // The credentials were never sent; say so, or the operator re-checks a secret for an hour.
-          'Could not verify the HPE certificate. The credentials were not checked.'
+          'The credentials were not checked'
         : report.missing_credentials.length > 0
           ? 'GreenLake credentials are not configured'
           : 'GreenLake credentials were rejected'
       : report.ready
         ? 'GreenLake credentials accepted; Data Services is provisioned'
-        : 'GreenLake credentials accepted, but no provisioned Data Services instance was found';
+        : 'Credentials accepted; no Data Services instance found';
   const reportMessage = !report
     ? undefined
     : report.ok
       ? report.ready
         ? undefined
         : 'Deploy Data Services to the workspace in the region nearest the array before registering it.'
-      : (report.error ?? report.missing_credentials.join(', '));
+      : report.tls_trust_failure
+        ? `Could not verify the HPE certificate${report.error ? `: ${report.error}` : '.'}`
+        : (report.error ?? report.missing_credentials.join(', '));
+
+  // one status: reading > the credential check when it did not pass > workbook read; a passing check is a note
+  const status: StepStatus | undefined =
+    busy === 'upload'
+      ? { state: 'running', message: 'Reading the workbook and storing the credentials.' }
+      : report && !reportPassed
+        ? { state: reportState, title: reportTitle, message: reportMessage }
+        : item
+          ? {
+              state: 'complete',
+              title: `Workbook read for ${item.serial_number}${item.dscc_setup?.system_name ? ` (${item.dscc_setup.system_name})` : ''}`,
+              message: 'Nothing is sent to the array yet; the run is created on the next step.',
+            }
+          : undefined;
+  const notes = report && reportPassed ? [reportTitle] : [];
 
   return (
     <StepShell
       title="Initialisation sheet"
-      description="One workbook per array, completed in full. Upload it to start a run."
+      description="Upload the completed workbook for this array to start a run."
       state={state}
       stateLabel={item ? 'Workbook read' : busy === 'upload' ? 'Reading' : 'Upload the workbook'}
       error={error}
       onDismissError={() => setError(null)}
+      status={status}
+      notes={notes}
       buttons={[
         {
           label: 'Validate GreenLake credentials',
@@ -134,20 +154,6 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
         />
       }
     >
-      {busy === 'upload' && <StatusLine state="running">Reading the workbook and storing the credentials.</StatusLine>}
-      {item && busy !== 'upload' && (
-        <StatusLine state="complete">
-          Workbook read for {item.serial_number}
-          {item.dscc_setup?.system_name ? ` (${item.dscc_setup.system_name})` : ''}. Nothing is sent to the array yet; the run is created on
-          the next step.
-        </StatusLine>
-      )}
-      {report && (
-        <StatusLine state={reportState} title={reportTitle}>
-          {reportMessage}
-        </StatusLine>
-      )}
-
       <Box flex={false}>
         <FileInput
           name="xlsx"
@@ -162,36 +168,34 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
 
       {item && (
         <Panel title="What the workbook holds" description="Check these against the workbook before you create the run.">
-          <Box direction="row" gap="large" wrap>
-            <NameValueList pairProps={{ direction: 'column' }} valueProps={{ width: 'small' }}>
-              <NameValuePair name="Serial number">
-                <Value>{item.serial_number}</Value>
-              </NameValuePair>
-              <NameValuePair name="Product number">
-                <Value>{item.part_number}</Value>
-              </NameValuePair>
-              <NameValuePair name="Management IP">
-                <Value>{item.network?.mgmt_ipv4}</Value>
-              </NameValuePair>
-              <NameValuePair name="Gateway">
-                <Value>{item.network?.gateway}</Value>
-              </NameValuePair>
-            </NameValueList>
-            <NameValueList pairProps={{ direction: 'column' }} valueProps={{ width: 'small' }}>
-              <NameValuePair name="System name">
-                <Value>{item.dscc_setup?.system_name}</Value>
-              </NameValuePair>
-              <NameValuePair name="Country">
-                <Value>{item.dscc_setup?.country}</Value>
-              </NameValuePair>
-              <NameValuePair name="Regions">
-                <Value>{`${item.service_catalog_region_id} · ${item.dscc_region_code}`}</Value>
-              </NameValuePair>
-              <NameValuePair name="NTP">
-                <Value>{item.network?.ntp}</Value>
-              </NameValuePair>
-            </NameValueList>
-            <NameValueList pairProps={{ direction: 'column' }} valueProps={{ width: 'small' }}>
+          <NameValueList layout="grid" pairProps={{ direction: 'column' }} valueProps={{ width: 'small' }}>
+            <NameValuePair name="Serial number">
+              <Value>{item.serial_number}</Value>
+            </NameValuePair>
+            <NameValuePair name="Product number">
+              <Value>{item.part_number}</Value>
+            </NameValuePair>
+            <NameValuePair name="System name">
+              <Value>{item.dscc_setup?.system_name}</Value>
+            </NameValuePair>
+            <NameValuePair name="Management IP">
+              <Value>{item.network?.mgmt_ipv4}</Value>
+            </NameValuePair>
+            <NameValuePair name="Regions">
+              <Value>{`${item.service_catalog_region_id} · ${item.dscc_region_code}`}</Value>
+            </NameValuePair>
+            <NameValuePair name="Country">
+              <Value>{item.dscc_setup?.country}</Value>
+            </NameValuePair>
+            <NameValuePair name="Gateway">
+              <Value>{item.network?.gateway}</Value>
+            </NameValuePair>
+            <NameValuePair name="NTP">
+              <Value>{item.network?.ntp}</Value>
+            </NameValuePair>
+          </NameValueList>
+          <Disclosure label="all values">
+            <NameValueList layout="grid" pairProps={{ direction: 'column' }} valueProps={{ width: 'small' }}>
               {TARGETS.map(([key, label]) => (
                 <NameValuePair key={key} name={label}>
                   <Value>{targets[`${key}_host`] ? `${targets[`${key}_user`] ?? ''}@${targets[`${key}_host`]}` : null}</Value>
@@ -209,7 +213,7 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
                 </NameValuePair>
               )}
             </NameValueList>
-          </Box>
+          </Disclosure>
         </Panel>
       )}
     </StepShell>

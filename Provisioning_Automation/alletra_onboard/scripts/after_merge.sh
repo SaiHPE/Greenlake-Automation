@@ -29,10 +29,17 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   git status --short --untracked-files=no | head -10 >&2
   exit 1
 fi
-case "$(git subtree -h 2>&1 || true)" in
-  *"git subtree"*) ;;
-  *) echo "git subtree is missing (Apple git lacks it; use Homebrew git)." >&2; exit 1 ;;
-esac
+# GitHub Desktop's git lacks `subtree`; Apple's /usr/bin/git and Homebrew git have it.
+has_subtree() { case "$("$1" subtree -h 2>&1 || true)" in *"git subtree"*) return 0 ;; *) return 1 ;; esac; }
+SUBTREE_GIT=git
+if ! has_subtree git; then
+  if [ -x /usr/bin/git ] && has_subtree /usr/bin/git; then
+    SUBTREE_GIT=/usr/bin/git
+  else
+    echo "git subtree is missing: the git on PATH lacks it (GitHub Desktop's does). Install Homebrew git, or put /usr/bin first on PATH." >&2
+    exit 1
+  fi
+fi
 
 echo "== 1. main from origin"
 git pull -q --ff-only origin main
@@ -55,7 +62,7 @@ else
 fi
 
 echo "== 3. jumpbox-package"
-git subtree split -q --prefix="$APP" -b jbp-new
+"$SUBTREE_GIT" subtree split -q --prefix="$APP" -b jbp-new
 git branch -f jumpbox-package jbp-new && git branch -D -q jbp-new
 git push -q -f origin jumpbox-package
 echo "   $(git rev-parse --short jumpbox-package)"

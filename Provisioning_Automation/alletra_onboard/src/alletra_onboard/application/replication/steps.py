@@ -26,18 +26,45 @@ from alletra_onboard.application.runs.coordinator import (
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.replication import (
     LINK_CHECK_TIME_DEFAULT,
-    RTT_LIMIT_MS,
     TEST_GROUP,
     FailoverRecord,
     LinkCheck,
     ReplicationPlan,
     ReplicationReport,
+    rtt_limit_ms,
+    rtt_limit_text,
 )
 
 REPORT_ARTIFACT = "replication_report"
 RESULT_ARTIFACT = "replication_result"
 FAILOVER_ARTIFACT = "failover_record"
 LINK_CHECK_ARTIFACT = "link_check"
+#: SPEC-031 R6: over Fibre Channel the typed round-trip time stands in for the link check.
+FC_RTT_MISSING = ("Type the round-trip time between the arrays on the Replication tab: the tool cannot measure "
+                  "Fibre Channel links yet.")
+
+
+def gate_on_typed_rtt(report: ReplicationReport, rtt_ms: float | None, accept_latency: bool) -> list[str]:
+    """SPEC-031 R6: a Fibre Channel partnership's latency is the round-trip time typed on the Replication tab,
+    until the array's link test is known to measure FC links. Blank is refused; over the limit is refused unless
+    the operator ticked 'Continue anyway'. The note says the value was typed, not measured."""
+    if rtt_ms is None:
+        raise StepPreconditionError(FC_RTT_MISSING)
+    modes = report.modes or ["async"]
+    over = [m for m in modes if rtt_ms > rtt_limit_ms("FC", m)]
+    if over and not accept_latency:
+        raise StepPreconditionError(
+            f"The round-trip time typed on the Replication tab is {rtt_ms:g} ms; {rtt_limit_text('FC', over[0])}. "
+            "Tick 'Continue anyway' to configure it regardless."
+        )
+    note = (f"Round-trip time {rtt_ms:g} ms, typed on the Replication tab by the engineer, not measured (the tool "
+            "cannot measure Fibre Channel links yet)")
+    if over:
+        note += (f"; over the {rtt_limit_ms('FC', over[0]):g} ms limit for {'/'.join(over)} over Fibre Channel — "
+                 "the operator accepted it and chose to continue.")
+    else:
+        note += "; within the limit."
+    return [note]
 
 
 class ReplicationSteps:
@@ -134,6 +161,8 @@ class ReplicationSteps:
             raise StepPreconditionError("read both arrays first — the link check needs the ports and links the read found")
         if report.partnership is None:
             raise StepPreconditionError("no Remote Copy partnership between the arrays was found; there is no link to check")
+        if report.partnership.transport == "FC":
+            raise StepPreconditionError(f"the arrays replicate over Fibre Channel. {FC_RTT_MISSING}")
         coord.spawn(run_id, self._run_link_check(run, intent, report, duration_s))
         return run
 
@@ -170,7 +199,7 @@ class ReplicationSteps:
     def _link_summary(check: LinkCheck, failed: list) -> str:
         measured = [r for r in check.results if r.status == "measured"]
         worst = check.worst_ms
-        limits = ", ".join(f"{m} needs {RTT_LIMIT_MS[m]:g} ms or less" for m in check.modes)
+        limits = ", ".join(f"{m} needs {rtt_limit_ms('IP', m):g} ms or less" for m in check.modes)
         text = f"Latency {worst:g} ms on {len(measured)} link(s)" + (f" ({limits})" if limits else "")
         over = check.over_limit()
         if over:
@@ -184,10 +213,14 @@ class ReplicationSteps:
             text += " Pings were lost on " + ", ".join(f"{r.pair.nsp_a} ({r.pings_lost_pct:g} %)" for r in lost) + "."
         return text
 
-    def _gate_on_link(self, run_id: str, report: ReplicationReport, accept_latency: bool) -> list[str]:
-        """R4: notes for the result, or a StepPreconditionError. RCIP partnerships only."""
+    def _gate_on_link(self, run_id: str, report: ReplicationReport, accept_latency: bool,
+                      rtt_ms: float | None = None) -> list[str]:
+        """R4: notes for the result, or a StepPreconditionError. An RCIP partnership needs this run's link check;
+        a Fibre Channel one the round-trip time typed on the Replication tab (SPEC-031 R6)."""
         if report.partnership is None:
             return []
+        if report.partnership.transport == "FC":
+            return gate_on_typed_rtt(report, rtt_ms, accept_latency)
         check = self.link_check(run_id)
         if check is None or not check.measured:
             raise StepPreconditionError(
@@ -197,12 +230,12 @@ class ReplicationSteps:
         if over and not accept_latency:
             mode = over[0]
             raise StepPreconditionError(
-                f"The measured latency is {check.worst_ms:g} ms; {mode} replication over RCIP needs "
-                f"{RTT_LIMIT_MS[mode]:g} ms or less. Tick 'Continue anyway' to configure it regardless."
+                f"The measured latency is {check.worst_ms:g} ms; {rtt_limit_text('IP', mode)}. "
+                "Tick 'Continue anyway' to configure it regardless."
             )
         note = f"Link check {check.at}: latency {check.worst_ms:g} ms on {len(check.results)} link(s)"
         if over:
-            note += (f"; over the {RTT_LIMIT_MS[over[0]]:g} ms limit for {'/'.join(over)} — "
+            note += (f"; over the {rtt_limit_ms('IP', over[0]):g} ms limit for {'/'.join(over)} — "
                      "the operator accepted it and chose to continue.")
         else:
             note += "; within the limit."
@@ -226,7 +259,7 @@ class ReplicationSteps:
             raise StepPreconditionError("nothing to create — every object in the plan already exists")
         # LESSONS 7: the operator's tick reaches the server as the id of the plan it was given for.
         check_approval(approved_plan, plan.plan_id)
-        notes = self._gate_on_link(run_id, report, accept_latency)
+        notes = self._gate_on_link(run_id, report, accept_latency, intent.replication.rtt_ms)
         coord.spawn(run_id, self._run_apply(run, intent, plan, notes))
         return run
 

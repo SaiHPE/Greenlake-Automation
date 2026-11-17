@@ -1,6 +1,6 @@
 // The redesign's content blocks (BL-43, draft 3 mockups in frontend/mockups/kit.tsx), built on the
 // HPE Design System parts. Rules they follow are in docs/UX-GUIDELINES.md.
-import { Box, Button, Collapsible, Heading, Notification, Paragraph, Spinner, Text } from 'grommet';
+import { Anchor, Box, Button, Collapsible, Heading, Notification, Paragraph, Spinner, Text } from 'grommet';
 import { Clock, FormDown, FormUp, Radial } from 'grommet-icons';
 import { ReactNode, useState } from 'react';
 import { StatusIcon, StepState } from './status';
@@ -16,20 +16,34 @@ const NOTIFICATION_STATUS: Record<StepState, 'normal' | 'warning' | 'critical' |
   waiting: 'unknown',
 };
 
-/** One sentence on what happened, as the Design System inline notification: icon, colour, words, time. */
+/** A link in a status line: it acts on this page (opens the log, for example), never a button. */
+export interface StatusLink {
+  label: string;
+  onClick: () => void;
+}
+
+/**
+ * One sentence on what happened, as the Design System inline notification: icon, colour, words, time,
+ * and at most two links.
+ */
 export function StatusLine({
   state,
   title,
   children,
   time,
+  links = [],
   onClose,
 }: {
   state: StepState;
   title?: string;
   children?: ReactNode;
   time?: string;
+  links?: StatusLink[];
   onClose?: () => void;
 }) {
+  // Notification draws its own `actions` only beside a plain-string message; this message also holds
+  // the time, so the links are drawn here, as the same anchors.
+  const shownLinks = links.slice(0, 2);
   const icon =
     state === 'running' ? (
       <Spinner size="xsmall" message={{ start: 'Working', end: 'Finished' }} />
@@ -46,9 +60,28 @@ export function StatusLine({
         title={title}
         onClose={onClose}
         message={
-          children || time ? (
+          children || time || shownLinks.length ? (
             <Box direction="row" gap="medium" align="start" justify="between">
-              <Box>{children}</Box>
+              {shownLinks.length ? (
+                <Box>
+                  <Box>{children}</Box>
+                  <Box direction="row" gap="medium" wrap margin={{ top: 'xsmall' }}>
+                    {shownLinks.map((link) => (
+                      <Anchor
+                        key={link.label}
+                        label={link.label}
+                        href="#"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          link.onClick();
+                        }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              ) : (
+                <Box>{children}</Box>
+              )}
               {time && (
                 <Text size="small" color="text-weak" style={{ whiteSpace: 'nowrap' }}>
                   {time}
@@ -199,7 +232,13 @@ export function DoneList({
                 {it.text}
               </Text>
               {it.detail && (
-                <Button plain onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i}>
+                <Button
+                  plain
+                  onClick={() => setOpen(open === i ? null : i)}
+                  aria-expanded={open === i}
+                  // the name says which part's detail; it keeps the visible verb (WCAG 2.5.3)
+                  a11yTitle={typeof it.text === 'string' ? `${open === i ? 'Hide' : 'Show'} detail: ${it.text}` : undefined}
+                >
                   <Text size="small" color="text-anchor">
                     {open === i ? 'Hide detail' : 'Show detail'}
                   </Text>
@@ -217,6 +256,41 @@ export function DoneList({
           )}
         </Box>
       ))}
+    </Box>
+  );
+}
+
+/**
+ * An inline toggle inside a section, for commands or a legend (SPEC-030 R6): "Show <label> (N)" /
+ * "Hide <label>", with what it shows folded under it.
+ */
+export function Disclosure({
+  label,
+  count,
+  open: openInitially = false,
+  children,
+}: {
+  label: string;
+  count?: number;
+  open?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(openInitially);
+  return (
+    <Box flex={false}>
+      <Button plain alignSelf="start" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <Box direction="row" gap="xxsmall" align="center">
+          {open ? <FormUp size="small" aria-hidden /> : <FormDown size="small" aria-hidden />}
+          <Text size="small" color="text-anchor">
+            {open ? `Hide ${label}` : `Show ${label}${count ? ` (${count})` : ''}`}
+          </Text>
+        </Box>
+      </Button>
+      <Collapsible open={open}>
+        <Box pad={{ top: 'xsmall' }} gap="small">
+          {children}
+        </Box>
+      </Collapsible>
     </Box>
   );
 }

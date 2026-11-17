@@ -65,7 +65,8 @@ reads `.env`). Key fields: `api_host`/`api_port` (127.0.0.1:8765), `alletra_prof
 (`full` or `init-only`), `gl_client_id`, `gl_client_secret`, `gl_token_url`, `gl_base_url`
 (`https://global.api.greenlake.hpe.com`), `state_database_path` (`.alletra_onboard/state.db`),
 `artifact_dir`, `browser_cdp_url` (`http://localhost:9222`), `browser_proxy`,
-`browser_proxy_bypass`, `alletra_proxy`. `RunCoordinator.current_settings()` reloads settings at each
+`browser_proxy_bypass`, `alletra_proxy`, `alletra_device_ca_bundle` (ADR 0026, section 13.1).
+`RunCoordinator.current_settings()` reloads settings at each
 step, so credentials saved after start-up take effect without a restart.
 
 ---
@@ -84,7 +85,6 @@ step, so credentials saved after start-up take effect without a restart.
 | [`replication.py`](../../src/alletra_onboard/domain/replication.py) | The Replication tab (`ReplicationIntent`, `ProtectionRequest`, `RcipPortRequest`, `pair_ports`), the array view (`ReplicationArrayView`, `RcipPort`, `RcTransport`, `RcTarget`, `RcLink`, `RcGroup`), the check and plan (`ReplicationReport`, `Partnership`, `ReplicationPlan`, `ReplicationAction`, `PlannedCall`), results (`ReplicationResult`, `ReplicationOutcome`), verify (`ReplicationVerification`), link check (`LinkCheck`, `LinkPair`, `LinkCheckResult`) and failover test (`FailoverRecord`, `FailoverSide`, `FailoverStepRecord`). Constants: `RTT_LIMIT_MS` (sync 10 ms, async 200 ms), `GROUP_NAME_MAX = 22`, the `zz_rc_test*` test object names, `DR_ACTION_FAILOVER = 7`, `DR_ACTION_RECOVER = 9`, `DR_ACTION_RESTORE = 10`. |
 | [`cloudinit_url.py`](../../src/alletra_onboard/domain/cloudinit_url.py) | `normalize_cloudinit_url()` and `is_valid_cloudinit_url()`: the setup wizard URL must be link-local (`https://169.254.*` or an `fe80::` IPv6 address with a zone); the path defaults to `/cloudinit`. |
 | [`policies.py`](../../src/alletra_onboard/domain/policies.py) | `redact()` (Bearer tokens, `client_secret`, `subscription_key`), `RateBudget`, `TokenBucket`. |
-| [`errors.py`](../../src/alletra_onboard/domain/errors.py) | `ErrorCategory` and `OnboardError`. Defined, but nothing in `src/` raises them today; each adapter has its own exception (section 14). |
 
 ---
 
@@ -130,6 +130,7 @@ exists (hard rule 5).
 | `dscc` | DSCC Setup | `DSCC_SETUP_SYSTEM` | init |
 | `discover` | Discovery | `STORAGE_DISCOVER` | provision |
 | `zoning` | SAN Zoning | `STORAGE_ZONING` | provision |
+| `migrate` | Migration | `STORAGE_MIGRATE` | migrate (not built yet: served with `unavailable`) |
 | `provision` | Provision storage | `STORAGE_PROVISION` | provision |
 | `replicate` | Replication | `STORAGE_REPLICATE` | replicate |
 | `failover_test` | Failover test | `STORAGE_FAILOVER_TEST` | replicate |
@@ -142,6 +143,7 @@ exists (hard rule 5).
 | `PROVISION_ONLY` | discover, zoning, provision, verify, asbuilt |
 | `BOTH` | greenlake, cloudinit, dscc, discover, zoning, provision, verify, asbuilt |
 | `REPLICATE` | discover, zoning, provision, replicate, failover_test, verify, asbuilt |
+| `MIGRATE` | discover, zoning, migrate, verify, asbuilt |
 | `VERIFY_ONLY` | verify, asbuilt |
 | `CUSTOM` | exactly `RunRecord.selected_steps`, in registry order |
 
@@ -151,10 +153,14 @@ Functions:
 - `initial_phase(mode, selected)` is the phase a new run lands on (its first step).
 - `next_enabled_phase(mode, selected, after_key)` advances only along the `init` chain
   (greenlake, cloudinit, dscc). Every other step is started by the operator.
+- `NOT_BUILT_STEPS` names the registry steps whose work is not built yet, with the operator's
+  sentence. `RunCoordinator.create_run` refuses a run that includes one, and the mode chooser greys
+  out every mode that does. Today: `migrate` (BL-27 slice 1 has the tab and the registry entry only).
 
 `GET /app/profile` ([`api/app.py`](../../src/alletra_onboard/api/app.py), `app_profile`) serves:
 `profile`, `init_only`, `title` (from `Settings`), `steps` (key, label, kind, phase for each
-`StepDef`), `modes` (from `mode_steps()`), and `capabilities` (`wsapi_sdk`, `wsapi_sdk_error`: did
+`StepDef`, and `unavailable`: the sentence from `NOT_BUILT_STEPS` for a step whose work is not built
+yet, else empty), `modes` (from `mode_steps()`), and `capabilities` (`wsapi_sdk`, `wsapi_sdk_error`: did
 this build import `python-3parclient`). The frontend's
 [`modes.ts`](../../frontend/src/modes.ts) keeps only presentation extras (subtitles, mode blurbs)
 and the TypeScript types for the served data.
@@ -240,8 +246,8 @@ reaches the loop with `loop.call_soon_threadsafe(coord.emit, ...)`.
 ### 5.3 Status and phase rules
 
 `RunStatus` values: `not_started`, `ready`, `running`, `waiting_for_operator`, `retryable_failure`,
-`terminal_failure`, `cancel_requested`, `cancelled`, `succeeded`, `skipped`. (`cancel_requested`,
-`cancelled` and `skipped` are defined but no code sets them.)
+`terminal_failure`, `succeeded`. (`cancel_requested`, `cancelled` and `skipped` were removed in BL-56;
+no release ever set them. A stored run that carries one still loads, as `ready`.)
 
 | Step | Sets on start | On success | On failure |
 |---|---|---|---|
@@ -274,6 +280,7 @@ Every event is a `RunEvent` (`event_id`, `run_id`, `phase`, `event_type`, `messa
 | Provisioning | `storage.previewed`, `storage.preview.failed`, `storage.apply.started`, `storage.applied`, `storage.apply.failed`, `storage.paths.checking`, `storage.paths.verified`, `storage.paths.failed` |
 | Replication | `replication.previewed`, `replication.preview.failed`, `replication.link_check.started`, `replication.link_checked`, `replication.link_check.failed`, `replication.apply.started`, `replication.applied`, `replication.apply.failed`, `replication.verify.started`, `replication.verified`, `replication.verify.failed`, `failover.started`, `failover.completed`, `failover.failed` |
 | Documents | `verify.completed`, `verify.failed`, `asbuilt.started`, `asbuilt.generated`, `asbuilt.failed` |
+| Device trust (section 13.1) | `device.trusted` (first contact; never decides a step), `device.trust_failed` (a device was refused during the step; the step shows stopped), `device.refused` (refused while a route read it, such as the console; a note), `device.retrusted` (the operator's re-trust, both fingerprints in `data`) |
 
 The as-built step reads the latest payload of several of these back from the store
 (`DocumentSteps._run_records`) to write the provisioning, zoning and replication sections.
@@ -345,6 +352,8 @@ All routes are closures inside `create_app(service)` in
 | POST | `/runs/{id}/replication/apply` | Apply the replication plan (partnership over SSH, or groups over WSAPI). `accept_latency` overrides the latency gate. |
 | POST | `/runs/{id}/replication/verify` | `showrcopy` on both arrays, one verdict per group. |
 | POST | `/runs/{id}/replication/failover-test` | Failover test on one group (`group`, `confirm`). |
+| GET | `/runs/{id}/trust` | The devices the run trusts (fingerprints only) and the device CA bundle in use (section 13.1). |
+| POST | `/runs/{id}/trust/retrust` | Trust the key a device presented when it was refused (`kind`, `host`, `port`, `fingerprint`). 404 for a device the run never reached; 409 when nothing was refused or the fingerprint is not the one refused. |
 | GET | `/runs/{id}/events` | Event history from the store. |
 | GET | `/runs/{id}/stream` | Event SSE stream. |
 | GET | `/runs/{id}/console/log` | Command records after `since`; `format=txt` downloads them as text. |
@@ -380,6 +389,7 @@ migrations: new fields go into the JSON `payload`, and Pydantic defaults load ol
 | `pending_sheets` | `token` | `payload`, `created_at` | A parsed sheet waiting for a mode; deleted on pop. |
 | `run_artifacts` | (`run_id`, `kind`) | `payload` BLOB, `updated_at` | Durable step results. |
 | `run_commands` | (`run_id`, `seq`) | `payload` | The command log (section 13). |
+| `run_device_pins` | (`run_id`, `kind`, `host`, `port`) | `payload` (`DevicePin` JSON) | The key or certificate each on-site device presented on the run's first contact (section 13.1). A table of its own because steps write back whole `RunRecord`s read earlier. |
 
 `_work_item_json` and `_provisioning_intent_json` write the secrets in clear, because
 `model_dump_json` would mask `SecretStr` and break the round trip. The database lives in the
@@ -413,8 +423,9 @@ See [LESSONS.md](../LESSONS.md) lesson 6.
 
 ### 8.1 Read-only SSH: `ArrayCliClient`
 
-[`adapters/array/cli_client.py`](../../src/alletra_onboard/adapters/array/cli_client.py), paramiko,
-`AutoAddPolicy` (a fresh array has no known host key), connect timeout 15 s, per-command cap 120 s.
+[`adapters/array/cli_client.py`](../../src/alletra_onboard/adapters/array/cli_client.py), paramiko
+through `device_trust.open_ssh` (a fresh array has no known host key: trusted on first contact and
+pinned for the run, section 13.1), connect timeout 15 s, per-command cap 120 s.
 
 `ALLOWED_COMMANDS` (the first word must be one of these):
 
@@ -485,8 +496,14 @@ Only `make_rc_cli` builds this client, and only
 ### 8.3 WSAPI: `WsapiClient`
 
 [`adapters/array/wsapi_client.py`](../../src/alletra_onboard/adapters/array/wsapi_client.py) wraps
-`python-3parclient` (`HPE3ParClient`) against `https://<array>:443/api/v1`, `secure=False`. Design
-points:
+`python-3parclient` (`HPE3ParClient`) against `https://<array>:443/api/v1`. Design points:
+
+- **Certificate pinned** (section 13.1). `connect()` reads the certificate (`device_trust.check_tls`)
+  and compares it with the run's pin before the SDK client exists. The SDK runs with `secure=False`
+  and `_pin_calls` binds the pinned SHA-256 for each of its calls; `_PinnedRequests`, installed as
+  `hpe3parclient.http.requests`, sends those through a session whose adapter sets urllib3's
+  `assert_fingerprint`. `_translate` turns the SDK's `SSLCertFailed` into the sentence naming both
+  fingerprints. With a device CA bundle the SDK gets its path as `secure` instead.
 
 - **Readiness gate.** `connect()` logs in. A 503, "not ready" or a timeout becomes `WsapiNotReady`
   with the remedy in the message.
@@ -499,6 +516,9 @@ points:
   `created`, `exists` or `updated`. `EXISTENT_PATH` (a WWN on another host) is not swallowed.
 - **Subscription gate.** An array that has not finished GreenLake onboarding refuses creates; the
   error is translated to say so.
+- **A volume too large.** `ensure_volume` turns the array's HTTP 400 code 28 (*client request contains
+  value that is too large*, live for 1 PiB on rack13-ARCUS, 2026-11-16) into a sentence naming the size
+  and the fix (BL-55).
 
 SDK calls used for **writes**:
 
@@ -603,8 +623,12 @@ runs the same reads as checks, and [`health.py`](../../src/alletra_onboard/appli
 checks the region pair: `ap-northeast` to `jp1`, `us-west` to `us1`, `eu-central` to `eu1`,
 `eu-west` to `uk1`; an unknown pair is a warning.
 
-GreenLake calls are not written to the command log today; only array, WSAPI and switch clients
-call `command_log.record`.
+Every GreenLake HTTP attempt, retries included, is written to the command log (transport
+`greenlake`) as `METHOD /path`: no query, no body and no error text, because the subscription key
+travels in the `find_by_key` filter and the add body, and httpx error text quotes the full URL. A 202's
+`Location` path is the output. `POST`/`PATCH` are writes, except a device add with `dry-run=true`.
+`OAuthClientCredentials` records the token request as `POST <token path> (client credentials
+withheld)`, its answer as `(token withheld)`.
 
 ---
 
@@ -628,15 +652,17 @@ On a timeout or an unknown screen they save a screenshot and page text under `ar
 
 | Adapter | Transport | What it reads | Allowlist |
 |---|---|---|---|
-| [`vcenter/vcenter_client.py`](../../src/alletra_onboard/adapters/vcenter/vcenter_client.py) `VCenterClient` | pyVmomi `SmartConnect`, port 443 | `host_fc_hbas()` (ESXi FC HBA WWPNs and OS), `host_identities()` (FC and iSCSI identity, serial), `host_luns()` (`parse_storage_device`: LUNs, multipath state per path) | Read-only by construction: no method writes. |
-| [`fabric/brocade_client.py`](../../src/alletra_onboard/adapters/fabric/brocade_client.py) `BrocadeClient` | paramiko SSH | `cfgshow`, `alishow`, `nsshow`, `nscamshow`, `fabricshow`, `switchshow`, `cfgtransshow` | `ALLOWED_READ`: `cfgshow`, `zoneshow`, `alishow`, `nsshow`, `nscamshow`, `nsallshow`, `fabricshow`, `switchshow`, `cfgtransshow`. `_guard` refuses metacharacters and anything else (`BrocadeRefused`). There is no write method (ADR 0012). |
-| [`hosts/linux_ssh.py`](../../src/alletra_onboard/adapters/hosts/linux_ssh.py) `LinuxHostClient` | paramiko SSH | `read(key)` runs only `COMMANDS[key]`: `hostname`, `cat /etc/os-release`, `cat /sys/class/dmi/id/product_serial` (and `sudo -n` form), `cat /sys/class/fc_host/host*/port_name`, `cat /etc/iscsi/initiatorname.iscsi`, `multipath -ll` (and `sudo -n` form) | Fixed by key. |
-| [`hosts/windows_winrm.py`](../../src/alletra_onboard/adapters/hosts/windows_winrm.py) `WindowsHostClient` | pywinrm, NTLM; `http://<host>:5985/wsman` first, then `https://<host>:5986/wsman`; proxy off | `read(key)` runs only `SCRIPTS[key]`: `hostname`, `os` (Win32_OperatingSystem), `serial` (Win32_BIOS), `initiators` (`Get-InitiatorPort`), `mpio` (feature state, claimed 3PARdata hardware, 3PARdata disks). Each emits JSON. | Fixed by key. |
+| [`vcenter/vcenter_client.py`](../../src/alletra_onboard/adapters/vcenter/vcenter_client.py) `VCenterClient` | pyVmomi `SmartConnect`, port 443; certificate probed and compared first, then `device_trust.pinned_context` on every connection (section 13.1) | `host_fc_hbas()` (ESXi FC HBA WWPNs and OS), `host_identities()` (FC and iSCSI identity, serial), `host_luns()` (`parse_storage_device`: LUNs, multipath state per path) | Read-only by construction: no method writes. |
+| [`fabric/brocade_client.py`](../../src/alletra_onboard/adapters/fabric/brocade_client.py) `BrocadeClient` | paramiko SSH through `device_trust.open_ssh` | `cfgshow`, `alishow`, `nsshow`, `nscamshow`, `fabricshow`, `switchshow`, `cfgtransshow` | `ALLOWED_READ`: `cfgshow`, `zoneshow`, `alishow`, `nsshow`, `nscamshow`, `nsallshow`, `fabricshow`, `switchshow`, `cfgtransshow`. `_guard` refuses metacharacters and anything else (`BrocadeRefused`). There is no write method (ADR 0012). |
+| [`hosts/linux_ssh.py`](../../src/alletra_onboard/adapters/hosts/linux_ssh.py) `LinuxHostClient` | paramiko SSH through `device_trust.open_ssh` | `read(key)` runs only `COMMANDS[key]`: `hostname`, `cat /etc/os-release`, `cat /sys/class/dmi/id/product_serial` (and `sudo -n` form), `cat /sys/class/fc_host/host*/port_name`, `cat /etc/iscsi/initiatorname.iscsi`, `multipath -ll` (and `sudo -n` form) | Fixed by key. |
+| [`hosts/windows_winrm.py`](../../src/alletra_onboard/adapters/hosts/windows_winrm.py) `WindowsHostClient` | pywinrm, NTLM; `http://<host>:5985/wsman` first, then `https://<host>:5986/wsman`; proxy off; certificate not checked unless a device CA bundle is set (reason at the site) | `read(key)` runs only `SCRIPTS[key]`: `hostname`, `os` (Win32_OperatingSystem), `serial` (Win32_BIOS), `initiators` (`Get-InitiatorPort`), `mpio` (feature state, claimed 3PARdata hardware, 3PARdata disks). Each emits JSON. | Fixed by key. |
 | [`system/clock.py`](../../src/alletra_onboard/adapters/system/clock.py) | HTTPS `Date` header | Clock skew; on Windows, sets the clock when elevated | |
 | [`system/discovery_tool.py`](../../src/alletra_onboard/adapters/system/discovery_tool.py) | Local process | Finds and launches `*Discovery Tool*.exe` (the bundled copy, checked against its `.sha256` sidecar when one exists, then known folders) | |
 
-Only the array clients and the Brocade client write to the command log. vCenter and host reads are
-reported through discovery notes and events.
+Every adapter in this table except the clock and the Discovery Tool writes to the command log
+(BL-54): `VCenterClient` one record for the login and one per inventory read (`vcenter`, output the
+parsed rows), `LinuxHostClient.run` one per fixed command (`host-ssh`, `exit N`), `WindowsHostClient`
+one per script, including the login probe on each listener (`winrm`).
 
 ---
 
@@ -704,7 +730,7 @@ Gates in `ReplicationSteps`:
 | [`platform/configuring.py`](../../src/alletra_onboard/application/platform/configuring.py) | `.env` read and write; `set_env_values` never writes an empty value over a saved one; `masked_gl_credentials`. |
 | [`platform/proxy.py`](../../src/alletra_onboard/application/platform/proxy.py) | `ProxyResolver`: manual override, else `HTTPS_PROXY`, else the OS proxy (WinINET or PAC through WinHTTP), else direct. `apply_proxy_env` publishes it to the process; on-prem targets are bypassed (ADR 0008). |
 | [`platform/prereqs.py`](../../src/alletra_onboard/application/platform/prereqs.py) | `rules_for(region)`, `firewall_text`, `check_connectivity` (direct or through the proxy). |
-| [`platform/tls.py`](../../src/alletra_onboard/application/platform/tls.py) | `ssl_context()`: OS trust store plus certifi plus `ALLETRA_CA_BUNDLE`. |
+| [`platform/tls.py`](../../src/alletra_onboard/application/platform/tls.py) | `ssl_context()`: OS trust store plus certifi plus `ALLETRA_CA_BUNDLE`. Cloud endpoints only; on-site devices are section 13.1. |
 
 ---
 
@@ -717,11 +743,13 @@ Gates in `ReplicationSteps`:
   that read outside a step (`/storage/preflight`, `/storage/objects`, the console) use
   `coordinator.recording(run_id)`.
 - `record(target, transport, command, started, ok, result, output, secrets, write)` builds one entry:
-  `at`, `target`, `transport` (`ssh`, `wsapi`, `fos`), `command`, `duration_s`, `ok`, `result`
+  `at`, `target`, `transport` (`ssh`, `wsapi`, `fos`, `vcenter`, `host-ssh`, `winrm`, `greenlake`),
+  `command`, `duration_s`, `ok`, `result`
   (300 characters), `write`, `output` (capped at 64 KB). With no sink bound it does nothing.
   A failing sink never breaks the command.
 - **Redaction.** Each client passes its own password in `secrets`; `redact()` replaces any secret of
-  three characters or more with `********` in the command, result and output.
+  three characters or more with `********` in the command, result and output, then applies
+  `domain.policies.redact()` (Bearer tokens, `client_secret`, subscription keys) to every record.
 - The coordinator stores the entry (`append_command` returns the next `seq`) and pushes it on the
   `ConsoleBus`.
 
@@ -738,6 +766,38 @@ Gates in `ReplicationSteps`:
 
 A second redaction, `domain.policies.redact()`, removes Bearer tokens, `client_secret` and
 subscription keys from GreenLake error text.
+
+### 13.1 Device trust (ADR 0026)
+
+[`adapters/device_trust.py`](../../src/alletra_onboard/adapters/device_trust.py) is the one place every
+SSH and TLS client to an on-site device asks:
+
+- A `ContextVar` holds the run's `TrustBook`. `RunCoordinator.spawn` and `recording()` bind a
+  [`RunTrustBook`](../../src/alletra_onboard/application/runs/trust.py) next to the command-log sink,
+  so every client built in that step or route gets the run's pins. With none bound, nothing is
+  compared or recorded.
+- `check(kind, host, port, device, offered)` records the key on the run's first contact
+  (`add_device_pin` is insert-if-absent, so two reads racing to the same device keep one), lets the
+  same key through, and refuses a different one with `DeviceTrustError`, whose message
+  (`domain/trust.py` `mismatch_message`) names the device and both fingerprints and says the password
+  was not sent. Each client turns it into its own error type with the same text.
+- SSH: `open_ssh(host, port, device=..., username=..., password=..., timeout=...)` preloads a pinned key
+  (under `[host]:port` when the port is not 22) and sets `FirstContactPolicy`; paramiko compares the
+  key before it authenticates. Keys are kept as type, base64 and `SHA256:` fingerprint.
+- TLS: `probe_tls` reads the leaf certificate in a handshake that sends nothing (direct, never through
+  the proxy); `check_tls` compares it. `tls_key` keeps the PEM and the SHA-256 as colon hex.
+  `pinned_context` is an `ssl.SSLContext` that compares the certificate after every handshake made
+  with it (for pyVmomi, whose `serverPemCert` cannot pin a self-signed vCenter).
+- `device_ca_bundle()` returns `ALLETRA_DEVICE_CA_BUNDLE` (the run's setting, else the environment);
+  set, WSAPI, vCenter and WinRM over HTTPS check against it instead, with no fallback.
+- `RunTrustBook` emits `device.trusted` on first contact (from a worker thread, handed to the loop)
+  and, when the step ends, one `device.trust_failed` per refused device in the step's phase. After a
+  route (`recording()`), whose answer already carries the refusal, it emits `device.refused`, a note.
+  `RunCoordinator.retrust_device` (`POST /runs/{id}/trust/retrust`) replaces the pin with the key
+  the device presented when it was refused, only when the request names that fingerprint, and emits
+  `device.retrusted`.
+- Sites that still turn a check off carry a `# TRUST-OFF:` reason;
+  `tests/unit/test_trust_checks_off.py` lists them and fails on a new one.
 
 ---
 
@@ -815,6 +875,11 @@ One workbook is one array.
 - The Replication tab refuses the types in `_UNSUPPORTED_REPLICATION_TYPES` (peer persistence, active
   sync, SLD, 3DC, streaming, app); the network tab checks IPv4 addresses and masks, and pairs ports with `pair_ports`.
 - A replication step selected without a Replication tab is refused.
+- A volume size must be a whole number of GiB above 0, and not above `VOLUME_MAX_GIB`
+  (`domain/provisioning.py`, BL-55). That limit is `None` until the array's `help createvv` is
+  captured (`lab/snap_capture.py`); while it is `None` no size is refused and the array has the last
+  word. The plan applies the same check (`_judge_volume`: a new volume over the limit is a conflict,
+  so a blocker), for intents that did not come through the sheet.
 
 On upload, the API saves the sheet's GreenLake credentials to `.env`, stashes the parsed sheet under a
 token, and returns the work item without the DSCC password. Device passwords never return to the

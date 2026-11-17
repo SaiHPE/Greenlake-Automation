@@ -38,13 +38,21 @@ export interface HealthIssue {
   qty: number;
   details?: HealthDetail[];                     // SPEC-011 R1: the array's Detail rows for this component
 }
+/** SPEC-024 R6: one row of the sheet's iSCSI network tab against the array's VLAN interfaces. */
+export interface IscsiVlanCheck { nsp: string; vlan_id: number; status: 'present' | 'missing' | 'different'; differences: string[]; }
 export interface VerificationReport {
   reachable: boolean;
   error: string | null;
   checks: FieldCheck[];
   health_issues: HealthIssue[];
   raw: Record<string, string>;
+  iscsi_vlans?: IscsiVlanCheck[];
+  iscsi_vlans_error?: string | null;
+  peer_ports?: PeerPortCheck[];
+  peer_ports_error?: string | null;
 }
+/** SPEC-025 R6: one planned peer port as the array reads it. */
+export interface PeerPortCheck { nsp: string; ok: boolean; sentence: string; }
 
 export interface CheckReport {
   ok: boolean;
@@ -145,6 +153,8 @@ export interface InitSheetUploadResult {
   targets?: Record<string, string>;
   // SPEC-021: the Replication network tab, one line per port ("this array 0:4:4 10.93.18.11"); empty without the tab.
   replication_ports?: string[];
+  // SPEC-023 R9: the Snapshots tab, one line per row ("zz_sn_vvs: Snapshot now · every 4 hours …"); empty without it.
+  snapshot_rows?: string[];
 }
 // Upload the filled Initialisation_sheet.xlsx (base64). The server validates it is COMPLETE, writes
 // the GreenLake API creds to .env, and HOLDS the parsed sheet server-side — returning a token. No run
@@ -166,6 +176,33 @@ export interface ArrayCredentialInfo {
 export const getRun = (runId: string) =>
   request<{ run: RunRecord; work_item: any; array_credential: ArrayCredentialInfo | null }>('GET', `/runs/${runId}`);
 export const listRuns = () => request<{ runs: RunRecord[] }>('GET', '/runs');
+
+// ------------------------------------------------------------------ device trust (trusted on first contact)
+/** One on-site device this run trusts: what it presented on first contact. Fingerprints only. */
+export interface TrustedDevice {
+  kind: 'ssh' | 'tls';
+  host: string;
+  port: number;
+  device: string;
+  key_type: string;
+  fingerprint: string;
+  trusted_at: string;
+  how: 'first_contact' | 'retrusted';
+  previous_fingerprint: string | null;
+  /** A different key the device presented since; the tool refused it and sent nothing. */
+  refused_key_type: string | null;
+  refused_fingerprint: string | null;
+  refused_at: string | null;
+}
+export const getTrustedDevices = (runId: string) =>
+  request<{ devices: TrustedDevice[]; device_ca_bundle: string | null }>('GET', `/runs/${runId}/trust`);
+export const retrustDevice = (runId: string, device: TrustedDevice, fingerprint: string) =>
+  request<{ device: TrustedDevice }>('POST', `/runs/${runId}/trust/retrust`, {
+    kind: device.kind,
+    host: device.host,
+    port: device.port,
+    fingerprint,
+  });
 export const getEvents = (runId: string) => request<{ events: RunEvent[] }>('GET', `/runs/${runId}/events`);
 
 export const startProvision = (runId: string, dryRun: boolean) =>
@@ -191,6 +228,23 @@ export interface AsBuiltResult {
   // visible in the finished document. The document is always produced (operator decision), so
   // these must be shown prominently before it is sent.
   warnings: string[];
+  // What the array said about itself when the document was made; absent on documents made before it.
+  handover?: HandoverStatus | null;
+}
+// SPEC-026 R10: from the same reads as the document's status and performance section. A null figure
+// is not known (its read failed, named in read_errors and in the warnings), never zero.
+export interface HandoverStatus {
+  read_at: string | null;
+  window_from: string | null;
+  window_to: string | null;
+  alerts_new: number | null;
+  alerts_major: number | null;      // Major, Critical or Fatal
+  oldest_alert: string | null;      // the oldest first occurrence, as the array printed it
+  cloud_alert: number | null;       // the alert saying the array is disconnected from Data Services Cloud Console
+  cpu_max_pct: number | null;       // the busiest sample of any controller node
+  iops_avg: number | null;          // the host ports' average IO/s, summed
+  idle: boolean | null;
+  read_errors: Record<string, string>;
 }
 export const startAsbuilt = (
   runId: string, override: CredentialOverride, customer = '', site = '',
@@ -282,10 +336,44 @@ export interface DiscoveredHost {
   // Linux only: ok | uneven | degraded | none | not_set_up | not_permitted | timed_out.
   multipath_state?: string;
 }
+// The array's file side (Unified File), read over its file API. The File ports themselves stay in
+// DiscoveryReport.file_ports (`showport -file`); nothing here repeats them.
+export interface FilePortStatus { configured: boolean; online: boolean; mtu: number; }
+export interface FileNodeStatus { node: number; status: string; ports: FilePortStatus[]; }
+// MiB. OS 10.5.0 sends only total, used and available; the rest is null there.
+export interface FileCapacity {
+  total: number; used: number; available: number;
+  limit_percentage: number | null; file_systems: number | null; file_shares: number | null;
+}
+export interface FileService {
+  uid: string; enabled: boolean; name: string; system_wwn: string; domain: string;
+  ransomware_check: boolean | null; nodes: FileNodeStatus[]; capacity: FileCapacity | null;
+}
+export interface ClientRule { address: string; access: string; options: string; }
+export interface FileSystemRecord {
+  uid: string; id: number | null; name: string; state: string; size_mib: number; vv_size_mib: number | null;
+  reduce: boolean; prov: string; share_count: number; owner_node: number; volumes: string[];
+}
+// The array calls it a file share setting; on screen it is a client group.
+export interface ClientGroup {
+  uid: string; id: number | null; name: string; state: string; clients: ClientRule[];
+  host_count: number | null; share_count: number | null;
+}
+export interface FileShareRecord {
+  uid: string; id: number | null; name: string; state: string; file_system: string; client_group: string;
+  mount_path: string; protocols: string[]; host_ip: string;
+}
+// `service` is null when the file API was not read or refused; `notes` says why, one sentence each.
+export interface FileReport {
+  os_version: string; array_serial: string; service: FileService | null;
+  file_systems: FileSystemRecord[]; client_groups: ClientGroup[]; shares: FileShareRecord[]; notes: string[];
+}
 export interface DiscoveryReport {
   array_ports: ArrayPort[];
   replication_ports: EthernetPort[];
   file_ports: EthernetPort[];
+  // null on an array with no File ports and the file service off; absent in a report from an older build.
+  file?: FileReport | null;
   host_hbas: HostHba[];
   array_hosts: ArrayHost[];
   hosts: DiscoveredHost[];
@@ -330,6 +418,9 @@ export interface FabricZonePlan {
   pairs: [string, string][]; already_zoned: [string, string][];
   zone_names?: Record<string, string[]>;   // "host|array" -> effective zone name(s) covering the pair
   defined_names?: string[];                // every alias/zone/cfg name the switch already defines
+  // SPEC-025 R7: the peer-port block (this array's peer ports, the source array's ports, their pairs)
+  peer_ports?: AliasedWwpn[]; sources?: AliasedWwpn[];
+  peer_pairs?: [string, string][]; peer_already_zoned?: [string, string][];
 }
 export interface ZoningPlan {
   fabrics: FabricZonePlan[]; offline_hosts: string[]; notes: string[]; error: string | null;
@@ -338,6 +429,8 @@ export interface ZoningRenderResult {
   commands: Record<string, string[]>;
   skipped: Record<string, string[]>;
   warnings?: Record<string, string[]>;   // legal-but-non-portable alias names (FOS 8.1+)
+  peer_commands?: Record<string, string[]>;   // SPEC-025 R7: the peer-port block, per fabric
+  peer_skipped?: Record<string, string[]>;
 }
 export const renderZoningCommands = (
   plan: ZoningPlan, aliases: Record<string, string>, selectedPairs: [string, string][], runId?: string,
@@ -415,8 +508,55 @@ export interface HostPathStatus {
 export interface PathVerification { hosts: HostPathStatus[]; notes: string[]; error: string | null; }
 export const verifyPaths = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/verify-paths`);
 
+// SPEC-024: the Array ports step. VLAN-tagged iSCSI addresses from the sheet's iSCSI network tab, planned
+// against what the array has. The first slice prints the array's own CLI lines; the tool sends none.
+export interface IscsiVlanRequest { nsp: string; vlan_id: number; ip: string; netmask: string; gateway: string; }
+export interface PortRole { nsp: string; mode: string; state: string; type: string; protocol: string; node_wwn: string; }
+export interface IscsiPortAddress { nsp: string; ip: string; netmask: string; gateway: string; peer_enabled: boolean; vlans: string; }
+export interface IscsiVlanInterface { nsp: string; vlan_id: number; ip: string; netmask: string; gateway: string; mtu: string; }
+export interface PortNetworkView {
+  name: string; mgmt_ip: string; mgmt_netmask: string;
+  roles: Record<string, PortRole>; iscsi_ports: IscsiPortAddress[]; vlans: IscsiVlanInterface[];
+  other_addresses: Record<string, string>;
+}
+export type IscsiVlanActionState = 'create' | 'exists' | 'conflict';
+export interface IscsiVlanAction { nsp: string; vlan_id: number; state: IscsiVlanActionState; reason: string; cli: string; }
+export interface IscsiNetworkPlan {
+  array: string; actions: IscsiVlanAction[]; blockers: string[]; notes: string[]; switch_handoff: string[];
+}
+/** The iSCSI section of a ports.* event: the rows read, and (after a read) the view and the plan. */
+export interface IscsiSection { requests: IscsiVlanRequest[]; view?: PortNetworkView; plan?: IscsiNetworkPlan; error?: string; }
+// SPEC-025: peer ports for a migration, the second section of the Array ports step. The first slice prints
+// the commands and their undo for a consultant to paste; the tool sends none.
+export interface PeerPortRequest { nsp: string; source_wwpns: string[]; }
+export interface PeerPortIntent { ports: PeerPortRequest[]; }
+export interface PeerPortState {
+  nsp: string; mode: string; state: string; type: string; protocol: string;
+  node_wwn: string; port_wwn: string; label: string; partner: string; failover_state: string;
+}
+export interface PeerPortView { host: string; ports: Record<string, PeerPortState>; params: Record<string, { nsp: string; connmode: string; conntype: string }>; }
+export type PeerPortActionState = 'create' | 'exists' | 'conflict';
+export interface PeerPortAction { nsp: string; state: PeerPortActionState; reason: string; commands: string[]; undo: string[]; }
+export interface PeerPortPlan { actions: PeerPortAction[]; blockers: string[]; notes: string[]; }
+export interface PeerPortResult { changed: string[]; removals: string[]; error: string | null; sentences: string[]; }
+/** The peer section of a ports.* event: the rows, and after a read the view, the plan, the command set and
+ *  its removal set, and the judgement of a read after the paste. */
+export interface PeerSection {
+  requests: PeerPortRequest[]; error?: string; view?: PeerPortView; plan?: PeerPortPlan;
+  result?: PeerPortResult | null; removals?: string[]; zones_checked?: boolean;
+  commands_text?: string; removals_text?: string; result_removals_text?: string;
+}
+export interface ArrayPorts {
+  iscsi_network: IscsiVlanRequest[]; iscsi_plan_held: boolean;
+  peer_ports: PeerPortIntent | null; peer_plan_held: boolean;
+}
+export const getArrayPorts = (runId: string) => request<ArrayPorts>('GET', `/runs/${runId}/ports`);
+export const portsPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/ports/preview`);
+
 // SPEC-016: replication to a peer array. Release (a) is read-only: both arrays read, the
 // partnership found by link address, the findings, and the exists/create/conflict plan.
+// SPEC-031: a partnership is over RCIP ('IP', found by address) or Fibre Channel ('FC', found by port WWN).
+export type Transport = 'IP' | 'FC';
 export interface RcipPort { nsp: string; state: string; ip: string; netmask: string; gateway: string; mtu: string; rate: string; }
 export interface RcTarget { name: string; id: number | null; type: string; status: string; options: string; policy: string; }
 export interface RcLink { target: string; nsp: string; address: string; status: string; }
@@ -433,17 +573,20 @@ export interface ReplicationArrayView {
   cpg_free_mib: Record<string, number>; vvsets: Record<string, string[]>; read_error: string | null;
 }
 export interface PartnerTarget {
-  name: string; peer_name: string; links_up: number; links_total: number; peer_links_up: number; peer_links_total: number;
+  name: string; peer_name: string; transport?: Transport; links_up: number; links_total: number; peer_links_up: number; peer_links_total: number;
   mirror_config: boolean; modes: string[]; groups: number; own_modes: string[];
 }
 export interface Partnership {
-  target_on_primary: string; target_on_peer: string;
+  target_on_primary: string; target_on_peer: string; transport?: Transport;
   links_primary_up: number; links_peer_up: number; links_primary_total: number; links_peer_total: number; mirror_config: boolean;
   targets?: PartnerTarget[]; target_by_mode?: Record<string, string>;
 }
 export interface ReplicationReport {
   primary: ReplicationArrayView; peer: ReplicationArrayView; partnership: Partnership | null;
   findings: string[]; notes: string[]; error: string | null;
+  // SPEC-031: IP and FC targets towards each other (nothing planned); the round-trip time typed on the
+  // Replication tab, which stands in for the link check over FC; the modes this run's groups replicate in.
+  mixed_transports?: boolean; rtt_ms?: number | null; modes?: string[];
 }
 export interface PlannedCall { where: 'A' | 'B'; wsapi: string; cli: string; seq: number; }
 export type ReplicationActionState = 'create' | 'exists' | 'conflict';
@@ -474,8 +617,14 @@ export const isPartnershipResult = (result: ReplicationResult | null | undefined
 export const replicationApply = (runId: string, approvedPlan: string | null, acceptLatency = false) =>
   request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/apply`, { approved_plan: approvedPlan, accept_latency: acceptLatency });
 // SPEC-020: the latency between the arrays measured with checkrclink (server on B, client on A, read until
-// the latency is printed, stop both). RTT_LIMIT_MS mirrors the domain's HPE limits for the verdict per mode.
-export const RTT_LIMIT_MS: Record<string, number> = { sync: 10, async: 200 };
+// the latency is printed, stop both). RTT_LIMIT_MS mirrors the domain's HPE limits per transport and mode
+// (SPEC-031 R6: 10 ms for both modes over Fibre Channel); read it through rttLimitMs, which names the transport.
+export const RTT_LIMIT_MS: Record<Transport, Record<string, number>> = {
+  IP: { sync: 10, async: 200 },
+  FC: { sync: 10, async: 10 },
+};
+export const rttLimitMs = (transport: Transport, mode: string): number => RTT_LIMIT_MS[transport][mode] ?? 0;
+export const TRANSPORT_WORDS: Record<Transport, string> = { IP: 'over RCIP', FC: 'over Fibre Channel' };
 export interface LinkPair { nsp_a: string; ip_a: string; nsp_b: string; ip_b: string; }
 export interface LinkCheckResult {
   pair: LinkPair; status: 'measured' | 'failed'; latency_ms: number | null; pings_lost_pct: number | null; detail: string; output: string;
@@ -538,3 +687,48 @@ const clockQuery = (url?: string) => (url ? `?url=${encodeURIComponent(url)}` : 
 export const getClock = (url?: string) => request<ClockStatus>('GET', `/system/clock${clockQuery(url)}`);
 export const syncClock = (url?: string) =>
   request<{ changed: boolean; skew_seconds_before: number; local_utc_after: string }>('POST', `/system/clock/sync${clockQuery(url)}`);
+
+// SPEC-023: a snapshot now of each volume set or volume on the Snapshots tab, and a schedule on the array.
+export type SnapshotActionState = 'create' | 'exists' | 'conflict';
+export interface SnapshotAction {
+  kind: 'snapshot' | 'schedule'; name: string; source: string; state: SnapshotActionState; reason: string;
+  members: string[]; cli: string; call: string;
+}
+export interface SnapshotPlan { actions: SnapshotAction[]; notes: string[]; blockers: string[]; error: string | null; plan_id: string; }
+export interface ArraySchedule {
+  name: string; command: string; interval: string; minute: string; hour: string; dom: string; month: string; dow: string;
+  created_by: string; status: string; alert: string; next_run: string;
+}
+// What the read found, as the previewed event carries it: the array and its schedules, not every volume.
+export interface SnapshotArraySummary {
+  host: string; name: string; os_version: string; time_zone: string; retention_max_hours: number; schedules: ArraySchedule[];
+}
+export interface SnapshotOutcome { kind: 'snapshot' | 'schedule'; name: string; source: string; status: 'created' | 'exists' | 'skipped' | 'failed'; detail: string; }
+export interface SnapshotResult {
+  outcomes: SnapshotOutcome[]; removals: RemovalItem[]; removal_notes: string[]; notes: string[];
+  schedules_created: string[]; started_at: string; error: string | null;
+}
+export interface SnapshotRowCheck {
+  source: string; schedule: string; verdict: 'scheduled' | 'taking' | 'not_scheduled' | 'none'; detail: string;
+  next_run: string; taken: number; now_ok: boolean | null; now_detail: string;
+}
+export interface SnapshotVerification { rows: SnapshotRowCheck[]; notes: string[]; error: string | null; }
+export interface SnapshotRow { source: string; kind: string; schedule: string; summary: string; }
+// The tab's rows in words, and the id of the plan the server still holds ('' when none: it was used, or the app restarted).
+export interface SnapshotsTab { rows: SnapshotRow[]; held_plan_id: string; }
+export const getSnapshots = (runId: string) => request<SnapshotsTab>('GET', `/runs/${runId}/snapshots`);
+export const snapshotsPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/snapshots/preview`);
+// The server checks the tick too: it gets the plan's id only when this plan was ticked (BL-52).
+export const snapshotsApply = (runId: string, approvedPlan: string | null) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/snapshots/apply`, { approved_plan: approvedPlan });
+export const snapshotsVerify = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/snapshots/verify`);
+
+/**
+ * SPEC-023 R9: what the sheet review says when the Snapshots tab is filled and the chosen steps lack the
+ * Snapshots step; null otherwise. `steps` are the run's step keys, from the served registry.
+ */
+export function snapshotsTabNotPicked(sheet: InitSheetUploadResult | null | undefined, steps: string[]): string | null {
+  return sheet?.snapshot_rows?.length && !steps.includes('snapshots')
+    ? 'The Snapshots tab is filled in; pick the Snapshots step to apply it.'
+    : null;
+}

@@ -15,9 +15,25 @@ from pydantic import BaseModel, Field
 from alletra_onboard.domain.shared import EndpointCreds
 
 ReplicationMode = Literal["async", "sync"]
+#: SPEC-031 R2: a Remote Copy target's transport, the `Type` column of `showrcopy targets`.
+Transport = Literal["IP", "FC"]
+#: How every sentence names a transport.
+TRANSPORT_WORDS: dict[str, str] = {"IP": "over RCIP", "FC": "over Fibre Channel"}
 
-#: Support Matrix (RCIP), OS 10.5 column — research 2026-10-07 §3.
-RTT_LIMIT_MS: dict[str, float] = {"sync": 10.0, "async": 200.0}
+#: Support Matrix, OS 10.5 column — research 2026-10-07 §3. Over Fibre Channel (RCFC) the limit is 10 ms
+#: for sync and for async (research 2026-11-17 §7). Read it through `rtt_limit_ms`, which names the transport.
+RTT_LIMIT_MS: dict[str, dict[str, float]] = {"IP": {"sync": 10.0, "async": 200.0}, "FC": {"sync": 10.0, "async": 10.0}}
+
+
+def rtt_limit_ms(transport: str, mode: str) -> float:
+    """The round-trip time limit of one mode over one transport (0 for a mode the table does not know)."""
+    return RTT_LIMIT_MS[transport].get(mode, 0.0)
+
+
+def rtt_limit_text(transport: str, mode: str) -> str:
+    """'async replication over Fibre Channel needs 10 ms or less': every sentence names the transport."""
+    return f"{mode} replication {TRANSPORT_WORDS[transport]} needs {rtt_limit_ms(transport, mode):g} ms or less"
+
 #: A group name may be at most 22 characters under `mirror_config` (the peer side appends `.r<id>`).
 GROUP_NAME_MAX = 22
 #: RPO in whole minutes; the array period is RPO / 2 (its minimum period is 15 s).
@@ -153,6 +169,12 @@ class RcTarget(BaseModel):
     def mirror_config(self) -> bool:
         return "mirror_config" in self.policy and not self.policy.startswith("no_")
 
+    @property
+    def is_fc(self) -> bool:
+        """SPEC-031 R2: a Fibre Channel target. Its Options carry the peer's node WWN and its links address
+        the peer's port WWNs (an IP target's links address RCIP addresses)."""
+        return self.type.upper() == "FC"
+
 
 class RcLink(BaseModel):
     """`showrcopy links`: Target Node Address Status. `receive` rows are this array's own inbound ports."""
@@ -212,7 +234,8 @@ class PortRole(BaseModel):
     state: str = ""             # ready | offline | loss_sync | …
     type: str = ""              # host | disk | free | rcip | file | cluster | …
     protocol: str = ""          # FC | iSCSI | IP | NVMe | …
-    node_wwn: str = ""          # FC rows: the array's node WWN
+    node_wwn: str = ""          # FC rows: the array's node WWN (a peer port has a `0202` one of its own)
+    port_wwn: str = ""          # FC rows: the port's own WWN, the address an FC Remote Copy link uses
 
     @property
     def rcip_capable(self) -> bool:
@@ -231,7 +254,7 @@ class ReplicationArrayView(BaseModel):
     rc_status: str = ""                 # Started | Stopped | "" (Remote Copy not configured)
     rc_health: str = ""                 # Normal | …
     ports: dict[str, PortRole] = Field(default_factory=dict)   # SPEC-021 R2, from `showport`
-    fc_node_wwn: str = ""
+    fc_node_wwn: str = ""               # the first FC row's (SPEC-021); SPEC-031 reads every one: fc_node_wwns
     rcip_ports: list[RcipPort] = Field(default_factory=list)
     transports: list[RcTransport] = Field(default_factory=list)
     targets: list[RcTarget] = Field(default_factory=list)
@@ -249,6 +272,18 @@ class ReplicationArrayView(BaseModel):
     @property
     def rcip_addresses(self) -> set[str]:
         return {p.ip for p in self.rcip_ports if p.ip}
+
+    @property
+    def fc_node_wwns(self) -> set[str]:
+        """Every FC node WWN the array shows (SPEC-031 R1). The one source, with `fc_port_wwns`, for "which
+        WWNs belong to this array" (LESSONS 41): the partnership and the as-built read both from here."""
+        wwns = {p.node_wwn for p in self.ports.values() if p.node_wwn}
+        return (wwns | {self.fc_node_wwn}) if self.fc_node_wwn else wwns
+
+    @property
+    def fc_port_wwns(self) -> set[str]:
+        """Every FC port WWN the array shows: what the other array's FC links address."""
+        return {p.port_wwn for p in self.ports.values() if p.port_wwn}
 
     def group(self, name: str) -> RcGroup | None:
         return next((g for g in self.groups if g.name == name), None)
@@ -268,6 +303,7 @@ class PartnerTarget(BaseModel):
 
     name: str
     peer_name: str = ""
+    transport: Transport = "IP"
     links_up: int = 0
     links_total: int = 0
     peer_links_up: int = 0
@@ -280,12 +316,14 @@ class PartnerTarget(BaseModel):
 
 class Partnership(BaseModel):
     """The targets that point at each other, found by LINK ADDRESS (never by name — on the lab pair
-    the peer's target for us carries the peer's own name). `target_on_primary` / `target_on_peer`
+    the peer's target for us carries the peer's own name): RCIP addresses over IP, port WWNs over Fibre
+    Channel (SPEC-031 R3). A pair has one transport. `target_on_primary` / `target_on_peer`
     are the target this run uses first; `targets` lists every one; `target_by_mode` is the choice
     per sheet mode (a mode without an entry has no target it may start on)."""
 
     target_on_primary: str
     target_on_peer: str
+    transport: Transport = "IP"
     links_primary_up: int = 0
     links_peer_up: int = 0
     links_primary_total: int = 0
@@ -308,6 +346,12 @@ class ReplicationReport(BaseModel):
     findings: list[str] = Field(default_factory=list)      # blocking, one sentence each
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
+    # SPEC-031 R3: the arrays show IP and FC targets towards each other; the step plans nothing.
+    mixed_transports: bool = False
+    # SPEC-031 R6: the round-trip time typed on the Replication tab (it stands in for the measurement over
+    # Fibre Channel) and the modes this run's groups replicate in, for the limit it is held to.
+    rtt_ms: float | None = None
+    modes: list[str] = Field(default_factory=list)
 
 
 # ------------------------------------------------------------------ the link check (SPEC-020)
@@ -363,11 +407,11 @@ class LinkCheck(BaseModel):
         return self.error is None and any(r.status == "measured" for r in self.results)
 
     def over_limit(self) -> list[str]:
-        """The modes on the tab whose RTT limit the worst latency exceeds."""
+        """The modes on the tab whose RTT limit the worst latency exceeds. The link check measures RCIP links only."""
         worst = self.worst_ms
         if worst is None:
             return []
-        return [m for m in self.modes if worst > RTT_LIMIT_MS.get(m, 0)]
+        return [m for m in self.modes if worst > rtt_limit_ms("IP", m)]
 
 
 # ------------------------------------------------------------------ the plan (SPEC-016 R3)

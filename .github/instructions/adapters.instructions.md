@@ -8,9 +8,11 @@ applyTo: "Provisioning_Automation/alletra_onboard/src/alletra_onboard/adapters/*
   in the Brocade client's allowlist. Adding one needs a unit test and a sentence in the pull request.
   Writes go through WSAPI after the operator approves a plan. Every SSH write follows ADR 0025 (exact
   forms, approved apply only, the plan's objects only, undo first, read-back after, no prompts). Today
-  the one SSH write client is ADR 0015's `ArrayRcCliClient` (`RC_WRITE_FORMS` in
-  `adapters/array/rc_cli_client.py`): a new form needs a test pinned to the array's own help or a live
-  answer, and a new kind of write needs its own ADR. Never a switch write (ADR 0012).
+  there are two SSH write clients: ADR 0015's `ArrayRcCliClient` (`RC_WRITE_FORMS` in
+  `adapters/array/rc_cli_client.py`) and ADR 0016's `ArraySnapCliClient` (`SNAP_WRITE_FORMS` in
+  `adapters/array/snap_cli_client.py`: one `createsched -f` form, the command inside its quotes checked
+  as a form of its own). A new form needs a test pinned to the array's own help or a live answer, and a
+  new kind of write needs its own ADR. Never a switch write (ADR 0012).
 - Every command sent to a device is recorded with `command_log.record(...)`, with the client's
   secrets passed in so they are redacted.
 - Parse real output: capture it read-only on the lab, scrub it (no passwords, no customer data),

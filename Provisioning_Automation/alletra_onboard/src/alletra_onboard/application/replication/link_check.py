@@ -48,7 +48,9 @@ LATENCY_WAIT_S = 120.0
 LINKS_SETTLE_S = 60.0
 LINKS_POLL_S = 10.0
 
-FC_ONLY = "The link check measures RCIP links; this pair replicates over fibre channel."
+#: SPEC-031 R6: `checkrclink` is not run on FC links until its help shows an FC form.
+FC_ONLY = ("The link check measures RCIP links; this pair replicates over Fibre Channel. Type the round-trip time "
+           "between the arrays on the Replication tab instead.")
 
 
 def plan_pairs(report: ReplicationReport) -> tuple[list[LinkPair], list[str]]:
@@ -56,6 +58,8 @@ def plan_pairs(report: ReplicationReport) -> tuple[list[LinkPair], list[str]]:
     p = report.partnership
     if p is None:
         return [], ["No Remote Copy partnership between the arrays was found; nothing to measure."]
+    if p.transport == "FC":
+        return [], [FC_ONLY]
     targets = set(p.target_by_mode.values()) or {p.target_on_primary}
     ip_a = {port.nsp: port.ip for port in report.primary.rcip_ports if port.ip}
     nsp_b = {port.ip: port.nsp for port in report.peer.rcip_ports if port.ip}
@@ -73,8 +77,7 @@ def plan_pairs(report: ReplicationReport) -> tuple[list[LinkPair], list[str]]:
         else:
             pairs.append(LinkPair(nsp_a=link.nsp, ip_a=a_ip, nsp_b=b_nsp, ip_b=link.address))
     if not pairs and not unchecked:
-        unchecked.append(FC_ONLY if not report.primary.rcip_ports else
-                         f"Target '{p.target_on_primary}' on A has no outbound link.")
+        unchecked.append(f"Target '{p.target_on_primary}' on A has no outbound link.")
     return pairs, unchecked
 
 

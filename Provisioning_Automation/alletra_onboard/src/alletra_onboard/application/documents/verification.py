@@ -24,6 +24,9 @@ import re
 from collections.abc import Callable
 
 from alletra_onboard.adapters.array.cli_client import ArrayCliClient, ArrayCliError
+from alletra_onboard.adapters.array.wsapi_v3_client import WsapiV3Client
+from alletra_onboard.application.replication.read import parse_showversion
+from alletra_onboard.application.unified_file.read import read_file_side
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
     FieldCheck,
@@ -32,6 +35,7 @@ from alletra_onboard.domain.models import (
     HealthIssue,
     VerificationReport,
 )
+from alletra_onboard.domain.unified_file import NODE_RUNNING, FileReport
 
 _IPV4 = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
 # shownet's data row: the only line that starts with two IPv4s (mgmt IP then netmask).
@@ -41,7 +45,9 @@ _PARENS = re.compile(r"\(([^)]+)\)")
 # inventory (checkhealth is parsed into issues; the rest are captured raw for operator review).
 _CONFIG_COMMANDS = ("showsys -d", "shownet", "showdate")
 _HEALTH_COMMANDS = ("checkhealth -svc -detail", "showversion", "showsys", "showcpg", "showpd", "showinventory")
-_COMMANDS = _CONFIG_COMMANDS + _HEALTH_COMMANDS
+# SPEC-028 R3: the File ports; the file service itself is read over the array's WSAPI v3.
+_FILE_COMMANDS = ("showport -file",)
+_COMMANDS = _CONFIG_COMMANDS + _HEALTH_COMMANDS + _FILE_COMMANDS
 
 
 def _kv(text: str) -> dict[str, str]:
@@ -180,33 +186,80 @@ def _health_issues(checkhealth: str) -> list[HealthIssue]:
     return issues
 
 
+_FILE_SERVICE = "File service"
+_FILE_PORTS_UP = "File ports up"
+
+
+def _file_checks(ports: list, report: FileReport | None) -> list[FieldCheck]:
+    """SPEC-028 R3: the file service state and its File ports, read-only. No rows on an array with
+    no File ports and the file service off (most block arrays). The sheet says nothing about file
+    yet, so the service is expected on and every File port up."""
+    if report is None:
+        return []
+    service = report.service
+    if service is None:   # not read, or refused: the reason is in Discovery's notes
+        service_check = FieldCheck(field=_FILE_SERVICE, expected="on", actual=None,
+                                   status=FieldCheckStatus.NOT_READABLE)
+    else:
+        running = sum(1 for n in service.nodes if n.status == NODE_RUNNING)
+        actual = f"on, {running} of {len(service.nodes)} nodes running" if service.enabled else "off"
+        service_check = FieldCheck(
+            field=_FILE_SERVICE, expected="on", actual=actual,
+            status=FieldCheckStatus.PASS if service.running else FieldCheckStatus.MISMATCH,
+        )
+    up = sum(1 for p in ports if p.link == "up")
+    ports_check = FieldCheck(
+        field=_FILE_PORTS_UP, expected=f"{len(ports)} of {len(ports)}" if ports else "at least 1",
+        actual=f"{up} of {len(ports)}",
+        status=FieldCheckStatus.PASS if ports and up == len(ports) else FieldCheckStatus.MISMATCH,
+    )
+    return [service_check, ports_check]
+
+
+def _unreadable_file_checks() -> list[FieldCheck]:
+    return [FieldCheck(field=name, expected=expected, actual=None, status=FieldCheckStatus.NOT_READABLE)
+            for name, expected in ((_FILE_SERVICE, "on"), (_FILE_PORTS_UP, "every File port"))]
+
+
 def verify(
     item: ArrayWorkItem,
     username: str,
     password: str,
     *,
     client_factory: Callable[..., ArrayCliClient] = ArrayCliClient,
+    wsapi_v3_factory: Callable[..., WsapiV3Client] = WsapiV3Client,
 ) -> VerificationReport:
-    """Connect over SSH, read the config, and compare it to the work item. Never writes."""
-    client = client_factory(host=item.network.mgmt_ipv4, username=username, password=password)
+    """Connect over SSH, read the config, and compare it to the work item. Never writes. The file
+    service is read over the array's WSAPI v3, GETs only, when the array has a file side."""
+    host = item.network.mgmt_ipv4
+    client = client_factory(host=host, username=username, password=password)
     try:
         client.connect()
     except ArrayCliError as exc:
         return VerificationReport(reachable=False, error=str(exc))
 
     outputs: dict[str, str] = {}
+    file_checks: list[FieldCheck] = []
     try:
         for command in _COMMANDS:
             try:
                 outputs[command] = client.run(command)
             except ArrayCliError:
                 outputs[command] = ""  # that command failed — its fields become "not readable"
+        try:
+            ports, report = read_file_side(
+                client, wsapi_v3_factory(host=host, username=username, password=password),
+                parse_showversion(outputs["showversion"]), outputs["showport -file"],
+            )
+            file_checks = _file_checks(ports, report)
+        except Exception:  # noqa: BLE001 - the file side cannot sink verification
+            file_checks = _unreadable_file_checks()
     finally:
         client.close()
 
     return VerificationReport(
         reachable=True,
-        checks=_build_checks(item, outputs),
+        checks=_build_checks(item, outputs) + file_checks,
         health_issues=_health_issues(outputs.get("checkhealth -svc -detail", "")),
         raw=outputs,
     )

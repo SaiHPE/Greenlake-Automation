@@ -1,6 +1,6 @@
 import { Box, Button, DataTable, Text } from 'grommet';
 import { Search, StatusWarning } from 'grommet-icons';
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import {
   ArrayPort,
   DiscoveredHost,
@@ -13,12 +13,13 @@ import {
   getStoragePreflight,
   startDiscover,
 } from '../api';
-import { EmptyState, Guidance, Section, StatusLine } from '../ui/blocks';
-import { DiscoveryFreshness } from '../ui/discoveryAge';
-import { InlineNotification, NotesList, TableSummary } from '../ui/primitives';
-import { StatusIndicator } from '../ui/status';
+import { Disclosure, EmptyState, Guidance, Section } from '../ui/blocks';
+import { discoveryReadAt, isDiscoveryStale } from '../ui/discoveryAge';
+import { NotesList, TableSummary } from '../ui/primitives';
+import { NoValue, RESULT, StatusIndicator } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
-import { StepShell } from '../ui/StepShell';
+import { StepShell, StepStatus } from '../ui/StepShell';
+import { FileServiceView } from './FileServiceView';
 
 interface Props {
   runId: string;
@@ -39,6 +40,20 @@ const OTHER_HOSTS_FOLD = 10;
 // multipath, a login that cannot read it, or a read that timed out. "none" (no Alletra devices yet) is
 // normal before volumes are presented.
 const MULTIPATH_WARN = new Set(['degraded', 'uneven', 'not_set_up', 'not_permitted', 'timed_out']);
+
+// A host the operator should look at: not logged in to the array, or a multipath warning (BL-36).
+const needsLook = (h: DiscoveredHost) => !h.logged_in || MULTIPATH_WARN.has(h.multipath_state ?? '');
+
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+// This step makes the snapshot, so its age is a note here; the steps that act on it warn (LESSONS 8).
+function freshnessNote(events: RunEvent[]): string | null {
+  const when = discoveryReadAt(events);
+  if (!when) return null;
+  return isDiscoveryStale(events)
+    ? `The environment was last read ${when.toLocaleString()}, more than 12 hours ago. If hosts, cabling or zoning have changed since, run discovery again.`
+    : `Environment last read ${when.toLocaleString()}.`;
+}
 
 function osLabel(h: DiscoveredHost): string {
   if (h.os_text) return h.os_text;
@@ -96,7 +111,7 @@ const HOST_COLUMNS = [
         {h.multipath &&
           (MULTIPATH_WARN.has(h.multipath_state ?? '') ? (
             <Box direction="row" gap="xxsmall" align="start">
-              <Box flex={false} pad={{ top: '2px' }}>
+              <Box flex={false} pad={{ top: 'xxsmall' }}>
                 <StatusWarning size="small" color="status-warning" a11yTitle="Warning" />
               </Box>
               <Text size="xsmall" color="status-warning">multipath: {h.multipath}</Text>
@@ -163,6 +178,13 @@ function HostsTable({ title, description, rows, fold, open: openInitially }: { t
           <Button size="small" label={`Show all ${rows.length}`} onClick={() => setOpen(true)} />
         </Box>
       )}
+      <Disclosure label="what the columns mean">
+        <Text size="xsmall" color="text-weak">
+          <b>Logged in (odd, even)</b>: the array sees the initiator on those fabrics. <b>Not logged in</b>: configured or expected but
+          no login (not zoned, or the server is off). <b>none yet</b>: no host object on the array; provisioning creates one. <b>OS not
+          reported</b>: no source states an operating system (the array&apos;s persona is shown when it has one).
+        </Text>
+      </Disclosure>
     </Section>
   );
 }
@@ -206,6 +228,37 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   const inRun = hosts.filter((h) => h.in_run ?? (h.sources.includes('vcenter') || h.sources.includes('sheet')));
   const others = hosts.filter((h) => !inRun.includes(h));
 
+  // One status line: running, then a problem the read reported, then the counts (SPEC-030 R2).
+  const status: StepStatus | undefined = running
+    ? { state: 'running', message: 'Reading the array, vCenter and the hosts. Each part appears in Activity, below.' }
+    : report?.error
+      ? { state: 'failed', title: 'Discovery reported a problem', message: report.error }
+      : report
+        ? {
+            state: 'complete',
+            title: 'Discovery finished',
+            time: reportAt ? hhmm(reportAt) : undefined,
+            message: `${fcPorts.length} Fibre Channel port${fcPorts.length === 1 ? '' : 's'} (${readyPorts} ready), ${inRun.length} host${
+              inRun.length === 1 ? '' : 's'
+            } in this run, ${others.length} other host${others.length === 1 ? '' : 's'} on the array. Nothing was changed.`,
+          }
+        : undefined;
+  const notes: ReactNode[] = [];
+  if (report && previousDiscovery) {
+    notes.push(
+      changes.length ? (
+        <>
+          Since the discovery at {hhmm(previousDiscovery.created_at)}: <NotesList notes={changes} />
+        </>
+      ) : (
+        `Since the discovery at ${hhmm(previousDiscovery.created_at)}: no change, the same hosts and every array port in the same link state.`
+      ),
+    );
+  }
+  if (report) notes.push(...report.notes);
+  const freshness = freshnessNote(events);
+  if (freshness) notes.push(freshness);
+
   const discover = async () => {
     setError(null);
     try {
@@ -230,10 +283,11 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   return (
     <StepShell
       title="Discovery"
-      description="Reads the array target ports, the ESXi host adapters from vCenter, and their fabric logins. Read-only."
-      stateDetail={report ? `${fcPorts.length} ports · ${inRun.length} host${inRun.length === 1 ? '' : 's'} in this run` : undefined}
+      description="Reads the array's ports, the hosts and their fabric logins, and changes nothing."
       error={error}
       onDismissError={() => setError(null)}
+      status={status}
+      notes={notes}
       buttons={[
         { label: checking ? 'Checking' : 'Check readiness', busy: checking, onClick: checkReadiness },
         ...(report ? [{ label: running ? 'Discovering' : 'Run discovery again', busy: running, onClick: discover }] : []),
@@ -257,19 +311,13 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
         />
       }
     >
-      {running && <StatusLine state="running">Reading the array, vCenter and the hosts. Each part appears in Activity, below.</StatusLine>}
-      {report && !running && !report.error && (
-        <StatusLine state="complete" time={reportAt ? new Date(reportAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined}>
-          Discovery finished: {fcPorts.length} Fibre Channel ports ({readyPorts} ready), {inRun.length} host{inRun.length === 1 ? '' : 's'} in
-          this run, {others.length} other host{others.length === 1 ? '' : 's'} on the array. Nothing was changed.
-        </StatusLine>
-      )}
-
       {preflight && (
+        // keyed: Section reads `open` once, so it opens by itself only while something is blocked
         <Section
+          key={preflight.ready ? 'ready' : 'blocked'}
           title="Environment readiness"
           summary={preflight.ready ? 'Every prerequisite is met' : 'Something is blocked'}
-          open
+          open={!preflight.ready}
           right={<StatusIndicator state={preflight.ready ? 'complete' : 'failed'} label={preflight.ready ? 'Ready' : 'Blocked'} />}
         >
           <Text size="small" color="text-weak">
@@ -285,12 +333,10 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
               {
                 property: 'status',
                 header: 'Result',
-                render: (check: PreflightCheck) => (
-                  <StatusIndicator
-                    state={check.status === 'pass' ? 'complete' : check.status === 'warn' ? 'action_required' : 'failed'}
-                    label={check.status === 'pass' ? 'Ready' : check.status === 'warn' ? 'Review' : 'Blocked'}
-                  />
-                ),
+                render: (check: PreflightCheck) => {
+                  const word = check.status === 'pass' ? RESULT.passed : check.status === 'warn' ? RESULT.review : RESULT.failed;
+                  return <StatusIndicator state={word.state} label={word.label} />;
+                },
               },
               {
                 property: 'detail',
@@ -322,22 +368,6 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
         </EmptyState>
       )}
 
-      <DiscoveryFreshness events={events} action="continuing" />
-
-      {report?.error && (
-        <StatusLine state="failed" title="Discovery reported a problem">
-          {report.error}
-        </StatusLine>
-      )}
-
-      {report && previousDiscovery && (
-        <InlineNotification
-          tone="info"
-          title={`Since the discovery at ${new Date(previousDiscovery.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-          message={changes.length ? <NotesList notes={changes} /> : 'No change: the same hosts, and every array port in the same link state.'}
-        />
-      )}
-
       {report && (
         <Section
           title={`${fcPorts.length} array Fibre Channel port${fcPorts.length === 1 ? '' : 's'}`}
@@ -354,7 +384,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
                 property: 'fabric',
                 header: 'Fabric',
                 render: (port: ArrayPort) => (
-                  <Text size="small">{port.fabric ? `${port.fabric}${port.fabric_switch ? ` (${port.fabric_switch})` : ''}` : '—'}</Text>
+                  <Text size="small">{port.fabric ? `${port.fabric}${port.fabric_switch ? ` (${port.fabric_switch})` : ''}` : <NoValue />}</Text>
                 ),
               },
               {
@@ -383,7 +413,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
           <DataTable
             columns={[
               { property: 'label', header: 'Port', render: (port: ArrayPort) => <Text size="small" style={mono}>{`${port.node}:${port.slot}:${port.card_port}`}</Text> },
-              { property: 'address', header: 'IP address', render: (port: ArrayPort) => <Text size="small" style={mono}>{port.address || '—'}</Text> },
+              { property: 'address', header: 'IP address', render: (port: ArrayPort) => <Text size="small" style={mono}>{port.address || <NoValue />}</Text> },
               {
                 property: 'link_state',
                 header: 'Link',
@@ -399,52 +429,7 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
         </Section>
       )}
 
-      {report && report.file_ports.length > 0 && (
-        <Section title={`${report.file_ports.length} file service port${report.file_ports.length === 1 ? '' : 's'}`} summary="Ethernet ports serving file protocols">
-          <Text size="small" color="text-weak">
-            These occupy the same n:s:p as iSCSI ports, so the role comes from the array&apos;s own port type, never from the slot number.
-          </Text>
-          <DataTable
-            columns={[
-              { property: 'label', header: 'Port', render: (p: EthernetPort) => <Text size="small" style={mono}>{`${p.node}:${p.slot}:${p.card_port}`}</Text> },
-              {
-                property: 'address',
-                header: 'IP address',
-                render: (p: EthernetPort) => (
-                  <Text size="small" style={mono}>{p.address ? `${p.address}/${p.prefix_len}` : '—'}</Text>
-                ),
-              },
-              { property: 'vlan', header: 'VLAN', render: (p: EthernetPort) => <Text size="small">{p.vlan || '—'}</Text> },
-              { property: 'mtu', header: 'MTU', render: (p: EthernetPort) => <Text size="small">{p.mtu || '—'}</Text> },
-              { property: 'eth', header: 'Interface', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.eth || '—'}</Text> },
-              {
-                property: 'link',
-                header: 'Link',
-                render: (p: EthernetPort) => (
-                  <Box gap="xxsmall">
-                    <StatusIndicator
-                      state={p.link === 'up' ? 'complete' : 'action_required'}
-                      label={p.link === 'up' ? `up · ${p.rate}` : p.link_state}
-                    />
-                    {/* A port whose address is carried by its partner is covered, not simply dead. */}
-                    {p.ip_disabled && <Text size="xsmall" color="text-weak">IP disabled</Text>}
-                  </Box>
-                ),
-              },
-              {
-                property: 'failover_ips',
-                header: 'Failover for',
-                render: (p: EthernetPort) => (
-                  <Text size="small" style={mono} color="text-weak">{p.failover_ips.join(', ') || '—'}</Text>
-                ),
-              },
-            ]}
-            data={report.file_ports}
-            primaryKey={false}
-            a11yTitle="File service ports with address, VLAN, MTU and link"
-          />
-        </Section>
-      )}
+      {report && (report.file_ports.length > 0 || report.file) && <FileServiceView ports={report.file_ports} file={report.file} />}
 
       {report && report.replication_ports.length > 0 && (
         <Section
@@ -466,9 +451,9 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
                   return <StatusIndicator state={s.state} label={s.label} />;
                 },
               },
-              { property: 'address', header: 'IP address', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.address || '—'}</Text> },
-              { property: 'netmask', header: 'Netmask', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.netmask || '—'}</Text> },
-              { property: 'gateway', header: 'Gateway', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.gateway || '—'}</Text> },
+              { property: 'address', header: 'IP address', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.address || <NoValue />}</Text> },
+              { property: 'netmask', header: 'Netmask', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.netmask || <NoValue />}</Text> },
+              { property: 'gateway', header: 'Gateway', render: (p: EthernetPort) => <Text size="small" style={mono}>{p.gateway || <NoValue />}</Text> },
               {
                 property: 'link_state',
                 header: 'Link',
@@ -496,31 +481,27 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
           {/* SPEC-014: the run's hosts, one table per OS. */}
           {(Object.keys(OS_LABEL) as DiscoveredHost['os'][])
             .filter((os) => inRun.some((h) => h.os === os))
-            .map((os) => (
-              <HostsTable
-                key={os}
-                open
-                title={`Hosts in this run, ${os === 'unknown' ? 'OS not reported' : OS_LABEL[os]}`}
-                description="Servers the sheet's vCenter reports, the sheet declares, or a sheet host set names. A sheet host typed without a WWPN/IQN is looked up in vCenter and on the array; its serial number, WWPNs and IQN are filled in from what was found."
-                rows={inRun.filter((h) => h.os === os)}
-              />
-            ))}
+            .map((os) => {
+              const rows = inRun.filter((h) => h.os === os);
+              const attention = rows.some(needsLook);
+              return (
+                // keyed: Section reads `open` once, so it opens by itself only while a host here needs a look
+                <HostsTable
+                  key={`${os}:${attention ? 'look' : 'fine'}`}
+                  open={attention}
+                  title={`Hosts in this run, ${os === 'unknown' ? 'OS not reported' : OS_LABEL[os]}`}
+                  description="Servers the sheet's vCenter reports, the sheet declares, or a sheet host set names. A sheet host typed without a WWPN/IQN is looked up in vCenter and on the array; its serial number, WWPNs and IQN are filled in from what was found."
+                  rows={rows}
+                />
+              );
+            })}
           <HostsTable
             title="Other hosts on this array"
             description="Every other server the array can see: other tenants of a shared array. Listed so you know what not to touch; this run never changes them."
             rows={others}
             fold
           />
-          <Text size="xsmall" color="text-weak">
-            Legend. <b>Logged in (odd, even)</b>: the array sees the initiator on those fabrics. <b>Not logged in</b>: configured
-            or expected but no login (not zoned, or the server is off). <b>none yet</b>: no host object on the array; provisioning
-            creates one. <b>OS not reported</b>: no source states an operating system (the array&apos;s persona is shown when it has one).
-          </Text>
         </Box>
-      )}
-
-      {report && report.notes.length > 0 && (
-        <InlineNotification tone="info" title="Discovery notes" message={<NotesList notes={report.notes} />} />
       )}
     </StepShell>
   );

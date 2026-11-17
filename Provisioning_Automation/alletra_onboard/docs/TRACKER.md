@@ -33,10 +33,22 @@ Rules:
 | BL-29 | [#15](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/15) | GreenLake for File (GL4F) |
 | BL-30 | [#16](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/16) | Tool approved as tenets |
 
+## Opened as issues after 2026-10-15 (still open)
+
+| ID | Issue | Item |
+|---|---|---|
+| BL-44 | [#18](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/18) | iSCSI hosts created from their IQN, and LUNs presented to them |
+| BL-50 | [#26](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/26) | Remote Copy over Fibre Channel (RCFC) |
+| BL-53 | [#29](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/29) | Certificate and SSH host-key checks (ADR 0026) |
+| BL-54 | [#30](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/30) | GreenLake, vCenter and host reads appear in the Console's command log |
+| BL-55 | [#31](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/31) | A volume size the array cannot take is refused in the plan |
+| BL-59 | [#35](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues/35) | UI round 2, one question per screen (ADR 0023) |
+
 ## Closed
 
 | ID | Item | Closed | Evidence |
 |---|---|---|---|
+| BL-56 | Tidy-ups found while writing the design documents | 2026-11-17 | **Closed on its tests: nothing on a device changes.** The unused `OnboardError`/`ErrorCategory` and the never-set run statuses `cancel_requested`, `cancelled` and `skipped` are removed (an old `state.db` row with one reads as *ready*, pinned by a test); `POST /runs/{id}/provision` is documented as GreenLake device registration, not storage provisioning (route docstring, ARCHITECTURE, LLD, developer handbook), not renamed because the screens call it. Integration pull request of 2026-11-17. |
 | BL-43 | UI redesign: a calmer screen per step (draft 3, the Design System wizard frame) | 2026-11-17 | **Closed on the owner's decision 2026-11-17.** Built 2026-10-14 in seven steps: kit and shell (e2f743f5), app frame (a8388277), Prepare (374083bb), onboarding (66c47863), Discovery, SAN zoning and Provision storage (91ec6091), Replication and Failover test (6fb38bfe), Verify, As-built and Done (705f5709); fixes from the live checks in c7623778, cc6c40b9 and 96149c80. **Live on labrat 2026-10-14:** `lab/ui_live_lab.py`, read-only, 24/0, every page at 1366 and 1080 wide; the provisioning apply through the page's own buttons 18/0 (`lab/ui_provision_lab.py`: four `zz_ui_*` objects on D22U27, Create without the tick refused with nothing sent, paths live, removed by the run's own set). **Replication configure and the failover test on the new screens, live 2026-11-05** through a 1366 × 768 browser in BL-41's runs 3cb3a8c8 (four screen faults found and fixed) and 179121cc (clean) ([validation record](validation/2026-11-03-rcip-partnership.md), *2026-11-05: through the screens*). Round 2, one question per screen (ADR 0023 accepted with changes, SPEC-030, `workpackets/BL-59.md`), is a new item: BL-59. |
 | BL-42 | Link check before replication: `checkrclink` latency, the operator's option to continue ([SPEC-020](specs/SPEC-020-link-check.md)) | 2026-11-17 | **Closed on the owner's decision 2026-11-17.** Live on the BL-41 pair (Alletra MP rack13-ARCUS → Primera 630, runs fadc7d54, 4dc6331e, 29d4a304, b8e5f956 and through the screens 179121cc; [validation record](validation/2026-11-03-rcip-partnership.md)): the measurement, the ping fallback, the gate before configuring, the as-built paragraph, the *not measured* and *within the limit* states. The over-the-limit path (refusal, *Continue anyway*, the accepted note) and the per-link verdict column stand on unit tests: no lab pair is over 10 ms (the pair measures 0.02 ms). Known limit: every link is judged against every mode on the sheet (SPEC-020). |
 | BL-46 | The read-only array client refuses options that act (`showtarget -rescan`) | 2026-11-16 | **Live on rack13-ARCUS** (run `aa3d93c5`, `lab/failed_apply_lab.py`, record `validation/2026-11-16-failed-apply-rack13.md` in BL-45's pull request): refused when typed in the Console and over the API, recorded in the command log, nothing sent; `showtarget` still ran. Found while designing migration (BL-27). Issue to be created on github.hpe.com (unreachable on 2026-11-16). |

@@ -37,10 +37,11 @@ Everything lives under `Provisioning_Automation/alletra_onboard/` (called "the a
    and Tcl quoting characters refused). A write over SSH needs: exact command forms each with a test,
    a client built only inside the apply of an approved plan, only on the objects that plan names, its
    removal line written before the command, a read-back after it, and no prompts. One client per kind,
-   each kind argued in its own ADR; today the only one is ADR 0015's `ArrayRcCliClient` (RCIP
-   addresses, `startrcopy`, Remote Copy targets). WSAPI writes also run only after the operator approved
-   a plan on screen. The link check runs `checkrclink` (and, when it prints no latency number, an RCIP
-   ping) through a separate diagnostic allowlist.
+   each kind argued in its own ADR; today there are two: ADR 0015's `ArrayRcCliClient` (RCIP
+   addresses, `startrcopy`, Remote Copy targets) and ADR 0016's `ArraySnapCliClient` (one form:
+   `createsched -f` of a `createsv -f` with an expiry and no lock). WSAPI writes also run only after
+   the operator approved a plan on screen. The link check runs `checkrclink` (and, when it prints no
+   latency number, an RCIP ping) through a separate diagnostic allowlist.
 3. **Verification, as-built and discovery never change anything** on an array, host, vCenter or
    switch.
 4. **One array per run.** Refuse a workbook that names two.

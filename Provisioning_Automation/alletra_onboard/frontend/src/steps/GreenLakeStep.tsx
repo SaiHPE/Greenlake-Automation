@@ -2,9 +2,8 @@ import { Box, CheckBox, NameValueList, NameValuePair, Text } from 'grommet';
 import { Cloud } from 'grommet-icons';
 import { useState } from 'react';
 import { RunEvent, RunRecord, startProvision } from '../api';
-import { EmptyState, Guidance, Panel, StatusLine } from '../ui/blocks';
-import { NotesList } from '../ui/primitives';
-import { StepShell } from '../ui/StepShell';
+import { EmptyState, Guidance, Panel } from '../ui/blocks';
+import { StepShell, StepStatus } from '../ui/StepShell';
 import { useStepContext } from '../ui/StepContext';
 import { useStepState } from '../ui/useStepState';
 
@@ -27,6 +26,17 @@ export function GreenLakeStep({ runId, run, events, onDone }: Props) {
   const registered = state === 'complete';
   const resources = events.find((event) => event.event_type === 'step.completed' && event.phase.startsWith('GL_'));
 
+  // one status: running > registered; the subscription warnings are notes
+  const status: StepStatus | undefined = running
+    ? { state: 'running', title: 'Registering the array in HPE GreenLake', message: 'Each phase appears in Activity, below.' }
+    : registered
+      ? {
+          state: 'complete',
+          title: 'Registered and assigned to Data Services',
+          message: 'The array can now be connected to HPE GreenLake from the array console.',
+        }
+      : undefined;
+
   const start = async () => {
     setError(null);
     try {
@@ -42,6 +52,8 @@ export function GreenLakeStep({ runId, run, events, onDone }: Props) {
       description="Registers the array in HPE GreenLake, assigns it to Data Services and applies the subscription."
       error={error}
       onDismissError={() => setError(null)}
+      status={status}
+      notes={run?.warnings ?? []}
       primary={
         registered
           ? { label: nextTitle ? `Continue to ${nextTitle}` : 'Continue', onClick: onDone }
@@ -57,18 +69,6 @@ export function GreenLakeStep({ runId, run, events, onDone }: Props) {
         />
       }
     >
-      {registered && (
-        <StatusLine state="complete" title="The array is registered and assigned to Data Services">
-          It can now be connected to HPE GreenLake from the array console.
-        </StatusLine>
-      )}
-      {running && <StatusLine state="running">Registering the array in HPE GreenLake. Each phase appears in Activity, below.</StatusLine>}
-      {run?.warnings?.length ? (
-        <StatusLine state="action_required" title="Registration completed with warnings">
-          <NotesList notes={run.warnings} />
-        </StatusLine>
-      ) : null}
-
       {!registered && !running && (
         <Box gap="small" flex={false}>
           <EmptyState icon={<Cloud size="large" color="icon-weak" />} title="Not registered yet">

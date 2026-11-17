@@ -1,5 +1,5 @@
 import { Box, Button, Notification, Select, Text, TextInput } from 'grommet';
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import {
   DiscoveredHostBrief,
   ExportRequest,
@@ -50,9 +50,9 @@ function exportToRow(e: ExportRequest): ExportRow {
 
 const sourceOptions = (o: ProvisioningObjects): Opt[] => [
   ...o.new_volumes.map((n) => ({ label: `${n} — new volume`, value: `volume:${n}` })),
-  ...o.new_vvsets.map((n) => ({ label: `${n} — new VV-set`, value: `vvset:${n}` })),
+  ...o.new_vvsets.map((n) => ({ label: `${n} — new volume set`, value: `vvset:${n}` })),
   ...o.existing_volumes.map((n) => ({ label: `${n} — existing volume`, value: `volume:${n}` })),
-  ...o.existing_volume_sets.map((n) => ({ label: `${n} — existing VV-set`, value: `vvset:${n}` })),
+  ...o.existing_volume_sets.map((n) => ({ label: `${n} — existing volume set`, value: `vvset:${n}` })),
 ];
 
 // Where a host's identity came from, in the operator's words (SPEC-003 R5).
@@ -65,8 +65,8 @@ const hostLabel = (h: DiscoveredHostBrief) =>
     : `${h.name} — ${h.status} · ${SOURCE[h.source] ?? h.source}`;
 
 const targetOptions = (o: ProvisioningObjects): Opt[] => [
-  ...o.new_host_sets.map((n) => ({ label: `${n} — new host-set`, value: `hostset:${n}` })),
-  ...o.existing_host_sets.map((n) => ({ label: `${n} — existing host-set`, value: `hostset:${n}` })),
+  ...o.new_host_sets.map((n) => ({ label: `${n} — new host set`, value: `hostset:${n}` })),
+  ...o.existing_host_sets.map((n) => ({ label: `${n} — existing host set`, value: `hostset:${n}` })),
   ...o.discovered_hosts.filter((h) => h.fc_capable !== false).map((h) => ({ label: hostLabel(h), value: `host:${h.name}` })),
   ...o.existing_hosts.filter((n) => !o.discovered_hosts.some((h) => h.name === n)).map((n) => ({ label: `${n} — existing host`, value: `host:${n}` })),
   ...o.discovered_hosts.filter((h) => h.fc_capable === false).map((h) => ({ label: hostLabel(h), value: `host:${h.name}` })),
@@ -93,18 +93,20 @@ export const memberLabel = (names: string[]): string | undefined => {
 
 function ExportRowView({ row, sourceOpts, targetOpts, disabled, onChange, onRemove }: {
   row: ExportRow; sourceOpts: Opt[]; targetOpts: Opt[]; disabled: boolean;
-  onChange: (r: ExportRow) => void; onRemove: () => void;
+  onChange: (r: ExportRow) => void;
+  /** Absent when the composition is read-only: the button is not drawn. */
+  onRemove?: () => void;
 }) {
   return (
     <Box direction="row" gap="small" align="center" pad={{ vertical: 'xxsmall' }}>
       <Box basis="medium" flex="shrink">
-        <Select size="small" placeholder="source — volume / VV-set" options={sourceOpts} labelKey="label"
+        <Select size="small" placeholder="source: volume or volume set" options={sourceOpts} labelKey="label"
           valueKey={{ key: 'value', reduce: true }} value={row.source} disabled={disabled}
           onChange={({ value }) => onChange({ ...row, source: value })} />
       </Box>
       <Text size="small">→</Text>
       <Box basis="medium" flex="shrink">
-        <Select size="small" placeholder="target — host / host-set" options={targetOpts} labelKey="label"
+        <Select size="small" placeholder="target: host or host set" options={targetOpts} labelKey="label"
           valueKey={{ key: 'value', reduce: true }} value={row.target} disabled={disabled}
           onChange={({ value }) => onChange({ ...row, target: value })} />
       </Box>
@@ -112,15 +114,24 @@ function ExportRowView({ row, sourceOpts, targetOpts, disabled, onChange, onRemo
         <TextInput size="small" placeholder="LUN auto" value={row.lun} disabled={disabled}
           onChange={(e) => onChange({ ...row, lun: e.target.value })} />
       </Box>
-      <Button size="small" plain label="remove" disabled={disabled} onClick={onRemove} />
+      {onRemove && <Button size="small" plain label="remove" onClick={onRemove} />}
     </Box>
   );
 }
 
-export function ProvisioningBuilderView({ runId, disabled = false, readOnly = false }: {
-  runId: string; disabled?: boolean;
+const INTRO = 'Pick host set members and the exports: which volume or volume set goes to which host or host set, at which LUN.';
+// SPEC-004 R4: the real default, word for word.
+const DEFAULT_RULE =
+  'With no exports composed and exactly one host set, every volume is presented to that set at an auto LUN; with more than one host set, the exports must be composed here.';
+
+export function ProvisioningBuilderView({ runId, disabled = false, readOnly = false, bare = false }: {
+  runId: string;
+  /** While the step works on the array: the fields are locked and a button says why on click. */
+  disabled?: boolean;
   /** After apply: the composition that was used stays in view, nothing editable (SPEC-004 R4). */
   readOnly?: boolean;
+  /** No surface of its own: the step's panel or row is the frame. */
+  bare?: boolean;
 }) {
   const [objects, setObjects] = useState<ProvisioningObjects | null>(null);
   const [members, setMembers] = useState<Record<string, string[]>>({});
@@ -128,6 +139,34 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
   const [busy, setBusy] = useState<'' | 'load' | 'save'>('');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  // No disabled buttons (SPEC-030 R3): while this view is busy a click does nothing (the busy button
+  // shows why); while the step works on the array it says why and sends nothing.
+  const guard = (action: () => void) => () => {
+    if (busy !== '') return;
+    if (disabled) {
+      setNote('The step is working on the array. Try again when it has finished.');
+      return;
+    }
+    setNote(null);
+    action();
+  };
+  const frame = (children: ReactNode, title?: string, description?: ReactNode) =>
+    bare ? (
+      <Box gap="small" flex={false}>
+        {description && (
+          <Text size="small" color="text-weak">
+            {description}
+          </Text>
+        )}
+        {children}
+      </Box>
+    ) : (
+      <Surface title={title} description={description}>
+        {children}
+      </Surface>
+    );
 
   const load = async () => {
     setError(null); setSaved(null); setBusy('load');
@@ -161,7 +200,7 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
       };
       const comp = await saveStorageBuilder(runId, builder);
       const assigned = comp.host_sets.reduce((n, h) => n + h.members.length, 0);
-      setSaved(`Saved — ${comp.exports.length} export(s), ${assigned} host-set member(s). Build the plan below to preview.`);
+      setSaved(`Saved: ${comp.exports.length} export(s), ${assigned} host set member(s). Build the plan to see what will be created.`);
     } catch (e: any) {
       setError(String(e.message ?? e));
     } finally {
@@ -170,19 +209,16 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
   };
 
   if (!objects) {
-    return (
-      <Surface title="Compose the provisioning (dropdowns)">
-        <Text size="small" color="text-weak">
-          Pick host-set members and the exports (which volume / VV-set is presented to which host /
-          host-set, at which LUN) from the discovered + to-be-created objects. With no exports composed
-          and exactly one host set, every volume is presented to that set at an auto LUN; with more than
-          one host set, the exports must be composed here.
-        </Text>
-        <Box direction="row" gap="small" align="center">
-          <Button size="small" busy={busy === 'load'} label={busy === 'load' ? 'Reading the array and the run' : 'Retry loading objects'} disabled={disabled} onClick={load} />
+    return frame(
+      <>
+        <Box direction="row" gap="small" align="center" wrap>
+          <Button size="small" busy={busy === 'load'} label={busy === 'load' ? 'Reading the array and the run' : 'Retry loading objects'} onClick={guard(() => void load())} />
+          {note && disabled && <Text size="small" color="text-weak">{note}</Text>}
         </Box>
         {error && <Notification status="critical" title="Could not load objects" message={error} onClose={() => setError(null)} />}
-      </Surface>
+      </>,
+      undefined,
+      `${INTRO} ${DEFAULT_RULE}`,
     );
   }
 
@@ -191,18 +227,15 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
   const memOpts = memberOptions(objects);
   const busyOrDisabled = disabled || busy !== '' || readOnly;
 
-  return (
-    <Surface
-      title={readOnly ? 'Composition applied' : 'Compose the provisioning (dropdowns)'}
-      description={readOnly ? 'The membership and exports below are what was created. Rebuild the plan to compose again.' : undefined}
-    >
+  return frame(
+    <>
       {objects.array_error && (
         <Notification status="warning" title="Array objects unavailable"
-          message={`Couldn't read existing objects from the array (${objects.array_error}). You can still compose over the to-be-created + discovered objects.`} />
+          message={`Could not read the objects already on the array (${objects.array_error}). You can still compose with the objects this run will create and the hosts discovery found.`} />
       )}
 
-      <Text size="small" weight="bold">Host-set membership</Text>
-      <Text size="xsmall" color="text-weak">Pick the members; an empty set blocks the plan. Status shows fabric-login so a half-zoned host isn't picked blind.</Text>
+      <Text size="small" weight="bold">Host set membership</Text>
+      <Text size="xsmall" color="text-weak">Pick the members; an empty set blocks the plan. Each host says whether it is logged in on the fabrics, so a half-zoned host is not picked blind.</Text>
       {objects.host_sets.length === 0 && <Text size="small" color="text-weak">No host sets in the sheet.</Text>}
       {objects.host_sets.map((hs) => (
         <Box key={hs.name} direction="row" gap="small" align="center" pad={{ vertical: 'xxsmall' }}>
@@ -225,21 +258,24 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
       {rows.map((row, i) => (
         <ExportRowView key={i} row={row} sourceOpts={srcOpts} targetOpts={tgtOpts} disabled={busyOrDisabled}
           onChange={(r) => setRows((rs) => rs.map((x, j) => (j === i ? r : x)))}
-          onRemove={() => setRows((rs) => rs.filter((_, j) => j !== i))} />
+          onRemove={readOnly ? undefined : guard(() => setRows((rs) => rs.filter((_, j) => j !== i)))} />
       ))}
       {!readOnly && (
         <>
-          <Button size="small" label="+ Add export row" disabled={busyOrDisabled} alignSelf="start"
-            onClick={() => setRows((rs) => [...rs, { source: '', target: '', lun: '' }])} />
+          <Button size="small" label="+ Add export row" alignSelf="start"
+            onClick={guard(() => setRows((rs) => [...rs, { source: '', target: '', lun: '' }]))} />
 
-          <Box direction="row" gap="small" align="center" margin={{ top: 'small' }}>
-            <Button primary size="small" busy={busy === 'save'} label={busy === 'save' ? 'Saving' : 'Save composition'} disabled={busyOrDisabled} onClick={save} />
-            <Button size="small" busy={busy === 'load'} label="Reload" disabled={busyOrDisabled} onClick={load} />
+          <Box direction="row" gap="small" align="center" margin={{ top: 'small' }} wrap>
+            <Button size="small" busy={busy === 'save'} label={busy === 'save' ? 'Saving' : 'Save composition'} onClick={guard(() => void save())} />
+            <Button size="small" busy={busy === 'load'} label="Reload" onClick={guard(() => void load())} />
+            {note && disabled && <Text size="small" color="text-weak">{note}</Text>}
           </Box>
         </>
       )}
       {saved && <Notification status="normal" title="Composition saved" message={saved} onClose={() => setSaved(null)} />}
       {error && <Notification status="critical" title="Save failed" message={error} onClose={() => setError(null)} />}
-    </Surface>
+    </>,
+    readOnly ? 'Composition applied' : undefined,
+    readOnly ? 'The membership and exports below are what was created. Rebuild the plan to compose again.' : INTRO,
   );
 }

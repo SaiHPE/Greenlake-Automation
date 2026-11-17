@@ -74,3 +74,17 @@ while the option check sees a different word. No read the tool makes uses these 
 them costs nothing. The link check and the Remote Copy write client share the same set and refuse them
 as well. Whether the CLI really applies Tcl parsing to an SSH exec is not confirmed: a harmless lab
 check such as `showsys [showdate]` would settle it. It has not been run.
+
+## Addendum 2026-11-17 (SPEC-026, ADR 0019)
+
+The read allowlist gains four commands by exact base name: `showalert` (the array's alerts) and the
+System Reporter reports `srstatcpu`, `srstatport` and `srstatvv`. The as-built reads them for its
+*Array status and performance at handover* section. Each only reads: `showalert` lists alerts, and an
+`srstat*` report queries the System Reporter database. Every option their captured `help` offers on
+OS 10.5.0, 10.5.51, 10.5.60 and 10.6.0 filters, windows, sorts or formats, and AUTHORITY is "Any role
+in the system"; `tests/unit/test_cli_allowlist.py` reads those help pages and fails on an option
+nobody has reviewed (LESSONS 46). The same file pins what stays off: `srstatrcvv` (until a started
+Remote Copy group is captured), the live samplers `statcpu`, `statport` and `statvv` (without `-iter`
+they never end), System Reporter's writes (`setsr`, `startsr`, `stopsr`, `*sralertcrit`) and the
+alert writes `setalert` and `removealert`. The Console prompt uses this allowlist, so it can run the
+four commands too.

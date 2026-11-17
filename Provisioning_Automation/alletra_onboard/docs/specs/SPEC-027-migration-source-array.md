@@ -1,6 +1,10 @@
 # SPEC-027 — Migration from a source array: read it, check readiness, zone the peer links
 
-**Status:** accepted 2026-11-17 with ADR 0020 (owner's decision, with changes), not built ·
+**Status:** accepted 2026-11-17 with ADR 0020 (owner's decision, with changes). **Slice 1 started
+2026-11-17:** R1 (the Migration tab, parse, compose, the source password kept by the store) and R3 (the
+`migrate` step, the Migrate preset, the 422 without the tab) are built, with unit tests; the step is
+listed as not built yet, so a run with it is refused and the Migrate mode is greyed out. R2's read,
+R4 and R5 wait for the captures (`lab/mig_pair_capture.py`, not yet run) ·
 **Decision:** [ADR 0020](../adr/0020-migration-tool-prepares-hpe-imports.md) · **Research:**
 [2026-11-16](../research/2026-11-16-migration-from-a-source-array.md) · **Tracker:** BL-27 · **Depends on:** SPEC-025 (BL-26, the destination's FC peer ports) · **Pattern:**
 SPEC-015 (a tab and a step credential), SPEC-016 R1-R3 (read, check, plan), SPEC-010 (command set) ·

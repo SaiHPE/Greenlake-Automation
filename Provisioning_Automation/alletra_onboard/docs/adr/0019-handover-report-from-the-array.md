@@ -9,6 +9,10 @@
 **Spec:** [SPEC-026](../specs/SPEC-026-handover-status-and-performance.md) ·
 **Work packet:** [BL-24](../workpackets/BL-24.md)
 
+**Built 2026-11-17, pending live run** (work packet BL-24 steps 2 to 7): the four commands on the
+allowlist with their tests and the ADR 0001 addendum; the as-built section and the page summary from
+the array over the read-only client. Decision 5 (DSCC) and Remote Copy figures are later slices.
+
 ## Changes on acceptance (owner, 2026-11-17)
 
 The owner accepted the decision with the changes a review recommended. They are folded into the

@@ -2,7 +2,8 @@
 current in this context (bound by the run coordinator for the step's task and its worker threads).
 
 Clients call `record()` after every command; with no run bound it does nothing. Output is capped and
-every secret the client holds is replaced before the record leaves the client.
+every secret the client holds is replaced before the record leaves the client, then the domain's
+redaction policy masks anything shaped like a bearer token, client secret or subscription key.
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ import time
 from collections.abc import Callable, Iterable
 from contextvars import ContextVar, Token
 from datetime import UTC, datetime
+
+from alletra_onboard.domain.policies import redact as redact_policy
 
 MAX_OUTPUT_BYTES = 64 * 1024
 REDACTED = "********"
@@ -36,7 +39,7 @@ def redact(text: str, secrets: Iterable[str]) -> str:
     for secret in secrets:
         if secret and len(secret) >= 3:
             text = text.replace(secret, REDACTED)
-    return text
+    return redact_policy(text)
 
 
 def cap(text: str) -> str:

@@ -1,7 +1,10 @@
 # SPEC-025 — Peer ports for migration, set up by the tool
 
-**Status:** proposed 2026-11-16; the read (R2) built 2026-11-16, pinned to rack13-ARCUS, and on
-2026-11-17 to a port in peer mode (E18U31) and to OS 10.5.0 and 10.5.51; the rest not built ·
+**Status:** first slice built 2026-11-17, pending live run (R1 to R3, R4's command set and read after
+the paste, R5's removal set as text, R6 to R9; work packet steps 1, 3, 3b and 6 to 10). The tool's
+write (R4 later, steps 4 and 5) is deferred by the owner. Proposed 2026-11-16; the read (R2) built
+2026-11-16, pinned to rack13-ARCUS, and on 2026-11-17 to a port in peer mode (E18U31) and to OS
+10.5.0 and 10.5.51 ·
 **Decision:** ADR 0018 (accepted 2026-11-17: the command set first; the tool's write after the live
 captures, over the array-port client of ADR 0025) ·
 **Tracker:** BL-26 · **Used by:** BL-27 migration (SPEC-027) · **Sibling:** BL-25 VLAN (SPEC-024) ·

@@ -1,10 +1,11 @@
 # SPEC-028 — Unified File: read, check and set up NFS shares on the run's array
 
-**Status:** PROPOSED 2026-11-16; the reads accepted 2026-11-17 with ADR 0021. R1 parsers built
-and pinned to two captures (§8): rack13-ARCUS (no File ports) and D22U27 (four File ports, the
-service on, three file systems, client groups and shares). Nothing reads an array yet: slice 1
-(work packet steps 4–7) is next. R4–R6 (slice 2) follow slice 1's live run; R7–R12 (slice 3, the
-writes) wait for ADR 0021's write-plane amendment.
+**Status:** PROPOSED 2026-11-16; the reads accepted 2026-11-17 with ADR 0021. **R1–R3 built
+2026-11-17, pending live run** (slice 1, work packet steps 4–7): the GET-only v3 client, the *File
+service* section in Discovery and the as-built, and two Verify rows, pinned to two captures (§8):
+rack13-ARCUS (no File ports) and D22U27 (four File ports, the service on, three file systems,
+client groups and shares). R4–R6 (slice 2) follow slice 1's live run; R7–R12 (slice 3, the writes)
+wait for ADR 0021's write-plane amendment.
 **ADRs:** [0021](../adr/0021-unified-file-over-wsapi-v3.md) (accepted for reads; the write plane
 waits for an amendment) · [0013](../adr/0013-one-array-credential-per-run.md) ·
 [0001](../adr/0001-post-init-verification-via-ssh-cli.md) (SSH stays read-only) · ADR 0025 (any
@@ -97,11 +98,32 @@ Whether to show anything is decided by `showport -file` and `isFileServiceEnable
 v3 answers: rack13-ARCUS has no File ports and still answers all four GETs with 200, a stopped
 service record and empty collections (§8). That array is the "no File ports, service off" case.
 
+*As built (2026-11-17), where the list above left a case open:*
+- With no File ports the file API is read only when `showversion` says 10.5 or later, and anything
+  but a running service read from the run's own array shows nothing: a failed or refused read, a
+  serial that does not match and a stopped service all leave `file` empty. The OS sentence is said
+  only on an array that lists File ports.
+- A login the file API answers with 401 or 403 is the session sentence too, and so is a 403 on a read.
+- Where a serial is missing (from a collection, or from `showsys`), the sentence says *(no serial
+  given)* in its place. `showsys` is read first and each collection is checked as it arrives: the
+  first that is missing the serial or names another stops the read, and its body is kept out of the
+  command log (the console shows the call, its status and *not recorded*), since the log is stored
+  and shown.
+- An answer that is neither of these, an HTTP status other than 200, 401 or 403 or a record in a
+  shape no capture has shown, says: *"The array's file API gave an answer the tool could not read,
+  so only the File ports are shown. Block storage is not affected; send the console log to the tool
+  team."* (`UNREADABLE` in `application/unified_file/read.py`; R2 had no sentence for it.)
+
 **R3 — Show it, and put it in the as-built.** Discovery's *file service ports* section becomes
 *File service* with four folded parts (service, ports, file systems, shares with their clients).
 The as-built gains a *File service* section after the provisioning record, read when the document
 is made (the SPEC-018 pattern); absent when the array has no File ports and the service is off.
 Verify configuration adds the service state and the File ports to its table, read-only.
+*As built:* two rows when the array has a file side, none otherwise. *File service*: expected
+`on`, the array's answer `on, 2 of 2 nodes running` (Match when every node runs) or `off`; not
+readable when the file API was not read. *File ports up*: expected `4 of 4` (every File port
+`showport -file` lists), the array's answer the number with Link `up`. The sheet has no File tab
+until slice 2, so these are the defaults R4 gives.
 
 ### Configure (slice 2 after slice 1's live run; slice 3 after ADR 0021's write-plane amendment)
 

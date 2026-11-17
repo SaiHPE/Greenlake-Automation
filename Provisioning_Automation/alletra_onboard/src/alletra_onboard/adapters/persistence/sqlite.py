@@ -7,6 +7,7 @@ from pathlib import Path
 
 from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunRecord
 from alletra_onboard.domain.provisioning import ProvisioningIntent
+from alletra_onboard.domain.trust import DevicePin
 
 # How many runs keep their step artifacts. Runs stay in the database; only their cached artifacts
 # are pruned, so an old run reopened after this can simply re-run discovery.
@@ -96,6 +97,21 @@ class SqliteRunStore:
                     seq INTEGER NOT NULL,
                     payload TEXT NOT NULL,
                     PRIMARY KEY (run_id, seq)
+                )
+                """
+            )
+            # ADR 0026: the SSH host key or TLS certificate each on-site device presented on the run's
+            # first contact. Kept with the run, like its credentials (ADR 0013); a new run starts empty.
+            # A table of its own, not the run record: steps write back whole stale RunRecords.
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS run_device_pins (
+                    run_id TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    host TEXT NOT NULL,
+                    port INTEGER NOT NULL,
+                    payload TEXT NOT NULL,
+                    PRIMARY KEY (run_id, kind, host, port)
                 )
                 """
             )
@@ -285,6 +301,45 @@ class SqliteRunStore:
             ).fetchall()
         return [json.loads(r[0]) for r in rows]
 
+    def get_device_pin(self, run_id: str, kind: str, host: str, port: int) -> DevicePin | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM run_device_pins WHERE run_id = ? AND kind = ? AND host = ? AND port = ?",
+                (run_id, str(kind), host, port),
+            ).fetchone()
+        return None if row is None else DevicePin.model_validate_json(row[0])
+
+    def list_device_pins(self, run_id: str) -> list[DevicePin]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM run_device_pins WHERE run_id = ? ORDER BY host, port, kind", (run_id,)
+            ).fetchall()
+        return [DevicePin.model_validate_json(r[0]) for r in rows]
+
+    def add_device_pin(self, run_id: str, pin: DevicePin) -> DevicePin:
+        """Record a first contact unless the device already has a pin, and return the pin that holds:
+        two reads reaching the same device at once must not each trust what they saw."""
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO run_device_pins (run_id, kind, host, port, payload) VALUES (?, ?, ?, ?, ?)",
+                (run_id, str(pin.kind), pin.host, pin.port, pin.model_dump_json()),
+            )
+            row = connection.execute(
+                "SELECT payload FROM run_device_pins WHERE run_id = ? AND kind = ? AND host = ? AND port = ?",
+                (run_id, str(pin.kind), pin.host, pin.port),
+            ).fetchone()
+        return DevicePin.model_validate_json(row[0])
+
+    def save_device_pin(self, run_id: str, pin: DevicePin) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO run_device_pins (run_id, kind, host, port, payload) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(run_id, kind, host, port) DO UPDATE SET payload = excluded.payload
+                """,
+                (run_id, str(pin.kind), pin.host, pin.port, pin.model_dump_json()),
+            )
+
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.database_path, timeout=5)
 
@@ -309,4 +364,6 @@ def _provisioning_intent_json(intent: ProvisioningIntent) -> str:
         row["password"] = host.password.get_secret_value() if host.password is not None else None
     if intent.replication is not None:
         data["replication"]["peer"]["password"] = intent.replication.peer.password.get_secret_value()
+    if intent.migration is not None:
+        data["migration"]["source"]["password"] = intent.migration.source.password.get_secret_value()
     return json.dumps(data)

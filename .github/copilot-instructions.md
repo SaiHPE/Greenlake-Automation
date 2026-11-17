@@ -9,7 +9,8 @@ The rules that matter most, in short:
 - The tool never writes to a SAN switch. Array SSH is read-only through an allowlist; writes go
   through WSAPI after the operator approves a plan. An SSH write follows ADR 0025: exact tested forms,
   built only inside an approved apply, only on the plan's objects, undo written first, read back after.
-  Today the one SSH write client is ADR 0015's `ArrayRcCliClient` (Remote Copy ports and targets).
+  Today the SSH write clients are ADR 0015's `ArrayRcCliClient` (Remote Copy ports and targets) and
+  ADR 0016's `ArraySnapCliClient` (snapshot schedules, one `createsched -f` form).
 - A run is one array. Steps and modes come from `domain/workflow.py` only.
 - No secrets, customer names or customer addresses in git. Never commit `frontend/dist`.
 - Tests use fakes and captured output only. "Done" means run live on lab hardware.

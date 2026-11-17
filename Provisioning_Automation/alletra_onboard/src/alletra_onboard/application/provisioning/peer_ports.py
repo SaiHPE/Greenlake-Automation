@@ -1,11 +1,13 @@
-"""SPEC-025 (BL-26): the read side of peer ports. What this run's array says about its FC ports,
-and which of them the tool may set to peer mode.
+"""SPEC-025 (BL-26): peer ports. What this run's array says about its FC ports, which of them the
+tool may set to peer mode, the plan with the command set a consultant pastes, the judgement of the
+read after the paste, verify, and the zone pairs.
 
-Read-only. Every parser is pinned to real output: rack13-ARCUS, OS 10.6.0, 2026-11-16
-(`tests/fixtures/peer_ports/rack13/`); E18U31 with two FC peer ports (OS 10.5.60), D22U27 (OS 10.5.0)
-and VZ (OS 10.5.51), 2026-11-17 (`tests/fixtures/peer_ports/<array>/`); E18U31 and D22U27 as they
-were on 2026-10-07 (`rc_pair/`); and the Primera (`rcip_pair/before/primera/`, 2026-11-03). The plan,
-the apply, the verify and the zones are later steps of `docs/workpackets/BL-26.md`.
+Read-only, and nothing here writes: the first slice of ADR 0018 prints the commands. Every parser is
+pinned to real output: rack13-ARCUS, OS 10.6.0, 2026-11-16 (`tests/fixtures/peer_ports/rack13/`);
+E18U31 with two FC peer ports (OS 10.5.60), D22U27 (OS 10.5.0) and VZ (OS 10.5.51), 2026-11-17
+(`tests/fixtures/peer_ports/<array>/`); E18U31 and D22U27 as they were on 2026-10-07 (`rc_pair/`);
+and the Primera (`rcip_pair/before/primera/`, 2026-11-03). The tool's own write (the apply) waits
+for ADR 0018's live captures and the owner's yes.
 """
 
 from __future__ import annotations
@@ -16,7 +18,16 @@ from collections.abc import Callable
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.provisioning.discovery import UNCLAIMED_HOST, parse_showhost
 from alletra_onboard.application.replication.read import parse_showport_roles
-from alletra_onboard.domain.peer_ports import PeerPortState, PeerPortView, PortParams
+from alletra_onboard.domain.peer_ports import (
+    PeerPortAction,
+    PeerPortCheck,
+    PeerPortIntent,
+    PeerPortPlan,
+    PeerPortResult,
+    PeerPortState,
+    PeerPortView,
+    PortParams,
+)
 from alletra_onboard.domain.shared import EndpointCreds
 
 _NSP = re.compile(r"^\d+:\d+:\d+$")
@@ -216,3 +227,231 @@ def read_view(
     )
     view.host = creds.host
     return view
+
+
+# ------------------------------------------------------------------ R3: the plan
+
+def set_commands(nsp: str) -> list[str]:
+    """ADR 0018: the help refuses a mode change on an online port, so offline first; `peer` takes only
+    `point`. `controlport rst` joins only if the live capture shows the port stays offline."""
+    return [f"controlport offline {nsp}", f"controlport config peer -ct point -f {nsp}"]
+
+
+def restore_lines(nsp: str, before: PortParams) -> list[str]:
+    """R5: back to the connection mode `showport -par` read before the change. The `rst` line stays on
+    every port, so a port left offline by a hung `config` comes back."""
+    return [f"controlport offline {nsp}", f"controlport config {before.connmode} -ct {before.conntype} -f {nsp}",
+            f"controlport rst {nsp}"]
+
+
+def _pairs_sentence(usable: list[str]) -> str:
+    nodes = sorted({int(n.split(":", 1)[0]) for n in usable})
+    got = (f"got {', '.join(usable)} only on node {nodes[0]}" if usable else "got no port that can be used")
+    return (f"Peer ports go in pairs across nodes: name at least one port on each of two nodes ({got}), so the "
+            "migration keeps a path when a node restarts.")
+
+
+def _busy(view: PeerPortView, nsp: str) -> str:
+    parts = []
+    if view.logins.get(nsp):
+        parts.append("logged in: " + ", ".join(view.logins[nsp]))
+    if view.exports.get(nsp):
+        parts.append("exported: " + ", ".join(view.exports[nsp]))
+    return "; ".join(parts)
+
+
+def _action(nsp: str, view: PeerPortView) -> PeerPortAction:
+    """SPEC-025 R3 for one row, the first rule that applies: not on the array, not FC, already peer,
+    serving hosts or busy, another Type, a failover partner in use, a prohibited mode change, no
+    `showport -par` row, else create. `is_free_fc_port` is the same judgement (LESSONS 41)."""
+    p = view.ports.get(nsp)
+    act = PeerPortAction(nsp=nsp, state="conflict")
+    if p is None:
+        act.reason = f"{nsp} is not on this array (showport has no such port)."
+    elif not p.is_fc:
+        act.reason = f"{nsp} is not a Fibre Channel port (Type {p.type}, protocol {p.protocol}). Peer ports are FC ports."
+    elif p.type == "peer":
+        act.state, act.reason = "exists", f"{nsp} is already a peer port."
+    elif busy := _busy(view, nsp):
+        act.reason = (f"{nsp} serves hosts (Type {p.type}; {busy}). The tool never takes a port from hosts: pick a "
+                      "free port, or move the hosts first.")
+    elif p.type != "free":
+        act.reason = f"{nsp} is Type {p.type}; the tool changes only free FC ports."
+    elif p.failover_state not in ("", "none"):
+        act.reason = (f"{nsp} is the failover partner of {p.partner} (state {p.failover_state}); changing it removes "
+                      "that path protection.")
+    elif view.mode_change.get(nsp) == "prohibited":
+        act.reason = f"{nsp}: the array does not allow a mode change on this port (showport -c)."
+    elif nsp not in view.params:
+        act.reason = (f"{nsp}: showport -par gave no connection mode for this port, so the change could not be "
+                      "undone. Read the array again.")
+    else:
+        act.state, act.reason = "create", "free, nothing logged in, no exports"
+        act.commands, act.undo = set_commands(nsp), restore_lines(nsp, view.params[nsp])
+    return act
+
+
+def _fabric_by_parity(nsp: str) -> str:
+    """ADR 0009's fallback: an odd card port is on the odd fabric (F1), an even one on the even (F2)."""
+    return "odd fabric (F1)" if int(nsp.rsplit(":", 1)[1]) % 2 else "even fabric (F2)"
+
+
+def plan_peer_ports(
+    intent: PeerPortIntent, view: PeerPortView, zones: dict[str, dict[str, set[str]] | None] | None = None,
+) -> PeerPortPlan:
+    """R3: one action per sheet row, in sheet order. Pure. `zones` is each switch's effective zones
+    (`zoning.parse_active_zones`), keyed by the switch's name, from the run's own read-only switch
+    read, None for a switch that could not be read; `zones` None when the run has no switch read. The
+    plan says so whenever a switch's zones were not checked."""
+    plan = PeerPortPlan(actions=[_action(req.nsp, view) for req in intent.ports])
+    plan.blockers = [a.reason for a in plan.actions if a.state == "conflict"]
+    usable = [a.nsp for a in plan.actions if a.state in ("create", "exists")]
+    if len({int(n.split(":", 1)[0]) for n in usable}) < 2:
+        plan.blockers.append(_pairs_sentence(usable))
+    fabrics = {_fabric_by_parity(n) for n in usable}
+    if len(usable) >= 2 and len(fabrics) == 1:
+        plan.notes.append(f"{' and '.join(usable)} are {'both' if len(usable) == 2 else 'all'} on the "
+                          f"{fabrics.pop()} by port number; a fabric failure stops the migration.")
+    for act in plan.actions:
+        if act.state != "create":
+            continue
+        p = view.ports[act.nsp]
+        if p.state != "ready":
+            plan.notes.append(f"{act.nsp}'s link is {p.state} (no cable or no switch port): it can be set, but zones "
+                              "will not work until it is cabled.")
+        if zones is None:
+            plan.notes.append(f"The zones on {act.nsp}'s WWPN were not checked (no switch read): ask the SAN team "
+                              "before setting it.")
+            continue
+        for switch, active in zones.items():
+            if active is None:
+                plan.notes.append(f"The zones on {act.nsp}'s WWPN were not checked on {switch} (it could not be "
+                                  "read): ask the SAN team before setting it.")
+                continue
+            named = sorted(zone for zone, members in active.items() if p.port_wwn and p.port_wwn in members)
+            if named:
+                plan.notes.append(f"{act.nsp} ({p.port_wwn}) is still in zone{'s' if len(named) > 1 else ''} "
+                                  f"{', '.join(named)} on {switch}: a host that is switched off may use this port. "
+                                  "Ask the SAN team before setting it.")
+    return plan
+
+
+def command_set_text(plan: PeerPortPlan, array: str) -> str:
+    """R4, first slice: the lines a consultant pastes, in sheet order, as one text for Copy and Download."""
+    lines = [f"# Peer ports on {array}: paste on the array's CLI, then read the array again in the tool."]
+    for act in plan.actions:
+        if act.state == "create":
+            lines += [f"# {act.nsp}", *act.commands]
+    return "\n".join(lines) + "\n"
+
+
+def removal_set_text(removals: list[str], array: str) -> str:
+    """R5: the removal set as text, with its header. The tool never runs it."""
+    head = [(f"# Undo the peer ports this run set on {array}. Remove the SAN team's peer-port zones and any "
+             "migration that uses these ports first."),
+            "# Review before pasting. The tool never runs these."]
+    return "\n".join(head + removals) + "\n"
+
+
+def planned_removals(plan: PeerPortPlan) -> list[str]:
+    """Before the paste: every create's undo, last port first, so the undo exists before anything is pasted."""
+    return [line for act in reversed(plan.actions) if act.state == "create" for line in act.undo]
+
+
+# ------------------------------------------------------------------ R4: the read after the paste
+
+def changed_since(plan: PeerPortPlan, before: PeerPortView, after: PeerPortView) -> bool:
+    """Whether the array reads differently on any port the plan sets (Type, mode, state, connection
+    mode) or on any other port's mode or Type: the read after a paste, not just a second look."""
+    planned = {a.nsp for a in plan.actions if a.state == "create"}
+    for nsp, b in before.ports.items():
+        a = after.ports.get(nsp)
+        if a is None or (a.mode, a.type) != (b.mode, b.type):
+            return True
+        if nsp in planned and (a.state != b.state or after.params.get(nsp) != before.params.get(nsp)):
+            return True
+    return False
+
+
+def read_back_peer_ports(plan: PeerPortPlan, *, before: PeerPortView, after: PeerPortView) -> PeerPortResult:
+    """R4: the read after the consultant's paste, judged as the apply will judge its read-back (one
+    function, LESSONS 41). Each planned port must read Type peer, Connmode peer, ConnType point; every
+    other port's mode and Type must be as in the read the plan was made from (LESSONS 44). The removal
+    set keeps only what changed, last port first (R5): a port now peer gets its whole restore, a port
+    held offline in its old mode `controlport rst` only, a port in a mode nobody planned the whole
+    restore."""
+    result = PeerPortResult()
+    failures: list[str] = []
+    blocks: list[list[str]] = []
+    planned = [a for a in plan.actions if a.state == "create"]
+    for act in planned:
+        b, a = before.ports[act.nsp], after.ports.get(act.nsp)
+        b_par, a_par = before.params.get(act.nsp), after.params.get(act.nsp)
+        if a is not None and a.type == "peer" and a_par is not None and (a_par.connmode, a_par.conntype) == ("peer", "point"):
+            result.changed.append(act.nsp)
+            result.sentences.append(f"{act.nsp} is now a peer port (port WWPN {a.port_wwn or 'not read'}).")
+            blocks.append(act.undo)
+            continue
+        if a is None:
+            failures.append(f"{act.nsp} is not in showport any more: check the array before going on.")
+            blocks.append(act.undo)
+            continue
+        failures.append(f"{act.nsp} did not come back as a peer port (Type {a.type}, state {a.state}).")
+        same_mode = a.type == b.type and (a_par is None or b_par is None
+                                          or (a_par.connmode, a_par.conntype) == (b_par.connmode, b_par.conntype))
+        if not same_mode:
+            blocks.append(act.undo)
+        elif a.state == "offline" and b.state != "offline":
+            blocks.append([f"controlport rst {act.nsp}"])
+    planned_nsps = {a.nsp for a in planned}
+    for nsp, b in before.ports.items():
+        if nsp in planned_nsps:
+            continue
+        a = after.ports.get(nsp)
+        if a is None:
+            failures.append(f"{nsp} is not in showport any more: check the array before going on.")
+        elif a.mode != b.mode:
+            failures.append(f"{nsp} changed as well (mode {b.mode}, now {a.mode}): check the array before going on.")
+        elif a.type != b.type:
+            failures.append(f"{nsp} changed as well (Type {b.type}, now {a.type}): check the array before going on.")
+    result.sentences += failures
+    result.error = " ".join(failures) or None
+    result.removals = [line for block in reversed(blocks) for line in block]
+    return result
+
+
+# ------------------------------------------------------------------ R6: verify
+
+def verify_peer_ports(intent: PeerPortIntent, view: PeerPortView) -> list[PeerPortCheck]:
+    """R6, read-only: per sheet row, Type peer, Connmode peer (when `showport -par` was read) and the link."""
+    checks = []
+    for req in intent.ports:
+        p = view.ports.get(req.nsp)
+        par = view.params.get(req.nsp)
+        if p is None:
+            checks.append(PeerPortCheck(nsp=req.nsp, ok=False,
+                                        sentence=f"{req.nsp} is not on this array (showport has no such port)."))
+        elif p.type != "peer" or (par is not None and par.connmode != "peer"):
+            what = f"Type {p.type}" + (f", Connmode {par.connmode}" if par is not None and par.connmode != "peer" else "")
+            checks.append(PeerPortCheck(nsp=req.nsp, ok=False, sentence=f"{req.nsp} is not a peer port ({what})."))
+        elif p.state != "ready":
+            checks.append(PeerPortCheck(nsp=req.nsp, ok=False, sentence=(
+                f"{req.nsp} is a peer port but its link is {p.state}: check the cable and the switch port.")))
+        else:
+            checks.append(PeerPortCheck(nsp=req.nsp, ok=True, sentence=f"{req.nsp} is a peer port, link ready."))
+    return checks
+
+
+# ------------------------------------------------------------------ R7: the zones
+
+def peer_zone_pairs(intent: PeerPortIntent, view: PeerPortView) -> list[tuple[str, str]]:
+    """(peer port WWPN, source array port WWPN) per sheet row and source, in sheet order. The peer
+    WWPN is the one in `view`, which must be the read AFTER the change (the read after the paste, later
+    the apply's read-back): a port not yet in peer mode gives no pair, since its WWPN may still change."""
+    pairs = []
+    for req in intent.ports:
+        p = view.ports.get(req.nsp)
+        if p is None or p.type != "peer" or not p.port_wwn:
+            continue
+        pairs += [(p.port_wwn, source) for source in req.source_wwpns]
+    return pairs

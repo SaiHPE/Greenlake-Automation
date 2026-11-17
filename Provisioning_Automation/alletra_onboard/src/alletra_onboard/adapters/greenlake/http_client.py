@@ -4,9 +4,11 @@ import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
+from alletra_onboard.adapters import command_log
 from alletra_onboard.application.platform.tls import ssl_context
 from alletra_onboard.domain.policies import RateBudget, TokenBucket
 
@@ -51,6 +53,7 @@ class GreenLakeHttpClient:
         timeout_seconds: float = 60.0,
     ) -> None:
         self.base_url = base_url.rstrip("/")
+        self.host = urlsplit(self.base_url).hostname or self.base_url
         self.token_provider = token_provider
         self.buckets = buckets or default_rate_buckets()
         self.max_retries = max_retries
@@ -66,16 +69,38 @@ class GreenLakeHttpClient:
             await self._bucket(bucket).acquire()
             token = await self.token_provider.token()
             headers = {**base_headers, "Authorization": f"Bearer {token}"}
-            async with httpx.AsyncClient(
-                base_url=self.base_url, timeout=self.timeout_seconds, verify=ssl_context()
-            ) as client:
-                response = await client.request(method, path, headers=headers, **kwargs)
-            if response.status_code in RETRYABLE_STATUS and attempt < self.max_retries:
+            started = time.monotonic()
+            try:
+                async with httpx.AsyncClient(
+                    base_url=self.base_url, timeout=self.timeout_seconds, verify=ssl_context()
+                ) as client:
+                    response = await client.request(method, path, headers=headers, **kwargs)
+            except Exception as exc:
+                self._record(method, path, kwargs, started, ok=False, result=type(exc).__name__, token=token)
+                raise
+            retrying = response.status_code in RETRYABLE_STATUS and attempt < self.max_retries
+            self._record(method, path, kwargs, started, ok=response.is_success,
+                         result=f"HTTP {response.status_code}" + (", retrying" if retrying else ""),
+                         output=_location(response), token=token)
+            if retrying:
                 attempt += 1
                 await asyncio.sleep(_retry_delay(response, attempt))
                 continue
             response.raise_for_status()
             return response
+
+    def _record(self, method: str, path: str, kwargs: dict[str, Any], started: float, *, ok: bool,
+                result: str, token: str, output: str = "") -> None:
+        """One console record per HTTP attempt: method and path only. Queries and bodies are left out
+        (a subscription key travels in both), and so is error text (it quotes the URL)."""
+        params = kwargs.get("params")
+        dry_run = isinstance(params, dict) and str(params.get("dry-run", "")).lower() == "true"
+        command = f"{method} {_path_of(path)}" + ("?dry-run=true" if dry_run else "")
+        command_log.record(
+            target=self.host, transport="greenlake", command=command, started=started, ok=ok,
+            result=result, output=output, write=method.upper() not in ("GET", "HEAD") and not dry_run,
+            secrets=[token, getattr(self.token_provider, "client_secret", "")],
+        )
 
     async def poll_async(
         self,
@@ -126,6 +151,16 @@ class GreenLakeHttpClient:
                 )
             interval = float(payload.get("suggestedPollingIntervalSeconds") or default_interval)
             await asyncio.sleep(max(1.0, min(interval, 30.0)))
+
+
+def _path_of(path: str) -> str:
+    """The path alone: a polled Location may be a full URL, and a query may carry a key."""
+    return urlsplit(path).path
+
+
+def _location(response: httpx.Response) -> str:
+    location = response.headers.get("Location")
+    return f"Location: {_path_of(location)}" if location else ""
 
 
 def _retry_delay(response: httpx.Response, attempt: int) -> float:

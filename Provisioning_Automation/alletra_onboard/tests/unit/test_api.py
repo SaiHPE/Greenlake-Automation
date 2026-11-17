@@ -67,17 +67,30 @@ def test_app_profile_serves_the_step_registry(tmp_path):
     # ADR 0011 Phase 2: the wizard renders from the SERVED registry — this payload IS the contract
     # that replaced the hand-synced frontend mirror (modes.ts).
     body = _client(tmp_path).get("/app/profile").json()
+    # SPEC-023 R9 (BL-21) added the Snapshots step, kind "snapshot", after the failover test.
     assert [s["key"] for s in body["steps"]] == [
-        "greenlake", "cloudinit", "dscc", "discover", "zoning", "provision",
-        "replicate", "failover_test", "verify", "asbuilt",
+        "greenlake", "cloudinit", "dscc", "discover", "ports", "zoning", "migrate", "provision",
+        "replicate", "failover_test", "snapshots", "verify", "asbuilt",
     ]
-    assert all(s["label"] and s["kind"] in ("init", "provision", "replicate", "verify") and s["phase"] for s in body["steps"])
+    assert all(s["label"] and s["kind"] in ("init", "provision", "replicate", "migrate", "snapshot", "verify")
+               and s["phase"]
+               for s in body["steps"])
     assert body["modes"]["VERIFY_ONLY"] == ["verify", "asbuilt"]
     assert body["modes"]["FULL_ONBOARDING"] == ["greenlake", "cloudinit", "dscc", "verify", "asbuilt"]
-    assert body["modes"]["PROVISION_ONLY"] == ["discover", "zoning", "provision", "verify", "asbuilt"]
-    # BOTH is every step EXCEPT the replication pair, which needs the Replication tab (SPEC-015 R4).
-    assert body["modes"]["BOTH"] == [s["key"] for s in body["steps"] if s["kind"] != "replicate"]
-    assert body["modes"]["REPLICATE"] == ["discover", "zoning", "provision", "replicate", "failover_test", "verify", "asbuilt"]
+    # SPEC-024 R8 (BL-25): Array ports sits between Discovery and SAN Zoning in the Provision only, Both and
+    # Provision then replicate presets. Changed on purpose when the step joined the registry.
+    assert body["modes"]["PROVISION_ONLY"] == ["discover", "ports", "zoning", "provision", "verify", "asbuilt"]
+    # BOTH is every step EXCEPT the replication pair and the migration step, which need their own tabs
+    # (SPEC-015 R4, SPEC-027 R3), and the Snapshots step, which is picked in Custom only (SPEC-023 R9).
+    # Changed on purpose when each of those steps joined the registry.
+    assert body["modes"]["BOTH"] == [s["key"] for s in body["steps"]
+                                     if s["kind"] not in ("replicate", "migrate", "snapshot")]
+    assert body["modes"]["REPLICATE"] == ["discover", "ports", "zoning", "provision", "replicate", "failover_test", "verify", "asbuilt"]
+    # The Migrate preset is SPEC-027's own: discover, zoning, migrate (Peer Motion creates the volumes).
+    assert body["modes"]["MIGRATE"] == ["discover", "zoning", "migrate", "verify", "asbuilt"]
+    # A step whose work is not built yet is served with the sentence the mode chooser shows.
+    unavailable = {s["key"]: s["unavailable"] for s in body["steps"] if s["unavailable"]}
+    assert unavailable == {"migrate": "The Migration step is not built yet."}
     # Optional-dependency capability: a frozen build that fails to bundle the 3PAR SDK degrades
     # silently until WSAPI is first touched (how v0.14.0-rc.1 shipped broken). In the dev env the
     # SDK is installed so this must be True; on a packaged build, this one field is the smoke test.
@@ -552,6 +565,71 @@ def test_upload_lists_the_replication_ports_to_set_up(tmp_path, monkeypatch):
         assert up.status_code == 200, up.text
         assert up.json()["replication_ports"] == want
         assert base64.b64decode(composed)[:2] == b"PK"
+
+
+def test_upload_lists_the_snapshot_rows_for_the_review(tmp_path, monkeypatch):
+    """SPEC-023 R9: the review needs to know the Snapshots tab is filled, to say so when the mode lacks the step."""
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    base_b64 = _fill_template(client.get("/init-sheet/template").content, _COMPLETE_MAIN, _COMPLETE_PROV)
+    rows = [{"source": "zz_sn_vvs", "snapshot_now": "yes", "every": "4", "unit": "hours", "expire_hours": "24"},
+            {"source": "zz_sn_vol03", "kind": "volume", "snapshot_now": "yes", "expire_hours": "2", "read_only": "no"}]
+    for snapshots, want in ((rows, ["zz_sn_vvs: Snapshot now · every 4 hours from 00:00, every day, kept 24 hours, read-only",
+                                    "zz_sn_vol03: Snapshot now · kept 2 hours, read-write"]), ([], [])):
+        composed = client.post("/init-sheet/compose", json={"base_b64": base_b64, "snapshots": snapshots}).json()["content_b64"]
+        up = client.post("/init-sheet/upload", json={"content_b64": composed})
+        assert up.status_code == 200, up.text
+        assert up.json()["snapshot_rows"] == want
+
+
+_MIGRATION = {"fields": {"source_host": "192.0.2.10", "source_user": "lab-reader", "source_password": "src-secret-pw"},
+              "rows": [{"host": "lab-host-01", "cpg": "SSD_r6", "type": "offline"}]}
+
+
+def _upload_with_migration(client, migration: dict | None) -> tuple[str, str]:
+    """Compose the complete sheet with the Migration tab as given, upload it: (hold token, response text)."""
+    base_b64 = _fill_template(client.get("/init-sheet/template").content, _COMPLETE_MAIN, _COMPLETE_PROV)
+    composed = client.post("/init-sheet/compose", json={"base_b64": base_b64, "migration": migration})
+    assert composed.status_code == 200, composed.text
+    up = client.post("/init-sheet/upload", json={"content_b64": composed.json()["content_b64"]})
+    assert up.status_code == 200, up.text
+    return up.json()["token"], up.text
+
+
+def test_the_migration_tab_composes_and_uploads_without_echoing_the_source_password(tmp_path, monkeypatch):
+    """SPEC-027 R1/R2: the session runner can fill the tab; the held sheet keeps the source password and
+    the response never shows it."""
+    monkeypatch.chdir(tmp_path)
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    client = TestClient(create_app(OnboardingService(Settings(), store, InMemoryEventBus())))
+    token, text = _upload_with_migration(client, _MIGRATION)
+    assert "src-secret-pw" not in text
+    _item, intent = store.pop_pending_sheet(token)
+    assert intent.migration.source.password.get_secret_value() == "src-secret-pw"
+    assert [(h.host, h.type) for h in intent.migration.hosts] == [("lab-host-01", "offline")]
+
+
+def test_a_migrate_run_is_refused_without_the_tab_and_while_the_step_is_not_built(tmp_path, monkeypatch):
+    """SPEC-027 R3: minting a run with the Migration step from a workbook without the tab is a 422 with
+    one sentence. With the tab it is still refused, with the not-built sentence, until the step exists."""
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    for mode, steps in (("MIGRATE", []), ("CUSTOM", ["migrate", "verify"])):
+        token, _text = _upload_with_migration(client, None)
+        minted = client.post("/runs/from-sheet", json={"token": token, "mode": mode, "selected_steps": steps})
+        assert minted.status_code == 422
+        assert minted.json()["detail"] == (
+            "The Migration step needs the workbook's 'Migration' tab (the source array and the hosts to migrate). "
+            "Fill it in and upload again, or choose a mode without it."
+        )
+        token, _text = _upload_with_migration(client, _MIGRATION)
+        minted = client.post("/runs/from-sheet", json={"token": token, "mode": mode, "selected_steps": steps})
+        assert minted.status_code == 422
+        assert minted.json()["detail"] == "The Migration step is not built yet. Choose a mode without it."
+    # the tab does not stop any other mode
+    token, _text = _upload_with_migration(client, _MIGRATION)
+    assert client.post("/runs/from-sheet", json={"token": token, "mode": "PROVISION_ONLY"}).status_code == 200
 
 
 def test_verify_and_asbuilt_use_the_sheets_array_credential(tmp_path, monkeypatch):

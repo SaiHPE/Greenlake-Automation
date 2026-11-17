@@ -15,7 +15,11 @@ the B10000 (see ADR 0003 + the deep-research findings in the runbook). Design po
 - **Proxy bypass**: the array is on the internal mgmt network; routing its 443 through the jump-box
   proxy is what caused TLS handshake timeouts (see probe_wsapi.py). We add the host to NO_PROXY so
   python-3parclient's `requests` calls go direct.
-- **Self-signed TLS**: secure=False.
+- **Self-signed TLS, pinned** (ADR 0026): the SDK's own chain check stays off, because a certificate
+  the array made for itself cannot pass one. Before login the certificate is read and compared with the
+  run's pin (recorded on first contact), and every connection the SDK opens after that checks the same
+  SHA-256 (`_pin_calls`), so a device that answers in the array's place never gets the password or the
+  session key.
 
 The client is synchronous; callers drive it via asyncio.to_thread (the SDK pulls in eventlet but we
 never monkey-patch, so it stays dormant).
@@ -25,8 +29,9 @@ from __future__ import annotations
 
 import os
 import time
+from contextvars import ContextVar
 
-from alletra_onboard.adapters import command_log
+from alletra_onboard.adapters import command_log, device_trust
 
 try:
     from hpe3parclient import exceptions as hpe_exc
@@ -53,10 +58,12 @@ if hpe_exc is not None:
     _TIMEOUT_TYPES += (hpe_exc.Timeout,)
 try:
     import requests
+    from requests.adapters import HTTPAdapter
 
     _TIMEOUT_TYPES += (requests.exceptions.Timeout,)
 except ImportError:
-    pass
+    requests = None
+    HTTPAdapter = object
 
 # WSAPI host-persona ids, resolved by NAME. The values are hpe3parclient's HOST_PERSONA_* constants —
 # the array's WSAPI persona enum: VMware=8, WindowsServer=11, Generic-ALUA=2. Verified 2026-07-22 against
@@ -275,6 +282,67 @@ class WsapiError(Exception):
     """Couldn't reach, authenticate to, or drive WSAPI on the array."""
 
 
+# ADR 0026. The SDK opens a new connection for every call (it calls the module-level `requests.request`),
+# so a probe before login covers only that moment. A pinned client binds its certificate's SHA-256 for
+# each call it makes, and the stand-in for `requests` inside the SDK sends that call through a session
+# whose connections check it (urllib3's assert_fingerprint, which urllib3 checks with verification off).
+_PINNED_FINGERPRINT: ContextVar[str | None] = ContextVar("alletra_wsapi_fingerprint", default=None)
+
+
+class _FingerprintAdapter(HTTPAdapter):
+    def __init__(self, fingerprint: str) -> None:
+        self._fingerprint = fingerprint      # read by init_poolmanager, which HTTPAdapter.__init__ calls
+        super().__init__()
+
+    def init_poolmanager(self, *args, **kwargs) -> None:
+        kwargs["assert_fingerprint"] = self._fingerprint
+        super().init_poolmanager(*args, **kwargs)
+
+
+class _PinnedRequests:
+    """Stands in for the `requests` module inside `hpe3parclient.http`; everything else passes through."""
+
+    def __init__(self, real) -> None:
+        self._real = real
+
+    def __getattr__(self, name: str):
+        return getattr(self._real, name)
+
+    def request(self, method, url, **kwargs):
+        fingerprint = _PINNED_FINGERPRINT.get()
+        if fingerprint is None:
+            return self._real.request(method, url, **kwargs)
+        with self._real.Session() as session:
+            session.mount("https://", _FingerprintAdapter(fingerprint))
+            return session.request(method=method, url=url, **kwargs)
+
+
+def _install_pinned_transport() -> None:
+    from hpe3parclient import http as sdk_http
+
+    if not isinstance(sdk_http.requests, _PinnedRequests):
+        sdk_http.requests = _PinnedRequests(sdk_http.requests)
+
+
+if HPE3ParClient is not None and requests is not None:
+    _install_pinned_transport()
+
+
+def _pin_calls(client, fingerprint: str) -> None:
+    """Every HTTP call the SDK makes for `client` goes through `client.http.request`: bind the pin there."""
+    http = client.http
+    inner = http.request
+
+    def pinned(*args, **kwargs):
+        token = _PINNED_FINGERPRINT.set(fingerprint)
+        try:
+            return inner(*args, **kwargs)
+        finally:
+            _PINNED_FINGERPRINT.reset(token)
+
+    http.request = pinned
+
+
 class WsapiNotReady(WsapiError):
     """The array's WSAPI is reachable but not serving (503 'services not ready') — retry later."""
 
@@ -331,9 +399,11 @@ class WsapiClient:
         self.host = host
         self.username = username
         self.password = password
+        self.port = port
         self.api_url = f"https://{host}:{port}/api/v1"
         self.timeout = timeout
         self._client = None
+        self._ca_bundle: str | None = None
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -343,8 +413,26 @@ class WsapiClient:
                 f"python-3parclient is not available in this build ({SDK_IMPORT_ERROR})."
             )
         _bypass_proxy_for(self.host)
+        # ADR 0026: with the customer's device CA bundle the SDK makes the full check (requests takes a path
+        # as `verify`), with no fallback. Without one, read the certificate and compare it with the run's
+        # pin before the password goes anywhere.
+        trusted = None
         try:
-            client = HPE3ParClient(self.api_url, secure=False, timeout=self.timeout, suppress_ssl_warnings=True)
+            self._ca_bundle = device_trust.device_ca_bundle()
+            if self._ca_bundle is None:
+                trusted = device_trust.check_tls(self.host, self.port, device="array", timeout=self.timeout)
+        except device_trust.DeviceTrustError as exc:
+            raise WsapiError(str(exc)) from exc
+        except Exception as exc:
+            raise self._translate(exc, where="login") from exc
+        try:
+            if trusted is None:
+                client = HPE3ParClient(self.api_url, secure=self._ca_bundle, timeout=self.timeout)
+            else:
+                # TRUST-OFF: a certificate the array made for itself cannot pass a chain check, so the SDK's
+                # is off; every connection this client opens checks the pinned SHA-256 instead (_pin_calls).
+                client = HPE3ParClient(self.api_url, secure=False, timeout=self.timeout, suppress_ssl_warnings=True)
+                _pin_calls(client, trusted.fingerprint)
             _record_calls(client, self.host, self.api_url, self.password)
             client.login(self.username, self.password)  # the readiness gate
         except Exception as exc:
@@ -371,6 +459,11 @@ class WsapiClient:
     def system_name(self) -> str:
         info = self._require().getStorageSystemInfo()
         return info.get("name", "") if isinstance(info, dict) else ""
+
+    def system_info(self) -> dict:
+        """GET /system as the array returns it: name, timeZone, `parameters` (VVRetentionTimeMax, …)."""
+        info = self._require().getStorageSystemInfo()
+        return info if isinstance(info, dict) else {}
 
     def cpg_names(self) -> list[str]:
         body = self._require().getCPGs()
@@ -631,6 +724,15 @@ class WsapiClient:
         except Exception as exc:
             if self._is_conflict(exc):
                 return "exists"
+            # Live on rack13-ARCUS, 2026-11-16: a 1 PiB volume was refused with HTTP 400 code 28,
+            # "client request contains value that is too large". The size is the one number in the body.
+            if self._array_code(exc) == "28":
+                size = f"{size_mib // 1024} GiB" if size_mib % 1024 == 0 else f"{size_mib} MiB"
+                raise WsapiError(
+                    f"the array says {size} is more than it can create in one volume. Make it smaller on the "
+                    f"sheet's Volumes tab, then build the plan again. Array said: "
+                    f"{self._array_reason(exc) or self._safe_str(exc)}"
+                ) from exc
             raise self._translate(exc, where=f"createVolume {name}") from exc
 
     def ensure_volume_set(self, name: str, members: list[str]) -> str:
@@ -671,6 +773,27 @@ class WsapiClient:
             if self._is_conflict(exc):
                 return "exists"
             raise self._translate(exc, where=f"createVLUN {volume_name}->{host_name}") from exc
+
+    # ------------------------------------------------------------------ snapshots (SPEC-023 R5)
+    # hpe3parclient 4.5 `createSnapshot` and `createSnapshotOfVolumeSet` (read 2026-11-17, LESSONS 29):
+    # plain WSAPI, no SSH. POST /volumes/<vol> and /volumesets/<set> with {action: createSnapshot,
+    # parameters: {name, readOnly, expirationHours}}; a set's `name` may be a VV name pattern. Never
+    # `retentionHours`: no lock in the first slice (ADR 0016 decision 2). A duplicate name is the array's
+    # refusal, never "exists": the plan judged that from its read (LESSONS 29, 37). `@vvname@.initial`
+    # over WSAPI is confirmed on the lab before the live run (work packet, live check 2).
+
+    def create_snapshot(self, volume: str, name: str, *, read_only: bool, expire_hours: int) -> None:
+        try:
+            self._require().createSnapshot(name, volume, optional={"readOnly": read_only, "expirationHours": expire_hours})
+        except Exception as exc:
+            raise self._translate(exc, where=f"createSnapshot {name} of {volume}") from exc
+
+    def create_set_snapshot(self, vvset: str, pattern: str, *, read_only: bool, expire_hours: int) -> None:
+        try:
+            self._require().createSnapshotOfVolumeSet(
+                pattern, vvset, optional={"readOnly": read_only, "expirationHours": expire_hours})
+        except Exception as exc:
+            raise self._translate(exc, where=f"createSnapshotOfVolumeSet {pattern} of set {vvset}") from exc
 
     # ------------------------------------------------------------------ Remote Copy groups (SPEC-016 R4)
     # The `/remotecopygroups` resource, confirmed on WSAPI 1.15 (B10000, OS 10.5.0, both lab
@@ -782,6 +905,17 @@ class WsapiClient:
         return hpe_exc is not None and isinstance(exc, hpe_exc.HTTPConflict)
 
     @staticmethod
+    def _array_code(exc: Exception) -> str:
+        """The array's error code as text ("28"), or '' when the error did not come from the array."""
+        if hpe_exc is None or not isinstance(exc, hpe_exc.ClientException):
+            return ""
+        try:
+            code = exc.get_code()
+        except Exception:  # noqa: BLE001 - describing a failure must never fail
+            return ""
+        return "" if code in (None, "") else str(code)
+
+    @staticmethod
     def _safe_str(exc: BaseException) -> str:
         """``str(exc)`` without trusting the exception to be describable.
 
@@ -805,6 +939,10 @@ class WsapiClient:
         return text or f"{type(exc).__name__} (no detail available)"
 
     def _translate(self, exc: Exception, *, where: str) -> WsapiError:
+        if hpe_exc is not None and isinstance(exc, hpe_exc.SSLCertFailed):
+            if self._ca_bundle:
+                return WsapiError(device_trust.ca_bundle_refusal("array", self.host, self._ca_bundle))
+            return self._certificate_changed(where)
         detail = self._safe_str(exc)
         reason = self._array_reason(exc)
         # str() of a bare ClientException fails, so its description reaches these checks only
@@ -839,6 +977,21 @@ class WsapiClient:
         if reason:
             return WsapiError(f"WSAPI {where} failed: {reason}")
         return WsapiError(f"WSAPI {where} failed: {type(exc).__name__}: {detail[:200]}")
+
+    def _certificate_changed(self, where: str) -> WsapiError:
+        """A connection after login met a certificate other than the pinned one; the request was not
+        sent. Read it again so the run records what was presented, and say so with both fingerprints."""
+        try:
+            device_trust.check_tls(self.host, self.port, device="array", timeout=self.timeout)
+        except device_trust.DeviceTrustError as exc:
+            return WsapiError(str(exc))
+        except Exception:  # noqa: BLE001 - the array went away as well; the sentence below still holds
+            pass
+        return WsapiError(
+            f"The array at {self.host} presented a different certificate during {where}, so the tool "
+            "stopped before sending the request. Run the step again; if it stops again, the run "
+            "overview shows the fingerprints under Trusted devices."
+        )
 
     @staticmethod
     def _is_timeout(exc: Exception, text: str) -> bool:

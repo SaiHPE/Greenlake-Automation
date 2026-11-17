@@ -81,7 +81,11 @@ Emit hooks + redaction (~120 lines), route + artifact (~80), xterm pane (~250), 
   method (`http._time_request`) and `BrocadeClient._exec` record into it. No sink bound, nothing
   recorded.
 - **vCenter is not recorded.** pyVmomi has no single call every read goes through; its reads stay the
-  tool's own and are listed by what they found, as before.
+  tool's own and are listed by what they found, as before. *Changed 2026-11-17 (BL-54):* vCenter
+  records one entry per login and per inventory read (`vcenter`), and Linux host SSH (`host-ssh`),
+  Windows host WinRM (`winrm`) and GreenLake HTTP (`greenlake`, method and path only) are recorded too.
+  Every record also passes through `domain.policies.redact()`. The as-built appendix keeps its title
+  and names the new transports in its *Via* column.
 - **Routes.** `GET /runs/{id}/console/log?since=&format=json|txt`, `GET /runs/{id}/console/targets`,
   `POST /runs/{id}/console {command, target: array|peer}` (the target is a field, not a `--peer`
   prefix), `POST /runs/{id}/console/terminal {target}`.

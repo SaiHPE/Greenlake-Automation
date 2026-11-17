@@ -131,10 +131,12 @@ def stale_fc_targets(primary: ReplicationArrayView, peer: ReplicationArrayView) 
     Alletra failed with "Failed to send message to target"."""
     out = []
     for here, there in ((primary, peer), (peer, primary)):
-        if not there.fc_node_wwn:
+        # Every node WWN `there` shows, not only its first FC row's: a peer port has one of its own (LESSONS 41).
+        wwns = there.fc_node_wwns
+        if not wwns:
             continue
         for t in here.targets:
-            if t.type.upper() != "FC" or t.options.upper() != there.fc_node_wwn:
+            if t.type.upper() != "FC" or t.options.upper() not in wwns:
                 continue
             # BL-57: the removal command is printed only for a dead target. On a working FC pair it would
             # delete the target and every group on it, and replication would stop.

@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { theme } from '../src/theme';
 import { NotesContext } from './kit';
 import { Screen } from './screen';
+import { arrayPorts } from './screens/ArrayPorts';
 import { asbuilt } from './screens/AsBuilt';
 import { calmZoning } from './screens/CalmZoning';
 import { discovery } from './screens/Discovery';
@@ -14,15 +15,18 @@ import { finish } from './screens/Finish';
 import { handoff } from './screens/Handoff';
 import { home } from './screens/Home';
 import { overview } from './screens/Overview';
+import { peerPorts } from './screens/PeerPorts';
 import { prerequisites } from './screens/Prerequisites';
 import { provision } from './screens/Provision';
 import { replication } from './screens/Replication';
+import { replicationFc } from './screens/ReplicationFc';
+import { snapshots } from './screens/Snapshots';
 import { custom, mode, sheet } from './screens/SheetMode';
 import { startScreen } from './screens/Start';
 import { stopped } from './screens/Stopped';
 import { verify } from './screens/Verify';
 
-const SCREENS: Screen[] = [home, prerequisites, sheet, mode, overview, discovery, replication, handoff, stopped, finish, provision, failover, verify, asbuilt, custom, calmZoning];
+const SCREENS: Screen[] = [home, prerequisites, sheet, mode, overview, discovery, arrayPorts, peerPorts, replication, replicationFc, handoff, stopped, finish, provision, failover, snapshots, verify, asbuilt, custom, calmZoning];
 const WIDTHS = [
   { label: 'Jump box 1366 × 768', w: 1366, h: 768 },
   { label: 'Small laptop 1080 × 720', w: 1080, h: 720 },

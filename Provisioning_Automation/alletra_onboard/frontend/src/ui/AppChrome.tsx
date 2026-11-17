@@ -35,7 +35,9 @@ export function AppHeader({
   onNewRun,
 }: {
   appName: string;
+  /** The array the run writes to: shown on every page of a run. */
   serial?: string;
+  /** Left out in the wizard, whose bar already names the mode (SPEC-030 R5). */
   mode?: string;
   runState?: StepState;
   runLabel?: string;

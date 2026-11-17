@@ -27,6 +27,63 @@ const STATES: Record<StepState, StateStyle> = {
 
 export const stateLabel = (state: StepState) => STATES[state].label;
 
+/** A row's result: the word drawn, and the state that gives it its icon and colour. */
+export interface ResultWord {
+  state: StepState;
+  label: string;
+}
+
+/**
+ * The words a table row says about one thing (SPEC-030 R9), drawn with StatusIndicator. Step maps point
+ * here; no step keeps its own words or icons for these.
+ */
+export const RESULT = {
+  // a check (prerequisites, readiness, link); a failover step uses passed, failed and skipped
+  passed: { state: 'complete', label: 'Passed' },
+  review: { state: 'action_required', label: 'Review' },
+  failed: { state: 'failed', label: 'Failed' },
+  not_checked: { state: 'not_started', label: 'Not checked' },
+  // an endpoint; a port
+  reachable: { state: 'complete', label: 'Reachable' },
+  blocked: { state: 'failed', label: 'Blocked' },
+  ready: { state: 'complete', label: 'Ready' },
+  // a host on a fabric (Not zoned waits, grey, while a command set is with the SAN team)
+  zoned: { state: 'complete', label: 'Zoned' },
+  not_zoned: { state: 'failed', label: 'Not zoned' },
+  partly_zoned: { state: 'action_required', label: 'Partly zoned' },
+  not_on_fabric: { state: 'not_started', label: 'Not on fabric' },
+  // a plan row (in a write's result, Already there is grey: the object was left alone)
+  create: { state: 'not_started', label: 'Create' },
+  update: { state: 'action_required', label: 'Update' },
+  already_there: { state: 'complete', label: 'Already there' },
+  conflict: { state: 'failed', label: 'Conflict' },
+  // a write
+  created: { state: 'complete', label: 'Created' },
+  updated: { state: 'complete', label: 'Updated' },
+  skipped: { state: 'not_started', label: 'Skipped' },
+  // paths: No path is a report, never a gate, so amber, not red
+  live: { state: 'complete', label: 'Live' },
+  partial: { state: 'action_required', label: 'Partial' },
+  no_path: { state: 'action_required', label: 'No path' },
+  // a Remote Copy group
+  replicating: { state: 'complete', label: 'Replicating' },
+  syncing: { state: 'running', label: 'Initial sync in progress' },
+  not_replicating: { state: 'failed', label: 'Not replicating' },
+  // a setting
+  matches: { state: 'complete', label: 'Matches' },
+  differs: { state: 'action_required', label: 'Differs' },
+  not_readable: { state: 'not_started', label: 'Not readable' },
+} satisfies Record<string, ResultWord>;
+
+/** An empty table cell (Design System tables): `--`, read as "No value". */
+export function NoValue() {
+  return (
+    <Text size="small" color="text-weak" a11yTitle="No value">
+      --
+    </Text>
+  );
+}
+
 export function StatusIcon({ state, size = 'small' }: { state: StepState; size?: string }) {
   const { Icon, color, label } = STATES[state];
   return <Icon size={size} color={color} a11yTitle={label} />;

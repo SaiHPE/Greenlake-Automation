@@ -18,6 +18,7 @@ from alletra_onboard.application.provisioning.clients import make_wsapi
 from alletra_onboard.application.provisioning.hosts import declared_mismatches, union_hosts
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
+    REMOVAL_ORDER,
     ActionOutcome,
     ArrayHostRecord,
     ArrayVolumeRecord,
@@ -31,6 +32,7 @@ from alletra_onboard.domain.provisioning import (
     RemovalItem,
     VlunTemplate,
     VolumeRequest,
+    volume_too_large,
 )
 from alletra_onboard.domain.shared import normalize_wwpn
 
@@ -579,9 +581,12 @@ def _judge_set(name: str, members: list[str], on_array: dict[str, list[str]], no
 
 def _judge_volume(v: VolumeRequest, on_array: list[ArrayVolumeRecord]) -> tuple[PlanState, str]:
     """R2: a name match is not a match. Size, CPG and provisioning type must all agree, or the row is
-    a conflict apply cannot fix (the array has no 'resize to intent' that is safe to do unasked)."""
+    a conflict apply cannot fix (the array has no 'resize to intent' that is safe to do unasked).
+    A new volume larger than the array can create is a conflict too (BL-55)."""
     found = next((r for r in on_array if r.name == v.name), None)
     if found is None:
+        if too_large := volume_too_large(v.size_gib):
+            return "conflict", f"{too_large}. Make it smaller on the sheet's Volumes tab."
         return "create", ""
     on = f"{_gib(found.size_mib)} {found.provisioning_type} on {found.cpg}"
     want = f"{v.size_gib} GiB {v.provisioning_type} on {v.cpg}"
@@ -754,8 +759,7 @@ def apply_plan(
     return result
 
 
-# The paste order that never trips over a dependency: exports, then sets, then their members.
-_REMOVAL_ORDER = {"vlun": 0, "vvset": 1, "volume": 2, "hostset": 3, "host": 4}
+# The paste order is REMOVAL_ORDER (domain/provisioning.py).
 # How each object is named on screen, read on the array and removed (`-f` where the CLI prompts).
 _LABEL = {"host": "host", "hostset": "host set", "volume": "volume", "vvset": "volume set", "vlun": "export of"}
 _SHOW = {"host": "showhost {n}", "hostset": "showhostset {n}", "volume": "showvv {n}", "vvset": "showvvset {n}"}
@@ -822,14 +826,14 @@ def removal_set(
     notes = ["Not reverted — members, WWNs or iSCSI names were added to: " + ", ".join(touched) + ". They existed before this run."] if touched else []
     # S-12 (2026-09-14): the runner pasted the raw list and removed hosts before their set. The LIST
     # is in paste order, not only the rendering.
-    items.sort(key=lambda i: _REMOVAL_ORDER.get(i.kind, 9))
+    items.sort(key=lambda i: REMOVAL_ORDER.get(i.kind, 9))
     return items, notes
 
 
 def render_removal_commands(items: list[RemovalItem]) -> list[str]:
     """R3: dependency order, one command per object, de-duplicated — usable across several applies."""
     out: list[str] = []
-    for item in sorted(items, key=lambda i: _REMOVAL_ORDER.get(i.kind, 9)):
+    for item in sorted(items, key=lambda i: REMOVAL_ORDER.get(i.kind, 9)):
         if item.command not in out:
             out.append(item.command)
     return out

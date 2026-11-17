@@ -7,7 +7,8 @@ Brand Central plugin references (`colour.md`, `typography.md`, `voice-and-tone.m
 `design-system.md`). The first extraction (2026-07-25, a browser read of design-system.hpe.design)
 is in git history at e3d662e6. Rules below are the Design System's. **Our call** lines record
 where this app knowingly differs and why. Draft 3 of the redesign mockups (`frontend/mockups`,
-BL-43) implements these.
+BL-43) implements these. Round 2, one question per screen (BL-59, ADR 0023, SPEC-030, built
+2026-11-17), adds the **Our call** lines marked *round 2*.
 
 ## 1. Brand and identity
 
@@ -62,6 +63,15 @@ BL-43) implements these.
   (form errors above the submit button). Status icon + optional title (page summaries only) +
   message + up to two links + close (never on critical). **No buttons inside.** Not sticky.
   Messages wrap, never truncate. Statuses: normal, warning, critical, info, unknown.
+  - **Our call (round 2): one status line; every other notice is a note.** A step draws one status
+    notification under its header (and its parts bar): a title of at most eight words, one
+    sentence, the time and at most two links (*See the commands* opens the log on *Commands*). The
+    step's error replaces it while shown. The status line sits in a `role="status"` region
+    (`aria-live="polite"`), the error in `role="alert"`. Every other notice (what changed since the
+    last check, plan and discovery notes, run warnings, the read time) is a **note**: one folded
+    section, *N notes*, one note per line. Exception: a discovery over 12 hours old stays a visible
+    warning on the steps that act on it, SAN zoning and Provision storage (LESSONS 8). Write gates
+    and form errors stay where they are. (`StepShell` `status`, `notes`, `staleNotice`; SPEC-030 R2.)
 - **Toast**: low attention, no action needed, one at a time, 8 seconds, three lines, no links or
   buttons, never for "in progress", never while a modal or wizard is open. Not a primary channel.
 - **Global notification**: directly under the global header, system conditions only (outage,
@@ -89,6 +99,20 @@ BL-43) implements these.
   **primary at the outer edge**. Left-aligned sets start with the primary.
 - **No disabled buttons to gate a step.** Leave the button active and say, on click, what is still
   missing. A button that does not apply is not shown at all.
+  - **Our call (round 2): the footer limit.** A step's footer holds at most three buttons: the one
+    primary and two others. A finished part's "again" sits on that part's row, never also in the
+    footer: an action is drawn in one place. After a failed apply, Provision storage keeps
+    *Rebuild plan* as the footer primary. No `disabled` on any button in a step or in the log
+    panel (the console's *Run* and *Open terminal* included): it says why on click, or it is not
+    drawn. In development `StepShell` warns when a step passes more than two buttons beside the
+    primary. (SPEC-030 R3, R4.)
+  - **Our call (round 2): frozen words.** The button labels and page text the UI lab scripts press
+    and read (`lab/ui_live_lab.py`, `ui_provision_lab.py`, `failed_apply_lab.py`; SPEC-030 R10 lists
+    them) stay word for word, drawn in the state the script reads them. A closed section renders
+    nothing, so frozen text never sits folded away in that state; a section's title, which stays
+    drawn, may carry it. `tests/unit/test_frozen_ui_words.py`, run by `scripts/check.py`, fails when
+    one leaves the source; it cannot see the state, so the screenshots and the lab run check that.
+    A new browser lab script joins its list on purpose.
 - Labels: **verb + noun** for the primary ("Apply filters", "Create run"); later buttons may drop
   the noun ("Reset"). The label matches the destination or the result. No contractions, no
   colloquialisms. "Add" associates an existing object; "New" opens a blank template; "Create"
@@ -126,9 +150,40 @@ Anatomy from the Design System template and its example code:
   read as "cancel this click".
 - Other footer actions sit left of the primary, right-aligned as the Design System orders them.
   A tick the operator must give before the primary sits in the footer next to the button; pressing
-  the button before the tick shows a warning notification above the footer saying so.
+  the button before the tick shows a warning notification above the footer saying so. *Round 2:*
+  at `large` and wider the ticks share the button row, left of the buttons; below `large` they
+  stack above it. A step may need two ticks (Replication: the latency, then the plan); the warning
+  names the first one not given, *Tick the box first: <tick text>*. A plan's tick belongs to that
+  plan's id: a rebuilt plan starts unticked.
 - The guidance panel can be hidden ("About this step" brings it back); below `large` it folds
-  under the title.
+  under the title. *Round 2:* it starts closed on every step and keeps the operator's choice for
+  the browser session (`sessionStorage` `alletra.about`).
+
+**Our calls, round 2** (BL-59, ADR 0023, SPEC-030):
+
+- **One question per screen.** Each state of a step asks one question: the status line asks or
+  answers it, the footer's one primary acts on it, and the content under them answers it;
+  everything else is one click away, never deleted. The step header shows the state word only
+  (the counts are in the status line); on step pages the app header leaves the mode to the wizard
+  bar and keeps the serial and the run state. A description is one sentence of at most 120
+  characters; the rest goes in *About this step*. A section opens by itself only when it holds
+  something to act on now (a failure, a conflict, a host not logged in or with a multipath
+  warning, a field to fill), and is keyed on that condition. (SPEC-030 R1, R5, R6, R8.)
+- **Parts, not pages.** SAN zoning, Provision storage, Replication and Snapshots show a parts bar
+  under the h1. The part at hand is the only open panel, titled with the part's name; later parts
+  are not drawn; finished parts are one list, a row each with *Show detail* and the part's own
+  "again". At 1366 x 768 and 1080 x 720, with *About this step* and the log closed, the header,
+  the status line, the start of the part at hand and the whole footer are on screen (R13):
+  Replication puts its finished parts under the part at hand for that reason; SAN zoning,
+  Provision storage and Snapshots put them above it. A failed apply keeps Provision storage's
+  *Create* part open with its removal set showing (R7a). (SPEC-030 R7.)
+- **The log panel.** One slim bar under every step: the last event, *Activity (N)* and *Console
+  (N commands)*. Either button opens one panel with two tabs, *Activity* and *Commands*, on its own
+  tab, and closes it when pressed again on that tab. The panel is 40% of the window high (at
+  least `small`); *Taller* makes it 70% and *Shorter* puts it back, for the browser session; the
+  list and the terminal scroll inside, and a tall panel shrinks before the step's footer leaves
+  the screen. It never opens by itself; a status line's link may open it. The arrow keys move
+  between the tabs. (SPEC-030 R11.)
 
 ## 7. Pages that are not steps
 

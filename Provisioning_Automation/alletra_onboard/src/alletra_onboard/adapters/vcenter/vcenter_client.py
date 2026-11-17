@@ -3,11 +3,16 @@
 Enumerates each ESXi host's Fibre Channel HBAs — their port WWPNs and the host OS/build — so the
 provisioning flow can build host definitions and zoning from the real environment instead of asking
 the operator to type WWPNs. Strictly read-only: it connects, reads the inventory, and disconnects.
+
+pyVmomi has no single call every read goes through, so the command log gets one record per login and
+per inventory read, named by the properties it reads.
 """
 
 from __future__ import annotations
 
 import ssl
+import time
+from collections.abc import Callable
 
 try:
     from pyVim.connect import Disconnect, SmartConnect
@@ -17,6 +22,7 @@ except Exception:  # noqa: BLE001 - bundled in the .exe; optional otherwise
     Disconnect = None
     vim = None
 
+from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.domain.discovery import HostHba, HostIdentity
 from alletra_onboard.domain.provisioning import EsxiLun
 from alletra_onboard.domain.shared import normalize_wwpn
@@ -24,6 +30,17 @@ from alletra_onboard.domain.shared import normalize_wwpn
 
 class VCenterError(Exception):
     """Couldn't reach, authenticate to, or read inventory from vCenter."""
+
+
+LOGIN = "login {user, password: ********}"
+READ_FC_HBAS = "read HostSystem config.storageDevice.hostBusAdapter (FC ports)"
+READ_IDENTITIES = "read HostSystem hardware.systemInfo, config.storageDevice.hostBusAdapter (serial, iSCSI names)"
+READ_LUNS = "read HostSystem config.storageDevice.scsiLun, multipathInfo (LUNs and paths)"
+
+
+def _fault_text(exc: Exception) -> str:
+    # D-11 (S-3, 2026-09-17): str() of a vim fault is its whole property dump; `.msg` is the sentence.
+    return str(getattr(exc, "msg", "") or exc).strip()[:200]
 
 
 def _wwpn_hex(port_wwn: int) -> str:
@@ -108,23 +125,65 @@ class VCenterClient:
     def connect(self) -> None:
         if SmartConnect is None:
             raise VCenterError("pyVmomi is not available in this build.")
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE  # vCenter self-signed cert in the lab
+        # ADR 0026: with the customer's device CA bundle, the full check (chain and name), no fallback.
+        # Without one, vCenter's certificate is usually its own: read it and compare it with the run's pin
+        # (recorded on first contact) before the account, often the vSphere administrator, is sent.
+        bundle = None
+        try:
+            bundle = device_trust.device_ca_bundle()
+            if bundle:
+                ctx = ssl.create_default_context(cafile=bundle)
+            else:
+                trusted = device_trust.check_tls(self.host, self.port, device="vCenter", timeout=self.timeout)
+                # pyVmomi 9.1's serverPemCert is consulted only after a verifying handshake fails, and
+                # SmartConnect's version lookup connects with the context alone, so a self-signed vCenter
+                # cannot be pinned through it. This context compares the pin on every connection instead.
+                ctx = device_trust.pinned_context(self.host, self.port, device="vCenter", trusted=trusted)
+        except device_trust.DeviceTrustError as exc:
+            raise VCenterError(str(exc)) from exc
+        except Exception as exc:
+            raise VCenterError(f"Could not connect to vCenter {self.host}: {type(exc).__name__}: "
+                               f"{str(exc).strip()[:200]}") from exc
+        started = time.monotonic()
         try:
             self._si = SmartConnect(
                 host=self.host, user=self.username, pwd=self.password,
                 port=self.port, sslContext=ctx, connectionPoolTimeout=int(self.timeout),
             )
+        except device_trust.DeviceTrustError as exc:
+            raise VCenterError(str(exc)) from exc
+        except ssl.SSLCertVerificationError as exc:
+            if not bundle:
+                raise VCenterError(f"Could not connect to vCenter {self.host}: {exc}") from exc
+            raise VCenterError(device_trust.ca_bundle_refusal(
+                "vCenter", self.host, bundle, getattr(exc, "verify_message", "") or str(exc))) from exc
         except Exception as exc:
-            # D-11 (S-3, 2026-09-17): str() of a vim fault is its whole property dump; `.msg` is the sentence.
-            detail = str(getattr(exc, "msg", "") or exc).strip()[:200]
+            detail = _fault_text(exc)
+            self._record(LOGIN, started, ok=False, result=f"{type(exc).__name__}: {detail}")
             if type(exc).__name__ == "InvalidLogin":
                 raise VCenterError(
                     f"Login failed for {self.username}@{self.host} — check the vCenter username/password "
                     f"on the sheet ({detail})."
                 ) from exc
             raise VCenterError(f"Could not connect to vCenter {self.host}: {type(exc).__name__}: {detail}") from exc
+        self._record(LOGIN, started, ok=True, result="ok", output="(session withheld)")
+
+    def _record(self, command: str, started: float, *, ok: bool, result: str, output: object = "") -> None:
+        command_log.record(target=self.host, transport="vcenter", command=command, started=started, ok=ok,
+                           result=result, output=output, secrets=[self.password])
+
+    def _recorded_read(self, command: str, read: Callable[[], list]) -> list:
+        if self._si is None:
+            raise VCenterError("not connected")
+        started = time.monotonic()
+        try:
+            found = read()
+        except Exception as exc:
+            self._record(command, started, ok=False, result=f"{type(exc).__name__}: {_fault_text(exc)}")
+            raise
+        self._record(command, started, ok=True, result=f"ok, {len(found)} found",
+                     output=[item.model_dump(mode="json") for item in found])
+        return found
 
     def close(self) -> None:
         if self._si is not None:
@@ -143,8 +202,9 @@ class VCenterClient:
 
     def host_fc_hbas(self) -> list[HostHba]:
         """One HostHba per ESXi FC HBA port (WWPN + host name + ESXi version)."""
-        if self._si is None:
-            raise VCenterError("not connected")
+        return self._recorded_read(READ_FC_HBAS, self._read_fc_hbas)
+
+    def _read_fc_hbas(self) -> list[HostHba]:
         content = self._si.RetrieveContent()
         view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
         hbas: list[HostHba] = []
@@ -181,8 +241,9 @@ class VCenterClient:
 
     def host_identities(self) -> list[HostIdentity]:
         """SPEC-014 R2: serial number + iSCSI IQNs per ESXi host. Read-only."""
-        if self._si is None:
-            raise VCenterError("not connected")
+        return self._recorded_read(READ_IDENTITIES, self._read_identities)
+
+    def _read_identities(self) -> list[HostIdentity]:
         content = self._si.RetrieveContent()
         view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
         out: list[HostIdentity] = []
@@ -202,8 +263,9 @@ class VCenterClient:
         """SPEC-013 R1: every SCSI device each ESXi host sees, with its multipath state — what
         `esxcli storage core path list` would show, read through vCenter's cached storageDevice.
         Read-only; no rescan is triggered (R4)."""
-        if self._si is None:
-            raise VCenterError("not connected")
+        return self._recorded_read(READ_LUNS, self._read_luns)
+
+    def _read_luns(self) -> list[EsxiLun]:
         content = self._si.RetrieveContent()
         view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
         out: list[EsxiLun] = []

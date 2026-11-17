@@ -3,7 +3,8 @@
     .\\.venv\\Scripts\\python.exe lab\\snap_capture.py
 
 Changes nothing on the array. Logs in to D22U27 (10.64.122.99) as 3paradm with LAB_ARRAY_PW from .env:
-1. over SSH, runs show commands and the CLI's own help for the schedule and snapshot commands
+1. over SSH, runs show commands and the CLI's own help for the schedule and snapshot commands, and for
+   createvv (BL-55: the largest volume the array creates, for VOLUME_MAX_GIB in domain/provisioning.py)
 2. over WSAPI, opens one session, runs GETs only (and asks for /schedules, to learn whether WSAPI has
    such a resource; any answer, 404 included, is recorded), and closes the session
 3. says what it found: OS, time zone, schedules, snapshots, and whether anything named zz_sn_* is there
@@ -43,6 +44,7 @@ READS = {
     "help showsched": "help_showsched.txt",
     "help createsv": "help_createsv.txt",
     "help removevv": "help_removevv.txt",
+    "help createvv": "help_createvv.txt",
 }
 WSAPI_GETS = {
     "/system": "wsapi_system.json",
@@ -110,6 +112,7 @@ def main():
     ic.check("showsched read", "SchedName" in raw["showsched"] or "No scheduled tasks" in raw["showsched"])
     ic.check("createsched help read", "createsched" in raw["help createsched"].lower())
     ic.check("createsv help read", "createsv" in raw["help createsv"].lower())
+    ic.check("createvv help read", "createvv" in raw["help createvv"].lower())
 
 
 if __name__ == "__main__":

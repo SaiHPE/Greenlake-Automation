@@ -287,9 +287,15 @@ def build_zoning_plan(
     discovery: DiscoveryReport,
     *,
     brocade_factory: Callable = make_brocade,
+    peer_pairs: list[tuple[str, str]] | None = None,
+    peer_nsps: dict[str, str] | None = None,
 ) -> ZoningPlan:
     """Read both fabrics READ-ONLY and compute the per-fabric single-initiator-single-target plan.
-    Writes nothing. A switch that can't be read leaves that fabric empty with a note."""
+    Writes nothing. A switch that can't be read leaves that fabric empty with a note.
+
+    `peer_pairs` (SPEC-025 R7): (peer port WWPN, source array port WWPN) from `peer_ports.peer_zone_pairs`,
+    the peer WWPN read after the change; `peer_nsps` names each peer WWPN's port. They make the peer-port
+    block of each fabric where both WWPNs are in the name server."""
     plan = ZoningPlan()
 
     # 1) Read each fabric switch (F1 = odd, F2 = even), read-only.
@@ -327,6 +333,8 @@ def build_zoning_plan(
                 defined[label] = parse_defined_names(alishow_text) | parse_defined_names(cfg_text)
                 active_cfg[label] = parse_active_cfg(cfg_text)
                 active_zones[label], _ = parse_active_zones(cfg_text)
+                plan.active_zones[f"the {label} switch {creds.host}"] = {
+                    zone: sorted(members) for zone, members in active_zones[label].items()}
                 if not active_cfg[label]:
                     plan.notes.append(
                         f"No effective zoning configuration was read on the {label} switch {creds.host} "
@@ -355,6 +363,7 @@ def build_zoning_plan(
                         "array ports) cannot be placed. Likely transient: rebuild the plan."
                     )
         except Exception as exc:  # noqa: BLE001 - one unreachable switch must not sink the plan
+            plan.active_zones[f"the {label} switch {creds.host or '(none on the sheet)'}"] = None
             ns[label] = {}
             local_ns[label] = {}
             remote_domain[label] = {}
@@ -506,6 +515,19 @@ def build_zoning_plan(
             return ""
         return fabric_switches.get(label, {}).get(remote[wwpn]) or f"domain {remote[wwpn]}"
 
+    # SPEC-025 R7: the alias pre-fill for a peer port is this array's convention name with a PEER marker.
+    own_serial = next((ns[label][p.wwpn].array_serial for label in ("F1", "F2") for p in array_ports
+                       if p.wwpn in ns.get(label, {}) and ns[label][p.wwpn].array_serial), "")
+    peer_pairs = list(peer_pairs or [])
+    peer_nsps = dict(peer_nsps or {})
+    for peer, source in peer_pairs:
+        if not any(peer in ns.get(label, {}) and source in ns.get(label, {}) for label in ("F1", "F2")):
+            plan.notes.append(
+                f"Peer port {peer_nsps.get(peer, '')} ({wwpn_colons(peer)}) and the source port {wwpn_colons(source)} "
+                "are not both in one fabric's name server, so no zone is drafted for them. Check the cabling and "
+                "the WWPN on the Peer ports tab."
+            )
+
     for label in ("F1", "F2"):
         names_by_domain = fabric_switches.get(label, {})
         hosts = [
@@ -534,12 +556,29 @@ def build_zoning_plan(
             if covering:
                 already.append(pair)
                 zone_names[f"{pair[0]}|{pair[1]}"] = covering
+        on_fabric = [(p, s) for p, s in peer_pairs if p in ns.get(label, {}) and s in ns[label]]
+        peers: list[AliasedWwpn] = []
+        sources: list[AliasedWwpn] = []
+        for peer, source in on_fabric:
+            if all(e.wwpn != peer for e in peers):
+                entry = _aliased(peer, "array", label, aliases[label], alias_freq[label],
+                                 nsp=peer_nsps.get(peer, ""), serial=own_serial)
+                if entry.proposed_alias:
+                    entry.proposed_alias = f"{entry.proposed_alias}_PEER"[:FOS_NAME_MAX]
+                peers.append(entry)
+            if all(e.wwpn != source for e in sources):
+                device = ns[label][source]
+                sources.append(_aliased(source, "array", label, aliases[label], alias_freq[label],
+                                        nsp=device.array_nsp, serial=device.array_serial))
+        peer_zoned = [pair for pair in on_fabric
+                      if any(pair[0] in members and pair[1] in members for members in zones.values())]
         plan.fabrics.append(FabricZonePlan(
             fabric=label, switch_host=switch_host[label], active_cfg=active_cfg.get(label, ""),
             switch_name=switch_name.get(label, ""), fabric_name=fabric_name.get(label, ""),
             switch_count=len(names_by_domain),
             hosts=hosts, array_ports=ports, pairs=pairs, already_zoned=already, zone_names=zone_names,
             defined_names=sorted(defined[label]),
+            peer_ports=peers, sources=sources, peer_pairs=on_fabric, peer_already_zoned=peer_zoned,
         ))
 
     # 5) Host WWPNs on NO fabric -> offline; can't be placed (cable + power, then re-run).
@@ -707,3 +746,21 @@ def render_commands(
         out[fabric.fabric] = cmds
         skipped_out[fabric.fabric] = skipped
     return out, skipped_out
+
+
+def render_peer_commands(
+    plan: ZoningPlan, aliases: dict[str, str],
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """SPEC-025 R7: the peer-port block, its own command set per fabric, through the same renderer as
+    the host zones (`render_commands`): one single-initiator single-target zone per (peer port, source
+    port) pair the sheet asks for, `<peer alias>_<source alias>`, `cfgsave` and `cfgenable` kept apart
+    by the page as today. The tool never runs these (ADR 0012)."""
+    blocks = ZoningPlan(fabrics=[
+        FabricZonePlan(
+            fabric=f.fabric, switch_host=f.switch_host, active_cfg=f.active_cfg, switch_name=f.switch_name,
+            fabric_name=f.fabric_name, hosts=f.peer_ports, array_ports=f.sources, pairs=f.peer_pairs,
+            already_zoned=f.peer_already_zoned, defined_names=f.defined_names,
+        )
+        for f in plan.fabrics if f.peer_pairs
+    ])
+    return render_commands(blocks, aliases, None)

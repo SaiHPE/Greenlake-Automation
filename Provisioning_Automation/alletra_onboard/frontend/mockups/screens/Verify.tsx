@@ -7,8 +7,8 @@ import { Screen } from '../screen';
 
 type Check = { field: string; expected: string; actual: string; status: 'pass' | 'mismatch' | 'not_readable'; note?: string };
 const CHECK_STATE: Record<Check['status'], { state: StepState; label: string }> = {
-  pass: { state: 'complete', label: 'Match' },
-  mismatch: { state: 'action_required', label: 'Mismatch' },
+  pass: { state: 'complete', label: 'Matches' },
+  mismatch: { state: 'action_required', label: 'Differs' },
   not_readable: { state: 'not_started', label: 'Not readable' },
 };
 

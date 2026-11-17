@@ -770,7 +770,7 @@ Decision record 0015 says the tool will one day set up Remote Copy links and tar
 <p><code>DocumentSteps</code> runs the two read-only steps at the end of every mode. Both run after the outcome of the run is decided and never change the run's status: a failed check cannot undo a successful onboarding.</p>
 <ul>
   <li><strong>Verify configuration</strong> (<code>documents/verification.py</code>) logs in over SSH and compares what the array runs (system name, management address, netmask, gateway, DNS, NTP, time zone, and so on) with what the sheet asked for, field by field. Then it adds the array's own status check (<code>checkhealth</code>) and inventory.</li>
-  <li><strong>As-built document</strong> (<code>documents/asbuilt.py</code>, <code>asbuilt_parse.py</code>, <code>asbuilt_docx.py</code>) reads the array, parses the tables, and fills HPE's Word template with <code>python-docx</code>, keeping the template's boilerplate: configuration and inventory, what this run created and how to remove it, the zoning command set, the replication groups, the link check and the failover test. The file is saved with the run and served by <code>GET /runs/{id}/asbuilt/download</code>.</li>
+  <li><strong>As-built document</strong> (<code>documents/asbuilt.py</code>, <code>asbuilt_parse.py</code>, <code>asbuilt_docx.py</code>, <code>handover.py</code>) reads the array, parses the tables, and fills HPE's Word template with <code>python-docx</code>, keeping the template's boilerplate: configuration and inventory, the array's status and performance at handover (new alerts, capacity, System Reporter), what this run created and how to remove it, the zoning command set, the replication groups, the link check and the failover test. The file is saved with the run and served by <code>GET /runs/{id}/asbuilt/download</code>.</li>
 </ul>
 
 <h3>Platform</h3>
@@ -842,7 +842,7 @@ sqlite3 .alletra_onboard/state.db "select json_extract(payload,'$.at'), json_ext
 <tr><th style="width:22%">Group</th><th>Routes</th></tr>
 <tr><td>App and prerequisites</td><td><code>GET /health</code>, <code>GET /app/profile</code> (the step registry), <code>GET|POST /config</code>, <code>POST /config/check</code>, <code>GET /prereqs/firewall</code>, <code>GET /prereqs/connectivity</code>, <code>GET|POST /prereqs/proxy</code>, <code>GET /system/clock</code>, <code>POST /system/clock/sync</code></td></tr>
 <tr><td>Sheet and runs</td><td><code>GET /init-sheet/template</code>, <code>POST /init-sheet/compose</code>, <code>POST /init-sheet/upload</code> (returns the token), <code>POST /runs/from-sheet</code>, <code>GET /runs</code>, <code>GET /runs/{id}</code>, <code>POST /runs/{id}/complete</code></td></tr>
-<tr><td>Onboarding</td><td><code>POST /runs/{id}/provision</code> (GreenLake), <code>/cloudinit</code>, <code>/dscc</code>, <code>POST /browser/launch</code>, <code>POST /tools/discovery/launch</code></td></tr>
+<tr><td>Onboarding</td><td><code>POST /runs/{id}/provision</code> (GreenLake device registration, not storage provisioning; the name predates the storage steps), <code>/cloudinit</code>, <code>/dscc</code>, <code>POST /browser/launch</code>, <code>POST /tools/discovery/launch</code></td></tr>
 <tr><td>Storage</td><td><code>POST /runs/{id}/discover</code>, <code>/zoning/preview</code>, <code>/zoning/plan</code>, <code>POST /zoning/render</code>, <code>GET /runs/{id}/storage/preflight</code>, <code>/storage/objects</code>, <code>POST /storage/builder</code>, <code>/storage/preview</code>, <code>/storage/apply</code>, <code>/storage/verify-paths</code></td></tr>
 <tr><td>Replication</td><td><code>POST /runs/{id}/replication/preview</code>, <code>/link-check</code>, <code>/apply</code>, <code>/verify</code>, <code>/failover-test</code></td></tr>
 <tr><td>Documents</td><td><code>POST /runs/{id}/verify</code>, <code>POST /runs/{id}/asbuilt</code>, <code>GET /runs/{id}/asbuilt/download</code></td></tr>
@@ -1031,7 +1031,7 @@ cd frontend && npm run typecheck                                # TypeScript onl
     'init_sheet.py': 'src/alletra_onboard/application/platform/init_sheet.py', 'configuring.py': 'src/alletra_onboard/application/platform/configuring.py',
     'proxy.py': 'src/alletra_onboard/application/platform/proxy.py', 'tls.py': 'src/alletra_onboard/application/platform/tls.py',
     'prereqs.py': 'src/alletra_onboard/application/platform/prereqs.py',
-    'asbuilt_parse.py': 'src/alletra_onboard/application/documents/asbuilt_parse.py', 'asbuilt_docx.py': 'src/alletra_onboard/application/documents/asbuilt_docx.py'
+    'asbuilt_parse.py': 'src/alletra_onboard/application/documents/asbuilt_parse.py', 'asbuilt_docx.py': 'src/alletra_onboard/application/documents/asbuilt_docx.py', 'handover.py': 'src/alletra_onboard/application/documents/handover.py'
   };
   var pathLike = /^[A-Za-z0-9_.\/-]+\.(py|ts|tsx|md|toml|json|txt|html|ps1|cmd|sh|csv)$|^[A-Za-z0-9_.\/-]+\/$/;
   var startsWith = function (s, list) { return list.some(function (p) { return s === p || s.indexOf(p) === 0; }); };

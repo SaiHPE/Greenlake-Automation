@@ -2,8 +2,11 @@ import { Anchor, Box, Button, Grid, Heading, PageHeader, ResponsiveContext, Text
 import { Document, Download, LinkPrevious, Storage, Terminal } from 'grommet-icons';
 import { ReactNode, useContext, useEffect, useState } from 'react';
 import { asbuiltDownloadUrl, consoleLogTxtUrl, listRuns, RunEvent, RunRecord } from '../api';
-import { DocList, DocItem, EmptyState, StatusLine } from './blocks';
+import { DocList, DocItem, EmptyState, Section, StatusLine } from './blocks';
+import { NotesList } from './primitives';
 import { StatusIcon, StepState } from './status';
+import type { StepStatus } from './StepShell';
+import { TrustedDevices } from './TrustedDevices';
 import { runStatusToState } from './useStepState';
 
 /** "Today, 19:31", "Yesterday, 08:12" or "5 Oct 2026": relative while recent, the date once it is not. */
@@ -28,18 +31,30 @@ function saveText(filename: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-/** A page that is not a step: the Design System PageHeader, a parent link on child pages only. */
+/**
+ * A page that is not a step: the Design System PageHeader, a parent link on child pages only. Under it
+ * the same status slot as a step (SPEC-030 R2): the error while shown, else the one status line, then
+ * the notes folded.
+ */
 export function PlainPage({
   title,
   subtitle,
   parent,
   actions,
+  status,
+  error,
+  onDismissError,
+  notes = [],
   children,
 }: {
   title: string;
   subtitle?: string;
   parent?: { label: string; onClick: () => void };
   actions?: JSX.Element;
+  status?: StepStatus;
+  error?: { title: string; message: string } | null;
+  onDismissError?: () => void;
+  notes?: ReactNode[];
   children: ReactNode;
 }) {
   const size = useContext(ResponsiveContext);
@@ -54,6 +69,26 @@ export function PlainPage({
         size="small"
         pad={{ vertical: 'medium' }}
       />
+      {error ? (
+        <Box role="alert" flex={false}>
+          <StatusLine state="failed" title={error.title} onClose={onDismissError}>
+            {error.message}
+          </StatusLine>
+        </Box>
+      ) : (
+        status && (
+          <Box role="status" aria-live="polite" flex={false}>
+            <StatusLine state={status.state} title={status.title} time={status.time} links={status.links}>
+              {status.message}
+            </StatusLine>
+          </Box>
+        )
+      )}
+      {notes.length > 0 && (
+        <Section title={`${notes.length} note${notes.length === 1 ? '' : 's'}`}>
+          <NotesList notes={notes} />
+        </Section>
+      )}
       {children}
     </Box>
   );
@@ -273,10 +308,11 @@ export function RunOverview({
       subtitle={`${modeLabel}${created ? ` · started ${when(created.created_at)}` : ''} · ${steps.length} steps`}
       parent={{ label: 'Your runs', onClick: onHome }}
       actions={next ? <Button primary label={`Continue at ${next.label}`} onClick={() => onOpenStep(next.key)} /> : undefined}
+      status={{
+        state: next ? next.state : 'complete',
+        message: next ? NEXT_SENTENCE[next.state](next.label) : NEXT_SENTENCE.complete(''),
+      }}
     >
-      <StatusLine state={next ? (next.state === 'not_started' ? 'not_started' : next.state) : 'complete'}>
-        {next ? NEXT_SENTENCE[next.state](next.label) : NEXT_SENTENCE.complete('')}
-      </StatusLine>
       {begun.length > 0 && (
         <Grid columns={{ count: columns, size: 'auto' }} gap="small" as="ul" style={{ margin: 0, padding: 0 }}>
           {begun.map((s) => (
@@ -323,6 +359,7 @@ export function RunOverview({
           </Text>
         </Box>
       )}
+      <TrustedDevices runId={runId} events={events} />
       <Box gap="small" flex={false}>
         <Heading level={2} size="small" margin="none">
           Documents and logs

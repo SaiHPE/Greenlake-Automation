@@ -3,17 +3,20 @@
 // are SERVED by the backend (GET /app/profile — single source of truth: domain/workflow.py). This
 // module keeps only presentation extras (subtitles, mode labels/blurbs) and helpers over served data.
 
-export type RunMode = 'FULL_ONBOARDING' | 'PROVISION_ONLY' | 'BOTH' | 'REPLICATE' | 'VERIFY_ONLY' | 'CUSTOM';
+export type RunMode = 'FULL_ONBOARDING' | 'PROVISION_ONLY' | 'BOTH' | 'REPLICATE' | 'MIGRATE' | 'VERIFY_ONLY' | 'CUSTOM';
 
 export type ActionKey =
   | 'greenlake'
   | 'cloudinit'
   | 'dscc'
   | 'discover'
+  | 'ports'
   | 'zoning'
+  | 'migrate'
   | 'provision'
   | 'replicate'
   | 'failover_test'
+  | 'snapshots'
   | 'verify'
   | 'asbuilt';
 
@@ -21,8 +24,10 @@ export type ActionKey =
 export interface ServedStep {
   key: ActionKey;
   label: string;
-  kind: 'init' | 'provision' | 'replicate' | 'verify';
+  kind: 'init' | 'provision' | 'replicate' | 'migrate' | 'snapshot' | 'verify';
   phase: string;
+  /** Why the step cannot be part of a run yet (its work is not built); '' when it can. */
+  unavailable?: string;
 }
 
 export interface StepRegistry {
@@ -36,10 +41,13 @@ const STEP_SUBTITLES: Record<ActionKey, string> = {
   cloudinit: 'Connect the array to HPE GreenLake',
   dscc: 'Set Up System wizard',
   discover: 'Array ports, host adapters, fabric logins',
+  ports: 'iSCSI VLAN addresses from the sheet',
   zoning: 'Verify and draft switch commands',
+  migrate: 'Read the source array and check it is ready',
   provision: 'Hosts, volumes and exports',
   replicate: 'Remote Copy groups to the peer array',
   failover_test: 'Fail over, recover, restore',
+  snapshots: 'A snapshot now and a schedule',
   verify: 'Read-only configuration check',
   asbuilt: 'Handover document',
 };
@@ -70,9 +78,19 @@ export const MODE_PRESETS: ModePreset[] = [
     mode: 'REPLICATE', label: 'Provision, then replicate', needs: 'replication',
     blurb: 'Discovery, zoning and provisioning, then Remote Copy of the new volume sets to a peer array and a failover test. Needs the workbook’s Replication tab.',
   },
+  {
+    mode: 'MIGRATE', label: 'Migrate from another array',
+    blurb: 'Discovery and zoning, then read the array the data moves from and check it is ready for Peer Motion. Needs the workbook’s Migration tab.',
+  },
   { mode: 'VERIFY_ONLY', label: 'Verify only', blurb: 'A read-only verification of the array configuration and status.' },
   { mode: 'CUSTOM', label: 'Custom…', blurb: 'Pick exactly the steps to run.' },
 ];
+
+// The served reasons a set of steps cannot run yet: one per step whose work is not built.
+export function unavailableReasons(catalog: ServedStep[], keys: ActionKey[]): string[] {
+  const chosen = new Set(keys);
+  return catalog.filter((s) => chosen.has(s.key) && s.unavailable).map((s) => s.unavailable as string);
+}
 
 // Map a persisted run phase back to the action step key, so a refresh resumes on the right step.
 // A GL_* mid-phase resolves to the step that owns it (GreenLake).

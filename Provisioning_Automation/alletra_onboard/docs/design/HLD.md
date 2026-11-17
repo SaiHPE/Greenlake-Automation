@@ -414,7 +414,7 @@ Replication runs from this run's array to one peer array named on the Replicatio
    array: RCIP address per port, start Remote Copy, a target pointing at the other array. A port
    with another address or another role is a conflict; the tool never changes a port's role or an
    existing address. On approval it sets the addresses, pings, starts Remote Copy, creates the
-   targets and waits for the links to come up. This is the only SSH write path (section 7.3).
+   targets and waits for the links to come up. This is one of the two SSH write paths (section 7.3).
 3. **Link check** ([link_check.py](../../src/alletra_onboard/application/replication/link_check.py),
    [SPEC-020](../specs/SPEC-020-link-check.md)): `checkrclink` between the paired ports, or a ping
    when it prints no latency. On RCIP, the groups apply is refused until the link is checked in this
@@ -460,16 +460,19 @@ from `GET /runs/{id}/asbuilt/download`.
 
 ### 6.8 Console
 
-[SPEC-019](../specs/SPEC-019-console.md). Every command the tool sends to an array or switch is
-recorded with its target, transport, duration, result and output (capped at 64 KB). The records go
+[SPEC-019](../specs/SPEC-019-console.md). Every command the tool sends to an array, switch, vCenter,
+host or GreenLake is recorded with its target, transport, duration, result and output (capped at 64 KB). The records go
 to a table of their own and a live stream, and show in a pane under every step
 ([ConsolePane.tsx](../../frontend/src/ui/ConsolePane.tsx)). The operator can type a command in the
 pane; it runs through the read-only allowlist with the run's credential, on this array or the peer.
 Anything else is refused with a sentence pointing to *Open terminal*, which opens the system
 terminal with `ssh user@array` and no password.
 
-Recorded: array SSH (both clients), array WSAPI, switch SSH. Not recorded: vCenter (pyVmomi has
-no single call to hook), Linux and Windows host reads, and GreenLake calls, which show as step events.
+Recorded: array SSH (both clients), array WSAPI, switch SSH, and since BL-54 vCenter (one record per
+login and per inventory read, as pyVmomi has no single call to hook), Linux host SSH, Windows host
+WinRM and GreenLake HTTP calls. A GreenLake record is the method and path only: no query, no body,
+no error text, as a subscription key travels in all three; the token request shows neither the client
+secret nor the token.
 
 ---
 
@@ -506,7 +509,7 @@ Adding a command to any list needs a unit test and a plain sentence in the pull 
 
 ### 7.3 The write paths
 
-Four paths change something outside the jump box. Each has a gate.
+Four kinds of path change something outside the jump box. Each has a gate.
 
 | Write path | What it may change | Gate |
 |---|---|---|
@@ -514,6 +517,7 @@ Four paths change something outside the jump box. Each has a gate.
 | Browser wizards | Array network setup through its own wizard (submitted after a Review read-back); DSCC form fields (never submitted) | Operator reviews values in the app; the Review guard; the operator submits DSCC |
 | Array WSAPI | Hosts, sets, volumes, exports; Remote Copy groups and DR actions | A plan previewed in this process, with no conflicts, then the operator's tick and button |
 | Array SSH, write-scoped ([rc_cli_client.py](../../src/alletra_onboard/adapters/array/rc_cli_client.py), [ADR 0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md)) | RCIP address, gateway and ping; `startrcopy`; create and remove Remote Copy targets; admit and dismiss links | Built only inside the apply of an approved replication plan; every command matched against `RC_WRITE_FORMS` as a whole line, addresses and masks validated |
+| Array SSH, write-scoped ([snap_cli_client.py](../../src/alletra_onboard/adapters/array/snap_cli_client.py), [ADR 0016](../adr/0016-snapshot-schedules-write-scoped-ssh.md)) | Create a snapshot schedule: one form, `createsched -f` of a `createsv -f` with an expiry and no lock (built 2026-11-17, pending live run) | Built only inside the apply of an approved snapshot plan, with that plan's (schedule name, source) pairs; the command inside the quotes checked as a form of its own; `removesched -f` in the removal set before the write; `showsched` read back after it |
 
 How the approval is held, from the code:
 
@@ -538,7 +542,7 @@ How the approval is held, from the code:
 - GreenLake logging passes through `redact()`, which masks bearer tokens, `client_secret` and
   subscription keys ([policies.py](../../src/alletra_onboard/domain/policies.py)).
 - Every command record replaces every secret the client holds with `********` before the record
-  leaves the client. The WSAPI login body shows the password masked and its answer as
+  leaves the client, then passes through `redact()` as well. The WSAPI login body shows the password masked and its answer as
   *(session key withheld)* ([command_log.py](../../src/alletra_onboard/adapters/command_log.py),
   [SPEC-019](../specs/SPEC-019-console.md) §6). The live run of 2026-10-12 checked that no password,
   session key or write appeared in the log.
@@ -547,7 +551,8 @@ How the approval is held, from the code:
 
 ### 7.5 Transport trust: certificates and host keys
 
-The policy, decided by the owner on 2026-11-17 ([ADR 0026](../adr/0026-certificates-and-host-keys.md); being built):
+The policy, decided by the owner on 2026-11-17 ([ADR 0026](../adr/0026-certificates-and-host-keys.md)),
+built 2026-11-17 (BL-53), pending a live run:
 
 Cloud endpoints (GreenLake, DSCC) always have their TLS certificates checked against the Windows and
 public roots; this cannot be switched off. On-site devices ship with self-signed certificates, so the
@@ -558,16 +563,42 @@ bundle, where one exists, replaces first-contact trust. Two links stay unchecked
 reasons: the link-local setup wizard (same cable, no credentials) and WinRM (NTLM-encrypted,
 read-only).
 
-What the code does until ADR 0026 is built:
+What the code does:
 
 - **Cloud calls** verify TLS against the Windows trust store plus public roots. Verification is
-  never turned off; a PEM bundle can be named for inspecting proxies
-  ([tls.py](../../src/alletra_onboard/application/platform/tls.py)).
-- **On-site devices** use self-signed certificates in practice. Array WSAPI is called with
-  certificate checks off (`secure=False`), vCenter with `CERT_NONE`, WinRM with
-  `server_cert_validation="ignore"`, and the array wizard with `ignore_https_errors`. SSH clients
-  accept an unknown host key (`AutoAddPolicy`). These links are on the customer's management
-  network from a jump box next to the array.
+  never turned off; a PEM bundle can be named for inspecting proxies (`ALLETRA_CA_BUNDLE`,
+  [tls.py](../../src/alletra_onboard/application/platform/tls.py)).
+- **One place decides for on-site devices**:
+  [device_trust.py](../../src/alletra_onboard/adapters/device_trust.py). The run coordinator binds
+  the run's pins for every step and every route that reads a device, as it binds the command log.
+  Before a client sends a password it hands over what the device presented: the key is recorded on
+  the run's first contact, the same key goes through, and a different one is refused with a sentence
+  naming the device and both fingerprints and saying the password was not sent. The pins live in
+  the run's `run_device_pins` rows in `state.db` (section 8), so a new run trusts again on its own
+  first contact.
+- **SSH** (array reads, the link check, the console, the Remote Copy write client, Brocade, Linux
+  hosts) connects through `open_ssh`: a paramiko `MissingHostKeyPolicy` records the key on first
+  contact, and later connections preload the pinned key so paramiko compares it before it
+  authenticates.
+- **Array WSAPI** reads the certificate in a handshake that sends nothing, compares it, then logs in;
+  every later connection of the SDK checks the same SHA-256 (urllib3's `assert_fingerprint`).
+  **vCenter** is compared the same way first, then pyVmomi gets a context that compares the pinned
+  certificate on every connection it opens.
+- **A device CA bundle** (`ALLETRA_DEVICE_CA_BUNDLE`, separate from the cloud bundle) replaces
+  first-contact trust for WSAPI, vCenter and WinRM over HTTPS with the full check (chain and name).
+  A failure stops the step; it never falls back.
+- **A mismatch blocks the step**: the step shows as stopped with the sentence, and the run overview
+  shows both fingerprints. Re-trusting is a separate action there, behind a tick that the new
+  fingerprint was compared with the device's own console, and is recorded as a run event with both
+  fingerprints. There is no re-trust button next to the error.
+- **Still unchecked, each with its reason at the code site** (`# TRUST-OFF:`, listed in
+  `tests/unit/test_trust_checks_off.py`, which fails on a new site): the setup wizard's browser
+  (`ignore_https_errors`; the address must be link-local) and WinRM with
+  `server_cert_validation="ignore"` when no device CA bundle is set. WSAPI's `secure=False` and the
+  context pyVmomi gets also turn the chain check off, each behind a pin.
+- Pins last one run. Whether the array's certificate or key changes after initial setup (wizard, DSCC
+  setup, a restart) is the open question of ADR 0026 step 9; until the live run, the re-trust action
+  is the way past such a change.
 - The local API on 127.0.0.1 has no authentication. Cross-origin requests are allowed only from the
   developer UI server on port 5173 ([app.py](../../src/alletra_onboard/api/app.py) CORS).
 
@@ -592,6 +623,7 @@ One SQLite file per installation ([adapters/persistence/sqlite.py](../../src/all
 | `pending_sheets` | A parsed workbook waiting for a mode, under a single-use token | Removed when the run is created |
 | `run_artifacts` | Results: discovery report, hosts zoned on both fabrics, replication report and result, link check, failover record, as-built `.docx` | Newest 20 runs (`ARTIFACT_RETENTION_RUNS`) |
 | `run_commands` | The console's command log | Newest 20 runs ([SPEC-019](../specs/SPEC-019-console.md) §6) |
+| `run_device_pins` | The SSH key or certificate each on-site device presented on the run's first contact, and any different one it was refused for ([ADR 0026](../adr/0026-certificates-and-host-keys.md)) | Kept with the run |
 
 Deliberately **not** stored: a plan's approval (section 7.3) and running tasks. Run status values
 are in [models.py](../../src/alletra_onboard/domain/models.py) `RunStatus`. A run reopened after a
@@ -690,7 +722,7 @@ From [SCOPE.md](../SCOPE.md) (last checked v0.16.1 + main) and the *Closed* tabl
 | [0014](../adr/0014-paired-runs-from-one-workbook.md) | Two arrays from one workbook (paired runs): accepted, then deferred. |
 | [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) | The tool configures Remote Copy: groups and DR over WSAPI, links and targets over a write-scoped SSH client. |
 | [0025](../adr/0025-one-rule-for-ssh-writes.md) | One rule for every write over the array's SSH: exact command forms, only inside an approved apply, only on the plan's objects, an undo recorded before and a read-back after each write. Accepted 2026-11-17. |
-| [0026](../adr/0026-certificates-and-host-keys.md) | Cloud certificates are always checked; on-site devices are trusted on first contact and pinned for the run; the setup wizard and WinRM stay unchecked with written reasons. Accepted 2026-11-17; being built. |
+| [0026](../adr/0026-certificates-and-host-keys.md) | Cloud certificates are always checked; on-site devices are trusted on first contact and pinned for the run; the setup wizard and WinRM stay unchecked with written reasons. Accepted 2026-11-17; built 2026-11-17, pending live run. |
 
 Specifications: [docs/specs/](../specs/). Glossary: [CONTEXT.md](../../CONTEXT.md). Lessons: [LESSONS.md](../LESSONS.md).
 
@@ -707,7 +739,7 @@ Specifications: [docs/specs/](../specs/). Glossary: [CONTEXT.md](../../CONTEXT.m
 2. **Device trust and the approval tick.** *Device trust is answered.* On 2026-11-17 the owner
    accepted trust on first contact for on-site devices, kept certificate checks for GreenLake and
    DSCC, and kept two links unchecked with written reasons (section 7.5,
-   [ADR 0026](../adr/0026-certificates-and-host-keys.md); being built). *The approval tick is answered
+   [ADR 0026](../adr/0026-certificates-and-host-keys.md); built 2026-11-17, pending live run). *The approval tick is answered
    too:* the server checks the id of the ticked plan on every apply (section 7.3, BL-52).
 3. **Status mismatches in the docs.** *Answered 2026-11-17:* SCOPE and ARCHITECTURE were brought in
    line with main and TRACKER (BL-47), and the link check (BL-42) was closed on the owner's decision,

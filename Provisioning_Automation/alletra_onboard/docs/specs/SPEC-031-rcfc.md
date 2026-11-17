@@ -1,6 +1,8 @@
 # SPEC-031 — Remote Copy over Fibre Channel (RCFC)
 
-**Status:** part A accepted 2026-11-17 (owner's decision), not built; R5 done by BL-57; part B deferred ·
+**Status:** part A accepted 2026-11-17 (owner's decision); **part A built 2026-11-17, pending live run**
+(BL-50, branch `feat/bl-50-rcfc-part-a`; R1 without the optional reads, R2–R4, R6 with the proposed answer
+to §6 question 2, R7, R8); R5 done by BL-57; part B deferred ·
 **Decision:** [ADR 0024](../adr/0024-rcfc-ports-and-targets.md) (part A accepted, part B deferred) ·
 **Tracker:** BL-50 · **Research:** [2026-11-17-rcfc.md](../research/2026-11-17-rcfc.md) ·
 **Work packet:** [BL-50](../workpackets/BL-50.md) ·
@@ -168,15 +170,42 @@ with its removal sets.
 ## 6. Open questions for the owner
 
 1. ADR 0024: *answered 2026-11-17*: part A accepted, part B deferred.
-2. R6: typed RTT required for FC, or a *Continue without a measured latency* tick?
+2. R6: typed RTT required for FC, or a *Continue without a measured latency* tick? *Not answered; part A is
+   built with the proposed behaviour, a typed RTT is required* (`gate_on_typed_rtt` in
+   `application/replication/steps.py`). A tick would replace its first refusal.
 3. The CLI guide ED8's RCFC section: the order of `rcfc init`, zoning and `creatercopytarget`. Part B
    only; on ADR 0024's *Before part B* list.
-4. FCIP: ask the engineer on the tab (*links run over FCIP*, 120 ms async), or leave it out?
+4. FCIP: ask the engineer on the tab (*links run over FCIP*, 120 ms async), or leave it out? *Not answered;
+   part A applies the RCFC limit, 10 ms, to every FC pair.*
 5. The lab: may two rack13 FC ports change mode (0:3:3 and 1:3:4 are free; 0:3:4 and 1:3:3 carry an
    ESXi login), and can the lab team put the Primera's RCFC ports on the same fabric with zones? Part
    A's live run needs a working pair either way; part B's list has it too.
 6. Field input: how many deployments replicate over FC rather than IP? No public HPE figure was found.
    Asked before part B's ~550 lines and a lab rebuild.
+
+## 6a. Part A as built (2026-11-17)
+
+- **R1.** `parse_showport_roles` keeps each FC row's port WWN; `ReplicationArrayView.fc_node_wwns` and
+  `fc_port_wwns` (both from `showport`) are the one source for the WWNs of an array, read by the partnership,
+  the as-built and R5's guard (`stale_fc_targets` now matches every node WWN, so a peer port listed first no
+  longer hides an FC target; its rule and sentences are BL-57's, unchanged). `fc_node_wwn` stays for SPEC-021.
+  The optional reads (`showport -rcfc`, `showrctransport -rcfc`) are **not** read: no capture pins their
+  output (research §10, step 0 of the work packet not done).
+- **R3/R4.** `find_partnership` matches FC targets by node WWN and link WWNs and pairs them by the port WWNs
+  in use; `Partnership.transport` and `PartnerTarget.transport` carry `IP` or `FC`. A pair with IP and FC
+  targets towards each other is blocked with one finding and no plan (`ReplicationReport.mixed_transports`);
+  the removal command is offered only for a failed target with no link Up and no started group. An FC target
+  that does not resolve is named with the WWN that did not match: a blocking finding when no partnership is
+  found, a plan note when an FC partnership is.
+- **R6.** `RTT_LIMIT_MS` is a table per transport, read through `rtt_limit_ms(transport, mode)`. The sheet
+  still refuses a typed time over the RCIP limit (it does not know the transport); the Replication step holds
+  an FC pair to 10 ms at the apply, with *Continue anyway*. `checkrclink` is not run on FC links: its help
+  has never been captured (R6's question, research §2), so the link check is refused for an FC pair.
+- **R7.** Page: transport on the partnership line, FC links on the array cards, a *Round-trip time* panel in
+  place of *Check the link* (mockup `frontend/mockups/screens/ReplicationFc.tsx`; screenshots not taken).
+  As-built: *Replication ports* column, transport in the partnership sentence, a typed-latency paragraph.
+- **R8.** `tests/unit/test_replication_rcfc.py` runs plan → apply → verify on the lab pair's captures
+  carried over FC: the calls are the RCIP calls.
 
 ## 7. Size
 

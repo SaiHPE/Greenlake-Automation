@@ -16,12 +16,14 @@ Parsing the raw ``show*`` text into ``AsBuiltData`` lives in ``asbuilt_parse.py`
 from __future__ import annotations
 
 import io
+import ipaddress
 import os
 import re
 import sys
 import zipfile
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 import docx
@@ -30,6 +32,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt
 
 from alletra_onboard.application.documents.asbuilt_docx import hpe_table
+from alletra_onboard.domain.provisioning import REMOVAL_ORDER
 
 # Template Table-01 label (column 0, as it appears in the doc) -> AsBuiltData field. Match is
 # whitespace-normalised + case-insensitive (the template mixes "InServ"/"Inserv").
@@ -98,6 +101,10 @@ class AsBuiltData:
     showvvset: str = ""
     showvlun_t: str = ""
     showvlun_a: str = ""
+    showport: str = ""               # read for Table 01; SPEC-024 R7 and SPEC-026 R6 take each port's state from it
+    showport_iscsivlans: str = ""    # SPEC-024 R7: the VLAN-tagged iSCSI addresses
+    showport_par: str = ""           # SPEC-025 R9: each port's connection mode and type
+    showport_peer: str = ""          # SPEC-025 R9: the array's own listing of its peer ports
     read_errors: dict[str, str] = field(default_factory=dict)   # command -> error text (R6)
     # SPEC-002 run sections — the run's event payloads (JSON-shaped); None when the step did not run.
     zoning_plan: dict | None = None
@@ -124,7 +131,39 @@ class AsBuiltData:
     replication_peer: object | None = None         # ReplicationArrayView of the peer, same moment
     link_check: dict | None = None                 # SPEC-020 R6: replication.link_checked -> link_check (JSON)
     failover_record: dict | None = None            # SPEC-017 R6; None = the test did not run
+    # SPEC-028 R3: the file side, read when the document is made. No section when `file_report` is
+    # None (no File ports and the service off) and the read did not fail.
+    file_ports: list = field(default_factory=list)  # EthernetPort, from showport -file
+    file_report: object | None = None               # FileReport
+    file_read_error: str = ""                       # the read failed: named in the section and the warnings
+    # SPEC-023 R8: snapshots. snapshots_tab is None when the workbook has no Snapshots tab.
+    snapshots_tab: list[dict] | None = None        # SnapshotRequest dicts, one per row
+    snapshots_plan: dict | None = None             # snapshots.previewed -> plan (JSON)
+    snapshots_result: dict | None = None           # the latest snapshots.applied / .apply.failed -> result
+    snapshots_applies: list[dict] = field(default_factory=list)   # every apply in run order: {"plan", "result"}
+    snapshots_applied_at: str = ""
+    snapshots_view: object | None = None           # SnapshotArrayView read when the document is made
     commands: list[dict] = field(default_factory=list)   # SPEC-019 R2: the run's command log, without output
+    # SPEC-026: the handover reads, raw (handover.READS names the command for each); a failed one is in
+    # read_errors. handover_read_at is None when the reads were not made: the section is then left out.
+    # (`showport`, which R6 takes each port's state from, is the field above, read for Table 01.)
+    showalert_d: str = ""
+    showsys_space: str = ""
+    srstatcpu: str = ""
+    srstatport: str = ""
+    srstatvv: str = ""
+    handover_read_at: datetime | None = None
+    run_created_at: datetime | None = None         # R4: "Before this run" compares each alert with it
+    trusted_devices: list[dict] = field(default_factory=list)   # ADR 0026: DevicePinInfo dicts, fingerprints only
+    # SPEC-024 R7: the sheet's iSCSI network rows (IscsiVlanRequest dicts), and the (port, VLAN) pairs a
+    # plan of this run had to add, so an interface found now is marked "set up by this run".
+    iscsi_network_rows: list[dict] = field(default_factory=list)
+    iscsi_set_up_in_run: list[tuple[str, int]] = field(default_factory=list)
+    # SPEC-025 R9: the Peer ports tab's rows (PeerPortRequest dicts), the run's last plan that set ports
+    # (its commands, pasted by a consultant in the first slice) and the last read after the paste.
+    peer_ports_rows: list[dict] = field(default_factory=list)
+    peer_ports_plan: dict | None = None
+    peer_ports_result: dict | None = None
 
 
 def _resource_dir() -> Path:
@@ -469,6 +508,7 @@ def generate_asbuilt(
             "this document."
         )
 
+    _add_handover_section(doc, data, warnings)
     _add_provisioned_sections(doc, data, warnings)
     _update_fields_on_open(doc)
     _start_sections_on_new_pages(doc)
@@ -533,6 +573,160 @@ def _members_of(sets: OrderedDict[str, list[str]]) -> dict[str, list[str]]:
         for m in members:
             inverse.setdefault(m, []).append(name)
     return inverse
+
+
+# ------------------------------------------------------------------ SPEC-026: status and performance at handover
+
+HANDOVER_HEADING = "Array status and performance at handover"
+
+# Capacity lines of `showsys -space` (R5): label -> (section, path)
+_SPACE_LINES = (
+    ("Raw total", ("Raw Capacity", "Total")),
+    ("Raw allocated", ("Raw Capacity", "Total", "Usable", "Allocated")),
+    ("Raw free", ("Raw Capacity", "Total", "Usable", "Free")),
+    ("Usable total", ("Usable Capacity", "Total")),
+    ("Usable used", ("Usable Capacity", "Total", "Used")),
+    ("Usable free", ("Usable Capacity", "Total", "Free")),
+)
+_YES_NO = {True: "Yes", False: "No", None: "unknown"}
+
+
+def _figure(value: float | None, digits: int = 1) -> str:
+    return "—" if value is None else f"{value:.{digits}f}"
+
+
+def _three(stats: dict, attr: str, *, scale: float = 1.0, digits: int = 1) -> str:
+    """'average / 95th percentile / maximum' of one figure; '—' where the array printed none."""
+    values = []
+    for stat in ("avg", "95%", "max"):
+        value = getattr(stats[stat], attr) if stat in stats else None
+        values.append(_figure(None if value is None else value / scale, digits))
+    return " / ".join(values)
+
+
+def _io_cells(stats: dict) -> list[str]:
+    return [_three(stats, "iops"), _three(stats, "kbytes_s", scale=1024), _three(stats, "svct_ms", digits=2)]
+
+
+def _add_handover_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
+    """SPEC-026 R4 to R9: what the array said about itself when the document was made. Every read that
+    failed or could not be parsed is named in its subsection and in the warnings (R8), never shown as 0."""
+    from alletra_onboard.application.documents import handover
+
+    if data.handover_read_at is None:
+        return                                      # the reads were not made: nothing to report
+    reads = handover.read_from(data)
+    for command, words in reads.errors.items():
+        data.read_errors.setdefault(command, words)
+    _h1(doc, HANDOVER_HEADING)
+    _para(doc, "What the array reported about itself when this document was generated: its new alerts, its "
+               "capacity in use and 24 hours of performance from its own System Reporter. Reading it changed "
+               "nothing on the array.")
+    _add_handover_alerts(doc, data, reads, warnings)
+    _add_handover_capacity(doc, data, reads, warnings)
+    _add_handover_performance(doc, data, reads, warnings)
+    read_at = reads.read_at.astimezone(UTC) if reads.read_at.tzinfo else reads.read_at
+    line = f"This section was read from the array at {read_at:%Y-%m-%d %H:%M} UTC"
+    if reads.offset is not None:
+        local = read_at.replace(tzinfo=None) + reads.offset
+        line += f" ({local:%Y-%m-%d %H:%M} on the array's clock, {handover.offset_text(reads.offset)})"
+    _para(doc, line + ".")
+    _para(doc, handover.cloud_line(reads.alerts))
+
+
+def _add_handover_alerts(doc, data: AsBuiltData, reads, warnings: list[str]) -> None:
+    from alletra_onboard.application.documents import handover
+
+    _para(doc, "Alerts", bold=True)
+    if _read_failed(doc, data, handover.ALERTS, warnings):
+        return
+    alerts = reads.alerts
+    _para(doc, handover.alerts_verdict(alerts))
+    if not alerts:
+        return
+    full, groups = handover.alert_table(alerts)
+    offset = reads.offset
+    if full:
+        _para(doc, "Major, Critical and Fatal alerts, newest first. Before this run: whether the alert first "
+                   "occurred before this run was created.")
+        _table(doc, ["Id", "Severity", "Message code", "Message", "First occurred", "Latest", "Before this run"],
+               [[str(a.id), a.severity, a.message_code or "—", a.message, a.first_seen, a.time,
+                 _YES_NO[handover.before_run(a, offset, reads.run_created_at)]] for a in full],
+               widths=[0.05, 0.09, 0.10, 0.36, 0.15, 0.15, 0.10])
+        if offset is None:
+            _para(doc, "Before this run is unknown: no System Reporter report was read, so the array's time zone "
+                       "is not known.")
+    if groups:
+        _para(doc, "The other new alerts, one row for each message code and severity.")
+        _table(doc, ["Severity", "Message code", "Alerts", "First occurred", "Latest", "Sample message"],
+               [[g.severity, g.message_code or "—", str(g.count), g.first_seen, g.latest, g.sample] for g in groups],
+               widths=[0.10, 0.11, 0.07, 0.16, 0.16, 0.40])
+    _para(doc, "The full list is on the array: showalert -d. Once the cause of an alert is dealt with, setalert or "
+               "removealert on the array acknowledges or removes it; the tool runs neither.")
+    for a in full:
+        warnings.append(f"The array has a new {a.severity} alert {a.id} (first occurred {a.first_seen}): "
+                        f"{a.message.rstrip('.')}. Check whether it still applies before you send the document.")
+
+
+def _add_handover_capacity(doc, data: AsBuiltData, reads, warnings: list[str]) -> None:
+    from alletra_onboard.application.documents import handover
+
+    _para(doc, "Capacity", bold=True)
+    if _read_failed(doc, data, handover.SPACE, warnings):
+        return
+    rows = []
+    for label, (section, *path) in _SPACE_LINES:
+        line = reads.space.get(section, *path)
+        mib = reads.space.mib(section, *path)
+        rows.append([label, "—" if mib is None else f"{handover.tib(mib):.1f}", line.text if line else "not printed"])
+    _para(doc, "From showsys -space: in TiB with one decimal, and the array's own figure in MiB beside it.")
+    _table(doc, ["Capacity", "TiB", "MiB, as the array prints it"], rows, widths=[0.40, 0.20, 0.40])
+    if reads.space.reduction:
+        _para(doc, f"Data reduction: {reads.space.reduction} (the array's ratio).")
+
+
+def _add_handover_performance(doc, data: AsBuiltData, reads, warnings: list[str]) -> None:
+    from alletra_onboard.application.documents import handover
+
+    _para(doc, "Performance", bold=True)
+    window = reads.window
+    if window is not None:
+        end = window.end_text if window.end is not None else "the read (System Reporter had no sample in it)"
+        _para(doc, f"From the array's System Reporter, the 24 hours before the read: from {window.start_text} to "
+                   f"{end}, in 5-minute samples. Each cell is the average / the 95th percentile / the maximum.")
+        _para(doc, handover.PERFORMANCE_NOTE)
+        if reads.idle:
+            _para(doc, handover.IDLE_NOTE)
+
+    _para(doc, "Controller nodes", bold=True)
+    if not _read_failed(doc, data, handover.CPU, warnings):
+        if reads.cpu_nodes:
+            _para(doc, "CPU busy is 100 % minus the array's idle figure; the busiest sample comes from its lowest idle.")
+            _table(doc, ["Node", "Average % busy", "95th percentile % busy", "Busiest sample % busy"],
+                   [[n.node, _figure(n.busy_avg), _figure(n.busy_p95), _figure(n.busy_max)] for n in reads.cpu_nodes],
+                   widths=[0.16, 0.28, 0.28, 0.28])
+        else:
+            _para(doc, "System Reporter printed no CPU figure for this window.")
+
+    _para(doc, "Host ports", bold=True)
+    if not _read_failed(doc, data, handover.PORTS, warnings):
+        rows, lines = handover.split_ports(reads.port_loads, reads.roles)
+        if rows:
+            _table(doc, ["Port", "Protocol", "IO/s", "MB/s", "Service time (ms)"],
+                   [[r.load.name, r.protocol or "—", *_io_cells(r.load.stats)] for r in rows],
+                   widths=[0.10, 0.12, 0.24, 0.24, 0.30])
+        elif not lines:
+            _para(doc, "System Reporter printed no FC or iSCSI host port for this window.")
+        for line in lines:
+            _para(doc, line)
+
+    _para(doc, "All volumes", bold=True)
+    if not _read_failed(doc, data, handover.VOLUMES, warnings):
+        if reads.volume_load is not None:
+            _table(doc, ["Volumes", "IO/s", "MB/s", "Service time (ms)"],
+                   [["All volumes together", *_io_cells(reads.volume_load.stats)]], widths=[0.22, 0.24, 0.24, 0.30])
+        else:
+            _para(doc, "System Reporter printed no volume figure for this window.")
 
 
 def _add_hosts_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
@@ -744,13 +938,12 @@ def _add_zoning_section(doc, data: AsBuiltData) -> None:
 
 _OUTCOME_LABEL = {"created": "Created", "updated": "Updated", "exists": "Already existed", "failed": "Failed"}
 _VERDICT_LABEL = {"live": "Live", "partial": "Partial", "no_path": "No path"}
-_REMOVAL_ORDER = {"vlun": 0, "vvset": 1, "volume": 2, "hostset": 3, "host": 4}
 
 
 def _removal_lines(items: list[dict]) -> list[str]:
     """SPEC-007 R3 over JSON-shaped RemovalItems: dependency order, de-duplicated across applies."""
     out: list[str] = []
-    for item in sorted(items, key=lambda i: _REMOVAL_ORDER.get(i.get("kind", ""), 9)):
+    for item in sorted(items, key=lambda i: REMOVAL_ORDER.get(i.get("kind", ""), 9)):
         cmd = item.get("command", "")
         if cmd and cmd not in out:
             out.append(cmd)
@@ -784,9 +977,16 @@ def _add_provisioning_section(doc, data: AsBuiltData) -> None:
     if result.get("error"):
         _para(doc, f"Provisioning stopped with an error: {result['error']}")
     _para(doc, "To remove what this run created", bold=True)
-    removal_lines = _removal_lines(data.provisioning_removals or result.get("removals") or [])
+    snapshot_items: list[dict] = []
+    if data.snapshots_tab is not None:
+        # SPEC-023 R6: the snapshot lines go first; removevv refuses a volume that still has snapshots
+        from alletra_onboard.application.documents.asbuilt_snapshots import snapshot_removal_items
+
+        snapshot_items = snapshot_removal_items(data)
+    removal_lines = _removal_lines(snapshot_items + (data.provisioning_removals or result.get("removals") or []))
     if removal_lines:
-        _para(doc, "The undo for exactly the objects this run created, in dependency order (exports, VV sets, "
+        _para(doc, "The undo for exactly the objects this run created, in dependency order ("
+                   + ("snapshot schedules, snapshots, " if snapshot_items else "") + "exports, VV sets, "
                    "volumes, host sets, hosts). Objects that existed before the run are not listed. Review "
                    "before pasting; the tool never runs these.")
         _mono(doc, removal_lines)
@@ -812,30 +1012,287 @@ def _add_provisioning_section(doc, data: AsBuiltData) -> None:
         _para(doc, "No target hosts to verify.")
 
 
+def _add_iscsi_network_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
+    """SPEC-024 R7: when the array has a VLAN-tagged iSCSI address or the sheet asks for one: every
+    interface on every iSCSI port with the port's state (showport -iscsivlans has no State column),
+    whether this run set it up, then the sentences for the network team."""
+    # Imported here: replication.read imports this module (through asbuilt_parse) at load time.
+    from alletra_onboard.application.provisioning.discovery import parse_iscsi_vlans
+    from alletra_onboard.application.provisioning.iscsi_network import switch_handoff_for
+    from alletra_onboard.application.replication.read import parse_showport_roles
+
+    command = "showport -iscsivlans"
+    rows = data.iscsi_network_rows
+    unreadable = ""
+    answer = data.showport_iscsivlans.strip()
+    if answer.lower().startswith("error"):
+        vlans, unreadable = [], answer.splitlines()[0]
+    else:
+        try:
+            vlans = parse_iscsi_vlans(answer)
+        except ValueError as exc:
+            vlans, unreadable = [], str(exc)
+    # A read that failed cannot say the array has no interface, so the section names the failure.
+    if not vlans and not rows and not unreadable and command not in data.read_errors:
+        return
+    _h1(doc, "iSCSI network")
+    if _read_failed(doc, data, command, warnings):
+        return
+    if unreadable:
+        _para(doc, f"`{command}` could not be read: {unreadable}")
+        warnings.append(f"`{command}` could not be read ({unreadable}); the iSCSI network section is empty.")
+        return
+    roles, _wwn = parse_showport_roles(data.showport)
+    name = data.name or data.serial_no or "the array"
+    if vlans:
+        _para(doc, f"The VLAN-tagged iSCSI addresses on {name}'s iSCSI ports when this document was made. Each port's "
+                   "untagged address is not listed here; it stays as it was.")
+        set_up = {(nsp, vlan) for nsp, vlan in data.iscsi_set_up_in_run}
+        _table(doc, ["Port", "VLAN", "Address", "Gateway", "MTU", "Port state", "Set up"],
+               [[v.nsp, str(v.vlan_id), f"{v.ip}/{_prefix(v.netmask)}", v.gateway or "—", v.mtu or "—",
+                 roles[v.nsp].state if v.nsp in roles else "—",
+                 "By this run" if (v.nsp, v.vlan_id) in set_up else "Already there"] for v in vlans])
+    else:
+        _para(doc, f"{name} has no VLAN-tagged iSCSI address.")
+    there = {(v.nsp, v.vlan_id) for v in vlans}
+    absent = [r for r in rows if (r.get("nsp"), r.get("vlan_id")) not in there]
+    if absent:
+        _para(doc, "Asked for on the sheet but not on the array: "
+                   + ", ".join(f"{r.get('nsp')} VLAN {r.get('vlan_id')} ({r.get('ip')})" for r in absent) + ".")
+    sentences = switch_handoff_for(name, vlans)
+    if sentences:
+        _para(doc, "For the network team", bold=True)
+        _para(doc, "The tool does not change any switch. Each switch port cabled to these array ports carries the "
+                   "VLANs tagged and keeps its native VLAN for the untagged address:")
+        _mono(doc, sentences)
+
+
+def _add_peer_ports_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
+    """SPEC-025 R9, when the sheet has the Peer ports tab: each port as the array reads it now (mode,
+    connection, state, WWNs), the array's own peer-port listing, the commands and who ran them, the
+    peer-port zones designed in the run, and the removal set."""
+    if not data.peer_ports_rows:
+        return
+    # Imported here: replication.read imports this module (through asbuilt_parse) at load time.
+    from alletra_onboard.application.provisioning.peer_ports import (
+        parse_showport_par,
+        parse_showport_peer,
+        parse_showport_ports,
+    )
+
+    _h1(doc, "Peer ports")
+    name = data.name or data.serial_no or "the array"
+    ports = parse_showport_ports(data.showport)
+    params = parse_showport_par(data.showport_par)
+    _para(doc, f"The Fibre Channel ports of {name} named on the sheet's Peer ports tab, as the array reads them when "
+               "this document was made. A peer port logs in to the fabric as an initiator so a data migration can "
+               "read the source array through it.")
+    rows = []
+    for req in data.peer_ports_rows:
+        nsp = req.get("nsp", "")
+        p, par = ports.get(nsp), params.get(nsp)
+        rows.append([nsp, p.type if p else "not on the array", f"{par.connmode}, {par.conntype}" if par else "—",
+                     p.state if p else "—", p.node_wwn if p and p.node_wwn else "—", p.port_wwn if p and p.port_wwn else "—",
+                     ", ".join(req.get("source_wwpns") or []) or "—"])
+    _table(doc, ["Port", "Type", "Connection", "State", "Node WWN", "Port WWN", "Source ports to zone"], rows)
+    listed = parse_showport_peer(data.showport_peer)
+    if listed:
+        _para(doc, "The array's own list of its peer ports (showport -peer)", bold=True)
+        _table(doc, ["Port", "Mode", "State", "Node WWN", "Port WWN"],
+               [[r.nsp, r.mode, r.state, r.node_wwn or "—", r.port_wwn or "—"] for r in listed])
+    _para(doc, "How they were set", bold=True)
+    plan = data.peer_ports_plan or {}
+    creates = [a for a in plan.get("actions") or [] if a.get("state") == "create"]
+    result = data.peer_ports_result or {}
+    if creates and result.get("changed"):
+        _para(doc, "The tool printed these commands and a consultant pasted them on the array's CLI; the tool does "
+                   "not run them. The read after the paste checked each port and every other port.")
+        _mono(doc, [line for a in creates for line in [f"# {a.get('nsp', '')}", *(a.get("commands") or [])]])
+    elif creates:
+        _para(doc, "The tool printed these commands for a consultant to paste; no port change was seen on the array "
+                   "in this run.")
+        _mono(doc, [line for a in creates for line in [f"# {a.get('nsp', '')}", *(a.get("commands") or [])]])
+    else:
+        _para(doc, "No port was set in this run: every port the sheet names was already in peer mode, or no plan "
+                   "had a port to set.")
+    if result.get("sentences"):
+        _mono(doc, list(result["sentences"]))
+    if result.get("error"):
+        warnings.append(f"Peer ports: the read after the paste did not match the plan: {result['error']}")
+    _para(doc, "Peer-port zones designed in this run", bold=True)
+    zones = (data.zoning_rendered or {}).get("peer_commands") or {}
+    if any(zones.values()):
+        _para(doc, "The command set given to the SAN team; the tool never writes to a switch.")
+        for fabric, commands in sorted(zones.items()):
+            if commands:
+                _mono(doc, [f"# {fabric}", *commands])
+    else:
+        _para(doc, "No peer-port zone command set was generated in this run.")
+    _para(doc, "To remove the peer ports", bold=True)
+    removals = result.get("removals") or []
+    if removals:
+        _para(doc, "Puts each port this run set back in the mode it had, last port first. Remove the SAN team's "
+                   "peer-port zones and any migration that uses these ports first. The tool never runs these.")
+        _mono(doc, removals)
+    else:
+        _para(doc, "Nothing: the tool saw no port change in this run.")
+
+
+def _prefix(mask: str) -> str:
+    try:
+        return str(ipaddress.ip_network(f"0.0.0.0/{mask}").prefixlen)
+    except ValueError:
+        return mask
+
+
 def _add_provisioned_sections(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    """SPEC-002: the five sections appended after the template's last section; SPEC-018 adds two
-    more when the run's workbook has a Replication tab."""
+    """SPEC-002: the five sections appended after the template's last section; SPEC-024 and SPEC-025
+    add the iSCSI network and Peer ports sections when the sheet or the array has them; SPEC-028 adds
+    the file service when the array has one; SPEC-018 adds two more when the run's workbook has a
+    Replication tab."""
     _add_hosts_section(doc, data, warnings)
     _add_volumes_section(doc, data, warnings)
     _add_presentations_section(doc, data, warnings)
+    _add_iscsi_network_section(doc, data, warnings)
+    _add_peer_ports_section(doc, data, warnings)
     _add_zoning_section(doc, data)
     _add_provisioning_section(doc, data)
+    _add_file_section(doc, data, warnings)
     if data.replication_tab is not None:
         _add_replication_section(doc, data, warnings)
         _add_failover_section(doc, data)
+    if data.snapshots_tab is not None:
+        from alletra_onboard.application.documents.asbuilt_snapshots import add_snapshots_section
+
+        add_snapshots_section(doc, data, warnings)
+    if data.trusted_devices:
+        _add_device_fingerprints(doc, data)
     if data.commands:
         _add_commands_appendix(doc, data)
 
 
-_TRANSPORT_LABEL = {"ssh": "CLI (SSH)", "wsapi": "WSAPI", "fos": "switch (SSH)", "vcenter": "vCenter"}
+_DEVICE_LABEL = {"array": "Array", "switch": "SAN switch", "Linux host": "Linux host", "vCenter": "vCenter"}
+
+
+def _add_device_fingerprints(doc, data: AsBuiltData) -> None:
+    """ADR 0026: the key each on-site device presented, so the customer can compare it with the device."""
+    _h1(doc, "Device fingerprints")
+    _para(doc, "The tool trusted each device below the first time this run connected to it, and checked the "
+               "same key on every later connection. Compare each fingerprint with the one the device's own "
+               "console shows.")
+    rows = []
+    for d in data.trusted_devices:
+        port = d.get("port")
+        address = d.get("host", "") if port in (22, 443) else f"{d.get('host', '')}:{port}"
+        key = f"SSH host key ({d.get('key_type', '')})" if d.get("kind") == "ssh" else "TLS certificate"
+        how = "Again, by the operator" if d.get("how") == "retrusted" else "First contact"
+        trusted = f"{how}, {_when(str(d.get('trusted_at') or ''))}"
+        if d.get("refused_fingerprint"):
+            trusted += (f". Later presented {d['refused_fingerprint']}, which was refused "
+                        f"({_when(str(d.get('refused_at') or ''))})")
+        rows.append([_DEVICE_LABEL.get(d.get("device", ""), d.get("device", "")), address, key,
+                     d.get("fingerprint", ""), trusted])
+    _table(doc, ["Device", "Address", "Key", "SHA-256 fingerprint", "Trusted"], rows)
+
+
+# ------------------------------------------------------------------ SPEC-028 R3: the file service
+
+def _size(mib: int) -> str:
+    """The file side counts in MiB."""
+    if mib >= 1024 * 1024:
+        return f"{mib / (1024 * 1024):.1f} TiB"
+    return f"{mib / 1024:.1f} GiB".replace(".0 GiB", " GiB")
+
+
+def _state(state: str) -> str:
+    """'STATE_NORMAL' -> 'normal'."""
+    return state.removeprefix("STATE_").replace("_", " ").lower()
+
+
+def _add_file_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
+    """SPEC-028 R3: the file service, its File ports, file systems and shares with their clients, as
+    the array reports them when the document is made. Absent on an array with no File ports and the
+    file service off; nothing here was changed by the run."""
+    from alletra_onboard.domain.unified_file import NODE_RUNNING
+
+    report = data.file_report
+    if not data.file_read_error and report is None:
+        return
+    _h1(doc, "File service")
+    if data.file_read_error:
+        _para(doc, f"The file side could not be read: {data.file_read_error}")
+        warnings.append(f"The file side could not be read ({data.file_read_error}); the File service "
+                        "section is empty.")
+        return
+    service = report.service
+    _para(doc, "The array's NFS file service, its File ports, file systems and shares, as read from the "
+               "array when this document was made. This run changed nothing on the file side.")
+    for note in report.notes:
+        _para(doc, note)
+    if service is None:
+        reason = report.notes[0] if report.notes else "the file service was not read"
+        warnings.append(f"The File service section lists only the File ports: {reason}")
+    else:
+        running = sum(1 for n in service.nodes if n.status == NODE_RUNNING)
+        line = (f"File service: on, running on {running} of {len(service.nodes)} nodes."
+                if service.enabled else "File service: off.")
+        cap = service.capacity
+        if cap is not None:
+            line += (f" Capacity for file: {_size(cap.total)}, {_size(cap.used)} used, "
+                     f"{_size(cap.available)} available.")
+        _para(doc, line)
+
+    _para(doc, "File ports", bold=True)
+    if data.file_ports:
+        _table(doc, ["Port", "Address", "Gateway", "VLAN", "MTU", "Link"],
+               [[p.label, f"{p.address}/{p.prefix_len}" if p.address else "—", p.gateway or "—",
+                 p.vlan or "—", p.mtu or "—", f"{p.link} ({p.link_state})" if p.link else p.link_state or "—"]
+                for p in data.file_ports])
+    else:
+        _para(doc, "The array has no File ports.")
+    if service is None:
+        return
+
+    _para(doc, "File systems", bold=True)
+    if report.file_systems:
+        _table(doc, ["File system", "Size", "Data reduction", "Shares", "Owner node", "State"],
+               [[fs.name, _size(fs.size_mib), "Yes" if fs.reduce else "No", str(fs.share_count),
+                 str(fs.owner_node), _state(fs.state)] for fs in report.file_systems])
+    else:
+        _para(doc, "The array has no file systems.")
+
+    _para(doc, "Shares", bold=True)
+    if report.shares:
+        rows = []
+        for share in report.shares:
+            clients = report.clients_of(share)
+            rows.append([
+                share.name, share.file_system, share.client_group,
+                "\n".join(" ".join(x for x in (c.address, c.access, c.options) if x) for c in clients) or "—",
+                f"{share.host_ip}:{share.mount_path}" if share.host_ip else share.mount_path,
+                ", ".join(share.protocols) or "—", _state(share.state),
+            ])
+        _table(doc, ["Share", "File system", "Client group", "Clients", "Mount", "Protocol", "State"], rows)
+        _para(doc, "A share's clients are its client group's. A client of * is any host that can reach "
+                   "the File ports.")
+    else:
+        _para(doc, "The array has no shares.")
+
+
+_TRANSPORT_LABEL = {
+    "ssh": "CLI (SSH)", "wsapi": "WSAPI", "fos": "switch (SSH)", "vcenter": "vCenter",
+    "host-ssh": "Linux host (SSH)", "winrm": "Windows host (WinRM)", "greenlake": "GreenLake API",
+}
 
 
 def _add_commands_appendix(doc, data: AsBuiltData) -> None:
-    """SPEC-019 R2: what touched the arrays in this run. Changes one by one; reads counted, not shown."""
+    """SPEC-019 R2: what touched the arrays in this run, and the switches, vCenter, hosts and GreenLake
+    the run reached. Changes one by one; reads counted, not shown."""
     _h1(doc, "Commands run on the array")
     writes = [c for c in data.commands if c.get("write")]
     reads = [c for c in data.commands if not c.get("write")]
-    _para(doc, f"The tool recorded every command it sent for this run as it ran: {len(writes)} change(s) and "
+    _para(doc, f"The tool recorded every command it sent for this run as it ran, to the array and to any "
+               f"switch, vCenter, host or GreenLake service it reached: {len(writes)} change(s) and "
                f"{len(reads)} read-only command(s). The full output of each is in the run's command log "
                "(the app's console, Download .txt).")
     if writes:
@@ -914,20 +1371,20 @@ def _add_link_check(doc, data: AsBuiltData) -> None:
     """SPEC-020 R6: what `checkrclink` measured, the limit for each configured mode, and whether the
     operator accepted a latency over it (the apply's note says so)."""
     from alletra_onboard.application.replication.link_check import PING_COUNT
-    from alletra_onboard.domain.replication import RTT_LIMIT_MS
+    from alletra_onboard.domain.replication import RTT_LIMIT_MS, rtt_limit_ms, rtt_limit_text
 
     check = data.link_check or {}
     _para(doc, "Link check", bold=True)
     results = check.get("results", [])
     measured = [r for r in results if r.get("status") == "measured" and r.get("latency_ms") is not None]
     modes = check.get("modes", [])
-    limits = "; ".join(f"{m} replication over RCIP needs {RTT_LIMIT_MS[m]:g} ms or less" for m in modes if m in RTT_LIMIT_MS)
+    limits = "; ".join(rtt_limit_text("IP", m) for m in modes if m in RTT_LIMIT_MS["IP"])
     if check.get("error") or not measured:
         _para(doc, f"The latency between the arrays was not measured: {check.get('error') or 'no link could be tested'}.")
         return
     worst = max(r["latency_ms"] for r in measured)
     accepted = any("accepted it and chose to continue" in n for n in (data.replication_result or {}).get("notes", []))
-    over = [m for m in modes if worst > RTT_LIMIT_MS.get(m, 0)]
+    over = [m for m in modes if worst > rtt_limit_ms("IP", m)]
     verdict = ("over HPE's limit for " + "/".join(over) + (" — the operator accepted the measured latency and continued." if accepted else ".")
                if over else "within HPE's limit.")
     _para(doc, f"Measured with checkrclink on {check.get('at', '')} (test length {check.get('duration_s', '')} s, stopped "
@@ -953,6 +1410,28 @@ def _add_link_check(doc, data: AsBuiltData) -> None:
         _para(doc, f"Not checked: {line}")
 
 
+def _add_typed_latency(doc, data: AsBuiltData) -> None:
+    """SPEC-031 R6/R7: over Fibre Channel the latency is the round-trip time the engineer typed on the
+    Replication tab, held to the FC limit; the document says it was typed, not measured."""
+    from alletra_onboard.domain.replication import rtt_limit_ms, rtt_limit_text
+
+    tab = data.replication_tab or {}
+    rtt = tab.get("rtt_ms")
+    modes = sorted({r.get("mode") for r in tab.get("rows", []) if r.get("mode")}) or ["async"]
+    _para(doc, "Round-trip time", bold=True)
+    if rtt is None:
+        _para(doc, "The arrays replicate over Fibre Channel and no round-trip time was typed on the Replication tab. "
+                   "The tool cannot measure Fibre Channel links yet, so the latency between the arrays is not recorded.")
+        return
+    over = [m for m in modes if rtt > rtt_limit_ms("FC", m)]
+    accepted = any("accepted it and chose to continue" in n for n in (data.replication_result or {}).get("notes", []))
+    verdict = ("over HPE's limit for " + "/".join(over) + (" — the operator accepted the typed time and continued." if accepted else ".")
+               if over else "within HPE's limit.")
+    limits = "; ".join(rtt_limit_text("FC", m) for m in modes)
+    _para(doc, f"Typed by the engineer on the Replication tab, not measured: {rtt:g} ms. The tool cannot measure Fibre "
+               f"Channel links yet. {limits[0].upper() + limits[1:]}. The typed time is {verdict}")
+
+
 def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
     from alletra_onboard.application.replication.plan import find_partnership
     from alletra_onboard.application.replication.verify import peer_group_name
@@ -974,16 +1453,24 @@ def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> Non
 
     # -- partner array and partnership
     _para(doc, "Partner array", bold=True)
+    partnership = find_partnership(a, b) if a is not None and b is not None else None
+    # SPEC-031 R7: the replication ports are RCIP addresses, or over Fibre Channel each FC link (port → peer WWN)
+    transport = (partnership.transport if partnership is not None
+                 else ((data.replication_report or {}).get("partnership") or {}).get("transport", "IP"))
+
     def side(view, name, err):
         if view is None:
             return [name, "could not be read" if err else "—", "—", "—", "—"]
         rc = f"{view.rc_status}{', ' + view.rc_health if view.rc_health else ''}" or "—"
-        ports = "; ".join(f"{p.nsp} {p.ip}" for p in view.rcip_ports) or "none configured"
+        if transport == "FC":
+            fc = {t.name for t in view.targets if t.is_fc}
+            ports = "; ".join(f"{link.nsp} → {link.address}" for link in view.links if link.target in fc) or "none"
+        else:
+            ports = "; ".join(f"{p.nsp} {p.ip}" for p in view.rcip_ports) or "none configured"
         return [name, view.serial or "—", view.os_version or "—", rc, ports]
-    _table(doc, ["Array", "Serial", "OS", "Remote Copy", "RCIP ports"],
+    _table(doc, ["Array", "Serial", "OS", "Remote Copy", "Replication ports"],
            [["This array: " + a_name, *side(a, a_name, a_err)[1:]], ["Peer: " + b_name, *side(b, b_name, b_err)[1:]]],
            widths=[0.26, 0.14, 0.10, 0.16, 0.34])
-    partnership = find_partnership(a, b) if a is not None and b is not None else None
     if partnership is None:
         _para(doc, "No Remote Copy partnership between the two arrays could be confirmed when this document was "
                    "generated" + (" (one side was not readable)." if a_err or b_err else "."))
@@ -997,12 +1484,17 @@ def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> Non
         _para(doc, f"Partnered: {a_name} → {b_name} via target '{partnership.target_on_primary}' "
                    f"({partnership.links_primary_up}/{partnership.links_primary_total} links Up); "
                    f"{b_name} → {a_name} via target '{partnership.target_on_peer}' "
-                   f"({partnership.links_peer_up}/{partnership.links_peer_total} links Up). Found by link address.")
-        _table(doc, ["Array", "Target", "Policy", "Link (port → peer address)", "Status"], link_rows,
-               widths=[0.22, 0.22, 0.16, 0.28, 0.12])
+                   f"({partnership.links_peer_up}/{partnership.links_peer_total} links Up). "
+                   + ("Over Fibre Channel, found by port WWN." if partnership.transport == "FC"
+                      else "Over RCIP, found by link address."))
+        _table(doc, ["Array", "Target", "Policy",
+                     "Link (port → peer port WWN)" if partnership.transport == "FC" else "Link (port → peer address)",
+                     "Status"], link_rows, widths=[0.22, 0.22, 0.16, 0.28, 0.12])
 
-    # -- SPEC-020 R6: the measured latency
-    if data.link_check:
+    # -- SPEC-020 R6: the measured latency; SPEC-031 R6: over Fibre Channel, the typed one
+    if transport == "FC":
+        _add_typed_latency(doc, data)
+    elif data.link_check:
         _add_link_check(doc, data)
 
     # -- groups configured by this run

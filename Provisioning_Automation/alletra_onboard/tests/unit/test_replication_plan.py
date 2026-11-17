@@ -247,15 +247,24 @@ def test_a_rerun_keeps_a_group_on_the_target_it_was_created_on():
     assert report.partnership.target_by_mode == {"async": "E18U31_async"}
 
 
-def test_a_fibre_channel_only_pair_says_so():
+def test_a_fibre_channel_target_that_does_not_resolve_is_named_with_the_wwn_that_did_not_match():
+    """Changed on purpose (BL-50, SPEC-031 R4): this used to end with "this tool supports Remote Copy over
+    IP only" and send the engineer to the Replication network tab. An FC target is now matched by WWN;
+    SiteB's link addresses E18U31's peer port 0:3:2, but its Options carry no node WWN."""
     fc = ("Remote Copy System Information\nStatus: Started, Normal\n\nTarget Information\n\n"
           "Name ID Type Status Options Policy\nSiteB 1 FC ready - mirror_config\n\nLink Information\n\n"
           "Target Node Address Status Options\nSiteB 0:3:2 20320202AC02DEF2 Up -\n\nGroup Information\n\n")
     a, b = _views(a_overrides={"showrcopy": fc, "showport -rcip": "There is no specified port information\n"})
     report = check(a, b, _intent())
-    assert any(f.startswith("No Remote Copy partnership") for f in report.findings)
-    assert any(f == "Remote Copy over Fibre Channel target(s) found (SiteB); this tool supports Remote Copy over IP only."
-               for f in report.findings)
+    assert report.partnership is None
+    assert report.findings[:2] == [
+        ("No Remote Copy partnership between AlletraMP_D22U27 and AlletraMP_E18U31: no two targets point at each "
+        "other, by RCIP address or by Fibre Channel WWN. Fix the Fibre Channel partnership on the arrays (what each "
+        "target shows is below), then read both arrays again."),
+        ("AlletraMP_D22U27 has Fibre Channel target 'SiteB' that does not resolve to AlletraMP_E18U31: its node WWN "
+        "(none) is not one of AlletraMP_E18U31's (2FF70002AC02DEF2, 2FF70202AC02DEF2)."),
+    ]
+    assert not any("Replication network tab" in f or "over IP only" in f for f in report.findings)
 
 
 def test_an_async_row_on_a_target_with_no_groups_has_no_mode_finding():

@@ -1,14 +1,10 @@
 """SPEC-023 — snapshots and schedules from model objects: names, the cron and command lines (pinned to
 the schedules captured on the lab pair; `createsched -f` since ADR 0016 was accepted, 2026-11-17), the
 exists / create / conflict plan (R4, with the accepted ADR's blockers and notes), the removal order
-(R6) and the step (R9). Not built yet: every test here is expected to fail until the work packet's
-step that names it is done (docs/workpackets/BL-21.md)."""
+(R6) and the step (R9). Written 2026-11-16/17 as expected failures; built 2026-11-17
+(docs/workpackets/BL-21.md steps 1, 3, 5 and 6)."""
 
 import pytest
-
-pytestmark = pytest.mark.xfail(
-    reason="BL-21: not built yet, see docs/workpackets/BL-21.md", strict=True,
-)
 
 PATTERN = "@vvname@.@y@@m@@d@@H@@M@@S@"
 
@@ -54,7 +50,6 @@ def _schedule(name, command, cron, status="active"):
 
 def _plan(requests, view, **kw):
     from alletra_onboard.application.snapshots.plan import plan_snapshots
-
     from alletra_onboard.domain.snapshots import SnapshotIntent
 
     return plan_snapshots(SnapshotIntent(requests=requests), view, **kw)

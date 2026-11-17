@@ -307,8 +307,8 @@ def test_new_sections_are_heading_1_after_checkhealth_and_toc_updates_on_open(tm
 # ------------------------------------------------------------------ R6, R4, R5 — the step
 
 class _Cli:
-    def __init__(self, fail: str | None = None):
-        self.fail, self.ran = fail, []
+    def __init__(self, fail: str | None = None, outputs: dict[str, str] | None = None):
+        self.fail, self.ran, self.outputs = fail, [], outputs or {}
 
     def __enter__(self):
         return self
@@ -320,7 +320,7 @@ class _Cli:
         self.ran.append(cmd)
         if self.fail and cmd.startswith(self.fail):
             raise RuntimeError(f"{cmd} failed on purpose")
-        return f"# {cmd}\n"
+        return self.outputs.get(cmd, f"# {cmd}\n")
 
 
 def test_collect_continues_past_a_failing_command(monkeypatch):
@@ -334,6 +334,59 @@ def test_collect_continues_past_a_failing_command(monkeypatch):
     assert data.showvv_cpg.startswith("# showvv -showcols") and ",CPG," in data.showvv_cpg
     assert "UsrCPG" not in data.showvv_cpg                       # rejected by OS 10.5.55 (C-1)
     assert "showhost -d" in cli.ran and "showhostset" in cli.ran and "showvlun -a" in cli.ran
+
+
+def _handover_outputs(folder: str) -> dict[str, str]:
+    """SPEC-026 R3: the five reads as captured on one lab array, and its showport from the same night."""
+    from alletra_onboard.application.documents import handover
+
+    fixtures = FIX.parent
+    files = dict(zip((cmd for _a, cmd in handover.READS), ("showalert_d.txt", "showsys_space.txt",
+                                                            "srstatcpu_24h_v2.txt", "srstatport_24h_v2.txt",
+                                                            "srstatvv_24h.txt"), strict=True))
+    out = {cmd: (fixtures / "handover" / folder / name).read_text(encoding="utf-8").split("\n", 1)[1]
+           for cmd, name in files.items()}
+    out["showport"] = (fixtures / "peer_ports" / folder / "showport.txt").read_text(encoding="utf-8").split("\n", 1)[1]
+    return out
+
+
+def test_collect_reads_the_five_handover_reports_after_the_others(monkeypatch):
+    from alletra_onboard.application.documents import handover
+    from alletra_onboard.application.documents import steps as st
+
+    cli = _Cli(outputs=_handover_outputs("VZ"))
+    monkeypatch.setattr(st, "make_array_cli", lambda creds: cli)
+    data = st.DocumentSteps(coord=None)._collect_asbuilt("10.0.0.1", "u", "p")
+    commands = [cmd for _a, cmd in handover.READS]
+    assert cli.ran[-5:] == commands                                # after every existing read, in R3's order
+    assert not any(c.startswith(("srstatrcvv", "stat", "setalert", "removealert")) for c in cli.ran)
+    assert data.showalert_d.startswith("Id ") and "31 alerts" in data.showalert_d
+    assert data.srstatport.startswith("Start Time:") and data.showport.startswith("N:S:P")
+    assert data.handover_read_at is not None and data.read_errors == {}
+
+
+def test_a_refused_handover_read_lands_in_read_errors_and_the_others_still_read(monkeypatch):
+    """SPEC-026 R8: an older OS, or the client, refuses one report; the rest of the section still reads."""
+    from alletra_onboard.adapters.array.cli_client import ArrayCliError
+    from alletra_onboard.application.documents import handover
+    from alletra_onboard.application.documents import steps as st
+
+    class _Refusing(_Cli):
+        def run(self, cmd, timeout=None):
+            if cmd.startswith("srstatcpu"):
+                self.ran.append(cmd)
+                raise ArrayCliError("refused: 'srstatcpu' is not a read-only show command")
+            return super().run(cmd, timeout)
+
+    cli = _Refusing(outputs=_handover_outputs("VZ"))
+    monkeypatch.setattr(st, "make_array_cli", lambda creds: cli)
+    data = st.DocumentSteps(coord=None)._collect_asbuilt("10.0.0.1", "u", "p")
+    assert data.read_errors == {handover.CPU: "ArrayCliError: refused: 'srstatcpu' is not a read-only show command"}
+    assert data.srstatcpu == "" and cli.ran[-5:] == [cmd for _a, cmd in handover.READS]   # the rest still ran
+    reads = handover.read_from(data)
+    assert set(reads.errors) == {handover.CPU} and reads.cpu_nodes is None
+    assert len(reads.alerts) == 31 and reads.space is not None and reads.volume_load is not None
+    assert reads.idle is True and reads.offset is not None              # the ports' report gave the offset
 
 
 def test_run_records_take_the_latest_event_of_each_type():
@@ -465,3 +518,42 @@ def test_the_two_run_sections_share_a_page(tmp_path):
     assert h1["Provisioning performed in this run"].paragraph_format.page_break_before is not True
     assert h1["Hosts and host sets"].paragraph_format.page_break_before is True
     assert h1["Presentations"].paragraph_format.page_break_before is True
+
+
+# ------------------------------------------------------------------ ADR 0026 — device fingerprints
+
+def test_device_fingerprints_are_listed_for_the_customer_to_compare(tmp_path):
+    from datetime import UTC, datetime
+
+    from alletra_onboard.domain.trust import DeviceKey, DevicePin, DevicePinInfo, TrustKind
+
+    at = datetime(2026, 11, 17, 10, 31, tzinfo=UTC)
+
+    def ssh(fp, kt="ssh-ed25519"):
+        return DeviceKey(kind=TrustKind.SSH, key_type=kt, data="AAAA", fingerprint=fp)
+
+    cert = DeviceKey(kind=TrustKind.TLS, key_type="certificate", data="PEM", fingerprint="AB:CD")
+    pins = [
+        DevicePin(kind=TrustKind.SSH, host="10.0.0.5", port=22, device="array", key=ssh("SHA256:arraykey"), trusted_at=at),
+        DevicePin(kind=TrustKind.TLS, host="10.0.0.5", port=443, device="array", key=cert, trusted_at=at,
+                  how="retrusted", previous=cert.model_copy(update={"fingerprint": "EF:01"})),
+        DevicePin(kind=TrustKind.SSH, host="10.0.1.2", port=2222, device="switch", key=ssh("SHA256:switchkey", "ssh-rsa"),
+                  trusted_at=at, refused=ssh("SHA256:otherkey"), refused_at=at),
+    ]
+    devices = [DevicePinInfo.of(p).model_dump(mode="json") for p in pins]
+    out, _ = generate_asbuilt(_array_data(trusted_devices=devices), tmp_path / "fingerprints.docx")
+    doc, _text = _read(out)
+    assert ("Heading 1", "Device fingerprints") in _headings(doc)
+    rows = _tables_by_header(doc)[("Device", "Address", "Key", "SHA-256 fingerprint", "Trusted")]
+    assert rows == [
+        ["Array", "10.0.0.5", "SSH host key (ssh-ed25519)", "SHA256:arraykey", "First contact, 2026-11-17 10:31 UTC"],
+        ["Array", "10.0.0.5", "TLS certificate", "AB:CD", "Again, by the operator, 2026-11-17 10:31 UTC"],
+        ["SAN switch", "10.0.1.2:2222", "SSH host key (ssh-rsa)", "SHA256:switchkey",
+         "First contact, 2026-11-17 10:31 UTC. Later presented SHA256:otherkey, which was refused (2026-11-17 10:31 UTC)"],
+    ]
+
+
+def test_no_device_fingerprints_section_when_the_run_reached_no_device(tmp_path):
+    out, _ = generate_asbuilt(_array_data(), tmp_path / "nofingerprints.docx")
+    doc, _text = _read(out)
+    assert ("Heading 1", "Device fingerprints") not in _headings(doc)

@@ -1,6 +1,6 @@
 import { Box, Button, DataTable, Text } from 'grommet';
 import { Storage as StorageIcon } from 'grommet-icons';
-import { useState } from 'react';
+import { ComponentProps, ReactNode, useState } from 'react';
 import {
   ActionOutcome,
   HostPathStatus,
@@ -17,38 +17,39 @@ import {
   storagePreview,
   verifyPaths,
 } from '../api';
-import { EmptyState, Guidance, Panel, PartsBar, Section, StatusLine } from '../ui/blocks';
-import { DiscoveryFreshness } from '../ui/discoveryAge';
+import { DoneList, EmptyState, Guidance, Panel, PartsBar, Section, StatusLine } from '../ui/blocks';
+import { DiscoveryFreshness, discoveryReadAt, isDiscoveryStale } from '../ui/discoveryAge';
 import { InlineNotification, NotesList } from '../ui/primitives';
-import { StatusIndicator, StepState } from '../ui/status';
+import { NoValue, RESULT, ResultWord, StatusIndicator, StepState } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
-import { FooterAction, StepShell } from '../ui/StepShell';
+import { FooterAction, StepShell, StepStatus } from '../ui/StepShell';
 import { ProvisioningBuilderView } from './ProvisioningBuilderView';
 
-const VERDICT: Record<PathVerdict, { state: StepState; label: string }> = {
-  live: { state: 'complete', label: 'Live' },
-  partial: { state: 'action_required', label: 'Partial' },
-  no_path: { state: 'not_started', label: 'No path' },
+const VERDICT: Record<PathVerdict, ResultWord> = {
+  live: RESULT.live,
+  partial: RESULT.partial,
+  no_path: RESULT.no_path,
 };
 
 // What apply will do to each object (SPEC-001 R10). Grey = not there yet; green = there and matches;
 // amber = there, apply will add to it; red = there and differs in a way apply cannot fix.
-const PLAN_STATE: Record<PlanState, { state: StepState; label: string }> = {
-  create: { state: 'not_started', label: 'Create' },
-  exists: { state: 'complete', label: 'Exists' },
-  update: { state: 'action_required', label: 'Update' },
-  conflict: { state: 'failed', label: 'Conflict' },
+const PLAN_STATE: Record<PlanState, ResultWord> = {
+  create: RESULT.create,
+  exists: RESULT.already_there,
+  update: RESULT.update,
+  conflict: RESULT.conflict,
 };
 
-const OUTCOME: Record<ActionOutcome['status'], { state: StepState; label: string }> = {
-  created: { state: 'complete', label: 'Created' },
-  updated: { state: 'complete', label: 'Updated' },
-  exists: { state: 'not_started', label: 'Existed' },
-  failed: { state: 'failed', label: 'Failed' },
+const OUTCOME: Record<ActionOutcome['status'], ResultWord> = {
+  created: RESULT.created,
+  updated: RESULT.updated,
+  exists: { ...RESULT.already_there, state: 'not_started' },
+  failed: RESULT.failed,
 };
 
-// SPEC-007 R3: exports, then sets, then their members — the order that pastes top to bottom.
-const REMOVAL_ORDER: Record<string, number> = { vlun: 0, vvset: 1, volume: 2, hostset: 3, host: 4 };
+// SPEC-007 R3 (and SPEC-023 R6): schedules, snapshots, exports, then sets, then their members — the order
+// that pastes top to bottom. The backend's REMOVAL_ORDER (domain/provisioning.py) is the same.
+const REMOVAL_ORDER: Record<string, number> = { schedule: 0, snapshot: 1, vlun: 2, vvset: 3, volume: 4, hostset: 5, host: 6 };
 const removalLines = (items: RemovalItem[]): string[] => {
   const out: string[] = [];
   [...items].sort((a, b) => (REMOVAL_ORDER[a.kind] ?? 9) - (REMOVAL_ORDER[b.kind] ?? 9))
@@ -101,6 +102,171 @@ function RemovalSet({ removals, notes, runId, serial }: { removals: RemovalItem[
     </Box>
   );
 }
+
+/** The plan, one row per object (SPEC-001 R10); `previous` says what moved since the plan before it. */
+function PlanTable({ plan, previous }: { plan: ProvisioningPlan; previous: Map<string, PlanState> }) {
+  return (
+    <DataTable
+      columns={[
+        { property: 'kind', header: 'Kind', render: (action: PlannedAction) => <Text size="small">{action.kind}</Text> },
+        { property: 'name', header: 'Name', render: (action: PlannedAction) => <Text size="small">{action.name}</Text> },
+        {
+          property: 'state',
+          header: 'Action',
+          render: (action: PlannedAction) => {
+            const was = previous.get(`${action.kind}|${action.name}`);
+            return (
+              <Box gap="xxsmall">
+                {action.state === 'create' ? (
+                  <Text size="small" weight={500}>Create</Text>
+                ) : (
+                  <StatusIndicator state={PLAN_STATE[action.state].state} label={PLAN_STATE[action.state].label} />
+                )}
+                {was && was !== action.state && <Text size="xsmall" color="text-weak">was {PLAN_STATE[was].label.toLowerCase()}</Text>}
+              </Box>
+            );
+          },
+        },
+        {
+          property: 'description',
+          header: 'Detail',
+          render: (action: PlannedAction) => (
+            <Box>
+              <Text size="small" color="text-weak">
+                {action.description}
+              </Text>
+              {action.reason && (
+                <Text size="xsmall" color={action.state === 'conflict' ? 'status-critical' : 'text-weak'}>
+                  {action.reason}
+                </Text>
+              )}
+            </Box>
+          ),
+        },
+      ]}
+      data={plan.actions}
+      primaryKey={false}
+      a11yTitle="Provisioning plan: one row per object, with the action apply will take"
+    />
+  );
+}
+
+/** What the array answered for each object, then the undo for everything this run created. */
+function ResultTable({ result }: { result: ProvisioningResult }) {
+  return (
+    <DataTable
+      columns={[
+        { property: 'kind', header: 'Kind', render: (outcome: ActionOutcome) => <Text size="small">{outcome.kind}</Text> },
+        { property: 'name', header: 'Name', render: (outcome: ActionOutcome) => <Text size="small">{outcome.name}</Text> },
+        {
+          property: 'status',
+          header: 'Result',
+          render: (outcome: ActionOutcome) => <StatusIndicator state={OUTCOME[outcome.status].state} label={OUTCOME[outcome.status].label} />,
+        },
+        {
+          property: 'detail',
+          header: 'Detail',
+          render: (outcome: ActionOutcome) =>
+            outcome.detail ? (
+              <Text size="small" color="text-weak">
+                {outcome.detail}
+              </Text>
+            ) : (
+              <NoValue />
+            ),
+        },
+      ]}
+      data={result.outcomes}
+      primaryKey={false}
+      a11yTitle="Provisioning result: one row per object, with what the array reported"
+    />
+  );
+}
+
+/** The path report: per host, the array's view and the ESXi host's own (SPEC-013), and its notes. */
+function PathsReport({ paths }: { paths: PathVerification | null }) {
+  return (
+    <>
+      <Text size="small" color="text-weak">
+        Reads the array back and reports, per host: how many LUNs are live, over how many HBAs, how many paths each LUN has, and on which
+        fabrics. For ESXi hosts it also reads the host&apos;s own multipath view through vCenter (a new LUN needs a storage rescan before
+        ESXi sees it).
+      </Text>
+      {paths?.error && (
+        <StatusLine state="failed" title="Path verification failed">
+          {paths.error}
+        </StatusLine>
+      )}
+      {paths && !paths.error && paths.hosts.length === 0 && (
+        <Text size="small" color="text-weak">
+          No target hosts to verify.
+        </Text>
+      )}
+      {paths && !paths.error && paths.hosts.length > 0 && (
+        <DataTable
+          columns={[
+            { property: 'host', header: 'Host', render: (host: HostPathStatus) => <Text size="small">{host.host}</Text> },
+            {
+              property: 'verdict',
+              header: 'Result',
+              render: (host: HostPathStatus) => <StatusIndicator state={VERDICT[host.verdict].state} label={VERDICT[host.verdict].label} />,
+            },
+            {
+              property: 'detail',
+              header: 'Array view',
+              render: (host: HostPathStatus) => (
+                <Text size="small" color="text-weak">
+                  {host.detail}
+                </Text>
+              ),
+            },
+            {
+              property: 'esxi_note',
+              header: 'ESXi view',
+              render: (host: HostPathStatus) => {
+                // SPEC-013: the host's own multipath view; a second opinion, never the verdict.
+                const s = host.esxi_state ?? 'not_checked';
+                const state: StepState =
+                  s === 'ok' ? 'complete' : s === 'degraded' || s === 'absent' ? 'action_required' : s === 'not_read' ? 'failed' : 'not_started';
+                const label =
+                  s === 'ok' ? 'Visible' : s === 'degraded' ? 'Degraded' : s === 'absent' ? 'Rescan needed' : s === 'not_read' ? 'Not read' : '';
+                return (
+                  <Box gap="xxsmall">
+                    {label ? <StatusIndicator state={state} label={label} /> : <NoValue />}
+                    {host.esxi_note && (
+                      <Text size="xsmall" color="text-weak">
+                        {host.esxi_note}
+                      </Text>
+                    )}
+                  </Box>
+                );
+              },
+            },
+          ]}
+          data={paths.hosts}
+          primaryKey="host"
+          a11yTitle="Path verification: one row per host, the array's view and the ESXi host's view"
+        />
+      )}
+      {paths?.notes.length ? (
+        <Box flex={false}>
+          <Text size="xsmall" color="text-weak">
+            <NotesList notes={paths.notes} />
+          </Text>
+        </Box>
+      ) : null}
+    </>
+  );
+}
+
+const pathsSummary = (paths: PathVerification | null) =>
+  paths?.error
+    ? 'Could not run'
+    : paths
+      ? `${paths.hosts.length} host${paths.hosts.length === 1 ? '' : 's'} read back`
+      : 'Not run yet. A report only; it never gates the run.';
+
+const PARTS = ['Compose', 'Review the plan', 'Create', 'Verify paths'];
 
 interface Props {
   runId: string;
@@ -184,7 +350,8 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
   const at = !plan || plan.error ? 0 : !result ? 1 : stopped ? 2 : 3;
   const allDone = !!result && !stopped && !!paths && !paths.error;
   const next = nextTitle ? `Continue to ${nextTitle}` : 'Continue';
-  const build: FooterAction = { label: plan ? 'Rebuild plan' : 'Build plan', busy: running, onClick: call(() => storagePreview(runId)) };
+  const rebuild = call(() => storagePreview(runId));
+  const build: FooterAction = { label: plan ? 'Rebuild plan' : 'Build plan', busy: running, onClick: rebuild };
   const skip: FooterAction = { label: everApplied ? next : `${next} without provisioning`, onClick: onDone };
   const verify: FooterAction = { label: paths ? 'Verify paths again' : 'Verify paths', busy: running, onClick: call(() => verifyPaths(runId)) };
   // The server checks the tick too: it gets the plan's id only when this plan was ticked.
@@ -193,42 +360,125 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
     busy: running,
     onClick: call(() => storageApply(runId, authorised ? planId : null)),
   };
+  // Rebuild plan sits on the plan's panel while that is the part at hand, and on its row once the plan
+  // is created; it is in the footer only where it is the one way on: no plan yet, a plan that cannot be
+  // applied, or a failed apply (SPEC-030 R4, R7a). One place at a time (R3).
+  const reviewing = !!plan && !plan.error && !result && !blocked;
 
   let primary: FooterAction;
   let buttons: FooterAction[];
   if (stopped) {
-    // A new plan reads the array again: what the failed attempt made shows as Exists, the rest as Create.
+    // A new plan reads the array again: what the failed attempt made shows as Already there, the rest as Create.
     primary = build;
     buttons = [skip];
   } else if (result) {
     primary = paths ? { label: next, onClick: onDone } : verify;
-    buttons = paths ? [verify, build] : [build, skip];
-  } else if (plan && !plan.error && !blocked) {
+    buttons = paths ? [verify] : [skip];
+  } else if (reviewing) {
     primary = create;
-    buttons = [build, skip];
+    buttons = [skip];
   } else {
     primary = build;
     buttons = [skip];
   }
 
+  const hhmm = (types: string[]) => {
+    const when = [...events].reverse().find((event) => types.includes(event.event_type))?.created_at;
+    return when ? new Date(when).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  };
+
+  // One status line (SPEC-030 R2): working, a plan that could not be built, what the create answered,
+  // a plan that cannot be applied, a plan to approve. Before a plan, the empty state says it.
+  let status: StepStatus | undefined;
+  if (running) {
+    status = { state: 'running', message: 'Working on the array. Each action appears in Activity, below.' };
+  } else if (plan?.error) {
+    status = { state: 'failed', title: 'The plan could not be built', message: plan.error };
+  } else if (result) {
+    status = {
+      state: result.error || failed > 0 ? 'failed' : 'complete',
+      title: result.error
+        ? 'Creation reported an error'
+        : failed > 0
+          ? `${failed} export${failed === 1 ? '' : 's'} not found on read-back`
+          : `${created} created${updated ? `, ${updated} updated` : ''}`,
+      time: hhmm(APPLY_EVENTS),
+      message: result.error
+        ? `${result.error.replace(/\.$/, '')}. ${created ? `${created} object${created === 1 ? ' was' : 's were'} created before it stopped; the removal set below undoes them. ` : ''}Fix the cause on the array or in the plan, then rebuild the plan: objects already made will show as Already there.`
+        : failed > 0
+          ? "The array reported the export created, but it is not in the array's export list. Check `showvlun -t` on the array before continuing."
+          : `${result.outcomes.length - created - updated} already existed and were left untouched.${paths ? '' : ' Verify the paths next.'}`,
+    };
+  } else if (plan && blocked) {
+    status = {
+      state: 'failed',
+      title: conflictRows > 0 ? 'The plan has conflicts' : 'The plan cannot be applied yet',
+      time: hhmm(['storage.previewed']),
+      message:
+        conflictRows > 0
+          ? 'Something on the array has the same name as an object in this plan but different attributes. Resolve it on the array (or change the plan), then rebuild.'
+          : plan.blockers.join(' '),
+    };
+  } else if (plan) {
+    status = {
+      state: 'action_required',
+      title: 'Review the plan, then approve creation',
+      time: hhmm(['storage.previewed']),
+      message: `${toCreate} to create, ${toUpdate} to update, ${existing} already there. No changes have been made to the array. Tick the box next to the green button when you have reviewed it.`,
+    };
+  }
+
+  // Every other notice is a note (R2); a stale discovery stays a visible warning here (LESSONS 8): the
+  // hosts this step creates come from the discovery snapshot.
+  const stale = isDiscoveryStale(events);
+  const readAt = discoveryReadAt(events);
+  const notes: ReactNode[] = [...(plan && !plan.error ? plan.notes : [])];
+  if (readAt && !stale) notes.push(`Environment last read ${readAt.toLocaleString()}.`);
+
+  // A create that stopped, or exports the read-back did not find, keep Create the open part (R6, R7a).
+  const createOpen = !!result && (stopped || failed > 0);
+  const counts = `${toCreate} to create · ${toUpdate} to update · ${existing} already there · ${conflicts} conflict${conflicts === 1 ? '' : 's'}`;
+
+  // Finished parts, one row each (R7).
+  const done: ComponentProps<typeof DoneList>['items'] = [];
+  if (at >= 1) {
+    done.push({
+      text: result && !stopped ? 'Composition applied: host set members and exports' : 'Composition: host set members and exports',
+      // editable until the objects are created, as before; read-only after (SPEC-004 R4)
+      detail: <ProvisioningBuilderView runId={runId} disabled={running} readOnly={!!result && !stopped} bare />,
+    });
+  }
+  if (plan && !plan.error && result) {
+    done.push({
+      text: `Plan built at ${hhmm(['storage.previewed'])}: ${toCreate} to create, ${toUpdate} to update, ${existing} already there`,
+      detail: <PlanTable plan={plan} previous={previousState} />,
+      again: stopped ? undefined : { label: 'Rebuild plan', busy: running, onClick: rebuild },
+    });
+  }
+  if (result && !createOpen) {
+    done.push({
+      text: `What the array answered at ${hhmm(APPLY_EVENTS)}: ${created} created${updated ? `, ${updated} updated` : ''}, ${
+        result.outcomes.length - created - updated - failed
+      } already there`,
+      detail: (
+        <>
+          <ResultTable result={result} />
+          <RemovalSet removals={allRemovals} notes={allRemovalNotes} runId={runId} serial={run?.serial_number} />
+        </>
+      ),
+    });
+  }
+
   return (
     <StepShell
       title="Provision storage"
-      description="Creates the hosts, host sets, volumes and exports on the array. Nothing is written until you approve the plan."
-      stateDetail={
-        stopped
-          ? 'stopped during create'
-          : result
-            ? 'objects created'
-            : blocked
-              ? `${plan!.blockers.length} blocker${plan!.blockers.length === 1 ? '' : 's'} to resolve`
-              : plan
-                ? 'awaiting approval'
-                : undefined
-      }
+      description="Creates the hosts, host sets, volumes and exports on the array, only after you approve the plan."
       error={error}
       onDismissError={() => setError(null)}
-      top={<PartsBar parts={['Compose', 'Review the plan', 'Create', 'Verify paths']} at={at} doneAll={allDone} failed={(blocked && !result) || stopped} />}
+      top={<PartsBar parts={PARTS} at={at} doneAll={allDone} failed={(blocked && !result) || stopped} />}
+      status={status}
+      notes={notes}
+      staleNotice={stale ? <DiscoveryFreshness events={events} action="creating objects on the array" /> : undefined}
       primary={primary}
       buttons={buttons}
       // The only action in this tool that writes to a customer array, so it takes an explicit
@@ -242,13 +492,12 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
             }
           : undefined
       }
-      guideOpen={false}
       guidance={
         <Guidance
           items={[
             {
               title: 'What this step writes',
-              body: 'Only what the plan shows, and only after your tick. Objects marked Exists are left alone; Update adds to an existing object without removing anything.',
+              body: 'Only what the plan shows, and only after your tick. Objects marked Already there are left alone; Update adds to an existing object without removing anything.',
             },
             { title: 'Discovery feeds it', body: 'The hosts it creates come from Discovery. Run Discovery again if hosts, cabling or zoning have changed since.' },
             {
@@ -263,60 +512,33 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
         />
       }
     >
-      {/* The hosts this step creates come from the discovery snapshot, so its age matters here most. */}
-      <DiscoveryFreshness events={events} action="creating objects on the array" />
-
-      {running && <StatusLine state="running">Working on the array. Each action appears in Activity, below.</StatusLine>}
       {!running && !plan && (
         <EmptyState icon={<StorageIcon size="large" color="icon-weak" />} title="No plan yet">
           Compose the host set members and the exports below, then Build plan to see what will be created, what is already on the array and
           what conflicts. Nothing is created until you approve it.
         </EmptyState>
       )}
-      {plan?.error && (
-        <StatusLine state="failed" title="The plan could not be built">
-          {plan.error}
-        </StatusLine>
-      )}
-      {!running && plan && !plan.error && !result && blocked && (
-        <StatusLine state="failed" title={conflictRows > 0 ? 'The plan has conflicts' : 'The plan cannot be applied yet'}>
-          {conflictRows > 0
-            ? 'Something on the array has the same name as an object in this plan but different attributes. Resolve it on the array (or change the plan), then rebuild.'
-            : plan.blockers.join(' ')}
-        </StatusLine>
-      )}
-      {!running && plan && !plan.error && !result && !blocked && (
-        <StatusLine state="action_required" title="Review the plan, then approve creation">
-          {toCreate} to create, {toUpdate} to update, {existing} already there. No changes have been made to the array. Tick the box next to the
-          green button when you have reviewed it.
-        </StatusLine>
-      )}
-      {!running && result && (
-        <StatusLine
-          state={result.error || failed > 0 ? 'failed' : 'complete'}
-          title={
-            result.error
-              ? 'Creation reported an error'
-              : failed > 0
-                ? `${failed} export${failed === 1 ? '' : 's'} not found on read-back`
-                : `${created} created${updated ? `, ${updated} updated` : ''}`
-          }
-        >
-          {result.error
-            ? `${result.error.replace(/\.$/, '')}. ${created ? `${created} object${created === 1 ? ' was' : 's were'} created before it stopped; the removal set below undoes them. ` : ''}Fix the cause on the array or in the plan, then rebuild the plan: objects already made will show as Exists.`
-            : failed > 0
-              ? "The array reported the export created, but it is not in the array's export list. Check `showvlun -t` on the array before continuing."
-              : `${result.outcomes.length - created - updated} already existed and were left untouched.${paths ? '' : ' Verify the paths next.'}`}
-        </StatusLine>
-      )}
 
-      {/* keyed: Section reads `open` once, so it folds when the plan arrives */}
-      <Section key={plan ? 'planned' : 'compose'} title={result && !stopped ? 'Composition applied' : 'Compose'} summary="Host set members and exports" open={!plan}>
-        <ProvisioningBuilderView runId={runId} disabled={running} readOnly={!!result && !stopped} />
-      </Section>
+      {done.length > 0 && <DoneList items={done} />}
+
+      {at === 0 && (
+        <Panel title="Compose">
+          <ProvisioningBuilderView runId={runId} disabled={running} bare />
+        </Panel>
+      )}
 
       {plan && !plan.error && !result && (
-        <Panel title="Review the plan" right={<Text size="small" color="text-weak">{toCreate} to create · {toUpdate} to update · {existing} already there · {conflicts} conflict{conflicts === 1 ? '' : 's'}</Text>}>
+        <Panel
+          title="Review the plan"
+          right={
+            <Box direction="row" gap="small" align="center" wrap>
+              <Text size="small" color="text-weak">
+                {counts}
+              </Text>
+              {reviewing && <Button size="small" label="Rebuild plan" busy={running} onClick={rebuild} />}
+            </Box>
+          }
+        >
           {blocked && (
             <InlineNotification
               tone="critical"
@@ -324,168 +546,42 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
               message={<NotesList notes={plan.blockers} />}
             />
           )}
-          <DataTable
-            columns={[
-              { property: 'kind', header: 'Kind', render: (action: PlannedAction) => <Text size="small">{action.kind}</Text> },
-              { property: 'name', header: 'Name', render: (action: PlannedAction) => <Text size="small">{action.name}</Text> },
-              {
-                property: 'state',
-                header: 'Action',
-                render: (action: PlannedAction) => {
-                  const was = previousState.get(`${action.kind}|${action.name}`);
-                  return (
-                    <Box gap="xxsmall">
-                      {action.state === 'create' ? (
-                        <Text size="small" weight={500}>Create</Text>
-                      ) : (
-                        <StatusIndicator state={PLAN_STATE[action.state].state} label={PLAN_STATE[action.state].label} />
-                      )}
-                      {was && was !== action.state && <Text size="xsmall" color="text-weak">was {PLAN_STATE[was].label.toLowerCase()}</Text>}
-                    </Box>
-                  );
-                },
-              },
-              {
-                property: 'description',
-                header: 'Detail',
-                render: (action: PlannedAction) => (
-                  <Box>
-                    <Text size="small" color="text-weak">
-                      {action.description}
-                    </Text>
-                    {action.reason && (
-                      <Text size="xsmall" color={action.state === 'conflict' ? 'status-critical' : 'text-weak'}>
-                        {action.reason}
-                      </Text>
-                    )}
-                  </Box>
-                ),
-              },
-            ]}
-            data={plan.actions}
-            primaryKey={false}
-            a11yTitle="Provisioning plan: one row per object, with the action apply will take"
-          />
-          {plan.notes.length > 0 && <InlineNotification tone="info" title="Plan notes" message={<NotesList notes={plan.notes} />} />}
+          <PlanTable plan={plan} previous={previousState} />
         </Panel>
       )}
 
-      {result && (
-        <Section title="What the array answered" summary={`${result.outcomes.length} objects, one row each, and the commands to remove what was created`} open={!!result.error || failed > 0}>
-          <DataTable
-            columns={[
-              { property: 'kind', header: 'Kind', render: (outcome: ActionOutcome) => <Text size="small">{outcome.kind}</Text> },
-              { property: 'name', header: 'Name', render: (outcome: ActionOutcome) => <Text size="small">{outcome.name}</Text> },
-              {
-                property: 'status',
-                header: 'Result',
-                render: (outcome: ActionOutcome) => <StatusIndicator state={OUTCOME[outcome.status].state} label={OUTCOME[outcome.status].label} />,
-              },
-              {
-                property: 'detail',
-                header: 'Detail',
-                render: (outcome: ActionOutcome) => (
-                  <Text size="small" color="text-weak">
-                    {outcome.detail || '--'}
-                  </Text>
-                ),
-              },
-            ]}
-            data={result.outcomes}
-            primaryKey={false}
-            a11yTitle="Provisioning result: one row per object, with what the array reported"
-          />
+      {result && createOpen && (
+        <Panel title="Create" description={`What the array answered: ${result.outcomes.length} objects, one row each, and the commands to remove what was created.`}>
+          <ResultTable result={result} />
           <RemovalSet removals={allRemovals} notes={allRemovalNotes} runId={runId} serial={run?.serial_number} />
-        </Section>
+        </Panel>
       )}
+
+      {result && !stopped && (
+        <Panel title="Verify paths" right={<Text size="small" color="text-weak">{pathsSummary(paths)}</Text>}>
+          <PathsReport paths={paths} />
+        </Panel>
+      )}
+
       {!result && allRemovals.length > 0 && (
         <Section title="Undo what this run created" summary={`${removalLines(allRemovals).length} removal command${removalLines(allRemovals).length === 1 ? '' : 's'} from earlier applies in this run`} open={false}>
           <RemovalSet removals={allRemovals} notes={allRemovalNotes} runId={runId} serial={run?.serial_number} />
         </Section>
       )}
 
-      <Section
-        key={paths ? 'read' : 'not-read'}
-        title="Path verification"
-        summary={
-          paths?.error
-            ? 'Could not run'
-            : paths
-              ? `${paths.hosts.length} host${paths.hosts.length === 1 ? '' : 's'} read back`
-              : 'Not run yet. A report only; it never gates the run.'
-        }
-        open={!!paths}
-        right={result ? undefined : <Button size="small" busy={running} label={paths ? 'Verify paths again' : 'Verify paths'} onClick={call(() => verifyPaths(runId))} />}
-      >
-        <Text size="small" color="text-weak">
-          Reads the array back and reports, per host: how many LUNs are live, over how many HBAs, how many paths each LUN has, and on which
-          fabrics. For ESXi hosts it also reads the host&apos;s own multipath view through vCenter (a new LUN needs a storage rescan before
-          ESXi sees it).
-        </Text>
-        {paths?.error && (
-          <StatusLine state="failed" title="Path verification failed">
-            {paths.error}
-          </StatusLine>
-        )}
-        {paths && !paths.error && paths.hosts.length === 0 && (
-          <Text size="small" color="text-weak">
-            No target hosts to verify.
-          </Text>
-        )}
-        {paths && !paths.error && paths.hosts.length > 0 && (
-          <DataTable
-            columns={[
-              { property: 'host', header: 'Host', render: (host: HostPathStatus) => <Text size="small">{host.host}</Text> },
-              {
-                property: 'verdict',
-                header: 'Result',
-                render: (host: HostPathStatus) => <StatusIndicator state={VERDICT[host.verdict].state} label={VERDICT[host.verdict].label} />,
-              },
-              {
-                property: 'detail',
-                header: 'Array view',
-                render: (host: HostPathStatus) => (
-                  <Text size="small" color="text-weak">
-                    {host.detail}
-                  </Text>
-                ),
-              },
-              {
-                property: 'esxi_note',
-                header: 'ESXi view',
-                render: (host: HostPathStatus) => {
-                  // SPEC-013: the host's own multipath view; a second opinion, never the verdict.
-                  const s = host.esxi_state ?? 'not_checked';
-                  const state: StepState =
-                    s === 'ok' ? 'complete' : s === 'degraded' || s === 'absent' ? 'action_required' : s === 'not_read' ? 'failed' : 'not_started';
-                  const label =
-                    s === 'ok' ? 'Visible' : s === 'degraded' ? 'Degraded' : s === 'absent' ? 'Rescan needed' : s === 'not_read' ? 'Not read' : s === 'not_in_vcenter' ? 'n/a' : '--';
-                  return (
-                    <Box gap="xxsmall">
-                      <StatusIndicator state={state} label={label} />
-                      {host.esxi_note && (
-                        <Text size="xsmall" color="text-weak">
-                          {host.esxi_note}
-                        </Text>
-                      )}
-                    </Box>
-                  );
-                },
-              },
-            ]}
-            data={paths.hosts}
-            primaryKey="host"
-            a11yTitle="Path verification: one row per host, the array's view and the ESXi host's view"
-          />
-        )}
-        {paths?.notes.length ? (
-          <Box flex={false}>
-            <Text size="xsmall" color="text-weak">
-              <NotesList notes={paths.notes} />
-            </Text>
-          </Box>
-        ) : null}
-      </Section>
+      {/* Before a create the path check is a folded report with its own button, as before: it reads what
+          is already exported and never gates the run. After a create it is the part at hand, above. */}
+      {!(result && !stopped) && (
+        <Section
+          key={paths ? 'read' : 'not-read'}
+          title="Path verification"
+          summary={pathsSummary(paths)}
+          open={!!paths}
+          right={result ? undefined : <Button size="small" busy={running} label={paths ? 'Verify paths again' : 'Verify paths'} onClick={call(() => verifyPaths(runId))} />}
+        >
+          <PathsReport paths={paths} />
+        </Section>
+      )}
     </StepShell>
   );
 }

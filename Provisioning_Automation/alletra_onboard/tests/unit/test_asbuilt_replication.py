@@ -117,7 +117,8 @@ def test_replication_section_renders_partner_groups_volumes_and_removal_blocks_f
     assert _h1(doc)[-2:] == ["Replication configured in this run", "Failover test"]
     tables = _tables(doc)
 
-    partner = tables[("Array", "Serial", "OS", "Remote Copy", "RCIP ports")]
+    # BL-50 (SPEC-031 R7): the column was "RCIP ports"; an FC pair lists its FC links in it
+    partner = tables[("Array", "Serial", "OS", "Remote Copy", "Replication ports")]
     assert partner == [
         ["This array: AlletraMP_D22U27", "CZ2D320BT1", "10.5.0", "Started, Normal", "0:4:3 10.54.122.92; 1:4:3 10.54.122.93"],
         ["Peer: AlletraMP_E18U31", "CZ2D3209YV", "10.5.0", "Started, Normal", "0:4:3 10.54.154.192; 1:4:3 10.54.154.193"],
@@ -197,7 +198,7 @@ def test_an_unreadable_peer_is_named_and_the_document_is_still_produced(tmp_path
     assert any("could not read the peer array" in w for w in warnings)
     assert "The peer array could not be read for this section: Could not read 10.64.154.190" in text
     tables = _tables(doc)
-    partner = tables[("Array", "Serial", "OS", "Remote Copy", "RCIP ports")]
+    partner = tables[("Array", "Serial", "OS", "Remote Copy", "Replication ports")]
     assert partner[1] == ["Peer: 10.64.154.190", "could not be read", "—", "—", "—"]
     assert "No Remote Copy partnership between the two arrays could be confirmed" in text and "one side was not readable" in text
     groups = tables[("Group", "Mode", "RPO / period", "Policies", "Role here", "Role on peer", "Status", "Peer volume set")]
@@ -330,6 +331,7 @@ def test_collect_replication_reads_both_arrays_with_the_runs_credentials():
     assert st.DocumentSteps._replication_tab(intent) == {
         "peer_host": "10.64.154.190", "failover_test": True,
         "rows": [{"vvset": "zz_rc_vvs", "mode": "async", "rpo_minutes": 10, "peer_cpg": "SSD_r6"}],
+        "rtt_ms": 1.0,       # BL-50: over Fibre Channel the as-built states the typed round-trip time
     }
 
 

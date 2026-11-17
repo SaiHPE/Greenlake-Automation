@@ -140,6 +140,13 @@ class FabricZonePlan(BaseModel):
     # had already read and thrown away.
     zone_names: dict[str, list[str]] = Field(default_factory=dict)
     defined_names: list[str] = Field(default_factory=list)  # every alias/zone/cfg name the switch defines
+    # SPEC-025 R7: the peer-port block, its own command set. This array's peer ports (the WWPN read after
+    # the change) and the source array's ports on this fabric, the (peer, source) pairs from the sheet with
+    # both in this fabric's name server, and those an effective zone already covers.
+    peer_ports: list[AliasedWwpn] = Field(default_factory=list)
+    sources: list[AliasedWwpn] = Field(default_factory=list)
+    peer_pairs: list[tuple[str, str]] = Field(default_factory=list)
+    peer_already_zoned: list[tuple[str, str]] = Field(default_factory=list)
 
 
 class ZoningPlan(BaseModel):
@@ -150,6 +157,10 @@ class ZoningPlan(BaseModel):
     offline_hosts: list[str] = Field(default_factory=list)  # host "name (wwpn)" on no fabric -> cable+power
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
+    # Each switch's effective zones as read ({switch: {zone: [WWPNs]}}, None for a switch that could not
+    # be read), for the peer-port plan's note on a free port still zoned (SPEC-025 R3). Kept off the event
+    # payload: a production fabric has hundreds.
+    active_zones: dict[str, dict[str, list[str]] | None] = Field(default_factory=dict, exclude=True)
 
 
 # FabricStageResult / ZoningStageResult lived here until 2026-09-02. They modelled the outcome of

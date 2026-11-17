@@ -8,6 +8,9 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
+from alletra_onboard.domain.network import IscsiVlanCheck
+from alletra_onboard.domain.peer_ports import PeerPortCheck
+
 
 class WorkflowPhase(StrEnum):
     NOT_STARTED = "NOT_STARTED"
@@ -22,11 +25,17 @@ class WorkflowPhase(StrEnum):
     DSCC_SETUP_SYSTEM = "DSCC_SETUP_SYSTEM"
     # Storage provisioning (Phase 2) — driven over WSAPI, see docs/adr/0002-0004 + the runbook.
     STORAGE_DISCOVER = "STORAGE_DISCOVER"
+    # The array's own ports, set from the sheet before zoning (SPEC-024: iSCSI VLAN addresses).
+    STORAGE_PORTS = "STORAGE_PORTS"
     STORAGE_ZONING = "STORAGE_ZONING"
     STORAGE_PROVISION = "STORAGE_PROVISION"
     # Replication (SPEC-015..017) — groups over WSAPI to a peer array, then the failover test.
     STORAGE_REPLICATE = "STORAGE_REPLICATE"
     STORAGE_FAILOVER_TEST = "STORAGE_FAILOVER_TEST"
+    # Migration (SPEC-027) — read the source array and check it is ready for Peer Motion; never writes.
+    STORAGE_MIGRATE = "STORAGE_MIGRATE"
+    # Snapshots (SPEC-023) — one now over WSAPI, a schedule through the array's own createsched.
+    STORAGE_SNAPSHOT = "STORAGE_SNAPSHOT"
     CONFIG_VERIFY = "CONFIG_VERIFY"
     ASBUILT_DOCUMENT = "ASBUILT_DOCUMENT"
     COMPLETE = "COMPLETE"
@@ -44,6 +53,7 @@ class RunMode(StrEnum):
     PROVISION_ONLY = "PROVISION_ONLY"    # Discovery -> Zoning -> Provision -> Verify
     BOTH = "BOTH"                        # full onboarding, then provisioning
     REPLICATE = "REPLICATE"              # provisioning, then replication + failover test (SPEC-015)
+    MIGRATE = "MIGRATE"                  # discovery + zoning, then migration from a source array (SPEC-027)
     VERIFY_ONLY = "VERIFY_ONLY"          # just the read-only SSH config/health check
     CUSTOM = "CUSTOM"                    # exactly the steps in selected_steps
 
@@ -55,10 +65,12 @@ class RunStatus(StrEnum):
     WAITING_FOR_OPERATOR = "waiting_for_operator"
     RETRYABLE_FAILURE = "retryable_failure"
     TERMINAL_FAILURE = "terminal_failure"
-    CANCEL_REQUESTED = "cancel_requested"
-    CANCELLED = "cancelled"
     SUCCEEDED = "succeeded"
-    SKIPPED = "skipped"
+
+
+# Run statuses that were defined but never set by any release. A stored run carrying one still
+# loads, as an idle run, so one odd row cannot break the list of runs.
+_RETIRED_RUN_STATUSES = frozenset({"cancel_requested", "cancelled", "skipped"})
 
 
 class BrowserResultStatus(StrEnum):
@@ -211,6 +223,11 @@ class RunRecord(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def _retired_status_is_idle(cls, value: Any) -> Any:
+        return RunStatus.READY if value in _RETIRED_RUN_STATUSES else value
+
 
 class PhaseResult(BaseModel):
     status: RunStatus
@@ -281,6 +298,12 @@ class VerificationReport(BaseModel):
     checks: list[FieldCheck] = Field(default_factory=list)
     health_issues: list[HealthIssue] = Field(default_factory=list)  # from checkhealth -svc -detail
     raw: dict[str, str] = Field(default_factory=dict)  # raw show* output, for operator review/calibration
+    # SPEC-024 R6: the sheet's iSCSI network rows against `showport -iscsivlans`; empty without the tab.
+    iscsi_vlans: list[IscsiVlanCheck] = Field(default_factory=list)
+    iscsi_vlans_error: str | None = None
+    # SPEC-025 R6: the sheet's peer ports as the array reads them; empty without the Peer ports tab.
+    peer_ports: list[PeerPortCheck] = Field(default_factory=list)
+    peer_ports_error: str | None = None
 
     @property
     def passed(self) -> int:

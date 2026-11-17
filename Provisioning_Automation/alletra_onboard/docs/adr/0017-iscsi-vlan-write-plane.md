@@ -6,6 +6,9 @@
 go on its one array-port write client) · **Keeps:** ADR 0001 (the read client stays read-only), ADR
 0012 (no switch writes), ADR 0015 (`ArrayRcCliClient` is not widened)
 
+**Built:** the first slice (point 4) on 2026-11-17, pending live run: no write client, no tick, no
+apply button, no allowlist change. Points 5 and 6 are not started.
+
 Proposed on 2026-11-16 as *"A, if a live probe confirms it; otherwise C"*. On 2026-11-17 the owner
 took C now, with the changes a review recommended: the forms go on ADR 0025's one array-port client,
 every form carries `-vlan`, a first slice ships without the apply, and the forms are confirmed live

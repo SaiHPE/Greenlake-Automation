@@ -9,7 +9,9 @@ Reference: [`mockups.html`](mockups.html) is the authority for layout and wordin
 ## A. Chrome — verify once, applies to every screen
 
 - [ ] Header shows the **HPE Element** and the service name. **No HPE GreenLake lockup anywhere.**
-- [ ] Header shows serial, mode and run status once a run exists; nothing stale before that.
+- [ ] Header shows the serial and the run status once a run exists, and the mode on Home, Run
+      overview and Finish; on step pages the mode is left to the wizard bar, which reads
+      "<mode> on <serial>". Nothing stale before a run exists.
 - [ ] Rail groups steps under **Prepare / Initialize / Provision / Document**.
 - [ ] Rail shows a status icon per step, and a result hint under completed steps
       (for example "4 ports · 6 adapters" after discovery).
@@ -18,11 +20,40 @@ Reference: [`mockups.html`](mockups.html) is the authority for layout and wordin
 - [ ] **Cancel run** is disabled with no run; with a run it opens the confirmation
       ("Discard this run?" · Keep run / Discard run) and discarding returns to step 1.
 - [ ] Every step header reads **"Step X of Y"**, with Y matching the number of rail entries.
-- [ ] Status wording is only ever: Not started, Running, Action required, Complete, Failed.
+- [ ] Status wording is only ever: Not started, Running, Action required, Waiting on others,
+      Complete, Failed. The step header shows the word alone, with no counts after it.
+- [ ] Table rows use the result words only, each with its icon: Passed, Review, Failed, Not
+      checked; Reachable, Blocked, Ready; Zoned, Not zoned, Partly zoned, Not on fabric; Create,
+      Update, Already there, Conflict; Created, Updated, Skipped; Live, Partial, No path (amber);
+      Replicating, Initial sync in progress, Not replicating; Matches, Differs, Not readable. An
+      empty cell is `--`, read as "No value".
 - [ ] Every status shows an icon as well as colour; none rely on colour alone.
-- [ ] Keyboard: Tab reaches every control, focus is clearly visible, Enter activates.
+- [ ] Keyboard: Tab reaches every control, focus is clearly visible, Enter activates, Enter and
+      Space open every toggle (*Show detail*, *Show N commands*, sections); the arrow keys move
+      between the log panel's tabs.
 - [ ] No screen shows more than one spinner at a time.
-- [ ] The word "health" appears nowhere in the interface.
+- [ ] The word "health" appears nowhere in the interface, nor *WSAPI*, *SSE*, *n:s:p*, *VV-set*,
+      *(dropdowns)*, *to-be-created* or *fabric-login*; command names appear only inside commands,
+      the log and *About this step*.
+- [ ] Under each step's header: one status line (a screen reader announces it; an error replaces
+      it), then the other notices folded as *N notes*. On SAN zoning and Provision storage a
+      discovery over 12 hours old is a visible warning.
+- [ ] *About this step* starts closed on every step; once opened, it stays open for the rest of
+      the browser session.
+- [ ] One primary per screen, in the footer; at most three footer buttons; no greyed-out button in
+      a step or in the log panel (pressed early, it says what is missing).
+- [ ] Ticks sit on the footer's button row at 1366 wide and above it at 1080 wide. Pressing the
+      primary before every tick is given shows *Tick the box first: <tick text>* and sends nothing.
+- [ ] SAN zoning, Provision storage, Replication and Snapshots: a parts bar under the title, the
+      part at hand the only open panel, the finished parts one list with *Show detail*.
+- [ ] At 1366 × 768 and 1080 × 720, with *About this step* and the log closed: the header, the
+      status line, the start of the part at hand and the whole footer show without scrolling.
+- [ ] Log bar: *Activity (N)* and *Console (N commands)* open one panel on their own tab
+      (*Activity*, *Commands*) and close it when pressed again on that tab. The panel is 40% of the
+      window high; *Taller* makes it 70%, *Shorter* puts it back, for the session. The footer stays
+      on screen. The panel never opens by itself.
+- [ ] `scripts/check.py` passes, its frozen words test included (the labels and text the lab
+      scripts press and read).
 
 ## B. Per-mode walkthrough
 
