@@ -155,6 +155,8 @@ export interface InitSheetUploadResult {
   replication_ports?: string[];
   // SPEC-023 R9: the Snapshots tab, one line per row ("zz_sn_vvs: Snapshot now · schedule zz_sn_vvs_snap, every 4 hours …"); empty without it.
   snapshot_rows?: string[];
+  // Problems in tabs that initialising the array does not use, one sentence each. They stop only a run whose steps use that tab.
+  problems?: string[];
 }
 // Upload the filled Initialisation_sheet.xlsx (base64). The server validates it is COMPLETE, writes
 // the GreenLake API creds to .env, and HOLDS the parsed sheet server-side — returning a token. No run

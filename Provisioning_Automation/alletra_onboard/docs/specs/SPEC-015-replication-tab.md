@@ -34,7 +34,7 @@ written before this spec parses exactly as today.
 Direction is always **this run's array → the peer**. To replicate the other way, run the tool on the
 other array with its own workbook.
 
-**R2 — Validation at upload (blocking, one sentence each).**
+**R2 — Validation at upload (blocking, one sentence each).** *Since 2026-11-19 (owner, ADR 0005): the sentence is listed at upload and on the Initialisation sheet page, and refuses the run when it is created with a step that uses this tab; it no longer stops the upload or a Full onboarding run.*
 - Mode is not `async` / `sync`, or any other type is named (Peer Persistence, Active Sync, SLD, 3DC)
   — *not supported in this version*.
 - Async RPO missing, under 1 minute or not a whole number of minutes. Period sent to the array =

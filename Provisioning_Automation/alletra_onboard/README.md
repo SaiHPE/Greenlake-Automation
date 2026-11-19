@@ -316,7 +316,9 @@ the app's step registry, so it is always current).
    Full onboarding, Provision only, Both, Provision then replicate, Migrate from another array,
    Verify only, or Custom. *Migrate from another array* is listed but greyed out: the Migration
    step is not built yet. The Migration tab is read and checked at upload already (the source may
-   not be this run's array; one row per host; a destination CPG on every row).
+   not be this run's array; one row per host; a destination CPG on every row). A problem in a tab the
+   run does not use (a volume name, a Replication network row) does not stop the upload: it is listed
+   as a note on the *Initialisation sheet* page and only stops a run that uses that tab.
 2. **Onboarding** (Full onboarding and Both) is steps 3 to 5.
 3. **GreenLake registration** — click **Run**; the live phase log streams in. A subscription-apply
    *warning* is non-fatal (register + assign are the success criteria).
@@ -475,7 +477,8 @@ The initialisation sheet replaced the older `arrays.csv` (its template is still 
 - **The cloudinit URL** changes on every boot: paste the fresh `169.254.x` URL in the app.
 - **The iSCSI network tab's Port column is text.** Excel turns `0:4:1` typed in a General cell into a
   time; the template formats the column as text and the parser reads a time back as N:S:P anyway. One
-  VLAN is one network: a VLAN on two networks, or two VLANs on one network, is refused at upload.
+  VLAN is one network: a VLAN on two networks, or two VLANs on one network, is refused (listed at upload,
+  refused for a run that uses the tab).
 
 The *Snapshots* tab (optional, one row per volume set or volume):
 

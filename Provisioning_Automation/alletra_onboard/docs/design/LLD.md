@@ -325,9 +325,9 @@ All routes are closures inside `create_app(service)` in
 | POST | `/work-items/parse` | Parse CSV text into work items (never echoes the DSCC password). |
 | GET | `/init-sheet/template` | Blank `Initialisation_sheet.xlsx` (no provisioning tabs in `init-only`). |
 | POST | `/init-sheet/compose` | Build a filled workbook from JSON (the session runner, SPEC-006). Holds nothing. |
-| POST | `/init-sheet/upload` | Parse and validate a base64 workbook, save its GreenLake credentials, hold it under a token. Returns the token, the work item without passwords, the endpoint hosts and users, and the RCIP rows. |
+| POST | `/init-sheet/upload` | Parse and validate a base64 workbook, save its GreenLake credentials, hold it under a token. Returns the token, the work item without passwords, the endpoint hosts and users, the RCIP rows and `problems`: one sentence for each problem in a tab initialising the array does not use (422 only for the Initialisation tab or two arrays). |
 | POST | `/runs` | Create a run from a work item in the body (CSV path). |
-| POST | `/runs/from-sheet` | Create the run from a held sheet token and a mode. 410 if the token is gone. |
+| POST | `/runs/from-sheet` | Create the run from a held sheet token and a mode. 410 if the token is gone. 422 with the sentence when the upload listed a problem in a tab the chosen steps use (the hold stays). |
 | GET | `/runs` | List runs, newest first. |
 | GET | `/runs/{id}` | Run, work item and `ArrayCredentialInfo` (never the secret). |
 | POST | `/runs/{id}/provision` | **GreenLake registration** (step `greenlake`; the name predates the storage steps). `dry_run` supported. |
@@ -874,7 +874,14 @@ One workbook is one array.
 
 `parse_workbook_bytes(data, mode=..., selected_steps=..., complete=...)` returns `ParsedInitSheet`
 (GreenLake credentials, `ArrayWorkItem`, optional `ProvisioningIntent`). The upload path uses
-`complete=True`: it validates the full superset and always parses the provisioning tabs. Validation:
+`parse_upload(data)` (owner, 2026-11-19): `complete=True` first, which validates the full superset and
+always parses the provisioning tabs; when that raises, the Initialisation tab is parsed as a Full
+onboarding run reads it (a problem there still raises, so does `_reject_two_arrays`) and every other tab
+on its own. Each problem is one sentence in the returned list, the sentence the complete parse raises; a
+bad Volumes or Hosts row is left out of the intent, a tab with a problem is left out whole. The hold then
+keeps the file (`save_pending_sheet(..., workbook)`), and `create_run_from_pending` parses it again with
+the chosen mode before it uses the hold up: a step that uses a tab with a problem refuses the run with
+that sentence. Validation:
 
 - The **Field** column is the key (`_LABEL_TO_KEY`); labels must not be renamed. Credential fields
   are kept verbatim; others are trimmed.
@@ -913,8 +920,8 @@ One workbook is one array.
   help).
 
 On upload, the API saves the sheet's GreenLake credentials to `.env`, stashes the parsed sheet under a
-token, and returns the work item without the DSCC password. Device passwords never return to the
-browser.
+token, and returns the work item without the DSCC password and the problems found in tabs a Full
+onboarding run does not use. Device passwords never return to the browser.
 
 ---
 

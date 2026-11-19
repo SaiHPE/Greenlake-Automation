@@ -10,11 +10,12 @@ prompts. Needs both fixes: run it from a branch that has BL-45 and BL-46.
                                       host vCenter knows; the run makes it when the array does not have it)
 
 1. checks the array has no zz_bl45_* objects (stops before anything if it has)
-2. restarts the app on the latest code (Windows only); first three sheets the app must refuse on upload,
-   so nothing reaches the array: one with a 1 PiB volume (BL-55: above the array's 64 TiB), one with a
-   volume named zz_bl45_vol02+ (help createvv: letters, digits, '.', '-' and '_' only), one with the
-   volume set zz_bl45_vvs+ (the array refused that '+' live, 2026-11-17, so the sheet checks it now,
-   BL-60). Then a Provision only run: host set zz_bl45_hs (the host: when the array does not have it yet
+2. restarts the app on the latest code (Windows only); first three sheets whose Volumes tab has a problem:
+   each uploads (initialising the array does not read that tab), the upload lists the problem, and a
+   Provision only run is refused with that sentence, so no run is made and nothing reaches the array: one
+   with a 1 PiB volume (BL-55: above the array's 64 TiB), one with a volume named zz_bl45_vol02+ (help
+   createvv: letters, digits, '.', '-' and '_' only), one with the volume set zz_bl45_vvs+ (the array
+   refused that '+' live, 2026-11-17, so the sheet checks it now, BL-60). Then a Provision only run: host set zz_bl45_hs (the host: when the array does not have it yet
    the apply makes it, and its removal set must remove it again) and two 1 GiB thin volumes,
    zz_bl45_vol01 and zz_bl45_vol02, in a volume set whose name is zz_bl45_vvs_ and x's, 256 characters.
    The tool does not check a volume set name's length (no captured help states it); 256 is longer than
@@ -154,6 +155,34 @@ def leftovers(c):
     return sorted(set(found))
 
 
+def refused_for_provisioning(name, sheet, status, up, phrase):
+    """A problem on the Volumes tab does not stop the upload (initialising the array does not read that
+    tab); the upload lists it, and a Provision only run is refused with that sentence, so no run exists
+    and nothing reaches the array."""
+    problems = up.get("problems", []) if isinstance(up, dict) else []
+    listed = [p for p in problems if phrase in p]
+    # One sentence per bad row: the volume set name is on both volumes' rows, so it is listed twice.
+    check("%s uploads and the upload lists the problem" % sheet, status == 200 and bool(listed),
+          "HTTP %s: %s" % (status, str(problems if status == 200 else up)[:240]))
+    runs_before = len(api("GET", "/runs")[1]["runs"])
+    minted, r = None, None
+    if status == 200:
+        minted, r = api("POST", "/runs/from-sheet", {"token": up["token"], "mode": "PROVISION_ONLY", "selected_steps": []})
+    sentence = ""
+    if minted == 422:
+        try:
+            sentence = json.loads(r).get("detail", "")
+        except ValueError:
+            pass
+    runs_after = len(api("GET", "/runs")[1]["runs"])
+    fl.save(name + ".txt", "upload HTTP %s\n%s\n\nProvision only run HTTP %s\n%s" % (
+        status, json.dumps(problems, indent=2) if status == 200 else up, minted, r))
+    check("%s: the Provision only run is refused with that sentence and no run is made" % sheet,
+          minted == 422 and bool(listed) and sentence == listed[0] and runs_after == runs_before,
+          "HTTP %s: %s" % (minted, str(r)[:240]))
+    return None
+
+
 def compose(vol2_gib=1, vol2_name=VOL2, vvset=VVSET):
     body = {
         "init": {
@@ -177,20 +206,14 @@ def compose(vol2_gib=1, vol2_name=VOL2, vvset=VVSET):
         raise RuntimeError("compose -> HTTP %s: %s" % (status, resp))
     status, up = api("POST", "/init-sheet/upload", {"content_b64": resp["content_b64"]})
     if vol2_gib == TOO_BIG_GIB:
-        fl.save("upload-1pib.txt", "HTTP %s\n%s" % (status, up))
-        check("BL-55: a sheet with a 1 PiB volume is refused on upload, before any run",
-              status == 422 and "more than the array can create in one volume" in str(up), "HTTP %s: %s" % (status, str(up)[:240]))
-        return None
+        return refused_for_provisioning("upload-1pib", "BL-55: a sheet with a 1 PiB volume", status, up,
+                                        "more than the array can create in one volume")
     if vol2_name == BAD_VOLUME_NAME:
-        fl.save("upload-bad-name.txt", "HTTP %s\n%s" % (status, up))
-        check("a sheet with the volume name %s is refused on upload, before any run" % BAD_VOLUME_NAME,
-              status == 422 and "in a volume name, not '+'" in str(up), "HTTP %s: %s" % (status, str(up)[:240]))
-        return None
+        return refused_for_provisioning("upload-bad-name", "a sheet with the volume name %s" % BAD_VOLUME_NAME, status, up,
+                                        "in a volume name, not '+'")
     if vvset == BAD_VVSET_NAME:
-        fl.save("upload-bad-set-name.txt", "HTTP %s\n%s" % (status, up))
-        check("a sheet with the volume set name %s is refused on upload, before any run" % BAD_VVSET_NAME,
-              status == 422 and "in a volume set name, not '+'" in str(up), "HTTP %s: %s" % (status, str(up)[:240]))
-        return None
+        return refused_for_provisioning("upload-bad-set-name", "a sheet with the volume set name %s" % BAD_VVSET_NAME,
+                                        status, up, "in a volume set name, not '+'")
     if status != 200:
         raise RuntimeError("upload -> HTTP %s: %s" % (status, up))
     status, r = api("POST", "/runs/from-sheet", {"token": up["token"], "mode": "PROVISION_ONLY", "selected_steps": []})

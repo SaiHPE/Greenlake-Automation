@@ -107,7 +107,7 @@ check.
 
 The sheet's "Measured round-trip time (ms)" stays, optional for every mode (the rule *sync but RTT
 blank* is dropped: the tool measures it). A typed value over the limit is still refused at upload
-(the operator knew the value when filling the sheet).
+(the operator knew the value when filling the sheet). *Since 2026-11-19 (owner, ADR 0005): the sentence is listed at upload and on the Initialisation sheet page, and refuses the run when it is created with a step that uses this tab; it no longer stops the upload or a Full onboarding run.*
 
 **R5 — The page.** On the Replication step, between *What the arrays say* and *Plan*, a *Link
 latency* panel: *Check RC link* (after the read; RCIP only), the progress lines while it runs, then

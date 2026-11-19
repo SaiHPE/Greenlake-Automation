@@ -12,6 +12,7 @@ from alletra_onboard.application.platform.init_sheet import (
     VOLUME_COLUMNS,
     VOLUMES_SHEET_NAME,
     build_template_bytes,
+    parse_upload,
     parse_workbook_bytes,
 )
 from alletra_onboard.domain.models import RunMode
@@ -295,6 +296,42 @@ def test_full_mode_ignores_the_provisioning_tabs():
     # No provisioning step selected -> the Provisioning tabs are not parsed at all.
     parsed = parse_workbook_bytes(_fill_tabs(_COMPLETE))  # default FULL_ONBOARDING, no prov values
     assert parsed.provisioning_intent is None
+
+
+def test_the_upload_lists_every_bad_row_and_keeps_the_rest_of_the_sheet():
+    """Owner, 2026-11-19: a problem in a tab onboarding does not use is listed, one sentence each, the
+    sentence the complete check raises; the good rows and the targets stay in the intent."""
+    sheet = _fill_tabs(_COMPLETE | {"mgmt_ipv4": "10.64.122.140"}, {
+        "targets": _PROV_TARGETS,
+        "volumes": [{"name": "zz_bad+", "size_gib": "1"}, {"name": "zz_good", "size_gib": "1"},
+                    {"name": "zz_big", "size_gib": str(1024 * 1024)}],
+        "hostsets": [],
+    })
+    with pytest.raises(ValueError) as complete:
+        parse_workbook_bytes(sheet, complete=True)
+    parsed, problems = parse_upload(sheet)
+    assert len(problems) == 3 and problems[0] == str(complete.value)
+    assert "Volume 'zz_big' — Size (GiB):" in problems[1]
+    assert problems[2] == "Host sets tab — add at least one host set (a name)."
+    assert [v.name for v in parsed.provisioning_intent.volumes] == ["zz_good"]
+    assert parsed.provisioning_intent.array.host == "10.64.122.140"
+    assert parsed.work_item.serial_number == "SGHD45FF0Y"
+
+
+def test_the_upload_of_a_valid_sheet_is_the_complete_parse():
+    sheet = _fill_tabs(_COMPLETE | {"mgmt_ipv4": "10.64.122.140"}, _PROV_COMPLETE)
+    parsed, problems = parse_upload(sheet)
+    assert problems == []
+    assert parsed.provisioning_intent == parse_workbook_bytes(sheet, complete=True).provisioning_intent
+
+
+def test_the_upload_still_refuses_an_initialisation_problem_and_two_arrays():
+    bad = {"targets": _PROV_TARGETS, "volumes": [{"name": "zz_bad+", "size_gib": "1"}], "hostsets": _PROV_HOSTSETS}
+    no_serial = {k: v for k, v in _COMPLETE.items() if k != "serial_number"}
+    with pytest.raises(ValueError, match="^Missing required fields: Storage system serial number$"):
+        parse_upload(_fill_tabs(no_serial, bad))
+    with pytest.raises(ValueError, match="names two different arrays"):
+        parse_upload(_fill_tabs(_COMPLETE, bad))   # Initialisation 10.64.154.225, Provisioning 10.64.122.140
 
 
 def test_row_table_headers_match_on_their_leading_phrase_not_the_hint():

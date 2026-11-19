@@ -96,6 +96,7 @@ from alletra_onboard.application.platform.configuring import (
 from alletra_onboard.application.platform.init_sheet import (
     build_template_bytes,
     compose_workbook_bytes,
+    parse_upload,
     parse_workbook_bytes,
 )
 from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
@@ -393,19 +394,22 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.post("/init-sheet/upload", response_model=InitSheetUploadResponse)
     async def init_sheet_upload(request: InitSheetUploadRequest) -> InitSheetUploadResponse:
-        # The sheet is COMPLETE intake, uploaded before a mode is chosen (ADR 0005 revision): validate
-        # the full superset, save GreenLake creds, and HOLD the parsed sheet server-side. No run yet —
-        # picking a mode (POST /runs/from-sheet) mints it. Device passwords never leave the server.
+        # The sheet is COMPLETE intake, uploaded before a mode is chosen (ADR 0005 revision): save
+        # GreenLake creds and HOLD the parsed sheet server-side. No run yet — picking a mode (POST
+        # /runs/from-sheet) mints it. Device passwords never leave the server. Only a problem in what
+        # initialising the array needs refuses the upload; a problem in another tab is listed and stops
+        # only a run whose steps use that tab (owner, 2026-11-19).
         # The init-only accelerator validates ONBOARDING fields only (no Provisioning tab).
         try:
             raw = base64.b64decode(request.content_b64, validate=True)
         except (ValueError, TypeError) as exc:
             raise HTTPException(status_code=422, detail="Upload was not valid base64") from exc
+        problems: list[str] = []
         try:
             if load_settings().init_only:
                 parsed = parse_workbook_bytes(raw, mode=RunMode.FULL_ONBOARDING)
             else:
-                parsed = parse_workbook_bytes(raw, complete=True)
+                parsed, problems = parse_upload(raw)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=f"Initialisation sheet did not parse: {exc}") from exc
 
@@ -420,7 +424,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                     "GL_TOKEN_URL": parsed.gl_token_url,
                 },
             )
-        token = service.stash_pending_sheet(parsed.work_item, parsed.provisioning_intent)
+        token = service.stash_pending_sheet(parsed.work_item, parsed.provisioning_intent, raw if problems else None)
         data = parsed.work_item.model_dump(mode="json")
         data["subscription_key"] = parsed.work_item.subscription_key.get_secret_value()
         data["dscc_setup"].pop("password", None)  # never echo the admin password to the UI
@@ -439,7 +443,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
                 snapshot_rows = [f"{r.source}: {r.summary(named=True)}" for r in intent.snapshots.requests]
         return InitSheetUploadResponse(
             token=token, work_item=data, credentials_saved=credentials_saved, targets=targets, replication_ports=ports,
-            snapshot_rows=snapshot_rows,
+            snapshot_rows=snapshot_rows, problems=problems,
         )
 
     # ------------------------------------------------------------------ runs + steps

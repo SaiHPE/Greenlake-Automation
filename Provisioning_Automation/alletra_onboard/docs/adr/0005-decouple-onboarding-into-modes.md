@@ -12,6 +12,18 @@
 > list, permissive backend, secrets-in-sheet rule) stands. This reverses only the "mode first"
 > ordering below.
 
+> **Revision (2026-11-19, owner): check a tab only when the run uses it.** The upload refuses only a
+> problem in what initialising the array needs (the Initialisation tab, as a Full onboarding run reads
+> it) and a workbook that names two arrays. A problem in any other tab (Provisioning, Volumes, Host sets,
+> Hosts, Replication, Replication network, Snapshots, Migration, iSCSI network, Peer ports) is listed
+> in the upload's answer, one sentence each, and shown on the *Initialisation sheet* page; the hold keeps
+> the file, and `/runs/from-sheet` checks it again for the chosen steps (`parse_workbook_bytes` with the
+> mode), refusing with that sentence a run whose steps use the tab, and keeping the hold so another mode
+> can be chosen. A sheet with no problem is held and minted exactly as before. Why: rules added since
+> v0.18.0 (volume size and name rules, new tabs) could stop a Full onboarding run with a tab it never
+> reads. Consequence (1) of the revision above now reads "the upload checks the complete superset and
+> lists, rather than refuses, what only other steps use".
+
 The operator picks a **mode** — *Full onboarding*, *Provision storage only*, *Both*, *Verify only*,
 or *Custom* — and the wizard renders (and the service advances through) only the steps that mode
 needs. The same workbook is reused; what changes is which steps run. (Ordering: per the revision
