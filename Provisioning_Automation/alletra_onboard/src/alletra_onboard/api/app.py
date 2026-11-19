@@ -125,6 +125,7 @@ from alletra_onboard.application.service import (
 )
 from alletra_onboard.config import load_settings
 from alletra_onboard.domain.models import RunMode
+from alletra_onboard.domain.ports import StoredCredentialsUnreadableError
 from alletra_onboard.domain.provisioning import (
     PreflightReport,
     ProvisioningBuilder,
@@ -208,6 +209,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         elif path.startswith("/assets/"):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return response
+
+    @app.exception_handler(StoredCredentialsUnreadableError)
+    async def _credentials_unreadable(_request, exc: StoredCredentialsUnreadableError) -> JSONResponse:
+        # ADR 0027: the run's secrets were encrypted with a key this installation does not hold.
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
 
     def _get_run_or_404(run_id: str):
         try:
@@ -479,13 +485,14 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     @app.get("/runs/{run_id}", response_model=RunDetailResponse)
     async def get_run(run_id: str) -> RunDetailResponse:
         run = _get_run_or_404(run_id)
+        # A run whose stored credentials cannot be read still opens; its steps say why they refuse.
         try:
             item = service.get_work_item(run_id)
-        except RunNotFoundError:
+        except (RunNotFoundError, StoredCredentialsUnreadableError):
             item = None
         try:
             credential = service.array_credential_info(run_id)
-        except RunNotFoundError:
+        except (RunNotFoundError, StoredCredentialsUnreadableError):
             credential = None
         return RunDetailResponse(run=run, work_item=item, array_credential=credential)
 
@@ -548,11 +555,11 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     @app.get("/runs/{run_id}/asbuilt/download")
     async def download_asbuilt(run_id: str) -> Response:
-        _get_run_or_404(run_id)
+        run = _get_run_or_404(run_id)
         data = service.get_asbuilt(run_id)
         if data is None:
             raise HTTPException(status_code=404, detail="No as-built generated yet — run the as-built step first.")
-        serial = service.get_work_item(run_id).serial_number
+        serial = run.serial_number  # from the run, so a run whose credentials cannot be read still downloads
         return Response(
             content=data,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",

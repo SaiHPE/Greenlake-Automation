@@ -40,14 +40,16 @@ with Git for Windows). Then:
 ```bash
 gh auth login --hostname github.hpe.com && gh auth setup-git --hostname github.hpe.com
 git clone https://github.hpe.com/g-sai-roopesh/greenlake-automation.git
-cd greenlake-automation
-git config core.hooksPath .githooks          # turns on the commit hook (section 6)
-cd Provisioning_Automation/alletra_onboard
+cd greenlake-automation/Provisioning_Automation/alletra_onboard
 python -m venv .venv
 .venv/bin/pip install -e ".[dev]"            # Windows: .venv\Scripts\pip install -e ".[dev]"
 cd frontend && npm ci && cd ..
+scripts/install_hooks.sh                     # turns on the commit and push hooks (section 6)
 .venv/bin/python scripts/check.py            # must end with PASS
 ```
+
+On Windows run `scripts/install_hooks.sh` from Git Bash. The push hook runs the check with the
+`.venv` above, so create it before your first push.
 
 On a Windows laptop use `.venv\Scripts\python` wherever this page says `.venv/bin/python`.
 
@@ -114,7 +116,7 @@ confirmation tick before anything that writes to an array. Attach screenshots at
 `.github/instructions/` on their own. You are still the author: read what they produce, and run the
 check yourself.
 
-## 6. The check, and the commit hook
+## 6. The check, and the hooks
 
 There is no CI on github.hpe.com (Actions is turned off for this repository), so one command is the
 gate. From the app folder:
@@ -128,6 +130,8 @@ gate. From the app folder:
 | tests | the whole pytest suite | fix the code, or the test if behaviour changed on purpose (say so in the pull request) |
 | lint | `ruff check .` with the pinned version | `ruff check --fix .` handles most |
 | types | `npm run typecheck` in `frontend/` | fix the TypeScript error |
+| mockups | the design mockups' TypeScript (`tsc -p mockups --noEmit` in `frontend/`) | fix the error in `frontend/mockups` |
+| ui-tests | the frontend unit tests (`npm test` in `frontend/`) | fix the code, or the test if behaviour changed on purpose |
 | dist | nothing under `frontend/dist` changed on your branch | it prints the command that drops those changes |
 | secrets | no token, private key or lab password in the lines you added | remove it, and tell the owner if it was ever pushed |
 | ignored | (warning) files under `src/`, `tests/` or `frontend/src/` that `.gitignore` hides | see section 9 |
@@ -135,8 +139,17 @@ gate. From the app folder:
 It ends with a block to paste into the pull request.
 
 The **commit hook** (`.githooks/pre-commit`, on after the setup step) refuses a commit that touches
-`frontend/dist` or contains something that looks like a GitHub token or private key. Do not bypass
-it with `--no-verify`.
+`frontend/dist` or contains something that looks like a GitHub token or private key.
+
+The **push hook** (`.githooks/pre-push`) runs the check before every push of your branch and refuses
+the push unless it says PASS. It skips pushes with nothing to check: deleting a branch, pushing only
+tags, commits the remote already has, the `jumpbox-package` and `jumpbox-test` branches, and commits
+that change only `frontend/dist` (the owner's `after_merge.sh`). It checks the branch you have
+checked out, so push from that branch. In a second worktree without its own `.venv`, point it at
+one: `CHECK_PYTHON=/path/to/.venv/bin/python git push`.
+
+Do not bypass either hook with `--no-verify`. It breaks the project rule (the check must say PASS
+before a pull request), and the reviewer has no other gate.
 
 ## 7. The pull request
 

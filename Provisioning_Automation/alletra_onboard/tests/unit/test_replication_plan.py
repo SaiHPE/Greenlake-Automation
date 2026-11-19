@@ -482,3 +482,34 @@ def test_the_sheet_keeps_its_default_cpg_on_the_intent():
                      "rows": [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "mode": "sync"}]})
     intent = init_sheet.parse_workbook_bytes(data, mode=init_sheet.RunMode.CUSTOM, selected_steps=["replicate"]).provisioning_intent
     assert intent.volumes == [] and intent.default_cpg == "FC_r6"
+
+
+# ------------------------------------------------------------------ BL-63: the array's zone, from showdate
+
+_HANDOVER = Path(__file__).resolve().parents[1] / "fixtures" / "handover"
+
+
+def test_showdate_gives_the_array_time_and_zone():
+    from datetime import UTC, datetime
+
+    from alletra_onboard.application.replication.read import parse_showdate, utc_offset_minutes
+
+    local, zone = parse_showdate((_HANDOVER / "rack13" / "showdate.txt").read_text(encoding="utf-8"))
+    assert (local, zone) == (datetime(2026, 11, 16, 23, 27, 23), "IST (Asia/Kolkata)")
+    # 5 h 30 ahead, to the quarter hour even with the array a few minutes off
+    assert utc_offset_minutes(local, datetime(2026, 11, 16, 17, 57, 23, tzinfo=UTC)) == 330
+    assert utc_offset_minutes(local, datetime(2026, 11, 16, 18, 1, 0, tzinfo=UTC)) == 330
+    assert parse_showdate("") == (None, "")
+
+
+def test_the_read_carries_the_zone_and_reads_on_without_showdate():
+    from alletra_onboard.application.replication.read import array_time
+
+    showdate = (_HANDOVER / "rack13" / "showdate.txt").read_text(encoding="utf-8")
+    a, _b = _views(a_overrides={"showdate": showdate})
+    assert a.read_error is None and a.time_zone == "IST (Asia/Kolkata)" and a.utc_offset_minutes is not None
+    a.utc_offset_minutes = 330
+    assert array_time("2026-10-10T10:20:40+00:00", a) == "2026-10-10 15:50:40 IST"
+    _a, b = _views()                                   # no showdate capture for E18U31: the rest still reads
+    assert b.read_error is None and b.groups and b.time_zone == "" and b.utc_offset_minutes is None
+    assert array_time("2026-10-10T10:20:40+00:00", b) == "2026-10-10 10:20:40 UTC"

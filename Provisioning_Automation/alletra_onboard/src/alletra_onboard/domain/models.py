@@ -229,14 +229,6 @@ class RunRecord(BaseModel):
         return RunStatus.READY if value in _RETIRED_RUN_STATUSES else value
 
 
-class PhaseResult(BaseModel):
-    status: RunStatus
-    message: str
-    resources: ExternalResources = Field(default_factory=ExternalResources)
-    warnings: list[str] = Field(default_factory=list)
-    artifacts: list[str] = Field(default_factory=list)
-
-
 class PreflightCheck(BaseModel):
     name: str
     status: CheckStatus

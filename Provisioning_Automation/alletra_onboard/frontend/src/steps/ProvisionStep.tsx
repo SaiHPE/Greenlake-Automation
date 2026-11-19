@@ -50,7 +50,7 @@ const OUTCOME: Record<ActionOutcome['status'], ResultWord> = {
 // SPEC-007 R3 (and SPEC-023 R6): schedules, snapshots, exports, then sets, then their members — the order
 // that pastes top to bottom. The backend's REMOVAL_ORDER (domain/provisioning.py) is the same.
 const REMOVAL_ORDER: Record<string, number> = { schedule: 0, snapshot: 1, vlun: 2, vvset: 3, volume: 4, hostset: 5, host: 6 };
-const removalLines = (items: RemovalItem[]): string[] => {
+export const removalLines = (items: RemovalItem[]): string[] => {
   const out: string[] = [];
   [...items].sort((a, b) => (REMOVAL_ORDER[a.kind] ?? 9) - (REMOVAL_ORDER[b.kind] ?? 9))
     .forEach((i) => { if (!out.includes(i.command)) out.push(i.command); });
@@ -67,7 +67,7 @@ function download(filename: string, text: string) {
 
 /** The undo for exactly what this run created, across every apply, failed ones included (SPEC-007 R4, R6).
  *  Text for the operator; the tool never runs it. */
-function RemovalSet({ removals, notes, runId, serial }: { removals: RemovalItem[]; notes: string[]; runId: string; serial?: string }) {
+export function RemovalSet({ removals, notes, runId, serial }: { removals: RemovalItem[]; notes: string[]; runId: string; serial?: string }) {
   const [copied, setCopied] = useState(false);
   const lines = removalLines(removals);
   const header = [

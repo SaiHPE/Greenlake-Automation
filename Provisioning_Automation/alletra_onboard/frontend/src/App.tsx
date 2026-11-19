@@ -1,7 +1,7 @@
 import { Box, Button, Heading, Layer, Main, ResponsiveContext, Text } from 'grommet';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { createRunFromSheet, getAppProfile, getRun, InitSheetUploadResult, snapshotsTabNotPicked } from './api';
-import { actionKeysFor, ActionKey, phaseToActionKey, RunMode, ServedStep, StepRegistry } from './modes';
+import { actionKeysFor, ActionKey, phaseToActionKey, RunMode, ServedStep, STAGE, StepRegistry } from './modes';
 import { useRunEvents } from './useRunEvents';
 import { EMPTY_FORM, fromParsedWorkItem, WorkItemForm } from './workItem';
 import { AppHeader, RailItem, StepRail, WizardBar } from './ui/AppChrome';
@@ -42,11 +42,6 @@ const MODE_STEP: WizardStep = { key: 'mode', label: 'Mode', group: 'Prepare' };
 const DONE_STEP: WizardStep = { key: 'done', label: 'Finish', group: 'Document' };
 const PREPARE_KEYS = ['prereq', 'sheet', 'mode'];
 const RUN_ID_KEY = 'alletra.runId';
-
-// Registry step kinds, mapped to the deployment stages the rail groups by.
-const STAGE: Record<string, string> = {
-  init: 'Initialize', provision: 'Provision', replicate: 'Replicate', migrate: 'Migrate', snapshot: 'Protect', verify: 'Document',
-};
 
 // Prerequisites -> sheet -> mode -> the steps the mode selected -> finish. The middle comes from the
 // served registry (GET /app/profile); the UI keeps no copy of the step list.

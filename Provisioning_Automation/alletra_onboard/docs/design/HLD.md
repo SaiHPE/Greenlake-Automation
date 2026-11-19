@@ -485,12 +485,19 @@ secret nor the token.
 | Secret | Where it lives | Where it never goes |
 |---|---|---|
 | GreenLake client ID and secret | `.env` next to the app, written on workbook upload or the Configure page ([config.py](../../src/alletra_onboard/config.py)) | git; the browser after upload |
-| Array, peer, vCenter, switch and host passwords | The uploaded workbook, then the run's record in the local `state.db` for the life of the run ([ADR 0013](../adr/0013-one-array-credential-per-run.md)) | Run events, artifacts, logs, the as-built, API responses. `SecretStr` masks them in model dumps |
+| Array, peer, vCenter, switch, host and migration source passwords; the subscription key; the DSCC system password | The uploaded workbook, then the run's record in the local `state.db` for the life of the run ([ADR 0013](../adr/0013-one-array-credential-per-run.md)), encrypted with the installation's key ([ADR 0027](../adr/0027-stored-credentials-encrypted-at-rest.md)) | Run events, artifacts, logs, the as-built, API responses. `SecretStr` masks them in model dumps |
+| The key that encrypts them | `secrets.key` next to `state.db`, made on first use, 0600 on POSIX; on Windows in the user's own `%LOCALAPPDATA%\AlletraOnboard` | The database, git, logs, API answers, evidence and release zips |
 | DSCC and GreenLake user passwords, MFA | The operator's own browser | The tool, entirely |
 | Lab passwords (developers only) | The jump box `.env` (`LAB_ARRAY_PW`, `LAB_DEFAULT_PW`) | git; `check.py` scans added lines for them |
 
-The state database is not encrypted at rest. ADR 0013 records this as a decision for a
-single-operator jump box, to revisit if the tool ever runs on a shared host.
+The secret fields of the state database are encrypted at rest (BL-65,
+[ADR 0027](../adr/0027-stored-credentials-encrypted-at-rest.md)); the rest of each row stays readable
+for support. This protects a copy of `state.db` on its own (a support case, another computer, an
+evidence zip): its stored credentials cannot be read there, and the steps say so and ask for the sheet
+again. It does not protect against someone who can read both files, such as anyone signed in with the
+same Windows account. Rows saved before BL-65 stay in clear until their run is saved again; uploaded
+sheets nobody turned into a run are purged after 24 hours. DPAPI, to bind the key file to the Windows
+user, is left for when it can be tested on Windows.
 
 ### 7.2 Read-only by construction
 
@@ -622,10 +629,14 @@ One SQLite file per installation ([adapters/persistence/sqlite.py](../../src/all
 | `run_events` | Every step event, in order (the run's timeline) | Kept |
 | `work_items` | The array work item: identity, network, GreenLake and DSCC fields | Kept |
 | `provisioning_intents` | Addresses, credentials, volumes, host sets, replication rows | Kept with the run |
-| `pending_sheets` | A parsed workbook waiting for a mode, under a single-use token | Removed when the run is created |
+| `pending_sheets` | A parsed workbook waiting for a mode, under a single-use token | Removed when the run is created, or after 24 hours |
 | `run_artifacts` | Results: discovery report, hosts zoned on both fabrics, replication report and result, link check, failover record, as-built `.docx` | Newest 20 runs (`ARTIFACT_RETENTION_RUNS`) |
 | `run_commands` | The console's command log | Newest 20 runs ([SPEC-019](../specs/SPEC-019-console.md) §6) |
 | `run_device_pins` | The SSH key or certificate each on-site device presented on the run's first contact, and any different one it was refused for ([ADR 0026](../adr/0026-certificates-and-host-keys.md)) | Kept with the run |
+
+The schema version is kept in `PRAGMA user_version`; a database from a newer version of the tool is
+refused at start-up. Secrets in `work_items`, `provisioning_intents` and `pending_sheets` are encrypted
+(section 7.1).
 
 Deliberately **not** stored: a plan's approval (section 7.3) and running tasks. Run status values
 are in [models.py](../../src/alletra_onboard/domain/models.py) `RunStatus`. A run reopened after a

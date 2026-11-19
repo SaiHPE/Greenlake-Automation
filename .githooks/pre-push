@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Runs scripts/check.py before a push and refuses the push unless it says PASS. github.hpe.com has
+# no CI, so this is the gate on your laptop. Turned on with
+# Provisioning_Automation/alletra_onboard/scripts/install_hooks.sh (also turns on pre-commit).
+#
+# Not checked, because nothing in them is reviewed as a pull request:
+#   - deleting a branch, or pushing only tags
+#   - commits the remote already has (a new branch on an existing commit)
+#   - jumpbox-package and jumpbox-test: built by after_merge.sh and push_jumpbox_test.sh
+#   - commits that change only frontend/dist: after_merge.sh pushing the rebuilt dist to main
+#
+# The check runs on the checked-out branch, so a push of another branch is refused.
+# Python: the app folder's .venv, or the interpreter in CHECK_PYTHON (a worktree without its own .venv).
+# `git push --no-verify` skips this hook. That breaks the project rule (check.py must say PASS
+# before a pull request): use it only for a push that is not going to a pull request.
+set -uo pipefail
+
+APP=Provisioning_Automation/alletra_onboard
+DIST="$APP/frontend/dist/"
+remote=$1
+cd "$(git rev-parse --show-toplevel)" || exit 1
+# git sets GIT_DIR for hooks; with it set, git run from the app folder takes that folder for the
+# repository root, and check.py would compare the wrong tree. From the top, git finds the repo itself.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
+
+if git remote | grep -qxF -- "$remote"; then known="--remotes=$remote"; else known="--remotes"; fi
+head=$(git rev-parse HEAD)
+gate=0
+while read -r local_ref local_sha remote_ref _remote_sha; do
+  [[ $local_sha =~ ^0+$ ]] && continue   # a deletion
+  case "$remote_ref" in
+    refs/tags/*) continue ;;
+    refs/heads/jumpbox-package | refs/heads/jumpbox-test) continue ;;
+  esac
+  files=$(git log --format= --name-only "$local_sha" --not "$known" -- 2>/dev/null | sort -u | sed '/^$/d')
+  [ -z "$files" ] && continue
+  if ! printf '%s\n' "$files" | grep -qv "^$DIST"; then
+    continue
+  fi
+  if [ "$local_sha" != "$head" ]; then
+    echo "pre-push: the check runs on the checked-out branch, but this push sends $local_ref." >&2
+    echo "  Check out ${local_ref#refs/heads/} and push again from there." >&2
+    exit 1
+  fi
+  gate=1
+done
+
+[ "$gate" = 1 ] || exit 0
+
+py=${CHECK_PYTHON:-}
+if [ -z "$py" ]; then
+  for candidate in "$APP/.venv/bin/python" "$APP/.venv/Scripts/python.exe"; do
+    [ -x "$candidate" ] && { py=$candidate; break; }
+  done
+fi
+if [ -z "$py" ]; then
+  echo "pre-push: no Python to run scripts/check.py with, so the push is refused." >&2
+  echo "  Set up the app folder's .venv once (CONTRIBUTING.md, One-time setup):" >&2
+  echo "    cd $APP && python -m venv .venv && .venv/bin/pip install -e \".[dev]\"" >&2
+  echo "    (Windows: .venv\\Scripts\\pip install -e \".[dev]\")" >&2
+  echo "  Or point CHECK_PYTHON at a Python that has the app installed." >&2
+  exit 1
+fi
+case "$py" in */*) py=$(cd "$(dirname "$py")" && pwd)/$(basename "$py") ;; esac
+
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "pre-push: note: you have uncommitted changes. The check sees them; the push does not." >&2
+fi
+echo "pre-push: running scripts/check.py (git push --no-verify skips it; see the hook's header) ..." >&2
+out=$(cd "$APP" && "$py" scripts/check.py </dev/null 2>&1 | tee /dev/stderr)
+status=$?
+if [ "$status" = 0 ] && printf '%s\n' "$out" | tr -d '\r' | grep -q '^check.py on .*: PASS$'; then
+  exit 0
+fi
+echo "pre-push: check.py did not say PASS, so the push is refused. Fix the FAIL lines above and push again." >&2
+exit 1

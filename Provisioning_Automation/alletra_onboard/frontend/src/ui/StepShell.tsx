@@ -92,8 +92,6 @@ export function StepShell({
   description?: ReactNode;
   /** Overrides the status derived from the run; used by the steps that frame a run rather than run in it. */
   state?: StepState;
-  /** @deprecated Ignored: the header says the state word only (SPEC-030 R5); its counts go in `status`. */
-  stateDetail?: string;
   stateLabel?: string;
   gate?: { title: string; message: ReactNode } | null;
   error?: string | null;
@@ -110,8 +108,6 @@ export function StepShell({
   /** Ticks the primary needs, in the order they are drawn (Replication: the latency, then the plan). */
   confirmations?: Confirmation[];
   guidance?: ReactNode;
-  /** @deprecated Ignored: About this step starts closed on every step and keeps the operator's choice (R8). */
-  guideOpen?: boolean;
   top?: ReactNode;
   children?: ReactNode;
 }) {

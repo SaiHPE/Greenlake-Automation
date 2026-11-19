@@ -75,6 +75,25 @@ primary: `GET /remotecopy`, `GET /remotecopygroups`. Parsers are pinned to the B
   from v0.19). Learned live 2026-10-09: the array accepts every write and refuses the **start**
   (HTTP 400 code 236) — the check has to say it before the plan.
 - Sync rows: RTT ≤ 10 ms; async rows: ≤ 200 ms (from the tab).
+- **Sync refused by this array for the peer's OS** (BL-62, added 2026-11-19). On 2026-11-18 rack13-ARCUS on
+  OS **10.6.0** refused a sync group to PRIMERA630R11U22 on OS **4.6.20**, after the partnership was set up
+  and the link checked: *"RC sync/AA configurations are not supported with target PRIMERA630R11U22 running
+  4.x / 9.x. (HTTP 400, code 29)"*. The same pair ran sync on 2026-11-03 with rack13 on **10.5.55**
+  (`tests/fixtures/rcip_pair/before/*/showversion.txt`). The rule is only what the arrays did and said: this
+  array on release **10.6**, the peer on **4.x** (Primera) or **9.x** (Alletra 9000), the two targets the
+  message names → each sync group this run would create is one blocker sentence at the **first read**, before
+  any write, including before the partnership is set up: *"<A> (OS <v>) refuses sync replication to <B> (OS
+  <v>), as it does to any Primera 4.x array, so the sync row for volume set '<set>' cannot be configured: set
+  Mode to async (periodic) on the Replication tab for this pair."* (the failover test group, which takes the
+  first row's mode, gets the same sentence when it alone would be sync). Async rows are not affected; a sync
+  group already on the array is not a write and is not refused. Not blocked, because nothing seen says so:
+  10.5.x to a 4.x or 9.x peer (10.5.55 ran sync with the Primera live), a 10.x peer, a 3.x peer, a release
+  after 10.6 (add it to `SYNC_REFUSING_SOURCE_RELEASES` in `domain/replication.py` when one is seen to
+  refuse). The repo's replication research notes (2026-09-19, 2026-10-07, 2026-11-17, which summarise the
+  Support Matrix) say nothing on sync to an older array family. Peer Persistence (active-active) is refused on the sheet already (SPEC-015).
+  Verify and the as-built do not use this rule. Pinned in `test_replication_partnership.py` to the captured
+  `showversion` of each array; live 2026-11-19 (`lab/rcip_tool_lab.py`, sync: refused at preview 1,
+  nothing written; [validation record](../validation/2026-11-19-bl62-sync-version.md)).
 - The volume set exists on the primary with ≥ 1 member; no member is already in a Remote Copy group.
 - The peer CPG exists on the peer with free space ≥ the set's provisioned size.
 - Group counts within the Support Matrix for that array's OS (read from `showversion`).

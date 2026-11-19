@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 
 from alletra_onboard.application.documents.asbuilt_parse import parse_cli_sets
 from alletra_onboard.application.provisioning.clients import make_array_cli
@@ -361,6 +362,40 @@ def parse_showport_roles(text: str) -> tuple[dict[str, PortRole], str]:
     return roles, node_wwn
 
 
+_SHOWDATE_ROW = re.compile(r"^\s*\d+\s+(?P<when>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\s+(?P<zone>\S.*?)\s*$")
+
+
+def parse_showdate(text: str) -> tuple[datetime | None, str]:
+    """`showdate` -> (the first node's local time, naive; its zone as printed: "IST (Asia/Kolkata)").
+    (None, "") when no node row reads."""
+    for line in (text or "").splitlines():
+        m = _SHOWDATE_ROW.match(line)
+        if m:
+            return datetime.strptime(m.group("when"), "%Y-%m-%d %H:%M:%S"), m.group("zone")
+    return None, ""
+
+
+def utc_offset_minutes(array_local: datetime, utc_now: datetime) -> int:
+    """The array's local time minus UTC, to the quarter hour (every zone's offset is a multiple of 15
+    minutes, so a clock a few minutes off still gives the right one). Needs no time zone database:
+    the Windows jump box has none."""
+    minutes = (array_local - utc_now.astimezone(UTC).replace(tzinfo=None)).total_seconds() / 60
+    return round(minutes / 15) * 15
+
+
+def array_time(iso_utc: str, view: ReplicationArrayView) -> str:
+    """A UTC timestamp in the array's local time with its zone, as the array writes its own times
+    ("2026-10-10 15:50:40 IST"); in UTC when its `showdate` did not read."""
+    when = datetime.fromisoformat(iso_utc).astimezone(UTC)
+    if view.utc_offset_minutes is None:
+        return when.strftime("%Y-%m-%d %H:%M:%S UTC")
+    local = when.replace(tzinfo=None) + timedelta(minutes=view.utc_offset_minutes)
+    hours, minutes = divmod(abs(view.utc_offset_minutes), 60)
+    zone = view.time_zone.split()[0] if view.time_zone else \
+        f"UTC{'-' if view.utc_offset_minutes < 0 else '+'}{hours:02d}:{minutes:02d}"
+    return f"{local:%Y-%m-%d %H:%M:%S} {zone}"
+
+
 def read_array(
     creds: EndpointCreds, *, array_cli_factory: Callable = make_array_cli,
     progress: Callable[[str], None] | None = None,
@@ -388,6 +423,13 @@ def read_array(
             view.cpg_free_mib = parse_showcpg_free(cli.run("showcpg"))
             view.vvsets = dict(parse_cli_sets(cli.run("showvvset")))
             view.volume_size_mib = parse_showvv_sizes(cli.run("showvv -showcols Name,VSize_MB"))
+            try:
+                # the zone the array writes its times in (a group's last sync): only for showing times
+                local, view.time_zone = parse_showdate(cli.run("showdate"))
+                if local is not None:
+                    view.utc_offset_minutes = utc_offset_minutes(local, datetime.now(UTC))
+            except Exception:  # noqa: BLE001 - times are then shown in UTC
+                pass
     except Exception as exc:  # noqa: BLE001 - the step reports, the operator fixes the sheet
         view.read_error = f"Could not read {creds.host}: {exc}"
     return view

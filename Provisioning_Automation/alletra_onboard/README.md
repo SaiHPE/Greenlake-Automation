@@ -67,11 +67,10 @@ need no Node.
 gh auth login --hostname github.hpe.com        # browser login with your HPE account
 gh auth setup-git --hostname github.hpe.com    # plain git uses the same login
 git clone https://github.hpe.com/g-sai-roopesh/greenlake-automation.git
-cd greenlake-automation
-git config core.hooksPath .githooks                # refuses commits that touch frontend/dist or carry a token
-cd Provisioning_Automation/alletra_onboard
+cd greenlake-automation/Provisioning_Automation/alletra_onboard
 python -m venv .venv && .venv/bin/pip install -e .[dev]    # Windows: .venv\Scripts\pip
-cd frontend && npm ci
+cd frontend && npm ci && cd ..
+scripts/install_hooks.sh    # Git Bash on Windows. Hooks: no frontend/dist or token in a commit; check.py PASS before a push
 ```
 Line endings are fixed by `.gitattributes`: every clone, Mac or Windows, gets the same bytes and a
 clean `git status`.
@@ -97,7 +96,8 @@ Add-Content .env "LAB_DEFAULT_PW=<the lab vCenter and switch password>"
 1. `git switch main && git pull`, then `git switch -c feat/bl-NN-short-name`.
 2. Change the code. Before pushing, from the app folder: `.venv/bin/python scripts/check.py`
    (Windows: `.venv\Scripts\python scripts\check.py`). It runs the tests, ruff, the TypeScript
-   check and the branch rules below, and ends with a block to paste into the pull request. There is
+   checks (app and mockups), the frontend unit tests and the branch rules below, and ends with a
+   block to paste into the pull request. There is
    no CI on github.hpe.com, so this is the check the reviewer relies on.
 3. UI changes: edit `frontend/src` only. **Never commit `frontend/dist`**: the owner rebuilds it
    after each merge, and `scripts/push_jumpbox_test.sh` builds it for lab runs. The hook and
@@ -369,7 +369,10 @@ the app's step registry, so it is always current).
    array or the peer, N:S:P, address, netmask, gateway only when the arrays are on different
    networks), *Replication* first sets those addresses, starts Remote Copy and pairs the two arrays,
    as its own plan with its own confirmation; then *Read both arrays again*, *Check RC link* and
-   configure the groups. Leave the tab empty when the arrays are already paired. After *Verify
+   configure the groups. Leave the tab empty when the arrays are already paired. An array on OS 10.6
+   refuses sync replication to a Primera (OS 4.x) or Alletra 9000 (OS 9.x) peer, so the first read
+   stops a sync row to such a peer with one sentence, before anything is written: use async (periodic)
+   for that pair. After *Verify
    replication* the page lists each group the run configured with its settings and every volume in
    it, read with `showrcopy -d` on this array; the as-built has the same table per group.
    Arrays already paired over **Fibre Channel** work too: the step finds the partnership by port WWN
@@ -462,6 +465,7 @@ app refuses the apply and says why. `session.ps1` and the lab scripts already do
 **Run history** lives in `%LOCALAPPDATA%\AlletraOnboard\` (from rc.28), so a new zip in a new folder
 keeps every earlier run; the console banner prints the folder. An older `.alletra_onboard\state.db`
 beside the exe is still used when present. *Runs, Your runs* (top right) lists every run, grouped by who has to act next.
+A key file, `secrets.key`, sits next to `state.db` and encrypts the stored passwords and subscription key: keep it with the database; copying `state.db` alone to another computer leaves its stored credentials unreadable there.
 
 ---
 
@@ -512,7 +516,7 @@ in the wizard (the tool never handles it).
 ## Development (workstation only)
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\check.py      # tests, ruff, TypeScript and branch rules in one go
+.\.venv\Scripts\python.exe scripts\check.py      # tests, ruff, TypeScript, UI tests and branch rules in one go
 .\.venv\Scripts\python.exe -m pytest -q          # backend tests only
 cd frontend; npm ci; npm run build               # build the UI locally (never commit frontend/dist)
 ```

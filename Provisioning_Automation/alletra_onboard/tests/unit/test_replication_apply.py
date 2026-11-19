@@ -493,3 +493,24 @@ def test_the_b_block_removes_what_a_primera_peer_kept_after_the_a_block():
     assert [line.split()[0] for line in b] == ["removevvset"] * 2 + ["removevv"] * 3       # sets before volumes
     for line in b:
         assert line.split()[-1].startswith("zz_rc")
+
+
+def test_the_applied_sentence_counts_what_the_plan_found_already_there():
+    # BL-63: it counted the apply's own "exists" answers, so a plan with 8 already there said 0
+    from alletra_onboard.application.replication.steps import applied_message
+    from alletra_onboard.domain.replication import (
+        ReplicationAction,
+        ReplicationOutcome,
+        ReplicationPlan,
+        ReplicationResult,
+    )
+
+    there = [ReplicationAction(kind=k, name=f"{k}-{w}", where=w, state="exists")
+             for k in ("rcip_port", "rc_service", "target") for w in ("A", "B")]
+    plan = ReplicationPlan(actions=[*there, ReplicationAction(kind="group", name="g_rcg", state="create"),
+                                    ReplicationAction(kind="peer_vvset", name="g_rc", where="B", state="create")])
+    result = ReplicationResult(groups_created=["g_rcg"], outcomes=[
+        ReplicationOutcome(kind="group", name="g_rcg"), ReplicationOutcome(kind="peer_vvset", name="g_rc", where="B", status="exists"),
+    ])
+    assert applied_message(plan, result) == ("Replication configured — g_rcg; 1 write(s), 7 already there. "
+                                             "Verify replication to read it back.")

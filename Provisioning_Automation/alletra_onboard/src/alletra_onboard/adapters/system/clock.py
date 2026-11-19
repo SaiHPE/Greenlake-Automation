@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import ctypes
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
+from typing import NamedTuple
 
 import httpx
 from pydantic import BaseModel
@@ -64,19 +65,37 @@ def _candidates(preferred: str | None) -> list[str]:
     return ordered
 
 
-async def _server_utc(preferred: str | None = None) -> tuple[datetime, str]:
-    """Return (UTC now, source URL used), trying candidates until one yields a Date header.
-    trust_env (default) makes httpx use HTTPS_PROXY, so this works behind the lab proxy."""
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+class _Reading(NamedTuple):
+    server: datetime     # the source's Date header
+    local: datetime      # this clock at the midpoint of that request
+    source: str
+
+    @property
+    def skew(self) -> float:
+        return (self.local - self.server).total_seconds()
+
+
+async def _server_utc(preferred: str | None = None) -> _Reading:
+    """The first candidate that answers with a Date header, and the local time to compare it with.
+    The local time is taken per attempt, at the midpoint of that request: a slow or failed source
+    before it (10 s timeout) must not count as skew. trust_env (default) makes httpx use HTTPS_PROXY,
+    so this works behind the lab proxy."""
     last = "no time sources tried"
     for url in _candidates(preferred):
         try:
+            t0 = _now()
             async with httpx.AsyncClient(
                 timeout=10.0, follow_redirects=True, verify=ssl_context()
             ) as client:
                 resp = await client.get(url)
+            t1 = _now()
             date = resp.headers.get("date")
             if date:
-                return parsedate_to_datetime(date).astimezone(UTC), url
+                return _Reading(parsedate_to_datetime(date).astimezone(UTC), t0 + (t1 - t0) / 2, url)
             last = f"no Date header from {url}"
         except Exception as exc:  # noqa: BLE001 - try the next source
             last = f"{type(exc).__name__} from {url}: {str(exc)[:80]}"
@@ -84,27 +103,26 @@ async def _server_utc(preferred: str | None = None) -> tuple[datetime, str]:
 
 
 async def clock_status(url: str | None = None) -> ClockStatus:
-    local = datetime.now(UTC)
     try:
-        server, source = await _server_utc(url)
+        reading = await _server_utc(url)
     except Exception as exc:  # noqa: BLE001 - status must never raise; the UI just won't warn.
         return ClockStatus(
             in_sync=True,
             skew_seconds=None,
-            local_utc=local.isoformat(),
+            local_utc=_now().isoformat(),
             server_utc=None,
             is_admin=is_elevated(),
             source=url or "(none reachable)",
             error=f"{type(exc).__name__}: {str(exc)[:200]}",
         )
-    skew = (local - server).total_seconds()
+    skew = reading.skew
     return ClockStatus(
         in_sync=abs(skew) <= IN_SYNC_THRESHOLD_S,
         skew_seconds=skew,
-        local_utc=local.isoformat(),
-        server_utc=server.isoformat(),
+        local_utc=reading.local.isoformat(),
+        server_utc=reading.server.isoformat(),
         is_admin=is_elevated(),
-        source=source,
+        source=reading.source,
     )
 
 
@@ -139,18 +157,18 @@ def _set_system_utc(when: datetime) -> None:
 
 async def sync_clock(url: str | None = None) -> ClockSyncResult:
     """Set the system clock from the HTTPS time source if it has drifted past the threshold."""
-    before = datetime.now(UTC)
-    server, source = await _server_utc(url)
-    skew = (before - server).total_seconds()
+    reading = await _server_utc(url)
+    skew = reading.skew
     changed = abs(skew) > IN_SYNC_THRESHOLD_S
     if changed:
-        _set_system_utc(server)
-    after = datetime.now(UTC)
+        # the Date header plus half the round trip, plus the time since that request
+        _set_system_utc(_now() - timedelta(seconds=skew))
+    after = _now()
     return ClockSyncResult(
         changed=changed,
         skew_seconds_before=skew,
-        local_utc_before=before.isoformat(),
+        local_utc_before=reading.local.isoformat(),
         local_utc_after=after.isoformat(),
-        server_utc=server.isoformat(),
-        source=source,
+        server_utc=reading.server.isoformat(),
+        source=reading.source,
     )

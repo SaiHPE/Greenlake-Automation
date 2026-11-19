@@ -37,7 +37,10 @@ per object (`removevv -f` per volume, not one line of five — a failure names t
 so records can be unioned) and a rendered block. The UI shows it under the Result with a header the
 paste carries (`# Removal of what run <id> created on <array> — <time>` / `# Review before pasting.
 The tool never runs these.`), *Copy* and *Download .txt*. The as-built's provisioning record
-includes the block under *To remove what this run created*, unioned across every apply in the run.
+includes the block under *To remove what this run created*, unioned across every apply in the run. The
+Finish page shows the run's removal sets too, each in its own folded section named for its step:
+*Provision storage: removal command set* and *Replication: removal command set* (BL-63), read from the
+same apply events and drawn by the same blocks as the two steps.
 
 **R5 — Empty is stated.** An apply that created nothing renders *"Nothing to remove — this apply
 created nothing."*

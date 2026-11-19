@@ -26,6 +26,9 @@ docx_images/
 *.yaml
 *.pdf
 *.db
+# The key that encrypts the state database's stored credentials (ADR 0027), kept next to state.db
+secrets.key
+*.key
 
 # Editor / OS
 .vscode/

@@ -80,10 +80,12 @@ scripts/         check.py, push_jumpbox_test.sh, after_merge.sh, release and pac
 ```bash
 python -m venv .venv && .venv/bin/pip install -e .[dev]   # Windows: .venv\Scripts\pip
 cd frontend && npm ci && cd ..
-.venv/bin/python scripts/check.py        # the pre-pull-request gate: tests, ruff, tsc, branch rules
+.venv/bin/python scripts/check.py        # the pre-pull-request gate: tests, ruff, tsc, UI tests, branch rules
+scripts/install_hooks.sh                 # once per clone: commit hook, and a push hook that runs check.py
 .venv/bin/python -m pytest -q            # tests only
 .venv/bin/python -m ruff check .         # lint (ruff is pinned in pyproject.toml)
 cd frontend && npm run typecheck         # TypeScript
+cd frontend && npm test                  # frontend unit tests (vitest, pure logic, no browser)
 .venv/bin/onboard ui                     # run the app (http://127.0.0.1:8765)
 cd frontend && npm run dev               # UI dev server on :5173 against the running backend
 cd frontend && npm run mockups           # design mockups on :5175

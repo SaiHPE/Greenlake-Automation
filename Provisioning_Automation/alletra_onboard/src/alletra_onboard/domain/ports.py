@@ -2,13 +2,21 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from alletra_onboard.domain.models import ArrayWorkItem, BrowserResultStatus, RunEvent, RunRecord
+from alletra_onboard.domain.models import ArrayWorkItem, RunEvent, RunRecord
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.trust import DevicePin
 
+CREDENTIALS_UNREADABLE = (
+    "This run's stored credentials cannot be read on this computer (the key file is missing or belongs "
+    "to another installation). Upload the initialisation sheet again to start a new run."
+)
 
-class EventSink(Protocol):
-    async def publish(self, event: RunEvent) -> None: ...
+
+class StoredCredentialsUnreadableError(RuntimeError):
+    """A stored secret cannot be decrypted here (ADR 0027). The message is for the operator as it is."""
+
+    def __init__(self, message: str = CREDENTIALS_UNREADABLE) -> None:
+        super().__init__(message)
 
 
 class RunStore(Protocol):
@@ -37,11 +45,3 @@ class RunStore(Protocol):
     def list_device_pins(self, run_id: str) -> list[DevicePin]: ...
     def add_device_pin(self, run_id: str, pin: DevicePin) -> DevicePin: ...
     def save_device_pin(self, run_id: str, pin: DevicePin) -> None: ...
-
-
-class CloudinitWizard(Protocol):
-    async def run(self, item: ArrayWorkItem, run_id: str) -> BrowserResultStatus: ...
-
-
-class DsccSetupWizard(Protocol):
-    async def run(self, item: ArrayWorkItem, run_id: str) -> BrowserResultStatus: ...

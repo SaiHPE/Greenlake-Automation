@@ -433,3 +433,15 @@ tab: a consultant could not initialise an array because of a volume name. Found 
 "by which run?". Rules: a sheet check belongs to the steps that read its tab; the upload refuses only what
 initialising the array needs (and two arrays), lists the rest, and the run is checked again for the steps
 chosen when it is created. A test of a new sheet rule includes a Full onboarding run that still mints.
+
+**49. When a device refuses a write for a reason it could have known at read time, the plan says it next time.**
+On 2026-11-18 rack13-ARCUS, upgraded to OS 10.6.0, set up its partnership with the Primera, passed the link
+check, and only then refused the sync group: *RC sync/AA configurations are not supported with target
+PRIMERA630R11U22 running 4.x / 9.x*. Both versions had been read at the first preview (`showversion`) and
+used for nothing. The same pair had run sync on 2026-11-03, on 10.5.55, so every test and the run sheet were
+right for the array as it was, and nobody re-asked after the upgrade. The removal set undid the half-made
+run, but the operator had waited through the setup and the link check for a failure the tool could have
+named at the start.
+Rules: when an apply fails with a refusal that names a fact the plan already reads (a version, a model, a
+mode), turn it into a plan blocker at the first read, from the refusal's own words and the runs that
+passed, no wider; and an OS upgrade on a lab array is a reason to re-run the live checks that touch it.

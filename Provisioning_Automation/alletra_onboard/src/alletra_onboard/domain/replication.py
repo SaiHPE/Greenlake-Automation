@@ -34,6 +34,32 @@ def rtt_limit_text(transport: str, mode: str) -> str:
     """'async replication over Fibre Channel needs 10 ms or less': every sentence names the transport."""
     return f"{mode} replication {TRANSPORT_WORDS[transport]} needs {rtt_limit_ms(transport, mode):g} ms or less"
 
+
+#: BL-62, from what the arrays did and nothing else: rack13-ARCUS on OS 10.6.0 refused a sync group to
+#: PRIMERA630R11U22 on 4.6.20 (live 2026-11-18: "RC sync/AA configurations are not supported with target
+#: PRIMERA630R11U22 running 4.x / 9.x", HTTP 400 code 29); the same pair ran sync on 2026-11-03 with
+#: rack13 on 10.5.55. The source releases that refuse, as (major, minor); a release seen to refuse is added here.
+SYNC_REFUSING_SOURCE_RELEASES: frozenset[tuple[int, int]] = frozenset({(10, 6)})
+#: The target OS majors that message names: Primera 4.x and Alletra 9000 9.x.
+SYNC_REFUSED_TARGETS: dict[int, str] = {4: "Primera 4.x", 9: "Alletra 9000 9.x"}
+
+
+def os_release(version: str) -> tuple[int, int] | None:
+    """`showversion`'s release ("10.6.0", "4.6.20") as (major, minor); None when it is not one."""
+    parts = (version or "").strip().split(".")
+    if len(parts) < 2 or not (parts[0].isdigit() and parts[1].isdigit()):
+        return None
+    return int(parts[0]), int(parts[1])
+
+
+def sync_refused_target(source_os: str, target_os: str) -> str:
+    """The target family this array refuses sync (and Peer Persistence) to, else ''. An unread version refuses nothing."""
+    source, target = os_release(source_os), os_release(target_os)
+    if source is None or target is None or source not in SYNC_REFUSING_SOURCE_RELEASES:
+        return ""
+    return SYNC_REFUSED_TARGETS.get(target[0], "")
+
+
 #: A group name may be at most 22 characters under `mirror_config` (the peer side appends `.r<id>`).
 GROUP_NAME_MAX = 22
 #: RPO in whole minutes; the array period is RPO / 2 (its minimum period is 15 s).
@@ -303,6 +329,8 @@ class ReplicationArrayView(BaseModel):
     cpg_free_mib: dict[str, int] = Field(default_factory=dict)
     vvsets: dict[str, list[str]] = Field(default_factory=dict)
     volume_size_mib: dict[str, int] = Field(default_factory=dict)
+    time_zone: str = ""                 # `showdate`, as the array prints it: "IST (Asia/Kolkata)"
+    utc_offset_minutes: int | None = None   # the array's local time minus UTC, when `showdate` read
     read_error: str | None = None
 
     @property
