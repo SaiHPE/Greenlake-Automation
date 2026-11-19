@@ -122,6 +122,20 @@ The server checks the tick as well: the apply body carries the previewed plan's 
   never a removal line of its own (`removercopygroup` owns it).
 Verdict per group: **Replicating** · **Initial sync in progress** · **Not replicating (reason)**.
 
+*Added 2026-11-19 (the owner, after the customer demo; BL-64: "show all volumes in rcgroup including
+config, showrcopy -d").* For every group the run configured that is on A, Verify also reads
+`showrcopy -d groups <group>` on A, in one more read-only SSH session (`showrcopy` is on the read
+allowlist; `-d` only "displays more detailed configuration information", the array's help, and
+`test_replication_group_detail.py` pins the form against the allowlist). Each group in the
+`replication.verified` event carries `config`: target, mode, period, the workbook's RPO, policies, role,
+status, group ID, the user and snapshot CPGs on both sides, the group's last sync, and every volume with
+its ID, the peer volume and ID, sync status, last sync, resync and sync snapshots, the three iteration
+numbers and the volume sets. Shown, never judged: the verdict above is unchanged, and a group whose
+`-d` read fails is a note. The Replication page lists each such group in a folded section after
+Verify (its settings, then a table of every volume); the as-built does the same (SPEC-018). Parsed by
+header (`read.parse_showrcopy_detail`), pinned to the OS 10.5.0 captures in `rc_pair/` and the OS 10.6.0
+and Primera OS 4.6.20 captures in `rcip_pair/showrcopy_d/`.
+
 **R7 — Removal set (SPEC-007 pattern: CLI lines the operator pastes, in reverse dependency order).**
 Exactly what this run created, as two blocks:
 - **A:** `stoprcopygroup <group>` → `dismissrcopyvv -removevv <vol> <group>` per volume (removes

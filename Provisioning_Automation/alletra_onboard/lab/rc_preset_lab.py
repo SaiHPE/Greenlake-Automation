@@ -245,7 +245,7 @@ def main():
         # SPEC-020 R4: on RCIP the apply needs the link checked first
         approve = {"approved_plan": rplan.get("plan_id")}   # the plan just read
         status, resp = api("POST", "/runs/%s/replication/apply" % run1, approve)
-        check("7b gate: apply refused until the link is checked", status == 409 and "Check the link first" in str(resp), "HTTP %s %s" % (status, str(resp)[:160]))
+        check("7b gate: apply refused until the link is checked", status == 409 and "Check RC link first" in str(resp), "HTTP %s %s" % (status, str(resp)[:160]))
         ev = step(run1, "/replication/link-check", ["replication.link_checked", "replication.link_check.failed"], "link-check", body={"duration_s": 600})
         lc = ev["data"]["link_check"]
         worst = max((x["latency_ms"] for x in lc["results"] if x["status"] == "measured"), default=None)

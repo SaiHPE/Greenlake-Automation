@@ -138,7 +138,7 @@ no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 | `documents/steps.py` | `DocumentSteps` — post-init verify + as-built (never touch run status) |
 | `documents/verification.py` | Read-only config+health verify (`verify(item, user, pw)` → `VerificationReport`) |
 | `documents/asbuilt.py`, `asbuilt_parse.py`, `asbuilt_docx.py` | As-built: fill the bundled HPE `.docx` / parse the CLI dump (CSV) / HPE house-style tables |
-| `documents/handover.py` | As-built *Array status and performance at handover* (SPEC-026): parse `showalert -d`, `showsys -space` and the `srstat*` summaries; the alert table, idle, the event's `handover` summary |
+| `documents/handover.py` | As-built *Array status at handover* (SPEC-026): parse `showdate`, `showalert -d` and `showsys -space`; the alert table, the array's UTC offset, the event's `handover` summary (performance removed 2026-11-19) |
 | `platform/init_sheet.py` | The workbook: template build + `parse_workbook_bytes` → `ParsedInitSheet` |
 | `platform/intake.py`, `platform/configuring.py` | CSV intake, `.env` config I/O |
 | `platform/proxy.py`, `platform/prereqs.py` | `ProxyResolver` (ADR 0008), firewall rules + connectivity check |

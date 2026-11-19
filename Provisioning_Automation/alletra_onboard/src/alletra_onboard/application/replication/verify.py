@@ -2,6 +2,10 @@
 right role on each side and its volumes Synced. Vocabulary from the Remote Copy troubleshooting
 guide (ED6): Status Started/Stopped/Failsafe · Role Primary/Secondary/-Rev · SyncStatus
 Synced/Syncing/Stopped/Stale. The tool never retries a write here — it reports and names HPE's step.
+
+BL-64 (the owner, 2026-11-19): each group's settings and every volume in it, read with `showrcopy -d
+groups <group>` on this array, travel with the verdict (`GroupVerification.config`). They are shown,
+never judged: the verdict still comes from `showrcopy` on both arrays.
 """
 
 from __future__ import annotations
@@ -75,10 +79,25 @@ def _judge(group: str, a_group: RcGroup | None, b_group: RcGroup | None, expecte
     return v
 
 
+def _rpo_minutes(action, intent) -> int | None:
+    """The workbook's RPO for a periodic group: its volume set's row, else twice the planned period
+    (the tool's own test group copies the first row's mode and period)."""
+    if action.detail.get("mode") == "sync":
+        return None
+    row = next((r for r in intent.protections if r.vvset == action.detail.get("vvset")), None)
+    if row is not None and row.rpo_minutes:
+        return row.rpo_minutes
+    period = action.detail.get("period_seconds")
+    return period * 2 // 60 if period else None
+
+
 def verify(
     provisioning: ProvisioningIntent, plan: ReplicationPlan, *,
-    read_fn: Callable = replication_read.read_array, progress: Callable[[str], None] | None = None,
+    read_fn: Callable = replication_read.read_array, detail_fn: Callable | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> ReplicationVerification:
+    """`detail_fn` (`replication_read.read_group_details` in the step) reads each group's `showrcopy -d`
+    on this array; without it the groups carry no `config`."""
     out = ReplicationVerification()
     intent = provisioning.replication
     if intent is None:
@@ -100,7 +119,8 @@ def verify(
             f"{a.name} → {b.name} via '{t.name}' {t.links_up}/{t.links_total} links Up · "
             f"{b.name} → {a.name} via '{t.peer_name}' {t.peer_links_up}/{t.peer_links_total} links Up"
             for t in targets)
-    for action in (x for x in plan.actions if x.kind == "group" and x.state in ("create", "exists")):
+    group_actions = [x for x in plan.actions if x.kind == "group" and x.state in ("create", "exists")]
+    for action in group_actions:
         g = action.name
         expected_mode = action.detail.get("mode", "")
         expected_period = action.detail.get("period_seconds")
@@ -115,6 +135,16 @@ def verify(
             elif len(members) != len(a_group.volumes):
                 v.detail += f" · peer set {peer_set} has {len(members)} of {len(a_group.volumes)} volumes"
         out.groups.append(v)
+    present = [v.group for v in out.groups if a.group(v.group) is not None]
+    if detail_fn is not None and present:
+        details, errors = detail_fn(provisioning.array, present, progress=progress)
+        rpo = {x.name: _rpo_minutes(x, intent) for x in group_actions}
+        for v in out.groups:
+            config = details.get(v.group)
+            if config is not None:
+                v.config = config.model_copy(update={"rpo_minutes": rpo.get(v.group)})
+            elif v.group in errors:
+                out.notes.append(f"The settings and volumes of {v.group} could not be read (showrcopy -d): {errors[v.group]}")
     rcp = [s for s in a.vvsets if s.startswith("RCP_")]
     if rcp:
         out.notes.append("The array keeps its own VV set per group (" + ", ".join(sorted(rcp)[:6]) + ("…" if len(rcp) > 6 else "")

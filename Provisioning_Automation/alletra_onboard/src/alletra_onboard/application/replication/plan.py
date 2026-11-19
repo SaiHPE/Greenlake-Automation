@@ -461,7 +461,7 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
         for seq, call in enumerate((c for x in p_actions for c in x.calls), start=1):
             call.seq = seq
         plan.notes.append(f"This configures the replication ports and the partnership between {a} and {b} first. "
-                          "The Remote Copy groups are planned after it: read both arrays again, check the link, "
+                          "The Remote Copy groups are planned after it: read both arrays again, press Check RC link, "
                           "then configure the groups.")
         return plan
 

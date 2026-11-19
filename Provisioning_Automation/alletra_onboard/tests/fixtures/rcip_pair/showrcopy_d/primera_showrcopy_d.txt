@@ -1,0 +1,30 @@
+# showrcopy -d
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name         ID Type Status Options Version Policy        Socks  Buffsz SysName       SysID RemoteName       RemoteID
+rack13-ARCUS 46 IP   ready  -            49 mirror_config    20 2097152 rack13-ARCUS 185493 PRIMERA630R11U22       18
+
+Link Information
+
+Target       Name               IPC      ID Node  Address     Status Options
+rack13-ARCUS rack13-ARCUS_0_1_1 RCs0181 181 0:1:1 10.93.18.11 Up     -
+rack13-ARCUS rack13-ARCUS_1_1_1 RCs1182 182 1:1:1 10.93.18.13 Up     -
+receive      rcv_ip_011         RCr0183 183 0:1:1 10.93.18.19 Up     -
+receive      rcv_ip_111         RCr1184 184 1:1:1 10.93.18.20 Up     -
+
+Group Information
+
+Name                    ID   Target       Status   Role       Mode     LocalUserCpg LocalSnapCpg RmUserCpg  RmSnapCpg  Options
+demo_rc_vvs_rcg.r185493   70 rack13-ARCUS Started  Secondary  Periodic SSD_r6       SSD_r6       SSD_r6     SSD_r6     Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV        ID   RemoteVV      ID   SyncStatus    Resync_ss Sync_ss  VV_iter   R_iter S_iter LastSyncTime
+  demo_rc_vol01 51913 demo_rc_vol01  138 Synced        none      none     185493/71 NA     NA     2026-11-19 16:15:50 IST
+
+Name                   ID   Target       Status   Role       Mode     LocalUserCpg LocalSnapCpg RmUserCpg  RmSnapCpg  Options
+zz_rc_test_rcg.r185493   71 rack13-ARCUS Started  Secondary  Periodic SSD_r6       SSD_r6       SSD_r6     SSD_r6     Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV         ID   RemoteVV       ID   SyncStatus    Resync_ss Sync_ss  VV_iter   R_iter S_iter LastSyncTime
+  zz_rc_test_v01 51914 zz_rc_test_v01  175 Synced        none      none     185493/72 NA     NA     2026-11-19 16:12:50 IST
+

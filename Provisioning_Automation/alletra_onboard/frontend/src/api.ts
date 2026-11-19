@@ -231,19 +231,14 @@ export interface AsBuiltResult {
   // What the array said about itself when the document was made; absent on documents made before it.
   handover?: HandoverStatus | null;
 }
-// SPEC-026 R10: from the same reads as the document's status and performance section. A null figure
+// SPEC-026 R10: from the same reads as the document's status section. A null figure
 // is not known (its read failed, named in read_errors and in the warnings), never zero.
 export interface HandoverStatus {
   read_at: string | null;
-  window_from: string | null;
-  window_to: string | null;
   alerts_new: number | null;
   alerts_major: number | null;      // Major, Critical or Fatal
   oldest_alert: string | null;      // the oldest first occurrence, as the array printed it
   cloud_alert: number | null;       // the alert saying the array is disconnected from Data Services Cloud Console
-  cpu_max_pct: number | null;       // the busiest sample of any controller node
-  iops_avg: number | null;          // the host ports' average IO/s, summed
-  idle: boolean | null;
   read_errors: Record<string, string>;
 }
 export const startAsbuilt = (
@@ -641,8 +636,20 @@ export const replicationLinkCheck = (runId: string, durationS = 600) =>
   request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/link-check`, { duration_s: durationS });
 // R6: read-only verdict per planned group from `showrcopy` on both arrays.
 export type GroupVerdict = 'replicating' | 'syncing' | 'not_replicating';
+// `showrcopy -d groups <group>` on this array (BL-64): every column as the array printed it ("NA", "none", "").
+export interface RcVolumeDetail {
+  local_name: string; local_id: number | null; remote_name: string; remote_id: number | null; sync_status: string;
+  resync_snapshot: string; sync_snapshot: string; volume_iteration: string; resync_iteration: string; sync_iteration: string;
+  last_sync: string; local_set: string; remote_set: string;
+}
+export interface RcGroupDetail {
+  name: string; id: number | null; target: string; status: string; role: string; mode: string;
+  local_user_cpg: string; local_snap_cpg: string; remote_user_cpg: string; remote_snap_cpg: string;
+  options: string[]; period: string; last_sync: string; rpo_minutes: number | null; volumes: RcVolumeDetail[];
+}
 export interface GroupVerification {
   group: string; peer_group: string; verdict: GroupVerdict; detail: string; next_step: string; volumes_total: number; volumes_synced: number;
+  config?: RcGroupDetail | null;
 }
 export interface ReplicationVerification { links_ok: boolean; links_detail: string; groups: GroupVerification[]; notes: string[]; error: string | null; }
 export const replicationVerify = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/verify`);

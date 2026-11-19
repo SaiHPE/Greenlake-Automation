@@ -32,6 +32,13 @@ Replication tab:
 - The calls made with their CLI equivalents, and the removal set as **A** and **B** blocks (SPEC-016
   R7), under *To remove what this run created* like the provisioning lines.
 
+*Added 2026-11-19 (BL-64):* after the group table, a table per group this run configured with every
+volume in it (ID, the peer volume and ID, sync status, last sync, resync and sync snapshots, the three
+iteration numbers, the volume sets) and a settings table (target, mode, RPO and period, policies, role,
+status, group ID, the CPGs on both sides, the group's last sync), read with `showrcopy -d groups <group>`
+on this array when the document is made. A group whose `-d` read fails keeps the short volume list, and
+the section and the warnings say why.
+
 **R2 — Failover test section** (SPEC-017 R6) when the test ran; otherwise one sentence: *The failover
 test was not run in this run.*
 

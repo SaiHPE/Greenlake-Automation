@@ -1,0 +1,104 @@
+{
+ "event_type": "replication.verified",
+ "message": "2 replicating \u00b7 0 syncing \u00b7 0 not replicating \u00b7 links Up",
+ "verification": {
+  "links_ok": true,
+  "links_detail": "rack13-ARCUS \u2192 PRIMERA630R11U22 via 'PRIMERA630R11U22' 2/2 links Up \u00b7 PRIMERA630R11U22 \u2192 rack13-ARCUS via 'rack13-ARCUS' 2/2 links Up",
+  "groups": [
+   {
+    "group": "zz_rc_vvs_rcg",
+    "peer_group": "zz_rc_vvs_rcg.r185493",
+    "verdict": "replicating",
+    "detail": "Started \u00b7 Primary here, Secondary on the peer \u00b7 Periodic \u00b7 1 volume(s) Synced \u00b7 last sync 2026-11-19 16:36:59 IST",
+    "next_step": "",
+    "volumes_total": 1,
+    "volumes_synced": 1,
+    "config": {
+     "name": "zz_rc_vvs_rcg",
+     "id": 29,
+     "target": "PRIMERA630R11U22",
+     "status": "Started",
+     "role": "Primary",
+     "mode": "Periodic",
+     "local_user_cpg": "SSD_r6",
+     "local_snap_cpg": "",
+     "remote_user_cpg": "SSD_r6",
+     "remote_snap_cpg": "",
+     "options": [
+      "auto_recover",
+      "over_per_alert",
+      "auto_synchronize"
+     ],
+     "period": "5m",
+     "last_sync": "2026-11-19 16:36:59 IST",
+     "rpo_minutes": 10,
+     "volumes": [
+      {
+       "local_name": "zz_rc_vol01",
+       "local_id": 326,
+       "remote_name": "zz_rc_vol01",
+       "remote_id": 52064,
+       "sync_status": "Synced",
+       "resync_snapshot": "rcpy.29.326.19",
+       "sync_snapshot": "none",
+       "volume_iteration": "185493/1",
+       "resync_iteration": "185493/1",
+       "sync_iteration": "NA",
+       "last_sync": "2026-11-19 16:36:59 IST",
+       "local_set": "zz_rc_vvs",
+       "remote_set": "NA"
+      }
+     ]
+    }
+   },
+   {
+    "group": "zz_rc_test_rcg",
+    "peer_group": "zz_rc_test_rcg.r185493",
+    "verdict": "replicating",
+    "detail": "Started \u00b7 Primary here, Secondary on the peer \u00b7 Periodic \u00b7 1 volume(s) Synced \u00b7 last sync 2026-11-19 16:36:59 IST",
+    "next_step": "",
+    "volumes_total": 1,
+    "volumes_synced": 1,
+    "config": {
+     "name": "zz_rc_test_rcg",
+     "id": 30,
+     "target": "PRIMERA630R11U22",
+     "status": "Started",
+     "role": "Primary",
+     "mode": "Periodic",
+     "local_user_cpg": "SSD_r6",
+     "local_snap_cpg": "",
+     "remote_user_cpg": "SSD_r6",
+     "remote_snap_cpg": "",
+     "options": [
+      "auto_recover",
+      "over_per_alert",
+      "auto_synchronize"
+     ],
+     "period": "5m",
+     "last_sync": "2026-11-19 16:36:59 IST",
+     "rpo_minutes": 10,
+     "volumes": [
+      {
+       "local_name": "zz_rc_test_v01",
+       "local_id": 327,
+       "remote_name": "zz_rc_test_v01",
+       "remote_id": 52065,
+       "sync_status": "Synced",
+       "resync_snapshot": "rcpy.30.327.19",
+       "sync_snapshot": "none",
+       "volume_iteration": "185493/1",
+       "resync_iteration": "185493/1",
+       "sync_iteration": "NA",
+       "last_sync": "2026-11-19 16:36:59 IST",
+       "local_set": "zz_rc_test",
+       "remote_set": "NA"
+      }
+     ]
+    }
+   }
+  ],
+  "notes": [],
+  "error": null
+ }
+}

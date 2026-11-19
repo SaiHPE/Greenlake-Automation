@@ -69,7 +69,7 @@ help shows an FC form (research §2). For an FC partner target with something to
   with *"Type the round-trip time between the arrays on the Replication tab: the tool cannot measure
   Fibre Channel links yet."* Over 10 ms: refused, with SPEC-020 R4's *Continue anyway* tick.
 - the link-check gate (`_gate_on_link`) asks for the typed value, not an RCIP link check; the page
-  offers no *Check the link* for FC targets and says why; the result's notes and the as-built say the
+  offers no *Check RC link* for FC targets and says why; the result's notes and the as-built say the
   latency was typed by the engineer, not measured.
 A pair never mixes transports (R3), so a run's targets are all checked one way.
 
@@ -202,7 +202,7 @@ with its removal sets.
   an FC pair to 10 ms at the apply, with *Continue anyway*. `checkrclink` is not run on FC links: its help
   has never been captured (R6's question, research §2), so the link check is refused for an FC pair.
 - **R7.** Page: transport on the partnership line, FC links on the array cards, a *Round-trip time* panel in
-  place of *Check the link* (mockup `frontend/mockups/screens/ReplicationFc.tsx`; screenshots not taken).
+  place of *Check RC link* (mockup `frontend/mockups/screens/ReplicationFc.tsx`; screenshots not taken).
   As-built: *Replication ports* column, transport in the partnership sentence, a typed-latency paragraph.
 - **R8.** `tests/unit/test_replication_rcfc.py` runs plan → apply → verify on the lab pair's captures
   carried over FC: the calls are the RCIP calls.

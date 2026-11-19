@@ -112,7 +112,7 @@ says why on click (the footer's `blocked`, or an inline sentence), or is not dra
 drawn in one place only: the footer, or a part's row, never both.
 
 **R4 — The footer holds at most three buttons.** The primary and two others. A finished part's
-"do it again" (*Read both arrays again*, *Check the link again*, *Verify again*, *Rebuild plan*)
+"do it again" (*Read both arrays again*, *Check RC link again* (renamed 2026-11-19 from *Check the link again*), *Verify again*, *Rebuild plan*)
 moves to that part's row (R7). Exception: after a failed apply on Provision storage, *Rebuild plan*
 is the footer primary (R7a). At `large` and wider the tick sits on the footer row, left of the
 buttons (as the signed-off draft-3 kit draws it); below `large` it stacks above. A step may have

@@ -88,3 +88,11 @@ Remote Copy group is captured), the live samplers `statcpu`, `statport` and `sta
 they never end), System Reporter's writes (`setsr`, `startsr`, `stopsr`, `*sralertcrit`) and the
 alert writes `setalert` and `removealert`. The Console prompt uses this allowlist, so it can run the
 four commands too.
+
+## Addendum 2026-11-19 (BL-64, the owner's decision)
+
+`srstatcpu`, `srstatport` and `srstatvv` leave the read allowlist. Performance was removed from the
+as-built at the owner's request, and nothing else read them; the Console prompt can no longer run them
+either. `showalert` stays. `tests/unit/test_cli_allowlist.py` now pins the three as refused, and its help
+review covers `showalert` only (the System Reporter help pages stay in the fixtures). The as-built reads
+`showdate`, already on the list, for the array's UTC offset that a System Reporter window used to give.

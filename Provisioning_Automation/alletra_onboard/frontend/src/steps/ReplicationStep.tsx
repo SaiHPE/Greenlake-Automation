@@ -1,4 +1,4 @@
-import { Box, Button, DataTable, Text } from 'grommet';
+import { Box, Button, DataTable, NameValueList, NameValuePair, Text } from 'grommet';
 import { Connect } from 'grommet-icons';
 import { ComponentProps, useEffect, useState } from 'react';
 import {
@@ -9,6 +9,8 @@ import {
   LinkCheckResult,
   Partnership,
   RcGroup,
+  RcGroupDetail,
+  RcVolumeDetail,
   ReplicationAction,
   ReplicationActionState,
   ReplicationArrayView,
@@ -438,6 +440,117 @@ function VerifyTable({ verification }: { verification: ReplicationVerification }
   );
 }
 
+// The array's policy words, readable (BL-64). Anything else is shown as the array prints it.
+const POLICY_WORDS: Record<string, string> = {
+  auto_recover: 'Auto recover',
+  auto_synchronize: 'Auto synchronize',
+  over_per_alert: 'Over-period alert',
+  active_active: 'Active-active',
+  auto_failover: 'Auto failover',
+  path_management: 'Path management',
+};
+const UNIT_WORDS: Record<string, string> = { s: 'seconds', m: 'minutes', h: 'hours', d: 'days' };
+
+/** A value as the array printed it, or "--" for its words for nothing. */
+const shown = (value: string | null | undefined) => (!value || value === 'NA' || value === '-' ? null : value);
+function Value({ value }: { value?: string | null }) {
+  const text = shown(value);
+  return text ? <Text size="small">{text}</Text> : noValue;
+}
+/** "5m" -> "Every 5 minutes"; anything else as printed. */
+function periodWords(period: string): string {
+  const m = /^(\d+)([smhd])$/.exec(period);
+  return m ? `Every ${m[1]} ${UNIT_WORDS[m[2]]}` : period;
+}
+function VolumeName({ name, id, set }: { name: string; id: number | null; set: string }) {
+  const details = [id !== null ? `ID ${id}` : '', shown(set) ? `set ${set}` : ''].filter(Boolean).join(' · ');
+  return (
+    <Box>
+      <Text size="small" style={mono}>{name}</Text>
+      {details && <Text size="xsmall" color="text-weak">{details}</Text>}
+    </Box>
+  );
+}
+/** Values that belong together in one cell, "--" for each the array printed none for. */
+const joined = (...values: string[]) => values.map((x) => shown(x) ?? '--').join(' · ');
+
+/** One group the run configured: its settings and every volume in it, from showrcopy -d on this array (BL-64). */
+function GroupDetail({ config, aName }: { config: RcGroupDetail; aName: string }) {
+  const synced = config.volumes.filter((v) => v.sync_status === 'Synced').length;
+  const count = `${config.volumes.length} volume${config.volumes.length === 1 ? '' : 's'}`;
+  const settings: [string, string | null][] = [
+    ['Target', config.target],
+    ['Mode', config.mode],
+    ['Sync period', config.period ? periodWords(config.period) : null],
+    ['RPO (from the workbook)', config.rpo_minutes ? `${config.rpo_minutes} minutes` : null],
+    ['Policies', config.options.map((o) => POLICY_WORDS[o] ?? o).join(', ')],
+    [`Role on ${aName}`, config.role],
+    ['Status', config.status],
+    ['Last sync', config.last_sync],
+    [`CPG for the volumes on ${aName}`, config.local_user_cpg],
+    ['CPG for the volumes on the peer', config.remote_user_cpg],
+    ...(config.local_snap_cpg || config.remote_snap_cpg
+      ? ([
+          [`Snapshot CPG on ${aName}`, config.local_snap_cpg],
+          ['Snapshot CPG on the peer', config.remote_snap_cpg],
+        ] as [string, string][])
+      : []),
+    ['Group ID', config.id === null ? null : String(config.id)],
+  ];
+  return (
+    <Section
+      title={`${config.name}: ${count}`}
+      summary={`${config.mode}${config.period ? `, ${periodWords(config.period).toLowerCase()}` : ''} · ${config.status} · ${synced} of ${config.volumes.length} synced`}
+    >
+      <Text size="small" color="text-weak">
+        The group’s settings and every volume in it, as {aName} reports them.
+      </Text>
+      <NameValueList nameProps={{ width: 'small' }} valueProps={{ width: 'medium' }}>
+        {settings.map(([name, value]) => (
+          <NameValuePair key={name} name={name}>
+            <Value value={value} />
+          </NameValuePair>
+        ))}
+      </NameValueList>
+      <DataTable
+        columns={[
+          {
+            property: 'local_name',
+            header: `Volume on ${aName}`,
+            render: (v: RcVolumeDetail) => <VolumeName name={v.local_name} id={v.local_id} set={v.local_set} />,
+          },
+          {
+            property: 'remote_name',
+            header: 'Volume on the peer',
+            render: (v: RcVolumeDetail) => <VolumeName name={v.remote_name} id={v.remote_id} set={v.remote_set} />,
+          },
+          {
+            property: 'sync_status',
+            header: 'Sync status',
+            render: (v: RcVolumeDetail) => (
+              <StatusIndicator state={v.sync_status === 'Synced' ? 'complete' : 'action_required'} label={v.sync_status || 'Not reported'} />
+            ),
+          },
+          { property: 'last_sync', header: 'Last sync', render: (v: RcVolumeDetail) => <Value value={v.last_sync} /> },
+          {
+            property: 'resync_snapshot',
+            header: 'Snapshots: resync, sync',
+            render: (v: RcVolumeDetail) => <Text size="small">{joined(v.resync_snapshot, v.sync_snapshot)}</Text>,
+          },
+          {
+            property: 'volume_iteration',
+            header: 'Iterations: volume, resync, sync',
+            render: (v: RcVolumeDetail) => <Text size="small">{joined(v.volume_iteration, v.resync_iteration, v.sync_iteration)}</Text>,
+          },
+        ]}
+        data={config.volumes}
+        primaryKey="local_name"
+        a11yTitle={`Every volume in ${config.name}: ${count}, with its peer volume, volume sets, sync status, last sync, snapshots and iterations`}
+      />
+    </Section>
+  );
+}
+
 const VERIFY_TEXT =
   'Reads Remote Copy back on both arrays and judges each planned group: Started, Primary here and Secondary on the peer, every volume Synced. An initial sync still running is reported, not failed.';
 
@@ -517,7 +630,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const seeCommands = openLog ? [{ label: 'See the commands', onClick: () => openLog('commands') }] : undefined;
 
   const read: FooterAction = { label: report ? 'Read both arrays again' : 'Read both arrays', busy: running, onClick: call(() => replicationPreview(runId)) };
-  const checkLink: FooterAction = { label: linkCheck ? 'Check the link again' : 'Check the link', busy: linkRunning, onClick: call(() => replicationLinkCheck(runId)) };
+  const checkLink: FooterAction = { label: linkCheck ? 'Check RC link again' : 'Check RC link', busy: linkRunning, onClick: call(() => replicationLinkCheck(runId)) };
   const verify: FooterAction = { label: verification ? 'Verify again' : 'Verify replication', busy: running, onClick: call(() => replicationVerify(runId)) };
   const proceed: FooterAction = { label: next, onClick: onDone };
   const skip: FooterAction = { label: everApplied ? next : `${next} without replication`, onClick: onDone };
@@ -528,7 +641,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
     onClick: call(() => replicationApply(runId, authorised ? planId : null, acceptLatency)),
     blocked:
       rcip && !measured
-        ? 'Check the link first: HPE asks for the latency between the arrays before Remote Copy over RCIP.'
+        ? 'Check RC link first: HPE asks for the latency between the arrays before Remote Copy over RCIP.'
         : rcip && overLimit.length > 0 && !acceptLatency
           ? `The measured latency is ${worstMs} ms, over HPE's limit for ${overLimit.join(' and ')}. Tick Continue anyway first.`
           : fc && typedRtt === null
@@ -598,7 +711,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const candidates: (StepStatus | null)[] = running
     ? [
         linkRunning
-          ? { state: 'running', title: 'Checking the link', message: linkProgress[linkProgress.length - 1] || 'Starting the link check.' }
+          ? { state: 'running', title: 'Checking the RC link', message: linkProgress[linkProgress.length - 1] || 'Starting the link check.' }
           : { state: 'running', message: 'Working on the arrays. Each action appears in Activity, below.' },
         plan?.error ? { state: 'failed', title: 'The arrays could not be read', message: plan.error } : null,
       ]
@@ -624,7 +737,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
           ? rcip && !measured
             ? {
                 state: 'action_required',
-                title: 'Check the link before configuring replication',
+                title: 'Check RC link before configuring replication',
                 message: "HPE's procedure before Remote Copy over RCIP is to measure the latency between the two arrays; the check changes nothing.",
               }
             : rcip && overLimit.length > 0 && !acceptLatency
@@ -656,7 +769,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
           ? {
               state: 'action_required',
               title: 'Ports and partnership set up',
-              message: `${writes('created')} step(s) done and every link is Up, but nothing is replicated yet: read both arrays again to plan the groups, check the link, then configure them.`,
+              message: `${writes('created')} step(s) done and every link is Up, but nothing is replicated yet: read both arrays again to plan the groups, press Check RC link, then configure them.`,
             }
           : null,
         verification && !verification.error
@@ -701,10 +814,10 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   }
   if (rcip && measured && linkCheck) {
     rows.push({
-      text: `Check the link: latency ${worstMs} ms, ${overLimit.length ? `over the limit for ${overLimit.join(' and ')}` : 'within the limit'}`,
+      text: `Check RC link: latency ${worstMs} ms, ${overLimit.length ? `over the limit for ${overLimit.join(' and ')}` : 'within the limit'}`,
       state: overLimit.length ? 'action_required' : 'complete',
       // after a configure the link is not tested again from here, as before
-      again: result ? undefined : { label: 'Check the link again', busy: linkRunning, onClick: checkLink.onClick! },
+      again: result ? undefined : { label: 'Check RC link again', busy: linkRunning, onClick: checkLink.onClick! },
       detail: <LinkLatency check={linkCheck} worstMs={worstMs} overLimit={overLimit} aName={aName} bName={bName} />,
     });
   }
@@ -770,7 +883,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
       notes={notes}
       top={
         <PartsBar
-          parts={['Read both arrays', fc ? 'Round-trip time' : 'Check the link', 'Review the plan', 'Configure', 'Verify']}
+          parts={['Read both arrays', fc ? 'Round-trip time' : 'Check RC link', 'Review the plan', 'Configure', 'Verify']}
           at={at}
           doneAll={replicating}
           failed={partFailed}
@@ -798,9 +911,12 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
             },
             {
               title: 'The partnership',
-              body: "When the workbook's Replication network tab names the ports, the ports and the partnership are set up first, as their own plan: the RCIP addresses, Remote Copy started and a target on each array. Then read both arrays again, check the link and configure the groups. Without that tab the partnership must exist, and this step reads and checks it. Groups this run did not create are listed and never touched.",
+              body: "When the workbook's Replication network tab names the ports, the ports and the partnership are set up first, as their own plan: the RCIP addresses, Remote Copy started and a target on each array. Then read both arrays again, press Check RC link and configure the groups. Without that tab the partnership must exist, and this step reads and checks it. Groups this run did not create are listed and never touched.",
             },
-            { title: 'Verify replication', body: 'Reads showrcopy on both arrays and judges each planned group. It is read-only: a report, never a gate.' },
+            {
+              title: 'Verify replication',
+              body: "Reads showrcopy on both arrays and judges each planned group, then lists each group's settings and every volume in it from showrcopy -d on this array. It is read-only: a report, never a gate.",
+            },
           ]}
         />
       }
@@ -820,7 +936,7 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
 
       {at === 1 && rcip && (
         <Panel
-          title="Check the link"
+          title="Check RC link"
           description={`Measures the latency between the arrays' Remote Copy ports: a test server on ${bName}, a test client on ${aName}, stopped as soon as the latency is printed. No configuration is changed.`}
         >
           {linkRunning && (
@@ -881,11 +997,15 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
       {/* finished parts sit under the current part, so its start stays above the fold (SPEC-030 R13) */}
       {rows.length > 0 && <DoneList items={rows} />}
 
+      {verification &&
+        !verification.error &&
+        verification.groups.map((g) => (g.config ? <GroupDetail key={g.group} config={g.config} aName={aName} /> : null))}
+
       {rcip && !measured && !linkIsPrimary && (
         <Section
-          title="Check the link"
+          title="Check RC link"
           summary="Not measured"
-          right={result ? undefined : <Button size="small" busy={linkRunning} label={linkCheck ? 'Check again' : 'Check the link'} onClick={checkLink.onClick} />}
+          right={result ? undefined : <Button size="small" busy={linkRunning} label={linkCheck ? 'Check RC link again' : 'Check RC link'} onClick={checkLink.onClick} />}
         >
           {linkCheck ? (
             <LinkLatency check={linkCheck} worstMs={worstMs} overLimit={overLimit} aName={aName} bName={bName} />

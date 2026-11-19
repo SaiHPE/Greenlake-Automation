@@ -96,7 +96,7 @@ each step ("Starting the test server on B 0:4:3", "Measuring latency A 0:4:3 →
 
 **R4 — The gate, and the option to continue.** When the partnership is RCIP and the plan has
 something to create, *Configure replication* needs a link check from this run: without one the
-apply is refused with *"Check the link first: the latency between the arrays has not been measured
+apply is refused with *"Check RC link first: the latency between the arrays has not been measured
 in this run."* When the worst latency is over the limit for a mode on the tab, the apply is refused
 with *"The measured latency is N ms; sync replication over RCIP needs 10 ms or less. Tick 'Continue
 anyway' to configure it regardless."* until the request carries `accept_latency: true`; the page
@@ -110,9 +110,9 @@ blank* is dropped: the tool measures it). A typed value over the limit is still 
 (the operator knew the value when filling the sheet).
 
 **R5 — The page.** On the Replication step, between *What the arrays say* and *Plan*, a *Link
-latency* panel: *Check the link* (after the read; RCIP only), the progress lines while it runs, then
+latency* panel: *Check RC link* (after the read; RCIP only), the progress lines while it runs, then
 one row per pair (A port → B port, latency, pings lost, verdict against each mode's limit), the
-pairs not checked with their reason, and *Check again*. Over the limit: the tick-box *Continue
+pairs not checked with their reason, and *Check RC link again*. Over the limit: the tick-box *Continue
 anyway — I accept the measured latency* enables *Configure replication*. The step's gate text says
 which of the three states applies: not measured, measured within the limit, measured over it.
 
@@ -167,10 +167,16 @@ another file is named.
 | R7 runners | `lab/rc_link_lab.py`, `lab/rc_preset_lab.py` (check between preview and apply). Both point at the D22U27/E18U31 pair (their docstrings), which the BL-41 runs do not use; no run of `rc_link_lab.py` is recorded | Superseded by `lab/rcip_tool_lab.py` (preview, apply refused until checked, link check, apply), live 25/0, 27/0 and 28/0, and `lab/rcip_scope_lab.py` (the gateway case), 35/0 | Live (through the BL-41 runners) |
 | Limit: every link against every mode | `LinkCheck.over_limit`, `asbuilt._add_link_check` and the page (status line and *Against the limit*) judge the measured latency against every mode on the sheet, whatever target each link carries | Cannot arise on the lab pair: the partnership the tool sets up has one target (VR *2026-11-06: the in-scope paths*, first row) | **Known limit**, below |
 
-Two corrections to the text above. The panel is titled *Check the link*, not *Link latency*. §4's "six
+Two corrections to the text above. The panel is titled *Check RC link* (*Check the link* until 2026-11-19), not *Link latency*. §4's "six
 commands per pair" is five `checkrclink` commands per pair (stop server, start server, start client, stop
 client, stop server), then one `showrcopy links` on each array after the last pair, and a
 `controlport rcip ping` per pair only when R2a applies.
+
+**Renamed 2026-11-19 (owner, after the customer demo; BL-64):** the button, its *again* form, the part name in the
+parts bar, the panel and section title, the sentences that tell the operator to press it and the apply's 409 text
+say *Check RC link* (*Check RC link again*, *Check RC link first: …*) where they said *Check the link*. Behaviour is
+unchanged. The table above keeps the old words where it quotes what a past run showed. The lab runners
+(`rc_link_lab.py`, `rc_preset_lab.py`, `rcip_tool_lab.py`) look for the new 409 text.
 
 ### Known limit: every link is judged against every mode on the sheet
 
@@ -194,7 +200,7 @@ pins it.
 It needs a pair whose measured round trip is over 10 ms: two sites over a WAN, or a delay inserted
 between two RCIP networks. The lab pair measures 0.02 ms and cannot show it. On a sheet with one sync row:
 
-1. *Check the link* measures every link. Each row's *Against the limit* reads *Over sync (10 ms)*. The
+1. *Check RC link* measures every link. Each row's *Against the limit* reads *Over sync (10 ms)*. The
    status line reads *The measured latency is N ms, over HPE's limit for sync*, and *Configure replication*
    is blocked.
 2. The apply without the tick answers HTTP 409: *The measured latency is N ms; sync replication over RCIP

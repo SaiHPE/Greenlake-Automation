@@ -101,7 +101,7 @@ class AsBuiltData:
     showvvset: str = ""
     showvlun_t: str = ""
     showvlun_a: str = ""
-    showport: str = ""               # read for Table 01; SPEC-024 R7 and SPEC-026 R6 take each port's state from it
+    showport: str = ""               # read for Table 01; SPEC-024 R7 takes each port's state from it
     showport_iscsivlans: str = ""    # SPEC-024 R7: the VLAN-tagged iSCSI addresses
     showport_par: str = ""           # SPEC-025 R9: each port's connection mode and type
     showport_peer: str = ""          # SPEC-025 R9: the array's own listing of its peer ports
@@ -129,6 +129,10 @@ class AsBuiltData:
     replication_applied_at: str = ""
     replication_primary: object | None = None      # ReplicationArrayView read when the document is made (R3)
     replication_peer: object | None = None         # ReplicationArrayView of the peer, same moment
+    # BL-64: `showrcopy -d groups <group>` on this array for each group this run configured, same moment:
+    # group -> RcGroupDetail, and group -> why it could not be read
+    replication_details: dict = field(default_factory=dict)
+    replication_details_errors: dict[str, str] = field(default_factory=dict)
     link_check: dict | None = None                 # SPEC-020 R6: replication.link_checked -> link_check (JSON)
     failover_record: dict | None = None            # SPEC-017 R6; None = the test did not run
     # SPEC-028 R3: the file side, read when the document is made. No section when `file_report` is
@@ -146,12 +150,9 @@ class AsBuiltData:
     commands: list[dict] = field(default_factory=list)   # SPEC-019 R2: the run's command log, without output
     # SPEC-026: the handover reads, raw (handover.READS names the command for each); a failed one is in
     # read_errors. handover_read_at is None when the reads were not made: the section is then left out.
-    # (`showport`, which R6 takes each port's state from, is the field above, read for Table 01.)
+    showdate: str = ""
     showalert_d: str = ""
     showsys_space: str = ""
-    srstatcpu: str = ""
-    srstatport: str = ""
-    srstatvv: str = ""
     handover_read_at: datetime | None = None
     run_created_at: datetime | None = None         # R4: "Before this run" compares each alert with it
     trusted_devices: list[dict] = field(default_factory=list)   # ADR 0026: DevicePinInfo dicts, fingerprints only
@@ -575,9 +576,10 @@ def _members_of(sets: OrderedDict[str, list[str]]) -> dict[str, list[str]]:
     return inverse
 
 
-# ------------------------------------------------------------------ SPEC-026: status and performance at handover
+# ------------------------------------------------------------------ SPEC-026: status at handover
 
-HANDOVER_HEADING = "Array status and performance at handover"
+# 2026-11-19: performance removed from the as-built at the owner's request (the title lost "and performance").
+HANDOVER_HEADING = "Array status at handover"
 
 # Capacity lines of `showsys -space` (R5): label -> (section, path)
 _SPACE_LINES = (
@@ -591,26 +593,9 @@ _SPACE_LINES = (
 _YES_NO = {True: "Yes", False: "No", None: "unknown"}
 
 
-def _figure(value: float | None, digits: int = 1) -> str:
-    return "—" if value is None else f"{value:.{digits}f}"
-
-
-def _three(stats: dict, attr: str, *, scale: float = 1.0, digits: int = 1) -> str:
-    """'average / 95th percentile / maximum' of one figure; '—' where the array printed none."""
-    values = []
-    for stat in ("avg", "95%", "max"):
-        value = getattr(stats[stat], attr) if stat in stats else None
-        values.append(_figure(None if value is None else value / scale, digits))
-    return " / ".join(values)
-
-
-def _io_cells(stats: dict) -> list[str]:
-    return [_three(stats, "iops"), _three(stats, "kbytes_s", scale=1024), _three(stats, "svct_ms", digits=2)]
-
-
 def _add_handover_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    """SPEC-026 R4 to R9: what the array said about itself when the document was made. Every read that
-    failed or could not be parsed is named in its subsection and in the warnings (R8), never shown as 0."""
+    """SPEC-026 R4, R5, R8 and R9: what the array said about itself when the document was made. Every read
+    that failed or could not be parsed is named in its subsection and in the warnings (R8), never shown as 0."""
     from alletra_onboard.application.documents import handover
 
     if data.handover_read_at is None:
@@ -619,12 +604,15 @@ def _add_handover_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
     for command, words in reads.errors.items():
         data.read_errors.setdefault(command, words)
     _h1(doc, HANDOVER_HEADING)
-    _para(doc, "What the array reported about itself when this document was generated: its new alerts, its "
-               "capacity in use and 24 hours of performance from its own System Reporter. Reading it changed "
-               "nothing on the array.")
+    _para(doc, "What the array reported about itself when this document was generated: its new alerts and its "
+               "capacity in use. Reading it changed nothing on the array.")
     _add_handover_alerts(doc, data, reads, warnings)
     _add_handover_capacity(doc, data, reads, warnings)
-    _add_handover_performance(doc, data, reads, warnings)
+    clock_error = data.read_errors.get(handover.CLOCK)
+    if clock_error is not None:
+        _para(doc, f"`{handover.CLOCK}` could not be read: {clock_error}")
+        warnings.append(f"`{handover.CLOCK}` could not be read ({clock_error}); whether each alert came before "
+                        "this run is unknown.")
     read_at = reads.read_at.astimezone(UTC) if reads.read_at.tzinfo else reads.read_at
     line = f"This section was read from the array at {read_at:%Y-%m-%d %H:%M} UTC"
     if reads.offset is not None:
@@ -654,8 +642,8 @@ def _add_handover_alerts(doc, data: AsBuiltData, reads, warnings: list[str]) -> 
                  _YES_NO[handover.before_run(a, offset, reads.run_created_at)]] for a in full],
                widths=[0.05, 0.09, 0.10, 0.36, 0.15, 0.15, 0.10])
         if offset is None:
-            _para(doc, "Before this run is unknown: no System Reporter report was read, so the array's time zone "
-                       "is not known.")
+            _para(doc, "Before this run is unknown: the array's clock (showdate) could not be read, so its time "
+                       "zone is not known.")
     if groups:
         _para(doc, "The other new alerts, one row for each message code and severity.")
         _table(doc, ["Severity", "Message code", "Alerts", "First occurred", "Latest", "Sample message"],
@@ -683,50 +671,6 @@ def _add_handover_capacity(doc, data: AsBuiltData, reads, warnings: list[str]) -
     _table(doc, ["Capacity", "TiB", "MiB, as the array prints it"], rows, widths=[0.40, 0.20, 0.40])
     if reads.space.reduction:
         _para(doc, f"Data reduction: {reads.space.reduction} (the array's ratio).")
-
-
-def _add_handover_performance(doc, data: AsBuiltData, reads, warnings: list[str]) -> None:
-    from alletra_onboard.application.documents import handover
-
-    _para(doc, "Performance", bold=True)
-    window = reads.window
-    if window is not None:
-        end = window.end_text if window.end is not None else "the read (System Reporter had no sample in it)"
-        _para(doc, f"From the array's System Reporter, the 24 hours before the read: from {window.start_text} to "
-                   f"{end}, in 5-minute samples. Each cell is the average / the 95th percentile / the maximum.")
-        _para(doc, handover.PERFORMANCE_NOTE)
-        if reads.idle:
-            _para(doc, handover.IDLE_NOTE)
-
-    _para(doc, "Controller nodes", bold=True)
-    if not _read_failed(doc, data, handover.CPU, warnings):
-        if reads.cpu_nodes:
-            _para(doc, "CPU busy is 100 % minus the array's idle figure; the busiest sample comes from its lowest idle.")
-            _table(doc, ["Node", "Average % busy", "95th percentile % busy", "Busiest sample % busy"],
-                   [[n.node, _figure(n.busy_avg), _figure(n.busy_p95), _figure(n.busy_max)] for n in reads.cpu_nodes],
-                   widths=[0.16, 0.28, 0.28, 0.28])
-        else:
-            _para(doc, "System Reporter printed no CPU figure for this window.")
-
-    _para(doc, "Host ports", bold=True)
-    if not _read_failed(doc, data, handover.PORTS, warnings):
-        rows, lines = handover.split_ports(reads.port_loads, reads.roles)
-        if rows:
-            _table(doc, ["Port", "Protocol", "IO/s", "MB/s", "Service time (ms)"],
-                   [[r.load.name, r.protocol or "—", *_io_cells(r.load.stats)] for r in rows],
-                   widths=[0.10, 0.12, 0.24, 0.24, 0.30])
-        elif not lines:
-            _para(doc, "System Reporter printed no FC or iSCSI host port for this window.")
-        for line in lines:
-            _para(doc, line)
-
-    _para(doc, "All volumes", bold=True)
-    if not _read_failed(doc, data, handover.VOLUMES, warnings):
-        if reads.volume_load is not None:
-            _table(doc, ["Volumes", "IO/s", "MB/s", "Service time (ms)"],
-                   [["All volumes together", *_io_cells(reads.volume_load.stats)]], widths=[0.22, 0.24, 0.24, 0.30])
-        else:
-            _para(doc, "System Reporter printed no volume figure for this window.")
 
 
 def _add_hosts_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
@@ -1385,6 +1329,11 @@ def _rc_group_rows(data: AsBuiltData) -> list[dict]:
     return [{"name": n, **detail.get(n, {})} for n in dict.fromkeys(n for n in names if n)]
 
 
+def rc_group_names(data: AsBuiltData) -> list[str]:
+    """The Remote Copy groups this run configured, in the section's order."""
+    return [row["name"] for row in _rc_group_rows(data)]
+
+
 def _rc_peer_set(peer, peer_group) -> str:
     """The peer volume set holding exactly the peer group's volumes (the array's own RCP_ sets aside)."""
     if peer is None or peer_group is None or not peer_group.volumes:
@@ -1404,6 +1353,51 @@ def _rc_rpo_text(row: dict, tab: dict, period_read: str = "") -> str:
         rpo = period * 2 // 60
     shown = period_read or (f"{period // 60}m" if period else "?")
     return (f"RPO {rpo} min " if rpo else "") + f"(period {shown})"
+
+
+def _cell(value: str) -> str:
+    return "—" if value in ("", "NA", "-") else value
+
+
+def _with_id(name: str, number: int | None) -> str:
+    return _cell(name) + (f" ({number})" if number is not None else "")
+
+
+def _add_rc_group_detail(doc, data: AsBuiltData, row: dict, tab: dict, a_name: str, warnings: list[str]) -> None:
+    """BL-64: every volume in one group and the group's settings, from `showrcopy -d groups <group>` read
+    on this array when the document was made."""
+    g = row["name"]
+    detail = (data.replication_details or {}).get(g)
+    if detail is None:
+        err = (data.replication_details_errors or {}).get(g)
+        if err:
+            _para(doc, f"{g}: its settings and volumes could not be read (showrcopy -d): {err}")
+            warnings.append(f"The settings and volumes of Remote Copy group {g} could not be read ({err}); "
+                            "the replication section lists its volumes without them.")
+        return
+    _para(doc, f"{g}: every volume and the group's settings", bold=True)
+    _para(doc, f"As {a_name} reports them (showrcopy -d groups {g}) when this document was generated. ID: the "
+               "array's own number. Iterations correlate each volume with its snapshots and the peer's copy.")
+    settings = [
+        ["Target", _cell(detail.target)], ["Mode", _cell(detail.mode)],
+        ["RPO / period", _rc_rpo_text(row, tab, detail.period)],
+        ["Policies", ", ".join(detail.options) or "—"], ["Role here", _cell(detail.role)],
+        ["Status", _cell(detail.status)], ["Group ID", "—" if detail.id is None else str(detail.id)],
+        ["CPG for the volumes here", _cell(detail.local_user_cpg)],
+        ["CPG for the volumes on the peer", _cell(detail.remote_user_cpg)],
+    ]
+    if detail.local_snap_cpg or detail.remote_snap_cpg:
+        settings += [["Snapshot CPG here", _cell(detail.local_snap_cpg)],
+                     ["Snapshot CPG on the peer", _cell(detail.remote_snap_cpg)]]
+    settings += [["Last sync of the group", _cell(detail.last_sync)], ["Volumes", str(len(detail.volumes))]]
+    _table(doc, ["Setting", "Value"], settings, widths=[0.35, 0.65])
+    _table(doc, ["Volume here (ID)", "Volume on peer (ID)", "Sync status", "Last sync", "Resync snapshot",
+                 "Sync snapshot", "Iterations: volume / resync / sync", "Volume set here / on peer"],
+           [[_with_id(v.local_name, v.local_id), _with_id(v.remote_name, v.remote_id), _cell(v.sync_status),
+             _cell(v.last_sync), _cell(v.resync_snapshot), _cell(v.sync_snapshot),
+             " / ".join(_cell(x) for x in (v.volume_iteration, v.resync_iteration, v.sync_iteration)),
+             f"{_cell(v.local_set)} / {_cell(v.remote_set)}"] for v in detail.volumes],
+           widths=[0.15, 0.15, 0.09, 0.14, 0.13, 0.09, 0.13, 0.12])
 
 
 def _add_link_check(doc, data: AsBuiltData) -> None:
@@ -1579,9 +1573,14 @@ def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> Non
                                     v.sync_status or "—", v.last_sync if v.last_sync and v.last_sync != "NA" else "—"])
         _table(doc, ["Group", "Mode", "RPO / period", "Policies", "Role here", "Role on peer", "Status", "Peer volume set"],
                group_rows, widths=[0.14, 0.08, 0.14, 0.16, 0.09, 0.10, 0.17, 0.12])
+        details = data.replication_details or {}
+        # a group whose showrcopy -d was read gets its own table below; the others keep the short list
+        volume_rows = [r for r in volume_rows if r[0] not in details]
         if volume_rows:
             _table(doc, ["Group", "Volume here", "Size (GiB)", "Volume on peer", "Sync status", "Last sync"],
                    volume_rows, widths=[0.18, 0.20, 0.10, 0.20, 0.12, 0.20])
+        for row in groups:
+            _add_rc_group_detail(doc, data, row, tab, a_name, warnings)
 
     # -- groups the run did not create
     _para(doc, "Replication already present", bold=True)

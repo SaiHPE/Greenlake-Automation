@@ -236,7 +236,7 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     with pytest.raises(StepPreconditionError,
                        match=re.escape("The plan changed since it was approved. Review the new plan and tick again.")):
         service.start_replication_apply(run.run_id, approved_plan="a-plan-nobody-was-shown")
-    with pytest.raises(StepPreconditionError, match="Check the link first: the latency between the arrays has not been measured"):
+    with pytest.raises(StepPreconditionError, match="Check RC link first: the latency between the arrays has not been measured"):
         service.start_replication_apply(run.run_id, approved_plan=approved)
     assert applied == []
 
@@ -271,11 +271,16 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
         service.start_replication_apply(run.run_id, approved_plan=approved)   # spent: a second apply needs a fresh plan
 
     # ---- R6: verify finds the plan in the run's events once the approval is spent
-    def fake_verify(provisioning, plan, *, read_fn=None, progress=None):
+    from alletra_onboard.domain.replication import RcGroupDetail, RcVolumeDetail
+
+    def fake_verify(provisioning, plan, *, read_fn=None, detail_fn=None, progress=None):
         assert [a.name for a in plan.actions] == ["HS_rcg", "HS_rc"]
+        assert detail_fn is replication_read.read_group_details        # BL-64: the step reads showrcopy -d
+        config = RcGroupDetail(name="HS_rcg", mode="Periodic", period="5m", volumes=[RcVolumeDetail(local_name="HS_v1")])
         return ReplicationVerification(links_ok=True, links_detail="2/2 · 2/2",
                                        groups=[GroupVerification(group="HS_rcg", peer_group="HS_rcg.r100", verdict="replicating",
-                                                                 detail="Started · Primary here, Secondary on the peer")])
+                                                                 detail="Started · Primary here, Secondary on the peer",
+                                                                 config=config)])
 
     monkeypatch.setattr(replication_verify, "verify", fake_verify)
     service.start_replication_verify(run.run_id)
@@ -283,6 +288,7 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     verified = next(e for e in service.list_events(run.run_id) if e.event_type == "replication.verified")
     assert verified.message == "1 replicating · 0 syncing · 0 not replicating · links Up"
     assert verified.data["verification"]["groups"][0]["peer_group"] == "HS_rcg.r100"
+    assert verified.data["verification"]["groups"][0]["config"]["volumes"][0]["local_name"] == "HS_v1"
 
     # ---- SPEC-017 R1/R4/R5 through the service: which group may be tested, the record, the events
     from alletra_onboard.application.replication import failover as replication_failover
@@ -968,7 +974,7 @@ async def test_start_asbuilt_reads_array_and_produces_downloadable_docx(tmp_path
 
 async def test_asbuilt_generated_carries_the_status_at_handover(tmp_path, monkeypatch):
     """SPEC-026 R10: the page's summary travels in the event, from the same reads as the document
-    (VZ's captures, OS 10.5.51, 2026-11-17, and its showport from the same day)."""
+    (VZ's captures, OS 10.5.51, 2026-11-17). No performance field since 2026-11-19 (the owner's decision)."""
     from pathlib import Path
 
     from alletra_onboard.application.documents import handover
@@ -979,10 +985,9 @@ async def test_asbuilt_generated_carries_the_status_at_handover(tmp_path, monkey
     def capture(path: Path) -> str:
         return path.read_text(encoding="utf-8").split("\n", 1)[1]
 
-    names = ("showalert_d.txt", "showsys_space.txt", "srstatcpu_24h_v2.txt", "srstatport_24h_v2.txt", "srstatvv_24h.txt")
+    names = ("showdate.txt", "showalert_d.txt", "showsys_space.txt")
     outputs = {cmd: capture(fixtures / "handover" / "VZ" / name)
                for (_attr, cmd), name in zip(handover.READS, names, strict=True)}
-    outputs["showport"] = capture(fixtures / "peer_ports" / "VZ" / "showport.txt")
 
     class FakeCli:
         def __enter__(self):
@@ -1003,8 +1008,8 @@ async def test_asbuilt_generated_carries_the_status_at_handover(tmp_path, monkey
     ev = next(e for e in service.list_events(run.run_id) if e.event_type == "asbuilt.generated")
     status = ev.data["handover"]
     assert (status["alerts_new"], status["alerts_major"], status["cloud_alert"]) == (31, 8, 11)
-    assert (status["cpu_max_pct"], status["iops_avg"], status["idle"]) == (11.0, 0.9, True)
-    assert status["window_from"] == "2026-11-15T18:39:27+00:00" and status["read_errors"] == {}
+    assert set(status) == {"read_at", "alerts_new", "alerts_major", "oldest_alert", "cloud_alert", "read_errors"}
+    assert status["read_errors"] == {}
     assert status["oldest_alert"] == "2026-06-24 08:57:17 IST" and status["read_at"]
     assert sum(w.startswith("The array has a new Major alert") for w in ev.data["warnings"]) == 8
 

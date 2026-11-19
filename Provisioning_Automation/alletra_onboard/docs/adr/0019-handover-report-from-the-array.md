@@ -13,6 +13,15 @@
 allowlist with their tests and the ADR 0001 addendum; the as-built section and the page summary from
 the array over the read-only client. Decision 5 (DSCC) and Remote Copy figures are later slices.
 
+**2026-11-19: performance removed from the as-built at the owner's request** (after the customer demo,
+BL-64). The section is *Array status at handover*: alerts and capacity only. No System Reporter read is
+sent for the as-built; `srstatcpu`, `srstatport` and `srstatvv` left the allowlist (ADR 0001 addendum of
+the same date), since nothing else read them. The page's block and the `handover` event data drop the
+window, CPU, host I/O and idle fields. Change 5 now takes the array's UTC offset from `showdate` (already
+on the allowlist) against the moment of the read, to the nearest quarter hour, still never from the
+zone's name. Decision 2's System Reporter part, change 2, the idle baseline and the performance
+consequences below are history.
+
 ## Changes on acceptance (owner, 2026-11-17)
 
 The owner accepted the decision with the changes a review recommended. They are folded into the
@@ -37,6 +46,8 @@ sections below and into SPEC-026.
    the Windows exe. The array's UTC offset comes from a System Reporter `Start Time` line, which
    prints the local time and the epoch (`2026-11-16 00:05:18 IST (1794767718)` is +05:30), never from
    the abbreviation `IST`. With no System Reporter read, *Before this run* says unknown.
+   *Since 2026-11-19 (no System Reporter read):* from `showdate`'s time against the moment of the read,
+   to the nearest quarter hour; with no `showdate`, *Before this run* says unknown.
 6. **This ADR corrects ADR 0006,** whose Consequences list "DSCC telemetry" as build-ready
    (verified). That came from documentation; the tool has never called a DSCC telemetry endpoint
    (research §1, §2.3). Slice 2 makes the first call, after a read-only probe.
