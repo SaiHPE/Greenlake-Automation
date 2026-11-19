@@ -90,7 +90,9 @@ group is offered. The sequence is not up for confirmation.
 
 **R3 — Measured, not assumed.** The record captures: start/end time of each step, the roles and
 status read after each, time to Primary-Rev (failover), time to Synced after recover, and — for
-async — the last sync time before failover (data-loss bound = time since that sync).
+async — the last sync time before failover (data-loss bound = time since that sync). Both times
+in the data-loss bound are the array's local time with its zone, read from `showdate` (BL-63: the
+failover time was in UTC next to the array's IST); UTC only when `showdate` does not read.
 
 **R4 — Approval gate.** A separate tick-box and button (*Run failover test*), naming the group and
 both arrays. Not part of *Configure replication*.

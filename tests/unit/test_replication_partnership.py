@@ -20,10 +20,19 @@ from alletra_onboard.application.platform import init_sheet
 from alletra_onboard.application.provisioning.clients import make_rc_cli
 from alletra_onboard.application.replication import partnership
 from alletra_onboard.application.replication.plan import build_plan, check
-from alletra_onboard.application.replication.read import parse_showport_roles, read_array
+from alletra_onboard.application.replication.read import (
+    parse_showport_roles,
+    parse_showversion,
+    read_array,
+)
 from alletra_onboard.domain.models import RunMode
 from alletra_onboard.domain.provisioning import ProvisioningIntent
-from alletra_onboard.domain.replication import ProtectionRequest, RcipPortRequest, ReplicationIntent
+from alletra_onboard.domain.replication import (
+    ProtectionRequest,
+    RcipPortRequest,
+    ReplicationIntent,
+    sync_refused_target,
+)
 from alletra_onboard.domain.shared import EndpointCreds
 from tests.unit.test_rc_cli_client import ALLETRA_OBJECTS, PRIMERA_OBJECTS
 
@@ -223,34 +232,103 @@ def test_an_address_already_on_the_port_is_kept_and_a_different_one_is_a_conflic
     assert port.state == "conflict" and "already has RCIP address 10.93.18.20 255.255.254.0" in port.reason
 
 
+# The arrays as the manual setup of 2026-11-03 left them (the same commands the tool sends).
+AFTER_A = {
+    "showrcopy": "\nRemote Copy System Information\nStatus: Started, Normal\n\nTarget Information\n\n"
+                 "Name             ID Type Status Options Policy\nPRIMERA630R11U22  1 IP   ready  -       mirror_config\n\n"
+                 "Link Information\n\nTarget           Node  Address     Status Options\n"
+                 "PRIMERA630R11U22 0:4:4 10.93.18.19 Up     -\nPRIMERA630R11U22 1:4:4 10.93.18.20 Up     -\n"
+                 "receive          0:4:4 10.93.18.11 Up     -\nreceive          1:4:4 10.93.18.13 Up     -\n",
+    "showport -rcip": "N:S:P State ---HwAddr--- IPAddr Netmask/PrefixLen Gateway MTU Rate Duplex AutoNeg\n"
+                      "0:4:4 ready 40A6B7D7D1EB 10.93.18.11 255.255.254.0 - 1500 10Gbps Full Yes\n"
+                      "1:4:4 ready 40A6B7D7C5C3 10.93.18.13 255.255.254.0 - 1500 10Gbps Full Yes\n",
+    "showvvset": "Id Name Members\n 90 zz_rc_vvs zz_rc_vol01\n",
+}
+AFTER_B = {
+    "showrcopy": "\nRemote Copy System Information\nStatus: Started, Normal\n\nTarget Information\n\n"
+                 "Name                 ID Type Status Options          Policy\n"
+                 "rack13-ARCUS         29 IP   ready  -                mirror_config\n\n"
+                 "Link Information\n\nTarget               Node  Address          Status Options\n"
+                 "rack13-ARCUS         0:1:1 10.93.18.11      Up     -\nrack13-ARCUS         1:1:1 10.93.18.13      Up     -\n"
+                 "receive              0:1:1 10.93.18.19      Up     -\nreceive              1:1:1 10.93.18.20      Up     -\n",
+}
+
 def test_after_the_setup_the_partnership_reads_as_existing_and_the_groups_are_planned():
     """The arrays as the manual setup left them (same commands the tool sends): every partnership row
     'exists', and the plan goes on to the groups as SPEC-016 plans them."""
-    after_a = {
-        "showrcopy": "\nRemote Copy System Information\nStatus: Started, Normal\n\nTarget Information\n\n"
-                     "Name             ID Type Status Options Policy\nPRIMERA630R11U22  1 IP   ready  -       mirror_config\n\n"
-                     "Link Information\n\nTarget           Node  Address     Status Options\n"
-                     "PRIMERA630R11U22 0:4:4 10.93.18.19 Up     -\nPRIMERA630R11U22 1:4:4 10.93.18.20 Up     -\n"
-                     "receive          0:4:4 10.93.18.11 Up     -\nreceive          1:4:4 10.93.18.13 Up     -\n",
-        "showport -rcip": "N:S:P State ---HwAddr--- IPAddr Netmask/PrefixLen Gateway MTU Rate Duplex AutoNeg\n"
-                          "0:4:4 ready 40A6B7D7D1EB 10.93.18.11 255.255.254.0 - 1500 10Gbps Full Yes\n"
-                          "1:4:4 ready 40A6B7D7C5C3 10.93.18.13 255.255.254.0 - 1500 10Gbps Full Yes\n",
-        "showvvset": "Id Name Members\n 90 zz_rc_vvs zz_rc_vol01\n",
-    }
-    after_b = {
-        "showrcopy": "\nRemote Copy System Information\nStatus: Started, Normal\n\nTarget Information\n\n"
-                     "Name                 ID Type Status Options          Policy\n"
-                     "rack13-ARCUS         29 IP   ready  -                mirror_config\n\n"
-                     "Link Information\n\nTarget               Node  Address          Status Options\n"
-                     "rack13-ARCUS         0:1:1 10.93.18.11      Up     -\nrack13-ARCUS         1:1:1 10.93.18.13      Up     -\n"
-                     "receive              0:1:1 10.93.18.19      Up     -\nreceive              1:1:1 10.93.18.20      Up     -\n",
-    }
-    plan = _plan(a_over=after_a, b_over=after_b)
+    plan = _plan(a_over=AFTER_A, b_over=AFTER_B)
     by = _by(plan)
     assert all(x.state == "exists" for x in plan.actions if x.kind in ("rcip_port", "rc_service", "target"))
     assert not plan.sets_up_partnership
     assert by[("group", "A", "zz_rc_vvs_rcg")].state == "create"
     assert plan.blockers == []
+
+
+# ------------------------------------------------------------------ BL-62: sync refused by the array's OS
+
+_FIXTURES = FIX.parent
+#: rack13-ARCUS after its upgrade (captured 2026-11-16), the OS that refused sync to the Primera on 2026-11-18.
+RACK13_10_6 = {"showversion": (_FIXTURES / "rack13_snap" / "showversion.txt").read_text(encoding="utf-8")}
+REFUSED = ("rack13-ARCUS (OS 10.6.0) refuses sync replication to PRIMERA630R11U22 (OS 4.6.20), as it does to any "
+           "Primera 4.x array, so the sync row for volume set 'zz_rc_vvs' cannot be configured: set Mode to async "
+           "(periodic) on the Replication tab for this pair.")
+
+
+def _version(path: str) -> str:
+    return parse_showversion((_FIXTURES / path).read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(("source", "target", "refused"), [
+    ("rack13_snap/showversion.txt", "rcip_pair/before/primera/showversion.txt", "Primera 4.x"),    # refused live 2026-11-18
+    ("rcip_pair/before/alletra/showversion.txt", "rcip_pair/before/primera/showversion.txt", ""),  # 10.5.55: sync ran 2026-11-03
+    ("rc_pair/D22U27/showversion.txt", "rc_pair/E18U31/showversion.txt", ""),                     # 10.5.0 pair, sync live
+    ("rc_pair/E18U31/showversion.txt", "rc_pair/D22U27/showversion.txt", ""),
+    ("rack13_snap/showversion.txt", "rc_pair/D22U27/showversion.txt", ""),                        # an Alletra MP target
+])
+def test_the_sync_rule_is_what_the_arrays_did(source, target, refused):
+    assert sync_refused_target(_version(source), _version(target)) == refused
+
+
+def test_the_rule_covers_both_targets_the_arrays_message_names_and_nothing_unread():
+    """'not supported with target … running 4.x / 9.x': Primera 4.x and Alletra 9000 9.x."""
+    assert sync_refused_target("10.6.0", "9.5.3") == "Alletra 9000 9.x"
+    assert sync_refused_target("10.6.0", "") == "" and sync_refused_target("", "4.6.20") == ""
+
+
+def test_a_sync_row_on_10_6_to_the_primera_is_refused_at_the_first_read_before_any_write():
+    """BL-62: the array refused the group only after the partnership was set up and the link checked; the plan
+    now says it at preview 1, so the partnership is not set up for a group that cannot be made."""
+    plan = _plan(a_over={**WITH_SET, **RACK13_10_6}, b_over=_without_fc_target())
+    assert plan.sets_up_partnership
+    assert plan.blockers == [REFUSED]
+
+
+def test_after_the_setup_a_sync_row_and_the_test_group_are_still_refused():
+    a, b = _views({**AFTER_A, **RACK13_10_6}, AFTER_B)
+    intent = _intent()
+    plan = build_plan(check(a, b, intent), intent, _prov(intent))
+    assert plan.blockers == [REFUSED]
+    intent = ReplicationIntent(peer=_creds(B_HOST), failover_test=True, network=[],
+                               protections=[ProtectionRequest(vvset="zz_rc_vvs", peer_cpg="SSD_r6", mode="sync", rpo_minutes=None)])
+    groups = AFTER_A["showrcopy"] + ("\nGroup Information\n\nName Target Status Role Mode Options\n"
+                                     "zz_rc_vvs_rcg PRIMERA630R11U22 Started Primary Sync\n"
+                                     "  LocalVV ID RemoteVV ID SyncStatus LastSyncTime\n  zz_rc_vol01 1 zz_rc_vol01 2 Synced NA\n")
+    a, b = _views({**AFTER_A, **RACK13_10_6, "showrcopy": groups}, AFTER_B)
+    assert check(a, b, intent).findings == [(
+        "rack13-ARCUS (OS 10.6.0) refuses sync replication to PRIMERA630R11U22 (OS 4.6.20), as it does to any Primera "
+        "4.x array, so the failover test group, which takes the first row's mode, cannot be sync: set that row's Mode to "
+        "async (periodic) on the Replication tab for this pair.")]
+
+
+def test_an_async_row_on_10_6_to_the_primera_plans_as_before():
+    a, b = _views({**WITH_SET, **RACK13_10_6}, _without_fc_target())
+    intent = _intent()
+    intent.protections[0] = ProtectionRequest(vvset="zz_rc_vvs", peer_cpg="SSD_r6", mode="async", rpo_minutes=10)
+    plan = build_plan(check(a, b, intent), intent, _prov(intent))
+    assert plan.blockers == [] and plan.sets_up_partnership
+    a, b = _views({**AFTER_A, **RACK13_10_6}, AFTER_B)
+    plan = build_plan(check(a, b, intent), intent, _prov(intent))
+    assert plan.blockers == [] and _by(plan)[("group", "A", "zz_rc_vvs_rcg")].detail["mode"] == "async"
 
 
 # ------------------------------------------------------------------ R4/R5: apply and its removal set

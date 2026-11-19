@@ -71,6 +71,9 @@ const OUTCOME: Record<ReplicationOutcome['status'], ResultWord> = {
   failed: RESULT.failed,
   skipped: RESULT.skipped,
 };
+/** A ping and the links coming Up are checks, not writes: a good one reads Passed, not Created. */
+const outcomeWord = (o: ReplicationOutcome): ResultWord =>
+  (o.kind === 'ping' || o.kind === 'links') && o.status === 'created' ? RESULT.passed : OUTCOME[o.status];
 const VERDICT: Record<GroupVerdict, ResultWord> = {
   replicating: RESULT.replicating,
   syncing: RESULT.syncing,
@@ -109,7 +112,7 @@ export function mergedRemovals(results: ReplicationResult[]): { removals_a: stri
   return { removals_a: merge((r) => r.removals_a), removals_b: merge((r) => r.removals_b) };
 }
 
-function RemovalSets({ result, runId, a, b }: { result: { removals_a: string[]; removals_b: string[] }; runId: string; a: string; b: string }) {
+export function RemovalSets({ result, runId, a, b }: { result: { removals_a: string[]; removals_b: string[] }; runId: string; a: string; b: string }) {
   const [copied, setCopied] = useState(false);
   const blocks: [string, string, string[]][] = [
     [a, 'A', result.removals_a],
@@ -384,7 +387,7 @@ function ResultTable({ result }: { result: ReplicationResult }) {
           { property: 'kind', header: 'Kind', render: (o: ReplicationOutcome) => <Text size="small">{OUTCOME_KIND[o.kind]}</Text> },
           { property: 'name', header: 'Name', render: (o: ReplicationOutcome) => <Text size="small" style={mono}>{o.name}</Text> },
           { property: 'where', header: 'On', render: (o: ReplicationOutcome) => <Text size="small">{o.where}</Text> },
-          { property: 'status', header: 'Result', render: (o: ReplicationOutcome) => <StatusIndicator state={OUTCOME[o.status].state} label={OUTCOME[o.status].label} /> },
+          { property: 'status', header: 'Result', render: (o: ReplicationOutcome) => <StatusIndicator state={outcomeWord(o).state} label={outcomeWord(o).label} /> },
           { property: 'detail', header: 'Detail', render: (o: ReplicationOutcome) => (o.detail ? <Text size="small" color="text-weak">{o.detail}</Text> : noValue) },
         ]}
         data={result.outcomes}
@@ -787,7 +790,8 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
           ? {
               state: 'complete',
               title: result.groups_created.length ? `${result.groups_created.join(', ')} created and started` : 'Nothing new to create',
-              message: `${writes('exists')} already existed and were left untouched${verification ? '' : '; Verify replication reads both arrays back'}.`,
+              // the plan's "already there", and any create the array answered was there by then
+              message: `${existing + writes('exists')} already there and left untouched${verification ? '' : '; Verify replication reads both arrays back'}.`,
             }
           : null,
         plan && !plan.error && !result && !blocked && toCreate === 0

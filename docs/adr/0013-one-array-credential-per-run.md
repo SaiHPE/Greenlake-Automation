@@ -54,4 +54,5 @@ sheet's Initialisation tab (`dscc_setup.username` / `dscc_setup.password`), whic
   new run). Acceptable: the run is one array, one sitting.
 - Not decided here: encrypting the state DB at rest. The jump box is a single-operator machine on
   the customer's management network; the DB holds the same secrets as the sheet sitting next to it.
-  Revisit if the tool ever runs on a shared host.
+  Revisit if the tool ever runs on a shared host. (Since decided: the secret fields are encrypted,
+  [ADR 0027](0027-stored-credentials-encrypted-at-rest.md).)

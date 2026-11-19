@@ -33,6 +33,7 @@ from alletra_onboard.domain.replication import (
     Transport,
     rtt_limit_ms,
     rtt_limit_text,
+    sync_refused_target,
 )
 
 #: Support Matrix, 2-node system (research 2026-10-07 §3). Checked per mode; practically never hit.
@@ -233,6 +234,28 @@ def run_modes(intent: ReplicationIntent) -> list[str]:
     return sorted(modes)
 
 
+def _sync_refused(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: ReplicationIntent) -> str:
+    """BL-62: the sentence when this run would create a sync group that this array refuses for the peer's OS
+    (`sync_refused_target`), else ''. Said at the first read, before the partnership is set up; a sync group
+    already on the array is not a write, so it is not refused."""
+    family = sync_refused_target(primary.os_version, peer.os_version)
+    if not family:
+        return ""
+    sets = [row.vvset for row in intent.protections if row.mode == "sync" and primary.group(row.group_name) is None]
+    lead = intent.protections[0].mode if intent.protections else ProtectionRequest(vvset=TEST_VVSET, peer_cpg="").mode
+    test = intent.failover_test and not intent.failover_group and lead == "sync" and primary.group(TEST_GROUP) is None
+    if sets:
+        what = (f"the sync row{'s' if len(sets) != 1 else ''} for volume set{'s' if len(sets) != 1 else ''} "
+                + ", ".join(f"'{s}'" for s in sets) + " cannot be configured: set Mode to async (periodic)")
+    elif test:
+        what = "the failover test group, which takes the first row's mode, cannot be sync: set that row's Mode to async (periodic)"
+    else:
+        return ""
+    a, b = primary.name or primary.host, peer.name or peer.host
+    return (f"{a} (OS {primary.os_version}) refuses sync replication to {b} (OS {peer.os_version}), as it does to any "
+            f"{family} array, so {what} on the Replication tab for this pair.")
+
+
 def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: ReplicationIntent) -> ReplicationReport:
     report = ReplicationReport(primary=primary, peer=peer)
     f = report.findings
@@ -293,6 +316,9 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
             f"{b} has one target; every group on one target must replicate in the same mode (HPE Support Matrix). "
             "Make all rows one mode, or set up a second target over spare RCIP ports on the arrays first."
         )
+    refused = _sync_refused(primary, peer, intent)
+    if refused:
+        f.append(refused)
     for view, label in ((primary, a), (peer, b)):
         if not view.rc_started and not sets_up:
             f.append(f"Remote Copy is not started on {label} (showrcopy says '{view.rc_status or 'unknown'}'); "

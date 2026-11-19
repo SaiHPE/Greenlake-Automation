@@ -31,9 +31,23 @@ from alletra_onboard.domain.replication import (
     LinkCheck,
     ReplicationPlan,
     ReplicationReport,
+    ReplicationResult,
     rtt_limit_ms,
     rtt_limit_text,
 )
+
+
+def applied_message(plan: ReplicationPlan, result: ReplicationResult) -> str:
+    """The sentence after a good apply. The apply writes only the plan's creates, so what was already
+    there is what the plan found there, plus any create the array answered was there by then."""
+    created = sum(1 for o in result.outcomes if o.status == "created")
+    if plan.sets_up_partnership:
+        return (f"Ports and partnership set up — {created} step(s), every link Up. Read both arrays again, "
+                "press Check RC link, then configure the groups.")
+    existed = sum(1 for a in plan.actions if a.state == "exists") + sum(1 for o in result.outcomes if o.status == "exists")
+    groups = ", ".join(result.groups_created) or "no new group"
+    return f"Replication configured — {groups}; {created} write(s), {existed} already there. Verify replication to read it back."
+
 
 REPORT_ARTIFACT = "replication_report"
 RESULT_ARTIFACT = "replication_result"
@@ -285,18 +299,13 @@ class ReplicationSteps:
             coord.store.save_artifact(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
         except Exception:  # noqa: BLE001 - the writes happened; failing to cache the record must not fail the step
             pass
-        created = sum(1 for o in result.outcomes if o.status == "created")
-        existed = sum(1 for o in result.outcomes if o.status == "exists")
         if result.error:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
             coord.emit(run.run_id, phase, "replication.apply.failed", result.error, data={"result": result.model_dump(mode="json")})
             return
         coord.set_state(run, RunStatus.READY, phase)
-        groups = ", ".join(result.groups_created) or "no new group"
-        message = (f"Ports and partnership set up — {created} step(s), every link Up. Read both arrays again, "
-                   "press Check RC link, then configure the groups." if plan.sets_up_partnership else
-                   f"Replication configured — {groups}; {created} write(s), {existed} already there. Verify replication to read it back.")
-        coord.emit(run.run_id, phase, "replication.applied", message, data={"result": result.model_dump(mode="json")})
+        coord.emit(run.run_id, phase, "replication.applied", applied_message(plan, result),
+                   data={"result": result.model_dump(mode="json")})
 
     # ------------------------------------------------------------------ R6: verify (read-only)
 

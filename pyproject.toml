@@ -24,6 +24,9 @@ dependencies = [
   # <4 ON PURPOSE (BL-40, LESSONS 43): 4.0 dropped ssh-dss and 5.0 every SHA-1 kex/host key; FOS 7.x
   # switches offer only those. Dependabot flags 3.x for SHA-1 - dismissed as tolerable; do not bump to clear it.
   "paramiko>=3.4.0,<4",
+  # Encrypts the secret fields of the state database (ADR 0027). Already installed with paramiko;
+  # declared because the app imports it directly.
+  "cryptography>=42.0.0",
   # Storage provisioning (Phase 2). 4.2.14 is the floor for the Alletra MP B10000: earlier
   # releases POST to /credentials instead of /api/v1/credentials and fail to authenticate
   # (verified by deep research, Launchpad bug #2128677).

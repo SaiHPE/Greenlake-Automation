@@ -243,8 +243,8 @@ def run_failover_test(
         finish(s2, p, s, t)
         record.time_to_failover_s = s2.seconds
         if record.mode == "async" and record.data_loss_bound:
-            done = datetime.fromisoformat(s2.ended_at).astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
-            record.data_loss_bound += f"; failover completed at {done}"
+            # in this array's zone, the zone its last sync time is written in
+            record.data_loss_bound += f"; failover completed at {replication_read.array_time(s2.ended_at, a)}"
 
         # 3. read only: the peer's volumes are read/write now
         t = begin(s3)

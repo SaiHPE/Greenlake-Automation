@@ -28,7 +28,7 @@ from alletra_onboard.domain.models import (
     RunStatus,
     WorkflowPhase,
 )
-from alletra_onboard.domain.ports import RunStore
+from alletra_onboard.domain.ports import RunStore, StoredCredentialsUnreadableError
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.snapshots import SNAPSHOTS_TAB_NEEDED
 from alletra_onboard.domain.trust import DevicePin, TrustKind, retrust, retrusted_message
@@ -364,7 +364,7 @@ class RunCoordinator:
                 run_id,
                 run.current_phase if run else WorkflowPhase.NOT_STARTED,
                 "step.crashed",
-                f"{type(exc).__name__}: {str(exc)[:300]}",
+                str(exc) if isinstance(exc, StoredCredentialsUnreadableError) else f"{type(exc).__name__}: {str(exc)[:300]}",
             )
         finally:
             if trust is not None:

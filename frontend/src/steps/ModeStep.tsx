@@ -1,6 +1,6 @@
 import { Box, CheckBox, Grid, ResponsiveContext, Text } from 'grommet';
 import { useContext, useState } from 'react';
-import { ActionKey, MODE_PRESETS, RunMode, ServedStep, subtitleFor, unavailableReasons } from '../modes';
+import { ActionKey, MODE_PRESETS, RunMode, ServedStep, STAGE, subtitleFor, unavailableReasons } from '../modes';
 import { Guidance, Panel, SelectorCard } from '../ui/blocks';
 import { StepState } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
@@ -26,9 +26,8 @@ interface Props {
   snapshotsReminder?: string | null;
 }
 
-const STAGE: Record<string, string> = {
-  init: 'Onboard', provision: 'Provision', replicate: 'Replicate', migrate: 'Migrate', snapshot: 'Protect', verify: 'Document',
-};
+// The step picker names the init stage "Onboard" where the rail says "Initialize"; kept as built.
+const PICKER_STAGE: Record<ServedStep['kind'], string> = { ...STAGE, init: 'Onboard' };
 
 export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, initOnly, catalog, modeSteps, state, hasReplicationTab, runSteps, snapshotsReminder }: Props) {
   const stepCount = runSteps.length;
@@ -88,7 +87,7 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
     }
   };
 
-  const stages = Object.entries(STAGE)
+  const stages = Object.entries(PICKER_STAGE)
     .map(([kind, title]) => ({ title, steps: catalog.filter((s) => s.kind === kind) }))
     .filter((g) => g.steps.length);
 

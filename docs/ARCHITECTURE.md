@@ -163,7 +163,8 @@ no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 | `fabric/brocade_client.py` | Brocade FOS reads (nsshow/cfgshow/…); read-only (write path removed) |
 | `greenlake/*` | GreenLake global API: `auth`, `devices`, `subscriptions`, `service_catalog`, `http_client` (Component A) |
 | `browser/*` | Playwright/CDP browser automation: `cloudinit_wizard` (B), `dscc_setup` (C), `debug_browser`, `locators` |
-| `persistence/sqlite.py` | `SqliteRunStore` (implements `RunStore`) |
+| `persistence/sqlite.py` | `SqliteRunStore` (implements `RunStore`): schema versions (`MIGRATIONS`, `PRAGMA user_version`), pending-sheet expiry |
+| `persistence/secrets.py` | `SecretBox`: encrypts the stored secret fields with the installation's key file, `secrets.key` next to `state.db` (ADR 0027) |
 | `system/clock.py`, `system/discovery_tool.py` | HTTPS-based clock sync (ADR 0008 note), bundled Discovery Tool launcher |
 
 ### 5.5 api/ & frontend/
@@ -212,8 +213,12 @@ no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
   withdrawn when its inputs change (provisioning: a new discovery or an edit to the composition;
   replication: a new read) and is gone after a restart, so the operator previews again
   ([LESSONS](LESSONS.md) 6). `_tasks` (running asyncio tasks) is transient too.
+- **Schema version:** `PRAGMA user_version`, raised by the ordered `MIGRATIONS` in `sqlite.py`; a newer
+  database than the code knows is refused at start-up. Pending sheets expire after 24 hours.
 - **Secrets:** GreenLake creds + proxy in gitignored `.env`; device passwords supplied per-run or held in the
-  pending-sheet/intent, never echoed to the browser.
+  pending-sheet/intent, never echoed to the browser. In the database the secret fields are encrypted with
+  the key in `secrets.key` next to `state.db` (ADR 0027); a run whose key is gone answers every step with
+  one sentence asking for the sheet again.
 
 ## 8. Refactoring seams & known pain points (read this first)
 

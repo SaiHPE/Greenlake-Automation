@@ -9,7 +9,7 @@ from alletra_onboard.domain.models import RunEvent
 class InMemoryEventBus:
     """Per-run event history + live fan-out to subscribers (the API's SSE stream).
 
-    publish() is async (EventSink protocol); publish_sync() exists for sync call sites like the
+    publish() is async; publish_sync() exists for sync call sites like the
     provisioning progress callback. Both append to history and push to every live subscriber
     queue without blocking (queues are unbounded).
     """

@@ -17,6 +17,9 @@ CHANGES BOTH ARRAYS and removes everything with the run's own removal sets:
    (groups), link check, apply, verify until replicating, failover test, as-built
 4. pastes the run's merged removal set over SSH (A block, then B block) and checks the pair is back
    at the starting point
+BL-62: when this array's OS refuses sync to the peer's (read from `showversion` on both, judged by the app's own
+rule), a sync run expects the opposite at step 3: preview 1 carries that one blocker, the apply is refused and
+the run writes nothing to either array; only the script's own volume and set from step 2 are made and removed.
 Password: RCIP_PAIR_PW. Evidence in RCIP_LAB_DIR (default ~/Downloads)/rcip_tool/.
 """
 import base64
@@ -46,6 +49,19 @@ if NET == "routed":
 RPO_MIN = 10
 OUT = os.path.join(pl.BASE, "_".join(["rcip_tool"] + [x for x in (MODE if MODE != "sync" else "", NET) if x]))
 check, evidence, api, step, events = pl.check, pl.evidence, pl.api, pl.step, pl.events
+VERSIONS = {"A": "", "P": ""}
+
+
+def refused_sentence():
+    """BL-62: the one blocker the plan must show when this array refuses a sync group to the peer's OS, else ''."""
+    from alletra_onboard.domain.replication import sync_refused_target
+
+    family = sync_refused_target(VERSIONS["A"], VERSIONS["P"]) if MODE == "sync" else ""
+    if not family:
+        return ""
+    return ("rack13-ARCUS (OS %s) refuses sync replication to PRIMERA630R11U22 (OS %s), as it does to any %s array, so "
+            "the sync row for volume set '%s' cannot be configured: set Mode to async (periodic) on the Replication tab "
+            "for this pair." % (VERSIONS["A"], VERSIONS["P"], family, VVSET))
 
 
 def starting_point(a, p):
@@ -111,6 +127,9 @@ def run_all(run_id):
               ("rc_service", "A", "Remote Copy", "create"), ("rc_service", "B", "Remote Copy", "exists"),
               ("target", "A", "PRIMERA630R11U22", "create"), ("target", "B", "rack13-ARCUS", "create")],
           json.dumps(rows(plan, "rcip_port", "rc_service", "target")))
+    refused = refused_sentence()
+    if refused:
+        return sync_refused(run_id, plan, refused)
     check("preview 1: no group yet, no blocker", not rows(plan, "group") and not plan.get("blockers"),
           "; ".join(plan.get("blockers", [])))
     if plan.get("blockers"):
@@ -222,6 +241,19 @@ def run_all(run_id):
     return removals
 
 
+def sync_refused(run_id, plan, sentence):
+    """BL-62: sync on a pair whose OS versions the array refuses stops at preview 1, before any write."""
+    check("preview 1: sync refused for these OS versions, one blocker, no group",
+          plan.get("blockers") == [sentence] and not rows(plan, "group"), " | ".join(plan.get("blockers", [])))
+    status, resp = api("POST", "/runs/%s/replication/apply" % run_id, {"approved_plan": plan.get("plan_id")})
+    check("apply 1 is refused: the plan has a blocker", status == 409 and "must be resolved first" in str(resp),
+          "HTTP %s %s" % (status, str(resp)[:160]))
+    writes = console_writes(run_id)
+    check("the run wrote nothing to either array", not writes, " | ".join(c["command"] for c in writes))
+    evidence("commands.txt", "\n".join(c["command"] for c in api("GET", "/runs/%s/console/log" % run_id)[1]["commands"]))
+    return []
+
+
 def check_group_details(run_id, plan, ver):
     """BL-64: Verify carries each planned group's settings and every volume in it, from showrcopy -d on the
     Alletra; the raw reads are saved from the console log (the fixtures' source)."""
@@ -271,6 +303,12 @@ def main():
     left = pl.leftovers(a, p)
     if left:
         sys.exit("zz_rc_* objects are already on the arrays: " + "; ".join(left))
+    from alletra_onboard.application.replication.read import parse_showversion
+
+    VERSIONS.update(A=parse_showversion(fl.run(a, "showversion")), P=parse_showversion(fl.run(p, "showversion")))
+    check("OS versions read: rack13-ARCUS %s, PRIMERA630R11U22 %s; sync %s" % (
+        VERSIONS["A"], VERSIONS["P"], "refused by the array for this pair" if refused_sentence() else
+        ("allowed" if MODE == "sync" else "not asked for")), all(VERSIONS.values()))
     if not check("the app answers on %s" % fl.APP, api("GET", "/app/profile")[0] == 200):
         sys.exit("start the app first")
     results = []

@@ -1,10 +1,12 @@
 import { Box, Button, Heading, NameValueList, NameValuePair, Text } from 'grommet';
 import { useState } from 'react';
-import { markComplete, ProvisioningResult, RunEvent, RunRecord } from '../api';
+import { markComplete, ProvisioningResult, ReplicationReport, ReplicationResult, RunEvent, RunRecord } from '../api';
 import { DocList, Section } from '../ui/blocks';
 import { ActivityTimeline } from '../ui/primitives';
 import { PlainPage, runDocuments, when } from '../ui/RunPages';
 import { NoValue } from '../ui/status';
+import { RemovalSet } from './ProvisionStep';
+import { mergedRemovals, RemovalSets } from './ReplicationStep';
 
 interface Props {
   runId: string | null;
@@ -37,6 +39,17 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
       : created
         ? 'Yes'
         : 'Yes. Everything was already on the array.';
+  // The removal sets, as the two steps show them: every apply's undo, failed ones included (SPEC-007 R6).
+  const storageResults = applies.map((event) => event.data!.result as ProvisioningResult);
+  const storageRemovals = storageResults.flatMap((r) => r.removals ?? []);
+  const storageNotes = storageResults.flatMap((r) => r.removal_notes ?? []).filter((note, i, all) => all.indexOf(note) === i);
+  const replicationResults = events
+    .filter((e) => ['replication.applied', 'replication.apply.failed'].includes(e.event_type) && e.data?.result)
+    .map((e) => e.data!.result as ReplicationResult);
+  const replicationRemovals = mergedRemovals(replicationResults);
+  const replicationRead = [...events].reverse().find((e) => e.event_type === 'replication.previewed' && e.data?.report);
+  const pair = replicationRead?.data?.report as ReplicationReport | undefined;
+  const lines = (n: number) => `${n} line${n === 1 ? '' : 's'}`;
   const started = events.find((e) => e.event_type === 'run.created');
   const last = events[events.length - 1];
 
@@ -114,6 +127,24 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
           </NameValuePair>
         </NameValueList>
       </Section>
+
+      {runId && storageResults.length > 0 && (
+        <Section
+          title="Provision storage: removal command set"
+          summary={`${lines(new Set(storageRemovals.map((r) => r.command)).size)} that undo what this run created on ${run?.serial_number ?? 'the array'}`}
+        >
+          <RemovalSet removals={storageRemovals} notes={storageNotes} runId={runId} serial={run?.serial_number} />
+        </Section>
+      )}
+
+      {runId && replicationResults.length > 0 && (
+        <Section
+          title="Replication: removal command set"
+          summary={`${lines(replicationRemovals.removals_a.length)} for ${pair?.primary.name || 'array A'}, then ${lines(replicationRemovals.removals_b.length)} for ${pair?.peer.name || 'array B'}`}
+        >
+          <RemovalSets result={replicationRemovals} runId={runId} a={pair?.primary.name || 'array A'} b={pair?.peer.name || 'array B'} />
+        </Section>
+      )}
 
       <Section title="Run timeline" summary={`${events.length} event${events.length === 1 ? '' : 's'}, in order`}>
         <ActivityTimeline events={events} />

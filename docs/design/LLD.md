@@ -75,9 +75,9 @@ step, so credentials saved after start-up take effect without a restart.
 
 | Module | What it holds |
 |---|---|
-| [`models.py`](../../src/alletra_onboard/domain/models.py) | `WorkflowPhase` (every phase, including the six `GL_*` sub-phases), `RunMode`, `RunStatus`, `BrowserResultStatus`, `CheckStatus`. Intake: `ArrayWorkItem`, `NetworkConfig` (normalises a proxy URL to a bare host and port), `DsccSetupConfig`. Run state: `RunRecord`, `RunEvent`, `ExternalResources`, `PhaseResult`. `ArrayCredential` (server side, holds the secret) and `ArrayCredentialInfo` (the shape that may leave the process, ADR 0013). Verify results: `FieldCheck`, `HealthIssue`, `HealthDetail`, `VerificationReport`. |
+| [`models.py`](../../src/alletra_onboard/domain/models.py) | `WorkflowPhase` (every phase, including the six `GL_*` sub-phases), `RunMode`, `RunStatus`, `BrowserResultStatus`, `CheckStatus`. Intake: `ArrayWorkItem`, `NetworkConfig` (normalises a proxy URL to a bare host and port), `DsccSetupConfig`. Run state: `RunRecord`, `RunEvent`, `ExternalResources`. `ArrayCredential` (server side, holds the secret) and `ArrayCredentialInfo` (the shape that may leave the process, ADR 0013). Verify results: `FieldCheck`, `HealthIssue`, `HealthDetail`, `VerificationReport`. |
 | [`workflow.py`](../../src/alletra_onboard/domain/workflow.py) | `StepDef`, `STEP_REGISTRY`, `_MODE_STEPS`, `REPLICATION_STEP_KEYS`, `mode_steps()`, `enabled_steps()`, `initial_phase()`, `next_enabled_phase()`. See section 4. |
-| [`ports.py`](../../src/alletra_onboard/domain/ports.py) | Protocols: `RunStore`, `EventSink`, `CloudinitWizard`, `DsccSetupWizard`. See section 3. |
+| [`ports.py`](../../src/alletra_onboard/domain/ports.py) | The one protocol: `RunStore`. See section 3. |
 | [`shared.py`](../../src/alletra_onboard/domain/shared.py) | `EndpointCreds` (host, username, `SecretStr` password), `Fabric` (`"odd"`/`"even"`), `normalize_wwpn`, `wwpn_colons`. |
 | [`discovery.py`](../../src/alletra_onboard/domain/discovery.py) | `ArrayPort`, `EthernetPort`, `ArrayHost`, `HostHba`, `HostIdentity`, `HostRead`, `DiscoveredHost`, `DiscoveryReport`; OS guessing from an IQN, a switch string or a persona. |
 | [`zoning.py`](../../src/alletra_onboard/domain/zoning.py) | Verify: `ExpectedZone`, `ZoneRemediation`, `ZoningReport`. Plan: `NsDevice`, `AliasedWwpn`, `FabricZonePlan`, `ZoningPlan`. |
@@ -90,15 +90,21 @@ step, so credentials saved after start-up take effect without a restart.
 
 ## 3. Ports and the adapters that implement them
 
-The protocols in [`domain/ports.py`](../../src/alletra_onboard/domain/ports.py) are structural
-(`typing.Protocol`); nothing subclasses them.
+The protocol in [`domain/ports.py`](../../src/alletra_onboard/domain/ports.py) is structural
+(`typing.Protocol`); nothing subclasses it.
 
 | Port | Implemented by | Notes |
 |---|---|---|
 | `RunStore` | `SqliteRunStore` in [`adapters/persistence/sqlite.py`](../../src/alletra_onboard/adapters/persistence/sqlite.py) | Runs, events, work items, intents, pending sheets, artifacts, commands. Section 7. |
-| `EventSink` | `InMemoryEventBus` in [`application/runs/event_bus.py`](../../src/alletra_onboard/application/runs/event_bus.py) | `publish()` is async; the coordinator calls `publish_sync()`. |
-| `CloudinitWizard` | `CloudinitWizardAdapter` in [`adapters/browser/cloudinit_wizard.py`](../../src/alletra_onboard/adapters/browser/cloudinit_wizard.py) | Its `run()` adds a keyword-only `auto_submit`. |
-| `DsccSetupWizard` | `DsccSetupAdapter` in [`adapters/browser/dscc_setup.py`](../../src/alletra_onboard/adapters/browser/dscc_setup.py) | Attach-only over CDP. |
+
+The event bus and the two browser adapters have no protocol (`EventSink`, `CloudinitWizard` and
+`DsccSetupWizard` were removed on 2026-11-19, BL-65: nothing was typed against them):
+`InMemoryEventBus` in [`application/runs/event_bus.py`](../../src/alletra_onboard/application/runs/event_bus.py)
+(`publish()` is async; the coordinator calls `publish_sync()`), `CloudinitWizardAdapter` in
+[`adapters/browser/cloudinit_wizard.py`](../../src/alletra_onboard/adapters/browser/cloudinit_wizard.py)
+(its `run()` adds a keyword-only `auto_submit`) and `DsccSetupAdapter` in
+[`adapters/browser/dscc_setup.py`](../../src/alletra_onboard/adapters/browser/dscc_setup.py)
+(attach-only over CDP). The step services build them through factories, like the device clients.
 
 The device clients have no domain protocol. They are injected as **factory callables** instead, so a
 test passes a fake factory:
@@ -363,8 +369,8 @@ All routes are closures inside `create_app(service)` in
 | GET | `/runs/{id}/console/stream` | Command record SSE stream. |
 | POST | `/browser/launch` | Start Chrome or Edge with `--remote-debugging-port` (default 9222). |
 | POST | `/tools/discovery/launch` | Start the HPE Discovery Tool on the jump box. |
-| GET | `/system/clock` | Compare the local clock with an HTTPS `Date` header. |
-| POST | `/system/clock/sync` | Set the Windows clock (403 when not elevated). |
+| GET | `/system/clock` | Compare the local clock with an HTTPS `Date` header, taking the local time at the midpoint of that one request (a slow source before it is not skew). |
+| POST | `/system/clock/sync` | Set the Windows clock to the `Date` header plus half the round trip (403 when not elevated). |
 | POST | `/preflight` | Local work-item checks, optionally live GreenLake reads. |
 | (mount) | `/` | `frontend/dist` as static files when present (`sys._MEIPASS` first in a frozen build). |
 
@@ -376,24 +382,41 @@ Middleware: CORS for the Vite dev server on `:5173`; `Cache-Control: no-cache` o
 ## 7. Persistence: SQLite schema
 
 [`adapters/persistence/sqlite.py`](../../src/alletra_onboard/adapters/persistence/sqlite.py)
-`SqliteRunStore`. `initialize()` creates the file and tables (`CREATE TABLE IF NOT EXISTS`), sets
-`journal_mode=WAL` and `busy_timeout=5000`. Each call opens its own connection. There are no
-migrations: new fields go into the JSON `payload`, and Pydantic defaults load older rows.
+`SqliteRunStore`. `initialize()` creates the file, sets `journal_mode=WAL` and `busy_timeout=5000`,
+brings the schema to the current version and purges expired pending sheets. Each call opens its own
+connection. New fields go into the JSON `payload`, and Pydantic defaults load older rows.
+
+**Schema version.** `MIGRATIONS` is an ordered list; entry N takes a database from version N-1 to N,
+and the version is kept in `PRAGMA user_version`. `_migrate` runs the missing entries and sets the
+version in one `BEGIN IMMEDIATE` transaction. Version 1 is the schema as it stood before versions
+were recorded, all `CREATE TABLE IF NOT EXISTS`, so a database from then (`user_version` 0) becomes
+version 1 with no other change. A database with a higher version than `SCHEMA_VERSION` is refused at
+start-up with `StateDatabaseTooNewError` ("...saved by a newer version of this tool..."), and left as
+it is. A schema change adds the next entry; a shipped entry is never edited.
 
 | Table | Key | Columns | Holds |
 |---|---|---|---|
 | `runs` | `run_id` | `serial_number`, `status`, `current_phase`, `payload` (RunRecord JSON), `updated_at` | One row per run. |
 | `run_events` | `event_id` | `run_id`, `phase`, `event_type`, `payload` (RunEvent JSON), `created_at` | Every event. |
-| `work_items` | `run_id` | `payload` | `ArrayWorkItem` **with** the subscription key and DSCC password. |
-| `provisioning_intents` | `run_id` | `payload` | `ProvisioningIntent` **with** array, vCenter, switch, host and peer passwords. |
-| `pending_sheets` | `token` | `payload`, `created_at` | A parsed sheet waiting for a mode; deleted on pop. |
+| `work_items` | `run_id` | `payload` | `ArrayWorkItem` **with** the subscription key and DSCC password, encrypted. |
+| `provisioning_intents` | `run_id` | `payload` | `ProvisioningIntent` **with** array, vCenter, switch, host, peer and migration source passwords, encrypted. |
+| `pending_sheets` | `token` | `payload`, `created_at` | A parsed sheet waiting for a mode (its secrets and any held workbook encrypted); deleted on pop, purged after `PENDING_SHEET_TTL` (24 hours) on start-up and on each upload. |
 | `run_artifacts` | (`run_id`, `kind`) | `payload` BLOB, `updated_at` | Durable step results. |
 | `run_commands` | (`run_id`, `seq`) | `payload` | The command log (section 13). |
 | `run_device_pins` | (`run_id`, `kind`, `host`, `port`) | `payload` (`DevicePin` JSON) | The key or certificate each on-site device presented on the run's first contact (section 13.1). A table of its own because steps write back whole `RunRecord`s read earlier. |
 
-`_work_item_json` and `_provisioning_intent_json` write the secrets in clear, because
-`model_dump_json` would mask `SecretStr` and break the round trip. The database lives in the
-gitignored `.alletra_onboard/` folder, or under `%LOCALAPPDATA%\AlletraOnboard` in a frozen build
+`_work_item_json` and `_provisioning_intent_json` produce the secrets in clear, because
+`model_dump_json` would mask `SecretStr` and break the round trip. Before the row is written,
+`_sealed` replaces each secret at the paths in `_WORK_ITEM_SECRETS` and `_INTENT_SECRETS` with
+`{"fernet": "<token>"}`; `_opened` reverses it on read ([ADR 0027](../adr/0027-stored-credentials-encrypted-at-rest.md)).
+The `SecretBox` in [`adapters/persistence/secrets.py`](../../src/alletra_onboard/adapters/persistence/secrets.py)
+holds the Fernet key, read from `secrets.key` next to the database and made (0600 on POSIX) on the first
+save. A plain string at a secret path is a row from before encryption and is read as it is; the next save
+encrypts it. A sealed value that does not decrypt (no key file, or another installation's) raises
+`StoredCredentialsUnreadableError` (`domain/ports.py`, message `CREDENTIALS_UNREADABLE`): the API answers
+409 with the sentence, `GET /runs/{id}` still returns the run with `work_item` and `array_credential` empty,
+and a background step records the sentence as its `step.crashed` event. The database and the key live in
+the gitignored `.alletra_onboard/` folder, or under `%LOCALAPPDATA%\AlletraOnboard` in a frozen build
 (`packaging/app_main.py`, `_place_state`).
 
 Artifact kinds in use:
@@ -941,7 +964,31 @@ parses uploads with `FULL_ONBOARDING` validation only. Shipped `.ps1` files must
 
 `GET /app/profile` reports `capabilities.wsapi_sdk`, so a build that failed to bundle
 `python-3parclient` is visible without touching an array. eventlet is bundled because the SDK
-imports it; the code never monkey-patches.
+imports it; the code never monkey-patches with eventlet.
+
+Two things are process-wide on purpose:
+
+- **The SDK's `requests`.** On import, `adapters/array/wsapi_client.py` replaces the `requests`
+  module attribute of `hpe3parclient.http` with `_PinnedRequests`, once. It passes everything through,
+  and for a client bound to a pinned certificate (`_pin_calls`, a context variable per call) it sends
+  each request through a session whose adapter checks the certificate's fingerprint, so the pinned
+  certificate is checked on every WSAPI call (ADR 0026). Without a pin a call goes through unchanged.
+- **The process environment.** Five places write the proxy variables:
+  - `apply_proxy_env` (`application/platform/proxy.py`), at startup (`create_app`) and when the
+    operator saves a proxy: sets or clears `HTTPS_PROXY`, `https_proxy`, `HTTP_PROXY`, `http_proxy`,
+    and sets `NO_PROXY` / `no_proxy` (colon-free entries only).
+  - `POST /prereqs/proxy` (`api/app.py`): sets `ALLETRA_PROXY` (and saves it to `.env`), then calls
+    `apply_proxy_env`.
+  - `_bypass_proxy_for` (`adapters/array/wsapi_client.py`), called by the WSAPI client and the
+    WSAPI v3 client (`wsapi_v3_client.py`) before they connect: adds the array's address to
+    `NO_PROXY` / `no_proxy`.
+  - `_ensure_localhost_no_proxy` in `adapters/browser/cloudinit_wizard.py` and
+    `adapters/browser/dscc_setup.py`, before they attach over CDP: adds `localhost` and
+    `127.0.0.1` to `NO_PROXY` / `no_proxy`.
+
+  The packaged `.exe` also sets defaults before the app starts, never the proxy:
+  `packaging/app_main.py` (`STATE_DATABASE_PATH`, `ARTIFACT_DIR`, `ALLETRA_PROFILE`) and
+  `packaging/rthook_playwright.py` (`PLAYWRIGHT_BROWSERS_PATH`), each with `setdefault`.
 
 ---
 

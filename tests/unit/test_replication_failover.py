@@ -52,7 +52,8 @@ class FakePair:
     reads return RcGroups built from it. `sync_after` polls: how many reads of step 5 until Synced."""
 
     def __init__(self, *, mode="Sync", sync_after=1, last_sync="2026-10-10 15:42:48 IST", refuse=(), stuck=(), mirror=False, start_after=1,
-                 flip=False):
+                 flip=False, zone=True):
+        self.zone = zone
         self.p = {"role": "Primary", "status": "Started", "synced": True}
         self.s = {"role": "Secondary", "status": "Started", "synced": True}
         self.mode, self.last_sync, self.refuse, self.stuck = mode, last_sync, set(refuse), set(stuck)
@@ -124,8 +125,10 @@ class FakePair:
         name = "AlletraMP_D22U27" if host == P else "AlletraMP_E18U31"
         gname = G if host == P else PG
         g = self.group(host, gname)
+        # the lab pair's showdate: IST (Asia/Calcutta), 5 h 30 ahead of UTC
+        zone = {"time_zone": "IST (Asia/Calcutta)", "utc_offset_minutes": 330} if self.zone else {}
         return ReplicationArrayView(host=host, name=name, system_id=188150 if host == P else 188146, rc_status="Started",
-                                    groups=[g] if g else [])
+                                    groups=[g] if g else [], **zone)
 
 
 class _Wsapi:
@@ -265,10 +268,19 @@ def test_the_async_sequence_records_the_data_loss_bound_and_waits_for_the_sync_b
     pair = FakePair(mode="Periodic", sync_after=3)
     rec = _run(pair)
     assert rec.result == "passed" and rec.mode == "async"
-    assert re.fullmatch(r"last sync before failover 2026-10-10 15:42:48 IST; failover completed at \d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC",
+    # BL-63: both times in the array's zone (the failover time was in UTC next to the array's IST)
+    assert re.fullmatch(r"last sync before failover 2026-10-10 15:42:48 IST; failover completed at \d{4}-\d\d-\d\d \d\d:\d\d:\d\d IST",
                         rec.data_loss_bound)
     assert rec.steps[0].primary.last_sync == "2026-10-10 15:42:48 IST"
     assert rec.time_to_synced_s >= 1                       # the fake was Syncing at first; the wait polled
+
+
+def test_the_failover_time_is_in_the_array_zone_and_in_utc_only_when_showdate_did_not_read(monkeypatch):
+    from alletra_onboard.application.replication import failover
+
+    monkeypatch.setattr(failover, "_now", lambda: "2026-10-10T10:20:40+00:00")
+    assert _run(FakePair(mode="Periodic")).data_loss_bound.endswith("; failover completed at 2026-10-10 15:50:40 IST")
+    assert _run(FakePair(mode="Periodic", zone=False)).data_loss_bound.endswith("; failover completed at 2026-10-10 10:20:40 UTC")
 
 
 def test_an_async_group_waits_at_least_one_period_for_the_sync_back():

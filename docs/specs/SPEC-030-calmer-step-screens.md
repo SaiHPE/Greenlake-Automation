@@ -168,7 +168,7 @@ keeps its own icon map (the zoning `PairStatus` goes).
 | A port | Ready (complete) · the array's own word (action required) |
 | A host on a fabric | Zoned (complete) · Not zoned (failed; waiting while a command set is with the SAN team) · Partly zoned (action required) · Not on fabric (not started) |
 | A plan row | Create (not started) · Update (action required) · Already there (complete) · Conflict (failed) |
-| A write | Created · Updated (complete) · Already there (not started) · Failed (failed) · Skipped (not started) |
+| A write | Created · Updated (complete) · Already there (not started) · Failed (failed) · Skipped (not started). A ping and the links coming Up among Replication's writes are checks: Passed (BL-63) |
 | Paths | Live (complete) · Partial (action required) · No path (action required: amber; a report, never a gate, Q4) |
 | A group | Replicating (complete) · Initial sync in progress (running) · Not replicating (failed) |
 | A setting | Matches (complete) · Differs (action required) · Not readable (not started) |

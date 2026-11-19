@@ -1,11 +1,51 @@
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from email.utils import format_datetime
 
 import httpx
 import pytest
 import respx
 
-from alletra_onboard.adapters.system.clock import _set_system_utc, clock_status, is_elevated
+from alletra_onboard.adapters.system import clock
+from alletra_onboard.adapters.system.clock import (
+    TIME_SOURCES,
+    _set_system_utc,
+    clock_status,
+    is_elevated,
+    sync_clock,
+)
+
+TRUE_UTC = datetime(2026, 11, 19, 9, 0, 0, tzinfo=UTC)
+
+
+class FakeClock:
+    """This host's clock, `ahead` seconds off the true time; requests move it on by their duration."""
+
+    def __init__(self, ahead: float = 0.0):
+        self.true = TRUE_UTC
+        self.ahead = timedelta(seconds=ahead)
+
+    def now(self) -> datetime:
+        return self.true + self.ahead
+
+    def wait(self, seconds: float) -> None:
+        self.true += timedelta(seconds=seconds)
+
+
+def _slow_first_source(fake: FakeClock) -> None:
+    """The preferred source times out after 10 s; the first fall-back answers in 0.4 s with the true time."""
+    def timeout(_request):
+        fake.wait(10.0)
+        raise httpx.ConnectTimeout("timed out")
+
+    def answer(_request):
+        fake.wait(0.2)
+        date = format_datetime(fake.true, usegmt=True)    # the server stamps its reply mid-way
+        fake.wait(0.2)
+        return httpx.Response(200, headers={"Date": date})
+
+    respx.get("https://slow.test/").mock(side_effect=timeout)
+    respx.get(TIME_SOURCES[0]).mock(side_effect=answer)
 
 
 @respx.mock
@@ -27,6 +67,53 @@ async def test_clock_status_unreachable_is_graceful():
     assert status.in_sync is True
     assert status.skew_seconds is None
     assert status.error is not None
+
+
+@respx.mock
+async def test_a_slow_first_source_is_not_skew(monkeypatch):
+    # BL-63: the local time was taken before the 10 s timeout and read as 10 s of skew
+    fake = FakeClock(ahead=0.0)
+    monkeypatch.setattr(clock, "_now", fake.now)
+    _slow_first_source(fake)
+    status = await clock_status("https://slow.test/")
+    assert status.source == TIME_SOURCES[0]
+    assert status.in_sync is True
+    assert abs(status.skew_seconds) < 1.0
+
+
+@respx.mock
+async def test_a_real_skew_behind_a_slow_first_source_is_still_reported(monkeypatch):
+    fake = FakeClock(ahead=60.0)
+    monkeypatch.setattr(clock, "_now", fake.now)
+    _slow_first_source(fake)
+    status = await clock_status("https://slow.test/")
+    assert status.in_sync is False
+    assert 59.0 < status.skew_seconds < 61.0
+
+
+@respx.mock
+async def test_sync_sets_the_source_time_plus_half_the_round_trip(monkeypatch):
+    fake = FakeClock(ahead=-30.0)
+    monkeypatch.setattr(clock, "_now", fake.now)
+    _slow_first_source(fake)
+    set_to: list[datetime] = []
+    monkeypatch.setattr(clock, "_set_system_utc", set_to.append)
+    result = await sync_clock("https://slow.test/")
+    assert result.changed is True and result.source == TIME_SOURCES[0]
+    assert -31.0 < result.skew_seconds_before < -29.0
+    # set to the true time of the moment it is set, within the Date header's one second
+    assert len(set_to) == 1 and abs((set_to[0] - fake.true).total_seconds()) < 1.0
+
+
+@respx.mock
+async def test_sync_leaves_a_right_clock_alone_behind_a_slow_first_source(monkeypatch):
+    fake = FakeClock(ahead=0.0)
+    monkeypatch.setattr(clock, "_now", fake.now)
+    _slow_first_source(fake)
+    set_to: list[datetime] = []
+    monkeypatch.setattr(clock, "_set_system_utc", set_to.append)
+    result = await sync_clock("https://slow.test/")
+    assert result.changed is False and set_to == []
 
 
 def test_set_system_utc_rejects_non_windows(monkeypatch):

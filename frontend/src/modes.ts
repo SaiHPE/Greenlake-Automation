@@ -30,6 +30,11 @@ export interface ServedStep {
   unavailable?: string;
 }
 
+/** Registry step kinds, mapped to the deployment stages the rail groups the steps by. */
+export const STAGE: Record<ServedStep['kind'], string> = {
+  init: 'Initialize', provision: 'Provision', replicate: 'Replicate', migrate: 'Migrate', snapshot: 'Protect', verify: 'Document',
+};
+
 export interface StepRegistry {
   steps: ServedStep[];
   modes: Record<string, ActionKey[]>;

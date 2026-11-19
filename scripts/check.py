@@ -8,6 +8,8 @@ reviewer relies on. It checks, against the branch point with origin/main:
   tests      pytest, the whole suite
   lint       ruff (the version pinned in pyproject.toml)
   types      the frontend TypeScript check (npm run typecheck)
+  mockups    the design mockups' TypeScript check (tsc -p mockups --noEmit)
+  ui-tests   the frontend unit tests (npm test: vitest, no browser)
   dist       frontend/dist is not changed: it is built from frontend/src after each merge
   secrets    no token, private key or lab password in the lines this branch adds
   ignored    files under src/, tests/ or frontend/src/ that .gitignore hides (a warning)
@@ -83,11 +85,13 @@ def lab_passwords() -> list[str]:
     return found
 
 
-def run_step(name: str, cmd: list[str], cwd: Path) -> None:
+def run_step(name: str, cmd: list[str], cwd: Path, summary_line: str = "") -> None:
+    """Runs one step. `summary_line`, a regex, picks the output line to show instead of the last one."""
     started = time.monotonic()
     proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
     tail = [line for line in (proc.stdout + proc.stderr).strip().splitlines() if line.strip()]
-    summary = tail[-1] if tail else "no errors"
+    picked = [line.strip() for line in tail if summary_line and re.search(summary_line, line)]
+    summary = picked[-1] if picked else tail[-1] if tail else "no errors"
     if proc.returncode == 0:
         record(name, "PASS", f"{summary} ({time.monotonic() - started:.0f} s)")
     else:
@@ -108,16 +112,24 @@ def main() -> int:
     if args.quick:
         record("tests", "SKIP", "--quick")
     else:
-        run_step("tests", [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], APP)
+        run_step("tests", [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], APP,
+                 r"\d+ (passed|failed)")
     run_step("lint", [sys.executable, "-m", "ruff", "check", "."], APP)
 
     npm = shutil.which("npm")
-    if not npm:
-        record("types", "FAIL", "npm not found: install Node 20")
-    elif not (APP / "frontend" / "node_modules").is_dir():
-        record("types", "FAIL", "run `npm ci` in frontend/ first")
-    else:
-        run_step("types", [npm, "run", "-s", "typecheck"], APP / "frontend")
+    frontend = APP / "frontend"
+    for name, args, needs, summary_line in (
+            ("types", ["run", "-s", "typecheck"], "typescript", ""),
+            ("mockups", ["exec", "--no", "--", "tsc", "-p", "mockups", "--noEmit"], "typescript", ""),
+            ("ui-tests", ["run", "-s", "test"], "vitest", r"^\s*Tests\s")):
+        if not npm:
+            record(name, "FAIL", "npm not found: install Node 20")
+        elif not (frontend / "node_modules").is_dir():
+            record(name, "FAIL", "run `npm ci` in frontend/ first")
+        elif not (frontend / "node_modules" / needs).is_dir():
+            record(name, "FAIL", f"{needs} is not installed: run `npm ci` in frontend/")
+        else:
+            run_step(name, [npm, *args], frontend, summary_line)
 
     changed = changed_files(base)
     dist = [f for f in changed if f.startswith(DIST)]
