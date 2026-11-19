@@ -226,6 +226,46 @@ class RcGroup(BaseModel):
         return [v.local_name for v in self.volumes]
 
 
+class RcVolumeDetail(BaseModel):
+    """One volume row of `showrcopy -d groups <group>`: every column the array prints, as printed
+    (`NA`, `none` and blanks kept). Column meanings from the array's `clihelp -col showrcopy`."""
+
+    local_name: str
+    local_id: int | None = None
+    remote_name: str = ""
+    remote_id: int | None = None
+    sync_status: str = ""           # Synced | Syncing (45%) | Stopped | Stale | NotSynced | …
+    resync_snapshot: str = ""       # Resync_ss: the starting point of the remote volume ("none" or a snapshot)
+    sync_snapshot: str = ""         # Sync_ss: the destination point of a resync in progress
+    volume_iteration: str = ""      # VV_iter, e.g. "185493/71"
+    resync_iteration: str = ""      # R_iter
+    sync_iteration: str = ""        # S_iter
+    last_sync: str = ""             # LastSyncTime: NA on sync groups, a time on periodic ones
+    local_set: str = ""             # LocalSet (not printed by every OS)
+    remote_set: str = ""            # RemoteSet
+
+
+class RcGroupDetail(BaseModel):
+    """One group block of `showrcopy -d groups <group>`: the group's configuration and every volume in it.
+    `rpo_minutes` is the workbook's, filled by Verify (the array prints the period, not the RPO)."""
+
+    name: str
+    id: int | None = None
+    target: str = ""
+    status: str = ""                # Started | Stopped | Failsafe | …
+    role: str = ""                  # Primary | Secondary, optionally -Rev
+    mode: str = ""                  # Sync | Periodic | Async
+    local_user_cpg: str = ""        # LocalUserCpg
+    local_snap_cpg: str = ""        # LocalSnapCpg (Primera OS 4.x prints it)
+    remote_user_cpg: str = ""       # RmUserCpg
+    remote_snap_cpg: str = ""       # RmSnapCpg
+    options: list[str] = Field(default_factory=list)    # the policies
+    period: str = ""                # periodic groups: "5m"
+    last_sync: str = ""             # periodic primaries: the Options column's Last-Sync
+    rpo_minutes: int | None = None
+    volumes: list[RcVolumeDetail] = Field(default_factory=list)
+
+
 class PortRole(BaseModel):
     """One row of `showport`: what a port is (SPEC-021 R2)."""
 
@@ -491,6 +531,7 @@ class GroupVerification(BaseModel):
     next_step: str = ""                  # HPE's documented action when not replicating
     volumes_total: int = 0
     volumes_synced: int = 0
+    config: RcGroupDetail | None = None  # `showrcopy -d groups <group>` on this array: settings and every volume
 
 
 class ReplicationVerification(BaseModel):

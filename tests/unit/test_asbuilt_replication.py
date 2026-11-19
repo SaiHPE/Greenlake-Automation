@@ -422,3 +422,68 @@ def test_run_records_take_the_failover_record_from_either_event():
     data = AsBuiltData()
     st.DocumentSteps(coord=SimpleNamespace(list_events=lambda run_id: events, list_commands=lambda run_id, since=0: []))._run_records("r1", data)
     assert data.failover_record == {"result": "passed"}
+
+
+# ------------------------------------------------------------------ BL-64: every volume and the settings (showrcopy -d)
+
+def _details(capture: str) -> dict:
+    from alletra_onboard.application.replication.read import parse_showrcopy_detail
+
+    text = (_FIXTURES / capture / "D22U27" / "showrcopy_d_groups.txt").read_text(encoding="utf-8")
+    return {g.name: g for g in parse_showrcopy_detail(text)}
+
+
+def test_each_group_gets_its_settings_and_every_volume_from_showrcopy_d(tmp_path):
+    """The owner, 2026-11-19: "show all volumes in rcgroup including config, showrcopy -d"."""
+    a, b = _views("after_apply_periodic_ui")
+    details = _details("after_apply_periodic_ui")
+    out, warnings = generate_asbuilt(
+        _data(replication_tab=_tab(), replication_plan=_periodic_json("plan.json"), replication_result=_periodic_json("result.json"),
+              replication_primary=a, replication_peer=b,
+              replication_details={g: details[g] for g in ("zz_rc_vvs_rcg", "zz_rc_test_rcg")}),
+        tmp_path / "detail.docx")
+    doc, text = _read(out)
+    assert not [w for w in warnings if "replication" in w.lower() or "showrcopy" in w]
+    for g in ("zz_rc_vvs_rcg", "zz_rc_test_rcg"):
+        assert f"{g}: every volume and the group's settings" in text
+        assert f"(showrcopy -d groups {g})" in text
+    settings = [t for t in doc.tables if t.rows[0].cells[0].text.strip() == "Setting"]
+    assert len(settings) == 2
+    first = next([[c.text.strip() for c in r.cells] for r in t.rows] for t in doc.tables if t.rows[0].cells[0].text.strip() == "Setting")
+    assert first[1:] == [
+        ["Target", "AlletraMP_E18U31"], ["Mode", "Periodic"], ["RPO / period", "RPO 10 min (period 5m)"],
+        ["Policies", "auto_recover, over_per_alert, auto_synchronize"], ["Role here", "Primary"], ["Status", "Started"],
+        ["Group ID", str(details["zz_rc_vvs_rcg"].id)], ["CPG for the volumes here", "SSD_r6"],
+        ["CPG for the volumes on the peer", "SSD_r6"], ["Last sync of the group", details["zz_rc_vvs_rcg"].last_sync],
+        ["Volumes", "1"]]
+    tables = _tables(doc)
+    volumes = tables[("Volume here (ID)", "Volume on peer (ID)", "Sync status", "Last sync", "Resync snapshot", "Sync snapshot",
+                      "Iterations: volume / resync / sync", "Volume set here / on peer")]
+    v = details["zz_rc_vvs_rcg"].volumes[0]
+    assert volumes[0] == [f"zz_rc_vol01 ({v.local_id})", f"zz_rc_vol01 ({v.remote_id})", "Synced", v.last_sync,
+                          v.resync_snapshot, "none", f"{v.volume_iteration} / {v.resync_iteration} / —", "zz_rc_vvs / —"]
+    assert len(volumes) == 2
+    # the short volume list gives way to the full one for groups whose showrcopy -d was read
+    assert ("Group", "Volume here", "Size (GiB)", "Volume on peer", "Sync status", "Last sync") not in tables
+
+
+def test_a_group_whose_showrcopy_d_failed_keeps_the_short_list_and_says_why(tmp_path):
+    a, b = _views("after_apply_periodic_ui")
+    details = _details("after_apply_periodic_ui")
+    out, warnings = generate_asbuilt(
+        _data(replication_tab=_tab(), replication_plan=_periodic_json("plan.json"), replication_result=_periodic_json("result.json"),
+              replication_primary=a, replication_peer=b, replication_details={"zz_rc_vvs_rcg": details["zz_rc_vvs_rcg"]},
+              replication_details_errors={"zz_rc_test_rcg": "ArrayCliError: timed out"}),
+        tmp_path / "half.docx")
+    doc, text = _read(out)
+    assert "zz_rc_test_rcg: its settings and volumes could not be read (showrcopy -d): ArrayCliError: timed out" in text
+    assert any(w.startswith("The settings and volumes of Remote Copy group zz_rc_test_rcg could not be read") for w in warnings)
+    short = _tables(doc)[("Group", "Volume here", "Size (GiB)", "Volume on peer", "Sync status", "Last sync")]
+    assert [r[0] for r in short] == ["zz_rc_test_rcg"]
+
+
+def test_the_document_reads_showrcopy_d_for_the_groups_this_run_configured():
+    from alletra_onboard.application.documents.asbuilt import rc_group_names
+
+    assert rc_group_names(_data(replication_tab=_tab(), replication_plan=_periodic_json("plan.json"),
+                                replication_result=_periodic_json("result.json"))) == ["zz_rc_vvs_rcg", "zz_rc_test_rcg"]

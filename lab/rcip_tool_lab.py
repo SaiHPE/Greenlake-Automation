@@ -166,7 +166,7 @@ def run_all(run_id):
           json.dumps({k: g.get("detail", {}).get(k) for k in ("mode", "period_seconds")}) + " " + g.get("reason", ""))
     approve = {"approved_plan": plan.get("plan_id")}   # the plan of preview 2
     status, resp = api("POST", "/runs/%s/replication/apply" % run_id, approve)
-    check("apply 2 is refused until the link is checked", status == 409 and "Check the link first" in str(resp),
+    check("apply 2 is refused until the link is checked", status == 409 and "Check RC link first" in str(resp),
           "HTTP %s %s" % (status, str(resp)[:160]))
     ev = step(run_id, "/replication/link-check", ["replication.link_checked", "replication.link_check.failed"], "link-check",
               body={"duration_s": 600})
@@ -191,6 +191,7 @@ def run_all(run_id):
         time.sleep(15)
     check("verify: every group replicating", bool(ver.get("groups")) and all(x["verdict"] == "replicating" for x in ver["groups"]),
           "; ".join("%s %s" % (x["group"], x["verdict"]) for x in ver.get("groups", [])))
+    check_group_details(run_id, plan, ver)
     ev = step(run_id, "/replication/failover-test", ["failover.completed", "failover.failed"], "failover", body={})
     rec = ev["data"].get("record") or {}
     check("failover test passed", rec.get("result") == "passed", ev["message"][:200])
@@ -201,9 +202,50 @@ def run_all(run_id):
                    "controlport rcip delete -f 0:4:4", "stoprcopygroup -f " + GROUP,
                    "RPO %d min (period 5" % RPO_MIN if MODE == "async" else "sync (every write)"):
         check("as-built carries '%s'" % needle, needle in text)
+    # BL-64: a table per group with every volume and the group's settings, from showrcopy -d
+    groups = [x["name"] for x in plan.get("actions", []) if x["kind"] == "group" and x["state"] == "create"]
+    for needle in ["Iterations: volume / resync / sync"] + [n + ": every volume and the group's settings" for n in groups] \
+            + ["(showrcopy -d groups %s)" % n for n in groups]:
+        check("as-built carries '%s'" % needle, needle in text)
     check("as-built: the groups' removal lines come before the partnership's",
           text.find("stoprcopygroup -f " + GROUP) < text.find("removercopytarget PRIMERA630R11U22"))
+    # BL-64 (2026-11-19, the owner's decision): no performance in the as-built, no System Reporter read sent
+    handover = (ev.get("data") or {}).get("handover") or {}
+    check("as-built: status at handover without performance",
+          "Array status at handover" in text and "System Reporter" not in text
+          and "Array status and performance" not in text
+          and not {"window_from", "cpu_max_pct", "iops_avg", "idle"} & set(handover), json.dumps(handover)[:300])
+    sent = [c["command"] for c in api("GET", "/runs/%s/console/log" % run_id)[1]["commands"]]
+    evidence("commands.txt", "\n".join(sent))
+    check("no srstat command was sent in the run", not [c for c in sent if c.split()[:1] and c.split()[0].startswith("srstat")],
+          "%d commands" % len(sent))
     return removals
+
+
+def check_group_details(run_id, plan, ver):
+    """BL-64: Verify carries each planned group's settings and every volume in it, from showrcopy -d on the
+    Alletra; the raw reads are saved from the console log (the fixtures' source)."""
+    planned = {x["name"]: x["detail"] for x in plan.get("actions", []) if x["kind"] == "group" and x["state"] == "create"}
+    got = {x["group"]: x.get("config") or {} for x in ver.get("groups", [])}
+    want_period = "%dm" % (RPO_MIN // 2) if MODE == "async" else ""
+    for name, detail in planned.items():
+        c = got.get(name) or {}
+        vols = sorted(v["local_name"] for v in c.get("volumes", []))
+        check("verify: %s shows every volume and its settings (showrcopy -d)" % name,
+              c.get("name") == name and vols == sorted(detail.get("volumes") or [])
+              and c.get("target") == "PRIMERA630R11U22" and c.get("role") == "Primary" and c.get("status") == "Started"
+              and c.get("mode") == ("Periodic" if MODE == "async" else "Sync") and c.get("period") == want_period
+              and (c.get("rpo_minutes") == RPO_MIN if MODE == "async" else c.get("rpo_minutes") is None)
+              and all(v.get("remote_name") and v.get("sync_status") for v in c.get("volumes", [])),
+              json.dumps({k: c.get(k) for k in ("name", "target", "mode", "period", "rpo_minutes", "role", "status")})
+              + " volumes " + ", ".join(vols))
+    sent = api("GET", "/runs/%s/console/log" % run_id)[1]["commands"]
+    reads = [c for c in sent if c["command"].startswith("showrcopy -d groups ")]
+    check("verify: one showrcopy -d groups <group> read per group, on the Alletra",
+          sorted(c["command"] for c in reads) == sorted("showrcopy -d groups " + n for n in planned)
+          and all(c.get("target") == A_HOST for c in reads), " | ".join("%s %s" % (c.get("target"), c["command"]) for c in reads))
+    for c in reads:
+        evidence("showrcopy_d_groups_%s.txt" % c["command"].split()[-1], "# %s\n%s" % (c["command"], c.get("output", "")))
 
 
 def merged(results, key):

@@ -5,7 +5,7 @@ or applied. No prompts.
 
 1. restarts the app on the latest code
 2. composes a replicate-only sheet (an existing set on D22U27, Volumes and Host sets empty)
-3. Read both arrays (preview), then Check the link: checkrclink server on E18U31, client on D22U27,
+3. Read both arrays (preview), then Check RC link: checkrclink server on E18U31, client on D22U27,
    stopped once the latency is printed, for each RCIP link
 4. checks the result, the gate (apply refused until checked), the six commands per link in the
    console log, and that no checkrclink server or client is left running on either array
@@ -157,9 +157,9 @@ def main():
         check("partnership found by link address", bool(part), str(part)[:200])
         approve = {"approved_plan": (ev["data"].get("plan") or {}).get("plan_id")}   # the plan just read
         status, resp = api("POST", "/runs/%s/replication/apply" % run_id, approve)
-        check("apply is refused until the link is checked", status == 409 and "Check the link first" in str(resp), "HTTP %s %s" % (status, str(resp)[:200]))
+        check("apply is refused until the link is checked", status == 409 and "Check RC link first" in str(resp), "HTTP %s %s" % (status, str(resp)[:200]))
 
-        fl.banner("Check the link (checkrclink)")
+        fl.banner("Check RC link (checkrclink)")
         t0 = time.time()
         ev = step(run_id, "/replication/link-check", ["replication.link_checked", "replication.link_check.failed"], "link-check", body={"duration_s": 600})
         took = time.time() - t0

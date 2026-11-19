@@ -30,8 +30,9 @@ ALLOWED_COMMANDS = (
     "showhostset", "showvvset",
     # replication read (SPEC-016 R1): the RCIP links with their peer addresses
     "showrctransport",
-    # SPEC-026: alerts and System Reporter reports (read-only)
-    "showalert", "srstatcpu", "srstatport", "srstatvv",
+    # SPEC-026: the array's alerts (read-only). System Reporter's srstatcpu, srstatport and srstatvv left
+    # on 2026-11-19 with the as-built's performance figures (the owner's decision): nothing else read them.
+    "showalert",
     # snapshot schedules (SPEC-023 R3). Its help (OS 10.5.x, 10.6.0) lists -all, -window and -sortcol,
     # all of which only change what is shown: no option acts.
     "showsched",

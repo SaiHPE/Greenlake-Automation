@@ -171,14 +171,14 @@ export const replicationFc: Screen = {
   notes: [
     'The partnership line names the transport: over Fibre Channel, found by port WWN. Target names are still never relied on.',
     'Each array card lists the Fibre Channel links its target uses (port → the other array’s port WWN) instead of “RCIP: no configured ports”.',
-    'There is no Check the link over Fibre Channel: the array’s link test is known for RCIP only. The Round-trip time panel says why, and the green button explains what is missing: the time typed on the Replication tab.',
+    'There is no Check RC link over Fibre Channel: the array’s link test is known for RCIP only. The Round-trip time panel says why, and the green button explains what is missing: the time typed on the Replication tab.',
     'Over Fibre Channel the limit is 10 ms for sync and for async. A typed time over it needs the Continue anyway tick, as a measured one does over RCIP; the choice goes into the result and the as-built.',
     'Open with the owner: a typed time is required (built this way). The alternative is a tick to continue without one.',
     'A pair with targets in both transports is blocked with one finding that names every target and its state. A removal command is shown only for a failed target with no link Up and no started group.',
-    'As built (2026-11-17): the same parts as over RCIP (M6), with Round-trip time in place of Check the link. The part at hand is the only open panel and the finished parts are one list under it, as on M6; this screen still draws What the arrays say open above the part. The typed-time tick is the first of the two footer ticks.',
+    'As built (2026-11-17): the same parts as over RCIP (M6), with Round-trip time in place of Check RC link. The part at hand is the only open panel and the finished parts are one list under it, as on M6; this screen still draws What the arrays say open above the part. The typed-time tick is the first of the two footer ticks.',
   ],
   keeps: [
-    ['Check the link / Check again', 'Not offered over Fibre Channel; the Round-trip time panel says why'],
+    ['Check RC link / Check RC link again', 'Not offered over Fibre Channel; the Round-trip time panel says why'],
     ['Continue anyway tick', 'Footer, when the typed time is over 10 ms'],
     ['Authorise tick, Configure replication', 'Footer, as over RCIP'],
     ['Partnership line', 'Names the transport and how the partnership was found'],

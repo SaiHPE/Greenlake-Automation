@@ -6,7 +6,7 @@ import { COMMANDS, EXISTING_GROUPS, PLAN, RUN, rail, stepLabel } from '../data';
 import { Action, AppFrame, CodeBlock, Confirmation, DoneList, EmptyState, Guidance, Mark, Panel, PartsBar, Section, StatusLine, StepPage, mono } from '../kit';
 import { Screen } from '../screen';
 
-const PARTS = ['Read both arrays', 'Check the link', 'Review the plan', 'Configure', 'Verify'];
+const PARTS = ['Read both arrays', 'Check RC link', 'Review the plan', 'Configure', 'Verify'];
 const PART_OF: Record<string, number> = { read: 0, link: 1, 'link-over': 1, plan: 2, configured: 3, verified: 4 };
 
 function LinkTable({ ms }: { ms: string }) {
@@ -39,7 +39,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
 
   const primary: Action = {
     read: { label: 'Read both arrays', onClick: next('link') },
-    link: { label: 'Check the link', onClick: next('plan') },
+    link: { label: 'Check RC link', onClick: next('plan') },
     'link-over': { label: 'Continue to the plan', onClick: next('plan') },
     plan: { label: 'Configure replication', onClick: next('configured') },
     configured: { label: 'Verify replication', onClick: next('verified') },
@@ -55,7 +55,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
   if (at > 0) done.push({ text: 'Read both arrays: partnered over 2 of 2 links each way.', again: 'Read both arrays again',
     detail: <Text size="small">Target AlletraMP_E18U31 on both arrays, policy mirror_config, found by link address. Remote Copy started on both.</Text> });
   if (at > 1) done.push({ text: over || accept ? 'Link: 12 ms, over the 10 ms sync limit. You chose to continue.' : 'Link: 0.4 ms on 2 links. Sync allows 10 ms.',
-    again: 'Check the link again', detail: <LinkTable ms={over || accept ? '12' : '0.4'} /> });
+    again: 'Check RC link again', detail: <LinkTable ms={over || accept ? '12' : '0.4'} /> });
   if (at > 2) done.push({ text: 'Plan approved at 19:31: 6 objects, 12 commands.', detail: <Text size="small" style={mono}>{PLAN.map((p) => p.name).join(' · ')}</Text> });
   if (at > 3) done.push({ text: 'Configured at 19:32: 12 writes done, both groups started.',
     detail: <Box direction="row" gap="small"><Button size="small" label="Copy the removal commands for A" /><Button size="small" label="Copy the removal commands for B" /></Box> });
@@ -97,7 +97,7 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
         )}
 
         {(state === 'link' || over) && (
-          <Panel title="Check the link">
+          <Panel title="Check RC link">
             {state === 'link' ? (
               <Text size="small">
                 checkrclink measures the latency between the two arrays' replication ports: a test server on AlletraMP_E18U31, a test client here,
@@ -178,6 +178,15 @@ function Replication({ state, setState }: { state: string; setState: (s: string)
           </Box>
         )}
 
+        {/* BL-64 (2026-11-19): after Verify, each group the run configured with its settings and every volume (showrcopy -d) */}
+        {verified &&
+          ['zz_rc_vvs_rcg', 'zz_rc_test_rcg'].map((g) => (
+            <Section key={g} title={<>{g}: 1 volume{g === 'zz_rc_vvs_rcg' && <Mark n={7} />}</>} summary="Periodic, every 5 minutes · Started · 1 of 1 synced">
+              <Text size="small" color="text-weak">Target AlletraMP_E18U31 · RPO 10 minutes · Auto recover, Over-period alert, Auto synchronize · CPG SSD_r6 on both arrays</Text>
+              <Text size="small" style={mono}>{g.replace('_rcg', '') === 'zz_rc_vvs' ? 'zz_rc_vol01' : 'zz_rc_test_v01'} → same name on the peer · Synced · last sync 19:33 · resync snapshot rcpy.27.12373.5</Text>
+            </Section>
+          ))}
+
         {at > 0 && (
           <Section title={<>Other groups on AlletraMP_D22U27 ({EXISTING_GROUPS.length}), never touched<Mark n={3} /></>}>
             <Text size="small" style={mono}>{EXISTING_GROUPS.join(' · ')}</Text>
@@ -201,22 +210,24 @@ export const replication: Screen = {
     { key: 'verified', label: '5. Verified' },
   ],
   notes: [
-    'The step is split into five parts done in order. The bar shows where you are, and the green button is always the next part: Read, Check the link, Configure, Verify. Today this page has 9 buttons at once.',
-    'Finished parts are one list, one line each, with Show detail and the part\'s own Read both arrays again or Check the link again. As built, the list sits under the part at hand, not above it: above, the plan\'s start fell under the footer at 1080 × 720 (SPEC-030 R13). The footer keeps Continue without replication, at most one more button and the green button.',
+    'The step is split into five parts done in order. The bar shows where you are, and the green button is always the next part: Read, Check RC link, Configure, Verify. Today this page has 9 buttons at once.',
+    'Finished parts are one list, one line each, with Show detail and the part\'s own Read both arrays again or Check RC link again. As built, the list sits under the part at hand, not above it: above, the plan\'s start fell under the footer at 1080 × 720 (SPEC-030 R13). The footer keeps Continue without replication, at most one more button and the green button.',
     'Groups already on the array fold into one line at the bottom: Other groups on <array> (N), never touched.',
     'The authorisation tick sits in the footer, right next to the button it unlocks, so it is always on screen. The button stays active: press it before the tick and it tells you what is missing, as the Design System asks, instead of a greyed button that says nothing.',
     'Latency over the limit: same rule as today. The Continue anyway tick is in the footer next to the green button, and the choice goes into the result and the as-built.',
     'As built (2026-11-17), unlike this screen: no description under the title (the parts bar sits there; the sentence is in About this step); the status line is the step\'s one status, other notices fold into N notes; with the latency over the limit, the Continue anyway tick and the plan tick are both in the footer, in that order, on the plan; the plan\'s commands are behind Show 12 commands.',
+    'Added 2026-11-19 (the owner, after the customer demo): after Verify, one folded section per group the run configured, titled with the group and its volume count. Inside: the group\'s settings (target, mode, sync period, the workbook\'s RPO, policies, role, status, last sync, CPGs, group ID) and a table of every volume (the volume and the peer volume with their IDs, sync status, last sync, resync and sync snapshots, iterations, volume sets), read with showrcopy -d on this array.',
   ],
   keeps: [
     ['Read both arrays / Read both arrays again', 'Footer (green) first, then Read both arrays again on the finished line'],
-    ['Check the link / Check again', 'Footer (green) in part 2, then Check the link again on the finished line'],
+    ['Check RC link / Check RC link again', 'Footer (green) in part 2, then Check RC link again on the finished line'],
     ['Continue anyway tick', 'Footer, next to the green button, when the latency is over the limit'],
     ['Plan table, Show N commands', 'Part 3'],
     ['Authorise tick', 'Footer, next to Configure replication'],
     ['Configure replication', 'Footer, right (green) in part 3'],
     ['Result table, removal sets with Copy and Download', 'Part 4'],
     ['Verify replication and its table', 'Part 5'],
+    ['Each group\'s settings and every volume (showrcopy -d)', 'New: a folded section per group after Verify'],
     ['Replication already present table', 'Folded section at the bottom, Other groups on <array> (N), never touched'],
     ['Continue without configuring replication', 'Footer, beside the green button, as Continue to Failover test without replication'],
   ],

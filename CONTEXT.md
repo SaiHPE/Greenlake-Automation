@@ -297,13 +297,11 @@ _Avoid_: reading a generated document as complete without checking its warnings.
 
 **Status at handover**:
 What the array says about itself when the as-built is generated (SPEC-026): its **New alerts** (from
-`showalert -d`), its capacity in use (`showsys -space`) and 24 hours of performance from its own
-**System Reporter** (`srstatcpu`, `srstatport`, `srstatvv` summaries: average, 95th percentile and
-maximum per node, host port and for all volumes). A section of the as-built and a block on the
-As-built page; read-only. The figures are the load seen in the window, not what the array can do; an
-array whose host ports averaged under 10 IO/s is an **idle baseline**. Each alert of severity Major,
-Critical or Fatal is an as-built warning. *Before this run* says whether an alert first occurred
-before the run was created (its `Time` is the latest occurrence).
+`showalert -d`) and its capacity in use (`showsys -space`). A section of the as-built (*Array status at
+handover*) and a block on the As-built page; read-only. Each alert of severity Major, Critical or Fatal
+is an as-built warning. *Before this run* says whether an alert first occurred before the run was
+created (its `Time` is the latest occurrence), using the array's clock (`showdate`) for its time zone.
+No performance figures: the owner removed them on 2026-11-19.
 _Avoid_: "health" on screen (write *status*); "open alerts" (the read gives the array's New alerts
 only); reading an idle baseline as the array's capability.
 

@@ -1,0 +1,12 @@
+# showrcopy -d groups demo_rc_vvs_rcg
+
+Remote Copy System Information
+Status: Started, Normal
+
+Group Information
+
+Name            ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+demo_rc_vvs_rcg   27 PRIMERA630R11U22 Started  Primary    Periodic SSD_r6       SSD_r6     Last-Sync 2026-11-19 16:13:56 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV       ID   RemoteVV       ID   SyncStatus    Resync_ss      Sync_ss  VV_iter   R_iter    S_iter LastSyncTime            LocalSet    RemoteSet
+  demo_rc_vol01  138 demo_rc_vol01 51913 Synced        rcpy.27.138.18 none     185493/71 185493/71 NA     2026-11-19 16:13:57 IST demo_rc_vvs NA
+

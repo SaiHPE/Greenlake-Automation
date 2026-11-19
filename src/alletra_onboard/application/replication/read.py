@@ -14,11 +14,13 @@ from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.domain.replication import (
     PortRole,
     RcGroup,
+    RcGroupDetail,
     RcGroupVolume,
     RcipPort,
     RcLink,
     RcTarget,
     RcTransport,
+    RcVolumeDetail,
     ReplicationArrayView,
 )
 from alletra_onboard.domain.shared import EndpointCreds
@@ -156,16 +158,7 @@ def parse_showrcopy(text: str) -> dict:
                 expect_group_row, in_volumes = False, True
                 continue
             if expect_group_row and len(tokens) >= 5:
-                # Periodic rows carry spaces in Options (live 2026-10-09 23:39):
-                # "Last-Sync 2026-10-09 23:39:23 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize"
-                options, period, last_sync = [], "", ""
-                for part in (p.strip() for p in " ".join(tokens[5:]).split(",")):
-                    if part.startswith("Last-Sync "):
-                        last_sync = part[len("Last-Sync "):].strip()
-                    elif part.startswith("Period "):
-                        period = part[len("Period "):].strip()
-                    elif part:
-                        options.append(part)
+                options, period, last_sync = _group_options(" ".join(tokens[5:]))
                 current = RcGroup(
                     name=tokens[0], target=tokens[1], status=tokens[2], role=tokens[3], mode=tokens[4],
                     options=options, period=period, last_sync=last_sync,
@@ -185,6 +178,138 @@ def parse_showrcopy(text: str) -> dict:
                     last_sync=" ".join(rest),
                 ))
     return {"status": status, "health": health, "targets": targets, "links": links, "groups": groups}
+
+
+def _group_options(text: str) -> tuple[list[str], str, str]:
+    """A group's Options column -> (policies, period, last sync). Periodic rows carry spaces in it (live
+    2026-10-09 23:39): "Last-Sync 2026-10-09 23:39:23 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize";
+    a secondary prints "Period 5m,auto_recover,..." without the Last-Sync part (Primera OS 4.6.20, 2026-11-19)."""
+    options, period, last_sync = [], "", ""
+    for part in (p.strip() for p in text.split(",")):
+        if part.startswith("Last-Sync "):
+            last_sync = part[len("Last-Sync "):].strip()
+        elif part.startswith("Period "):
+            period = part[len("Period "):].strip()
+        elif part:
+            options.append(part)
+    return options, period, last_sync
+
+
+def _header(line: str) -> list[tuple[int, str]]:
+    """A table header as (start column, name). The volume header names two columns ID: the one after
+    LocalVV is LocalID, the one after RemoteVV RemoteID."""
+    columns: list[tuple[int, str]] = []
+    for m in re.finditer(r"\S+", line):
+        name = m.group()
+        if name == "ID" and columns and columns[-1][1] in ("LocalVV", "RemoteVV"):
+            name = columns[-1][1][:-2] + "ID"
+        columns.append((m.start(), name))
+    return columns
+
+
+def _cells(line: str, columns: list[tuple[int, str]]) -> dict[str, str]:
+    """A row cut by its header. A word belongs to the last column that starts at or before its LAST
+    character: names and words are left-aligned under their heading, IDs right-aligned and may start
+    left of it ("  demo_rc_vol01 51913" under "  LocalVV        ID"). A word with a space in it (a time,
+    the periodic Options) is joined back. A column with nothing under it is ""."""
+    cells: dict[str, list[str]] = {name: [] for _start, name in columns}
+    for m in re.finditer(r"\S+", line):
+        last = m.end() - 1
+        name = next((n for start, n in reversed(columns) if start <= last), columns[0][1])
+        cells[name].append(m.group())
+    return {name: " ".join(words) for name, words in cells.items()}
+
+
+def parse_showrcopy_detail(text: str) -> list[RcGroupDetail]:
+    """`showrcopy -d groups <group>` (or a whole `showrcopy -d`) -> every group block: the group's row
+    and one row per volume, every column the array prints. Columns are found by their header, so the
+    Primera's LocalSnapCpg / RmSnapCpg and a volume header without LocalSet / RemoteSet (a secondary on
+    OS 4.6.20) read the same way. Pinned to `tests/fixtures/rc_pair/` (OS 10.5.0, sync and periodic) and
+    `tests/fixtures/rcip_pair/showrcopy_d/` (OS 10.6.0 and Primera OS 4.6.20, periodic). The Target and
+    Link sections are skipped; a missing group prints an Error line and no block."""
+    groups: list[RcGroupDetail] = []
+    section = ""
+    group_columns: list[tuple[int, str]] = []
+    volume_columns: list[tuple[int, str]] = []
+    expect_group_row = False
+    current: RcGroupDetail | None = None
+    for raw in (text or "").splitlines():
+        line = raw.rstrip()
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", "Error:")):
+            continue
+        if stripped.endswith("Information") and not raw.startswith(" "):
+            section, current, expect_group_row = stripped, None, False
+            continue
+        if section != "Group Information":
+            continue
+        words = stripped.split()
+        if words[0] == "Name" and "Target" in words and "Mode" in words:
+            group_columns, expect_group_row, current = _header(line), True, None
+            continue
+        if words[0] == "LocalVV":
+            volume_columns = _header(line)
+            continue
+        if expect_group_row:
+            row = _cells(line, group_columns)
+            options, period, last_sync = _group_options(row.get("Options", ""))
+            current = RcGroupDetail(
+                name=row.get("Name", ""), id=_int(row.get("ID", "")), target=row.get("Target", ""),
+                status=row.get("Status", ""), role=row.get("Role", ""), mode=row.get("Mode", ""),
+                local_user_cpg=row.get("LocalUserCpg", ""), local_snap_cpg=row.get("LocalSnapCpg", ""),
+                remote_user_cpg=row.get("RmUserCpg", ""), remote_snap_cpg=row.get("RmSnapCpg", ""),
+                options=options, period=period, last_sync=last_sync,
+            )
+            groups.append(current)
+            expect_group_row = False
+            continue
+        if current is not None and volume_columns:
+            row = _cells(line, volume_columns)
+            current.volumes.append(RcVolumeDetail(
+                local_name=row.get("LocalVV", ""), local_id=_int(row.get("LocalID", "")),
+                remote_name=row.get("RemoteVV", ""), remote_id=_int(row.get("RemoteID", "")),
+                sync_status=row.get("SyncStatus", ""), resync_snapshot=row.get("Resync_ss", ""),
+                sync_snapshot=row.get("Sync_ss", ""), volume_iteration=row.get("VV_iter", ""),
+                resync_iteration=row.get("R_iter", ""), sync_iteration=row.get("S_iter", ""),
+                last_sync=row.get("LastSyncTime", ""), local_set=row.get("LocalSet", ""),
+                remote_set=row.get("RemoteSet", ""),
+            ))
+    return groups
+
+
+def group_detail_command(group: str) -> str:
+    """The one form the tool sends: `-d` only changes what is shown (the array's help: "Displays more
+    detailed configuration information"), `groups <name>` limits it to one group."""
+    return f"showrcopy -d groups {group}"
+
+
+def read_group_details(
+    creds: EndpointCreds, groups: list[str], *, array_cli_factory: Callable = make_array_cli,
+    progress: Callable[[str], None] | None = None,
+) -> tuple[dict[str, RcGroupDetail], dict[str, str]]:
+    """One SSH session, read-only: `showrcopy -d groups <group>` for each group -> ({group: detail},
+    {group: why it is missing}). A failed login is every group's reason; the caller notes it and goes on."""
+    details: dict[str, RcGroupDetail] = {}
+    errors: dict[str, str] = {}
+    try:
+        with array_cli_factory(creds) as cli:
+            if progress:
+                progress(f"Reading {creds.host}: each group's settings and volumes (showrcopy -d)…")
+            for group in groups:
+                try:
+                    text = cli.run(group_detail_command(group))
+                except Exception as exc:  # noqa: BLE001 - one group's read costs that group only
+                    errors[group] = str(exc)
+                    continue
+                found = next((g for g in parse_showrcopy_detail(text) if g.name == group), None)
+                if found is None:
+                    first = next((ln.strip() for ln in text.splitlines() if ln.strip().startswith("Error")), "")
+                    errors[group] = first or "the array printed no block for it"
+                else:
+                    details[group] = found
+    except Exception as exc:  # noqa: BLE001 - a report, never a gate
+        errors = {group: f"Could not read {creds.host}: {exc}" for group in groups if group not in details}
+    return details, errors
 
 
 def parse_showcpg_free(text: str) -> dict[str, int]:

@@ -247,3 +247,17 @@ def test_every_lab_script_that_drives_the_browser_is_read_here():
     """A new browser script under lab/ joins SCRIPTS on purpose, so its words are frozen too."""
     drivers = sorted(p.relative_to(LAB).as_posix() for p in LAB.rglob("*.py") if _drives_a_browser(p))
     assert drivers == sorted(SCRIPTS), f"lab scripts that import Playwright: {drivers}; read here: {sorted(SCRIPTS)}"
+
+
+def test_the_link_check_is_called_check_rc_link_on_the_page_and_in_the_runners():
+    """The owner's name for the link check (2026-11-19, after the customer demo): *Check RC link* and
+    *Check RC link again* on the Replication page, never *Check the link*. The runners that check the
+    apply's refusal look for the backend's own words."""
+    page = (FRONTEND / "steps" / "ReplicationStep.tsx").read_text(encoding="utf-8")
+    assert "'Check RC link'" in page and "'Check RC link again'" in page
+    assert "check the link" not in FRONTEND_TEXT.lower()
+    refusal = "Check RC link first"
+    assert refusal in (APP / "src" / "alletra_onboard" / "application" / "replication" / "steps.py").read_text(encoding="utf-8")
+    for script in ("rc_link_lab.py", "rc_preset_lab.py", "rcip_tool_lab.py"):
+        text = (LAB / script).read_text(encoding="utf-8")
+        assert refusal in text and "Check the link" not in text, script

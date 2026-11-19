@@ -337,56 +337,53 @@ def test_collect_continues_past_a_failing_command(monkeypatch):
 
 
 def _handover_outputs(folder: str) -> dict[str, str]:
-    """SPEC-026 R3: the five reads as captured on one lab array, and its showport from the same night."""
+    """SPEC-026 R3: the three reads as captured on one lab array."""
     from alletra_onboard.application.documents import handover
 
     fixtures = FIX.parent
-    files = dict(zip((cmd for _a, cmd in handover.READS), ("showalert_d.txt", "showsys_space.txt",
-                                                            "srstatcpu_24h_v2.txt", "srstatport_24h_v2.txt",
-                                                            "srstatvv_24h.txt"), strict=True))
-    out = {cmd: (fixtures / "handover" / folder / name).read_text(encoding="utf-8").split("\n", 1)[1]
-           for cmd, name in files.items()}
-    out["showport"] = (fixtures / "peer_ports" / folder / "showport.txt").read_text(encoding="utf-8").split("\n", 1)[1]
-    return out
+    files = dict(zip((cmd for _a, cmd in handover.READS), ("showdate.txt", "showalert_d.txt", "showsys_space.txt"),
+                     strict=True))
+    return {cmd: (fixtures / "handover" / folder / name).read_text(encoding="utf-8").split("\n", 1)[1]
+            for cmd, name in files.items()}
 
 
-def test_collect_reads_the_five_handover_reports_after_the_others(monkeypatch):
+def test_collect_reads_the_handover_reports_after_the_others_and_no_system_reporter(monkeypatch):
+    """2026-11-19, the owner's decision: performance removed from the as-built, so no srstat* read is sent."""
     from alletra_onboard.application.documents import handover
     from alletra_onboard.application.documents import steps as st
 
     cli = _Cli(outputs=_handover_outputs("VZ"))
     monkeypatch.setattr(st, "make_array_cli", lambda creds: cli)
     data = st.DocumentSteps(coord=None)._collect_asbuilt("10.0.0.1", "u", "p")
-    commands = [cmd for _a, cmd in handover.READS]
-    assert cli.ran[-5:] == commands                                # after every existing read, in R3's order
-    assert not any(c.startswith(("srstatrcvv", "stat", "setalert", "removealert")) for c in cli.ran)
+    assert cli.ran[-3:] == ["showdate", "showalert -d", "showsys -space"]   # after every existing read, in R3's order
+    assert not any(c.startswith(("srstat", "stat", "setalert", "removealert")) for c in cli.ran)
     assert data.showalert_d.startswith("Id ") and "31 alerts" in data.showalert_d
-    assert data.srstatport.startswith("Start Time:") and data.showport.startswith("N:S:P")
+    assert data.showdate.startswith("Node Date")
     assert data.handover_read_at is not None and data.read_errors == {}
+    assert [cmd for _a, cmd in handover.READS] == cli.ran[-3:]
 
 
 def test_a_refused_handover_read_lands_in_read_errors_and_the_others_still_read(monkeypatch):
-    """SPEC-026 R8: an older OS, or the client, refuses one report; the rest of the section still reads."""
+    """SPEC-026 R8: an older OS, or the client, refuses one read; the rest of the section still reads."""
     from alletra_onboard.adapters.array.cli_client import ArrayCliError
     from alletra_onboard.application.documents import handover
     from alletra_onboard.application.documents import steps as st
 
     class _Refusing(_Cli):
         def run(self, cmd, timeout=None):
-            if cmd.startswith("srstatcpu"):
+            if cmd == "showsys -space":
                 self.ran.append(cmd)
-                raise ArrayCliError("refused: 'srstatcpu' is not a read-only show command")
+                raise ArrayCliError("Error: Invalid option -space")
             return super().run(cmd, timeout)
 
     cli = _Refusing(outputs=_handover_outputs("VZ"))
     monkeypatch.setattr(st, "make_array_cli", lambda creds: cli)
     data = st.DocumentSteps(coord=None)._collect_asbuilt("10.0.0.1", "u", "p")
-    assert data.read_errors == {handover.CPU: "ArrayCliError: refused: 'srstatcpu' is not a read-only show command"}
-    assert data.srstatcpu == "" and cli.ran[-5:] == [cmd for _a, cmd in handover.READS]   # the rest still ran
+    assert data.read_errors == {handover.SPACE: "ArrayCliError: Error: Invalid option -space"}
+    assert data.showsys_space == "" and cli.ran[-3:] == [cmd for _a, cmd in handover.READS]   # the rest still ran
     reads = handover.read_from(data)
-    assert set(reads.errors) == {handover.CPU} and reads.cpu_nodes is None
-    assert len(reads.alerts) == 31 and reads.space is not None and reads.volume_load is not None
-    assert reads.idle is True and reads.offset is not None              # the ports' report gave the offset
+    assert set(reads.errors) == {handover.SPACE} and reads.space is None
+    assert len(reads.alerts) == 31 and reads.clock is not None
 
 
 def test_run_records_take_the_latest_event_of_each_type():

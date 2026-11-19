@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from types import MappingProxyType
 
 from alletra_onboard.application.documents import handover
-from alletra_onboard.application.documents.asbuilt import generate_asbuilt
+from alletra_onboard.application.documents.asbuilt import generate_asbuilt, rc_group_names
 from alletra_onboard.application.documents.asbuilt_parse import parse_asbuilt
 from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.application.provisioning import iscsi_network
@@ -85,6 +85,7 @@ class DocumentSteps:
 
     def __init__(self, coord: RunCoordinator, *, verify_fn: Callable = verify,
                  read_replication: Callable = replication_read.read_array,
+                 read_replication_details: Callable = replication_read.read_group_details,
                  read_file: Callable = file_read.read_array_file,
                  wsapi_v3_factory: Callable = make_wsapi_v3,
                  read_snapshots: Callable = snapshots_read.read_array,
@@ -93,6 +94,7 @@ class DocumentSteps:
         self._coord = coord
         self._verify_fn = verify_fn
         self._read_replication = read_replication
+        self._read_replication_details = read_replication_details
         self._read_file = read_file
         self._wsapi_v3_factory = wsapi_v3_factory
         self._read_snapshots = read_snapshots
@@ -218,6 +220,11 @@ class DocumentSteps:
                 data.replication_primary, data.replication_peer = await asyncio.to_thread(
                     self._collect_replication, EndpointCreds(host=host, username=username, password=password), replication.peer,
                 )
+                # BL-64: every volume and the settings of each group this run configured (showrcopy -d)
+                names = rc_group_names(data)
+                if names:
+                    data.replication_details, data.replication_details_errors = await asyncio.to_thread(
+                        self._read_replication_details, EndpointCreds(host=host, username=username, password=password), names)
             snapshots = self._snapshots_intent(run.run_id)
             if snapshots is not None:
                 # SPEC-023 R8: schedules and snapshots are read now, not copied from the plan
@@ -282,7 +289,7 @@ class DocumentSteps:
                     data.read_errors[cmd] = f"{type(exc).__name__}: {exc}"
             # SPEC-028 R3: the file side, in the same session; no section on an array without one
             data.file_ports, data.file_report, data.file_read_error = self._collect_file(cli, creds)
-            # SPEC-026 R3: alerts, capacity and System Reporter, each failing on its own (R8), read last
+            # SPEC-026 R3: the array's clock, alerts and capacity, each failing on its own (R8), read last
             data.handover_read_at = datetime.now(UTC)
             for attr, cmd in handover.READS:
                 try:

@@ -395,7 +395,7 @@ def test_a_ping_that_loses_any_reply_leaves_the_pair_unmeasured():
     r = result.results[0]
     assert (r.status, r.latency_ms) == ("failed", None)
     assert r.detail.endswith("printed 'Average measured latency: min ms' with no number, and the ping that replaces it "
-                             "lost 10 % of 10. Check the link and check again.")
+                             "lost 10 % of 10. Check the network between the two ports, then Check RC link again.")
     assert result.measured is False
 
 

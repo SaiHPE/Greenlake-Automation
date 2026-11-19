@@ -247,7 +247,7 @@ def _ping_latency(result: LinkCheckResult, pair: LinkPair, a_cli, a_name: str, p
     result.detail = (f"{a_name}'s link test could not work out the latency on {pair.nsp_a} → {pair.ip_b}: it printed "
                      f"'{printed}' with no number, and the ping that replaces it "
                      + (f"lost {loss.group(1)} % of {PING_COUNT}" if loss else "printed no round trip")
-                     + ". Check the link and check again.")
+                     + ". Check the network between the two ports, then Check RC link again.")
 
 
 def _same_net_b(report: ReplicationReport | None, pair: LinkPair) -> bool:

@@ -1,4 +1,4 @@
-import { Box, Button, FormField, Grid, NameValueList, NameValuePair, Text, TextInput } from 'grommet';
+import { Box, Button, FormField, Grid, Text, TextInput } from 'grommet';
 import { Document } from 'grommet-icons';
 import { useState } from 'react';
 import { AsBuiltResult, CredentialOverride, HandoverStatus, RunEvent, RunRecord, asbuiltDownloadUrl, startAsbuilt } from '../api';
@@ -17,14 +17,6 @@ interface Props {
 
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-/** A value on the cover, or "--" read as "No value" (Design System name-value list). */
-function CoverValue({ value }: { value?: string }) {
-  return value ? <Text size="small">{value}</Text> : <Text size="small" color="text-weak" a11yTitle="No value">--</Text>;
-}
-
-const dateTime = (iso: string) =>
-  new Date(iso).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
-
 /** The alert verdict as a status: words from the same reads as the document's section. */
 function alertStatus(status: HandoverStatus): { state: StepState; label: string } {
   const count = status.alerts_new;
@@ -35,17 +27,11 @@ function alertStatus(status: HandoverStatus): { state: StepState; label: string 
   return { state: 'action_required', label: `${count} new alert${count === 1 ? '' : 's'}${major}${oldest}.` };
 }
 
-/** What the array said about itself when the document was made: alerts, the window, peak CPU, host I/O. */
+/** What the array said about itself when the document was made: its new alerts. */
 function HandoverBlock({ status }: { status: HandoverStatus }) {
   const verdict = alertStatus(status);
   const failed = Object.keys(status.read_errors ?? {}).length;
-  const window = status.window_from ? `${dateTime(status.window_from)} to ${status.window_to ? dateTime(status.window_to) : 'the read'}` : undefined;
-  const alerts = status.alerts_new === null ? 'alerts not read' : `${status.alerts_new} new alert${status.alerts_new === 1 ? '' : 's'}`;
-  const summary = [
-    alerts,
-    status.cpu_max_pct !== null && `busiest CPU ${status.cpu_max_pct.toFixed(1)} %`,
-    status.iops_avg !== null && `${status.iops_avg.toFixed(1)} IO/s on the host ports`,
-  ].filter(Boolean).join(' · ');
+  const summary = status.alerts_new === null ? 'alerts not read' : `${status.alerts_new} new alert${status.alerts_new === 1 ? '' : 's'}`;
   return (
     <Section title="Status at handover" summary={summary} open>
       <StatusIndicator state={verdict.state} label={verdict.label} />
@@ -57,19 +43,6 @@ function HandoverBlock({ status }: { status: HandoverStatus }) {
           Alerts record an event, not the current state: compare each with the array’s status check before acting. The document lists them.
         </Text>
       )}
-      <NameValueList pairProps={{ direction: 'column' }}>
-        <NameValuePair name="Performance window">
-          <CoverValue value={window} />
-        </NameValuePair>
-        <NameValuePair name="Busiest CPU sample">
-          <CoverValue value={status.cpu_max_pct === null ? undefined : `${status.cpu_max_pct.toFixed(1)} % busy`} />
-        </NameValuePair>
-        <NameValuePair name="Host port I/O, average">
-          <CoverValue value={status.iops_avg === null ? undefined : `${status.iops_avg.toFixed(1)} IO/s`} />
-        </NameValuePair>
-      </NameValueList>
-      {window && <Text size="small">These figures are the load seen in this window, not what the array can do.</Text>}
-      {status.idle && <Text size="small">The array carried almost no host I/O in this window: an idle baseline for later comparison.</Text>}
       {failed > 0 && (
         <Text size="xsmall" color="text-weak">
           {failed === 1 ? '1 read' : `${failed} reads`} could not be made. The document names each one, and so does Check before sending.
@@ -169,7 +142,7 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
       guidance={
         <Guidance
           items={[
-            { title: 'What goes in', body: 'System, network and time settings; the ports, hosts, volumes and exports; replication and the failover test with its timings; the verification result; the array status: its new alerts, capacity in use and 24 hours of performance. Making it changes nothing on the array.' },
+            { title: 'What goes in', body: 'System, network and time settings; the ports, hosts, volumes and exports; replication and the failover test with its timings; the verification result; the array status: its new alerts and capacity in use. Making it changes nothing on the array.' },
             { title: 'Cover details', body: 'Customer and site come from the workbook; type here to change them. Workload and purpose are yours to fill. None of it is stored on the array.' },
             { title: 'Check before sending', body: 'The document is always produced. Anything that did not fill is listed here so it cannot be missed; this is the last screen before the document goes to the customer.' },
           ]}

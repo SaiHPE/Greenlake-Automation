@@ -366,11 +366,13 @@ the app's step registry, so it is always current).
    When the sheet's *Replication network* tab names the replication ports (one row per port: this
    array or the peer, N:S:P, address, netmask, gateway only when the arrays are on different
    networks), *Replication* first sets those addresses, starts Remote Copy and pairs the two arrays,
-   as its own plan with its own confirmation; then *Read both arrays again*, *Check the link* and
-   configure the groups. Leave the tab empty when the arrays are already paired.
+   as its own plan with its own confirmation; then *Read both arrays again*, *Check RC link* and
+   configure the groups. Leave the tab empty when the arrays are already paired. After *Verify
+   replication* the page lists each group the run configured with its settings and every volume in
+   it, read with `showrcopy -d` on this array; the as-built has the same table per group.
    Arrays already paired over **Fibre Channel** work too: the step finds the partnership by port WWN
    and configures the groups the same way, but it cannot measure Fibre Channel links, so there is no
-   *Check the link*. Type the *Measured round-trip time (ms)* on the Replication tab before the run;
+   *Check RC link*. Type the *Measured round-trip time (ms)* on the Replication tab before the run;
    the limit over Fibre Channel is 10 ms for sync and async, and a typed time over it needs *Continue
    anyway*. The tool does not set up a Fibre Channel partnership, and it stops when the two arrays
    show targets towards each other over both IP and Fibre Channel.
@@ -385,8 +387,7 @@ the app's step registry, so it is always current).
 7. **Verify configuration** and **As-built document** — read-only: the array's settings against
    what was onboarded, its status check, and the Word document for the hand-over. The document also
    records the array's status at handover: its new alerts (each Major or worse is listed under
-   *Check before sending*), capacity in use and 24 hours of performance; the page shows a short
-   summary. **Finish** collects the documents and the run's timeline.
+   *Check before sending*) and capacity in use; the page shows the alerts in short. **Finish** collects the documents and the run's timeline.
    On an array with File ports (OS 10.5 or later), *Discovery* shows a **File service** section
    (the service on each node, the File ports, file systems, and shares with their clients),
    *Verify configuration* adds two rows (the file service, File ports up), and the as-built gains a

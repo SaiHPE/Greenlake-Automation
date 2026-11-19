@@ -224,7 +224,7 @@ class ReplicationSteps:
         check = self.link_check(run_id)
         if check is None or not check.measured:
             raise StepPreconditionError(
-                "Check the link first: the latency between the arrays has not been measured in this run."
+                "Check RC link first: the latency between the arrays has not been measured in this run."
             )
         over = check.over_limit()
         if over and not accept_latency:
@@ -294,7 +294,7 @@ class ReplicationSteps:
         coord.set_state(run, RunStatus.READY, phase)
         groups = ", ".join(result.groups_created) or "no new group"
         message = (f"Ports and partnership set up — {created} step(s), every link Up. Read both arrays again, "
-                   "check the link, then configure the groups." if plan.sets_up_partnership else
+                   "press Check RC link, then configure the groups." if plan.sets_up_partnership else
                    f"Replication configured — {groups}; {created} write(s), {existed} already there. Verify replication to read it back.")
         coord.emit(run.run_id, phase, "replication.applied", message, data={"result": result.model_dump(mode="json")})
 
@@ -333,7 +333,8 @@ class ReplicationSteps:
         def progress(message: str) -> None:
             loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
 
-        verification = await asyncio.to_thread(partial(replication_verify.verify, intent, plan, progress=progress))
+        verification = await asyncio.to_thread(partial(replication_verify.verify, intent, plan, progress=progress,
+                                                        detail_fn=replication_read.read_group_details))
         coord.set_state(run, RunStatus.RETRYABLE_FAILURE if verification.error else RunStatus.READY, phase)
         if verification.error:
             coord.emit(run.run_id, phase, "replication.verify.failed", verification.error,

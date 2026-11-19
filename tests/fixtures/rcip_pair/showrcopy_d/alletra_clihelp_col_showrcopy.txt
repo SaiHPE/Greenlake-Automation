@@ -1,0 +1,169 @@
+# clihelp -col showrcopy
+col,showrcopy - Explanation of column headers for showrcopy
+
+showrcopy has these sub-tables
+
+Target columns:
+Name            Name of the target.
+ID              System assigned ID of the target.
+Type            Target type, can be either FC (Fibre Channel) or IP (Internet
+                Protocol).
+Status          Status of the target, can be one of:
+                    new         The target's links have yet to come up.
+                    ready       The target has connected links.
+                    unsupported The target system's tpd version is not
+                                compatible with this system's version.
+                    failing     The target's links have all failed but its
+                                groups have not yet been stopped.
+                    failed      The target's links have all failed and its
+                                groups have been stopped.
+                    disabled    The target has been disabled.
+Options         Target options, with FC targets this includes the target
+                system's node WWN.
+Policy          Any policies that are set for the target. It can be
+                mirror_config or no_mirror_config. With mirror_config,
+                all configuration commands involving the specified
+                target are duplicated. With no_mirror_config, the commands
+                are not duplicated. If not specified, all configuration
+                commands are duplicated.
+Version         Remote Copy version.
+Socks           Number of sockets.
+Buffsz          Buffer size.  0 for "autotunelinks".
+SysName         Remote system's name.
+SysID           Remote system's ID.
+RemoteName      Remote system's name for this system.
+RemoteID        Remote system's ID for this system.
+State           State of the target, can be one of:
+                    normal   target is operating normally.
+                    degraded target is in degraded state.
+                    failed   target is operating abnormally.
+QW-IP           QW IP address.
+Q-Status        QW status.
+Q-Status-Qual   QW status qualifiers.
+
+Link columns:
+Target          Target name with which this link is affiliated.
+Name            Name of link.
+IPC             IPC name.
+ID              System assigned ID of the link.
+Node            Location (node, slot and port (N:S:P)) of this link. For IP
+                links, if the link was created with just node then only node is
+                displayed.
+Address         The address to which the link connects.
+Status          Status of the link, can be one of:
+                    Not Started Link has not been started.
+                    Down        Link is not currently up.
+                    Up          Link is currently up.
+                    Exited      Link failed to be started.
+                    Degraded    Link is degraded.
+Options         Options that are set for this link
+State           State of the link, can be one of:
+                    normal   link is operating normally.
+                    degraded link is in degraded state.
+                    failed   link is operating abnormally.
+
+Group columns:
+Name            Name of the group.
+ID              System assigned ID of the group.
+Target          Target to which the group is mirrored.
+Status          Current status of the group for this target, can be one of:
+                    New             Group has yet to be started for this target.
+                    Starting        Group is in the process of being started to
+                                    this target.
+                    Started         Group is currently started for this target.
+                    Stopped         Group is currently stopped for this target.
+                    Backup          This target of the group is the non-active
+                                    target for a multi-target group.
+                    Restart         Group will be restarted once system
+                                    startup is completed.
+                    Failsafe        The primary group is unable to reconcile
+                                    the state of the secondary group and will
+                                    be held in failsafe state until the
+                                    problem is resolved. Use the setrcopygroup
+                                    command with the override subcommand to
+                                    force the group out of failsafe state.
+                    Logging         Group has been stopped due to replication
+                                    resources dropping below sustainable limits.
+Role            Can be either Primary or Secondary.  Optionally followed by
+                "-Rev".
+Mode            Can be Sync, Async or Periodic.
+LocalUserCpg    CPG name for which the user space is allocated if -createvv
+                option is used for admitrcopyvv command. It will only be used
+                after failover and recover.
+RmUserCpg       CPG name for which the user space is allocated on remote target
+                if -createvv option is used for admitrcopyvv command.
+Options         Options that are set for the group.
+State           State of the group, can be one of:
+                    normal   group is operating normally.
+                    degraded group is in degraded state.
+                    failed   group is operating abnormally.
+
+Volume columns:
+LocalVV   ID    Volume name and ID on this system.
+RemoteVV  ID    Volume name and ID on the target system.
+SyncStatus      Synchronization status of the volume, can be one of:
+                    New              Remote copy for the volume has not started.
+                    New-SyncFromSnap Remote copy for the volume has not started.
+                                     When the group is started the volume will
+                                     be synced from the snapshot that was
+                                     specified when the volume was admitted to
+                                     the group.
+                    New-PreSynced    Remote copy for the volume has not started.
+                                     When the group is started the volume will
+                                     not undergo an initial sync.
+                    New-Pending      A New status is pending.
+                    Syncing          The secondary volume is currently being
+                                     synchronized with the primary.
+                    Synced           The primary and secondary volumes are
+                                     currently in sync (for periodic mode
+                                     volumes this indicates the last
+                                     synchronization completed).
+                    NotSynced        The primary and secondary volumes are not
+                                     in sync.
+                    Failsafe         The volume is unavailable to be exported to
+                                     attached hosts until the state of the
+                                     volume on the secondary is reconciled. Use
+                                     the setrcopygroup override command to
+                                     force the group out of failsafe state.
+                    Stale            The secondary virtual volume has a valid
+                                     point-in-time copy of the primary volume;
+                                     however, the last attempt at
+                                     synchronization failed.
+                    Logging          Group has been stopped due to replication
+                                     resources dropping below sustainable
+                                     limits.
+                    Pending-Dismiss  A dismiss is pending for the volume.
+                    Stopped          Syncing has been stopped for volume.
+Resync_ss       Resync snapshot indicates the starting point of the remote
+                volume.
+                On the primary array this snapshot is used to determine the
+                delta changes that should be synced to the secondary volume.
+                On the target array this is the snapshot that will be used as a
+                recovery point in case of a resync operation failure.
+Sync_ss         Sync snapshot is a snapshot indicating the destination point of the
+                remote copy volume on successful completion of the resync
+                operation, i.e.  On completion of a resync the remote base RC
+                volume will mirror this sync snapshot.
+                This snapshot will become the resync snapshot when the resync
+                operation completes.
+VV_iter         The volume iteration number is a correlator used to determine
+                the data consistency point of the volume relative to the remote
+                volume and/or snapshots.
+R_iter          The resync snapshot iteration number is a correlator used to
+                determine the data consistency point of the resync snapshot
+                relative to the remote volume and/or snapshots.
+S_iter          The sync snapshot iteration number is a correlator used to
+                determine the data consistency point of the sync snapshot
+                relative to the remote volume and/or snapshots.
+LastSyncTime    Time of the last successful synchronization for the RC volume.
+State           State of the volume, can be one of:
+                    normal   volume is operating normally.
+                    degraded volume is in degraded state.
+                    failed   volume is operating abnormally.
+
+Hosts columns:
+ID              System assigned ID of the group.
+Name            Name of the group.
+HostName        Host/Hostset name admitted to the group.
+Proximity       Host/Hostset Proximity.
+

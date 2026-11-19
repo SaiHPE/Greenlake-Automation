@@ -1,4 +1,4 @@
-# SPEC-026 — Array status and performance at handover
+# SPEC-026 — Array status at handover (performance until 2026-11-19)
 
 **Status:** first slice **built 2026-11-17, pending live run** (work packet steps 2 to 7: R1, R3 to
 R6 and R8 to R11; R7 is a later slice). APPROVED 2026-11-17 with
@@ -16,6 +16,32 @@ summary, all pinned to those captures (§2b). Not yet run on an array (§5).
 (new: parse and summarise), `application/documents/steps.py` (reads), `application/documents/asbuilt.py`
 (section), `frontend/src/steps/AsBuiltStep.tsx` (summary)
 **Work packet:** [workpackets/BL-24.md](../workpackets/BL-24.md)
+
+## 0. The owner's decision, 2026-11-19: performance removed from the as-built
+
+**2026-11-19: performance removed from the as-built at the owner's request** (after the customer demo of
+replication over RCIP; BL-64, branch `feat/bl-64-demo-feedback`). It keeps alerts and capacity. What
+changes in the requirements below, which are left as written for the record:
+
+- **R1.** `srstatcpu`, `srstatport` and `srstatvv` leave `ALLOWED_COMMANDS` (nothing else read them; ADR
+  0001 addendum 2026-11-19). `test_cli_allowlist.py` pins them as refused; its help review covers
+  `showalert` only.
+- **R3.** The reads are `showdate`, `showalert -d` and `showsys -space`, in that order. No System
+  Reporter read is sent for the as-built.
+- **R4, *Before this run*.** The array's UTC offset comes from `showdate`'s time against the moment of
+  the read, to the nearest quarter hour (ADR 0019 change 5, updated). With `showdate` not read, the column
+  says *unknown*, the section names the failed read and the as-built has a warning.
+- **R6 and R7.** Removed: no window, no CPU, port or volume table, no performance or idle sentence, no
+  Remote Copy figures.
+- **R9.** The Heading 1 is *Array status at handover*, with subsections *Alerts* and *Capacity* and the
+  two closing lines.
+- **R10.** `handover` in `asbuilt.generated` is `{read_at, alerts_new, alerts_major, oldest_alert,
+  cloud_alert, read_errors}`: `window_from`, `window_to`, `cpu_max_pct`, `iops_avg` and `idle` are gone.
+  The page's *Status at handover* block shows the alert verdict, the cloud sentence and the failed-read
+  count only.
+
+The System Reporter captures stay in `tests/fixtures/handover/` for the record; their parsers and tests
+were removed with the feature.
 
 ## 1. Problem
 

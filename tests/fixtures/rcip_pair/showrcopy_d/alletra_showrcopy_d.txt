@@ -1,0 +1,30 @@
+# showrcopy -d
+
+Remote Copy System Information
+Status: Started, Normal
+
+Target Information
+
+Name             ID Type Status Options Version Policy        Socks  Buffsz SysName           SysID RemoteName   RemoteID
+PRIMERA630R11U22 18 IP   ready  -            49 mirror_config    20 4194304 PRIMERA630R11U22 175160 rack13-ARCUS       46
+
+Link Information
+
+Target           Name                   IPC    ID Node  Address     Status Options VLAN
+PRIMERA630R11U22 PRIMERA630R11U22_0_4_4 RCs069 69 0:4:4 10.93.18.19 Up     -       -
+PRIMERA630R11U22 PRIMERA630R11U22_1_4_4 RCs170 70 1:4:4 10.93.18.20 Up     -       -
+receive          rcv_ip_044_0           RCr071 71 0:4:4 10.93.18.11 Up     -       -
+receive          rcv_ip_144_0           RCr172 72 1:4:4 10.93.18.13 Up     -       -
+
+Group Information
+
+Name            ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+demo_rc_vvs_rcg   27 PRIMERA630R11U22 Started  Primary    Periodic SSD_r6       SSD_r6     Last-Sync 2026-11-19 16:13:56 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV       ID   RemoteVV       ID   SyncStatus    Resync_ss      Sync_ss  VV_iter   R_iter    S_iter LastSyncTime            LocalSet    RemoteSet
+  demo_rc_vol01  138 demo_rc_vol01 51913 Synced        rcpy.27.138.18 none     185493/71 185493/71 NA     2026-11-19 16:13:57 IST demo_rc_vvs NA
+
+Name           ID   Target           Status   Role       Mode     LocalUserCpg RmUserCpg  Options
+zz_rc_test_rcg   28 PRIMERA630R11U22 Started  Primary    Periodic SSD_r6       SSD_r6     Last-Sync 2026-11-19 16:10:56 IST, Period 5m,auto_recover,over_per_alert,auto_synchronize
+  LocalVV        ID   RemoteVV        ID   SyncStatus    Resync_ss        Sync_ss  VV_iter   R_iter    S_iter LastSyncTime            LocalSet   RemoteSet
+  zz_rc_test_v01  175 zz_rc_test_v01 51914 Synced        rcpy.28.175.18.1 none     185493/72 185493/72 NA     2026-11-19 16:10:57 IST zz_rc_test NA
+
