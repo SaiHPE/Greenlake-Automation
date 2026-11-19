@@ -184,7 +184,8 @@ no performance) · Documentation ◐ (as-built ✅; HLD/LLD ◻︎).
 ## 6. Runtime flows (key sequences)
 
 1. **Intake → run:** download template → operator fills the workbook → `POST /init-sheet/upload` parses +
-   validates the *complete* superset, saves GL creds, and **holds the parsed sheet under a token** (device
+   validates the *complete* superset (only an Initialisation-tab problem refuses it; other tabs' problems are
+   listed and refuse only a run that uses them), saves GL creds, and **holds the parsed sheet under a token** (device
    passwords never round-trip to the browser). Picking a **mode** → `POST /runs/from-sheet` mints the run
    from the token (ADR 0005). Mode → `enabled_steps` → the wizard's step list.
 2. **A step:** `POST /runs/{id}/<step>` → `service.start_*` spawns a background `asyncio` task → device I/O

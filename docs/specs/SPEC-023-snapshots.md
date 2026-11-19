@@ -216,7 +216,7 @@ A tab, not columns on the Volumes tab: a schedule protects a set, the Volumes ta
 a row must be able to name a set that is already on the array (as the Replication tab does since
 v0.17.0).
 
-**R2 — Validation at upload (blocking, one sentence each, prefixed *Snapshots tab — row '<source>'*).**
+**R2 — Validation at upload (blocking, one sentence each, prefixed *Snapshots tab — row '<source>'*).** *Since 2026-11-19 (owner, ADR 0005): the sentence is listed at upload and on the Initialisation sheet page, and refuses the run when it is created with a step that uses this tab; it no longer stops the upload or a Full onboarding run.*
 - *appears twice; one row per volume set or volume.*
 - *: Kind must be 'set' or 'volume' (got 'x').*
 - *asks for nothing: set Snapshot now to yes, or fill Every and Unit.*

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import sqlite3
 from datetime import UTC, datetime
@@ -212,16 +213,18 @@ class SqliteRunStore:
         return ProvisioningIntent.model_validate(json.loads(row[0]))
 
     def save_pending_sheet(
-        self, token: str, item: ArrayWorkItem, intent: ProvisioningIntent | None
+        self, token: str, item: ArrayWorkItem, intent: ProvisioningIntent | None, workbook: bytes | None = None
     ) -> None:
         """Hold a parsed-but-not-yet-run sheet under an opaque token (secrets preserved, same as the
-        work-item / intent serializers). The row lives in the gitignored state DB only."""
-        payload = json.dumps(
-            {
-                "work_item": json.loads(_work_item_json(item)),
-                "provisioning_intent": json.loads(_provisioning_intent_json(intent)) if intent else None,
-            }
-        )
+        work-item / intent serializers). The row lives in the gitignored state DB only. `workbook`: the
+        uploaded file, kept only when the upload listed problems, to check it again for the chosen steps."""
+        data = {
+            "work_item": json.loads(_work_item_json(item)),
+            "provisioning_intent": json.loads(_provisioning_intent_json(intent)) if intent else None,
+        }
+        if workbook is not None:
+            data["workbook_b64"] = base64.b64encode(workbook).decode("ascii")
+        payload = json.dumps(data)
         with self._connect() as connection:
             connection.execute(
                 """
@@ -230,6 +233,15 @@ class SqliteRunStore:
                 """,
                 (token, payload, datetime.now(UTC).isoformat()),
             )
+
+    def pending_sheet_workbook(self, token: str) -> bytes | None:
+        """The uploaded file held with a pending sheet, without using the hold up; None when none was kept."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM pending_sheets WHERE token = ?", (token,)
+            ).fetchone()
+        workbook = json.loads(row[0]).get("workbook_b64") if row else None
+        return base64.b64decode(workbook) if workbook else None
 
     def pop_pending_sheet(
         self, token: str

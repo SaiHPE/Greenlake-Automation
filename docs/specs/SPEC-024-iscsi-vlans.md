@@ -59,6 +59,7 @@ workbook without the tab, or with a blank one, parses exactly as today and the p
 
 Each rule is refused at upload with one sentence, prefixed
 `iSCSI network tab — row '<port> VLAN <vlan>':`
+*Since 2026-11-19 (owner, ADR 0005): the sentence is listed at upload and on the Initialisation sheet page, and refuses the run when it is created with a step that uses this tab; it no longer stops the upload or a Full onboarding run.*
 
 | Rule | Sentence after the prefix |
 |---|---|

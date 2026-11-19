@@ -24,6 +24,7 @@ from alletra_onboard.application.onboarding.steps import (
     default_dscc_factory,
     default_provision_factory,
 )
+from alletra_onboard.application.platform.init_sheet import parse_workbook_bytes
 from alletra_onboard.application.provisioning.steps import (
     ArrayPortsSteps,
     DiscoveryZoningSteps,
@@ -115,9 +116,10 @@ class OnboardingService:
         )
 
     def stash_pending_sheet(
-        self, work_item: ArrayWorkItem, provisioning_intent: ProvisioningIntent | None
+        self, work_item: ArrayWorkItem, provisioning_intent: ProvisioningIntent | None,
+        workbook: bytes | None = None,
     ) -> str:
-        return self.coordinator.stash_pending_sheet(work_item, provisioning_intent)
+        return self.coordinator.stash_pending_sheet(work_item, provisioning_intent, workbook)
 
     def create_run_from_pending(
         self,
@@ -126,7 +128,15 @@ class OnboardingService:
         mode: RunMode = RunMode.FULL_ONBOARDING,
         selected_steps: list[str] | None = None,
     ) -> RunRecord:
-        return self.coordinator.create_run_from_pending(token, mode=mode, selected_steps=selected_steps)
+        # The upload listed problems in some tabs (parse_upload): check the sheet again for the chosen
+        # steps. A problem in a tab they use refuses the run (ValueError) and the hold stays for another mode.
+        checked_intent = None
+        workbook = self.coordinator.pending_sheet_workbook(token)
+        if workbook is not None:
+            checked_intent = parse_workbook_bytes(workbook, mode=mode, selected_steps=selected_steps).provisioning_intent
+        return self.coordinator.create_run_from_pending(
+            token, mode=mode, selected_steps=selected_steps, checked_intent=checked_intent
+        )
 
     def get_provisioning_intent(self, run_id: str) -> ProvisioningIntent:
         return self.coordinator.get_provisioning_intent(run_id)

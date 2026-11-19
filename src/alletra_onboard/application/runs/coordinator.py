@@ -149,14 +149,18 @@ class RunCoordinator:
         return run
 
     def stash_pending_sheet(
-        self, work_item: ArrayWorkItem, provisioning_intent: ProvisioningIntent | None
+        self, work_item: ArrayWorkItem, provisioning_intent: ProvisioningIntent | None,
+        workbook: bytes | None = None,
     ) -> str:
         """Hold a parsed COMPLETE sheet server-side and return a single-use token. The run is minted
         later, when the operator picks a mode (ADR 0005 revision) — device passwords never round-trip
-        to the browser."""
+        to the browser. `workbook`: the file, held when the upload listed problems in some tabs."""
         token = uuid4().hex
-        self.store.save_pending_sheet(token, work_item, provisioning_intent)
+        self.store.save_pending_sheet(token, work_item, provisioning_intent, workbook)
         return token
+
+    def pending_sheet_workbook(self, token: str) -> bytes | None:
+        return self.store.pending_sheet_workbook(token)
 
     def create_run_from_pending(
         self,
@@ -164,9 +168,11 @@ class RunCoordinator:
         *,
         mode: RunMode = RunMode.FULL_ONBOARDING,
         selected_steps: list[str] | None = None,
+        checked_intent: ProvisioningIntent | None = None,
     ) -> RunRecord:
         """Mint the run for a previously-uploaded complete sheet, now that the operator has chosen a
-        mode. Consumes the pending-sheet hold (single use)."""
+        mode. Consumes the pending-sheet hold (single use). `checked_intent`: the intent of the sheet
+        checked again for the chosen steps, used instead of the held one when there is one."""
         popped = self.store.pop_pending_sheet(token)
         if popped is None:
             raise PendingSheetNotFoundError(token)
@@ -175,7 +181,7 @@ class RunCoordinator:
             work_item,
             mode=mode,
             selected_steps=selected_steps,
-            provisioning_intent=provisioning_intent,
+            provisioning_intent=checked_intent if checked_intent is not None else provisioning_intent,
         )
 
     def get_provisioning_intent(self, run_id: str) -> ProvisioningIntent:

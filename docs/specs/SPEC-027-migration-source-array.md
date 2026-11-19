@@ -36,6 +36,7 @@ Refused at upload, one sentence each: source address blank or equal to the run's
 password blank; no host row; the same host twice; a type or provisioning outside the list; a blank CPG.
 The destination's peer ports are not on this tab (SPEC-025). Source host ports for the peer links are
 not on it either: the operator ticks them on screen (R6), as in the zoning designer (nothing pre-ticked).
+*Since 2026-11-19 (owner, ADR 0005): the sentence is listed at upload and on the Initialisation sheet page, and refuses the run when it is created with a step that uses this tab; it no longer stops the upload or a Full onboarding run.*
 
 **R2 — The source is a read-only step credential (ADR 0020 §1-2).** Held by the run with the intent,
 like the replication peer and the switch credentials; never in events, artifacts, logs, the as-built or

@@ -139,7 +139,7 @@ existing workbook parses as today (SPEC-015 R1 pattern).
 
 Words on the sheet and screen: *client group*, not *share setting*; *share*, *file system*.
 
-**R5 — Validation at upload (blocking, one sentence each).**
+**R5 — Validation at upload (blocking, one sentence each).** *Since 2026-11-19 (owner, ADR 0005): the sentence is listed at upload and on the Initialisation sheet page, and refuses the run when it is created with a step that uses this tab; it no longer stops the upload or a Full onboarding run.*
 - A share's client group is not on the tab; a client group has no client row (lesson 36: a blank
   never means everyone). `*` is accepted only when typed, and then shown as *any host that can
   reach the File ports*.

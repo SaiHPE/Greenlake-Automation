@@ -43,6 +43,7 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
 
   const item = result?.work_item;
   const targets = result?.targets ?? {};
+  const problems = result?.problems ?? [];
 
   const upload = async (file: File) => {
     setBusy('upload');
@@ -105,10 +106,12 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
           ? {
               state: 'complete',
               title: `Workbook read for ${item.serial_number}${item.dscc_setup?.system_name ? ` (${item.dscc_setup.system_name})` : ''}`,
-              message: 'Nothing is sent to the array yet; the run is created on the next step.',
+              message: problems.length
+                ? `${problems.length === 1 ? 'One problem is' : `${problems.length} problems are`} listed in the notes; a problem stops only a run whose steps use that tab.`
+                : 'Nothing is sent to the array yet; the run is created on the next step.',
             }
           : undefined;
-  const notes = report && reportPassed ? [reportTitle] : [];
+  const notes = [...problems, ...(report && reportPassed ? [reportTitle] : [])];
 
   return (
     <StepShell

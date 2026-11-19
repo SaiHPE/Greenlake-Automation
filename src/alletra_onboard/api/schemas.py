@@ -196,6 +196,9 @@ class InitSheetUploadResponse(BaseModel):
     # ("zz_sn_vvs: Snapshot now · schedule zz_sn_vvs_snap, every 4 hours …"), so the review can say the
     # tab is filled when the chosen mode lacks the step.
     snapshot_rows: list[str] = Field(default_factory=list)
+    # Problems in tabs that initialising the array does not use, one sentence each (the sentence that
+    # refuses a run whose steps use that tab). Empty for a sheet with none.
+    problems: list[str] = Field(default_factory=list)
 
 
 class RunFromSheetRequest(BaseModel):

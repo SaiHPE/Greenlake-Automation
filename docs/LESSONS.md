@@ -423,3 +423,13 @@ schedule. Two colleagues' contact details and a third's login sat in committed f
 capture before it is a fixture (names to `lab-user`, addresses to `lab-user@example.com`, padded to the
 same width in fixed-width output), and `check.py` refuses a real email address in an added fixture line.
 What is already in git history stays there; removing it means rewriting history, which is the owner's call.
+
+**48. A check on a tab the run does not use must not block the run.**
+The upload refused a workbook when any tab had a problem. Each new rule (a volume's size and name, BL-55
+and BL-60; the Snapshots, Migration, iSCSI network and Peer ports tabs) was right for the steps that read
+its tab, and every one of them also stopped a Full onboarding run, which reads only the Initialisation
+tab: a consultant could not initialise an array because of a volume name. Found by the owner on
+2026-11-19, not by a test, because every test of a rule asked "is the bad value refused?" and none asked
+"by which run?". Rules: a sheet check belongs to the steps that read its tab; the upload refuses only what
+initialising the array needs (and two arrays), lists the rest, and the run is checked again for the steps
+chosen when it is created. A test of a new sheet rule includes a Full onboarding run that still mints.

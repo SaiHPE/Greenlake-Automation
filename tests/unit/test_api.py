@@ -637,6 +637,92 @@ def test_a_migrate_run_is_refused_without_the_tab_and_while_the_step_is_not_buil
     assert client.post("/runs/from-sheet", json={"token": token, "mode": "PROVISION_ONLY"}).status_code == 200
 
 
+# Owner, 2026-11-19: check a tab only when the run uses it. Until then a problem in any tab refused the
+# upload, so a Full onboarding run could be stopped by a tab it never reads.
+_BAD_REPLICATION_NETWORK = {
+    "fields": {"peer_host": "10.132.30.28", "peer_user": "3paradm", "peer_password": "pw"},
+    "rows": [{"vvset": "zz_rc_vvs", "peer_cpg": "SSD_r6", "mode": "sync"}],
+    "network": [{"array": "this", "port": "0:4:4", "ip": "10.93.18.300", "netmask": "255.255.254.0"}],
+}
+
+
+def _upload_with(client, **tabs) -> object:
+    base_b64 = _fill_template(client.get("/init-sheet/template").content, _COMPLETE_MAIN, _COMPLETE_PROV)
+    composed = client.post("/init-sheet/compose", json={"base_b64": base_b64, **tabs})
+    assert composed.status_code == 200, composed.text
+    return client.post("/init-sheet/upload", json={"content_b64": composed.json()["content_b64"]})
+
+
+def test_a_problem_in_a_tab_onboarding_does_not_use_is_listed_and_stops_only_a_run_that_uses_it(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    client = _client(tmp_path)
+    ok_volume = {"name": "CRV_Prod01", "size_gib": "1024"}
+    cases = (
+        ({"volumes": [ok_volume, {"name": "zz_bad+", "size_gib": "1"}]}, "Volume 'zz_bad+' — Name:", "PROVISION_ONLY"),
+        ({"volumes": [ok_volume, {"name": "zz_big", "size_gib": str(1024 * 1024)}]},
+         "more than the array can create in one volume", "BOTH"),
+        ({"replication": _BAD_REPLICATION_NETWORK},
+         "Replication network tab — row 'this 0:4:4': RCIP address '10.93.18.300' is not an IPv4 address.", "PROVISION_ONLY"),
+    )
+    for tabs, sentence, provisioning_mode in cases:
+        up = _upload_with(client, **tabs)
+        assert up.status_code == 200, up.text
+        problems = up.json()["problems"]
+        assert len(problems) == 1 and sentence in problems[0], problems
+        token = up.json()["token"]
+        runs_before = len(client.get("/runs").json()["runs"])
+
+        refused = client.post("/runs/from-sheet", json={"token": token, "mode": provisioning_mode})
+        assert refused.status_code == 422
+        assert refused.json()["detail"] == problems[0]
+        assert len(client.get("/runs").json()["runs"]) == runs_before
+        custom = client.post("/runs/from-sheet", json={"token": token, "mode": "CUSTOM", "selected_steps": ["discover", "verify"]})
+        assert custom.status_code == 422 and custom.json()["detail"] == problems[0]
+
+        # the refusal kept the hold: the same upload still mints a Full onboarding run
+        minted = client.post("/runs/from-sheet", json={"token": token, "mode": "FULL_ONBOARDING"})
+        assert minted.status_code == 200, minted.text
+        run_id = minted.json()["run"]["run_id"]
+        # the rest of the sheet is still held: verify keeps the Provisioning tab's array account
+        assert client.get(f"/runs/{run_id}").json()["array_credential"]["source"] == "provisioning"
+
+
+def test_a_valid_sheet_lists_no_problem_and_an_initialisation_problem_still_refuses_the_upload(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    client = TestClient(create_app(OnboardingService(Settings(), store, InMemoryEventBus())))
+    up = _upload_with(client)
+    assert up.status_code == 200 and up.json()["problems"] == []
+    assert store.pending_sheet_workbook(up.json()["token"]) is None   # held exactly as before
+
+    template = client.get("/init-sheet/template").content
+    no_serial = {k: v for k, v in _COMPLETE_MAIN.items() if k != "serial_number"}
+    bad_volume = {**_COMPLETE_PROV, "volumes": [{"name": "zz_bad+", "size_gib": "1"}]}
+    resp = client.post("/init-sheet/upload", json={"content_b64": _fill_template(template, no_serial, bad_volume)})
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "Initialisation sheet did not parse: Missing required fields: Storage system serial number"
+
+
+def test_the_init_only_profile_reads_only_the_initialisation_tab_as_before(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ALLETRA_PROFILE", "init-only")
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    client = TestClient(create_app(OnboardingService(Settings(), store, InMemoryEventBus())))
+    monkeypatch.delenv("ALLETRA_PROFILE")
+    full_template = client.get("/init-sheet/template").content
+    monkeypatch.setenv("ALLETRA_PROFILE", "init-only")
+    bad_volume = {**_COMPLETE_PROV, "volumes": [{"name": "zz_bad+", "size_gib": "1"}]}
+    up = client.post("/init-sheet/upload", json={"content_b64": _fill_template(full_template, _COMPLETE_MAIN, bad_volume)})
+    assert up.status_code == 200 and up.json()["problems"] == [] and up.json()["targets"] == {}
+    token = up.json()["token"]
+    assert store.pending_sheet_workbook(token) is None
+    run = client.post("/runs/from-sheet", json={"token": token, "mode": "FULL_ONBOARDING"})
+    assert run.status_code == 200, run.text
+    assert store.get_provisioning_intent(run.json()["run"]["run_id"]) is None
+
+
 def test_verify_and_asbuilt_use_the_sheets_array_credential(tmp_path, monkeypatch):
     """SPEC-008 R2/R3 through the API: a run minted from a complete sheet holds the Provisioning tab's
     array admin; Verify with `{}` uses it (the fake verify_fn sees the sheet's user/password) and

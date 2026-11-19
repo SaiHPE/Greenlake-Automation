@@ -708,6 +708,54 @@ def parse_workbook_bytes(
     return parsed
 
 
+def parse_upload(data: bytes) -> tuple[ParsedInitSheet, list[str]]:
+    """The upload of the full app: refuse only what initialising the array needs, list the rest.
+
+    Owner, 2026-11-19: check a tab only when the run uses it. A sheet that passes the complete check
+    parses exactly as before, with no problems. Otherwise the Initialisation tab is checked as a Full
+    onboarding run checks it (a problem there still raises), every other tab is read on its own, and
+    each problem found is one sentence in the list, the same sentence the complete check raises. A bad
+    row is left out of the intent, a tab with a problem is left out whole, and the run is refused when it
+    is created with steps that use them (`parse_workbook_bytes` with the chosen mode). A workbook that
+    names two arrays is still refused here: a run is one array.
+    """
+    try:
+        return parse_workbook_bytes(data, complete=True), []
+    except ValueError as exc:
+        complete_problem = str(exc)
+    parsed = parse_workbook_bytes(data, mode=RunMode.FULL_ONBOARDING)
+    workbook = load_workbook(io.BytesIO(data), data_only=True)
+    problems: list[str] = []
+
+    def tab(read, fallback=None):
+        try:
+            return read()
+        except ValueError as exc:
+            problems.append(str(exc))
+            return fallback
+
+    def passes(check) -> bool:
+        return tab(lambda: check() or True, False)
+
+    intent = tab(lambda: _parse_provisioning_tab(workbook, problems=problems))
+    iscsi_network = tab(lambda: _parse_iscsi_network_tab(workbook), [])
+    peer_ports = tab(lambda: _parse_peer_ports_tab(workbook))
+    replication = tab(lambda: _parse_replication_tab(workbook))
+    migration = tab(lambda: _parse_migration_tab(workbook))
+    snapshots = tab(lambda: _parse_snapshots_tab(workbook))
+    if intent is not None:
+        intent.iscsi_network, intent.peer_ports = iscsi_network, peer_ports
+        intent.replication, intent.migration, intent.snapshots = replication, migration, snapshots
+        parsed.provisioning_intent = intent
+        _reject_two_arrays(parsed)
+        if not passes(lambda: _reject_peer_is_this_array(parsed)):
+            intent.replication = None
+        if not passes(lambda: _reject_source_is_this_array(parsed)):
+            intent.migration = None
+        passes(lambda: _reject_a_port_with_two_roles(intent))
+    return parsed, problems or [complete_problem]
+
+
 def _reject_source_is_this_array(parsed: ParsedInitSheet) -> None:
     intent = parsed.provisioning_intent
     if intent is None or intent.migration is None:
@@ -829,10 +877,72 @@ def _read_table(ws, columns: list[tuple[str, str, bool]], *, any_cell: bool = Fa
     return records
 
 
-def _parse_provisioning_tab(workbook, *, volumes_required: bool = True) -> ProvisioningIntent:
+def _note_or_raise(problems: list[str] | None, exc: ValueError) -> None:
+    """Strict (`problems` is None): raise. The upload: note the sentence and leave that row out."""
+    if problems is None:
+        raise exc
+    problems.append(str(exc))
+
+
+def _volume_request(r: dict[str, str], *, default_type: str, default_cpg: str) -> VolumeRequest:
+    if bad_name := volume_name_problem(r["name"]):
+        raise ValueError(f"Volume '{r['name']}' — Name: {bad_name}. Rename it.")
+    if r.get("vvset") and (bad_set := volume_set_name_problem(r["vvset"])):
+        raise ValueError(f"Volume '{r['name']}' — VV-set: {bad_set}. Rename it.")
+    ptype = (r.get("provisioning_type") or default_type).strip().lower()
+    if ptype not in ("tpvv", "reduce"):
+        raise ValueError(f"Volume '{r['name']}' — Type must be 'tpvv' or 'reduce'.")
+    try:
+        size = float(r["size_gib"])
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"Volume '{r.get('name', '?')}' — Size (GiB) must be a number.") from exc
+    if size <= 0 or not size.is_integer():
+        raise ValueError(f"Volume '{r['name']}' — Size (GiB) must be a whole number above 0 (got {r['size_gib']}).")
+    size_gib = int(size)
+    if too_large := volume_too_large(size_gib):
+        raise ValueError(f"Volume '{r['name']}' — Size (GiB): {too_large}. Make it smaller.")
+    return VolumeRequest(
+        name=r["name"], size_gib=size_gib,
+        provisioning_type=ptype,  # type: ignore[arg-type]
+        cpg=r.get("cpg") or default_cpg, vvset=r.get("vvset") or None,
+    )
+
+
+def _declared_host(r: dict[str, str]) -> DeclaredHost:
+    wwpns = [normalize_wwpn(w) for w in (r.get("wwpns") or "").replace(";", ",").split(",") if w.strip()]
+    iqn = (r.get("iqn") or "").strip()
+    bad = [w for w in wwpns if len(w) != 16]
+    if bad:
+        raise ValueError(
+            f"Hosts tab — host '{r['name']}' has an FC WWPN that is not 16 hex digits: "
+            + ", ".join(bad) + ". A mistyped WWPN produces a zone that matches nothing."
+        )
+    if iqn and not iqn.lower().startswith("iqn."):
+        raise ValueError(f"Hosts tab — host '{r['name']}' has an iSCSI IQN that does not start with 'iqn.': {iqn}")
+    # SPEC-014 R1: a row with neither id is a lookup request — discovery finds it by name/IP.
+    os_ = (r.get("os") or "").strip().lower()
+    if os_ and os_ not in ("esxi", "windows", "linux", "vme"):
+        raise ValueError(f"Hosts tab — host '{r['name']}' has an unrecognised OS '{os_}' (esxi / windows / linux / vme).")
+    username, password = (r.get("username") or "").strip(), r.get("password") or ""
+    address = (r.get("address") or "").strip()
+    if password and not username:
+        raise ValueError(f"Hosts tab — host '{r['name']}' has a login password but no login username.")
+    if username and not address:
+        raise ValueError(f"Hosts tab — host '{r['name']}' has a login but no IP address to log in to.")
+    return DeclaredHost(
+        name=r["name"], os=os_, address=address, wwpns=wwpns, iqn=iqn,
+        username=username, password=password or None,
+    )
+
+
+def _parse_provisioning_tab(
+    workbook, *, volumes_required: bool = True, problems: list[str] | None = None,
+) -> ProvisioningIntent:
     """Read the provisioning input (Provisioning targets + Volumes + Host sets row-tables) into a plural
     ProvisioningIntent (passwords included — customer-supplied). Exports are composed later in the UI.
-    `volumes_required` False: a run without the Provision step may leave Volumes and Host sets empty."""
+    `volumes_required` False: a run without the Provision step may leave Volumes and Host sets empty.
+    `problems` (the upload): a bad Volumes or Hosts row, or an empty Volumes or Host sets tab, is noted
+    there and left out instead of refused; a missing tab or target field is still raised."""
     for name in (PROVISIONING_SHEET_NAME, VOLUMES_SHEET_NAME, HOSTSETS_SHEET_NAME):
         if name not in workbook.sheetnames:
             raise ValueError(f"The '{name}' tab is required for provisioning but was not found in the workbook.")
@@ -861,38 +971,21 @@ def _parse_provisioning_tab(workbook, *, volumes_required: bool = True) -> Provi
         or _table_rows_present(workbook, PEER_PORTS_SHEET_NAME, PEER_PORT_COLUMNS)
     )
     if not vol_rows and not replicate_only:
-        raise ValueError(
+        _note_or_raise(problems, ValueError(
             "Volumes tab — add at least one volume (a name and a size). Or leave Volumes and Host sets empty and "
             "fill the Replication tab or the Snapshots tab (volume sets already on the array), fill the Migration "
             "tab (hosts from another array), or fill the iSCSI network or Peer ports tab (the array's own ports)."
-        )
+        ))
     volumes: list[VolumeRequest] = []
     for r in vol_rows:
-        if bad_name := volume_name_problem(r["name"]):
-            raise ValueError(f"Volume '{r['name']}' — Name: {bad_name}. Rename it.")
-        if r.get("vvset") and (bad_set := volume_set_name_problem(r["vvset"])):
-            raise ValueError(f"Volume '{r['name']}' — VV-set: {bad_set}. Rename it.")
-        ptype = (r.get("provisioning_type") or default_type).strip().lower()
-        if ptype not in ("tpvv", "reduce"):
-            raise ValueError(f"Volume '{r['name']}' — Type must be 'tpvv' or 'reduce'.")
         try:
-            size = float(r["size_gib"])
-        except (KeyError, ValueError) as exc:
-            raise ValueError(f"Volume '{r.get('name', '?')}' — Size (GiB) must be a number.") from exc
-        if size <= 0 or not size.is_integer():
-            raise ValueError(f"Volume '{r['name']}' — Size (GiB) must be a whole number above 0 (got {r['size_gib']}).")
-        size_gib = int(size)
-        if too_large := volume_too_large(size_gib):
-            raise ValueError(f"Volume '{r['name']}' — Size (GiB): {too_large}. Make it smaller.")
-        volumes.append(VolumeRequest(
-            name=r["name"], size_gib=size_gib,
-            provisioning_type=ptype,  # type: ignore[arg-type]
-            cpg=r.get("cpg") or default_cpg, vvset=r.get("vvset") or None,
-        ))
+            volumes.append(_volume_request(r, default_type=default_type, default_cpg=default_cpg))
+        except ValueError as exc:
+            _note_or_raise(problems, exc)
 
     hs_rows = _read_table(workbook[HOSTSETS_SHEET_NAME], HOSTSET_COLUMNS)
     if not hs_rows and not replicate_only:
-        raise ValueError("Host sets tab — add at least one host set (a name).")
+        _note_or_raise(problems, ValueError("Host sets tab — add at least one host set (a name)."))
     host_sets = [
         HostSetRequest(name=r["name"], members=[m.strip() for m in (r.get("members") or "").split(",") if m.strip()])
         for r in hs_rows
@@ -903,30 +996,10 @@ def _parse_provisioning_tab(workbook, *, volumes_required: bool = True) -> Provi
     declared: list[DeclaredHost] = []
     if HOSTS_SHEET_NAME in workbook.sheetnames:
         for r in _read_table(workbook[HOSTS_SHEET_NAME], HOSTS_COLUMNS):
-            wwpns = [normalize_wwpn(w) for w in (r.get("wwpns") or "").replace(";", ",").split(",") if w.strip()]
-            iqn = (r.get("iqn") or "").strip()
-            bad = [w for w in wwpns if len(w) != 16]
-            if bad:
-                raise ValueError(
-                    f"Hosts tab — host '{r['name']}' has an FC WWPN that is not 16 hex digits: "
-                    + ", ".join(bad) + ". A mistyped WWPN produces a zone that matches nothing."
-                )
-            if iqn and not iqn.lower().startswith("iqn."):
-                raise ValueError(f"Hosts tab — host '{r['name']}' has an iSCSI IQN that does not start with 'iqn.': {iqn}")
-            # SPEC-014 R1: a row with neither id is a lookup request — discovery finds it by name/IP.
-            os_ = (r.get("os") or "").strip().lower()
-            if os_ and os_ not in ("esxi", "windows", "linux", "vme"):
-                raise ValueError(f"Hosts tab — host '{r['name']}' has an unrecognised OS '{os_}' (esxi / windows / linux / vme).")
-            username, password = (r.get("username") or "").strip(), r.get("password") or ""
-            address = (r.get("address") or "").strip()
-            if password and not username:
-                raise ValueError(f"Hosts tab — host '{r['name']}' has a login password but no login username.")
-            if username and not address:
-                raise ValueError(f"Hosts tab — host '{r['name']}' has a login but no IP address to log in to.")
-            declared.append(DeclaredHost(
-                name=r["name"], os=os_, address=address, wwpns=wwpns, iqn=iqn,
-                username=username, password=password or None,
-            ))
+            try:
+                declared.append(_declared_host(r))
+            except ValueError as exc:
+                _note_or_raise(problems, exc)
 
     return ProvisioningIntent(
         array=EndpointCreds(host=targets["prov_array_host"], username=targets["prov_array_user"], password=targets["prov_array_password"]),

@@ -65,7 +65,7 @@ rules* and the ADRs in [docs/adr/](../adr/).
 | Writing to a SAN switch (create, change or activate zoning) | Applying zoning is the SAN team's job, on their schedule. A write path shipped in v0.14 and v0.15 and was removed in v0.16. [ADR 0012](../adr/0012-no-switch-writes-the-tool-emits-a-command-set.md) |
 | Cisco MDS fabrics | Brocade FOS only. No MDS to test against. [ADR 0004](../adr/0004-auto-remediate-san-zoning.md) |
 | Two arrays from one workbook (paired runs) | Deferred. The peer array is a credential on the Replication tab. [ADR 0014](../adr/0014-paired-runs-from-one-workbook.md) |
-| Peer Persistence, Active Sync, 3DC replication; RCFC; VLANs on RCIP ports | Refused at upload or not planned. [SPEC-015](../specs/SPEC-015-replication-tab.md), [SPEC-021](../specs/SPEC-021-rcip-partnership.md) §3 |
+| Peer Persistence, Active Sync, 3DC replication; RCFC; VLANs on RCIP ports | Refused by the sheet check (listed at upload, refused for a run that uses the tab) or not planned. [SPEC-015](../specs/SPEC-015-replication-tab.md), [SPEC-021](../specs/SPEC-021-rcip-partnership.md) §3 |
 | ESXi datastore creation and the host-side rescan | The engineer rescans; the tool reports what the host sees. [ADR 0010](../adr/0010-provisioning-builder-consumes-zoning.md), [SPEC-013](../specs/SPEC-013-esxi-paths.md) R4 |
 | Signing in to DSCC, handling DSCC passwords or MFA | The engineer signs in by hand; the tool attaches to that browser. [dscc_setup.py](../../src/alletra_onboard/adapters/browser/dscc_setup.py) |
 | A general shell to the array | The console runs the read-only allowlist only. [SPEC-019](../specs/SPEC-019-console.md) §3 |
@@ -292,7 +292,9 @@ One workbook describes one array
 and switch addresses and credentials, defaults), *Volumes*, *Host sets*, *Hosts*, *Replication*
 (optional: peer array and what to protect), *Replication network* (optional: RCIP ports to set up)
 and *Prerequisites*. The upload checks the whole workbook before any run exists, then holds it on
-the server under a single-use token. Device passwords never go back to the browser. Choosing a mode
+the server under a single-use token. Only a problem on the Initialisation tab, or two arrays, refuses
+the upload; a problem in another tab is listed on the sheet page and refuses only a run whose steps
+use that tab (owner, 2026-11-19). Device passwords never go back to the browser. Choosing a mode
 creates the run from that token ([ADR 0005](../adr/0005-decouple-onboarding-into-modes.md), revision
 of 2026-07-01).
 
