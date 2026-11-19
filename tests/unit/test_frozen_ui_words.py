@@ -1,6 +1,7 @@
 """The words the UI lab scripts press and read stay in the source (SPEC-030 R10, ADR 0023 change 3).
 
-`lab/ui_live_lab.py`, `lab/ui_provision_lab.py` and `lab/failed_apply_lab.py` drive the screens in a
+`lab/ui_live_lab.py`, `lab/ui_provision_lab.py`, `lab/failed_apply_lab.py` and `lab/init_walk_lab.py`
+drive the screens in a
 browser: they press buttons by name and look for text on the page. This test reads them with `ast`,
 takes every literal they press, fill or look for, and finds each one in `frontend/src`, or where the
 few made elsewhere are made (`ELSEWHERE`). A miss names the literal, the script and its line. Object
@@ -22,7 +23,7 @@ from alletra_onboard.domain.workflow import STEP_REGISTRY
 APP = Path(__file__).resolve().parents[2]
 LAB = APP / "lab"
 FRONTEND = APP / "frontend" / "src"
-SCRIPTS = ("failed_apply_lab.py", "ui_live_lab.py", "ui_provision_lab.py")
+SCRIPTS = ("failed_apply_lab.py", "init_walk_lab.py", "ui_live_lab.py", "ui_provision_lab.py")
 
 # Read by a script but made elsewhere, or built from parts: what to find instead, where, and why.
 ELSEWHERE: dict[str, tuple[str, str, str]] = {
@@ -247,6 +248,24 @@ def test_every_lab_script_that_drives_the_browser_is_read_here():
     """A new browser script under lab/ joins SCRIPTS on purpose, so its words are frozen too."""
     drivers = sorted(p.relative_to(LAB).as_posix() for p in LAB.rglob("*.py") if _drives_a_browser(p))
     assert drivers == sorted(SCRIPTS), f"lab scripts that import Playwright: {drivers}; read here: {sorted(SCRIPTS)}"
+
+
+def test_the_names_the_init_walk_keeps_in_constants_are_in_the_source():
+    """`lab/init_walk_lab.py` proves initialisation still works by never pressing a button that starts
+    work. It knows those buttons, the mode cards it picks and the rail's framing steps by name, in
+    constants the reader above does not see. A renamed button would leave its deny-list guarding nothing."""
+    tree = ast.parse((LAB / "init_walk_lab.py").read_text(encoding="utf-8"))
+    kept = ("DENY_NAMES", "MODE_CARDS", "INIT_ONLY_CARD", "RAIL_FRAME")
+    names: dict[str, list[str]] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) and node.targets[0].id in kept:
+            value = ast.literal_eval(node.value)
+            names[node.targets[0].id] = [value] if isinstance(value, str) else list(value.values() if isinstance(value, dict) else value)
+    assert set(names) == set(kept)
+    assert {"Register the array", "Fill in and connect", "Run DSCC automation", "Sync system clock"} <= set(names["DENY_NAMES"])
+    gone = [f"{name} ({constant})" for constant, values in names.items() for name in values
+            if not _contains(FRONTEND_TEXT, f"'{name}'", case=True) and not _contains(FRONTEND_TEXT, f'"{name}"', case=True)]
+    assert not gone, "names lab/init_walk_lab.py relies on are gone from frontend/src:\n  " + "\n  ".join(gone)
 
 
 def test_the_link_check_is_called_check_rc_link_on_the_page_and_in_the_runners():

@@ -55,7 +55,7 @@ def is_elevated() -> bool:
         return False
     try:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 
@@ -97,7 +97,7 @@ async def _server_utc(preferred: str | None = None) -> _Reading:
             if date:
                 return _Reading(parsedate_to_datetime(date).astimezone(UTC), t0 + (t1 - t0) / 2, url)
             last = f"no Date header from {url}"
-        except Exception as exc:  # noqa: BLE001 - try the next source
+        except Exception as exc:  # try the next source
             last = f"{type(exc).__name__} from {url}: {str(exc)[:80]}"
     raise RuntimeError(last)
 
@@ -105,7 +105,7 @@ async def _server_utc(preferred: str | None = None) -> _Reading:
 async def clock_status(url: str | None = None) -> ClockStatus:
     try:
         reading = await _server_utc(url)
-    except Exception as exc:  # noqa: BLE001 - status must never raise; the UI just won't warn.
+    except Exception as exc:  # status must never raise; the UI just won't warn.
         return ClockStatus(
             in_sync=True,
             skew_seconds=None,

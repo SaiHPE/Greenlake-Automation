@@ -187,7 +187,7 @@ def read_array_objects(intent: ProvisioningIntent, *, wsapi_factory: Callable = 
                 "volume_sets": sorted(array.volume_set_names()),
                 "error": None,
             }
-    except Exception as exc:  # noqa: BLE001 - the palette still works without the existing objects
+    except Exception as exc:  # the palette still works without the existing objects
         return {"cpgs": [], "hosts": [], "host_sets": [], "volumes": [], "volume_sets": [], "error": str(exc)}
 
 
@@ -407,7 +407,7 @@ def build_plan(
                 vluns=array.vlun_templates(),
                 cpgs=set(array.cpg_names()),
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         plan.error = f"Could not read the array over WSAPI: {exc}"
         return plan
 
@@ -757,7 +757,7 @@ def apply_plan(
                 after = array.vlun_templates() if exports else templates
                 if exports:
                     _confirm_exports(exports, export_outcomes, vvsets, after)
-            except Exception as exc:  # noqa: BLE001 - stop at the first failure; the undo still covers what was made
+            except Exception as exc:  # stop at the first failure; the undo still covers what was made
                 kind, name = doing
                 result.error = f"Stopped while creating {_LABEL[kind]} {name}: {exc}" if kind else str(exc)
                 if kind in _REMOVE:
@@ -770,14 +770,14 @@ def apply_plan(
                     # which LUNs this apply made, the failed call's included.
                     try:
                         after = array.vlun_templates()
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         failure_notes.append("The exports could not be read back after the failure. Check `showvlun -t` "
                                              "on the array for exports this apply made; they are not in this removal set.")
             result.outcomes.extend(export_outcomes)
             # SPEC-007: the undo for exactly what this apply created, from the same reads.
             result.removals, notes = removal_set(result.outcomes, templates or [], after)
             result.removal_notes = notes + failure_notes
-    except Exception as exc:  # noqa: BLE001 - no session (nothing was written), or it failed to close
+    except Exception as exc:  # no session (nothing was written), or it failed to close
         result.error = result.error or str(exc)
     return result
 

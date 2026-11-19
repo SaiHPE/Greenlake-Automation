@@ -43,6 +43,8 @@ dev = [
   "pytest-asyncio>=0.23.0",
   "respx>=0.21.0",
   "ruff==0.17.0",
+  "import-linter==2.17",  # the dependency rules of docs/STANDARD.md (the `deps` step of scripts/check.py)
+  "vulture==2.16",  # dead code, STANDARD M3 (the `vulture` step of scripts/check.py)
 ]
 
 [project.scripts]
@@ -65,10 +67,204 @@ target-version = "py312"
 extend-exclude = ["docs", "lab", "scripts", "build", "ui-smoke", "tools", "cloudinit", "packaging", "playwright captures"]
 
 [tool.ruff.lint]
-# ruff is pinned in the dev extra so everyone gets the same rules; `ruff check src tests` must be clean.
+# ruff is pinned in the dev extra so everyone gets the same rules. The gate is the `lint` and
+# `complexity` steps of scripts/check.py: they run ruff and take out today's offenders, which are
+# listed per function in quality/ceilings.toml. A bare `ruff check .` prints those too.
+extend-select = [
+  "C901", "PLR0913", "PLR0912", "PLR0915",  # STANDARD M1: complexity 10, 5 parameters, 12 branches, 50 statements
+  "PLC0415",                                # L6: no import inside a function
+  "PGH003", "RUF100",                       # T3: no `type: ignore` or `noqa` without its rule code
+  "ERA001", "FIX", "TD",                    # C1: no commented-out code, no TODO or FIXME left behind
+  "BLE001",                                 # E1: no `except Exception` (per-file-ignores below)
+  "S110", "S112",                           # E2: no `except: pass` or `except: continue`
+]
 ignore = [
-  "S110", "S112",  # best-effort cleanup and optional reads swallow errors on purpose
   "PYI034",        # the clients' __enter__ returns the concrete class; nothing subclasses them
   "B023",          # zoning_plan's closures are called inside the loop iteration that defines them
 ]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# STANDARD E1: the only two places a broad catch belongs, the step boundary and the API's error mapping.
+"src/alletra_onboard/application/runs/coordinator.py" = ["BLE001"]
+"src/alletra_onboard/api/app.py" = ["BLE001"]
+# STANDARD L6: local imports in test functions do not hide production import cycles.
+"tests/**" = ["PLC0415"]
+
+# The dependency rules of docs/STANDARD.md (3.1 to 3.3), checked by `lint-imports` (the `deps` step
+# of scripts/check.py). An `ignore_imports` entry is a violation that exists today: fix it and
+# delete its line (a line whose import is gone fails the check). Never add one.
+# Here an import under `if TYPE_CHECKING:` counts like any other. The two contracts where a
+# type-only import is allowed (L3, L6) are in quality/imports-type-only.toml.
+[tool.importlinter]
+root_package = "alletra_onboard"
+include_external_packages = true
+exclude_type_checking_imports = false
+
+# S2. Not protectable today, so not listed here:
+#   - make_rc_cli and make_snap_cli live in application/provisioning/clients.py with the read
+#     factories every context imports; protecting that module would refuse the readers too.
+#   - adapters/array/wsapi_client.py is one class holding the reads and the 14 writes, so there is
+#     no WSAPI writer module to protect apart from the reader. The contract S2-wsapi-client below
+#     keeps the whole class behind the factory until it is split.
+#   - There is no port-write SSH client.
+[[tool.importlinter.contracts]]
+id = "S2-rc-writer"
+name = "S2 least privilege: the Remote Copy SSH writer is imported only by the factory that builds it"
+type = "protected"
+protected_modules = ["alletra_onboard.adapters.array.rc_cli_client"]
+allowed_importers = ["alletra_onboard.application.provisioning.clients"]
+unmatched_ignore_imports_alerting = "error"
+ignore_imports = [
+  "alletra_onboard.adapters.array.snap_cli_client -> alletra_onboard.adapters.array.rc_cli_client",
+  "alletra_onboard.application.replication.partnership -> alletra_onboard.adapters.array.rc_cli_client",
+  "alletra_onboard.application.snapshots.apply -> alletra_onboard.adapters.array.rc_cli_client",
+]
+broken_contract_guidance = "STANDARD S2 (least privilege): only the writer factory may import a writer module. Take a writer from the factory; put a shared error or plan type in domain. Do not add an ignore_imports line."
+
+[[tool.importlinter.contracts]]
+id = "S2-snap-writer"
+name = "S2 least privilege: the snapshot-schedule SSH writer is imported only by the factory that builds it"
+type = "protected"
+protected_modules = ["alletra_onboard.adapters.array.snap_cli_client"]
+allowed_importers = ["alletra_onboard.application.provisioning.clients"]
+unmatched_ignore_imports_alerting = "error"
+ignore_imports = [
+  "alletra_onboard.application.snapshots.apply -> alletra_onboard.adapters.array.snap_cli_client",
+]
+broken_contract_guidance = "STANDARD S2 (least privilege): only the writer factory may import a writer module. Take a writer from the factory; put a shared error or plan type in domain. Do not add an ignore_imports line."
+
+[[tool.importlinter.contracts]]
+id = "S2-wsapi-client"
+name = "S2 least privilege: the WSAPI client, which holds the writes, is imported only by the factory that builds it"
+type = "protected"
+protected_modules = ["alletra_onboard.adapters.array.wsapi_client"]
+allowed_importers = ["alletra_onboard.application.provisioning.clients"]
+unmatched_ignore_imports_alerting = "error"
+ignore_imports = [
+  "alletra_onboard.adapters.array.wsapi_v3_client -> alletra_onboard.adapters.array.wsapi_client",
+  "alletra_onboard.api.app -> alletra_onboard.adapters.array.wsapi_client",
+]
+broken_contract_guidance = "STANDARD S2 (least privilege): only the factory may import the client that can write. Take a client from the factory; put a shared error or plan type in domain. Do not add an ignore_imports line."
+
+# L1 and L2 in one contract, so a violation is listed once. `config` sits where it is used today:
+# application and the entrypoints read it, adapters and domain do not.
+[[tool.importlinter.contracts]]
+id = "L1-L2-layers"
+name = "L1, L2 layers: entrypoints, application, adapters, domain; imports only point inward"
+type = "layers"
+containers = ["alletra_onboard"]
+exhaustive = true
+layers = ["__main__", "api | cli", "application", "config", "adapters", "domain"]
+unmatched_ignore_imports_alerting = "error"
+ignore_imports = [
+  "alletra_onboard.adapters.greenlake.auth -> alletra_onboard.application.platform.tls",
+  "alletra_onboard.adapters.greenlake.http_client -> alletra_onboard.application.platform.tls",
+  "alletra_onboard.adapters.system.clock -> alletra_onboard.application.platform.tls",
+]
+broken_contract_guidance = "STANDARD L1, L2 (layers): domain imports nothing outside domain; adapters never import application or api. Move what both sides need down (shared adapter plumbing lives in adapters/, shared types in domain/). Do not add an ignore_imports line."
+
+# External packages are known by their top name only, so `urllib` (urllib.parse is not I/O,
+# urllib.request is) cannot be listed.
+[[tool.importlinter.contracts]]
+id = "L4-no-io-libraries"
+name = "L4 application and domain import no network, SSH, browser or process library"
+type = "forbidden"
+source_modules = ["alletra_onboard.application", "alletra_onboard.domain", "alletra_onboard.config"]
+forbidden_modules = [
+  "httpx", "requests", "urllib3", "aiohttp", "websockets", "http", "ftplib", "smtplib", "telnetlib",
+  "paramiko", "socket", "ssl", "subprocess", "playwright",
+  "pyVmomi", "pyVim", "winrm", "requests_ntlm", "spnego", "hpe3parclient", "eventlet",
+]
+allow_indirect_imports = true
+unmatched_ignore_imports_alerting = "error"
+ignore_imports = [
+  "alletra_onboard.application.onboarding.greenlake_preflight -> httpx",
+  "alletra_onboard.application.onboarding.greenlake_provision -> httpx",
+  "alletra_onboard.application.platform.prereqs -> socket",
+  "alletra_onboard.application.platform.tls -> ssl",
+  "alletra_onboard.application.runs.console -> subprocess",
+  "alletra_onboard.domain.trust -> ssl",
+]
+broken_contract_guidance = "STANDARD L4: network, SSH, browser and process I/O lives in an adapter. Put the call in an adapter and hand its result (or a domain error) to the application code. Do not add an ignore_imports line."
+
+# The first ignore_imports line is the rule's own allowance (the store the entrypoint opens), not
+# a violation; the rest are today's.
+[[tool.importlinter.contracts]]
+id = "L5-entrypoints"
+name = "L5 entrypoints never import an adapter except the store they open"
+type = "forbidden"
+source_modules = ["alletra_onboard.api", "alletra_onboard.cli", "alletra_onboard.__main__"]
+forbidden_modules = ["alletra_onboard.adapters"]
+allow_indirect_imports = true
+unmatched_ignore_imports_alerting = "error"
+ignore_imports = [
+  "alletra_onboard.api.app -> alletra_onboard.adapters.persistence.sqlite",
+  "alletra_onboard.api.app -> alletra_onboard.adapters.array.wsapi_client",
+  "alletra_onboard.api.app -> alletra_onboard.adapters.browser.debug_browser",
+  "alletra_onboard.api.app -> alletra_onboard.adapters.system.clock",
+  "alletra_onboard.api.app -> alletra_onboard.adapters.system.discovery_tool",
+]
+broken_contract_guidance = "STANDARD L5 (composition root): api/app.py and the CLI reach devices through application services, wired in create_app and application/service.py. Add the call to a service. Do not add an ignore_imports line."
+
+# `service` is the composition root (L5), so nothing in application imports it: it is the top layer.
+# The step contexts may import each other (`:`), except each other's plan and apply (the two
+# contracts after this one).
+[[tool.importlinter.contracts]]
+id = "B1-workflow-order"
+name = "B1 workflow packages: documents, the step contexts, runs, platform; imports only go down"
+type = "layers"
+containers = ["alletra_onboard.application"]
+exhaustive = true
+layers = [
+  "service",
+  "documents",
+  "onboarding : provisioning : snapshots : replication : unified_file",
+  "runs",
+  "platform",
+]
+unmatched_ignore_imports_alerting = "error"
+ignore_imports = [
+  "alletra_onboard.application.replication.read -> alletra_onboard.application.documents.asbuilt_parse",
+  "alletra_onboard.application.runs.console -> alletra_onboard.application.provisioning.clients",
+]
+broken_contract_guidance = "STANDARD B1 (workflow order): documents -> step contexts -> runs -> platform, imports only go down. Move a shared read down, to an adapter or domain. Do not add an ignore_imports line."
+
+[[tool.importlinter.contracts]]
+id = "B1-replication-plan-apply"
+name = "B1 step contexts do not import replication's plan or apply"
+type = "forbidden"
+source_modules = [
+  "alletra_onboard.application.onboarding",
+  "alletra_onboard.application.provisioning",
+  "alletra_onboard.application.snapshots",
+  "alletra_onboard.application.unified_file",
+]
+forbidden_modules = [
+  "alletra_onboard.application.replication.plan",
+  "alletra_onboard.application.replication.apply",
+]
+allow_indirect_imports = true
+unmatched_ignore_imports_alerting = "error"
+broken_contract_guidance = "STANDARD B1: a step context does not import another context's plan or apply. Move what both need down, to an adapter or domain. Do not add an ignore_imports line."
+
+[[tool.importlinter.contracts]]
+id = "B1-snapshots-plan-apply"
+name = "B1 step contexts do not import snapshots' plan or apply"
+type = "forbidden"
+source_modules = [
+  "alletra_onboard.application.onboarding",
+  "alletra_onboard.application.provisioning",
+  "alletra_onboard.application.replication",
+  "alletra_onboard.application.unified_file",
+]
+forbidden_modules = [
+  "alletra_onboard.application.snapshots.plan",
+  "alletra_onboard.application.snapshots.apply",
+]
+allow_indirect_imports = true
+unmatched_ignore_imports_alerting = "error"
+broken_contract_guidance = "STANDARD B1: a step context does not import another context's plan or apply. Move what both need down, to an adapter or domain. Do not add an ignore_imports line."
 

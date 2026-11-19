@@ -14,35 +14,45 @@ class StepDef:
     `kind` groups steps: 'init' (the A->B->C onboarding), 'provision' (storage, Phase 2), 'replicate'
     (Remote Copy to a peer array — needs the Replication tab), 'migrate' (Peer Motion from a source
     array — needs the Migration tab), 'snapshot' (snapshots and a schedule — needs the Snapshots tab),
-    'verify'.
+    'verify'. `lab_script` is the file in lab/ that drives this step live on lab hardware; when no
+    script does, it is None and `no_lab_script` says why (docs/STANDARD.md X4). Neither is served to
+    the frontend.
     """
 
     key: str
     label: str
     phase: WorkflowPhase
     kind: str
+    lab_script: str | None
+    no_lab_script: str = ""
+
+    def __post_init__(self) -> None:
+        if bool(self.lab_script) == bool(self.no_lab_script):
+            raise ValueError(f"step {self.key}: name the lab script that drives it, or say why there is none")
 
 
 # Ordered registry — drives both the wizard step list and the service's advance logic.
 STEP_REGISTRY: tuple[StepDef, ...] = (
-    StepDef("greenlake", "GreenLake registration", WorkflowPhase.PREFLIGHT, "init"),
-    StepDef("cloudinit", "Cloud Connectivity", WorkflowPhase.CLOUDINIT_CONNECT, "init"),
-    StepDef("dscc", "DSCC Setup", WorkflowPhase.DSCC_SETUP_SYSTEM, "init"),
-    StepDef("discover", "Discovery", WorkflowPhase.STORAGE_DISCOVER, "provision"),
+    StepDef("greenlake", "GreenLake registration", WorkflowPhase.PREFLIGHT, "init", "init_walk_lab.py"),
+    StepDef("cloudinit", "Cloud Connectivity", WorkflowPhase.CLOUDINIT_CONNECT, "init", "init_walk_lab.py"),
+    StepDef("dscc", "DSCC Setup", WorkflowPhase.DSCC_SETUP_SYSTEM, "init", "init_walk_lab.py"),
+    StepDef("discover", "Discovery", WorkflowPhase.STORAGE_DISCOVER, "provision", "ui_live_lab.py"),
     # SPEC-024 R8: before zoning, because the zoning check is what sees an iSCSI host's login on the
     # address this step sets up. One step for every array-port feature, a section each (SPEC-025).
-    StepDef("ports", "Array ports", WorkflowPhase.STORAGE_PORTS, "provision"),
-    StepDef("zoning", "SAN Zoning", WorkflowPhase.STORAGE_ZONING, "provision"),
-    StepDef("migrate", "Migration", WorkflowPhase.STORAGE_MIGRATE, "migrate"),
-    StepDef("provision", "Provision storage", WorkflowPhase.STORAGE_PROVISION, "provision"),
-    StepDef("replicate", "Replication", WorkflowPhase.STORAGE_REPLICATE, "replicate"),
-    StepDef("failover_test", "Failover test", WorkflowPhase.STORAGE_FAILOVER_TEST, "replicate"),
+    StepDef("ports", "Array ports", WorkflowPhase.STORAGE_PORTS, "provision", None,
+            "ui_live_lab.py opens its plan; no lab script applies one"),
+    StepDef("zoning", "SAN Zoning", WorkflowPhase.STORAGE_ZONING, "provision", "ui_live_lab.py"),
+    StepDef("migrate", "Migration", WorkflowPhase.STORAGE_MIGRATE, "migrate", None, "the step is not built yet"),
+    StepDef("provision", "Provision storage", WorkflowPhase.STORAGE_PROVISION, "provision", "ui_provision_lab.py"),
+    StepDef("replicate", "Replication", WorkflowPhase.STORAGE_REPLICATE, "replicate", "rcip_tool_lab.py"),
+    StepDef("failover_test", "Failover test", WorkflowPhase.STORAGE_FAILOVER_TEST, "replicate", "rc_failover_lab.py"),
     # SPEC-023 R9: picked in Custom only; the presets are unchanged.
-    StepDef("snapshots", "Snapshots", WorkflowPhase.STORAGE_SNAPSHOT, "snapshot"),
+    StepDef("snapshots", "Snapshots", WorkflowPhase.STORAGE_SNAPSHOT, "snapshot", None,
+            "snap_capture.py reads what the array holds; no lab script drives the step"),
     # "Verify configuration", not "…& health": the HPE Design System prohibits "health" in UI copy —
     # always "status". This label is served to the UI, so this is the only place it is spelled.
-    StepDef("verify", "Verify configuration", WorkflowPhase.CONFIG_VERIFY, "verify"),
-    StepDef("asbuilt", "As-built document", WorkflowPhase.ASBUILT_DOCUMENT, "verify"),
+    StepDef("verify", "Verify configuration", WorkflowPhase.CONFIG_VERIFY, "verify", "ui_live_lab.py"),
+    StepDef("asbuilt", "As-built document", WorkflowPhase.ASBUILT_DOCUMENT, "verify", "ui_live_lab.py"),
 )
 
 # Preset modes -> the step keys they include. CUSTOM uses the explicit selection instead.

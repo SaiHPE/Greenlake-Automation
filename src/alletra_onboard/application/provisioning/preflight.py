@@ -113,7 +113,7 @@ def _vcenter_check(intent: ProvisioningIntent, vcenter_factory: Callable) -> Pre
     try:
         with vcenter_factory(intent.vcenter) as vcenter:
             hbas = vcenter.host_fc_hbas()
-    except Exception as exc:  # noqa: BLE001 - report it, never raise out of a preflight
+    except Exception as exc:  # report it, never raise out of a preflight
         return PreflightCheck(
             key="vcenter", label="vCenter", status="fail",
             detail=f"Could not reach vCenter {intent.vcenter.host}: {exc}",
@@ -150,7 +150,7 @@ def run_preflight(
                 | set(array.volume_names()) | set(array.volume_set_names())
             )
             ports = array.array_fc_ports()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         checks.append(PreflightCheck(
             key="array", label="Array management API", status="fail",
             detail=f"Could not reach {intent.array.host} over WSAPI: {exc}",

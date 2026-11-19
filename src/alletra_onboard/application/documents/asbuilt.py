@@ -238,7 +238,7 @@ def _text_parts(doc):
                 if part.is_linked_to_previous:
                     continue
                 yield part._element
-            except Exception:  # noqa: BLE001 - a malformed part must not stop the fill
+            except Exception:  # a malformed part must not stop the fill
                 continue
 
 

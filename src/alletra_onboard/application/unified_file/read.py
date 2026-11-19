@@ -242,7 +242,7 @@ def _same_serial(a: str, b: str) -> bool:
 def _run_serial(cli) -> str:
     try:
         return parse_showsys(cli.run("showsys")).get("serial", "")
-    except Exception:  # noqa: BLE001 - a serial that cannot be read cannot match: the read is refused
+    except Exception:  # a serial that cannot be read cannot match: the read is refused
         return ""
 
 

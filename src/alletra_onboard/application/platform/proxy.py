@@ -167,7 +167,7 @@ if _IS_WINDOWS:
         """Per-URL system proxy via WinHTTP: WinINET static, else PAC/WPAD — as the browser resolves it."""
         try:
             wh = _winhttp()
-        except Exception:  # noqa: BLE001 - winhttp unavailable
+        except Exception:  # winhttp unavailable
             return None
         cfg = _IE_PROXY_CONFIG()
         static: str | None = None
@@ -178,7 +178,7 @@ if _IS_WINDOWS:
                 static = _first_proxy(_wstr(cfg.lpszProxy))
                 auto_detect = bool(cfg.fAutoDetect)
                 pac_url = _wstr(cfg.lpszAutoConfigUrl)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         finally:
             _global_free(cfg.lpszAutoConfigUrl, cfg.lpszProxy, cfg.lpszProxyBypass)
@@ -202,7 +202,7 @@ if _IS_WINDOWS:
             info = _PROXY_INFO()
             try:
                 ok = wh.WinHttpGetProxyForUrl(session, url, ctypes.byref(opts), ctypes.byref(info))
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return None
             if not ok:
                 return None
@@ -223,7 +223,7 @@ if _IS_WINDOWS:
             if value:
                 try:
                     k32.GlobalFree(value)  # value is the real WinHTTP address (int), not a Python object
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
 
 else:  # pragma: no cover - the packaged app is Windows-only

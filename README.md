@@ -62,7 +62,7 @@ need no Node.
 
 ### One-time setup
 
-**Developer laptop.** Install git, Python 3.12, Node 20 and the GitHub CLI (`gh`), then:
+**Developer laptop.** Install git, Python 3.12, Node 20.19 or newer and the GitHub CLI (`gh`), then:
 ```bash
 gh auth login --hostname github.hpe.com        # browser login with your HPE account
 gh auth setup-git --hostname github.hpe.com    # plain git uses the same login

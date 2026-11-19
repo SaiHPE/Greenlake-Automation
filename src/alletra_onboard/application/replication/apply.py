@@ -128,7 +128,7 @@ def apply_plan(
                 status = starter.start_remote_copy_group(g)
                 record("start", g, d.get("start_where", "A"), "created" if status == "started" else status,
                        "started" if status == "started" else "was already started")
-    except Exception as exc:  # noqa: BLE001 - the array's message, where it stopped, what was created
+    except Exception as exc:  # the array's message, where it stopped, what was created
         done = [o for o in result.outcomes if o.status == "created"]
         result.error = (f"Stopped after {len(done)} write(s): {exc} The removal set below undoes exactly what "
                         "was created before the failure.")

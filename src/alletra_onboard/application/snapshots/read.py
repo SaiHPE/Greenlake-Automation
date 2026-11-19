@@ -216,6 +216,6 @@ def read_array(
             view.retention_max_hours = int(seconds) // 3600 if isinstance(seconds, int | float) else 0
             view.volumes = wsapi.volumes()
             view.vvsets = wsapi.volume_sets()
-    except Exception as exc:  # noqa: BLE001 - the step reports it; the operator fixes access and reads again
+    except Exception as exc:  # the step reports it; the operator fixes access and reads again
         view.read_error = f"Could not read {creds.host}: {exc}"
     return view

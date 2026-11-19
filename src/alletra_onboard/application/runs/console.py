@@ -48,7 +48,7 @@ class ConsoleService:
     def _peer(self, run_id: str) -> EndpointCreds | None:
         try:
             intent = self.coord.get_provisioning_intent(run_id)
-        except Exception:  # noqa: BLE001 - a run without the provisioning tabs has no peer
+        except Exception:  # a run without the provisioning tabs has no peer
             return None
         rep = getattr(intent, "replication", None)
         return rep.peer if rep is not None else None
@@ -94,7 +94,7 @@ class ConsoleService:
                                                                 "command line cannot take safely; open SSH yourself."}
         try:
             self.launcher(["ssh", f"{creds.username}@{creds.host}"])
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"launched": False, "command": line, "error": f"Could not open a terminal ({exc}). Run: {line}"}
         return {"launched": True, "command": line, "error": None}
 

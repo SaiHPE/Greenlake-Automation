@@ -76,7 +76,7 @@ class GreenLakeReadPreflightService:
     async def _check_auth(self) -> PreflightCheck:
         try:
             await self.token_provider.token()
-        except Exception as exc:  # noqa: BLE001 - operator-facing preflight should report all failures.
+        except Exception as exc:  # operator-facing preflight should report all failures.
             return _failed_check(
                 "greenlake_auth",
                 "Could not fetch a GreenLake OAuth token",
@@ -92,7 +92,7 @@ class GreenLakeReadPreflightService:
     async def _check_service_catalog(self, item: ArrayWorkItem) -> PreflightCheck:
         try:
             provisions = await self.service_catalog.service_manager_provisions(item.service_catalog_region_id)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return _failed_check(
                 "greenlake_service_catalog",
                 "Could not read Service Catalog provisions",
@@ -125,7 +125,7 @@ class GreenLakeReadPreflightService:
     async def _check_device_lookup(self, item: ArrayWorkItem) -> PreflightCheck:
         try:
             device = await self.devices.find_by_serial(item.serial_number)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return _failed_check(
                 "greenlake_device_lookup",
                 "Could not read Device Management inventory",
@@ -153,7 +153,7 @@ class GreenLakeReadPreflightService:
     async def _check_subscription_lookup(self, item: ArrayWorkItem) -> PreflightCheck:
         try:
             subscription = await self.subscriptions.find_by_key(item.subscription_key.get_secret_value())
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return _failed_check(
                 "greenlake_subscription_lookup",
                 "Could not read Subscription Management inventory",

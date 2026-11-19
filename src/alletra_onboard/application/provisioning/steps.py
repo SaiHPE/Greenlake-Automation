@@ -72,7 +72,7 @@ class DiscoveryZoningSteps:
                 try:
                     report = DiscoveryReport.model_validate_json(raw)
                     self._discovery[run_id] = report
-                except Exception:  # noqa: BLE001
+                except Exception:
                     # A stored report the current model can no longer read (an upgrade changed the
                     # schema, or the row is damaged). Treat it as absent so the operator can simply
                     # re-run discovery, instead of every step failing with a 500 and no way out.
@@ -105,7 +105,7 @@ class DiscoveryZoningSteps:
         self._discovery[run.run_id] = report
         try:
             coord.store.save_artifact(run.run_id, "discovery", report.model_dump_json().encode("utf-8"))
-        except Exception:  # noqa: BLE001 - discovery succeeded; failing to cache it must not fail the step.
+        except Exception:  # discovery succeeded; failing to cache it must not fail the step.
             pass
         if report.error:
             # D-10: the event's own message says what failed and what to do; the UI marks the step failed
@@ -154,7 +154,7 @@ class DiscoveryZoningSteps:
     def _save_zoned_hosts(self, run_id: str, hosts: list[str]) -> None:
         try:
             self._coord.store.save_artifact(run_id, "zoned_hosts", "\n".join(hosts).encode("utf-8"))
-        except Exception:  # noqa: BLE001 - the step succeeded; persisting the gate must not fail it
+        except Exception:  # the step succeeded; persisting the gate must not fail it
             pass
 
     def start_zoning_preview(self, run_id: str) -> RunRecord:
@@ -209,7 +209,7 @@ class DiscoveryZoningSteps:
         try:
             # The Array ports step's peer-port plan names a free port still zoned (SPEC-025 R3) from this read.
             coord.store.save_artifact(run.run_id, ACTIVE_ZONES_ARTIFACT, json.dumps(plan.active_zones).encode("utf-8"))
-        except Exception:  # noqa: BLE001 - the plan stands; failing to keep the zones only loses a note
+        except Exception:  # the plan stands; failing to keep the zones only loses a note
             pass
         pairs = sum(len(f.pairs) for f in plan.fabrics)
         coord.set_state(run, RunStatus.READY, WorkflowPhase.STORAGE_ZONING)
@@ -246,7 +246,7 @@ def latest_peer_view(coord: RunCoordinator, run_id: str) -> PeerPortView | None:
         if view:
             try:
                 return PeerPortView.model_validate(view)
-            except Exception:  # noqa: BLE001 - an unreadable stored view means "read the array again"
+            except Exception:  # an unreadable stored view means "read the array again"
                 return None
     return None
 
@@ -326,7 +326,7 @@ class ArrayPortsSteps:
             data["iscsi"] = section
             try:
                 view = await asyncio.to_thread(iscsi_network.read_port_network, intent.array)
-            except Exception as exc:  # noqa: BLE001 - the step reports; nothing is planned on half a read
+            except Exception as exc:  # the step reports; nothing is planned on half a read
                 section["error"] = f"Could not read {intent.array.host}: {exc}. Nothing was planned. Read the array again."
                 failures.append(section["error"])
             else:
@@ -398,7 +398,7 @@ class ArrayPortsSteps:
             stored = json.loads(raw)
             zones = {switch: None if active is None else {zone: set(members) for zone, members in active.items()}
                      for switch, active in stored.items()}
-        except Exception:  # noqa: BLE001 - unreadable: say the zones were not checked
+        except Exception:  # unreadable: say the zones were not checked
             return None
         return zones if any(active is not None for active in zones.values()) else None
 
@@ -417,7 +417,7 @@ class ArrayPortsSteps:
             try:
                 plan = PeerPortPlan.model_validate(section["plan"])
                 view = PeerPortView.model_validate(section["view"])
-            except Exception:  # noqa: BLE001 - an unreadable stored plan is no plan to judge against
+            except Exception:  # an unreadable stored plan is no plan to judge against
                 continue
             for action in plan.actions:
                 if action.state == "create" and action.nsp not in creates:

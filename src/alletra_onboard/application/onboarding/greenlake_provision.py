@@ -92,7 +92,7 @@ class GreenLakeProvisioningService:
             await self._apply_subscription(result, dry_run=dry_run)
             await self._verify(result, dry_run=dry_run)
             result.succeeded = not dry_run and all(p.status != FAILED for p in result.phases)
-        except Exception as exc:  # noqa: BLE001 - operator-facing pipeline must report, not crash.
+        except Exception as exc:  # operator-facing pipeline must report, not crash.
             detail = _exception_detail(exc)
             phase = _current_phase(result)
             result.error = detail
@@ -190,7 +190,7 @@ class GreenLakeProvisioningService:
         """Is the subscription key queryable yet? Ends the add poll early. Unreadable = 'not yet'."""
         try:
             return await self.subscriptions.find_by_key(key) is not None
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
 
     async def _serial_in_inventory(self, serial: str) -> bool:
@@ -198,7 +198,7 @@ class GreenLakeProvisioningService:
         answer must never end the poll — an unreachable read is 'not yet', not 'done'."""
         try:
             return await self.devices.find_by_serial(serial) is not None
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
 
     async def _assign_application(self, result: ProvisionResult, *, dry_run: bool) -> None:
@@ -302,7 +302,7 @@ class GreenLakeProvisioningService:
             return False
         try:
             return _assigned_state(await self.devices.get(device_id)) == ASSIGNED_STATE_TARGET
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
 
     async def _wait_for_device_state(self, device_id: str, target_state: str) -> dict[str, Any]:
@@ -391,7 +391,7 @@ def _greenlake_error_text(response: Any) -> str:
     """Pull the human-readable message + field issues out of a GreenLake error body."""
     try:
         data = response.json()
-    except Exception:  # noqa: BLE001 - error bodies are not always JSON.
+    except Exception:  # error bodies are not always JSON.
         return redact((response.text or "").strip()[:300])
     if not isinstance(data, dict):
         return ""

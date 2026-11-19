@@ -299,7 +299,7 @@ def read_group_details(
             for group in groups:
                 try:
                     text = cli.run(group_detail_command(group))
-                except Exception as exc:  # noqa: BLE001 - one group's read costs that group only
+                except Exception as exc:  # one group's read costs that group only
                     errors[group] = str(exc)
                     continue
                 found = next((g for g in parse_showrcopy_detail(text) if g.name == group), None)
@@ -308,7 +308,7 @@ def read_group_details(
                     errors[group] = first or "the array printed no block for it"
                 else:
                     details[group] = found
-    except Exception as exc:  # noqa: BLE001 - a report, never a gate
+    except Exception as exc:  # a report, never a gate
         errors = {group: f"Could not read {creds.host}: {exc}" for group in groups if group not in details}
     return details, errors
 
@@ -428,8 +428,8 @@ def read_array(
                 local, view.time_zone = parse_showdate(cli.run("showdate"))
                 if local is not None:
                     view.utc_offset_minutes = utc_offset_minutes(local, datetime.now(UTC))
-            except Exception:  # noqa: BLE001 - times are then shown in UTC
+            except Exception:  # times are then shown in UTC
                 pass
-    except Exception as exc:  # noqa: BLE001 - the step reports, the operator fixes the sheet
+    except Exception as exc:  # the step reports, the operator fixes the sheet
         view.read_error = f"Could not read {creds.host}: {exc}"
     return view

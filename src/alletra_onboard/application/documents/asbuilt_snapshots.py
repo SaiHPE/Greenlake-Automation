@@ -39,7 +39,7 @@ def _requests(data: AsBuiltData) -> list[SnapshotRequest]:
     for row in data.snapshots_tab or []:
         try:
             out.append(SnapshotRequest.model_validate(row))
-        except Exception:  # noqa: BLE001 - a row that no longer reads is left out, never guessed
+        except Exception:  # a row that no longer reads is left out, never guessed
             continue
     return out
 

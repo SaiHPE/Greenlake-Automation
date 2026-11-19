@@ -1,0 +1,8 @@
+{
+  "include": ["src"],
+  "extraPaths": ["src"],
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "standard",
+  "strict": ["src/alletra_onboard/domain"]
+}

@@ -346,11 +346,11 @@ def build_zoning_plan(
                 # the plan, which is complete without names.
                 try:
                     switch_name[label], _domain = parse_switchshow(switch.read("switchshow"))
-                except Exception:  # noqa: BLE001
+                except Exception:
                     switch_name[label] = ""
                 try:
                     fabric_name[label], fabric_switches[label] = parse_fabricshow(switch.fabricshow())
-                except Exception:  # noqa: BLE001
+                except Exception:
                     fabric_name[label], fabric_switches[label] = "", {}
                 if not local_ns[label]:
                     # Measured live 2026-08-15: one plan run got an empty local NS from a healthy
@@ -362,7 +362,7 @@ def build_zoning_plan(
                         "(nsshow) — devices plugged into that switch (typically this deployment's "
                         "array ports) cannot be placed. Likely transient: rebuild the plan."
                     )
-        except Exception as exc:  # noqa: BLE001 - one unreachable switch must not sink the plan
+        except Exception as exc:  # one unreachable switch must not sink the plan
             plan.active_zones[f"the {label} switch {creds.host or '(none on the sheet)'}"] = None
             ns[label] = {}
             local_ns[label] = {}

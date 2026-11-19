@@ -101,7 +101,7 @@ class ReplicationSteps:
             return None
         try:
             return ReplicationReport.model_validate_json(raw)
-        except Exception:  # noqa: BLE001 - an unreadable stored report means "read again"
+        except Exception:  # an unreadable stored report means "read again"
             return None
 
     def previewed_plan(self, run_id: str) -> ReplicationPlan | None:
@@ -133,7 +133,7 @@ class ReplicationSteps:
         plan = replication_plan.build_plan(report, intent.replication, intent).model_copy(update={"plan_id": new_plan_id()})
         try:
             coord.store.save_artifact(run.run_id, REPORT_ARTIFACT, report.model_dump_json().encode("utf-8"))
-        except Exception:  # noqa: BLE001 - the read succeeded; failing to cache it must not fail the step
+        except Exception:  # the read succeeded; failing to cache it must not fail the step
             pass
         self._plan[run.run_id] = (plan, report)
 
@@ -163,7 +163,7 @@ class ReplicationSteps:
             return None
         try:
             return LinkCheck.model_validate_json(raw)
-        except Exception:  # noqa: BLE001 - an unreadable stored check means "check again"
+        except Exception:  # an unreadable stored check means "check again"
             return None
 
     def start_link_check(self, run_id: str, *, duration_s: int = LINK_CHECK_TIME_DEFAULT) -> RunRecord:
@@ -197,7 +197,7 @@ class ReplicationSteps:
         ))
         try:
             coord.store.save_artifact(run.run_id, LINK_CHECK_ARTIFACT, check.model_dump_json().encode("utf-8"))
-        except Exception:  # noqa: BLE001 - the test ran; failing to cache it must not fail the step
+        except Exception:  # the test ran; failing to cache it must not fail the step
             pass
         data = {"link_check": check.model_dump(mode="json")}
         failed = [r for r in check.results if r.status == "failed"]
@@ -297,7 +297,7 @@ class ReplicationSteps:
         self._plan.pop(run.run_id, None)
         try:
             coord.store.save_artifact(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
-        except Exception:  # noqa: BLE001 - the writes happened; failing to cache the record must not fail the step
+        except Exception:  # the writes happened; failing to cache the record must not fail the step
             pass
         if result.error:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
@@ -328,7 +328,7 @@ class ReplicationSteps:
             if event.event_type == "replication.previewed" and event.data and event.data.get("plan"):
                 try:
                     return ReplicationPlan.model_validate(event.data["plan"])
-                except Exception:  # noqa: BLE001
+                except Exception:
                     return None
         return None
 
@@ -404,7 +404,7 @@ class ReplicationSteps:
         record: FailoverRecord = await asyncio.to_thread(partial(replication_failover.run_failover_test, intent, group, progress=progress))
         try:
             coord.store.save_artifact(run.run_id, FAILOVER_ARTIFACT, record.model_dump_json().encode("utf-8"))
-        except Exception:  # noqa: BLE001 - the test ran; failing to cache the record must not fail the step
+        except Exception:  # the test ran; failing to cache the record must not fail the step
             pass
         data = {"record": record.model_dump(mode="json")}
         if record.result == "passed":
@@ -427,5 +427,5 @@ class ReplicationSteps:
             return None
         try:
             return FailoverRecord.model_validate_json(raw)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None

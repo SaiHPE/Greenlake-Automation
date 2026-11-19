@@ -123,7 +123,7 @@ class WsapiV3Client:
         try:
             if self._http is not None and self._key:
                 self._send("DELETE", f"{_CREDENTIALS}/{self._key}")
-        except Exception:  # noqa: BLE001 - recorded in the command log by _send; nothing to undo
+        except Exception:  # recorded in the command log by _send; nothing to undo
             pass
         finally:
             self._key, self._cookies = "", []
@@ -214,6 +214,6 @@ class WsapiV3Client:
         if self._http is not None:
             try:
                 self._http.close()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
             self._http = None

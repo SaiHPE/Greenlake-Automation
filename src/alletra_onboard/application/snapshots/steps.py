@@ -160,7 +160,7 @@ class SnapshotSteps:
         self._plan.pop(run.run_id, None)
         try:
             coord.store.save_artifact(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
-        except Exception:  # noqa: BLE001 - the writes happened; failing to cache the record must not fail the step
+        except Exception:  # the writes happened; failing to cache the record must not fail the step
             pass
         data = {"result": result.model_dump(mode="json")}
         if result.error:
@@ -189,7 +189,7 @@ class SnapshotSteps:
             if event.event_type == "snapshots.previewed" and event.data and event.data.get("plan"):
                 try:
                     return SnapshotPlan.model_validate(event.data["plan"])
-                except Exception:  # noqa: BLE001
+                except Exception:
                     return None
         return None
 

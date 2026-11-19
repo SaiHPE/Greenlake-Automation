@@ -1,0 +1,74 @@
+# The two dependency rules of docs/STANDARD.md where an import under `if TYPE_CHECKING:` does not
+# count: L3 (application code may name an adapter class in an annotation, since L7 gives it no
+# Protocol to name instead) and L6 (a type-only import is not an import cycle). Every other
+# contract is in pyproject.toml, where such an import counts. `lint-imports` reads both files (the
+# `deps` step of scripts/check.py). An `ignore_imports` entry is a violation that exists today: fix
+# it and delete its line (a line whose import is gone fails the check). Never add one.
+[tool.importlinter]
+root_package = "alletra_onboard"
+include_external_packages = true
+exclude_type_checking_imports = true
+
+# The entrypoints are allowed importers here because L5 (pyproject.toml) is their rule.
+[[tool.importlinter.contracts]]
+id = "L3-clients-only"
+name = "L3 application imports adapters only in a context's clients.py"
+type = "protected"
+protected_modules = ["alletra_onboard.adapters"]
+allowed_importers = [
+  "alletra_onboard.application.*.clients",
+  "alletra_onboard.api",
+  "alletra_onboard.cli",
+]
+unmatched_ignore_imports_alerting = "error"
+ignore_imports = [
+  "alletra_onboard.application.documents.verification -> alletra_onboard.adapters.array.cli_client",
+  "alletra_onboard.application.documents.verification -> alletra_onboard.adapters.array.wsapi_v3_client",
+  "alletra_onboard.application.onboarding.greenlake_preflight -> alletra_onboard.adapters.greenlake.service_catalog",
+  "alletra_onboard.application.onboarding.greenlake_provision -> alletra_onboard.adapters.greenlake.devices",
+  "alletra_onboard.application.onboarding.greenlake_provision -> alletra_onboard.adapters.greenlake.http_client",
+  "alletra_onboard.application.onboarding.greenlake_provision -> alletra_onboard.adapters.greenlake.service_catalog",
+  "alletra_onboard.application.onboarding.greenlake_provision -> alletra_onboard.adapters.greenlake.subscriptions",
+  "alletra_onboard.application.onboarding.steps -> alletra_onboard.adapters.browser.cloudinit_wizard",
+  "alletra_onboard.application.onboarding.steps -> alletra_onboard.adapters.browser.dscc_setup",
+  "alletra_onboard.application.provisioning.discovery -> alletra_onboard.adapters.hosts.linux_ssh",
+  "alletra_onboard.application.provisioning.discovery -> alletra_onboard.adapters.hosts.windows_winrm",
+  "alletra_onboard.application.replication.link_check -> alletra_onboard.adapters.array.cli_client",
+  "alletra_onboard.application.replication.partnership -> alletra_onboard.adapters.array.cli_client",
+  "alletra_onboard.application.replication.partnership -> alletra_onboard.adapters.array.rc_cli_client",
+  "alletra_onboard.application.runs.console -> alletra_onboard.adapters.array.cli_client",
+  "alletra_onboard.application.runs.console -> alletra_onboard.adapters.command_log",
+  "alletra_onboard.application.runs.coordinator -> alletra_onboard.adapters.command_log",
+  "alletra_onboard.application.runs.coordinator -> alletra_onboard.adapters.device_trust",
+  "alletra_onboard.application.snapshots.apply -> alletra_onboard.adapters.array.cli_client",
+  "alletra_onboard.application.snapshots.apply -> alletra_onboard.adapters.array.rc_cli_client",
+  "alletra_onboard.application.snapshots.apply -> alletra_onboard.adapters.array.snap_cli_client",
+  "alletra_onboard.application.unified_file.read -> alletra_onboard.adapters.array.wsapi_v3_client",
+]
+broken_contract_guidance = "STANDARD L3: application code builds clients only in its context's clients.py and receives them as factories; the errors and plan types it names are defined in domain. Do not add an ignore_imports line."
+
+# Each ignore_imports line is one import that closes a cycle today: the fewest to remove, as
+# import-linter names them. Cutting the other side of a cycle leaves its line here matching an
+# import that is no longer a problem; delete it then.
+[[tool.importlinter.contracts]]
+id = "L6-no-cycles"
+name = "L6 no import cycles between sibling packages or modules"
+type = "acyclic_siblings"
+ancestors = ["alletra_onboard"]
+unmatched_ignore_imports_alerting = "error"
+ignore_imports = [
+  "alletra_onboard.adapters.greenlake.auth -> alletra_onboard.application.platform.tls",
+  "alletra_onboard.adapters.greenlake.http_client -> alletra_onboard.application.platform.tls",
+  "alletra_onboard.adapters.system.clock -> alletra_onboard.application.platform.tls",
+  "alletra_onboard.application.provisioning.discovery -> alletra_onboard.application.replication.read",
+  "alletra_onboard.application.provisioning.iscsi_network -> alletra_onboard.application.replication.read",
+  "alletra_onboard.application.provisioning.peer_ports -> alletra_onboard.application.replication.read",
+  "alletra_onboard.application.replication.read -> alletra_onboard.application.documents.asbuilt_parse",
+  "alletra_onboard.application.runs.console -> alletra_onboard.application.provisioning.clients",
+  "alletra_onboard.application.unified_file.read -> alletra_onboard.application.provisioning.discovery",
+  "alletra_onboard.application.unified_file.read -> alletra_onboard.application.replication.read",
+  "alletra_onboard.application.documents.asbuilt_parse -> alletra_onboard.application.documents.asbuilt",
+  "alletra_onboard.application.documents.asbuilt_snapshots -> alletra_onboard.application.documents.asbuilt",
+  "alletra_onboard.domain.snapshots -> alletra_onboard.domain.provisioning",
+]
+broken_contract_guidance = "STANDARD L6: no import cycles, and no import inside a function to hide one. Move what both sides need down (B1, L2), or pass it in. Do not add an ignore_imports line."

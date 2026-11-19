@@ -179,7 +179,7 @@ def apply_plan(
                     result.removal_notes.append(
                         f"Snapshots the schedule {request.name} takes expire on their own after {request.expire_hours} "
                         "hours. To remove them sooner, remove each with removevv -f.")
-    except Exception as exc:  # noqa: BLE001 - the array's words, where it stopped, what to remove
+    except Exception as exc:  # the array's words, where it stopped, what to remove
         if in_flight is not None:
             _diff_after_failure(in_flight, provisioning, wsapi_factory, result, remove)
         done = sum(1 for o in result.outcomes if o.status == "created")
@@ -215,7 +215,7 @@ def _schedule_after_failure(action: SnapshotAction, line: RemovalItem, cli, resu
     and read well, shows the schedule was not made."""
     try:
         names = {s.name for s in _read_schedules(cli, f"after {action.name} failed")}
-    except Exception:  # noqa: BLE001 - the line stays, with a note to check by hand
+    except Exception:  # the line stays, with a note to check by hand
         result.removal_notes.append(f"The array was not read after the schedule {action.name} failed. Check with "
                                     f"showsched {action.name}; if it is not there, skip its removesched line.")
         return
@@ -231,7 +231,7 @@ def _diff_after_failure(in_flight: tuple[SnapshotAction, set[str]], provisioning
     try:
         with wsapi_factory(provisioning.array) as wsapi:
             remove(made_by(action, before, wsapi.volumes()))
-    except Exception:  # noqa: BLE001 - the note below stands in for the read that failed
+    except Exception:  # the note below stands in for the read that failed
         names = " ".join(now_snapshot_name(m) for m in action.members)
         result.removal_notes.append(
             f"The array was not read after the snapshot of {action.source} failed. Check with showvv {names}; "
