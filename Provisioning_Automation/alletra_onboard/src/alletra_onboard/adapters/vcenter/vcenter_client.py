@@ -17,7 +17,7 @@ from collections.abc import Callable
 try:
     from pyVim.connect import Disconnect, SmartConnect
     from pyVmomi import vim
-except Exception:  # noqa: BLE001 - bundled in the .exe; optional otherwise
+except Exception:  # bundled in the .exe; optional otherwise
     SmartConnect = None
     Disconnect = None
     vim = None
@@ -189,7 +189,7 @@ class VCenterClient:
         if self._si is not None:
             try:
                 Disconnect(self._si)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
             self._si = None
 
@@ -235,7 +235,7 @@ class VCenterClient:
         finally:
             try:
                 view.Destroy()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         return hbas
 
@@ -255,7 +255,7 @@ class VCenterClient:
         finally:
             try:
                 view.Destroy()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         return out
 
@@ -275,7 +275,7 @@ class VCenterClient:
         finally:
             try:
                 view.Destroy()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
         return out
 

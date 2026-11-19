@@ -1,0 +1,512 @@
+# Today's known violations of docs/STANDARD.md, one line each. scripts/fitness.py compares the code
+# with this file (the `lint`, `complexity`, `fitness`, `pyright`, `vulture` and `knip` steps of
+# scripts/check.py) and fails on:
+#
+#   NEW    a violation that is not listed here. Fix the code. Never add a line.
+#   WORSE  a listed one whose number is now higher than its ceiling. Bring it back down.
+#   STALE  a listed one that is gone. Delete its line: the list only gets shorter.
+#
+# A number lower than its ceiling passes. `scripts/fitness.py --tighten` lowers every ceiling to
+# today's value and deletes the stale lines; it never adds a line and never raises a number.
+#
+# A key names the file and the function (`<module>` for code outside any function), never a line
+# number, so it survives edits above it. A function that moves or is renamed gets a new key: move
+# its lines here by hand in the same change, and say so in the pull request.
+#
+# The dependency rules keep their list in pyproject.toml and quality/imports-type-only.toml
+# (`ignore_imports`), and the frontend lint keeps its own in frontend/eslint-suppressions.json.
+
+[complexity]
+# STANDARD M1. `file :: function :: rule` = the function's number today: C901 complexity (limit 10),
+# PLR0913 parameters (5), PLR0912 branches (12), PLR0915 statements (50). A listed function may not
+# get worse; it is fixed when it is next changed for any reason.
+"src/alletra_onboard/adapters/array/cli_client.py :: ArrayCliClient.__init__ :: PLR0913" = 6
+"src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client.__init__ :: PLR0913" = 6
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter.run :: C901" = 15
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter.run :: PLR0912" = 17
+"src/alletra_onboard/adapters/browser/debug_browser.py :: debug_browser_args :: PLR0913" = 6
+"src/alletra_onboard/adapters/browser/debug_browser.py :: launch_debug_browser :: PLR0913" = 6
+"src/alletra_onboard/adapters/command_log.py :: record :: PLR0913" = 9
+"src/alletra_onboard/adapters/device_trust.py :: open_ssh :: PLR0913" = 6
+"src/alletra_onboard/adapters/fabric/brocade_client.py :: BrocadeClient.__init__ :: PLR0913" = 6
+"src/alletra_onboard/adapters/greenlake/http_client.py :: GreenLakeHttpClient._record :: PLR0913" = 8
+"src/alletra_onboard/adapters/greenlake/http_client.py :: GreenLakeHttpClient.poll_async :: PLR0913" = 6
+"src/alletra_onboard/adapters/hosts/linux_ssh.py :: LinuxHostClient.__init__ :: PLR0913" = 6
+"src/alletra_onboard/api/app.py :: create_app :: C901" = 115
+"src/alletra_onboard/api/app.py :: create_app :: PLR0915" = 281
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_failover_section :: C901" = 13
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_failover_section :: PLR0912" = 13
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_file_section :: C901" = 11
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_file_section :: PLR0912" = 14
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_iscsi_network_section :: C901" = 12
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_iscsi_network_section :: PLR0912" = 13
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_peer_ports_section :: C901" = 12
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_peer_ports_section :: PLR0912" = 14
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_rc_group_detail :: PLR0913" = 6
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_replication_section :: C901" = 33
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_replication_section :: PLR0912" = 33
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_replication_section :: PLR0915" = 116
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_zoning_section :: C901" = 16
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_zoning_section :: PLR0912" = 17
+"src/alletra_onboard/application/documents/asbuilt.py :: _fill_placeholders :: C901" = 14
+"src/alletra_onboard/application/documents/asbuilt.py :: generate_asbuilt :: C901" = 13
+"src/alletra_onboard/application/documents/asbuilt.py :: generate_asbuilt :: PLR0912" = 14
+"src/alletra_onboard/application/documents/asbuilt_docx.py :: _cell_text :: PLR0913" = 6
+"src/alletra_onboard/application/documents/asbuilt_docx.py :: hpe_table :: PLR0913" = 7
+"src/alletra_onboard/application/documents/handover.py :: parse_alerts :: C901" = 11
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps.__init__ :: PLR0913" = 9
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._run_asbuilt :: PLR0913" = 9
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._run_records :: C901" = 22
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._run_records :: PLR0912" = 21
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._run_records :: PLR0915" = 51
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps.start_asbuilt :: PLR0913" = 7
+"src/alletra_onboard/application/documents/verification.py :: _health_issues :: C901" = 11
+"src/alletra_onboard/application/onboarding/greenlake_provision.py :: GreenLakeProvisioningService.__init__ :: PLR0913" = 6
+"src/alletra_onboard/application/onboarding/steps.py :: OnboardingSteps._run_cloudinit :: C901" = 13
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_iscsi_network_tab :: C901" = 17
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_iscsi_network_tab :: PLR0912" = 16
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_migration_tab :: C901" = 13
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_network_tab :: C901" = 14
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_network_tab :: PLR0912" = 13
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_peer_ports_tab :: C901" = 11
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_provisioning_tab :: C901" = 12
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_replication_tab :: C901" = 19
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_replication_tab :: PLR0912" = 19
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_replication_tab :: PLR0915" = 54
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_snapshots_tab :: C901" = 26
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_snapshots_tab :: PLR0912" = 25
+"src/alletra_onboard/application/platform/init_sheet.py :: _parse_snapshots_tab :: PLR0915" = 70
+"src/alletra_onboard/application/platform/init_sheet.py :: _replace_row_table :: C901" = 11
+"src/alletra_onboard/application/platform/init_sheet.py :: compose_workbook_bytes :: C901" = 21
+"src/alletra_onboard/application/platform/init_sheet.py :: compose_workbook_bytes :: PLR0912" = 20
+"src/alletra_onboard/application/platform/init_sheet.py :: compose_workbook_bytes :: PLR0913" = 11
+"src/alletra_onboard/application/provisioning/discovery.py :: assemble_hosts :: C901" = 57
+"src/alletra_onboard/application/provisioning/discovery.py :: assemble_hosts :: PLR0912" = 52
+"src/alletra_onboard/application/provisioning/discovery.py :: assemble_hosts :: PLR0915" = 127
+"src/alletra_onboard/application/provisioning/discovery.py :: discover :: C901" = 23
+"src/alletra_onboard/application/provisioning/discovery.py :: discover :: PLR0912" = 19
+"src/alletra_onboard/application/provisioning/discovery.py :: discover :: PLR0913" = 7
+"src/alletra_onboard/application/provisioning/discovery.py :: discover :: PLR0915" = 76
+"src/alletra_onboard/application/provisioning/discovery.py :: resolve_port_fabrics :: C901" = 14
+"src/alletra_onboard/application/provisioning/discovery.py :: resolve_port_fabrics :: PLR0912" = 14
+"src/alletra_onboard/application/provisioning/hosts.py :: resolve_declared_hosts :: C901" = 17
+"src/alletra_onboard/application/provisioning/hosts.py :: resolve_declared_hosts :: PLR0912" = 13
+"src/alletra_onboard/application/provisioning/hosts.py :: resolve_declared_hosts :: PLR0915" = 70
+"src/alletra_onboard/application/provisioning/hosts.py :: resolve_declared_hosts.take :: PLR0913" = 6
+"src/alletra_onboard/application/provisioning/hosts.py :: union_hosts :: C901" = 26
+"src/alletra_onboard/application/provisioning/hosts.py :: union_hosts :: PLR0912" = 15
+"src/alletra_onboard/application/provisioning/hosts.py :: union_hosts :: PLR0915" = 60
+"src/alletra_onboard/application/provisioning/hosts.py :: union_hosts.claim :: PLR0913" = 6
+"src/alletra_onboard/application/provisioning/iscsi_network.py :: _action :: C901" = 12
+"src/alletra_onboard/application/provisioning/iscsi_network.py :: plan_iscsi_vlans :: C901" = 14
+"src/alletra_onboard/application/provisioning/iscsi_network.py :: plan_iscsi_vlans :: PLR0912" = 13
+"src/alletra_onboard/application/provisioning/path_verify.py :: attach_esxi_view :: C901" = 11
+"src/alletra_onboard/application/provisioning/path_verify.py :: attach_esxi_view :: PLR0913" = 6
+"src/alletra_onboard/application/provisioning/path_verify.py :: verify_paths :: C901" = 11
+"src/alletra_onboard/application/provisioning/path_verify.py :: verify_provisioned_paths :: PLR0913" = 7
+"src/alletra_onboard/application/provisioning/peer_ports.py :: build_view :: PLR0913" = 6
+"src/alletra_onboard/application/provisioning/peer_ports.py :: plan_peer_ports :: C901" = 11
+"src/alletra_onboard/application/provisioning/peer_ports.py :: read_back_peer_ports :: C901" = 11
+"src/alletra_onboard/application/provisioning/steps.py :: ArrayPortsSteps._run_ports_preview :: PLR0915" = 60
+"src/alletra_onboard/application/provisioning/storage_provision.py :: _ArrayState.__init__ :: PLR0913" = 6
+"src/alletra_onboard/application/provisioning/storage_provision.py :: apply_plan :: C901" = 19
+"src/alletra_onboard/application/provisioning/storage_provision.py :: apply_plan :: PLR0912" = 20
+"src/alletra_onboard/application/provisioning/storage_provision.py :: apply_plan :: PLR0915" = 80
+"src/alletra_onboard/application/provisioning/storage_provision.py :: build_plan :: C901" = 24
+"src/alletra_onboard/application/provisioning/storage_provision.py :: build_plan :: PLR0912" = 22
+"src/alletra_onboard/application/provisioning/storage_provision.py :: build_plan :: PLR0915" = 75
+"src/alletra_onboard/application/provisioning/zoning.py :: build_report :: C901" = 17
+"src/alletra_onboard/application/provisioning/zoning.py :: build_report :: PLR0912" = 16
+"src/alletra_onboard/application/provisioning/zoning.py :: parse_active_zones :: C901" = 19
+"src/alletra_onboard/application/provisioning/zoning.py :: parse_active_zones :: PLR0912" = 18
+"src/alletra_onboard/application/provisioning/zoning.py :: parse_active_zones :: PLR0915" = 52
+"src/alletra_onboard/application/provisioning/zoning_plan.py :: _aliased :: PLR0913" = 13
+"src/alletra_onboard/application/provisioning/zoning_plan.py :: _proposed_alias :: PLR0913" = 6
+"src/alletra_onboard/application/provisioning/zoning_plan.py :: build_zoning_plan :: C901" = 54
+"src/alletra_onboard/application/provisioning/zoning_plan.py :: build_zoning_plan :: PLR0912" = 45
+"src/alletra_onboard/application/provisioning/zoning_plan.py :: build_zoning_plan :: PLR0915" = 143
+"src/alletra_onboard/application/provisioning/zoning_plan.py :: parse_nameserver :: C901" = 11
+"src/alletra_onboard/application/provisioning/zoning_plan.py :: render_commands :: C901" = 24
+"src/alletra_onboard/application/provisioning/zoning_plan.py :: render_commands :: PLR0912" = 20
+"src/alletra_onboard/application/provisioning/zoning_plan.py :: render_commands :: PLR0915" = 65
+"src/alletra_onboard/application/replication/apply.py :: apply_plan :: C901" = 19
+"src/alletra_onboard/application/replication/apply.py :: apply_plan :: PLR0912" = 14
+"src/alletra_onboard/application/replication/apply.py :: apply_plan :: PLR0915" = 70
+"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: C901" = 40
+"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: PLR0912" = 29
+"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: PLR0913" = 9
+"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: PLR0915" = 145
+"src/alletra_onboard/application/replication/link_check.py :: _check_pair :: PLR0913" = 8
+"src/alletra_onboard/application/replication/link_check.py :: _ping_latency :: PLR0913" = 6
+"src/alletra_onboard/application/replication/link_check.py :: run_link_check :: PLR0913" = 8
+"src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: C901" = 30
+"src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: PLR0912" = 21
+"src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: PLR0915" = 88
+"src/alletra_onboard/application/replication/plan.py :: build_plan :: C901" = 26
+"src/alletra_onboard/application/replication/plan.py :: build_plan :: PLR0912" = 26
+"src/alletra_onboard/application/replication/plan.py :: build_plan :: PLR0915" = 87
+"src/alletra_onboard/application/replication/plan.py :: check :: C901" = 32
+"src/alletra_onboard/application/replication/plan.py :: check :: PLR0912" = 36
+"src/alletra_onboard/application/replication/plan.py :: check :: PLR0915" = 88
+"src/alletra_onboard/application/replication/read.py :: parse_showrcopy :: C901" = 20
+"src/alletra_onboard/application/replication/read.py :: parse_showrcopy :: PLR0912" = 19
+"src/alletra_onboard/application/replication/read.py :: parse_showrcopy :: PLR0915" = 61
+"src/alletra_onboard/application/replication/verify.py :: verify :: C901" = 13
+"src/alletra_onboard/application/replication/verify.py :: verify :: PLR0912" = 13
+"src/alletra_onboard/application/service.py :: OnboardingService.__init__ :: PLR0913" = 7
+"src/alletra_onboard/application/service.py :: OnboardingService.record_zoning_render :: PLR0913" = 6
+"src/alletra_onboard/application/service.py :: OnboardingService.start_asbuilt :: PLR0913" = 7
+"src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: C901" = 22
+"src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: PLR0912" = 18
+"src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: PLR0913" = 7
+"src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: PLR0915" = 77
+"src/alletra_onboard/application/snapshots/plan.py :: _count_per_member :: PLR0913" = 6
+"src/alletra_onboard/domain/provisioning.py :: ProvisioningIntent.from_simple :: PLR0913" = 12
+"tests/unit/test_api.py :: _fill_template :: C901" = 12
+"tests/unit/test_frozen_ui_words.py :: collect :: C901" = 22
+"tests/unit/test_frozen_ui_words.py :: collect :: PLR0912" = 21
+"tests/unit/test_frozen_ui_words.py :: collect.add :: PLR0913" = 6
+"tests/unit/test_host_keys.py :: test_a_pin_whose_key_cannot_be_read_says_so_and_sends_nothing :: PLR0913" = 6
+"tests/unit/test_onboarding_service.py :: test_replication_preview_reads_both_arrays_and_holds_the_plan :: PLR0915" = 116
+"tests/unit/test_plan_truth.py :: TruthfulFakeWsapi.__init__ :: PLR0913" = 6
+"tests/unit/test_replication_apply.py :: _group :: PLR0913" = 6
+"tests/unit/test_replication_failover.py :: FakePair.__init__ :: PLR0913" = 9
+"tests/unit/test_replication_link_check.py :: _Cli.__init__ :: PLR0913" = 6
+"tests/unit/test_replication_partnership.py :: _RcCli.__init__ :: PLR0913" = 7
+"tests/unit/test_replication_rcfc.py :: _target :: PLR0913" = 7
+"tests/unit/test_snapshots_apply.py :: _ArrayWsapi.__init__ :: PLR0913" = 7
+"tests/unit/test_snapshots_apply.py :: _Ssh.__init__ :: PLR0913" = 8
+"tests/unit/test_storage_services.py :: FakeWsapi.__init__ :: PLR0913" = 7
+
+[lint]
+# Every other ruff rule. `file :: function :: rule` = how many times the function breaks the rule.
+# BLE001 is E1, S110 and S112 are E2, PLC0415 is L6, PGH003 and RUF100 are T3, ERA001, FIX and TD are C1.
+"src/alletra_onboard/adapters/array/cli_client.py :: ArrayCliClient.close :: BLE001" = 1
+"src/alletra_onboard/adapters/array/cli_client.py :: ArrayCliClient.close :: S110" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: <module> :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient :: ERA001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._array_code :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._array_reason :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._certificate_changed :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._certificate_changed :: S110" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._existing_set_members :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._safe_str :: BLE001" = 2
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.close :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.close :: S110" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.host_set_names :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.volume_set_names :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: _install_pinned_transport :: PLC0415" = 1
+"src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client._close_http :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client._close_http :: S110" = 1
+"src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client.logout :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client.logout :: S110" = 1
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter._body_text :: BLE001" = 1
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter._dump :: BLE001" = 1
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter._dump :: S110" = 1
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter._select :: BLE001" = 1
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter._select :: S110" = 1
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter._wait_for_operator_submit :: BLE001" = 1
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter.run :: BLE001" = 1
+"src/alletra_onboard/adapters/browser/dscc_setup.py :: DsccSetupAdapter._dump :: BLE001" = 1
+"src/alletra_onboard/adapters/browser/dscc_setup.py :: DsccSetupAdapter._dump :: S110" = 1
+"src/alletra_onboard/adapters/browser/dscc_setup.py :: DsccSetupAdapter.run :: BLE001" = 1
+"src/alletra_onboard/adapters/command_log.py :: record :: BLE001" = 1
+"src/alletra_onboard/adapters/command_log.py :: record :: S110" = 1
+"src/alletra_onboard/adapters/fabric/brocade_client.py :: BrocadeClient :: ERA001" = 1
+"src/alletra_onboard/adapters/fabric/brocade_client.py :: BrocadeClient.close :: BLE001" = 1
+"src/alletra_onboard/adapters/fabric/brocade_client.py :: BrocadeClient.close :: S110" = 1
+"src/alletra_onboard/adapters/hosts/linux_ssh.py :: LinuxHostClient.close :: BLE001" = 1
+"src/alletra_onboard/adapters/hosts/linux_ssh.py :: LinuxHostClient.close :: S110" = 1
+"src/alletra_onboard/adapters/hosts/linux_ssh.py :: LinuxHostClient.run :: BLE001" = 1
+"src/alletra_onboard/adapters/hosts/windows_winrm.py :: WindowsHostClient.connect :: BLE001" = 1
+"src/alletra_onboard/adapters/hosts/windows_winrm.py :: WindowsHostClient.read :: BLE001" = 1
+"src/alletra_onboard/adapters/system/clock.py :: _server_utc :: BLE001" = 1
+"src/alletra_onboard/adapters/system/clock.py :: _set_system_utc :: PLC0415" = 1
+"src/alletra_onboard/adapters/system/clock.py :: clock_status :: BLE001" = 1
+"src/alletra_onboard/adapters/system/clock.py :: is_elevated :: BLE001" = 1
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: <module> :: BLE001" = 1
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient._read_fc_hbas :: BLE001" = 1
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient._read_fc_hbas :: S110" = 1
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient._read_identities :: BLE001" = 1
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient._read_identities :: S110" = 1
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient._read_luns :: BLE001" = 1
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient._read_luns :: S110" = 1
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient.close :: BLE001" = 1
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient.close :: S110" = 1
+"src/alletra_onboard/api/app.py :: _wsapi_capability :: PLC0415" = 1
+"src/alletra_onboard/api/schemas.py :: <module> :: ERA001" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_checkhealth_after :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_file_section :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_handover_alerts :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_handover_capacity :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_handover_section :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_hosts_section :: PLC0415" = 2
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_inventory_after :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_iscsi_network_section :: PLC0415" = 4
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_link_check :: PLC0415" = 2
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_peer_ports_section :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_presentations_section :: PLC0415" = 2
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_provisioned_sections :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_provisioning_section :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_replication_section :: PLC0415" = 2
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_typed_latency :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_volumes_section :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _insert_mono_after :: PLC0415" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _text_parts :: BLE001" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _text_parts :: S112" = 1
+"src/alletra_onboard/application/documents/asbuilt_snapshots.py :: _requests :: BLE001" = 1
+"src/alletra_onboard/application/documents/asbuilt_snapshots.py :: _requests :: S112" = 1
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._collect_asbuilt :: BLE001" = 2
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._collect_file :: BLE001" = 1
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._render_asbuilt :: PLC0415" = 2
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._run_asbuilt :: BLE001" = 2
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._run_asbuilt :: S110" = 1
+"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._run_verify :: BLE001" = 2
+"src/alletra_onboard/application/documents/verification.py :: verify :: BLE001" = 1
+"src/alletra_onboard/application/onboarding/greenlake_preflight.py :: GreenLakeReadPreflightService._check_auth :: BLE001" = 1
+"src/alletra_onboard/application/onboarding/greenlake_preflight.py :: GreenLakeReadPreflightService._check_device_lookup :: BLE001" = 1
+"src/alletra_onboard/application/onboarding/greenlake_preflight.py :: GreenLakeReadPreflightService._check_service_catalog :: BLE001" = 1
+"src/alletra_onboard/application/onboarding/greenlake_preflight.py :: GreenLakeReadPreflightService._check_subscription_lookup :: BLE001" = 1
+"src/alletra_onboard/application/onboarding/greenlake_provision.py :: GreenLakeProvisioningService._device_assigned :: BLE001" = 1
+"src/alletra_onboard/application/onboarding/greenlake_provision.py :: GreenLakeProvisioningService._serial_in_inventory :: BLE001" = 1
+"src/alletra_onboard/application/onboarding/greenlake_provision.py :: GreenLakeProvisioningService._subscription_present :: BLE001" = 1
+"src/alletra_onboard/application/onboarding/greenlake_provision.py :: GreenLakeProvisioningService.provision :: BLE001" = 1
+"src/alletra_onboard/application/onboarding/greenlake_provision.py :: _exception_detail :: PLC0415" = 1
+"src/alletra_onboard/application/onboarding/greenlake_provision.py :: _greenlake_error_text :: BLE001" = 1
+"src/alletra_onboard/application/onboarding/health.py :: greenlake_check :: BLE001" = 1
+"src/alletra_onboard/application/platform/prereqs.py :: _check_one :: BLE001" = 1
+"src/alletra_onboard/application/platform/prereqs.py :: _check_one :: S110" = 1
+"src/alletra_onboard/application/platform/prereqs.py :: _check_via_proxy :: BLE001" = 2
+"src/alletra_onboard/application/platform/proxy.py :: _global_free :: BLE001" = 1
+"src/alletra_onboard/application/platform/proxy.py :: _global_free :: S110" = 1
+"src/alletra_onboard/application/platform/proxy.py :: _win_proxy_for_url :: BLE001" = 1
+"src/alletra_onboard/application/platform/proxy.py :: _win_system_proxy :: BLE001" = 2
+"src/alletra_onboard/application/platform/proxy.py :: _win_system_proxy :: S110" = 1
+"src/alletra_onboard/application/platform/tls.py :: _load_certifi :: PLC0415" = 1
+"src/alletra_onboard/application/platform/tls.py :: ssl_context :: BLE001" = 1
+"src/alletra_onboard/application/platform/tls.py :: ssl_context :: S110" = 1
+"src/alletra_onboard/application/provisioning/discovery.py :: _read_file_side :: BLE001" = 2
+"src/alletra_onboard/application/provisioning/discovery.py :: _read_sheet_hosts :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/discovery.py :: _refine_fabrics_from_switches :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/discovery.py :: _refine_fabrics_from_switches :: S112" = 1
+"src/alletra_onboard/application/provisioning/discovery.py :: discover :: BLE001" = 5
+"src/alletra_onboard/application/provisioning/discovery.py :: discover._p :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/discovery.py :: discover._p :: S110" = 1
+"src/alletra_onboard/application/provisioning/path_verify.py :: verify_provisioned_paths :: BLE001" = 3
+"src/alletra_onboard/application/provisioning/peer_ports.py :: read_view :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/preflight.py :: _vcenter_check :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/preflight.py :: run_preflight :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: ArrayPortsSteps._active_zones :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: ArrayPortsSteps._before_the_paste :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: ArrayPortsSteps._before_the_paste :: S112" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: ArrayPortsSteps._run_ports_preview :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: DiscoveryZoningSteps._run_discover :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: DiscoveryZoningSteps._run_discover :: S110" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: DiscoveryZoningSteps._run_zoning_plan :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: DiscoveryZoningSteps._run_zoning_plan :: S110" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: DiscoveryZoningSteps._save_zoned_hosts :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: DiscoveryZoningSteps._save_zoned_hosts :: S110" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: DiscoveryZoningSteps.require_discovery :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/steps.py :: latest_peer_view :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/storage_provision.py :: apply_plan :: BLE001" = 3
+"src/alletra_onboard/application/provisioning/storage_provision.py :: build_plan :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/storage_provision.py :: read_array_objects :: BLE001" = 1
+"src/alletra_onboard/application/provisioning/zoning.py :: _hosts_in_scope :: PLC0415" = 1
+"src/alletra_onboard/application/provisioning/zoning_plan.py :: build_zoning_plan :: BLE001" = 3
+"src/alletra_onboard/application/replication/apply.py :: apply_plan :: BLE001" = 1
+"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: BLE001" = 6
+"src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: BLE001" = 1
+"src/alletra_onboard/application/replication/read.py :: read_array :: BLE001" = 2
+"src/alletra_onboard/application/replication/read.py :: read_array :: S110" = 1
+"src/alletra_onboard/application/replication/read.py :: read_group_details :: BLE001" = 2
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps._plan_for_verify :: BLE001" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps._run_apply :: BLE001" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps._run_apply :: S110" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps._run_failover :: BLE001" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps._run_failover :: S110" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps._run_link_check :: BLE001" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps._run_link_check :: S110" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps._run_preview :: BLE001" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps._run_preview :: S110" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps.current_report :: BLE001" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps.failover_record :: BLE001" = 1
+"src/alletra_onboard/application/replication/steps.py :: ReplicationSteps.link_check :: BLE001" = 1
+"src/alletra_onboard/application/runs/console.py :: ConsoleService._peer :: BLE001" = 1
+"src/alletra_onboard/application/runs/console.py :: ConsoleService.open_terminal :: BLE001" = 1
+"src/alletra_onboard/application/runs/coordinator.py :: RunCoordinator._guarded :: S110" = 1
+"src/alletra_onboard/application/runs/coordinator.py :: RunCoordinator.recording :: S110" = 1
+"src/alletra_onboard/application/snapshots/apply.py :: _diff_after_failure :: BLE001" = 1
+"src/alletra_onboard/application/snapshots/apply.py :: _schedule_after_failure :: BLE001" = 1
+"src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: BLE001" = 1
+"src/alletra_onboard/application/snapshots/read.py :: read_array :: BLE001" = 1
+"src/alletra_onboard/application/snapshots/steps.py :: SnapshotSteps._plan_for_verify :: BLE001" = 1
+"src/alletra_onboard/application/snapshots/steps.py :: SnapshotSteps._run_apply :: BLE001" = 1
+"src/alletra_onboard/application/snapshots/steps.py :: SnapshotSteps._run_apply :: S110" = 1
+"src/alletra_onboard/application/unified_file/read.py :: _run_serial :: BLE001" = 1
+"src/alletra_onboard/application/unified_file/read.py :: parse_showport_file :: PLC0415" = 1
+"src/alletra_onboard/cli/main.py :: ui :: PLC0415" = 2
+"src/alletra_onboard/domain/replication.py :: <module> :: ERA001" = 1
+"tests/unit/test_replication_failover.py :: test_the_sync_sequence_passes_and_ends_in_the_starting_state :: ERA001" = 1
+
+[pyright]
+# STANDARD T2. `file` = its pyright errors today (`standard` on src, `strict` on src/alletra_onboard/domain;
+# pyrightconfig.json). The count depends on the packages installed: use the dev extra's versions.
+"src/alletra_onboard/adapters/array/cli_client.py" = 3
+"src/alletra_onboard/adapters/array/wsapi_client.py" = 8
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py" = 3
+"src/alletra_onboard/adapters/browser/dscc_setup.py" = 5
+"src/alletra_onboard/adapters/device_trust.py" = 6
+"src/alletra_onboard/adapters/fabric/brocade_client.py" = 1
+"src/alletra_onboard/adapters/greenlake/auth.py" = 1
+"src/alletra_onboard/adapters/hosts/windows_winrm.py" = 1
+"src/alletra_onboard/adapters/persistence/sqlite.py" = 2
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py" = 15
+"src/alletra_onboard/application/documents/asbuilt.py" = 45
+"src/alletra_onboard/application/documents/handover.py" = 2
+"src/alletra_onboard/application/documents/steps.py" = 8
+"src/alletra_onboard/application/platform/init_sheet.py" = 11
+"src/alletra_onboard/application/platform/intake.py" = 2
+"src/alletra_onboard/application/platform/proxy.py" = 1
+"src/alletra_onboard/application/provisioning/discovery.py" = 4
+"src/alletra_onboard/application/provisioning/hosts.py" = 1
+"src/alletra_onboard/application/provisioning/storage_provision.py" = 9
+"src/alletra_onboard/application/provisioning/zoning.py" = 1
+"src/alletra_onboard/application/provisioning/zoning_plan.py" = 8
+"src/alletra_onboard/application/replication/plan.py" = 4
+"src/alletra_onboard/application/replication/steps.py" = 3
+"src/alletra_onboard/application/snapshots/apply.py" = 4
+"src/alletra_onboard/application/snapshots/steps.py" = 1
+"src/alletra_onboard/domain/discovery.py" = 8
+"src/alletra_onboard/domain/migration.py" = 1
+"src/alletra_onboard/domain/models.py" = 5
+"src/alletra_onboard/domain/network.py" = 3
+"src/alletra_onboard/domain/peer_ports.py" = 3
+"src/alletra_onboard/domain/ports.py" = 4
+"src/alletra_onboard/domain/provisioning.py" = 20
+"src/alletra_onboard/domain/replication.py" = 19
+"src/alletra_onboard/domain/snapshots.py" = 8
+"src/alletra_onboard/domain/unified_file.py" = 6
+"src/alletra_onboard/domain/zoning.py" = 11
+
+[vulture]
+# STANDARD M3. `file :: finding` = how often vulture reports it at 80% confidence in src. A finding is
+# a lead, not proof: delete code only after showing that nothing reaches it (LESSONS 18).
+"src/alletra_onboard/adapters/array/cli_client.py :: unused variable 'exc_info'" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: unused variable 'exc_info'" = 1
+"src/alletra_onboard/adapters/array/wsapi_v3_client.py :: unused variable 'exc_info'" = 1
+"src/alletra_onboard/adapters/fabric/brocade_client.py :: unused variable 'exc_info'" = 1
+"src/alletra_onboard/adapters/hosts/linux_ssh.py :: unused variable 'exc_info'" = 1
+"src/alletra_onboard/adapters/hosts/windows_winrm.py :: unused variable 'exc_info'" = 1
+"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: unused variable 'exc_info'" = 1
+
+[knip]
+# STANDARD M3. `file :: kind :: name` = one knip finding in the frontend (unused file, export, type
+# or dependency). A finding is a lead, not proof, like vulture's.
+"frontend/mockups/data.ts :: exports :: stepNo" = 1
+"frontend/mockups/kit.tsx :: exports :: StateLabel" = 1
+"frontend/mockups/kit.tsx :: types :: RailStep" = 1
+"frontend/src/api.ts :: exports :: RTT_LIMIT_MS" = 1
+"frontend/src/api.ts :: exports :: getConfig" = 1
+"frontend/src/api.ts :: exports :: saveConfig" = 1
+"frontend/src/api.ts :: types :: ArrayHost" = 1
+"frontend/src/api.ts :: types :: ClientRule" = 1
+"frontend/src/api.ts :: types :: EsxiLunPaths" = 1
+"frontend/src/api.ts :: types :: EsxiViewState" = 1
+"frontend/src/api.ts :: types :: ExpectedZone" = 1
+"frontend/src/api.ts :: types :: FailoverResult" = 1
+"frontend/src/api.ts :: types :: FailoverSide" = 1
+"frontend/src/api.ts :: types :: FileCapacity" = 1
+"frontend/src/api.ts :: types :: FilePortStatus" = 1
+"frontend/src/api.ts :: types :: FileService" = 1
+"frontend/src/api.ts :: types :: HealthDetail" = 1
+"frontend/src/api.ts :: types :: HostHba" = 1
+"frontend/src/api.ts :: types :: HostSetRequest" = 1
+"frontend/src/api.ts :: types :: IscsiNetworkPlan" = 1
+"frontend/src/api.ts :: types :: IscsiPortAddress" = 1
+"frontend/src/api.ts :: types :: IscsiVlanInterface" = 1
+"frontend/src/api.ts :: types :: LinkPair" = 1
+"frontend/src/api.ts :: types :: PartnerTarget" = 1
+"frontend/src/api.ts :: types :: PeerPortCheck" = 1
+"frontend/src/api.ts :: types :: PeerPortPlan" = 1
+"frontend/src/api.ts :: types :: PeerPortResult" = 1
+"frontend/src/api.ts :: types :: PeerPortState" = 1
+"frontend/src/api.ts :: types :: PeerPortView" = 1
+"frontend/src/api.ts :: types :: PlannedCall" = 1
+"frontend/src/api.ts :: types :: PortNetworkView" = 1
+"frontend/src/api.ts :: types :: PortRole" = 1
+"frontend/src/api.ts :: types :: RcGroupVolume" = 1
+"frontend/src/api.ts :: types :: RcLink" = 1
+"frontend/src/api.ts :: types :: RcTarget" = 1
+"frontend/src/api.ts :: types :: RcipPort" = 1
+"frontend/src/api.ts :: types :: SnapshotRow" = 1
+"frontend/src/api.ts :: types :: VolumeRequest" = 1
+"frontend/src/api.ts :: types :: ZoneRemediation" = 1
+"frontend/src/steps/CloudinitStep.tsx :: exports :: isLinkLocalWizardUrl" = 1
+"frontend/src/steps/ProvisioningBuilderView.tsx :: exports :: memberLabel" = 1
+"frontend/src/ui/ConsolePane.tsx :: exports :: recordLines" = 1
+"frontend/src/ui/useStepState.ts :: exports :: owns" = 1
+"frontend/src/workItem.ts :: exports :: toWorkItemPayload" = 1
+
+[file-lines]
+# STANDARD M2. `file` = its lines today, for a source file over 500 lines (src and frontend/src, tests
+# left out). The file may not grow. Splitting it only to get under a number is not a fix: a split
+# hides a decision, removes duplication or makes behaviour testable on its own.
+"frontend/src/api.ts" = 748
+"frontend/src/steps/DiscoveryStep.tsx" = 508
+"frontend/src/steps/ProvisionStep.tsx" = 587
+"frontend/src/steps/ReplicationStep.tsx" = 1064
+"frontend/src/steps/SnapshotsStep.tsx" = 503
+"frontend/src/steps/ZoningPlanView.tsx" = 801
+"src/alletra_onboard/adapters/array/wsapi_client.py" = 1057
+"src/alletra_onboard/api/app.py" = 886
+"src/alletra_onboard/application/documents/asbuilt.py" = 1714
+"src/alletra_onboard/application/documents/handover.py" = 510
+"src/alletra_onboard/application/platform/init_sheet.py" = 1656
+"src/alletra_onboard/application/provisioning/discovery.py" = 934
+"src/alletra_onboard/application/provisioning/peer_ports.py" = 561
+"src/alletra_onboard/application/provisioning/steps.py" = 636
+"src/alletra_onboard/application/provisioning/storage_provision.py" = 892
+"src/alletra_onboard/application/provisioning/zoning_plan.py" = 766
+"src/alletra_onboard/application/replication/plan.py" = 621
+"src/alletra_onboard/domain/provisioning.py" = 530
+"src/alletra_onboard/domain/replication.py" = 641
+
+[suppress-exception]
+# STANDARD E2. `file :: function` = its `suppress(Exception)` and `suppress(BaseException)` calls today.
+
+[doc-paths]
+# STANDARD C2. `document :: path` = a code path the document names in backticks that is not in the
+# repository. The documents are AGENTS.md, README.md, the app's CONTEXT.md and README.md and docs/design.
+"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/adapters/" = 1
+"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/api/" = 1
+"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/application/" = 1
+"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/cli/main.py" = 1
+"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/config.py" = 1
+"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/domain/" = 1
+"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: storage/clients.py" = 1
+"README.md :: greenlake/services.md" = 1
+
+[markdown-folders]
+# STANDARD C3. The folders that hold Markdown today, from the repository root (`.` is the
+# root, `folder/**` a whole tree of captures or mirrored pages). A Markdown file
+# anywhere else fails. Adding a folder here is the owner's call.
+folders = [
+  ".",
+  ".github",
+  ".github/instructions",
+  "Provisioning_Automation/alletra_onboard",
+  "Provisioning_Automation/alletra_onboard/docs",
+  "Provisioning_Automation/alletra_onboard/docs/adr",
+  "Provisioning_Automation/alletra_onboard/docs/design",
+  "Provisioning_Automation/alletra_onboard/docs/research",
+  "Provisioning_Automation/alletra_onboard/docs/runbooks",
+  "Provisioning_Automation/alletra_onboard/docs/specs",
+  "Provisioning_Automation/alletra_onboard/docs/ux",
+  "Provisioning_Automation/alletra_onboard/docs/validation",
+  "Provisioning_Automation/alletra_onboard/docs/workpackets",
+  "Provisioning_Automation/alletra_onboard/lab",
+  "Provisioning_Automation/alletra_onboard/scripts/discovery",
+  "Provisioning_Automation/alletra_onboard/tests/fixtures/**",
+  "archive/**",
+  "reference/**",
+]

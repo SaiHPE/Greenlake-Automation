@@ -50,7 +50,7 @@ async def greenlake_check(settings: Settings) -> GreenLakeCheckReport:
             "GET", "/service-catalog/v1/service-manager-provisions", bucket="service_catalog_read"
         )
         raw = response.json().get("items", [])
-    except Exception as exc:  # noqa: BLE001 - operator-facing health check reports, not crashes.
+    except Exception as exc:  # operator-facing health check reports, not crashes.
         if is_tls_trust_error(exc):
             return GreenLakeCheckReport(
                 ok=False,

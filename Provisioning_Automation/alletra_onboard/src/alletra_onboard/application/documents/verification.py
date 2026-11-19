@@ -252,7 +252,7 @@ def verify(
                 parse_showversion(outputs["showversion"]), outputs["showport -file"],
             )
             file_checks = _file_checks(ports, report)
-        except Exception:  # noqa: BLE001 - the file side cannot sink verification
+        except Exception:  # the file side cannot sink verification
             file_checks = _unreadable_file_checks()
     finally:
         client.close()

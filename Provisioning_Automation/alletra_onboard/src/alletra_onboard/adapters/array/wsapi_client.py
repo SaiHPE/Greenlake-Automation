@@ -38,7 +38,7 @@ try:
     from hpe3parclient.client import HPE3ParClient
 
     SDK_IMPORT_ERROR: str | None = None
-except Exception as _exc:  # noqa: BLE001 - import may pull eventlet; keep import errors non-fatal at module load
+except Exception as _exc:  # import may pull eventlet; keep import errors non-fatal at module load
     HPE3ParClient = None
     hpe_exc = None
     # Keep the REASON. A frozen build that fails this import degrades silently until WSAPI is first
@@ -449,7 +449,7 @@ class WsapiClient:
         if self._client is not None:
             try:
                 self._client.logout()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
             self._client = None
 
@@ -520,7 +520,7 @@ class WsapiClient:
     def host_set_names(self) -> list[str]:
         try:
             return [m.get("name", "") for m in _members(self._require().getHostSets())]
-        except Exception:  # noqa: BLE001 - older firmware may differ; non-fatal for a plan preview
+        except Exception:  # older firmware may differ; non-fatal for a plan preview
             return []
 
     def volume_names(self) -> list[str]:
@@ -529,7 +529,7 @@ class WsapiClient:
     def volume_set_names(self) -> list[str]:
         try:
             return [m.get("name", "") for m in _members(self._require().getVolumeSets())]
-        except Exception:  # noqa: BLE001
+        except Exception:
             return []
 
     # Record reads for the plan (SPEC-001 §4): one GET each, parsed by the module-level parsers.
@@ -685,7 +685,7 @@ class WsapiClient:
         reconciliation problem: exists-with-missing-members must gain them, never report 'exists'."""
         try:
             data = getter(name)
-        except Exception:  # noqa: BLE001 - not-found raises in the SDK
+        except Exception:  # not-found raises in the SDK
             return None
         if isinstance(data, dict):
             return list(data.get("setmembers") or [])
@@ -917,7 +917,7 @@ class WsapiClient:
             return ""
         try:
             code = exc.get_code()
-        except Exception:  # noqa: BLE001 - describing a failure must never fail
+        except Exception:  # describing a failure must never fail
             return ""
         return "" if code in (None, "") else str(code)
 
@@ -932,7 +932,7 @@ class WsapiClient:
         """
         try:
             text = str(exc)
-        except Exception:  # noqa: BLE001 - the exception's own __str__ is broken
+        except Exception:  # the exception's own __str__ is broken
             text = ""
         if not text:
             # Its args may still carry the detail. Only use them when there ARE any: repr(()) is
@@ -940,7 +940,7 @@ class WsapiClient:
             try:
                 args = tuple(getattr(exc, "args", ()) or ())
                 text = "; ".join(str(a) for a in args) if args else ""
-            except Exception:  # noqa: BLE001
+            except Exception:
                 text = ""
         return text or f"{type(exc).__name__} (no detail available)"
 
@@ -994,7 +994,7 @@ class WsapiClient:
             device_trust.check_tls(self.host, self.port, device="array", timeout=self.timeout)
         except device_trust.DeviceTrustError as exc:
             return WsapiError(str(exc))
-        except Exception:  # noqa: BLE001 - the array went away as well; the sentence below still holds
+        except Exception:  # the array went away as well; the sentence below still holds
             pass
         return WsapiError(
             f"The array at {self.host} presented a different certificate while the tool tried to {where}, so it "
@@ -1043,7 +1043,7 @@ class WsapiClient:
                                  ("debug2", getattr(exc, "_debug2", None))):
                 if value:
                     facts.append(f"{label} {value}")
-        except Exception:  # noqa: BLE001 - describing a failure must never fail
+        except Exception:  # describing a failure must never fail
             return ""
         return f"{desc} ({', '.join(facts)[:200]})" if facts else desc
 

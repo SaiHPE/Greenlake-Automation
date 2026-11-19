@@ -749,7 +749,7 @@ def _refine_fabrics_from_switches(cli, array_ports: list[ArrayPort], *, progress
             progress(f"Resolving the fabric switch for port {port.label} (probe {probed}, {len(switch_by_label)}/{len(ready)} ports resolved)…")
         try:
             text = cli.run(f"showportdev fcfabric {port.label}", timeout=_FCFABRIC_TIMEOUT)
-        except Exception:  # noqa: BLE001 - one flaky/slow lookup must not sink discovery
+        except Exception:  # one flaky/slow lookup must not sink discovery
             continue
         for other in ready:
             if other.label not in switch_by_label and (sw := switch_for_wwpn(text, other.wwpn)):
@@ -780,7 +780,7 @@ def _read_sheet_hosts(
         try:
             with factory(creds) as client:
                 out.append(reader(client, d.name, d.address))
-        except Exception as exc:  # noqa: BLE001 - one host's login must not sink discovery
+        except Exception as exc:  # one host's login must not sink discovery
             hint = " (OS is blank on the Hosts tab, so it was tried as Linux; set it to windows for a WinRM read)" if not d.os else ""
             out.append(HostRead(host_name=d.name, address=d.address, method=method, error=f"{exc}{hint}"))
     return out
@@ -793,13 +793,13 @@ def _read_file_side(cli, intent: ProvisioningIntent, file_ports: list[EthernetPo
     storage is not affected."""
     try:
         os_version = parse_showversion(cli.run("showversion"))
-    except Exception:  # noqa: BLE001 - without it the file API is read only when there are File ports
+    except Exception:  # without it the file API is read only when there are File ports
         os_version = ""
     if file_ports:
         progress("Reading the file service, file systems and shares (read-only)…")
     try:
         return read_file_report(cli, wsapi_v3_factory(intent.array), os_version, file_ports)
-    except Exception:  # noqa: BLE001 - the file side must never sink discovery
+    except Exception:  # the file side must never sink discovery
         return FileReport(os_version=os_version, notes=[UNREADABLE]) if file_ports else None
 
 
@@ -822,7 +822,7 @@ def discover(
         if progress:
             try:
                 progress(message)
-            except Exception:  # noqa: BLE001 - progress reporting must never break discovery
+            except Exception:  # progress reporting must never break discovery
                 pass
 
     # 1) Array (one SSH session): all FC + iSCSI target ports + the curated host view, then refine each
@@ -842,7 +842,7 @@ def discover(
             # covers only CONFIGURED ports, so it enriches the list above rather than replacing it.
             try:
                 detail = parse_rcip_detail(cli.run("showport -rcip"))
-            except Exception:  # noqa: BLE001 - enrichment only; the ports are already listed
+            except Exception:  # enrichment only; the ports are already listed
                 detail = {}
             for port in report.replication_ports:
                 extra = detail.get(port.label)
@@ -853,7 +853,7 @@ def discover(
             # without file configured — an empty result is normal, not a failure.
             try:
                 report.file_ports = parse_file_ports(cli.run("showport -file"))
-            except Exception:  # noqa: BLE001 - `showport -file` is unsupported on some releases
+            except Exception:  # `showport -file` is unsupported on some releases
                 report.notes.append("Could not read 'showport -file' — file ports not reported.")
             report.file = _read_file_side(cli, intent, report.file_ports, wsapi_v3_factory, _p)
             _p("Reading the array's host view (showhost)…")
@@ -875,7 +875,7 @@ def discover(
             _p(f"Array: {fc} FC + {isc} iSCSI target port(s){role_text}, {named} host(s){extra}. "
                "Resolving fabrics…")
             report.notes.extend(_refine_fabrics_from_switches(cli, report.array_ports, progress=_p))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # D-10 (S-3, 2026-09-17): the array is THE subject of discovery. Without it the zoning check has
         # no ports and the plan cannot read WSAPI, so this is the step's error, not note 1 of 7.
         report.error = f"Array discovery (SSH) failed: {exc}"
@@ -887,10 +887,10 @@ def discover(
             report.host_hbas = vcenter.host_fc_hbas()
             try:
                 report.host_identities = vcenter.host_identities()
-            except Exception as exc:  # noqa: BLE001 - serial/IQN are enrichment; the HBAs stand alone
+            except Exception as exc:  # serial/IQN are enrichment; the HBAs stand alone
                 report.notes.append(f"vCenter host serial/IQN read failed: {exc}")
         _p(f"vCenter: {len(report.host_hbas)} ESXi host HBA(s).")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         report.notes.append(f"vCenter discovery failed: {exc}")
 
     # 2b) SPEC-014 R4: sheet hosts that carry a login report their own serial, WWPNs, IQN, multipath.

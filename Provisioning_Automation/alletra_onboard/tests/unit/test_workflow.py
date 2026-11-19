@@ -1,11 +1,18 @@
+from pathlib import Path
+
+import pytest
+
 from alletra_onboard.domain.models import RunMode, WorkflowPhase
 from alletra_onboard.domain.workflow import (
     REPLICATION_STEP_KEYS,
     STEP_REGISTRY,
+    StepDef,
     enabled_steps,
     initial_phase,
     next_enabled_phase,
 )
+
+LAB = Path(__file__).resolve().parents[2] / "lab"
 
 # ---------------------------------------------------------------- decoupling: modes -> steps
 
@@ -95,3 +102,27 @@ def test_the_migration_step_has_its_own_kind_and_phase_and_no_other_preset_has_i
 def test_custom_can_pick_the_migration_step_in_registry_order():
     assert _keys(RunMode.CUSTOM, ["asbuilt", "migrate", "discover"]) == ["discover", "migrate", "asbuilt"]
     assert initial_phase(RunMode.CUSTOM, ["migrate"]) == WorkflowPhase.STORAGE_MIGRATE
+
+
+# ---------------------------------------------------------------- STANDARD X4: the lab script of each step
+
+def test_every_step_names_a_lab_script_that_exists_or_says_why_it_has_none():
+    for step in STEP_REGISTRY:
+        if step.lab_script is None:
+            assert step.no_lab_script.strip(), f"{step.key}: no lab script and no reason"
+        else:
+            assert (LAB / step.lab_script).is_file(), f"{step.key}: lab/{step.lab_script} does not exist"
+    init = [step for step in STEP_REGISTRY if step.kind == "init"]
+    assert [step.key for step in init] == ["greenlake", "cloudinit", "dscc"]
+    if (LAB / "init_walk_lab.py").is_file():
+        assert all(step.lab_script == "init_walk_lab.py" for step in init), (
+            "lab/init_walk_lab.py exists now: name it on the three initialisation steps")
+    else:
+        assert all(step.no_lab_script == "init_walk_lab.py (next change)" for step in init)
+
+
+def test_a_step_is_refused_without_a_lab_script_or_a_reason_and_with_both():
+    with pytest.raises(ValueError, match="name the lab script"):
+        StepDef("x", "X", WorkflowPhase.PREFLIGHT, "init", None)
+    with pytest.raises(ValueError, match="name the lab script"):
+        StepDef("x", "X", WorkflowPhase.PREFLIGHT, "init", "ui_live_lab.py", "and a reason")

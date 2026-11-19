@@ -85,7 +85,7 @@ class RunCoordinator:
         # snapshot (self.settings) is only a fallback if reloading ever fails.
         try:
             return load_settings()
-        except Exception:  # noqa: BLE001
+        except Exception:
             return self.settings
 
     # ------------------------------------------------------------------ run lifecycle
@@ -307,7 +307,7 @@ class RunCoordinator:
             command_log.unbind(token)
             try:
                 trust.finish()
-            except Exception:  # noqa: BLE001 - a note on the run must not replace the route's own answer
+            except Exception:  # a note on the run must not replace the route's own answer
                 pass
 
     # ------------------------------------------------------------------ ADR 0026 device trust
@@ -356,7 +356,7 @@ class RunCoordinator:
         # A crash must never leave a run stuck in RUNNING with no trace.
         try:
             await coro
-        except Exception as exc:  # noqa: BLE001 - background task; record, don't crash the app.
+        except Exception as exc:  # background task; record, don't crash the app.
             run = self.store.get_run(run_id)
             if run is not None:
                 self.set_state(run, RunStatus.RETRYABLE_FAILURE)
@@ -370,7 +370,7 @@ class RunCoordinator:
             if trust is not None:
                 try:
                     trust.finish()
-                except Exception:  # noqa: BLE001 - reporting a refusal must not crash the app
+                except Exception:  # reporting a refusal must not crash the app
                     pass
 
     def set_state(self, run: RunRecord, status: RunStatus, phase: WorkflowPhase | None = None) -> None:

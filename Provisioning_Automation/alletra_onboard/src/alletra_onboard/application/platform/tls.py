@@ -55,7 +55,7 @@ def ssl_context() -> ssl.SSLContext:
     for loader in (_load_certifi, _load_override):
         try:
             loader(context)
-        except Exception:  # noqa: BLE001 - a source we cannot read must not break the others
+        except Exception:  # a source we cannot read must not break the others
             pass
     return context
 

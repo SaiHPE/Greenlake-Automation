@@ -209,7 +209,7 @@ class LinuxHostClient:
             _in, stdout, _err = self._client.exec_command(command, timeout=self.exec_timeout)
             out = stdout.read().decode("utf-8", "replace")
             status = stdout.channel.recv_exit_status()
-        except Exception as exc:  # noqa: BLE001 - one unreadable file must not sink the host read
+        except Exception as exc:  # one unreadable file must not sink the host read
             command_log.record(target=self.host, transport="host-ssh", command=command, started=started,
                                ok=False, result=type(exc).__name__, secrets=[self.password])
             return -1, ""
@@ -226,7 +226,7 @@ class LinuxHostClient:
         if self._client is not None:
             try:
                 self._client.close()
-            except Exception:  # noqa: BLE001 - closing a dead session
+            except Exception:  # closing a dead session
                 pass
             self._client = None
 

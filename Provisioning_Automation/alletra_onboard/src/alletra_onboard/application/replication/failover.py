@@ -221,7 +221,7 @@ def run_failover_test(
         _p(f"Stopping {group} on {record.primary_array}…")
         try:
             wp.stop_remote_copy_group(group)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             p, s = both()
             return fail(s1, f"{record.primary_array} refused the stop: {exc}", p, s)
         ok, p, s, _w = wait_for(lambda p, s: p.status.lower() == "stopped" and s.status.lower() == "stopped", lim["stop"])
@@ -234,7 +234,7 @@ def run_failover_test(
         _p(f"Failing over: {record.peer_group} on {record.peer_array} becomes Primary-Rev…")
         try:
             ws.remote_copy_dr_action(record.peer_group, DR_ACTION_FAILOVER)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             p, s = both()
             return fail(s2, f"{record.peer_array} refused the failover: {exc}", p, s)
         ok, p, s, waited = wait_for(lambda p, s: s.role in ("Primary-Rev", "Primary"), lim["failover"])
@@ -267,7 +267,7 @@ def run_failover_test(
             _p(f"Recovering: {group} on {record.primary_array} becomes Secondary-Rev, syncing back…")
             try:
                 ws.remote_copy_dr_action(record.peer_group, DR_ACTION_RECOVER)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 p, s = both()
                 if not recovered(p, s):
                     return fail(s4, f"{record.peer_array} refused the recover: {exc}", p, s)
@@ -299,7 +299,7 @@ def run_failover_test(
             _p(f"Restoring the natural direction: {group} Primary on {record.primary_array} again…")
             try:
                 ws.remote_copy_dr_action(record.peer_group, DR_ACTION_RESTORE)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 p, s = both()
                 if not flipped(p, s) and p.role != "Secondary":
                     return fail(s6, f"{record.peer_array} refused the restore: {exc}", p, s)
@@ -317,7 +317,7 @@ def run_failover_test(
             _p(f"Failing back: stopping {record.peer_group} on {record.peer_array}, then failing over to {record.primary_array}…")
             try:
                 ws.stop_remote_copy_group(record.peer_group)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 p, s = both()
                 return fail(s6, f"{record.peer_array} refused the stop: {exc}", p, s)
             ok, p, s, _w = wait_for(lambda p, s: p.status.lower() == "stopped" and s.status.lower() == "stopped", lim["stop"])
@@ -325,7 +325,7 @@ def run_failover_test(
                 return fail(s6, f"Not Stopped on both sides within {lim['stop']} s.", p, s)
             try:
                 wp.remote_copy_dr_action(group, DR_ACTION_FAILOVER)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 p, s = both()
                 return fail(s6, f"{record.primary_array} refused the failover back: {exc}", p, s)
         ok, p, s, _w = wait_for(normal, lim["restore"])

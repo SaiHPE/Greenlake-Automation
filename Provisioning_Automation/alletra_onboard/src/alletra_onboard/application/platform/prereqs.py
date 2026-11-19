@@ -104,7 +104,7 @@ async def _check_one(host: str, port: int, timeout: float) -> ConnectivityResult
         writer.close()
         try:
             await writer.wait_closed()
-        except Exception:  # noqa: BLE001 - closing is best-effort
+        except Exception:  # closing is best-effort
             pass
         return ConnectivityResult(host, port, True, "reachable")
     except TimeoutError:
@@ -121,7 +121,7 @@ async def _check_via_proxy(host: str, port: int, proxy_url: str, timeout: float)
     phost, pport = parsed.hostname or "", parsed.port or 8080
     try:
         reader, writer = await asyncio.wait_for(asyncio.open_connection(phost, pport), timeout=timeout)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return ConnectivityResult(host, port, False, f"proxy {phost}:{pport} not reachable", via=proxy_url)
     try:
         writer.write(f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n".encode())
@@ -131,7 +131,7 @@ async def _check_via_proxy(host: str, port: int, proxy_url: str, timeout: float)
             return ConnectivityResult(host, port, False, "proxy requires authentication (407)", via=proxy_url)
         ok = " 200 " in f" {line} " or "200 connection" in line.lower()
         return ConnectivityResult(host, port, ok, "reachable via proxy" if ok else f"proxy said: {line}", via=proxy_url)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return ConnectivityResult(host, port, False, f"proxy error ({type(exc).__name__})", via=proxy_url)
     finally:
         writer.close()

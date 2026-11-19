@@ -92,7 +92,7 @@ class CloudinitWizardAdapter:
                         channel=preferred_channel(),
                         args=[] if self.headless else ["--start-maximized"],
                     )
-            except Exception:  # noqa: BLE001 - no browser (chromium missing, or CDP unreachable).
+            except Exception:  # no browser (chromium missing, or CDP unreachable).
                 return BrowserResultStatus.WAITING_FOR_OPERATOR
 
             context = None
@@ -389,7 +389,7 @@ class CloudinitWizardAdapter:
                     await target.first.scroll_into_view_if_needed(timeout=500)
                     await target.first.click(timeout=1_500)
                     return
-                except Exception:  # noqa: BLE001 - may be re-virtualized; scroll more and retry
+                except Exception:  # may be re-virtualized; scroll more and retry
                     pass
             await page.mouse.wheel(0, 400)
             await page.wait_for_timeout(100)
@@ -423,7 +423,7 @@ class CloudinitWizardAdapter:
                 return BrowserResultStatus.FAILED_RETRYABLE
             try:
                 await page.wait_for_timeout(2_000)
-            except Exception:  # noqa: BLE001 - the page may close mid-wait.
+            except Exception:  # the page may close mid-wait.
                 return BrowserResultStatus.WAITING_FOR_OPERATOR
         return BrowserResultStatus.WAITING_FOR_OPERATOR
 
@@ -443,7 +443,7 @@ class CloudinitWizardAdapter:
     async def _body_text(self, page) -> str:
         try:
             return await page.inner_text("body")
-        except Exception:  # noqa: BLE001
+        except Exception:
             return ""
 
     async def _page_has_any(self, page, signals) -> bool:
@@ -468,5 +468,5 @@ class CloudinitWizardAdapter:
         try:
             self.artifact_dir.mkdir(parents=True, exist_ok=True)
             await page.screenshot(path=str(self.artifact_dir / f"cloudinit-{run_id}-{label}.png"), full_page=True)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass

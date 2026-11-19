@@ -341,7 +341,7 @@ def apply_partnership(
             if down:
                 raise ArrayCliError(f"links not Up after {LINKS_UP_WAIT_S:g} s: {'; '.join(down)}")
             record("links", "Remote Copy links", "A", "created", "every planned link Up on both arrays")
-    except Exception as exc:  # noqa: BLE001 - the array's words, where it stopped, what to remove
+    except Exception as exc:  # the array's words, where it stopped, what to remove
         done = sum(1 for o in result.outcomes if o.status == "created")
         result.error = (f"Stopped after {done} step(s): {exc}. The removal set below undoes exactly what was "
                         "created before the failure.")

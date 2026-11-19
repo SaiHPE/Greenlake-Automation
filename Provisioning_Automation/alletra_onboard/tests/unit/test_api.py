@@ -1,4 +1,8 @@
+import io
+
+import pytest
 from fastapi.testclient import TestClient
+from openpyxl import load_workbook
 from pydantic import SecretStr
 
 from alletra_onboard import __version__
@@ -14,6 +18,7 @@ from alletra_onboard.domain.models import (
     NetworkConfig,
     VerificationReport,
 )
+from alletra_onboard.domain.workflow import STEP_REGISTRY, mode_steps
 
 
 def _client(tmp_path) -> TestClient:
@@ -433,30 +438,41 @@ def test_app_profile_defaults_to_full(tmp_path, monkeypatch):
     assert prof["profile"] == "full" and prof["init_only"] is False and "Onboarding" in prof["title"]
 
 
-def test_init_only_profile_template_has_no_provisioning_and_uploads(tmp_path, monkeypatch):
-    import io
-
-    from openpyxl import load_workbook
-
+@pytest.mark.parametrize(("profile", "title", "mode"), [
+    ("full", "Alletra MP B10000 Onboarding", "BOTH"),
+    ("init-only", "Alletra MP Initialization", "FULL_ONBOARDING"),
+])
+def test_each_build_profile_serves_the_step_registry_and_takes_a_workbook_to_a_run(
+        tmp_path, monkeypatch, profile, title, mode):
+    """STANDARD X3: both builds start, serve the step registry and mint a run from their own workbook.
+    The init-only build was the only one checked here before; a moved module must not break either."""
+    provisioning_tab = profile == "full"
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("ALLETRA_PROFILE", "init-only")
+    monkeypatch.setenv("ALLETRA_PROFILE", profile)
     client = _client(tmp_path)
 
     prof = client.get("/app/profile").json()
-    assert prof["init_only"] is True and prof["title"] == "Alletra MP Initialization"
+    assert prof["profile"] == profile and prof["init_only"] is (profile == "init-only") and prof["title"] == title
+    # both builds serve the whole registry and every preset; the UI narrows the mode chooser from `init_only`
+    assert [s["key"] for s in prof["steps"]] == [s.key for s in STEP_REGISTRY]
+    assert prof["modes"] == {preset.value: list(keys) for preset, keys in mode_steps().items()}
 
     # the init-only template ships an onboarding-only sheet — no Provisioning tab
     tpl = client.get("/init-sheet/template").content
     wb = load_workbook(io.BytesIO(tpl))
-    assert "Initialisation" in wb.sheetnames and "Provisioning" not in wb.sheetnames
+    assert "Initialisation" in wb.sheetnames and ("Provisioning" in wb.sheetnames) is provisioning_tab
 
     # an onboarding-only sheet (no Provisioning creds) uploads fine under the init-only profile
-    resp = client.post("/init-sheet/upload", json={"content_b64": _fill_template(tpl, _COMPLETE_MAIN)})
+    filled = _fill_template(tpl, _COMPLETE_MAIN, _COMPLETE_PROV if provisioning_tab else None)
+    resp = client.post("/init-sheet/upload", json={"content_b64": filled})
     assert resp.status_code == 200, resp.text
     assert resp.json()["token"]
-    # and it mints an onboarding run
-    run = client.post("/runs/from-sheet", json={"token": resp.json()["token"], "mode": "FULL_ONBOARDING"}).json()["run"]
-    assert run["mode"] == "FULL_ONBOARDING"
+    # and it mints a run of the profile's own kind, which the API then serves
+    minted = client.post("/runs/from-sheet", json={"token": resp.json()["token"], "mode": mode})
+    assert minted.status_code == 200, minted.text
+    run = minted.json()["run"]
+    assert run["mode"] == mode
+    assert client.get(f"/runs/{run['run_id']}").json()["run"]["serial_number"] == _COMPLETE_MAIN["serial_number"]
 
 
 def test_storage_builder_saves_composition_and_objects_needs_discovery(tmp_path):

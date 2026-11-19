@@ -34,8 +34,8 @@ Ask the owner (Sai) for each of these on your first day.
 
 ## 3. One-time setup
 
-Install git, Python 3.12 or newer, Node 20, the GitHub CLI (`gh`), and on Windows Git Bash (comes
-with Git for Windows). Then:
+Install git, Python 3.12 or newer, Node 20.19 or newer, the GitHub CLI (`gh`), and on Windows Git
+Bash (comes with Git for Windows). Then:
 
 ```bash
 gh auth login --hostname github.hpe.com && gh auth setup-git --hostname github.hpe.com
@@ -50,6 +50,11 @@ scripts/install_hooks.sh                     # turns on the commit and push hook
 
 On Windows run `scripts/install_hooks.sh` from Git Bash. The push hook runs the check with the
 `.venv` above, so create it before your first push.
+
+The two install lines bring every tool the check runs, at pinned versions: ruff, import-linter and
+vulture with `pip install -e ".[dev]"`; pyright, eslint and knip with `npm ci`. In a checkout you
+already have, run both again after pulling. If `npm ci` stops with
+`UNABLE_TO_GET_ISSUER_CERT_LOCALLY` on the HPE network, run it as `NODE_USE_SYSTEM_CA=1 npm ci`.
 
 On a Windows laptop use `.venv\Scripts\python` wherever this page says `.venv/bin/python`.
 
@@ -127,14 +132,25 @@ gate. From the app folder:
 
 | Line | What it checks | If it fails |
 |---|---|---|
-| tests | the whole pytest suite | fix the code, or the test if behaviour changed on purpose (say so in the pull request) |
-| lint | `ruff check .` with the pinned version | `ruff check --fix .` handles most |
+| tests | the whole pytest suite; a test that reaches the network fails | fix the code, or the test if behaviour changed on purpose (say so in the pull request) |
+| deps | the import rules of `docs/STANDARD.md` (import-linter) | the contract it prints says which rule and what to do |
+| lint, complexity | ruff with the pinned version, compared per function with `quality/ceilings.toml` | fix the function the NEW or WORSE line names; delete the line a STALE one names |
+| fitness | long files may not grow, documents name only code that exists, Markdown stays in today's folders, a new lesson names its test | each line says what to do |
+| vulture, knip | dead code in `src` and in `frontend/` | delete it or use it |
+| pyright | backend type errors per file | fix the types in the file it names |
 | types | `npm run typecheck` in `frontend/` | fix the TypeScript error |
 | mockups | the design mockups' TypeScript (`tsc -p mockups --noEmit` in `frontend/`) | fix the error in `frontend/mockups` |
+| ui-lint | `npm run lint` in `frontend/` (eslint) | fix the error; never add to `eslint-suppressions.json` |
 | ui-tests | the frontend unit tests (`npm test` in `frontend/`) | fix the code, or the test if behaviour changed on purpose |
 | dist | nothing under `frontend/dist` changed on your branch | it prints the command that drops those changes |
 | secrets | no token, private key or lab password in the lines you added | remove it, and tell the owner if it was ever pushed |
+| lists | (warning) a known violation your branch added to a list or raised | say why in the pull request |
 | ignored | (warning) files under `src/`, `tests/` or `frontend/src/` that `.gitignore` hides | see section 9 |
+
+The rules behind these lines are in `docs/STANDARD.md` (app folder). Violations that existed when a
+check was added are listed, in `quality/ceilings.toml`, in the import contracts and in
+`frontend/eslint-suppressions.json`. The lists only get shorter: fix the code rather than add a
+line, and after a fix run `.venv/bin/python scripts/fitness.py --tighten`.
 
 It ends with a block to paste into the pull request.
 

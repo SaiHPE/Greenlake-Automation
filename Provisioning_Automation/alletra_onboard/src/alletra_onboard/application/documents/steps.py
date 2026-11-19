@@ -130,7 +130,7 @@ class DocumentSteps:
         coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, "step.started", "Verifying the array configuration over SSH…")
         try:
             report = await asyncio.to_thread(self._verify_fn, item, username, password)
-        except Exception as exc:  # noqa: BLE001 - never propagate (the guard would mark the run failed)
+        except Exception as exc:  # never propagate (the guard would mark the run failed)
             coord.emit(
                 run.run_id,
                 WorkflowPhase.CONFIG_VERIFY,
@@ -151,7 +151,7 @@ class DocumentSteps:
                 report.iscsi_vlans = iscsi_network.verify_iscsi_vlans(rows, vlans)
                 present = sum(1 for c in report.iscsi_vlans if c.status == "present")
                 iscsi = f" iSCSI VLAN addresses: {present} of {len(rows)} present."
-            except Exception as exc:  # noqa: BLE001 - one read failing costs its section, not the report
+            except Exception as exc:  # one read failing costs its section, not the report
                 report.iscsi_vlans_error = f"`showport -iscsivlans` could not be read: {exc}"
                 iscsi = " The iSCSI VLAN addresses could not be read."
         peer = self._peer_intent(run.run_id)
@@ -242,14 +242,14 @@ class DocumentSteps:
                                     for pin in coord.device_pins(run.run_id)]
             docx_bytes, warnings = await asyncio.to_thread(self._render_asbuilt, data)
             status = self._handover_status(data)
-        except Exception as exc:  # noqa: BLE001 - report, never propagate (would mark the run failed)
+        except Exception as exc:  # report, never propagate (would mark the run failed)
             coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.failed",
                        f"As-built generation failed: {type(exc).__name__}: {str(exc)[:200]}")
             return
         self._asbuilt[run.run_id] = docx_bytes
         try:
             coord.store.save_artifact(run.run_id, "asbuilt_docx", docx_bytes)
-        except Exception:  # noqa: BLE001
+        except Exception:
             # The document exists and is downloadable from memory. Failing to persist it must not
             # escape: the guard around this task would mark a finished run failed, which this step
             # is documented never to do.
@@ -285,7 +285,7 @@ class DocumentSteps:
             for attr, cmd in self._ASBUILT_LISTINGS:
                 try:
                     setattr(data, attr, cli.run(cmd))
-                except Exception as exc:  # noqa: BLE001 - R6: name it, keep going
+                except Exception as exc:  # R6: name it, keep going
                     data.read_errors[cmd] = f"{type(exc).__name__}: {exc}"
             # SPEC-028 R3: the file side, in the same session; no section on an array without one
             data.file_ports, data.file_report, data.file_read_error = self._collect_file(cli, creds)
@@ -294,7 +294,7 @@ class DocumentSteps:
             for attr, cmd in handover.READS:
                 try:
                     setattr(data, attr, cli.run(cmd))
-                except Exception as exc:  # noqa: BLE001 - R8: name it, keep going
+                except Exception as exc:  # R8: name it, keep going
                     data.read_errors[cmd] = f"{type(exc).__name__}: {exc}"
         return data
 
@@ -389,7 +389,7 @@ class DocumentSteps:
         named in the section and the warnings; the document is still produced."""
         try:
             ports, report = self._read_file(cli, self._wsapi_v3_factory(creds))
-        except Exception as exc:  # noqa: BLE001 - R6 pattern: name it, keep going
+        except Exception as exc:  # R6 pattern: name it, keep going
             return [], None, f"{type(exc).__name__}: {exc}"
         return ports, report, ""
 

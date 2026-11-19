@@ -128,7 +128,7 @@ class WindowsHostClient:
                 raise WindowsHostError(
                     f"login failed for {self.username}@{self.host} — check the Hosts tab login{hint}"
                 ) from exc
-            except Exception as exc:  # noqa: BLE001 - refused / timeout / TLS: try the next listener
+            except Exception as exc:  # refused / timeout / TLS: try the next listener
                 last = exc
                 continue
             self._session = session
@@ -144,7 +144,7 @@ class WindowsHostClient:
             raise WindowsHostError("not connected")
         try:
             response = self._run_ps(self._session, key)
-        except Exception:  # noqa: BLE001 - one failed read must not sink the host read
+        except Exception:  # one failed read must not sink the host read
             return ""
         return response.std_out.decode("utf-8", "replace") if response.status_code == 0 else ""
 

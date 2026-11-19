@@ -69,7 +69,7 @@ class DsccSetupAdapter:
         async with async_playwright() as pw:
             try:
                 browser = await pw.chromium.connect_over_cdp(self.cdp_url)
-            except Exception:  # noqa: BLE001 - CDP unreachable / no debug browser.
+            except Exception:  # CDP unreachable / no debug browser.
                 return BrowserResultStatus.FAILED_RETRYABLE
 
             try:
@@ -229,5 +229,5 @@ class DsccSetupAdapter:
         try:
             self.artifact_dir.mkdir(parents=True, exist_ok=True)
             await page.screenshot(path=str(self.artifact_dir / f"dscc-{run_id}-{label}.png"), full_page=True)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass

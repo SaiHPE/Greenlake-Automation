@@ -83,7 +83,7 @@ class BrocadeClient:
         if self._client is not None:
             try:
                 self._client.close()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
             self._client = None
 

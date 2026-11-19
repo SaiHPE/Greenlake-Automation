@@ -292,7 +292,7 @@ def verify_provisioned_paths(
     try:
         with array_cli_factory(intent.array) as cli:
             text = cli.run("showvlun -a")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return PathVerification(error=f"Could not read 'showvlun -a' over SSH: {exc}")
     expected_by_host = storage_provision.exported_volumes_by_host(intent, discovery, reachable_hosts, zoning_plan)
     # The join key between "the hosts the run knows" and "the paths the array reports" is the HBA
@@ -328,7 +328,7 @@ def verify_provisioned_paths(
     try:
         with wsapi_factory(intent.array) as wsapi:
             wwn_by_volume = {v.name: v.wwn for v in wsapi.volumes() if v.wwn}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         read_error = f"volume WWNs over WSAPI: {str(exc)[:160]}"
     # With no vCenter inventory, "not an ESXi host in this vCenter" would be a guess about every host.
     if not read_error and any(n.startswith("vCenter discovery failed") for n in discovery.notes):
@@ -337,6 +337,6 @@ def verify_provisioned_paths(
         try:
             with vcenter_factory(intent.vcenter) as vcenter:
                 esxi_luns = vcenter.host_luns()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             read_error = str(exc)[:200]
     return attach_esxi_view(report, dict(expected_by_host), esxi_luns, wwn_by_volume, esxi_hosts, read_error=read_error)

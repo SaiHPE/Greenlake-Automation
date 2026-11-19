@@ -48,5 +48,7 @@ desktop.ini
 !Provisioning_Automation/alletra_onboard/docs/ux/*.html
 # The backend walkthrough for new developers (hand-written, no lab data)
 !Provisioning_Automation/alletra_onboard/docs/DEVELOPER-HANDBOOK.html
+# Settings of the gate's tools (docs/STANDARD.md; hand-written, no lab data)
+!Provisioning_Automation/alletra_onboard/pyrightconfig.json
 
 script-logs/*   

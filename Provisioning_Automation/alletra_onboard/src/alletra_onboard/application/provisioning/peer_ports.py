@@ -226,7 +226,7 @@ def read_view(
                     if command in _REQUIRED:
                         raise
                     answers[command] = ""
-    except Exception as exc:  # noqa: BLE001 - the step reports, the operator decides
+    except Exception as exc:  # the step reports, the operator decides
         return PeerPortView(host=creds.host, read_error=f"Could not read {creds.host}: {exc}")
     for command in READS:
         first = answers[command].strip().splitlines()[0] if answers[command].strip() else ""
