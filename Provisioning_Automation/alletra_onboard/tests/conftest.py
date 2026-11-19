@@ -4,6 +4,14 @@ from alletra_onboard.config import Settings
 
 
 @pytest.fixture(autouse=True)
+def _run_in_a_scratch_folder(tmp_path, monkeypatch):
+    """Every test runs in its own empty folder. The app writes `.env` (the sheet's GreenLake
+    credentials) and its state folder relative to the working directory, so a test must never run
+    in the app folder: it would overwrite the developer's real `.env`."""
+    monkeypatch.chdir(tmp_path)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_settings_from_dotenv(monkeypatch):
     """Keep unit tests deterministic regardless of a local operator .env.
 
