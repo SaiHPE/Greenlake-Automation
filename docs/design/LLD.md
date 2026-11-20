@@ -111,7 +111,9 @@ test passes a fake factory:
   read-only factories `make_wsapi` (`WsapiReader`), `make_wsapi_v3`, `make_array_cli`, `make_vcenter`,
   `make_brocade`, `make_linux_host`, `make_windows_host`. Each takes an `EndpointCreds` and returns a
   context-manager client.
-- Writer factories live in dedicated modules protected by import-linter S2 contracts (ADR 0031):
+- Writer factories live in dedicated modules protected by import-linter S2 contracts (ADR 0031) and
+  take an `Approval` (`domain/approval.py`) issued by `RunCoordinator.issue_approval`, pulling
+  credentials only from `Approval.creds_for`:
   [`application/runs/writer_clients.py`](../../src/alletra_onboard/application/runs/writer_clients.py)
   (`make_wsapi_writer` returning `WsapiWriter`, imported only by the four apply modules),
   [`application/replication/clients.py`](../../src/alletra_onboard/application/replication/clients.py)
@@ -214,10 +216,13 @@ one method to one service:
 - **The run's array.** `array_host(run_id)` returns the Initialisation tab's management IP if set,
   else the Provisioning tab's array host. `array_credential(run_id)` returns the Provisioning tab's
   array admin if it has a password, else the DSCC system credential, else none (ADR 0013).
-- **Background steps.** `spawn(run_id, coro)` refuses a second task for the same run
-  (`RunBusyError`), copies the context, binds the run's command sink into it, and starts the task
-  under `_guarded`. `_guarded` turns any exception into `RETRYABLE_FAILURE` plus a `step.crashed`
-  event, so a run is never left in `RUNNING`.
+- **Background steps and approvals.** `issue_approval(run_id, purpose, arrays)` is the single
+  constructor of `Approval` (`domain/approval.py`) in production code; `is_busy(run_id)` stays true
+  while a step task is running or its approval is unspent. `spawn(run_id, coro, approval=None)`
+  refuses a second task (`RunBusyError`), copies the context, binds the run's command sink into it,
+  and starts the task under `_guarded`. `run_approved(approval, fn)` executes write workers on a
+  thread and spends the approval in that thread's `finally`. `_guarded` turns any exception into
+  `RETRYABLE_FAILURE` plus a `step.crashed` event, so a run is never left in `RUNNING`.
 - **State and events.** `set_state(run, status, phase)` updates and upserts the run.
   `emit(run_id, phase, event_type, message, data)` appends the event to the store and publishes it
   on the bus.
@@ -359,7 +364,7 @@ All routes are closures inside `create_app(service)` in
 | POST | `/zoning/render` | Render the Brocade command set from a plan, aliases and selected pairs; with `run_id`, record it as `zoning.rendered`. |
 | GET | `/runs/{id}/storage/preflight` | Read-only readiness over WSAPI and vCenter. |
 | GET | `/runs/{id}/storage/objects` | The builder palette: array objects, planned objects, discovered hosts. |
-| POST | `/runs/{id}/storage/builder` | Save the operator's host-set, VV-set and export composition onto the intent. |
+| POST | `/runs/{id}/storage/builder` | Save the operator's host-set, VV-set and export composition onto the intent (409 while a step is running; withdraws any held plan). |
 | POST | `/runs/{id}/storage/preview` | Build the provisioning plan (the approval gate). |
 | POST | `/runs/{id}/storage/apply` | Apply the previewed plan over WSAPI. |
 | POST | `/runs/{id}/storage/verify-paths` | Path verification (`showvlun -a`, plus vCenter when present). |
@@ -367,7 +372,7 @@ All routes are closures inside `create_app(service)` in
 | POST | `/runs/{id}/replication/link-check` | `checkrclink` on each RCIP pair (`duration_s` 300 to 172800). |
 | POST | `/runs/{id}/replication/apply` | Apply the replication plan (partnership over SSH, or groups over WSAPI). `accept_latency` overrides the latency gate. |
 | POST | `/runs/{id}/replication/verify` | `showrcopy` on both arrays, one verdict per group. |
-| POST | `/runs/{id}/replication/failover-test` | Failover test on one group (`group`, `confirm`). |
+| POST | `/runs/{id}/replication/failover-test` | Failover test on one group (`group`, `confirm`, `authorised: true` required). |
 | GET | `/runs/{id}/trust` | The devices the run trusts (fingerprints only) and the device CA bundle in use (section 13.1). |
 | POST | `/runs/{id}/trust/retrust` | Trust the key a device presented when it was refused (`kind`, `host`, `port`, `fingerprint`). 404 for a device the run never reached; 409 when nothing was refused or the fingerprint is not the one refused. |
 | GET | `/runs/{id}/events` | Event history from the store. |
@@ -445,9 +450,11 @@ Retention: `ARTIFACT_RETENTION_RUNS = 20`. Saving an artifact deletes artifacts 
 20 most recently updated. The first command of a run does the same for `run_commands`. Runs and
 events are kept.
 
-**Approvals are not stored.** The previewed provisioning plan (`ProvisioningSteps._plan`) and the
-replication plan (`ReplicationSteps._plan`) are held in memory with the inputs they were built from.
-A restart, a new discovery or a builder edit withdraws them; an apply spends the replication plan.
+**Approvals are not stored.** The previewed provisioning plan and its frozen inputs
+(`ProvisioningSteps._plan`), the replication plan (`ReplicationSteps._plan`), the snapshot plan
+(`SnapshotSteps._plan`) and each single-use `Approval` (`domain/approval.py`) are held in memory
+only. A restart, a new discovery or a builder edit withdraws the held plan; every apply pops its
+plan, issues a single-use `Approval`, and spends it when the worker thread returns.
 See [LESSONS.md](../LESSONS.md) lesson 6.
 
 ---

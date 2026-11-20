@@ -826,7 +826,12 @@ def test_storage_apply_needs_the_plan_id_the_operator_ticked(tmp_path, monkeypat
 
     monkeypatch.setattr(sp, "build_plan", lambda i, d, **kw: ProvisioningPlan(actions=[PlannedAction(kind="host", name="esx1", description="d")]))
     applied: list = []
-    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, **kw: applied.append(1) or ProvisioningResult())
+    def fake_storage_apply(inputs, approval, **kw):
+        assert approval.creds_for("storage", "A").host == "a"
+        applied.append(1)
+        return ProvisioningResult()
+
+    monkeypatch.setattr(storage_apply, "apply_plan", fake_storage_apply)
     service, rid = _approval_run(tmp_path)
     with TestClient(create_app(service)) as client:
         def preview() -> str:
@@ -867,7 +872,13 @@ def test_replication_apply_needs_the_plan_id_the_operator_ticked(tmp_path, monke
     monkeypatch.setattr(replication_plan, "check", lambda a, b, r: ReplicationReport(primary=a, peer=b))   # no RCIP partnership: no link gate
     monkeypatch.setattr(replication_plan, "build_plan", lambda report, r, i: ReplicationPlan(actions=[ReplicationAction(kind="group", name="HS_rcg")]))
     applied: list = []
-    monkeypatch.setattr(replication_apply, "apply_plan", lambda plan, prov, **kw: applied.append(plan.plan_id) or ReplicationResult(groups_created=["HS_rcg"]))
+    def fake_rep_apply(plan, prov, approval, **kw):
+        assert approval.creds_for("rc_groups", "A").host == "a"
+        assert approval.creds_for("rc_groups", "B").host == "b"
+        applied.append(plan.plan_id)
+        return ReplicationResult(groups_created=["HS_rcg"])
+
+    monkeypatch.setattr(replication_apply, "apply_plan", fake_rep_apply)
     service, rid = _approval_run(tmp_path, replication=True)
     with TestClient(create_app(service)) as client:
         def preview() -> str:

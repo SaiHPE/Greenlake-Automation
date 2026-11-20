@@ -10,10 +10,6 @@ the B10000 (see ADR 0003 + the deep-research findings in the runbook). Mutating 
 - **Readiness gate**: login() is the gate. A degraded/initialising array returns 503 (code 68,
   "system services required for operation are not ready"); we surface that as a clear, retry-later
   error instead of half-provisioning.
-- **Idempotency**: every create is lookup-before-create (getHosts-derived WWN ownership) or catches the array's
-  HTTPConflict so a re-run reports "exists" rather than failing — EXISTENT_HOST / EXISTENT_SV
-  (volume; NOT EXISTENT_VV) / EXISTENT_VLUN, and EXISTENT_PATH (a WWN already on another host) which
-  is a real conflict we do NOT swallow.
 - **Proxy bypass**: the array is on the internal mgmt network; routing its 443 through the jump-box
   proxy is what caused TLS handshake timeouts (see probe_wsapi.py). We add the host to NO_PROXY so
   python-3parclient's `requests` calls go direct.
@@ -31,7 +27,7 @@ from __future__ import annotations
 
 import time
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, cast
 
 from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.domain.errors import WsapiError, WsapiNotReady
@@ -233,6 +229,10 @@ def parse_volumes(body: object) -> list[ArrayVolumeRecord]:
 def parse_sets(body: object) -> dict[str, list[str]]:
     """getHostSets / getVolumeSets -> {name: members}. A set with no `setmembers` is present and empty."""
     return {m["name"]: list(m.get("setmembers") or []) for m in _members(body) if m.get("name")}
+
+
+def _names(body: object) -> list[str]:
+    return [m.get("name", "") for m in _members(body)]
 
 
 def parse_vlun_templates(body: object) -> list[VlunTemplate]:
@@ -453,8 +453,7 @@ class WsapiReader:
         try:
             if trusted is None:
                 # requests accepts a CA bundle path as `verify` (the SDK forwards `secure` to `verify`).
-                sdk_factory: Any = HPE3ParClient
-                client = sdk_factory(self.api_url, secure=self._ca_bundle, timeout=self.timeout)
+                client = HPE3ParClient(self.api_url, secure=cast(Any, self._ca_bundle), timeout=self.timeout)
             else:
                 # TRUST-OFF: a certificate the array made for itself cannot pass a chain check, so the SDK's
                 # is off; every connection this client opens checks the pinned SHA-256 instead (_pin_calls).
@@ -493,8 +492,7 @@ class WsapiReader:
         return info if isinstance(info, dict) else {}
 
     def cpg_names(self) -> list[str]:
-        body = self._require().getCPGs()
-        return [m.get("name", "") for m in _members(body)]
+        return _names(self._require().getCPGs())
 
     def cpg_free_mib(self) -> dict[str, int]:
         """CPG name -> free capacity in MiB, for the readiness preflight. `freeSpaceMiB` is what the
@@ -536,20 +534,20 @@ class WsapiReader:
         return ports
 
     def host_names(self) -> list[str]:
-        return [m.get("name", "") for m in _members(self._require().getHosts())]
+        return _names(self._require().getHosts())
 
     def host_set_names(self) -> list[str]:
         try:
-            return [m.get("name", "") for m in _members(self._require().getHostSets())]
+            return _names(self._require().getHostSets())
         except Exception:  # older firmware may differ; non-fatal for a plan preview
             return []
 
     def volume_names(self) -> list[str]:
-        return [m.get("name", "") for m in _members(self._require().getVolumes())]
+        return _names(self._require().getVolumes())
 
     def volume_set_names(self) -> list[str]:
         try:
-            return [m.get("name", "") for m in _members(self._require().getVolumeSets())]
+            return _names(self._require().getVolumeSets())
         except Exception:
             return []
 
@@ -603,6 +601,10 @@ class WsapiReader:
         return self.wwn_owners().get(normalize_wwpn(wwn))
 
     # ------------------------------------------------------------------ Remote Copy group reads (SPEC-016)
+    # The `/remotecopygroups` resource, confirmed on WSAPI 1.15 (B10000, OS 10.5.0, both lab
+    # arrays): group records carry `role` 1/2, `targets[].mode` 1 sync / 2 periodic,
+    # `targets[].policies.{autoRecover,autoSynchronize,…}`, `targets[].syncPeriod`,
+    # `remoteGroupName`, `volumes[].remoteVolumes[].syncStatus` (tests/fixtures/rc_pair/README.md).
 
     def remote_copy_groups(self) -> list[dict]:
         try:

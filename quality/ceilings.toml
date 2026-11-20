@@ -35,8 +35,8 @@
 "src/alletra_onboard/adapters/greenlake/http_client.py :: GreenLakeHttpClient._record :: PLR0913" = 8
 "src/alletra_onboard/adapters/greenlake/http_client.py :: GreenLakeHttpClient.poll_async :: PLR0913" = 6
 "src/alletra_onboard/adapters/hosts/linux_ssh.py :: LinuxHostClient.__init__ :: PLR0913" = 6
-"src/alletra_onboard/api/app.py :: create_app :: C901" = 115
-"src/alletra_onboard/api/app.py :: create_app :: PLR0915" = 281
+"src/alletra_onboard/api/app.py :: create_app :: C901" = 114
+"src/alletra_onboard/api/app.py :: create_app :: PLR0915" = 279
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_failover_section :: C901" = 13
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_failover_section :: PLR0912" = 13
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_file_section :: C901" = 11
@@ -132,10 +132,10 @@
 "src/alletra_onboard/application/replication/apply.py :: apply_plan :: C901" = 19
 "src/alletra_onboard/application/replication/apply.py :: apply_plan :: PLR0912" = 14
 "src/alletra_onboard/application/replication/apply.py :: apply_plan :: PLR0915" = 70
-"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: C901" = 40
-"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: PLR0912" = 29
+"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: C901" = 39
+"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: PLR0912" = 28
 "src/alletra_onboard/application/replication/failover.py :: run_failover_test :: PLR0913" = 9
-"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: PLR0915" = 145
+"src/alletra_onboard/application/replication/failover.py :: run_failover_test :: PLR0915" = 144
 "src/alletra_onboard/application/replication/link_check.py :: _check_pair :: PLR0913" = 8
 "src/alletra_onboard/application/replication/link_check.py :: _ping_latency :: PLR0913" = 6
 "src/alletra_onboard/application/replication/link_check.py :: run_link_check :: PLR0913" = 8
@@ -329,7 +329,7 @@
 [pyright]
 # STANDARD T2. `file` = its pyright errors today (`standard` on src, `strict` on src/alletra_onboard/domain;
 # pyrightconfig.json). The count depends on the packages installed: use the dev extra's versions.
-"src/alletra_onboard/application/replication/steps.py" = 3
+"src/alletra_onboard/application/replication/steps.py" = 1
 "src/alletra_onboard/application/snapshots/steps.py" = 1
 
 [vulture]
@@ -345,18 +345,18 @@
 # 500 lines (src and frontend/src, tests left out). The file may not grow. Characters are counted, not
 # lines, so joining lines changes nothing. Splitting it only to get under a number is not a fix: a
 # split hides a decision, removes duplication or makes behaviour testable on its own.
-"frontend/src/api.ts" = 36845
+"frontend/src/api.ts" = 36828
 "frontend/src/steps/ReplicationStep.tsx" = 38526
 "frontend/src/steps/SnapshotsStep.tsx" = 18580
-"src/alletra_onboard/adapters/array/wsapi_client.py" = 28398
+"src/alletra_onboard/adapters/array/wsapi_client.py" = 28345
 "src/alletra_onboard/adapters/browser/cloudinit_wizard.py" = 18251
-"src/alletra_onboard/api/app.py" = 34943
+"src/alletra_onboard/api/app.py" = 34884
 "src/alletra_onboard/application/documents/asbuilt.py" = 61939
 "src/alletra_onboard/application/documents/steps.py" = 18539
 "src/alletra_onboard/application/platform/init_sheet.py" = 65775
 "src/alletra_onboard/application/provisioning/discovery.py" = 33791
 "src/alletra_onboard/application/provisioning/peer_ports.py" = 22799
-"src/alletra_onboard/application/provisioning/steps.py" = 26898
+"src/alletra_onboard/application/provisioning/steps.py" = 26693
 "src/alletra_onboard/application/provisioning/storage_provision.py" = 26026
 "src/alletra_onboard/application/provisioning/zoning_plan.py" = 31031
 "src/alletra_onboard/application/replication/plan.py" = 26605

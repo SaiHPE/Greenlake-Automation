@@ -272,6 +272,12 @@ def test_plan_summary_counts_come_from_state_not_the_old_boolean():
     assert len(plan.blockers) == 1
 
 
+def _approval(intent=None):
+    from alletra_onboard.domain.approval import Approval
+
+    return Approval("test-run", "storage", {"A": (intent or _intent()).array})
+
+
 # ------------------------------------------------------------------ R7 / R8 apply
 
 def test_apply_accepts_updated_and_continues_past_it():
@@ -281,7 +287,7 @@ def test_apply_accepts_updated_and_continues_past_it():
     fake.created_templates[("set:vvs", "set:hs")] = [
         VlunTemplate(volume="vol01", target="set:hs", lun=0), VlunTemplate(volume="vol02", target="set:hs", lun=1),
     ]
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), _approval(), wsapi_factory=lambda a, p, s: fake)
     assert result.error is None
     by = {(o.kind, o.name): o for o in result.outcomes}
     assert by[("host", "esx1")].status == "updated"
@@ -293,7 +299,7 @@ def test_apply_accepts_updated_and_continues_past_it():
 def test_apply_reads_back_created_exports_and_fails_the_missing_one():
     fake = TruthfulFakeWsapi()
     # the array says "created" but no template appears on read-back
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), _approval(), wsapi_factory=lambda a, p, s: fake)
     vlun = next(o for o in result.outcomes if o.kind == "vlun")
     assert vlun.status == "failed" and "read-back" in vlun.detail
 
@@ -301,7 +307,7 @@ def test_apply_reads_back_created_exports_and_fails_the_missing_one():
     honest.created_templates[("set:vvs", "set:hs")] = [
         VlunTemplate(volume="vol01", target="set:hs", lun=0), VlunTemplate(volume="vol02", target="set:hs", lun=1),
     ]
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), wsapi_factory=lambda c: honest)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), _approval(), wsapi_factory=lambda a, p, s: honest)
     vlun = next(o for o in result.outcomes if o.kind == "vlun")
     assert vlun.status == "created" and "LUN 0" in vlun.detail and "LUN 1" in vlun.detail
     assert honest.reads.count("vluns") == 2                       # once before the loop, once to read back — never per export
@@ -456,7 +462,7 @@ def test_blank_host_set_members_block_the_plan_and_plan_no_hosts():
     hs = _row(plan, "hostset", "hs")
     assert hs.state == "conflict" and "no members" in hs.reason
     # apply refuses too — the plan is the approval document
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovery(), REACHABLE, plan), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovery(), REACHABLE, plan), _approval(intent), wsapi_factory=lambda a, p, s: fake)
     assert result.error and "no members" in result.error and fake.writes == []
 
 
@@ -499,7 +505,7 @@ def test_apply_skips_an_export_that_already_exists_even_at_auto_lun():
     picks the next number — so apply must read the templates and skip what is there."""
     fake = TruthfulFakeWsapi(vluns=[VlunTemplate(volume="vol01", target="set:hs", lun=0),
                                     VlunTemplate(volume="vol02", target="set:hs", lun=1)])
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), _approval(), wsapi_factory=lambda a, p, s: fake)
     assert result.error is None
     assert [w for w in fake.writes if w[0] == "vlun"] == []            # nothing re-sent
     vlun = next(o for o in result.outcomes if o.kind == "vlun")
@@ -511,7 +517,7 @@ def test_apply_completes_a_partial_set_export_member_by_member():
     whole set again (which would duplicate the present member)."""
     fake = TruthfulFakeWsapi(vluns=[VlunTemplate(volume="vol01", target="set:hs", lun=0)])
     fake.created_templates[("vol02", "set:hs")] = [VlunTemplate(volume="vol02", target="set:hs", lun=1)]
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), _approval(), wsapi_factory=lambda a, p, s: fake)
     assert [w for w in fake.writes if w[0] == "vlun"] == [("vlun", "vol02", "set:hs", None)]
     vlun = next(o for o in result.outcomes if o.kind == "vlun")
     assert vlun.status == "created" and "LUN 0" in vlun.detail and "LUN 1" in vlun.detail
@@ -522,7 +528,7 @@ def test_apply_refuses_an_export_the_templates_say_conflicts():
     moved between plan and click)."""
     fake = TruthfulFakeWsapi(vluns=[VlunTemplate(volume="vol01", target="esx1", lun=2)])
     intent = _intent(exports=[ExportRequest(source_kind="vvset", source_name="vvs", target_kind="hostset", target_name="hs")])
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovery(), REACHABLE, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovery(), REACHABLE, prov.ProvisioningPlan()), _approval(intent), wsapi_factory=lambda a, p, s: fake)
     assert [w for w in fake.writes if w[0] == "vlun"] == []
     vlun = next(o for o in result.outcomes if o.kind == "vlun")
     assert vlun.status == "failed" and "already presented directly to member esx1" in vlun.detail
@@ -638,7 +644,7 @@ def test_result_rows_carry_the_arrays_identifiers():
     fake.created_templates[("set:vvs", "set:hs")] = [
         VlunTemplate(volume="vol01", target="set:hs", lun=0), VlunTemplate(volume="vol02", target="set:hs", lun=1),
     ]
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), _approval(), wsapi_factory=lambda a, p, s: fake)
     by = {(o.kind, o.name): o for o in result.outcomes}
     assert by[("host", "esx1")].detail == "id 16 · persona VMware · 2 WWNs"
     assert by[("volume", "vol01")].detail == "id 100 · WWN 60002AC000000000000000000002D495 · 20480 MiB tpvv on SSD_r6"

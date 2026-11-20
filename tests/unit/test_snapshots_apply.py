@@ -522,9 +522,10 @@ class _Ssh:
         self.sent: list[str] = []
         self.bound: set[tuple[str, str]] = set()
 
-    def client(self, creds, objects):
+    def client(self, approval, objects):
         from alletra_onboard.adapters.array.snap_cli_client import ArraySnapCliClient
 
+        creds = approval.creds_for("snapshots", "A")
         array = self
         self.bound = set(objects.schedules)
 
@@ -532,7 +533,7 @@ class _Ssh:
             def connect(self) -> None:
                 self._client = array
 
-        return _Client(creds.host, creds.username, creds.password.get_secret_value(), objects=objects)
+        return _Client(creds.host, creds.username, creds.password.get_secret_value(), objects=objects, approval=approval)
 
     def _showsched(self) -> str:
         if not self.schedules:
@@ -575,6 +576,12 @@ class _Ssh:
         return None
 
 
+def _snap_approval(creds=None):
+    from alletra_onboard.domain.approval import Approval
+
+    return Approval("test-run", "snapshots", {"A": creds or _creds()})
+
+
 def _apply(requests, fake: _ArrayWsapi, volumes=None, ssh: _Ssh | None = None):
     from alletra_onboard.application.snapshots.apply import apply_plan
     from alletra_onboard.application.snapshots.plan import plan_snapshots
@@ -586,7 +593,7 @@ def _apply(requests, fake: _ArrayWsapi, volumes=None, ssh: _Ssh | None = None):
     plan = plan_snapshots(intent, view)
     creds = _creds()
     prov = ProvisioningIntent(array=creds, vcenter=creds, switch_f1=creds, switch_f2=creds, snapshots=intent)
-    return plan, apply_plan(plan, view, prov, wsapi_factory=lambda c: fake, snap_cli_factory=ssh.client)
+    return plan, apply_plan(plan, view, prov, _snap_approval(creds), wsapi_factory=lambda a, p, s: fake, snap_cli_factory=ssh.client)
 
 
 def _base():
@@ -659,7 +666,7 @@ def test_whole_set_snapshot_refuses_when_set_membership_changed_after_preview():
 
     # Another volume is added to the set on the array after the operator reviewed the preview.
     fake.sets = {"zz_sn_vvs": ["zz_sn_vol01", "zz_sn_vol02", "zz_sn_vol03"]}
-    result = apply_plan(plan, view, prov, wsapi_factory=lambda c: fake, snap_cli_factory=_Ssh([]).client)
+    result = apply_plan(plan, view, prov, _snap_approval(creds), wsapi_factory=lambda a, p, s: fake, snap_cli_factory=_Ssh([]).client)
 
     assert fake.calls == []                                              # zero writes sent
     assert result.error is not None
@@ -683,7 +690,7 @@ def test_whole_set_snapshot_succeeds_in_one_call_when_set_membership_is_unchange
     creds = _creds()
     prov = ProvisioningIntent(array=creds, vcenter=creds, switch_f1=creds, switch_f2=creds, snapshots=intent)
 
-    result = apply_plan(plan, view, prov, wsapi_factory=lambda c: fake, snap_cli_factory=_Ssh([]).client)
+    result = apply_plan(plan, view, prov, _snap_approval(creds), wsapi_factory=lambda a, p, s: fake, snap_cli_factory=_Ssh([]).client)
 
     assert result.error is None
     assert fake.calls == [("set", "zz_sn_vvs", "@vvname@.initial", True, 2)]
@@ -787,8 +794,12 @@ async def test_apply_needs_the_ticked_plan_and_a_plan_without_blockers(tmp_path)
     fake = _ArrayWsapi(_base(), _SETS)
     view = SnapshotArrayView(name="AlletraMP_D22U27", os_version="10.5.0", volumes=list(fake.vols), vvsets=dict(_SETS))
     service, _ = _service(tmp_path, view)
+    def checked_wsapi(approval, purpose, side):
+        assert approval.creds_for(purpose, side).host == "10.64.122.99"
+        return fake
+
     service.snapshots = SnapshotSteps(service.coordinator, read_fn=lambda creds, progress=None: view.model_copy(
-        update={"volumes": fake.volumes()}), apply_fn=partial(apply_plan, wsapi_factory=lambda c: fake, snap_cli_factory=_Ssh([]).client))
+        update={"volumes": fake.volumes()}), apply_fn=partial(apply_plan, wsapi_factory=checked_wsapi, snap_cli_factory=_Ssh([]).client))
     run = _run(service, [_req(snapshot_now=True, expire_hours=2)])
     with pytest.raises(StepPreconditionError, match="read the array first"):
         service.start_snapshots_apply(run.run_id, approved_plan="x")

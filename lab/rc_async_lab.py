@@ -22,6 +22,7 @@ from alletra_onboard.application.replication.apply import apply_plan
 from alletra_onboard.application.replication.plan import build_plan, check
 from alletra_onboard.application.replication.read import read_array
 from alletra_onboard.application.replication.verify import verify
+from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.replication import ReplicationPlan
 
 ACTION = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -145,7 +146,8 @@ def main():
     if input("\nType APPLY to write these %d calls to the arrays: " % len(calls)).strip() != "APPLY":
         sys.exit("not applied")
     started = time.strftime("%H:%M:%S")
-    result = apply_plan(plan, intent, progress=print)
+    approval = Approval("lab", "rc_groups", {"A": intent.array, "B": intent.replication.peer})
+    result = apply_plan(plan, intent, approval, progress=print)
     save("result.json", result.model_dump_json(indent=2))
     print("\n==== Result (apply started %s):" % started)
     for o in result.outcomes:

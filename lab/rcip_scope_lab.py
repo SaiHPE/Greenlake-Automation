@@ -311,11 +311,11 @@ def peer(password):
 
         fl.banner("4b. A second run of the same sheet: the failover test on a group it did not create")
         second = run_from_sheet(password, "failover", steps=("failover_test",))
-        status, resp = api("POST", "/runs/%s/replication/failover-test" % second, {"group": GROUP})
+        status, resp = api("POST", "/runs/%s/replication/failover-test" % second, {"group": GROUP, "authorised": True})
         check("failover: refused without the name typed back",
               status == 409 and "was not created by this run" in str(resp), "HTTP %s %s" % (status, str(resp)[:200]))
         ev = step(second, "/replication/failover-test", ["failover.completed", "failover.failed"], "failover-typed",
-                  body={"group": GROUP, "confirm": GROUP})
+                  body={"group": GROUP, "confirm": GROUP, "authorised": True})
         rec = ev["data"].get("record") or {}
         check("failover: with the name typed back it ran on %s and passed" % GROUP,
               rec.get("result") == "passed" and rec.get("group") == GROUP, ev["message"][:200])
@@ -334,7 +334,11 @@ def main():
         shutil.rmtree(OUT)
     os.makedirs(OUT)
     fl.OUT = pl.OUT = OUT
+    from pydantic import SecretStr
+
     from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
+    from alletra_onboard.domain.approval import Approval
+    from alletra_onboard.domain.shared import EndpointCreds
 
     password = fl.lab_secret("RCIP_PAIR_PW")
     if not check("the app answers on %s" % fl.APP, api("GET", "/app/profile")[0] == 200):
@@ -346,7 +350,8 @@ def main():
     if not check("the pair has no partnership and nothing zz_rc_*", ok and not left, why + "; ".join(left)):
         sys.exit("Not at the starting point")
     try:
-        with WsapiWriter(A_HOST, "3paradm", password) as w:
+        lab_approval = Approval("lab", "storage", {"A": EndpointCreds(host=A_HOST, username="3paradm", password=SecretStr(password))})
+        with WsapiWriter(A_HOST, "3paradm", password, approval=lab_approval) as w:
             check("volume %s and set %s created" % (pl.VOL, pl.VVSET),
                   w.ensure_volume(pl.VOL, "SSD_r6", 1024, "tpvv") == "created" and w.ensure_volume_set(pl.VVSET, [pl.VOL]) == "created")
         for scenario in (mixed, half, gateway, peer):

@@ -30,6 +30,7 @@ from typing import Any
 
 from alletra_onboard.adapters import command_log
 from alletra_onboard.adapters.array.cli_client import _FORBIDDEN_CHARS, ArrayCliClient
+from alletra_onboard.domain.approval import Approval, require_approval
 from alletra_onboard.domain.array_parse import answered_error
 from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.plan_objects import SnapPlanObjects
@@ -132,10 +133,11 @@ class ArraySnapCliClient(ArrayCliClient):
     """Reads like `ArrayCliClient`; writes only the one schedule form above, and only the schedules of the
     plan it was built with. Built without them, it refuses every write."""
 
-    def __init__(self, host: str, username: str, password: str, *, objects: SnapPlanObjects | None = None,
-                 **kwargs: Any) -> None:
+    def __init__(self, host: str, username: str, password: str, *, approval: Approval,
+                 objects: SnapPlanObjects | None = None, **kwargs: Any) -> None:
         super().__init__(host, username, password, **kwargs)
         self._objects = objects
+        self._approval = require_approval(approval)
 
     @property
     def objects(self) -> SnapPlanObjects | None:
@@ -148,9 +150,14 @@ class ArraySnapCliClient(ArrayCliClient):
         return snap_write_refusal(command) or snap_object_refusal(command, self._objects)
 
     def write(self, command: str, timeout: float | None = None) -> str:
+        started = time.monotonic()
+        if self._approval.spent:
+            why = "refused: this approval has already been used"
+            command_log.record(target=self.host, transport="ssh", command=command, started=started, ok=False,
+                               result=why, secrets=[self.password], write=True)
+            self._approval.require_live()
         if self._client is None:
             raise ArrayCliError("not connected")
-        started = time.monotonic()
         why = self.write_refusal(command)
         if why:
             command_log.record(target=self.host, transport="ssh", command=command, started=started, ok=False,

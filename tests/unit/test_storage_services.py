@@ -405,9 +405,15 @@ def test_build_plan_flags_existing_and_lists_actions():
     assert plan.error is None
 
 
+def _storage_approval(intent=None):
+    from alletra_onboard.domain.approval import Approval
+
+    return Approval("test-run", "storage", {"A": (intent or _intent()).array})
+
+
 def test_apply_plan_is_idempotent_and_exports_to_host_set():
     fake = FakeWsapi(hosts={"esx1"})
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovered(), _ZONED, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovered(), _ZONED, prov.ProvisioningPlan()), _storage_approval(), wsapi_factory=lambda a, p, s: fake)
     statuses = {(o.kind, o.name): o.status for o in result.outcomes}
     assert statuses[("host", "esx1")] == "exists"
     assert statuses[("volume", "CRV_Prod01")] == "created"
@@ -426,7 +432,7 @@ def test_explicit_exports_override_the_default_and_carry_source_target_and_lun()
                       target_name="esx1"),
     ]})
     fake = FakeWsapi(hosts={"esx1"})
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovered(), _ZONED, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovered(), _ZONED, prov.ProvisioningPlan()), _storage_approval(intent), wsapi_factory=lambda a, p, s: fake)
     # source/target refs get the WSAPI set: prefix; explicit LUN is recorded, auto LUN is not
     assert ("vlun", "set:CRV_VVSet", "set:CRVLZ_Hostset", 100) in fake.calls
     assert ("vlun", "CRV_Prod01", "esx1") in fake.calls
@@ -525,7 +531,7 @@ class _StubSdk:
 def _client_with(stub):
     from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
 
-    c = WsapiWriter("192.0.2.1", "u", "p")
+    c = WsapiWriter("192.0.2.1", "u", "p", approval=_storage_approval())
     c._client = stub
     return c
 
@@ -699,7 +705,7 @@ def test_apply_creates_only_the_selected_hosts():
     report = _discovered()
     report.host_hbas.append(HostHba(host_name="esx2", wwpn=normalize_wwpn(_C), fabric="odd"))
     fake = FakeWsapi()
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, report, _ZONED, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, report, _ZONED, prov.ProvisioningPlan()), _storage_approval(intent), wsapi_factory=lambda a, p, s: fake)
     assert result.error is None
     assert [c[1] for c in fake.calls if c[0] == "host"] == ["esx1"]
 
@@ -716,7 +722,7 @@ def test_default_export_refuses_the_multi_hostset_cross_product():
     ]
     plan = prov.build_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
     assert plan.error and "refusing" in plan.error
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovered(), _ZONED, plan), wsapi_factory=lambda c: FakeWsapi())
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovered(), _ZONED, plan), _storage_approval(intent), wsapi_factory=lambda a, p, s: FakeWsapi())
     assert result.error and "Compose the exports" in result.error
 
 
@@ -832,7 +838,7 @@ def test_a_refused_volume_name_reads_in_plain_words_with_the_arrays_reason():
             raise hpe_exc.from_response(SimpleNamespace(status=400),
                                         {"code": 69, "desc": "illegal character in input", "ref": "name"})
 
-    client = WsapiWriter("h", "u", "p")
+    client = WsapiWriter("h", "u", "p", approval=_storage_approval())
     client._client = Refusing()
     with pytest.raises(WsapiError) as exc:
         client.ensure_volume("zz_bl45_vol02+", "SSD_r6", 1024, "tpvv")
@@ -879,7 +885,7 @@ def test_a_volume_the_array_finds_too_large_is_refused_with_a_sentence():
         def createVolume(self, name, cpg, size_mib, optional=None):
             raise hpe_exc.from_response(SimpleNamespace(status=400), {"code": 28, "desc": reason})
 
-    client = WsapiWriter("h", "u", "p")
+    client = WsapiWriter("h", "u", "p", approval=_storage_approval())
     client._client = Refusing()
     with pytest.raises(WsapiError) as exc:
         client.ensure_volume("zz_bl45_vol02", "SSD_r6", 1024 * 1024 * 1024, "tpvv")
@@ -1143,7 +1149,7 @@ def test_wsapi_volume_bodies_match_what_the_array_accepts():
         def createVolume(self, name, cpg, size_mib, optional=None):
             self.calls.append((name, cpg, size_mib, optional))
 
-    client = WsapiWriter(host="array", username="3paradm", password="x")
+    client = WsapiWriter(host="array", username="3paradm", password="x", approval=_storage_approval())
     spy = SpyClient()
     client._client = spy
 
@@ -1161,7 +1167,8 @@ def test_apply_plan_sets_persona_per_host_os():
         HostHba(host_name="winbox", wwpn=_B, os="Microsoft Windows Server 2022"),
     ])
     fake = FakeWsapi()
-    prov_apply.apply_plan(prov_apply.StorageInputs(_intent(members=["esx1", "winbox"]), d, _ZONED, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    intent = _intent(members=["esx1", "winbox"])
+    prov_apply.apply_plan(prov_apply.StorageInputs(intent, d, _ZONED, prov.ProvisioningPlan()), _storage_approval(intent), wsapi_factory=lambda a, p, s: fake)
     personas = {c[1]: c[3] for c in fake.calls if c[0] == "host"}  # ("host", name, wwns, persona)
     assert personas == {"esx1": "VMware", "winbox": "WindowsServer"}  # name per host, not hardcoded
 
@@ -1611,14 +1618,16 @@ def test_apply_holds_the_same_exports_the_plan_showed():
     """apply re-derives from the intent rather than replaying the plan, so the filter has to be in
     both places or the array gets an export the operator was told was held."""
     fake = FakeWsapi()
-    prov_apply.apply_plan(prov_apply.StorageInputs(_intent(members=["esx1", "esx2"]), _two_hosts(), set(), prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    intent = _intent(members=["esx1", "esx2"])
+    prov_apply.apply_plan(prov_apply.StorageInputs(intent, _two_hosts(), set(), prov.ProvisioningPlan()), _storage_approval(intent), wsapi_factory=lambda a, p, s: fake)
     assert not [c for c in fake.calls if c[0] == "vlun"]
     assert [c[1] for c in fake.calls if c[0] == "host"]      # hosts still created
 
 
 def test_apply_still_refuses_when_discovery_found_no_hosts_at_all():
+    intent = _intent()
     result = prov_apply.apply_plan(
-        prov_apply.StorageInputs(_intent(), disc.DiscoveryReport(), set(), prov.ProvisioningPlan()), wsapi_factory=lambda c: FakeWsapi(),
+        prov_apply.StorageInputs(intent, disc.DiscoveryReport(), set(), prov.ProvisioningPlan()), _storage_approval(intent), wsapi_factory=lambda a, p, s: FakeWsapi(),
     )
     assert result.error and "no hosts" in result.error
 
@@ -2331,7 +2340,7 @@ def test_a_host_set_member_typed_with_the_sheet_name_is_planned_under_the_found_
     assert hs.detail["members"] == ["esx1"]
     assert "Host set CRVLZ_Hostset: sheet host 'esx1.lab.local' is the same server as 'esx1' and is planned under that name." in plan.notes
     fake = FakeWsapi()
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovered(), _ZONED, plan), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovered(), _ZONED, plan), _storage_approval(intent), wsapi_factory=lambda a, p, s: fake)
     assert result.error is None
     assert ("host", "esx1", (normalize_wwpn(HOST_A), normalize_wwpn(HOST_B)), "VMware") in fake.calls
     assert next(o for o in result.outcomes if o.kind == "hostset").detail == "1 member: esx1"
@@ -2347,8 +2356,9 @@ def test_a_sheet_row_retyping_vcenters_wwpns_is_another_name_for_that_host():
     assert "Host 'esx1-sheet' has only initiators that belong to 'esx1' — treated as another name for it." in notes
     exports = [ExportRequest(source_kind="volume", source_name="CRV_Prod01", target_kind="host", target_name="esx1-sheet")]
     fake = FakeWsapi()
-    prov_apply.apply_plan(prov_apply.StorageInputs(_aliased_intent(["esx1-sheet"], [row], exports), _discovered(), _ZONED, prov.ProvisioningPlan()),
-                          wsapi_factory=lambda c: fake)
+    intent = _aliased_intent(["esx1-sheet"], [row], exports)
+    prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovered(), _ZONED, prov.ProvisioningPlan()),
+                          _storage_approval(intent), wsapi_factory=lambda a, p, s: fake)
     assert ("vlun", "CRV_Prod01", "esx1") in fake.calls
 
 

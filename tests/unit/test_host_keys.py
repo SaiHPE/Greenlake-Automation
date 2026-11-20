@@ -108,12 +108,19 @@ def test_a_port_other_than_22_is_pinned_under_its_own_name(ssh, book):
     assert list(book.pins) == [(TrustKind.SSH, "10.0.0.5", 2222)] and book.refused == []
 
 
+def _rc_approval(host: str = "10.0.0.6"):
+    from alletra_onboard.domain.approval import Approval
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    return Approval("test-run", "rc_partnership", {"A": EndpointCreds(host=host, username="3paradm", password=SecretStr(PW))})
+
+
 def test_the_remote_copy_write_client_connects_like_the_read_client(ssh, book):
     ssh.devices["10.0.0.6"] = fake_ssh.new_key()
     _connect(ArrayCliClient("10.0.0.6", "3paradm", PW))
     ssh.devices["10.0.0.6"] = fake_ssh.new_key()
     with pytest.raises(ArrayCliError, match="presented a different SSH host key"):
-        ArrayRcCliClient("10.0.0.6", "3paradm", PW, objects=RcPlanObjects()).connect()
+        ArrayRcCliClient("10.0.0.6", "3paradm", PW, approval=_rc_approval(), objects=RcPlanObjects()).connect()
     assert len(ssh.logins) == 1
 
 
@@ -208,7 +215,7 @@ def _unreadable(device: str, host: str, key) -> str:
 
 @pytest.mark.parametrize("make, error, device, host", [
     (lambda h: ArrayCliClient(h, "3paradm", PW), ArrayCliError, "array", "10.0.0.5"),
-    (lambda h: ArrayRcCliClient(h, "3paradm", PW, objects=RcPlanObjects()), ArrayCliError, "array", "10.0.0.6"),
+    (lambda h: ArrayRcCliClient(h, "3paradm", PW, approval=_rc_approval(h), objects=RcPlanObjects()), ArrayCliError, "array", "10.0.0.6"),
     (lambda h: BrocadeClient(h, "admin", PW), BrocadeError, "switch", "10.0.1.2"),
     (lambda h: LinuxHostClient(h, "root", PW), LinuxHostError, "Linux host", "10.0.2.7"),
 ])

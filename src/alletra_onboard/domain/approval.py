@@ -1,0 +1,56 @@
+"""Operator approval token for array writes (STANDARD S3, ADR 0031).
+
+An `Approval` is an in-memory value issued only by `RunCoordinator.issue_approval` after the
+operator has reviewed and ticked a plan (or authorised the failover test). It carries the run id,
+purpose, credentials for the arrays the reviewed plan names, and a `spent` flag. It is never
+stored or serialised, and compares by identity only (`eq=False`).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Literal
+
+from alletra_onboard.domain.shared import EndpointCreds
+
+Purpose = Literal["storage", "rc_groups", "rc_partnership", "snapshots", "failover"]
+Side = Literal["A", "B"]
+
+
+class ApprovalError(RuntimeError):
+    """An array write was attempted without a live, matching operator approval."""
+
+
+def require_approval(approval: object) -> Approval:
+    """Return `approval` when it is an `Approval`, else raise `ApprovalError`."""
+    if not isinstance(approval, Approval):
+        raise ApprovalError("No valid operator approval was provided.")
+    return approval
+
+
+@dataclass(eq=False)
+class Approval:
+    run_id: str
+    purpose: Purpose
+    arrays: Mapping[Side, EndpointCreds]
+    spent: bool = False
+
+    def __post_init__(self) -> None:
+        self.arrays = MappingProxyType(dict(self.arrays))
+
+    def require_live(self) -> None:
+        """Raise ApprovalError once this approval has been spent."""
+        if self.spent:
+            raise ApprovalError("This approval has already been used. Review and approve a new plan first.")
+
+    def creds_for(self, purpose: Purpose, side: Side) -> EndpointCreds:
+        """Return the credentials for `side` when this approval is live and matches `purpose`."""
+        self.require_live()
+        if self.purpose != purpose:
+            raise ApprovalError(f"This approval is for {self.purpose}, not {purpose}.")
+        creds = self.arrays.get(side)
+        if creds is None:
+            raise ApprovalError(f"This approval does not include array {side}.")
+        return creds

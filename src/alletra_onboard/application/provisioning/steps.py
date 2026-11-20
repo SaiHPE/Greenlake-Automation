@@ -13,6 +13,7 @@ monkeypatch the modules themselves.
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 from functools import partial
 
@@ -24,11 +25,13 @@ from alletra_onboard.application.provisioning import preflight as storage_prefli
 from alletra_onboard.application.provisioning import zoning as storage_zoning
 from alletra_onboard.application.provisioning import zoning_plan as storage_zoning_plan
 from alletra_onboard.application.runs.coordinator import (
+    RunBusyError,
     RunCoordinator,
     StepPreconditionError,
     check_approval,
     new_plan_id,
 )
+from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.network import IscsiNetworkPlan, IscsiVlanRequest, PortNetworkView
@@ -43,7 +46,6 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningBuilder,
     ProvisioningComposition,
     ProvisioningObjects,
-    ProvisioningPlan,
 )
 
 
@@ -128,9 +130,9 @@ class DiscoveryZoningSteps:
             data={"report": report.model_dump(mode="json")},
         )
 
-    def _latest_plan_payload(self, run_id: str) -> dict | None:
+    def zoning_plan_payload(self, run_id: str) -> dict | None:
         """The run's latest `zoning.plan` payload, or None — the fabric-named hosts reach the zoning
-        check (and provisioning) through it."""
+        check and provisioning through it (SPEC-003 R1)."""
         latest = None
         for event in self._coord.list_events(run_id):
             if event.event_type == "zoning.plan" and event.data.get("plan"):
@@ -170,7 +172,7 @@ class DiscoveryZoningSteps:
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
         coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "step.started", "Verifying SAN zoning on both fabrics…")
         report = await asyncio.to_thread(
-            storage_zoning.build_report, intent, discovery, self._latest_plan_payload(run.run_id)
+            storage_zoning.build_report, intent, discovery, self.zoning_plan_payload(run.run_id)
         )
         # Every verify OVERWRITES the gate. The verify is the ONLY thing that can open it, because a
         # host is provisionable exactly when the array can see it logged in on both fabrics.
@@ -448,29 +450,32 @@ class ProvisioningSteps:
         # inputs change (a re-run of discovery, or an edit to the composition). Persisting it would
         # let a plan approved before a restart authorise an apply of a different composition.
         # Held with the exact discovery it was built from, so a re-run of discovery withdraws it too.
-        self._plan: dict[str, tuple[ProvisioningPlan, DiscoveryReport]] = {}
+        self._plan: dict[str, apply.StorageInputs] = {}
 
     def invalidate_plan(self, run_id: str) -> None:
         """Withdraw a previous approval. The operator must preview again before anything is created."""
         self._plan.pop(run_id, None)
 
-    def _previewed_plan(self, run_id: str) -> ProvisioningPlan | None:
+    def _previewed_plan(self, run_id: str) -> apply.StorageInputs | None:
         entry = self._plan.get(run_id)
         if entry is None:
             return None
-        plan, approved_against = entry
-        if self._discovery_steps.current_discovery(run_id) is not approved_against:
+        if self._discovery_steps.current_discovery(run_id) is not entry.discovery:
             # Discovery was re-run: the environment the operator approved against no longer applies.
             self.invalidate_plan(run_id)
             return None
-        return plan
+        return entry
+
+    def _ready(self, run_id: str):
+        return (
+            self._coord.get_run(run_id),
+            self._coord.get_provisioning_intent(run_id),
+            self._discovery_steps.require_discovery(run_id),
+        )
 
     def start_storage_preview(self, run_id: str) -> RunRecord:
-        coord = self._coord
-        run = coord.get_run(run_id)
-        intent = coord.get_provisioning_intent(run_id)
-        discovery = self._discovery_steps.require_discovery(run_id)
-        coord.spawn(run_id, self._run_storage_preview(run, intent, discovery))
+        run, intent, discovery = self._ready(run_id)
+        self._coord.spawn(run_id, self._run_storage_preview(run, intent, discovery))
         return run
 
     async def _run_storage_preview(self, run: RunRecord, intent, discovery) -> None:
@@ -478,14 +483,15 @@ class ProvisioningSteps:
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
         self.invalidate_plan(run.run_id)   # a new preview withdraws the old approval, even if it fails
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "step.started", "Building the provisioning plan…")
-        zoned = self._discovery_steps.zoned_hosts(run.run_id)
+        frozen = intent.model_copy(deep=True)
+        zoned = set(self._discovery_steps.zoned_hosts(run.run_id))
+        zoning = copy.deepcopy(self._discovery_steps.zoning_plan_payload(run.run_id))
         plan = await asyncio.to_thread(
-            partial(storage_provision.build_plan, intent, discovery, reachable_hosts=zoned,
-                    zoning_plan=self._zoning_plan_payload(run.run_id))
+            partial(storage_provision.build_plan, frozen, discovery, reachable_hosts=zoned, zoning_plan=zoning)
         )
         # The identity the apply must quote back: a new preview is a new plan to approve.
         plan = plan.model_copy(update={"plan_id": new_plan_id()})
-        self._plan[run.run_id] = (plan, discovery)
+        self._plan[run.run_id] = apply.StorageInputs(frozen, discovery, zoned, plan, zoning)
         status = RunStatus.RETRYABLE_FAILURE if plan.error else RunStatus.WAITING_FOR_OPERATOR
         coord.set_state(run, status, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(
@@ -496,17 +502,15 @@ class ProvisioningSteps:
         )
 
     def start_storage_apply(self, run_id: str, *, approved_plan: str | None) -> RunRecord:
-        coord = self._coord
-        run = coord.get_run(run_id)
-        intent = coord.get_provisioning_intent(run_id)
-        discovery = self._discovery_steps.require_discovery(run_id)
+        run, _intent, _discovery = self._ready(run_id)
         # Zoning gates the EXPORT, per host, not the whole run (ADR 0012 revised 2026-09-02). Host
         # objects are created regardless: HPE's documented order is register-first, and a host object
         # for a server that is not cabled yet is harmless and reversible. The exports for hosts the
         # array cannot reach are held back and named in the plan the operator approves.
-        plan = self._previewed_plan(run_id)
-        if plan is None:
+        inputs = self._previewed_plan(run_id)
+        if inputs is None:
             raise StepPreconditionError("no provisioning plan to apply — run the provisioning preview first")
+        plan = inputs.plan
         if plan.error:
             # A previewed-but-failed plan is not an approval (e.g. the CPG hard gate) — fix, re-preview.
             raise StepPreconditionError(f"the provisioning preview reported a blocking problem: {plan.error}")
@@ -517,18 +521,16 @@ class ProvisioningSteps:
             )
         # LESSONS 7: the operator's tick reaches the server as the id of the plan it was given for.
         check_approval(approved_plan, plan.plan_id)
-        coord.spawn(run_id, self._run_storage_apply(run, intent, discovery, plan))
+        approval = self._coord.issue_approval(run_id, "storage", {"A": inputs.intent.array})
+        self._plan.pop(run_id, None)
+        self._coord.spawn(run_id, self._run_storage_apply(run, inputs, approval), approval=approval)
         return run
 
-    async def _run_storage_apply(self, run: RunRecord, intent, discovery, plan) -> None:
+    async def _run_storage_apply(self, run: RunRecord, inputs: apply.StorageInputs, approval: Approval) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.apply.started", "Creating host, volumes and exports…")
-        zoned = self._discovery_steps.zoned_hosts(run.run_id)
-        result = await asyncio.to_thread(
-            apply.apply_plan,
-            apply.StorageInputs(intent, discovery, zoned, plan, self._zoning_plan_payload(run.run_id)),
-        )
+        result = await coord.run_approved(approval, partial(apply.apply_plan, inputs, approval))
         created = sum(1 for o in result.outcomes if o.status == "created")
         updated = sum(1 for o in result.outcomes if o.status == "updated")
         failed = sum(1 for o in result.outcomes if o.status == "failed")
@@ -545,11 +547,8 @@ class ProvisioningSteps:
         )
 
     def start_path_verify(self, run_id: str) -> RunRecord:
-        coord = self._coord
-        run = coord.get_run(run_id)
-        intent = coord.get_provisioning_intent(run_id)
-        discovery = self._discovery_steps.require_discovery(run_id)
-        coord.spawn(run_id, self._run_path_verify(run, intent, discovery))
+        run, intent, discovery = self._ready(run_id)
+        self._coord.spawn(run_id, self._run_path_verify(run, intent, discovery))
         return run
 
     async def _run_path_verify(self, run: RunRecord, intent, discovery) -> None:
@@ -562,7 +561,7 @@ class ProvisioningSteps:
         zoned = self._discovery_steps.zoned_hosts(run.run_id)
         verification = await asyncio.to_thread(partial(
             storage_path_verify.verify_provisioned_paths, intent, discovery, reachable_hosts=zoned,
-            zoning_plan=self._zoning_plan_payload(run.run_id),
+            zoning_plan=self._discovery_steps.zoning_plan_payload(run.run_id),
         ))
         live = sum(1 for h in verification.hosts if h.verdict == "live")
         status = RunStatus.RETRYABLE_FAILURE if verification.error else RunStatus.WAITING_FOR_OPERATOR
@@ -590,7 +589,7 @@ class ProvisioningSteps:
         intent = coord.get_provisioning_intent(run_id)
         discovery = self._discovery_steps.require_discovery(run_id)
         existing = storage_provision.read_array_objects(intent)
-        zoning = self._zoning_plan_payload(run_id)
+        zoning = self._discovery_steps.zoning_plan_payload(run_id)
         shown, _ = storage_provision.planned_host_names(intent, discovery, zoning)
         return ProvisioningObjects(
             existing_cpgs=existing["cpgs"],
@@ -607,19 +606,12 @@ class ProvisioningSteps:
             exports=list(shown.exports),
         )
 
-    def _zoning_plan_payload(self, run_id: str) -> dict | None:
-        """The run's latest `zoning.plan` payload, or None (SPEC-003 R1: the fabric-named hosts
-        reach provisioning through it). Read from the run's events, like the as-built does."""
-        latest = None
-        for event in self._coord.list_events(run_id):
-            if event.event_type == "zoning.plan" and event.data.get("plan"):
-                latest = event.data["plan"]
-        return latest
-
     def set_provisioning_builder(self, run_id: str, builder: ProvisioningBuilder) -> ProvisioningComposition:
         """Save the operator's composed host-set membership + VV-set membership + exports onto the run's
         ProvisioningIntent, so the subsequent preview/apply act on them."""
         coord = self._coord
+        if coord.is_busy(run_id):
+            raise RunBusyError(run_id)
         intent = coord.get_provisioning_intent(run_id)
         updated = intent.model_copy(deep=True, update={
             "host_sets": builder.host_sets if builder.host_sets else intent.host_sets,

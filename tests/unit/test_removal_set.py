@@ -44,10 +44,17 @@ def _intent(**over) -> ProvisioningIntent:
     return ProvisioningIntent(**data)
 
 
+def _approval(intent=None):
+    from alletra_onboard.domain.approval import Approval
+
+    return Approval("test-run", "storage", {"A": (intent or _intent()).array})
+
+
 def _apply(fake, intent=None, discovery=None, *, plan=None) -> ProvisioningResult:
-    inputs = prov_apply.StorageInputs(intent or _intent(), discovery or _discovery(), REACHABLE,
+    resolved = intent or _intent()
+    inputs = prov_apply.StorageInputs(resolved, discovery or _discovery(), REACHABLE,
                                       plan or prov.ProvisioningPlan())
-    return prov_apply.apply_plan(inputs, wsapi_factory=lambda c: fake)
+    return prov_apply.apply_plan(inputs, _approval(resolved), wsapi_factory=lambda a, p, s: fake)
 
 
 # ------------------------------------------------------------------ R1, R2, R3
@@ -224,10 +231,14 @@ def test_exports_that_cannot_be_read_back_after_a_failure_are_named_in_a_note():
 
 
 def test_a_session_that_never_opened_wrote_nothing_and_removes_nothing():
-    def refuse(creds):
+    def refuse(approval, purpose, side):
         raise RuntimeError("login refused")
 
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), wsapi_factory=refuse)
+    intent = _intent()
+    result = prov_apply.apply_plan(
+        prov_apply.StorageInputs(intent, _discovery(), REACHABLE, prov.ProvisioningPlan()),
+        _approval(intent), wsapi_factory=refuse,
+    )
     assert result.error == "login refused" and result.removals == [] and result.outcomes == []
 
 
@@ -273,7 +284,10 @@ def test_the_second_session_cleanup_would_have_been_generated():
         exports=[ExportRequest(source_kind="vvset", source_name="zz_t2_vvs", target_kind="hostset", target_name="zz_t2_hs"),
                  ExportRequest(source_kind="vvset", source_name="zz_t3_vvs", target_kind="hostset", target_name="zz_t3_hs")],
     )
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, discovery, {"10.132.30.136"}, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(
+        prov_apply.StorageInputs(intent, discovery, {"10.132.30.136"}, prov.ProvisioningPlan()),
+        _approval(intent), wsapi_factory=lambda a, p, s: fake,
+    )
     assert result.error is None
     assert render_removal_commands(result.removals) == [
         "removevlun -f zz_t3_vol01 5 set:zz_t3_hs",
