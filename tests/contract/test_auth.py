@@ -1,7 +1,9 @@
 import httpx
+import pytest
 import respx
 
 from alletra_onboard.adapters.greenlake.auth import OAuthClientCredentials
+from alletra_onboard.domain.errors import GreenLakeHttpError
 
 TOKEN_URL = "https://global.api.greenlake.hpe.com/authorization/v2/oauth2/tid/token"
 
@@ -33,3 +35,13 @@ async def test_token_is_cached_until_near_expiry():
     await provider.token()
 
     assert route.call_count == 1
+
+
+@respx.mock
+async def test_a_redirect_from_the_token_endpoint_is_an_error():
+    respx.post(TOKEN_URL).mock(return_value=httpx.Response(302, headers={"Location": "https://login.example/sso"}))
+
+    with pytest.raises(GreenLakeHttpError) as refused:
+        await OAuthClientCredentials(TOKEN_URL, "cid", "shh").token()
+
+    assert refused.value.status_code == 302

@@ -4,6 +4,7 @@
     .venv/bin/python scripts/fitness.py complexity   one section (or several)
     .venv/bin/python scripts/fitness.py --tighten    lower each ceiling to today's value and drop the
                                                      entries whose violation is gone; never adds, never raises
+    .venv/bin/python scripts/fitness.py --move OLD NEW   code moved or was renamed: rename its keys, numbers kept
 
 Today's known violations are listed in quality/ceilings.toml, one line each, keyed by file and
 function, never by line. A section fails on a violation that is not listed (NEW), on a listed one
@@ -14,10 +15,13 @@ that got worse (WORSE) and on a listed one that is gone (STALE). Sections:
   pyright     type errors per file: `standard` on src, `strict` on domain (T2; pyrightconfig.json)
   vulture     dead Python code at 80% confidence in src (M3)
   knip        dead frontend code: unused files, exports, types and dependencies (M3)
-  files       a source file over 500 lines may not grow (M2)
+  files       a source file over 18,000 non-blank characters, about 500 lines, may not grow (M2)
   suppress    `suppress(Exception)` per function (E2)
-  docs        every code path a document names exists (C2); Markdown only in today's folders (C3)
-  lessons     a lesson numbered above 49 names a test or a lint rule that exists (C4)
+  suppressions  `type: ignore`, `noqa`, `pyright:`, `eslint-disable` and `@ts-` comments per file (T3)
+  docs        every code path a document names exists, and the name it gives inside a file (C2);
+              Markdown only in today's folders (C3)
+  lessons     a lesson numbered above 49 names a test that exists or a lint rule the configuration
+              selects, or says `No check:` and why (C4)
 """
 
 from __future__ import annotations
@@ -91,6 +95,12 @@ def rel(path: str | Path) -> str:
     return Path(path).resolve().relative_to(APP).as_posix()
 
 
+def toml(name: str) -> dict:
+    """A TOML file of the app folder; empty when the file is not there."""
+    path = APP / name
+    return tomllib.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+
 # ---- which function a line belongs to ----
 
 @cache
@@ -129,12 +139,12 @@ def scope_at(path: Path, row: int) -> str:
 NUMERIC = ("C901", "PLR0913", "PLR0912", "PLR0915")
 NUMBER = re.compile(r"\((\d+) > \d+\)")
 LINT_RULES = (
-    (("BLE001",), "STANDARD E1: catch DeviceError or something narrower; `except Exception` belongs only "
-                  "at the coordinator's step boundary and in the API's error mapping."),
+    (("BLE001",), ("STANDARD E1: catch DeviceError or something narrower; `except Exception` belongs only "
+                   "at the coordinator's step boundary and in the API's error mapping.")),
     (("S110", "S112"), "STANDARD E2: no silent swallowing. Handle the error or let it reach the step boundary."),
     (("PLC0415",), "STANDARD L6: import at the top of the file; an import inside a function hides a cycle."),
-    (("PGH003", "RUF100"), "STANDARD T3: name the rule code in a `type: ignore` or `noqa`, and delete one "
-                           "that suppresses nothing."),
+    (("PGH003", "RUF100"), ("STANDARD T3: name the rule code in a `type: ignore` or `noqa`, and delete one "
+                            "that suppresses nothing.")),
     (("ERA001", "FIX", "TD"), "STANDARD C1: delete commented-out code; a TODO becomes an issue, not a comment."),
 )
 
@@ -271,17 +281,19 @@ def app_files(*suffixes: str) -> list[str]:
 
 # ---- M2: a long file may not grow ----
 
-LONG = 500
+LONG = 18_000   # non-blank characters: 500 lines of this code, which averages 36 to a line
+M2 = f"STANDARD M2: a file over {LONG:,} non-blank characters (about 500 lines) may not grow"
 
 
-def measure_file_lines() -> Found:
+def measure_file_size() -> Found:
+    """Non-blank characters, not lines: joining two lines does not make a file smaller."""
     found: Found = {}
     for path in app_files(".py", ".ts", ".tsx"):
         if not path.startswith(("src/", "frontend/src/")) or path.endswith((".test.ts", ".test.tsx")):
             continue
-        lines = len((APP / path).read_text(encoding="utf-8").splitlines())
-        if lines > LONG:
-            found[path] = (lines, f"{lines} lines")
+        size = len("".join((APP / path).read_text(encoding="utf-8").split()))
+        if size > LONG:
+            found[path] = (size, "non-blank characters")
     return found
 
 
@@ -308,11 +320,30 @@ def measure_suppress() -> Found:
     return found
 
 
+# ---- T3: a suppression comment hides a finding from the gate ----
+
+SUPPRESSION = re.compile(r"#.*\b(?:type:\s*ignore|noqa|pyright:)|eslint-disable|@ts-(?:expect-error|ignore|nocheck)")
+SUPPRESSED = ("STANDARD T3: a suppression comment hides a finding from the gate, so a file may not gain one. "
+              "Fix what the tool reports and take the comment out.")
+
+
+def measure_suppressions() -> Found:
+    found: Found = {}
+    for path in app_files(".py", ".ts", ".tsx"):
+        if path.startswith(("src/", "tests/", "frontend/src/")):
+            text = (APP / path).read_text(encoding="utf-8")
+            hits = list(SUPPRESSION.finditer(text))
+            if hits:
+                found[path] = (len(hits), f"the first at line {text.count('\n', 0, hits[0].start()) + 1}")
+    return found
+
+
 # ---- C2: a document names only code that exists ----
 
 CODE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".mjs", ".ps1", ".sh", ".cmd", ".toml", ".spec", ".md", ".html")
 SPAN = re.compile(r"`([^`\n]+)`")
 PATH_TOKEN = re.compile(r"^[A-Za-z0-9_.\-/*]+$")
+LINE_SUFFIX = re.compile(r":\d[\d,\-]*$")   # `http_client.py:86`, `devices.py:48,72,82`, `fitness.py:364-366`
 # What the app, a build or a developer's machine makes: named in documents, never in the repository.
 NOT_IN_THE_REPO = (".venv", "node_modules", "dist/", "build/", "AlletraOnboard", ".alletra_onboard",
                    "~", "/", "http", "$", "%")
@@ -322,11 +353,18 @@ DOC_ROOTS = ("", "{app}", "{app}src/", "{app}src/alletra_onboard/", "{app}src/al
              "{app}tests/", "{app}tests/fixtures/")
 
 
+# An older ADR names files as they were then, and files of other projects: history, not checked.
+FIRST_ADR = "0028"
+
+
 def documents() -> list[str]:
     """The documents that describe the structure, from the repository root (STANDARD C2)."""
-    named = ["AGENTS.md", "README.md", app_prefix() + "CONTEXT.md", app_prefix() + "README.md"]
-    design = [name for name in repo_files() if name.startswith(app_prefix() + "docs/design/") and name.endswith(".md")]
-    return [name for name in named if name in repo_files()] + design
+    app = app_prefix()
+    named = ["AGENTS.md", "README.md", app + "CONTEXT.md", app + "README.md", app + "docs/STANDARD.md"]
+    return [name for name in named if name in repo_files()] + [
+        name for name in repo_files() if name.endswith(".md") and (
+            name.startswith(app + "docs/design/")
+            or (name.startswith(app + "docs/adr/") and name.rsplit("/", 1)[-1] >= FIRST_ADR))]
 
 
 @cache
@@ -361,9 +399,29 @@ def _resolves(token: str, roots: list[str]) -> bool:
         return any(pattern.match(path) for path in paths)
     if any((root + token) in paths for root in roots) or ("/" not in token and token in names):
         return True
-    # `platform/tls.ssl_context` names a function in platform/tls.py
+    # `platform/tls.ssl_context` names something platform/tls.py defines; a .ts or .tsx file likewise
     folder, _, last = token.rpartition("/")
-    return bool(folder) and "." in last and any(f"{root}{folder}/{last.split('.')[0]}.py" in paths for root in roots)
+    module, _, name = last.partition(".")
+    files = [f"{root}{folder}/{module}{suffix}" for root in roots for suffix in (".py", ".ts", ".tsx")]
+    return bool(folder and name) and any(_defines(path, name) for path in files if path in paths)
+
+
+@cache
+def _defines(path: str, dotted: str) -> bool:
+    """True when the file defines every part of `name` or `Class.method`: read from the syntax tree
+    of a Python file, a whole-word search in a TypeScript one."""
+    text = (repo_root() / path).read_text(encoding="utf-8")
+    if not path.endswith(".py"):
+        return all(re.search(rf"\b{re.escape(part)}\b", text) for part in dotted.split("."))
+    defined = set()
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            defined.add(node.name)
+        elif isinstance(node, ast.alias):
+            defined.add(node.asname or node.name)
+        elif isinstance(node, ast.Name | ast.Attribute) and isinstance(node.ctx, ast.Store):
+            defined.add(node.id if isinstance(node, ast.Name) else node.attr)
+    return all(part in defined for part in dotted.split("."))
 
 
 def doc_paths(doc: str) -> dict[str, int]:
@@ -379,6 +437,7 @@ def doc_paths(doc: str) -> dict[str, int]:
         for span in SPAN.findall(line):
             for word in span.replace("\\", "/").split():
                 token = word.split("::")[0].strip("()[],;:'\"").rstrip(".").removeprefix("./")
+                token = LINE_SUFFIX.sub("", token)
                 if _is_code_path(token, roots) and not _resolves(token, roots):
                     named.setdefault(token, row)
     return named
@@ -431,24 +490,30 @@ def markdown_folders_today() -> list[str]:
 LESSON = re.compile(r"^\*\*(\d+)\. ")
 OLD_LESSONS = 49
 RUFF_CODE = re.compile(r"^[A-Z]{1,4}\d{3,4}$")
+NO_CHECK = re.compile(r"No check:\s*\S")
 
 
 @cache
-def _check_ids() -> frozenset[str]:
-    """Rule ids the gate knows: ruff rules that are on, import contracts, eslint rules in the config."""
-    ids = set(re.findall(r"\(([A-Z]+\d+)\)", run([sys.executable, "-m", "ruff", "check", "--show-settings",
-                                                  "src/alletra_onboard/__init__.py"]).split("linter.rules.should_fix")[0]))
-    for config in ("pyproject.toml", "quality/imports-type-only.toml"):
-        with (APP / config).open("rb") as handle:
-            ids.update(contract["id"] for contract in tomllib.load(handle)["tool"]["importlinter"]["contracts"])
+def _selected() -> tuple[tuple[str, ...], frozenset[str]]:
+    """The checks the configuration turns on: (the ruff selectors pyproject.toml lists, the ids of the
+    import contracts and the eslint rules set to error)."""
+    lint = toml("pyproject.toml").get("tool", {}).get("ruff", {}).get("lint", {})
+    ids = {contract["id"] for config in ("pyproject.toml", "quality/imports-type-only.toml")
+           for contract in toml(config).get("tool", {}).get("importlinter", {}).get("contracts", [])}
     eslint = APP / "frontend" / "eslint.config.js"
     if eslint.is_file():
-        ids.update(re.findall(r"""["']([@a-z][a-z0-9/-]+)["']\s*:""", eslint.read_text(encoding="utf-8")))
-    return frozenset(ids)
+        ids.update(re.findall(r"""["']([@a-z][a-z0-9/-]+)["']\s*:\s*\[?\s*["']error["']""",
+                              eslint.read_text(encoding="utf-8")))
+    return (*lint.get("select", ()), *lint.get("extend-select", ())), frozenset(ids)
+
+
+def _is_selected_rule(token: str) -> bool:
+    ruff, ids = _selected()
+    return token in ids or token in ruff or bool(RUFF_CODE.match(token) and token.startswith(ruff))
 
 
 def _test_exists(test_id: str) -> bool:
-    path, _, name = test_id.partition("::")
+    path, _, name = test_id.split("[")[0].partition("::")
     file = next((root / path for root in (APP, repo_root()) if (root / path).is_file()), None)
     if file is None or not name:
         return False
@@ -466,25 +531,29 @@ def check_lessons(_ceilings: dict) -> Report:
             continue
         end = starts[index + 1][0] if index + 1 < len(starts) else len(text)
         body = "\n".join(line for line in text[row:end] if not line.startswith("## "))
+        if NO_CHECK.search(body):
+            continue
         tokens = [token.strip() for token in SPAN.findall(body)]
         tests = [token for token in tokens if "::" in token]
         broken = [token for token in tests if not _test_exists(token)]
-        rules = [token for token in tokens if token in _check_ids()]
+        rules = [token for token in tokens if _is_selected_rule(token)]
         if broken:
             report.new.append(f"NEW   [lessons] lesson {number} names a test that does not exist: "
                               f"{', '.join(broken)}. STANDARD C4: write the id as `tests/unit/test_x.py::test_name`.")
         elif not tests and not rules:
-            report.new.append(f"NEW   [lessons] lesson {number} names no test and no lint rule. STANDARD C4: a new "
-                              f"lesson lands with the check that now catches its defect, named in backticks: a "
-                              f"test id (`tests/unit/test_x.py::test_name`), a ruff rule (`BLE001`), an import "
-                              f"contract id (`L3-clients-only`) or an eslint rule.")
+            report.new.append(f"NEW   [lessons] lesson {number} names no test and no lint rule the configuration "
+                              f"selects. STANDARD C4: a new lesson lands with the check that now catches its "
+                              f"defect, named in backticks: a test id (`tests/unit/test_x.py::test_name`), a ruff "
+                              f"rule pyproject.toml selects (`BLE001`), an import contract id (`L3-clients-only`) "
+                              f"or an eslint rule set to error. A lesson that is not about a code defect says "
+                              f"`No check:` and why.")
     return report
 
 TABLES: dict[str, Table] = {table.name: table for table in (
     Table("complexity",
           "STANDARD M1. `file :: function :: rule` = the function's number today: C901 complexity (limit 10),\n"
           "PLR0913 parameters (5), PLR0912 branches (12), PLR0915 statements (50). A listed function may not\n"
-          "get worse; it is fixed when it is next changed for any reason.",
+          "get worse. A change to what it does brings it within the limits; a typing-only edit need not.",
           measure_complexity,
           lambda key: "STANDARD M1: a function stays within complexity 10, 5 parameters, 12 branches and 50 "
                       "statements. Simplify it: a table, or a helper that hides a decision.",
@@ -515,27 +584,35 @@ TABLES: dict[str, Table] = {table.name: table for table in (
           measure_knip,
           lambda key: DEAD_CODE,
           DEAD_CODE),
-    Table("file-lines",
-          "STANDARD M2. `file` = its lines today, for a source file over 500 lines (src and frontend/src, tests\n"
-          "left out). The file may not grow. Splitting it only to get under a number is not a fix: a split\n"
-          "hides a decision, removes duplication or makes behaviour testable on its own.",
-          measure_file_lines,
-          lambda key: f"STANDARD M2: a file over {LONG} lines may not grow, and this one just crossed it. Put the "
-                      f"new code where its decision lives, in a module of its own if it has one.",
-          f"STANDARD M2: a file over {LONG} lines may not grow. Put the new code in the module it belongs to, or "
-          f"take as many lines out as you add."),
+    Table("file-size",
+          "STANDARD M2. `file` = its non-blank characters today, for a source file over 18,000 of them, about\n"
+          "500 lines (src and frontend/src, tests left out). The file may not grow. Characters are counted, not\n"
+          "lines, so joining lines changes nothing. Splitting it only to get under a number is not a fix: a\n"
+          "split hides a decision, removes duplication or makes behaviour testable on its own.",
+          measure_file_size,
+          lambda key: f"{M2}, and this one just crossed it. Put the new code where its decision lives, in a "
+                      f"module of its own if it has one.",
+          f"{M2}. Put the new code in the module it belongs to, or take as much out as you add."),
     Table("suppress-exception",
           "STANDARD E2. `file :: function` = its `suppress(Exception)` and `suppress(BaseException)` calls today.",
           measure_suppress,
           lambda key: "STANDARD E2: no silent swallowing. Name the error the call can raise in `suppress(...)`, "
                       "or handle it.",
           "STANDARD E2: no silent swallowing. Name the error the call can raise in `suppress(...)`, or handle it."),
+    Table("suppressions",
+          "STANDARD T3. `file` = its lines today with a suppression comment (`type: ignore`, `noqa`, `pyright:`,\n"
+          "`eslint-disable`, `@ts-expect-error`), in src, tests and frontend/src. Each hides a finding from the gate.",
+          measure_suppressions,
+          lambda key: SUPPRESSED,
+          SUPPRESSED),
     Table("doc-paths",
           "STANDARD C2. `document :: path` = a code path the document names in backticks that is not in the\n"
-          "repository. The documents are AGENTS.md, README.md, the app's CONTEXT.md and README.md and docs/design.",
+          "repository, or a name (`platform/tls.ssl_context`) its file does not define. The documents are\n"
+          "AGENTS.md, README.md, the app's CONTEXT.md, README.md and docs/STANDARD.md, docs/design and the\n"
+          "ADRs from 0028 on.",
           measure_doc_paths,
-          lambda key: "STANDARD C2: a document names only code that exists. Correct the path in the document, in "
-                      "the change that moved or removed the file.",
+          lambda key: "STANDARD C2: a document names only code that exists. Correct the path or the name in the "
+                      "document, in the change that moved, renamed or removed the code.",
           "STANDARD C2: a document names only code that exists."),
 )}
 
@@ -553,8 +630,9 @@ SECTIONS: dict[str, tuple[tuple[str, ...], tuple[Callable[[dict], Report], ...]]
     "pyright": (("pyright",), ()),
     "vulture": (("vulture",), ()),
     "knip": (("knip",), ()),
-    "files": (("file-lines",), ()),
+    "files": (("file-size",), ()),
     "suppress": (("suppress-exception",), ()),
+    "suppressions": (("suppressions",), ()),
     "docs": (("doc-paths",), (check_markdown_folders,)),
     "lessons": ((), (check_lessons,)),
 }
@@ -563,10 +641,7 @@ SECTIONS: dict[str, tuple[tuple[str, ...], tuple[Callable[[dict], Report], ...]]
 # ---- ceilings.toml ----
 
 def load_ceilings() -> dict:
-    if not CEILINGS.is_file():
-        return {}
-    with CEILINGS.open("rb") as handle:
-        return tomllib.load(handle)
+    return toml("quality/ceilings.toml")
 
 
 def _quote(key: str) -> str:
@@ -574,7 +649,8 @@ def _quote(key: str) -> str:
 
 
 def write_ceilings(ceilings: dict) -> None:
-    """The header comment is kept as it is; every table is written again, sorted."""
+    """The header comment is kept as it is; every table is written again, sorted. A recorded move
+    whose entry is gone is left out."""
     header = []
     if CEILINGS.is_file():
         for line in CEILINGS.read_text(encoding="utf-8").splitlines():
@@ -592,7 +668,45 @@ def write_ceilings(ceilings: dict) -> None:
             out += f"\n[{name}]\n" + "".join(f"# {line}\n" for line in lists.splitlines())
             for key, values in ceilings[name].items():
                 out += f"{key} = [\n" + "".join(f"  {_quote(value)},\n" for value in sorted(values)) + "]\n"
+    moves = sorted((new, old) for new, old in ceilings.get("moves", {}).items()
+                   if any(new in ceilings.get(name, {}) for name in TABLES))
+    if moves:
+        out += "\n[moves]\n" + "".join(f"# {line}\n" for line in MOVES.splitlines())
+        out += "".join(f"{_quote(new)} = {_quote(old)}\n" for new, old in moves)
     CEILINGS.write_text(out, encoding="utf-8")
+
+
+MOVES = ("`new key` = `old key`, written by `scripts/fitness.py --move` when listed code moved or was renamed.\n"
+         "scripts/check.py compares a moved entry with its old key at the branch point, so the move is not\n"
+         "taken for a new violation. A line is dropped once its entry is gone.")
+
+
+def move(ceilings: dict, old: str, new: str) -> int:
+    """Renames every listed key that is `old` or starts with `old :: `. The number stays, and the
+    move is refused when the code is worse at its new key, so a move never raises a ceiling."""
+    renamed: dict[str, str] = {}
+    moved = 0
+    for name, table in TABLES.items():
+        listed = ceilings.get(name, {})
+        keys = [key for key in listed if key == old or key.startswith(old + SEP)]
+        found = table.measure() if keys else {}
+        for key in keys:
+            target = new + key[len(old):]
+            today = found.get(target, (0, ""))[0]
+            if target in listed or not 0 < today <= listed[key]:
+                raise ToolError(f"[{name}] {target} is {today} today and {key} is listed at {listed[key]}. A move "
+                                f"needs a violation at the new key that is not listed yet and is no higher than "
+                                f"the old one.")
+            listed[target] = listed.pop(key)
+            renamed[key] = target
+            moved += 1
+    if not moved:
+        raise ToolError(f"no listed key is `{old}` or starts with `{old}{SEP}`.")
+    moves = ceilings.setdefault("moves", {})
+    for key, target in renamed.items():
+        moves[target] = moves.pop(key, key)   # a key that was moved before keeps its first name
+    write_ceilings(ceilings)
+    return moved
 
 
 def compare(table: Table, listed: dict[str, int], found: Found) -> Report:
@@ -600,7 +714,8 @@ def compare(table: Table, listed: dict[str, int], found: Found) -> Report:
     for key, (value, where) in sorted(found.items()):
         if key not in listed:
             report.new.append(f"NEW   [{table.name}] {key} = {value} ({where}). {table.new(key)} "
-                              f"Do not add it to quality/ceilings.toml.")
+                              f"Do not add it to quality/ceilings.toml. If listed code only moved or was "
+                              f"renamed, run scripts/fitness.py --move 'OLD KEY' 'NEW KEY'.")
         elif value > listed[key]:
             report.worse.append(f"WORSE [{table.name}] {key} = {value}, its ceiling is {listed[key]} ({where}). "
                                 f"{table.worse}")
@@ -651,16 +766,19 @@ def main() -> int:
     parser.add_argument("--seed", action="store_true",
                         help="write today's violations for a table the file does not have yet (used once, "
                              "when a check is introduced)")
+    parser.add_argument("--move", nargs=2, metavar=("OLD_KEY", "NEW_KEY"),
+                        help="listed code moved or was renamed: rename its keys (the key itself, and every "
+                             "key that starts with `OLD_KEY :: `), keeping their numbers")
     args = parser.parse_args()
     unknown = [name for name in args.sections if name not in SECTIONS]
     if unknown:
         parser.error(f"no section named {', '.join(unknown)}; the sections are {', '.join(SECTIONS)}")
     names = args.sections or list(SECTIONS)
-    label = f"fitness[{', '.join(names)}]"
+    label = f"fitness[{'move' if args.move else ', '.join(names)}]"
     ceilings = load_ceilings()
     try:
-        if args.tighten or args.seed:
-            changed = tighten(ceilings, names, args.seed)
+        if args.tighten or args.seed or args.move:
+            changed = move(ceilings, *args.move) if args.move else tighten(ceilings, names, args.seed)
             print(f"{label}: {changed} entr{'y' if changed == 1 else 'ies'} changed in quality/ceilings.toml")
             return 0
         total = Report()

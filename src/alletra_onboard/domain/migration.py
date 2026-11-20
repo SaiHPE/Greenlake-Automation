@@ -37,4 +37,4 @@ class MigrationIntent(BaseModel):
 
     source: EndpointCreds
     orchestration: Orchestration = "array UI"
-    hosts: list[MigrationHostRequest] = Field(default_factory=list)
+    hosts: list[MigrationHostRequest] = Field(default_factory=list[MigrationHostRequest])

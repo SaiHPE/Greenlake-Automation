@@ -14,6 +14,8 @@ from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from types import MappingProxyType
 
+from pydantic import SecretStr
+
 from alletra_onboard.application.documents import handover
 from alletra_onboard.application.documents.asbuilt import generate_asbuilt, rc_group_names
 from alletra_onboard.application.documents.asbuilt_parse import parse_asbuilt
@@ -25,6 +27,7 @@ from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.application.snapshots import read as snapshots_read
 from alletra_onboard.application.unified_file import read as file_read
+from alletra_onboard.domain.discovery import EthernetPort
 from alletra_onboard.domain.models import ArrayWorkItem, RunRecord, WorkflowPhase
 from alletra_onboard.domain.network import IscsiVlanRequest
 from alletra_onboard.domain.peer_ports import PeerPortIntent
@@ -32,6 +35,7 @@ from alletra_onboard.domain.replication import ReplicationIntent
 from alletra_onboard.domain.shared import EndpointCreds
 from alletra_onboard.domain.snapshots import SnapshotIntent
 from alletra_onboard.domain.trust import DevicePinInfo
+from alletra_onboard.domain.unified_file import FileReport
 
 
 class DocumentSteps:
@@ -145,7 +149,7 @@ class DocumentSteps:
             return
         iscsi = ""
         rows = self._iscsi_rows(run.run_id)
-        creds = EndpointCreds(host=coord.array_host(run.run_id), username=username, password=password)
+        creds = EndpointCreds(host=coord.array_host(run.run_id), username=username, password=SecretStr(password))
         if rows:
             # SPEC-024 R6, read-only: the sheet's iSCSI network rows against showport -iscsivlans.
             try:
@@ -220,19 +224,19 @@ class DocumentSteps:
                 # SPEC-018 R3: the replication states are read from BOTH arrays now, not copied from the plan
                 data.replication_tab = self._replication_tab(replication)
                 data.replication_primary, data.replication_peer = await asyncio.to_thread(
-                    self._collect_replication, EndpointCreds(host=host, username=username, password=password), replication.peer,
+                    self._collect_replication, EndpointCreds(host=host, username=username, password=SecretStr(password)), replication.peer,
                 )
                 # BL-64: every volume and the settings of each group this run configured (showrcopy -d)
                 names = rc_group_names(data)
                 if names:
                     data.replication_details, data.replication_details_errors = await asyncio.to_thread(
-                        self._read_replication_details, EndpointCreds(host=host, username=username, password=password), names)
+                        self._read_replication_details, EndpointCreds(host=host, username=username, password=SecretStr(password)), names)
             snapshots = self._snapshots_intent(run.run_id)
             if snapshots is not None:
                 # SPEC-023 R8: schedules and snapshots are read now, not copied from the plan
                 data.snapshots_tab = [r.model_dump(mode="json") for r in snapshots.requests]
                 data.snapshots_view = await asyncio.to_thread(
-                    self._read_snapshots, EndpointCreds(host=host, username=username, password=password))
+                    self._read_snapshots, EndpointCreds(host=host, username=username, password=SecretStr(password)))
             # The step's own fields win over the workbook's — the operator is looking at the
             # document about to be produced, and the sheet may have been filled weeks earlier.
             data.customer = customer or item.customer_name or ""
@@ -274,7 +278,7 @@ class DocumentSteps:
         return handover.summarise(handover.read_from(data)).as_event()
 
     def _collect_asbuilt(self, host: str, username: str, password: str):
-        creds = EndpointCreds(host=host, username=username, password=password)
+        creds = EndpointCreds(host=host, username=username, password=SecretStr(password))
         lines: list[str] = []
         outputs: dict[str, str] = {}
         with make_array_cli(creds) as cli:
@@ -303,7 +307,7 @@ class DocumentSteps:
     def _run_records(self, run_id: str, data) -> None:
         """Fill the run sections from the run's own events: the latest payload per event type, plus
         the union of every apply's removal items (SPEC-007 — a run may apply more than once)."""
-        seen: dict[str, object] = {}
+        seen: dict[str, datetime] = {}
         peer_sets: dict[str, dict] = {}     # each port's first planned set (SPEC-025 R9)
         rc_applies: list[dict] = []
         last_rc_plan: dict | None = None
@@ -385,7 +389,7 @@ class DocumentSteps:
         the renderer names it and the document is still produced (R3)."""
         return self._read_replication(primary), self._read_replication(peer)
 
-    def _collect_file(self, cli, creds: EndpointCreds) -> tuple[list, object | None, str]:
+    def _collect_file(self, cli, creds: EndpointCreds) -> tuple[list[EthernetPort], FileReport | None, str]:
         """(File ports, FileReport or None, read error), over the open SSH session and, when the
         array has a file side, one WSAPI v3 session with the run's credential. A failed read is
         named in the section and the warnings; the document is still produced."""

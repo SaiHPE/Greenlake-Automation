@@ -14,7 +14,7 @@ from typing import Any
 from alletra_onboard.domain.discovery import EthernetPort
 from alletra_onboard.domain.replication import PortRole, RcipPort
 
-_NSP = re.compile(r"^\d+:\d+:\d+$")
+NSP = re.compile(r"^\d+:\d+:\d+$")
 _TOTAL = re.compile(r"^\s*\d+\s+total\b")
 _RULE = re.compile(r"^\s*-{4,}\s*$")
 _NONE_LISTED = re.compile(r"^\s*No \S.* listed\s*$", re.IGNORECASE)
@@ -25,18 +25,22 @@ _SHOWSYS_ROW = re.compile(
 )
 
 
-def _clean(value: str) -> str:
+def blank_unset(value: str) -> str:
+    """A cell the CLI printed as unset ("-" or "--") reads as empty."""
     return "" if value in ("-", "--", "") else value
 
 
-def _nsp_parts(token: str) -> tuple[int, int, int] | None:
-    parts = token.split(":")
-    if len(parts) != 3:
-        return None
+def nsp_parts(token: str) -> tuple[int, int, int] | None:
     try:
-        return int(parts[0]), int(parts[1]), int(parts[2])
+        node, slot, card_port = (int(x) for x in token.split(":"))
     except ValueError:
         return None
+    return node, slot, card_port
+
+
+def answered_error(text: str) -> bool:
+    """Whether an array CLI answer reported an error line."""
+    return any(line.strip().lower().startswith("error") for line in text.splitlines())
 
 
 def table_lines(text: str) -> list[str]:
@@ -95,11 +99,11 @@ def parse_showport_rcip(text: str) -> list[RcipPort]:
     out: list[RcipPort] = []
     for line in (text or "").splitlines():
         p = line.split()
-        if len(p) < 6 or not _NSP.match(p[0]):
+        if len(p) < 6 or not NSP.match(p[0]):
             continue
         out.append(RcipPort(
-            nsp=p[0], state=p[1], ip=_clean(p[3]), netmask=_clean(p[4]), gateway=_clean(p[5]),
-            mtu=_clean(p[6]) if len(p) > 6 else "", rate=_clean(p[7]) if len(p) > 7 else "",
+            nsp=p[0], state=p[1], ip=blank_unset(p[3]), netmask=blank_unset(p[4]), gateway=blank_unset(p[5]),
+            mtu=blank_unset(p[6]) if len(p) > 6 else "", rate=blank_unset(p[7]) if len(p) > 7 else "",
         ))
     return out
 
@@ -114,7 +118,7 @@ def parse_showport_roles(text: str) -> tuple[dict[str, PortRole], str]:
     node_wwn = ""
     for line in (text or "").splitlines():
         p = line.split()
-        if len(p) < 7 or not _NSP.match(p[0]):
+        if len(p) < 7 or not NSP.match(p[0]):
             continue
         role = PortRole(nsp=p[0], mode=p[1], state=p[2], type=p[5], protocol=p[6])
         if role.protocol.upper() == "FC" and re.fullmatch(r"[0-9A-Fa-f]{16}", p[3]):
@@ -130,13 +134,20 @@ def parse_file_ports(showport_file: str) -> list[EthernetPort]:
     """`showport -file` -> [EthernetPort]. A separate view with its own columns:
 
         N:S:P  Mode  State  IPAddr/PrefixLen  IPDisable  Gateway  VLAN  MTU  Rate  Eth  Link  FailoverIPs
+
+    File ports occupy the SAME n:s:p as iSCSI ports (x:4:1 / x:4:2), so position cannot tell the two
+    apart — only the array's own Type and this view can. Real-output hazards, all present in the two
+    captures this was written against: Gateway is "-" when unset, Rate is "n/a" on a down link, VLAN
+    reads "untagged" rather than a number, and FailoverIPs is "-" or an address. On the second array
+    1:4:1 is loss_sync with IPDisable Y and Link down, and its address appears as the FailoverIPs
+    value of 1:4:2 — the pair must be read together or a covered port looks simply dead.
     """
     out: list[EthernetPort] = []
     for line in (showport_file or "").splitlines():
         p = line.split()
         if len(p) < 12 or not p[0][:1].isdigit() or ":" not in p[0]:
             continue
-        nsp = _nsp_parts(p[0])
+        nsp = nsp_parts(p[0])
         if nsp is None:
             continue
         node, slot, card_port = nsp
@@ -144,8 +155,8 @@ def parse_file_ports(showport_file: str) -> list[EthernetPort]:
         out.append(EthernetPort(
             node=node, slot=slot, card_port=card_port, role="file",
             mode=p[1], link_state=p[2], address=address, prefix_len=prefix,
-            ip_disabled=p[4].upper() == "Y", gateway=_clean(p[5]), vlan=p[6], mtu=p[7],
-            rate=_clean(p[8]) if p[8] != "n/a" else "", eth=p[9], link=p[10],
-            failover_ips=[ip for ip in p[11:] if _clean(ip)],
+            ip_disabled=p[4].upper() == "Y", gateway="" if p[5] == "-" else p[5], vlan=p[6], mtu=p[7],
+            rate="" if p[8] in ("-", "n/a") else p[8], eth=p[9], link=p[10],
+            failover_ips=[ip for ip in p[11:] if ip != "-"],
         ))
     return out

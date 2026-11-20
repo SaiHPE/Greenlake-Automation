@@ -9,7 +9,10 @@ root_package = "alletra_onboard"
 include_external_packages = true
 exclude_type_checking_imports = true
 
-# The entrypoints are allowed importers here because L5 (pyproject.toml) is their rule.
+# The entrypoints are allowed importers here because L5 (pyproject.toml) is their rule. The two
+# `runs` modules are named because what they import is not a client: the coordinator binds the
+# command log and the device trust book to a step's context, and the console asks the read
+# allowlist why it refuses a command, records that refusal and opens the operator's terminal.
 [[tool.importlinter.contracts]]
 id = "L3-clients-only"
 name = "L3 application imports adapters only in a context's clients.py"
@@ -17,6 +20,8 @@ type = "protected"
 protected_modules = ["alletra_onboard.adapters"]
 allowed_importers = [
   "alletra_onboard.application.*.clients",
+  "alletra_onboard.application.runs.coordinator",
+  "alletra_onboard.application.runs.console",
   "alletra_onboard.api",
   "alletra_onboard.cli",
 ]

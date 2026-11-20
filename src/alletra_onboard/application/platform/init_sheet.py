@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from pydantic import SecretStr
 
 from alletra_onboard.application.platform import prereqs
 from alletra_onboard.domain.migration import (
@@ -426,7 +427,7 @@ def build_template_bytes(*, init_only: bool = False) -> bytes:
     Provisioning tab unless ``init_only`` (the Initialization accelerator ships an onboarding-only
     sheet — no array/vCenter/switch credentials)."""
     wb = Workbook()
-    ws = wb.active
+    ws = wb.active or wb.create_sheet()
     ws.title = SHEET_NAME
     _write_fillable_tab(ws, SECTIONS)
 
@@ -931,7 +932,7 @@ def _declared_host(r: dict[str, str]) -> DeclaredHost:
         raise ValueError(f"Hosts tab — host '{r['name']}' has a login but no IP address to log in to.")
     return DeclaredHost(
         name=r["name"], os=os_, address=address, wwpns=wwpns, iqn=iqn,
-        username=username, password=password or None,
+        username=username, password=SecretStr(password) if password else None,
     )
 
 
@@ -1002,11 +1003,11 @@ def _parse_provisioning_tab(
                 _note_or_raise(problems, exc)
 
     return ProvisioningIntent(
-        array=EndpointCreds(host=targets["prov_array_host"], username=targets["prov_array_user"], password=targets["prov_array_password"]),
-        vcenter=EndpointCreds(host=targets["prov_vcenter_host"], username=targets["prov_vcenter_user"], password=targets["prov_vcenter_password"]),
+        array=EndpointCreds(host=targets["prov_array_host"], username=targets["prov_array_user"], password=SecretStr(targets["prov_array_password"])),
+        vcenter=EndpointCreds(host=targets["prov_vcenter_host"], username=targets["prov_vcenter_user"], password=SecretStr(targets["prov_vcenter_password"])),
         # Switches are OPTIONAL (verify is array-side; switches only needed to CREATE zones) -> default blank.
-        switch_f1=EndpointCreds(host=targets.get("prov_sw1_host", ""), username=targets.get("prov_sw1_user", ""), password=targets.get("prov_sw1_password", "")),
-        switch_f2=EndpointCreds(host=targets.get("prov_sw2_host", ""), username=targets.get("prov_sw2_user", ""), password=targets.get("prov_sw2_password", "")),
+        switch_f1=EndpointCreds(host=targets.get("prov_sw1_host", ""), username=targets.get("prov_sw1_user", ""), password=SecretStr(targets.get("prov_sw1_password", ""))),
+        switch_f2=EndpointCreds(host=targets.get("prov_sw2_host", ""), username=targets.get("prov_sw2_user", ""), password=SecretStr(targets.get("prov_sw2_password", ""))),
         volumes=volumes,
         host_sets=host_sets,
         declared_hosts=declared,
@@ -1115,7 +1116,7 @@ def _parse_replication_tab(workbook) -> ReplicationIntent | None:
 
     network = _parse_network_tab(workbook)
     return ReplicationIntent(
-        peer=EndpointCreds(host=fields["peer_host"], username=fields["peer_user"], password=fields["peer_password"]),
+        peer=EndpointCreds(host=fields["peer_host"], username=fields["peer_user"], password=SecretStr(fields["peer_password"])),
         rtt_ms=rtt,
         protections=protections,
         failover_test=_yes_no(fields.get("failover_test"), default=True, where="Replication tab — 'Run the failover test'"),
@@ -1354,9 +1355,7 @@ def _parse_migration_tab(workbook) -> MigrationIntent | None:
         ))
 
     return MigrationIntent(
-        source=EndpointCreds(
-            host=fields["source_host"].strip(), username=fields["source_user"].strip(), password=fields["source_password"],
-        ),
+        source=EndpointCreds(host=fields["source_host"].strip(), username=fields["source_user"].strip(), password=SecretStr(fields["source_password"])),
         orchestration=orchestration,  # type: ignore[arg-type]
         hosts=hosts,
     )
@@ -1392,7 +1391,7 @@ def _parse_iscsi_network_tab(workbook) -> list[IscsiVlanRequest]:
             raise ValueError(f"{where}: Netmask '{mask}' is not a netmask (like 255.255.255.0).")
         if gw and not _ipv4(gw):
             raise ValueError(f"{where}: Gateway '{gw}' is not an IPv4 address.")
-        net = ipaddress.ip_network(f"{ip}/{mask}", strict=False)
+        net = ipaddress.IPv4Network(f"{ip}/{mask}", strict=False)
         if gw and ipaddress.IPv4Address(gw) not in net:
             raise ValueError(f"{where}: Gateway {gw} is not on the network {net} of {ip}.")
         # A /31 or /32 has no network or broadcast address to avoid.
@@ -1499,7 +1498,7 @@ def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
         country=get("dscc_country", "—"),
         credential_name=values.get("secret_name") or "b10000-admin",
         username=values.get("secret_username") or "3paradm",
-        password=values.get("secret_password") or None,
+        password=SecretStr(values["secret_password"]) if values.get("secret_password") else None,
         contact_first_name=values.get("contact_first_name"),
         contact_last_name=values.get("contact_last_name"),
         contact_language=values.get("contact_language") or "English",
@@ -1510,7 +1509,7 @@ def _build(values: dict[str, str], required: set[str]) -> ParsedInitSheet:
     work_item = ArrayWorkItem(
         serial_number=values["serial_number"],  # always required
         part_number=get("part_number", "—"),
-        subscription_key=get("subscription_key", "—"),
+        subscription_key=SecretStr(get("subscription_key", "—")),
         service_catalog_region_id=get("service_catalog_region_id", "—"),
         dscc_region_code=get("dscc_region_code", "—"),
         cloudinit_url=values.get("cloudinit_url") or DEFAULT_CLOUDINIT_URL,

@@ -267,17 +267,17 @@ class ArrayHost(BaseModel):
 class DiscoveryReport(BaseModel):
     # Host-facing target ports only (FC + iSCSI). Everything downstream treats this as "ports that
     # can serve a host", so replication and file ports are deliberately NOT in here.
-    array_ports: list[ArrayPort] = Field(default_factory=list)
-    replication_ports: list[EthernetPort] = Field(default_factory=list)  # RCIP (showport / -rcip)
-    file_ports: list[EthernetPort] = Field(default_factory=list)         # file services (showport -file)
+    array_ports: list[ArrayPort] = Field(default_factory=list[ArrayPort])
+    replication_ports: list[EthernetPort] = Field(default_factory=list[EthernetPort])  # RCIP (showport / -rcip)
+    file_ports: list[EthernetPort] = Field(default_factory=list[EthernetPort])         # file services (showport -file)
     # SPEC-028 R1: the file service, file systems, client groups and shares (WSAPI v3). None on an
     # array with no File ports and the file service off, which is most block arrays.
     file: FileReport | None = None
-    host_hbas: list[HostHba] = Field(default_factory=list)
-    host_identities: list[HostIdentity] = Field(default_factory=list)  # vCenter: serial + IQNs per host
-    host_reads: list[HostRead] = Field(default_factory=list)           # sheet hosts read over SSH/WinRM
-    array_hosts: list[ArrayHost] = Field(default_factory=list)  # from showhost -d (zoning source)
+    host_hbas: list[HostHba] = Field(default_factory=list[HostHba])
+    host_identities: list[HostIdentity] = Field(default_factory=list[HostIdentity])  # vCenter: serial + IQNs per host
+    host_reads: list[HostRead] = Field(default_factory=list[HostRead])           # sheet hosts read over SSH/WinRM
+    array_hosts: list[ArrayHost] = Field(default_factory=list[ArrayHost])  # from showhost -d (zoning source)
     # Every server any source can see, joined on initiator id and grouped by OS for display.
-    hosts: list[DiscoveredHost] = Field(default_factory=list)
+    hosts: list[DiscoveredHost] = Field(default_factory=list[DiscoveredHost])
     notes: list[str] = Field(default_factory=list)
     error: str | None = None

@@ -162,7 +162,7 @@ def test_a_refused_login_is_an_answer_with_no_session(array):
     array["login"].mock(return_value=httpx.Response(401, json={"code": 5, "desc": "invalid username or password"}))
     with pytest.raises(WsapiV3LoginRefused) as refused, _client():
         pass
-    assert refused.value.answer.status == 401
+    assert refused.value.status == 401
     assert array["logout"].call_count == 0
 
 

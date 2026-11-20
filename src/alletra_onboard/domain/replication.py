@@ -8,7 +8,7 @@ credential like the switches' (ADR 0013 covers the run's own array).
 from __future__ import annotations
 
 import hashlib
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -133,7 +133,7 @@ def pair_ports(network: list[RcipPortRequest]) -> list[tuple[RcipPortRequest, Rc
     for r in network:
         if r.side == "B":
             b_by_node.setdefault(r.node, []).append(r)
-    pairs = []
+    pairs: list[tuple[RcipPortRequest, RcipPortRequest]] = []
     for a in a_rows:
         if b_by_node.get(a.node):
             pairs.append((a, b_by_node[a.node].pop(0)))
@@ -145,11 +145,11 @@ class ReplicationIntent(BaseModel):
 
     peer: EndpointCreds
     rtt_ms: float | None = None
-    protections: list[ProtectionRequest] = Field(default_factory=list)
+    protections: list[ProtectionRequest] = Field(default_factory=list[ProtectionRequest])
     failover_test: bool = True
     failover_group: str = ""        # blank -> the tool's own test group (TEST_GROUP)
     # SPEC-021: the RCIP ports to set up. Empty = the partnership must exist already (SPEC-016).
-    network: list[RcipPortRequest] = Field(default_factory=list)
+    network: list[RcipPortRequest] = Field(default_factory=list[RcipPortRequest])
 
     @property
     def failover_group_name(self) -> str:
@@ -240,7 +240,7 @@ class RcGroup(BaseModel):
     options: list[str] = Field(default_factory=list)   # the policies (auto_recover, over_per_alert, …)
     period: str = ""            # periodic groups: "5m" (the Options column's `Period 5m`)
     last_sync: str = ""         # periodic primaries: the Options column's `Last-Sync <timestamp>`
-    volumes: list[RcGroupVolume] = Field(default_factory=list)
+    volumes: list[RcGroupVolume] = Field(default_factory=list[RcGroupVolume])
 
     @property
     def mode_key(self) -> str:
@@ -289,7 +289,7 @@ class RcGroupDetail(BaseModel):
     period: str = ""                # periodic groups: "5m"
     last_sync: str = ""             # periodic primaries: the Options column's Last-Sync
     rpo_minutes: int | None = None
-    volumes: list[RcVolumeDetail] = Field(default_factory=list)
+    volumes: list[RcVolumeDetail] = Field(default_factory=list[RcVolumeDetail])
 
 
 class PortRole(BaseModel):
@@ -321,11 +321,11 @@ class ReplicationArrayView(BaseModel):
     rc_health: str = ""                 # Normal | …
     ports: dict[str, PortRole] = Field(default_factory=dict)   # SPEC-021 R2, from `showport`
     fc_node_wwn: str = ""               # the first FC row's (SPEC-021); SPEC-031 reads every one: fc_node_wwns
-    rcip_ports: list[RcipPort] = Field(default_factory=list)
-    transports: list[RcTransport] = Field(default_factory=list)
-    targets: list[RcTarget] = Field(default_factory=list)
-    links: list[RcLink] = Field(default_factory=list)
-    groups: list[RcGroup] = Field(default_factory=list)
+    rcip_ports: list[RcipPort] = Field(default_factory=list[RcipPort])
+    transports: list[RcTransport] = Field(default_factory=list[RcTransport])
+    targets: list[RcTarget] = Field(default_factory=list[RcTarget])
+    links: list[RcLink] = Field(default_factory=list[RcLink])
+    groups: list[RcGroup] = Field(default_factory=list[RcGroup])
     cpg_free_mib: dict[str, int] = Field(default_factory=dict)
     vvsets: dict[str, list[str]] = Field(default_factory=dict)
     volume_size_mib: dict[str, int] = Field(default_factory=dict)
@@ -397,7 +397,7 @@ class Partnership(BaseModel):
     links_primary_total: int = 0
     links_peer_total: int = 0
     mirror_config: bool = True
-    targets: list[PartnerTarget] = Field(default_factory=list)
+    targets: list[PartnerTarget] = Field(default_factory=list[PartnerTarget])
     target_by_mode: dict[str, str] = Field(default_factory=dict)
 
     def target_for(self, mode: str) -> PartnerTarget | None:
@@ -459,7 +459,7 @@ class LinkCheck(BaseModel):
 
     at: str = ""
     duration_s: int = LINK_CHECK_TIME_DEFAULT
-    results: list[LinkCheckResult] = Field(default_factory=list)
+    results: list[LinkCheckResult] = Field(default_factory=list[LinkCheckResult])
     unchecked: list[str] = Field(default_factory=list)     # pairs not checked, with the reason
     modes: list[str] = Field(default_factory=list)         # the sheet modes this run configures
     notes: list[str] = Field(default_factory=list)
@@ -501,8 +501,8 @@ class ReplicationAction(BaseModel):
     where: Literal["A", "B"] = "A"
     state: Literal["create", "exists", "conflict"] = "create"
     reason: str = ""
-    calls: list[PlannedCall] = Field(default_factory=list)
-    detail: dict = Field(default_factory=dict)
+    calls: list[PlannedCall] = Field(default_factory=list[PlannedCall])
+    detail: dict[str, Any] = Field(default_factory=dict)
 
 
 #: SPEC-021: the action kinds that set up the partnership (over SSH, ADR 0015).
@@ -510,7 +510,7 @@ PARTNERSHIP_KINDS = ("rcip_port", "rc_service", "target")
 
 
 class ReplicationPlan(BaseModel):
-    actions: list[ReplicationAction] = Field(default_factory=list)
+    actions: list[ReplicationAction] = Field(default_factory=list[ReplicationAction])
     blockers: list[str] = Field(default_factory=list)      # findings + conflicts; non-empty refuses apply
     notes: list[str] = Field(default_factory=list)
     existing_groups: list[str] = Field(default_factory=list)   # R9: present, never touched
@@ -538,7 +538,7 @@ class ReplicationOutcome(BaseModel):
 
 
 class ReplicationResult(BaseModel):
-    outcomes: list[ReplicationOutcome] = Field(default_factory=list)
+    outcomes: list[ReplicationOutcome] = Field(default_factory=list[ReplicationOutcome])
     removals_a: list[str] = Field(default_factory=list)    # CLI lines the operator pastes on A, in order
     removals_b: list[str] = Field(default_factory=list)    # … and on B
     notes: list[str] = Field(default_factory=list)
@@ -546,7 +546,7 @@ class ReplicationResult(BaseModel):
     error: str | None = None
 
 
-# ------------------------------------------------------------------ verify, R6
+# ------------------------------------------------------------------ verify (SPEC-016 R6)
 
 GroupVerdict = Literal["replicating", "syncing", "not_replicating"]
 
@@ -565,7 +565,7 @@ class GroupVerification(BaseModel):
 class ReplicationVerification(BaseModel):
     links_ok: bool = False
     links_detail: str = ""
-    groups: list[GroupVerification] = Field(default_factory=list)
+    groups: list[GroupVerification] = Field(default_factory=list[GroupVerification])
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
 
@@ -630,7 +630,7 @@ class FailoverRecord(BaseModel):
     peer_array: str = ""
     started_at: str = ""
     ended_at: str = ""
-    steps: list[FailoverStepRecord] = Field(default_factory=list)
+    steps: list[FailoverStepRecord] = Field(default_factory=list[FailoverStepRecord])
     result: FailoverResult = "aborted"
     failed_step: int | None = None
     time_to_failover_s: float | None = None     # step 2: until the peer shows Primary-Rev

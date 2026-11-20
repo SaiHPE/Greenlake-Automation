@@ -12,9 +12,10 @@ from __future__ import annotations
 import ssl
 from pathlib import Path
 
-from alletra_onboard.adapters.tls import ca_bundle_override, ssl_context
-from alletra_onboard.application.platform.tls import (
+from alletra_onboard.adapters.tls import (
+    ca_bundle_override,
     is_tls_trust_error,
+    ssl_context,
     tls_trust_guidance,
 )
 
@@ -100,6 +101,17 @@ def test_an_unreadable_bundle_does_not_break_the_other_sources(monkeypatch, tmp_
     assert ctx.verify_mode == ssl.CERT_REQUIRED
     count = _ca_count(ctx)
     assert count is None or count > 0                        # OS store + certifi still there
+
+
+def test_a_trust_source_that_fails_oddly_does_not_break_the_others(monkeypatch):
+    """certifi unable to hand over its bundle (a ValueError, not an OSError) leaves the OS store standing."""
+    _clear(monkeypatch)
+
+    def lost() -> str:
+        raise ValueError("no cacert.pem")
+
+    monkeypatch.setattr("certifi.where", lost)
+    assert ssl_context().verify_mode == ssl.CERT_REQUIRED
 
 
 def test_is_tls_trust_error_sees_through_the_wrapping():

@@ -12,12 +12,9 @@ import re
 import time
 from collections.abc import Callable
 
-from alletra_onboard.application.runs.clients import (
-    command_refusal,
-    launch_terminal,
-    make_array_cli,
-    record_command,
-)
+from alletra_onboard.adapters import command_log
+from alletra_onboard.adapters.array.cli_client import refusal
+from alletra_onboard.adapters.system.terminal import launch_terminal
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.shared import EndpointCreds
@@ -29,7 +26,7 @@ _SAFE_USER = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
 
 class ConsoleService:
-    def __init__(self, coordinator: RunCoordinator, *, cli_factory: Callable = make_array_cli,
+    def __init__(self, coordinator: RunCoordinator, *, cli_factory: Callable,
                  launcher: Callable[[list[str]], None] | None = None) -> None:
         self.coord = coordinator
         self.cli_factory = cli_factory
@@ -70,10 +67,10 @@ class ConsoleService:
         command = " ".join(command.split())
         creds = self._creds(run_id, target)
         with self.coord.recording(run_id):
-            why = command_refusal(command)
+            why = refusal(command)
             if why:
-                record_command(target=creds.host, transport="ssh", command=command, started=time.monotonic(),
-                               ok=False, result=f"{why} (console)")
+                command_log.record(target=creds.host, transport="ssh", command=command, started=time.monotonic(),
+                                   ok=False, result=f"{why} (console)")
                 return {"ok": False, "refused": True, "output": REFUSED, "target": creds.host}
 
             def read() -> str:

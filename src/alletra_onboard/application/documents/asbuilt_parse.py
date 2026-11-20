@@ -11,10 +11,9 @@ import csv
 import re
 
 from alletra_onboard.application.documents.asbuilt_model import AsBuiltData
-from alletra_onboard.domain.array_parse import table_lines as _table_lines
+from alletra_onboard.domain.array_parse import NSP, table_lines
 from alletra_onboard.domain.provisioning import VlunTemplate
 
-_NSP = re.compile(r"^\d+:\d+:\d+$")
 _IPV4 = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
 
 
@@ -118,7 +117,7 @@ def _host_ports(sec: dict[str, str]) -> str:
     fc = []
     for line in sec.get("showport", "").splitlines():
         p = line.split()
-        if len(p) >= 7 and _NSP.match(p[0]) and p[1] == "target" and p[6] == "FC":
+        if len(p) >= 7 and NSP.match(p[0]) and p[1] == "target" and p[6] == "FC":
             fc.append((p[0], p[2]))
     if not fc:
         return ""
@@ -257,7 +256,7 @@ def parse_showvv(text: str) -> list[dict[str, str]]:
     ``VSize_MB`` when asked for by name), never fixed positions. Rows whose token count does not
     match the header are dropped rather than mis-assigned. Snapshots are rows too (``Type ==
     'vcopy'``, ``CopyOf`` = the base volume)."""
-    lines = _table_lines(text)
+    lines = table_lines(text)
     if not lines:
         return []
     header = lines[0].split()
@@ -275,7 +274,7 @@ def parse_showvlun_templates_cli(text: str) -> list[VlunTemplate]:
     -Host_WWN/iSCSI_Name- Port Type``; the target keeps the array's ``set:`` prefix, and ``Type``
     may be two words (``host set``), so only the first three tokens are read."""
     out: list[VlunTemplate] = []
-    for line in _table_lines(text)[1:]:
+    for line in table_lines(text)[1:]:
         toks = line.split()
         if len(toks) < 3 or not toks[0].isdigit():
             continue

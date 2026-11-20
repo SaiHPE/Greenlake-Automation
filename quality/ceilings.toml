@@ -1,6 +1,7 @@
 # Today's known violations of docs/STANDARD.md, one line each. scripts/fitness.py compares the code
 # with this file (the `lint`, `complexity`, `fitness`, `pyright`, `vulture` and `knip` steps of
-# scripts/check.py) and fails on:
+# scripts/check.py) and fails on the three below. scripts/check.py also compares this file with the
+# branch point (`lists`) and fails on a line a branch adds or a number it raises.
 #
 #   NEW    a violation that is not listed here. Fix the code. Never add a line.
 #   WORSE  a listed one whose number is now higher than its ceiling. Bring it back down.
@@ -10,8 +11,10 @@
 # today's value and deletes the stale lines; it never adds a line and never raises a number.
 #
 # A key names the file and the function (`<module>` for code outside any function), never a line
-# number, so it survives edits above it. A function that moves or is renamed gets a new key: move
-# its lines here by hand in the same change, and say so in the pull request.
+# number, so it survives edits above it. A function or file that moves or is renamed gets a new key,
+# and its lines here are never moved by hand: `scripts/fitness.py --move 'OLD KEY' 'NEW KEY'` renames
+# them in the same change, keeps their numbers and records the move in [moves]. It refuses code
+# that got worse on the way.
 #
 # The dependency rules keep their list in pyproject.toml and quality/imports-type-only.toml
 # (`ignore_imports`), and the frontend lint keeps its own in frontend/eslint-suppressions.json.
@@ -19,7 +22,7 @@
 [complexity]
 # STANDARD M1. `file :: function :: rule` = the function's number today: C901 complexity (limit 10),
 # PLR0913 parameters (5), PLR0912 branches (12), PLR0915 statements (50). A listed function may not
-# get worse; it is fixed when it is next changed for any reason.
+# get worse. A change to what it does brings it within the limits; a typing-only edit need not.
 "src/alletra_onboard/adapters/array/cli_client.py :: ArrayCliClient.__init__ :: PLR0913" = 6
 "src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client.__init__ :: PLR0913" = 6
 "src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter.run :: C901" = 15
@@ -314,42 +317,11 @@
 [pyright]
 # STANDARD T2. `file` = its pyright errors today (`standard` on src, `strict` on src/alletra_onboard/domain;
 # pyrightconfig.json). The count depends on the packages installed: use the dev extra's versions.
-"src/alletra_onboard/adapters/array/cli_client.py" = 3
 "src/alletra_onboard/adapters/array/wsapi_client.py" = 8
-"src/alletra_onboard/adapters/browser/cloudinit_wizard.py" = 3
-"src/alletra_onboard/adapters/browser/dscc_setup.py" = 5
-"src/alletra_onboard/adapters/device_trust.py" = 6
-"src/alletra_onboard/adapters/fabric/brocade_client.py" = 1
-"src/alletra_onboard/adapters/greenlake/auth.py" = 1
-"src/alletra_onboard/adapters/hosts/windows_winrm.py" = 1
-"src/alletra_onboard/adapters/persistence/sqlite.py" = 2
-"src/alletra_onboard/adapters/vcenter/vcenter_client.py" = 15
-"src/alletra_onboard/application/documents/asbuilt.py" = 45
-"src/alletra_onboard/application/documents/handover.py" = 2
-"src/alletra_onboard/application/documents/steps.py" = 8
-"src/alletra_onboard/application/platform/init_sheet.py" = 11
-"src/alletra_onboard/application/platform/intake.py" = 2
-"src/alletra_onboard/application/platform/proxy.py" = 1
-"src/alletra_onboard/application/provisioning/discovery.py" = 4
-"src/alletra_onboard/application/provisioning/hosts.py" = 1
 "src/alletra_onboard/application/provisioning/storage_provision.py" = 9
-"src/alletra_onboard/application/provisioning/zoning.py" = 1
-"src/alletra_onboard/application/provisioning/zoning_plan.py" = 8
-"src/alletra_onboard/application/replication/plan.py" = 4
 "src/alletra_onboard/application/replication/steps.py" = 3
 "src/alletra_onboard/application/snapshots/apply.py" = 4
 "src/alletra_onboard/application/snapshots/steps.py" = 1
-"src/alletra_onboard/domain/discovery.py" = 8
-"src/alletra_onboard/domain/migration.py" = 1
-"src/alletra_onboard/domain/models.py" = 5
-"src/alletra_onboard/domain/network.py" = 3
-"src/alletra_onboard/domain/peer_ports.py" = 3
-"src/alletra_onboard/domain/ports.py" = 4
-"src/alletra_onboard/domain/provisioning.py" = 20
-"src/alletra_onboard/domain/replication.py" = 19
-"src/alletra_onboard/domain/snapshots.py" = 8
-"src/alletra_onboard/domain/unified_file.py" = 6
-"src/alletra_onboard/domain/zoning.py" = 11
 
 [vulture]
 # STANDARD M3. `file :: finding` = how often vulture reports it at 80% confidence in src. A finding is
@@ -359,34 +331,55 @@
 # STANDARD M3. `file :: kind :: name` = one knip finding in the frontend (unused file, export, type
 # or dependency). A finding is a lead, not proof, like vulture's.
 
-[file-lines]
-# STANDARD M2. `file` = its lines today, for a source file over 500 lines (src and frontend/src, tests
-# left out). The file may not grow. Splitting it only to get under a number is not a fix: a split
-# hides a decision, removes duplication or makes behaviour testable on its own.
-"frontend/src/api.ts" = 745
-"frontend/src/steps/DiscoveryStep.tsx" = 508
-"frontend/src/steps/ProvisionStep.tsx" = 531
-"frontend/src/steps/ReplicationStep.tsx" = 998
-"frontend/src/steps/SnapshotsStep.tsx" = 503
-"src/alletra_onboard/adapters/array/wsapi_client.py" = 1039
-"src/alletra_onboard/api/app.py" = 876
-"src/alletra_onboard/application/documents/asbuilt.py" = 1574
-"src/alletra_onboard/application/documents/handover.py" = 510
-"src/alletra_onboard/application/platform/init_sheet.py" = 1656
-"src/alletra_onboard/application/provisioning/discovery.py" = 901
-"src/alletra_onboard/application/provisioning/peer_ports.py" = 561
-"src/alletra_onboard/application/provisioning/steps.py" = 636
-"src/alletra_onboard/application/provisioning/storage_provision.py" = 890
-"src/alletra_onboard/application/provisioning/zoning_plan.py" = 766
-"src/alletra_onboard/application/replication/plan.py" = 621
-"src/alletra_onboard/domain/replication.py" = 641
+[file-size]
+# STANDARD M2. `file` = its non-blank characters today, for a source file over 18,000 of them, about
+# 500 lines (src and frontend/src, tests left out). The file may not grow. Characters are counted, not
+# lines, so joining lines changes nothing. Splitting it only to get under a number is not a fix: a
+# split hides a decision, removes duplication or makes behaviour testable on its own.
+"frontend/src/api.ts" = 36845
+"frontend/src/steps/ReplicationStep.tsx" = 38526
+"frontend/src/steps/SnapshotsStep.tsx" = 18580
+"src/alletra_onboard/adapters/array/wsapi_client.py" = 41148
+"src/alletra_onboard/adapters/browser/cloudinit_wizard.py" = 18251
+"src/alletra_onboard/api/app.py" = 34943
+"src/alletra_onboard/application/documents/asbuilt.py" = 61941
+"src/alletra_onboard/application/documents/steps.py" = 18539
+"src/alletra_onboard/application/platform/init_sheet.py" = 65775
+"src/alletra_onboard/application/provisioning/discovery.py" = 33791
+"src/alletra_onboard/application/provisioning/peer_ports.py" = 22799
+"src/alletra_onboard/application/provisioning/steps.py" = 26908
+"src/alletra_onboard/application/provisioning/storage_provision.py" = 35788
+"src/alletra_onboard/application/provisioning/zoning_plan.py" = 31031
+"src/alletra_onboard/application/replication/plan.py" = 26605
+"src/alletra_onboard/domain/provisioning.py" = 18310
+"src/alletra_onboard/domain/replication.py" = 20339
 
 [suppress-exception]
 # STANDARD E2. `file :: function` = its `suppress(Exception)` and `suppress(BaseException)` calls today.
 
+[suppressions]
+# STANDARD T3. `file` = its lines today with a suppression comment (`type: ignore`, `noqa`, `pyright:`,
+# `eslint-disable`, `@ts-expect-error`), in src, tests and frontend/src. Each hides a finding from the gate.
+"frontend/src/steps/ZoningStep.tsx" = 1
+"frontend/src/ui/ProvisioningBuilderView.tsx" = 1
+"src/alletra_onboard/adapters/system/discovery_tool.py" = 1
+"src/alletra_onboard/adapters/tls.py" = 1
+"src/alletra_onboard/application/onboarding/greenlake_provision.py" = 1
+"src/alletra_onboard/application/platform/init_sheet.py" = 6
+"src/alletra_onboard/application/provisioning/discovery.py" = 1
+"src/alletra_onboard/application/replication/partnership.py" = 7
+"src/alletra_onboard/application/snapshots/apply.py" = 1
+"src/alletra_onboard/domain/snapshots.py" = 4
+"tests/unit/test_cloudinit_wizard.py" = 2
+"tests/unit/test_state_location.py" = 1
+
 [doc-paths]
 # STANDARD C2. `document :: path` = a code path the document names in backticks that is not in the
-# repository. The documents are AGENTS.md, README.md, the app's CONTEXT.md and README.md and docs/design.
+# repository, or a name (`platform/tls.ssl_context`) its file does not define. The documents are
+# AGENTS.md, README.md, the app's CONTEXT.md, README.md and docs/STANDARD.md, docs/design and the
+# ADRs from 0028 on.
+"Provisioning_Automation/alletra_onboard/docs/adr/0028-one-engineering-standard-enforced-by-the-gate.md :: ARCHITECTURE.md" = 1
+"Provisioning_Automation/alletra_onboard/docs/adr/0028-one-engineering-standard-enforced-by-the-gate.md :: platform/tls" = 1
 
 [markdown-folders]
 # STANDARD C3. The folders that hold Markdown today, from the repository root (`.` is the

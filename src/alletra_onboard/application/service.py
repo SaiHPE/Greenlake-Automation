@@ -21,19 +21,13 @@ from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.application.onboarding.clients import (
     default_cloudinit_factory,
     default_dscc_factory,
-    launch_debug_browser,
 )
 from alletra_onboard.application.onboarding.steps import (
     OnboardingSteps,
     default_provision_factory,
 )
-from alletra_onboard.application.platform.clients import (
-    clock_status,
-    launch_discovery_tool,
-    sync_clock,
-)
 from alletra_onboard.application.platform.init_sheet import parse_workbook_bytes
-from alletra_onboard.application.provisioning.clients import wsapi_capability
+from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.provisioning.steps import (
     ArrayPortsSteps,
     DiscoveryZoningSteps,
@@ -77,11 +71,6 @@ __all__ = [
     "RunBusyError",
     "RunNotFoundError",
     "StepPreconditionError",
-    "clock_status",
-    "launch_debug_browser",
-    "launch_discovery_tool",
-    "sync_clock",
-    "wsapi_capability",
 ]
 
 
@@ -113,7 +102,7 @@ class OnboardingService:
         self.replication = ReplicationSteps(self.coordinator)
         self.snapshots = SnapshotSteps(self.coordinator)
         self.documents = DocumentSteps(self.coordinator, verify_fn=verify_fn)
-        self.console = ConsoleService(self.coordinator)
+        self.console = ConsoleService(self.coordinator, cli_factory=make_array_cli)
 
     # ------------------------------------------------------------------ run lifecycle (coordinator)
 

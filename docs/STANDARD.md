@@ -13,11 +13,16 @@ Four rules govern the standard itself:
    design changes so the mistake cannot be written.
 3. **Known violations are listed one by one and only go down.** Each tool keeps its own list (section
    4). An entry names the file and the function or import, never a line number. The gate fails on a
-   new violation, on a listed function that got worse, and on an entry whose violation is gone.
-4. **Changing a rule here needs an ADR.** Fixing a violation does not.
+   new violation, on a listed function that got worse, and on an entry whose violation is gone. It
+   also fails when a branch adds an entry to a list or raises its number. Listed code that moves or
+   is renamed takes its entry along (`scripts/fitness.py --move`); that is not a new violation.
+4. **Changing a rule here needs an ADR.** Fixing a violation does not. Changing what a check
+   measures is changing a rule: the gate fails when a branch changes the gate's scripts or a tool's
+   settings.
 
 The standard was reviewed before adoption by three independent models; their critiques and what was
-taken from each are in ADR 0028.
+taken from each are in ADR 0028. An audit of the first refactor steps found ways to pass the gate
+without meeting a rule; ADR 0030 records what changed to close them.
 
 ## 1. What the code must be good at, in order
 
@@ -89,8 +94,8 @@ api/, cli/  ──►  application/  ──►  adapters/  ──►  domain/
 
 | Rule | Statement | Check |
 |---|---|---|
-| M1 | Function complexity at most 10; at most 5 parameters; at most 12 branches and 50 statements (ruff's defaults, unchanged). A function on the list may not get worse; it is fixed when it is next changed for any reason, and the hot spots in section 5 are fixed now. | ruff `C901`, `PLR0913`, `PLR0912`, `PLR0915`, listed per function with its current value as a ceiling |
-| M2 | No limit on file length. A source file under `src/` or `frontend/src/` over 500 lines may not grow. Splitting a file or function only to get under a number is not a fix; a split must hide a decision, remove duplication or make behaviour testable on its own. | `scripts/fitness.py` (growth); judgement (the split) |
+| M1 | Function complexity at most 10; at most 5 parameters; at most 12 branches and 50 statements (ruff's defaults, unchanged). A function on the list may not get worse. A change to what a listed function does brings it within the limits in the same change; an edit that leaves its behaviour alone (types, a rename, an import) need not. The hot spots in section 5 are fixed now. | ruff `C901`, `PLR0913`, `PLR0912`, `PLR0915`, listed per function with its current value as a ceiling (may not get worse); judgement (fixing it when its behaviour changes) |
+| M2 | No limit on file length. A source file under `src/` or `frontend/src/` over 18,000 non-blank characters (about 500 lines) may not grow. Its non-blank characters are counted, not its lines, so joining lines changes nothing. Splitting a file or function only to get under a number is not a fix; a split must hide a decision, remove duplication or make behaviour testable on its own. | `scripts/fitness.py` (growth); judgement (the split) |
 | M3 | No dead code: unused functions, classes, exports, dependencies. Tool findings are leads; a deletion needs proof that nothing reaches the code (LESSONS 18). | vulture (Python), knip (TypeScript) |
 | M4 | A wrapper with one caller and no second implementation is inlined. | judgement |
 | M5 | A rule that grows by one `if` per case becomes a table or a registry. | judgement; M1 catches the symptom |
@@ -99,9 +104,9 @@ api/, cli/  ──►  application/  ──►  adapters/  ──►  domain/
 
 | Rule | Statement | Check |
 |---|---|---|
-| T1 | Device output, workbook cells, HTTP bodies, SSE events, environment variables and database rows are parsed into typed models where they enter; inner code trusts the types. | judgement; T2 catches most slips |
+| T1 | Device output, workbook cells, HTTP bodies, SSE events, environment variables and database rows are parsed into typed models where they enter; inner code trusts the types. A pure parser of device text that more than one context uses lives in `domain/array_parse.py`; one that a single context uses stays in that context's read module (ADR 0029). | judgement; T2 catches most slips |
 | T2 | The backend type-checks: pyright `standard` on `src`, `strict` on `domain`. Brought in one package at a time. | pyright, per-file error counts listed |
-| T3 | No `type: ignore`, `noqa` or `eslint-disable` without its rule code. | ruff `PGH003`, `RUF100`; eslint `ban-ts-comment` |
+| T3 | No `type: ignore` or `noqa` without its rule code; no `@ts-ignore`, and no `@ts-expect-error` without a reason. A file may not gain a suppression comment of any kind (`type: ignore`, `noqa`, `pyright:`, `eslint-disable`, `@ts-expect-error`). | ruff `PGH003`, `RUF100`; eslint `ban-ts-comment`, and its report of a disable comment that suppresses nothing; `scripts/fitness.py` (suppression comments counted per file) |
 | T4 | Run events carry typed data: `RunEvent.data` is a union of models in the OpenAPI schema. The TypeScript types of the API and of the events are generated from it, not written by hand. The frontend has no `any` and no `as unknown as`. | a check that the generated file is current; eslint `no-explicit-any`, `no-restricted-syntax` |
 
 ### 3.6 Errors (APOSD, Q2)
@@ -118,9 +123,9 @@ api/, cli/  ──►  application/  ──►  adapters/  ──►  domain/
 | Rule | Statement | Check |
 |---|---|---|
 | C1 | A comment says only what the code cannot: an outside fact (a device quirk, with the capture that shows it), a constraint someone must not break, or a marked exception (`TRUST-OFF:`). It never argues that a workaround is acceptable; fix the cause or open an issue. | ruff `ERA001`, `FIX`, `TD`; judgement |
-| C2 | The structure is described once: the import contracts (enforced) and the HLD (`docs/design/HLD.md`, arc42 headings, C4 diagrams). Module tables are generated from the code or not written. `docs/ARCHITECTURE.md` is gone. | `scripts/fitness.py`: every code path a document names exists |
+| C2 | The structure is described once: the import contracts (enforced) and the HLD (`docs/design/HLD.md`, arc42 headings, C4 diagrams). Module tables are generated from the code or not written. The separate architecture document is gone. | `scripts/fitness.py`: every code path a document names exists, and so does a name it gives inside a file (`domain/workflow.enabled_steps`). Checked in `AGENTS.md`, the READMEs, `CONTEXT.md`, this file, `docs/design` and the ADRs from 0028 on. |
 | C3 | Markdown lives in the folders that exist today; adding a folder is the owner's call. | `scripts/fitness.py` (folder list) |
-| C4 | A new lesson about a code defect lands with the test or lint rule that now catches it, named by id; the gate resolves the id. A non-defect lesson states `No check:` and why. Old lessons are left as they are. | `scripts/fitness.py` (lessons after 49) |
+| C4 | A new lesson about a code defect lands with the test or lint rule that now catches it, named by id; the gate resolves the id. A non-defect lesson states `No check:` and why. Old lessons are left as they are. | `scripts/fitness.py` (lessons after 49: the test id exists, or the rule is one the configuration selects, or the lesson says `No check:` and why) |
 | C5 | `AGENTS.md` holds the judgement rules and points to the checks; it does not restate a rule a check enforces. | judgement |
 
 ### 3.8 Tests and verification (APP, TRUST, EVO)
@@ -148,8 +153,18 @@ api/, cli/  ──►  application/  ──►  adapters/  ──►  domain/
 `quality/imports-type-only.toml` (`ignore_imports`, with stale entries reported as errors), and
 eslint keeps its own in `frontend/eslint-suppressions.json`. `scripts/fitness.py` checks everything
 else against `quality/ceilings.toml`: ruff complexity and lint ceilings per function, pyright
-per-file error counts, vulture and knip leads, file growth, document paths, lesson ids and stale
-entries.
+per-file error counts, vulture and knip leads, file growth, suppression comments per file, document
+paths, lesson ids and stale entries.
+
+The lists are compared with the branch point as well (`lists`): an entry a branch adds, or a number
+it raises, fails. `ALLOW_LISTS=1` lets it through as a warning; that is the owner's call, for a new
+check that brings its list, and the pull request says why.
+
+What the gate measures is compared with the branch point too (`config`): `scripts/check.py`,
+`scripts/fitness.py`, `[tool.ruff]`, `pyrightconfig.json`, `frontend/eslint.config.js`,
+`frontend/tsconfig.json`, the npm scripts and the knip block of `frontend/package.json`, and the
+import contracts apart from their `ignore_imports` lists. A change to any of them fails;
+`ALLOW_CONFIG=1` lets it through as a warning, for a change that comes with its ADR.
 
 ## 5. Order of work
 
@@ -158,7 +173,7 @@ and the live checks for what it touches.
 
 1. Safety net: the build-profile and spec checks (X3), the socket guard (X1), the gate with today's
    lists. No source change.
-2. Subtract: proven dead code, `ARCHITECTURE.md`, stale module tables.
+2. Subtract: proven dead code, the separate architecture document, stale module tables.
 3. Mechanical moves: `tls`, `proxy`, `prereqs` and other raw I/O into adapters; shared error and plan
    types into `domain`; the cycles cut one per change.
 4. Least privilege: reader/writer split, write factories behind approvals, undo stored before the

@@ -204,7 +204,7 @@ flowchart TB
         PROV["provisioning/<br/>discovery, zoning, provision, paths"]
         REP["replication/<br/>read, plan, apply, link check, failover"]
         DOC["documents/<br/>verify, as-built"]
-        PLAT["platform/<br/>workbook, proxy, TLS, prerequisites"]
+        PLAT["platform/<br/>workbook, proxy, prerequisites"]
     end
     DOM["domain/<br/>models, step registry, policies. No I/O"]
     ADP["adapters/<br/>one package per outside system"]
@@ -575,7 +575,7 @@ What the code does:
 
 - **Cloud calls** verify TLS against the Windows trust store plus public roots. Verification is
   never turned off; a PEM bundle can be named for inspecting proxies (`ALLETRA_CA_BUNDLE`,
-  [tls.py](../../src/alletra_onboard/application/platform/tls.py)).
+  [tls.py](../../src/alletra_onboard/adapters/tls.py)).
 - **One place decides for on-site devices**:
   [device_trust.py](../../src/alletra_onboard/adapters/device_trust.py). The run coordinator binds
   the run's pins for every step and every route that reads a device, as it binds the command log.

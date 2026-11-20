@@ -108,14 +108,19 @@ The device clients have no domain protocol. They are injected as **factory calla
 test passes a fake factory:
 
 - [`application/provisioning/clients.py`](../../src/alletra_onboard/application/provisioning/clients.py):
-  `make_wsapi`, `make_array_cli`, `make_rc_cli`, `make_vcenter`, `make_brocade`, `make_linux_host`,
-  `make_windows_host`. Each takes an `EndpointCreds` and returns a context-manager client.
+  `make_wsapi`, `make_wsapi_v3`, `make_array_cli`, `make_rc_cli`, `make_snap_cli`, `make_vcenter`,
+  `make_brocade`, `make_linux_host`, `make_windows_host`. Each takes an `EndpointCreds` (the two
+  write-scoped SSH factories also take the plan's objects) and returns a context-manager client.
 - [`application/onboarding/clients.py`](../../src/alletra_onboard/application/onboarding/clients.py):
   `make_greenlake(settings)` returns `GreenLakeClients` (token provider, HTTP client, devices,
   subscriptions, service catalogue). This is also the slot for a future DSCC cloud client (ADR 0006).
-- [`application/onboarding/steps.py`](../../src/alletra_onboard/application/onboarding/steps.py):
-  `default_provision_factory`, `default_cloudinit_factory`, `default_dscc_factory`, passed into
-  `OnboardingService` and overridable in tests.
+  `default_cloudinit_factory` and `default_dscc_factory` build the two browser adapters.
+  `default_provision_factory` is in
+  [`application/onboarding/steps.py`](../../src/alletra_onboard/application/onboarding/steps.py).
+  All three are passed into `OnboardingService` and overridable in tests.
+- [`application/platform/clients.py`](../../src/alletra_onboard/application/platform/clients.py):
+  the system adapters by name: `clock_status`, `sync_clock`, `launch_discovery_tool`, `probe_tcp`,
+  `probe_via_proxy`.
 - [`application/onboarding/greenlake_preflight.py`](../../src/alletra_onboard/application/onboarding/greenlake_preflight.py)
   declares its own small protocols (`TokenProvider`, `DeviceLookup`, `SubscriptionLookup`,
   `ServiceCatalogLookup`).
@@ -528,7 +533,7 @@ Only `make_rc_cli` builds this client, and only
 
 - **Readiness gate.** `connect()` logs in. A 503, "not ready" or a timeout becomes `WsapiNotReady`
   with the remedy in the message.
-- **Proxy bypass.** `_bypass_proxy_for(host)` adds the array to `NO_PROXY`.
+- **Proxy bypass.** `device_trust.bypass_proxy_for(host)` adds the array to `NO_PROXY`.
 - **Command log.** `_record_calls` wraps the SDK's `http._time_request`, so every HTTP call is
   recorded with transport `wsapi`; the session key in a logout URL is masked.
 - **Personas by name.** `_WSAPI_PERSONA` maps `VMware` to 8, `WindowsServer` to 11, `Generic-ALUA`
@@ -574,8 +579,11 @@ Reads: `getStorageSystemInfo`, `getCPGs`, `getPorts`, `getHosts`, `getHostSets`,
 - [`http_client.py`](../../src/alletra_onboard/adapters/greenlake/http_client.py)
   `GreenLakeHttpClient.request(method, path, bucket=...)`: takes a token from the named bucket,
   adds the Bearer header, retries 429, 500, 502, 503 and 504 up to 4 times (honours `Retry-After`,
-  capped at 30 s; otherwise exponential from 0.5 s to 16 s), then `raise_for_status()`. TLS uses
-  `platform/tls.ssl_context()` (OS trust store plus certifi).
+  capped at 30 s; otherwise exponential from 0.5 s to 16 s). Any answer outside 2xx then raises
+  `GreenLakeHttpError` ([`domain/errors.py`](../../src/alletra_onboard/domain/errors.py)), a
+  redirect included: a `Location` is only ever read from an accepted write. TLS uses
+  `ssl_context()` in [`adapters/tls.py`](../../src/alletra_onboard/adapters/tls.py) (OS trust
+  store plus certifi).
 - `TokenBucket.acquire()` ([`domain/policies.py`](../../src/alletra_onboard/domain/policies.py))
   holds the lock only to refill and take a token; the sleep happens outside the lock.
 
@@ -742,16 +750,10 @@ Gates in `ReplicationSteps`:
 
 ### 12.4 Onboarding and platform
 
-`OnboardingSteps` (section 9.4, section 10) drives Components A, B and C. Platform modules:
-
-| Module | Role |
-|---|---|
-| [`platform/init_sheet.py`](../../src/alletra_onboard/application/platform/init_sheet.py) | The workbook (section 15). |
-| [`platform/intake.py`](../../src/alletra_onboard/application/platform/intake.py) | The older CSV intake: `CSV_COLUMNS`, `csv_template`, `load_work_items_csv_text`. |
-| [`platform/configuring.py`](../../src/alletra_onboard/application/platform/configuring.py) | `.env` read and write; `set_env_values` never writes an empty value over a saved one; `masked_gl_credentials`. |
-| [`platform/proxy.py`](../../src/alletra_onboard/application/platform/proxy.py) | `ProxyResolver`: manual override, else `HTTPS_PROXY`, else the OS proxy (WinINET or PAC through WinHTTP), else direct. `apply_proxy_env` publishes it to the process; on-prem targets are bypassed (ADR 0008). |
-| [`platform/prereqs.py`](../../src/alletra_onboard/application/platform/prereqs.py) | `rules_for(region)`, `firewall_text`, `check_connectivity` (direct or through the proxy). |
-| [`platform/tls.py`](../../src/alletra_onboard/application/platform/tls.py) | `ssl_context()`: OS trust store plus certifi plus `ALLETRA_CA_BUNDLE`. Cloud endpoints only; on-site devices are section 13.1. |
+`OnboardingSteps` (section 9.4, section 10) drives Components A, B and C. What sits in
+`application/platform/` and what it may import is not listed here: the `B1-workflow-order` and
+`L4-no-io-libraries` contracts in `pyproject.toml` and `L3-clients-only` in
+`quality/imports-type-only.toml` say it, and `lint-imports` checks them.
 
 ---
 
@@ -849,9 +851,12 @@ SSH and TLS client to an on-site device asks:
   type and the first 300 characters.
 - Step services catch their expected errors and emit a typed failure event with a sentence that says
   what to do. Verify and as-built catch everything, because they must never change run status.
-- Adapter exceptions: `ArrayCliError`, `WsapiError` and `WsapiNotReady`, `BrocadeError` and
+- Adapter exceptions. Defined in [`domain/errors.py`](../../src/alletra_onboard/domain/errors.py),
+  under one `DeviceError`: `ArrayCliError`, `WsapiError` and `WsapiNotReady`, `WsapiV3Error`,
+  `WsapiV3TrustError` and `WsapiV3LoginRefused`, `GreenLakeHttpError` (any answer outside 2xx) and
+  `GreenLakeAsyncOperationError`. Still defined in their adapters: `BrocadeError` and
   `BrocadeRefused`, `VCenterError`, `LinuxHostError`, `WindowsHostError`, `DsccSetupError`,
-  `GreenLakeAsyncOperationError`, `httpx.HTTPStatusError`, `TimeoutError`.
+  `DeviceTrustError`. A poll that runs out of time raises `TimeoutError`.
   `WsapiClient._translate` turns SDK errors into sentences: not ready (503), wedged WSAPI (timeout,
   restart it with `stopwsapi` and `startwsapi`), subscription not finished. Every other refusal reads
   *Could not <what the tool was doing>. The array said: <the array's reason> (HTTP <status>, code <n>)*.
@@ -977,7 +982,7 @@ Two things are process-wide on purpose:
     and sets `NO_PROXY` / `no_proxy` (colon-free entries only).
   - `POST /prereqs/proxy` (`api/app.py`): sets `ALLETRA_PROXY` (and saves it to `.env`), then calls
     `apply_proxy_env`.
-  - `_bypass_proxy_for` (`adapters/array/wsapi_client.py`), called by the WSAPI client and the
+  - `bypass_proxy_for` (`adapters/device_trust.py`), called by the WSAPI client and the
     WSAPI v3 client (`wsapi_v3_client.py`) before they connect: adds the array's address to
     `NO_PROXY` / `no_proxy`.
   - `_ensure_localhost_no_proxy` in `adapters/browser/cloudinit_wizard.py` and

@@ -3,6 +3,8 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+from pydantic import SecretStr
+
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig
 
 # Single source of truth for the operator-facing CSV columns (template download + loader).
@@ -63,7 +65,7 @@ def _row_to_work_item(row: dict[str, str]) -> ArrayWorkItem:
         # the dscc command validates that the ones it needs are present before running.
         credential_name=row.get("secret_name") or "b10000-admin",
         username=row.get("secret_username") or "3paradm",
-        password=row.get("secret_password") or None,
+        password=SecretStr(row["secret_password"]) if row.get("secret_password") else None,
         contact_first_name=row.get("contact_first_name") or None,
         contact_last_name=row.get("contact_last_name") or None,
         contact_language=row.get("contact_language") or "English",
@@ -76,7 +78,7 @@ def _row_to_work_item(row: dict[str, str]) -> ArrayWorkItem:
     return ArrayWorkItem(
         serial_number=row["serial_number"],
         part_number=row["part_number"],
-        subscription_key=row["subscription_key"],
+        subscription_key=SecretStr(row["subscription_key"]),
         service_catalog_region_id=row["service_catalog_region_id"],
         dscc_region_code=row["dscc_region_code"],
         cloudinit_url=row["cloudinit_url"],

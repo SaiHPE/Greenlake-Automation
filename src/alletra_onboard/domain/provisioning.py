@@ -5,7 +5,7 @@ palette/composition, the tier-1 plan + result, and tier-2 path verification (ADR
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, SecretStr
 
@@ -186,11 +186,11 @@ class ProvisioningIntent(BaseModel):
     vcenter: EndpointCreds        # vCenter for read-only ESXi HBA discovery
     switch_f1: EndpointCreds      # odd fabric (F1)
     switch_f2: EndpointCreds      # even fabric (F2)
-    volumes: list[VolumeRequest] = Field(default_factory=list)
-    host_sets: list[HostSetRequest] = Field(default_factory=list)
+    volumes: list[VolumeRequest] = Field(default_factory=list[VolumeRequest])
+    host_sets: list[HostSetRequest] = Field(default_factory=list[HostSetRequest])
     # Hosts the operator declared because nothing can see them yet (see DeclaredHost).
-    declared_hosts: list[DeclaredHost] = Field(default_factory=list)
-    exports: list[ExportRequest] = Field(default_factory=list)  # empty => default each-volume->each-host-set
+    declared_hosts: list[DeclaredHost] = Field(default_factory=list[DeclaredHost])
+    exports: list[ExportRequest] = Field(default_factory=list[ExportRequest])  # empty => default each-volume->each-host-set
     # The Provisioning tab's Default CPG; volume rows without a CPG take it, and so does the failover
     # test volume when the Volumes tab is empty (a Replication row naming a set already on the array).
     default_cpg: str = "SSD_r6"
@@ -202,7 +202,7 @@ class ProvisioningIntent(BaseModel):
     snapshots: SnapshotIntent | None = None
     # The iSCSI network tab (SPEC-024 R1): VLAN-tagged addresses for the array's iSCSI ports. Empty =
     # nothing to set up; the Array ports step then reads nothing.
-    iscsi_network: list[IscsiVlanRequest] = Field(default_factory=list)
+    iscsi_network: list[IscsiVlanRequest] = Field(default_factory=list[IscsiVlanRequest])
     # The Peer ports tab (SPEC-025 R1): free FC ports to set to peer mode for a migration. None = no tab.
     peer_ports: PeerPortIntent | None = None
 
@@ -300,9 +300,9 @@ class ProvisioningObjects(BaseModel):
     new_volumes: list[str] = Field(default_factory=list)
     new_host_sets: list[str] = Field(default_factory=list)
     new_vvsets: list[str] = Field(default_factory=list)
-    discovered_hosts: list[DiscoveredHostBrief] = Field(default_factory=list)
-    host_sets: list[HostSetRequest] = Field(default_factory=list)   # currently composed
-    exports: list[ExportRequest] = Field(default_factory=list)      # currently composed
+    discovered_hosts: list[DiscoveredHostBrief] = Field(default_factory=list[DiscoveredHostBrief])
+    host_sets: list[HostSetRequest] = Field(default_factory=list[HostSetRequest])   # currently composed
+    exports: list[ExportRequest] = Field(default_factory=list[ExportRequest])      # currently composed
 
 
 class ProvisioningBuilder(BaseModel):
@@ -310,17 +310,17 @@ class ProvisioningBuilder(BaseModel):
     (vvset name -> member volume names), and the exports. Saved onto the run's ProvisioningIntent.
     When `vvsets` is non-empty it is authoritative (a volume not listed in any set is un-set)."""
 
-    host_sets: list[HostSetRequest] = Field(default_factory=list)
-    exports: list[ExportRequest] = Field(default_factory=list)
+    host_sets: list[HostSetRequest] = Field(default_factory=list[HostSetRequest])
+    exports: list[ExportRequest] = Field(default_factory=list[ExportRequest])
     vvsets: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class ProvisioningComposition(BaseModel):
     """Echo of the composed relationships after saving them onto the intent (for the UI to confirm)."""
 
-    host_sets: list[HostSetRequest] = Field(default_factory=list)
-    exports: list[ExportRequest] = Field(default_factory=list)
-    volumes: list[VolumeRequest] = Field(default_factory=list)
+    host_sets: list[HostSetRequest] = Field(default_factory=list[HostSetRequest])
+    exports: list[ExportRequest] = Field(default_factory=list[ExportRequest])
+    volumes: list[VolumeRequest] = Field(default_factory=list[VolumeRequest])
 
 
 # ------------------------------------------------------------------ readiness preflight
@@ -343,7 +343,7 @@ class PreflightReport(BaseModel):
     """Read-only readiness of the environment the sheet points at, run BEFORE discovery so a missing
     prerequisite is named plainly instead of surfacing as a failed step. Never writes to the array."""
 
-    checks: list[PreflightCheck] = Field(default_factory=list)
+    checks: list[PreflightCheck] = Field(default_factory=list[PreflightCheck])
     ready: bool = True          # False when any check failed
 
     @classmethod
@@ -361,11 +361,11 @@ class PlannedAction(BaseModel):
     state: PlanState = "create"
     reason: str = ""         # why that state, in the operator's words ("adds 1 WWN: …")
     exists: bool = False     # == state != "create"; kept for callers that only ask "is it there?"
-    detail: dict = Field(default_factory=dict)
+    detail: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProvisioningPlan(BaseModel):
-    actions: list[PlannedAction] = Field(default_factory=list)
+    actions: list[PlannedAction] = Field(default_factory=list[PlannedAction])
     notes: list[str] = Field(default_factory=list)
     blockers: list[str] = Field(default_factory=list)   # every conflict reason; non-empty refuses apply
     error: str | None = None
@@ -381,8 +381,8 @@ class ActionOutcome(BaseModel):
 
 
 class ProvisioningResult(BaseModel):
-    outcomes: list[ActionOutcome] = Field(default_factory=list)
-    removals: list[RemovalItem] = Field(default_factory=list)      # SPEC-007: what this apply created, as undo lines
+    outcomes: list[ActionOutcome] = Field(default_factory=list[ActionOutcome])
+    removals: list[RemovalItem] = Field(default_factory=list[RemovalItem])  # SPEC-007: what this apply created, as undo lines
     removal_notes: list[str] = Field(default_factory=list)         # objects touched but not reverted; after a failure, what to check by hand
     error: str | None = None
 
@@ -476,11 +476,11 @@ class HostPathStatus(BaseModel):
     # exported a minute ago is invisible to ESXi until the operator rescans, so downgrading on it
     # would make every fresh export read no_path. It is a second column with its own state.
     esxi_state: EsxiViewState = "not_checked"
-    esxi_luns: list[EsxiLunPaths] = Field(default_factory=list)
+    esxi_luns: list[EsxiLunPaths] = Field(default_factory=list[EsxiLunPaths])
     esxi_note: str = ""
 
 
 class PathVerification(BaseModel):
-    hosts: list[HostPathStatus] = Field(default_factory=list)
+    hosts: list[HostPathStatus] = Field(default_factory=list[HostPathStatus])
     notes: list[str] = Field(default_factory=list)
     error: str | None = None

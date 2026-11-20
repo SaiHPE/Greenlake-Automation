@@ -14,11 +14,10 @@ is unreachable from anywhere else, and discovery cannot complete without it.
     set PYTHONPATH=src
     python -u scripts/validation/vz_validate.py
 
-Phases 1-5 are READ-ONLY. Phase 6 writes to the array, phase 8 writes to a switch transaction
-buffer that is always discarded. Opt in explicitly:
+Phases 1-5 and 7 are READ-ONLY. Phase 6 writes to the array. The switches are only ever read.
+Opt in explicitly:
 
     WRITE=1        phase 6 - create zz_val_* objects on the array (nothing existing is touched)
-    SWITCH=1       phase 8 - build a test zone in the switch transaction buffer, then ABORT it
 
 NOTHING IS EVER DELETED. The zz_val_* objects are left in place for inspection; remove them with
 scripts/provisioning/ui_prov_teardown.py when you are done (it is prefix-guarded).
@@ -55,8 +54,7 @@ SW_USER    = os.environ.get("SW_USER", "admin")
 SW_PW      = _secret("SW_PW")
 CPG        = os.environ.get("CPG", "SSD_r6")
 
-DO_WRITE  = os.environ.get("WRITE") == "1"
-DO_SWITCH = os.environ.get("SWITCH") == "1"
+DO_WRITE = os.environ.get("WRITE") == "1"
 
 PREFIX = "zz_val"          # every object this script may create starts here
 TEST_LUN = int(os.environ.get("TEST_LUN", "250"))
@@ -223,70 +221,6 @@ def phase_paths(intent, discovery):
     return rep
 
 
-def phase_switch_zone_test(discovery):
-    """Build a test zone in the switch TRANSACTION BUFFER, prove it via cfgshow, then ABORT.
-
-    Nothing is saved and nothing is activated: `cfgenable`/`cfgsave` are never issued, so the
-    effective configuration is untouched and no traffic is affected. Refuses to run if another
-    admin already has a zone transaction open on that switch.
-    """
-    head("PHASE 8 - switch zone CREATE test (transaction buffer, always aborted)")
-    import paramiko
-
-    fc = [p for p in discovery.array_ports if p.protocol == "fc" and p.link_state == "ready"]
-    port = next((p for p in fc if p.fabric == "odd"), None)
-    hba = next((h for h in discovery.host_hbas if h.fabric == "odd"), None)
-    if not port or not hba:
-        record("8 switch zone test", None, "no ready odd-fabric array port / host HBA to zone")
-        return
-
-    def q(w: str) -> str:  # array/host WWPNs are stored normalized; Brocade wants colons
-        return ":".join(w[i:i + 2] for i in range(0, 16, 2)).lower()
-
-    alias_h, alias_a = f"{PREFIX}_host", f"{PREFIX}_array"
-    zone = f"{PREFIX}_zone"
-    cmds = [
-        f'alicreate "{alias_h}", "{q(hba.wwpn)}"',
-        f'alicreate "{alias_a}", "{q(port.wwpn)}"',
-        f'zonecreate "{zone}", "{alias_h}; {alias_a}"',
-    ]
-
-    c = paramiko.SSHClient(); c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    c.connect(SW1_IP, port=22, username=SW_USER, password=SW_PW, timeout=25,
-              allow_agent=False, look_for_keys=False)
-
-    def run(cmd, timeout=90):
-        print(f"\n   $ {cmd}")
-        _i, o, e = c.exec_command(cmd, timeout=timeout)
-        out = o.read().decode("utf-8", "replace"); err = e.read().decode("utf-8", "replace")
-        print("     " + (out.strip()[:900] or "(no output)"))
-        if err.strip():
-            print("     stderr: " + err.strip()[:400])
-        return out + err
-
-    ok = False
-    try:
-        trans = run("cfgtransshow")
-        if "no outstanding" not in trans.lower() and "there is no" not in trans.lower():
-            record("8 switch zone test", None,
-                   "another zone transaction is already open on this switch — refusing to touch it")
-            return
-        for cmd in cmds:
-            run(cmd)
-        shown = run(f'zoneshow "{zone}"')
-        ok = zone.lower() in shown.lower()
-        print(f"\n   test zone visible in the defined config: {ok}")
-    finally:
-        print("\n   --- discarding the transaction (nothing saved, nothing activated) ---")
-        run("cfgtransabort")
-        after = run(f'zoneshow "{zone}"')
-        gone = zone.lower() not in after.lower()
-        print(f"   test zone gone after abort: {gone}")
-        c.close()
-        record("8 switch zone test", ok and gone,
-               "created in buffer, verified, aborted cleanly" if ok and gone else "see output above")
-
-
 # =========================================================================== main
 def main() -> int:
     # Print every resolved target INCLUDING usernames. These come from the environment, and a shell
@@ -296,7 +230,7 @@ def main() -> int:
     print(f"   array    {ARRAY_USER}@{ARRAY_IP}   cpg={CPG}")
     print(f"   vcenter  {VC_USER}@{VC_IP}")
     print(f"   switches {SW_USER}@{SW1_IP} (F1) / {SW_USER}@{SW2_IP} (F2)")
-    print(f"   WRITE={DO_WRITE}  SWITCH={DO_SWITCH}  prefix={PREFIX}  test LUN={TEST_LUN}")
+    print(f"   WRITE={DO_WRITE}  prefix={PREFIX}  test LUN={TEST_LUN}")
     if VC_IP.startswith("10.99.") :
         print("   NOTE: vCenter is on the isolated vault VLAN — this must run on the VZ jump box.")
     intent = make_intent()
@@ -324,10 +258,6 @@ def main() -> int:
         else:
             record("6 tier-1 apply", None, "set WRITE=1 to run")
             record("7 tier-2 paths", None, "set WRITE=1 to run (needs the applied export)")
-        if DO_SWITCH:
-            phases.append(("8 switch", lambda: phase_switch_zone_test(discovery)))
-        else:
-            record("8 switch zone test", None, "set SWITCH=1 to run")
 
         for name, fn in phases:
             try:

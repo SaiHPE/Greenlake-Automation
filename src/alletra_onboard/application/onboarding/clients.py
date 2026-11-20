@@ -18,6 +18,7 @@ from alletra_onboard.adapters.greenlake.devices import DevicesClient
 from alletra_onboard.adapters.greenlake.http_client import GreenLakeHttpClient
 from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogClient
 from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
+from alletra_onboard.adapters.tls import is_tls_trust_error, tls_trust_guidance
 from alletra_onboard.config import Settings
 
 
@@ -76,7 +77,9 @@ __all__ = [
     "GreenLakeClients",
     "default_cloudinit_factory",
     "default_dscc_factory",
+    "is_tls_trust_error",
     "launch_debug_browser",
     "make_greenlake",
     "missing_credentials",
+    "tls_trust_guidance",
 ]

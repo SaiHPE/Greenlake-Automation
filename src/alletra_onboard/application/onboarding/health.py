@@ -8,8 +8,12 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from alletra_onboard.application.onboarding.clients import make_greenlake, missing_credentials
-from alletra_onboard.application.platform.tls import is_tls_trust_error, tls_trust_guidance
+from alletra_onboard.application.onboarding.clients import (
+    is_tls_trust_error,
+    make_greenlake,
+    missing_credentials,
+    tls_trust_guidance,
+)
 from alletra_onboard.config import Settings
 
 

@@ -279,7 +279,7 @@ class HealthIssue(BaseModel):
     component: str  # e.g. Alert, Cage, CDM, iLO, RC, Security
     summary: str    # the Summary Description text
     qty: int        # how many of this issue
-    details: list[HealthDetail] = Field(default_factory=list)  # SPEC-011 R1: the Detail rows for this component
+    details: list[HealthDetail] = Field(default_factory=list[HealthDetail])  # SPEC-011 R1: the Detail rows for this component
 
 
 class VerificationReport(BaseModel):
@@ -287,14 +287,14 @@ class VerificationReport(BaseModel):
 
     reachable: bool  # could we SSH in + run the show commands at all?
     error: str | None = None
-    checks: list[FieldCheck] = Field(default_factory=list)
-    health_issues: list[HealthIssue] = Field(default_factory=list)  # from checkhealth -svc -detail
+    checks: list[FieldCheck] = Field(default_factory=list[FieldCheck])
+    health_issues: list[HealthIssue] = Field(default_factory=list[HealthIssue])  # from checkhealth -svc -detail
     raw: dict[str, str] = Field(default_factory=dict)  # raw show* output, for operator review/calibration
     # SPEC-024 R6: the sheet's iSCSI network rows against `showport -iscsivlans`; empty without the tab.
-    iscsi_vlans: list[IscsiVlanCheck] = Field(default_factory=list)
+    iscsi_vlans: list[IscsiVlanCheck] = Field(default_factory=list[IscsiVlanCheck])
     iscsi_vlans_error: str | None = None
     # SPEC-025 R6: the sheet's peer ports as the array reads them; empty without the Peer ports tab.
-    peer_ports: list[PeerPortCheck] = Field(default_factory=list)
+    peer_ports: list[PeerPortCheck] = Field(default_factory=list[PeerPortCheck])
     peer_ports_error: str | None = None
 
     @property

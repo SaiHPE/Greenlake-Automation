@@ -31,13 +31,17 @@ from alletra_onboard.domain.models import (
 )
 
 try:
-    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+    from playwright.async_api import TimeoutError as _PlaywrightTimeoutError
     from playwright.async_api import async_playwright
+
+    PlaywrightTimeoutError: type[Exception] = _PlaywrightTimeoutError
 except ImportError:  # pragma: no cover - browser deps optional until B/C run.
     async_playwright = None
 
-    class PlaywrightTimeoutError(Exception):
+    class _FallbackPlaywrightTimeoutError(Exception):
         pass
+
+    PlaywrightTimeoutError = _FallbackPlaywrightTimeoutError
 
 
 STEP_TIMEOUT_MS = 30_000
@@ -72,6 +76,7 @@ class DsccSetupAdapter:
             except Exception:  # CDP unreachable / no debug browser.
                 return BrowserResultStatus.FAILED_RETRYABLE
 
+            page = None
             try:
                 page = await self._pick_open_page(browser)
                 if page is None:
@@ -149,15 +154,16 @@ class DsccSetupAdapter:
         await self._continue(frame)
 
     async def _support_contact(self, frame, cfg: DsccSetupConfig) -> None:
-        missing = [
-            name
-            for name, value in (("contact_first_name", cfg.contact_first_name), ("contact_last_name", cfg.contact_last_name))
-            if not value
-        ]
-        if missing:
+        first, last = cfg.contact_first_name, cfg.contact_last_name
+        if not first or not last:
+            missing = [
+                name
+                for name, value in (("contact_first_name", first), ("contact_last_name", last))
+                if not value
+            ]
             raise DsccSetupError(f"Support Contact requires {', '.join(missing)} in arrays.csv.")
-        await self._fill(frame, DSCC["sc_first"], cfg.contact_first_name)
-        await self._fill(frame, DSCC["sc_last"], cfg.contact_last_name)
+        await self._fill(frame, DSCC["sc_first"], first)
+        await self._fill(frame, DSCC["sc_last"], last)
         await self._select(frame, DSCC["sc_country_select"], cfg.country, cfg.country, exact=True)
         await self._select(frame, DSCC["sc_language_select"], cfg.contact_language, cfg.contact_language, exact=True)
         if cfg.contact_company:

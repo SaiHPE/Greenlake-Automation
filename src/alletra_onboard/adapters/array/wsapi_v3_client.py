@@ -83,7 +83,7 @@ class WsapiV3Client:
         key = answer.body.get("key") if isinstance(answer.body, dict) else None
         if answer.status not in (200, 201) or not isinstance(key, str) or not key:
             self._close_http()
-            raise WsapiV3LoginRefused(answer)
+            raise WsapiV3LoginRefused(answer.status, answer.body)
         self._key = key
         self._cookies = [c.split(";", 1)[0].strip() for c in headers.get_list("set-cookie")]
         return answer

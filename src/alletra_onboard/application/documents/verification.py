@@ -24,7 +24,9 @@ import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from alletra_onboard.application.documents.clients import make_verify_cli, make_verify_wsapi_v3
+from pydantic import SecretStr
+
+from alletra_onboard.application.provisioning.clients import make_array_cli, make_wsapi_v3
 from alletra_onboard.application.unified_file.read import read_file_side
 from alletra_onboard.domain.array_parse import parse_showversion
 from alletra_onboard.domain.errors import ArrayCliError
@@ -36,6 +38,7 @@ from alletra_onboard.domain.models import (
     HealthIssue,
     VerificationReport,
 )
+from alletra_onboard.domain.shared import EndpointCreds
 from alletra_onboard.domain.unified_file import NODE_RUNNING, FileReport
 
 if TYPE_CHECKING:
@@ -231,13 +234,13 @@ def verify(
     username: str,
     password: str,
     *,
-    client_factory: Callable[..., ArrayCliClient] = make_verify_cli,
-    wsapi_v3_factory: Callable[..., WsapiV3Client] = make_verify_wsapi_v3,
+    client_factory: Callable[[EndpointCreds], ArrayCliClient] = make_array_cli,
+    wsapi_v3_factory: Callable[[EndpointCreds], WsapiV3Client] = make_wsapi_v3,
 ) -> VerificationReport:
     """Connect over SSH, read the config, and compare it to the work item. Never writes. The file
     service is read over the array's WSAPI v3, GETs only, when the array has a file side."""
-    host = item.network.mgmt_ipv4
-    client = client_factory(host=host, username=username, password=password)
+    creds = EndpointCreds(host=item.network.mgmt_ipv4, username=username, password=SecretStr(password))
+    client = client_factory(creds)
     try:
         client.connect()
     except ArrayCliError as exc:
@@ -253,7 +256,7 @@ def verify(
                 outputs[command] = ""  # that command failed — its fields become "not readable"
         try:
             ports, report = read_file_side(
-                client, wsapi_v3_factory(host=host, username=username, password=password),
+                client, wsapi_v3_factory(creds),
                 parse_showversion(outputs["showversion"]), outputs["showport -file"],
             )
             file_checks = _file_checks(ports, report)

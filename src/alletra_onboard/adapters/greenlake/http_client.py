@@ -83,7 +83,7 @@ class GreenLakeHttpClient:
                 attempt += 1
                 await asyncio.sleep(_retry_delay(response, attempt))
                 continue
-            if response.is_error:
+            if not response.is_success:
                 raise GreenLakeHttpError(
                     response.status_code,
                     response.request.method,

@@ -23,7 +23,8 @@ from typing import Any
 
 from alletra_onboard.adapters import command_log
 from alletra_onboard.adapters.array.cli_client import _FORBIDDEN_CHARS, ArrayCliClient
-from alletra_onboard.domain.errors import ArrayCliError, answered_error
+from alletra_onboard.domain.array_parse import answered_error
+from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.plan_objects import RcPlanObjects
 
 _NSP = r"\d{1,2}:\d{1,2}:\d{1,2}"

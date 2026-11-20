@@ -16,6 +16,8 @@ import re
 from collections import OrderedDict
 from collections.abc import Callable
 
+from pydantic import SecretStr
+
 from alletra_onboard.application.provisioning.clients import (
     make_array_cli,
     make_linux_host,
@@ -27,7 +29,7 @@ from alletra_onboard.application.provisioning.clients import (
 )
 from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
 from alletra_onboard.application.unified_file.read import UNREADABLE, read_file_report
-from alletra_onboard.domain.array_parse import parse_file_ports, parse_showversion
+from alletra_onboard.domain.array_parse import NSP, nsp_parts, parse_file_ports, parse_showversion
 from alletra_onboard.domain.discovery import (
     ArrayHost,
     ArrayPort,
@@ -58,9 +60,6 @@ def parse_iscsi_ips(showport_iscsi: str) -> dict[str, str]:
     return ips
 
 
-_NSP_RE = re.compile(r"\d+:\d+:\d+")
-
-
 def _header_rows(text: str, command: str, required: tuple[str, ...]) -> list[dict[str, str]]:
     """The port rows of a `showport` view, each keyed by the view's own header words.
 
@@ -77,7 +76,7 @@ def _header_rows(text: str, command: str, required: tuple[str, ...]) -> list[dic
             if missing:
                 raise ValueError(f"`{command}` header has no {', '.join(missing)} column: {line.strip()}")
             header = p
-        elif _NSP_RE.fullmatch(p[0]):
+        elif NSP.match(p[0]):
             if header is None:
                 raise ValueError(f"`{command}` printed a port row before its header: {line.strip()}")
             rows.append(dict(zip(header, p, strict=False)))
@@ -161,14 +160,6 @@ RCIP_CAPABLE_PORTS = (3, 4)
 DATA_SERVICES_PORTS = (1, 2)
 
 
-def _nsp(token: str) -> tuple[int, int, int] | None:
-    try:
-        node, slot, card_port = (int(x) for x in token.split(":"))
-    except ValueError:
-        return None
-    return node, slot, card_port
-
-
 def parse_ports(showport: str, iscsi_ips: dict[str, str]) -> list[ArrayPort]:
     """HOST-FACING FC + iSCSI TARGET ports (any state) -> [ArrayPort].
 
@@ -188,7 +179,7 @@ def parse_ports(showport: str, iscsi_ips: dict[str, str]) -> list[ArrayPort]:
         protocol = p[6]
         if protocol not in ("FC", "iSCSI"):
             continue
-        nsp = _nsp(p[0])
+        nsp = nsp_parts(p[0])
         if nsp is None:
             continue
         node, slot, card_port = nsp
@@ -231,7 +222,7 @@ def parse_replication_ports(showport: str) -> list[EthernetPort]:
         mode, state, port_type, protocol = p[1], p[2], p[5], p[6]
         if mode != "peer" or protocol != "IP" or port_type == "cluster":
             continue
-        nsp = _nsp(p[0])
+        nsp = nsp_parts(p[0])
         if nsp is None:
             continue
         node, slot, card_port = nsp
@@ -592,11 +583,11 @@ def _apply_read(host: DiscoveredHost, read: HostRead | None) -> None:
 
 def fabric_by_wwpn(array_hosts: list[ArrayHost], array_ports: list[ArrayPort]) -> dict[str, set[Fabric]]:
     """WWPN -> the fabrics it is logged into on the array (from showhost + the FC port fabric map)."""
-    port_fabric = {port.label: port.fabric for port in array_ports if port.protocol == "fc" and port.fabric}
+    port_fabric: dict[str, Fabric] = {port.label: port.fabric for port in array_ports if port.protocol == "fc" and port.fabric}
     out: dict[str, set[Fabric]] = {}
     for host in array_hosts:
         for wwpn, ports in host.wwpns.items():
-            fabrics = {port_fabric[nsp] for nsp in ports if nsp in port_fabric}
+            fabrics: set[Fabric] = {port_fabric[nsp] for nsp in ports if nsp in port_fabric}
             if fabrics:
                 out.setdefault(wwpn, set()).update(fabrics)
     return out
@@ -645,10 +636,8 @@ def resolve_port_fabrics(fc_ports: list[ArrayPort], switch_by_label: dict[str, s
         for port in fc_ports:
             port.fabric = parity(port)
         if len(switches) > 2:
-            notes.append(
-                f"Array FC ports resolved to {len(switches)} fabric switches ({', '.join(switches)}); "
-                "used card-port parity for fabric (could not map them to exactly two fabrics)."
-            )
+            notes.append(f"Array FC ports resolved to {len(switches)} fabric switches ({', '.join(switches)}); "
+                         "used card-port parity for fabric (could not map them to exactly two fabrics).")
         elif len(switches) == 1:
             on_sw = [p for p in fc_ports if switch_by_label.get(p.label) == switches[0]]
             if any(p.card_port % 2 for p in on_sw) and any(not p.card_port % 2 for p in on_sw):
@@ -665,7 +654,7 @@ def resolve_port_fabrics(fc_ports: list[ArrayPort], switch_by_label: dict[str, s
         odd = sum(1 for p in on_sw if p.card_port % 2)
         majority[sw] = "odd" if odd * 2 >= len(on_sw) else "even"
     if len(set(majority.values())) == 2:
-        label_of = majority
+        label_of: dict[str, Fabric] = majority
     else:  # both switches sit at the same port-parity -> parity can't name them; use a stable order
         label_of = {switches[0]: "odd", switches[1]: "even"}
         notes.append(
@@ -673,7 +662,7 @@ def resolve_port_fabrics(fc_ports: list[ArrayPort], switch_by_label: dict[str, s
             f"{switches[0]}=odd, {switches[1]}=even."
         )
     for port in fc_ports:
-        sw = switch_by_label.get(port.label)
+        sw = switch_by_label.get(port.label, "")
         if sw in label_of:
             resolved = label_of[sw]
             if resolved != parity(port):
@@ -742,8 +731,7 @@ def _read_sheet_hosts(
             out.append(HostRead(host_name=d.name, address=d.address, method="login", error=f"not logged in: {reason}"))
             continue
         progress(f"Reading host {d.name} over {method.upper()} ({d.address}, read-only)…")
-        creds = EndpointCreds(host=d.address, username=d.username,
-                              password=d.password.get_secret_value() if d.password else "")
+        creds = EndpointCreds(host=d.address, username=d.username, password=d.password or SecretStr(""))
         try:
             with factory(creds) as client:
                 out.append(reader(client, d.name, d.address))

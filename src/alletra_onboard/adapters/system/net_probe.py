@@ -42,7 +42,7 @@ async def probe_via_proxy(host: str, port: int, proxy_url: str, timeout: float) 
             return False, "proxy requires authentication (407)"
         ok = " 200 " in f" {line} " or "200 connection" in line.lower()
         return ok, ("reachable via proxy" if ok else f"proxy said: {line}")
-    except (OSError, TimeoutError) as exc:
+    except (OSError, TimeoutError, ValueError) as exc:
         return False, f"proxy error ({type(exc).__name__})"
     finally:
         writer.close()

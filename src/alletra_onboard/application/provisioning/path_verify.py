@@ -16,14 +16,13 @@ as a live path. `Type` is one or two words (`host` / `host set`), so we anchor p
 
 from __future__ import annotations
 
-import re
-
 from alletra_onboard.application.provisioning import storage_provision
 from alletra_onboard.application.provisioning.clients import (
     make_array_cli,
     make_vcenter,
     make_wsapi,
 )
+from alletra_onboard.domain.array_parse import NSP
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
     EsxiLun,
@@ -35,7 +34,6 @@ from alletra_onboard.domain.provisioning import (
 )
 from alletra_onboard.domain.shared import normalize_wwpn
 
-_NSP = re.compile(r"^\d+:\d+:\d+$")
 # ALUA states that mean the path carries (or can carry) I/O — i.e. a LIVE path.
 _LIVE_STATUS = {"active", "nonopt"}
 
@@ -62,7 +60,7 @@ def parse_showvlun_active(text: str) -> list[VolumePath]:
         p = line.split()
         if len(p) < 7 or not p[0].isdigit():
             continue
-        port_idx = next((i for i, tok in enumerate(p) if _NSP.match(tok)), None)
+        port_idx = next((i for i, tok in enumerate(p) if NSP.match(tok)), None)
         if port_idx is None or port_idx < 3:
             continue  # header / not a data row
         host_wwn = normalize_wwpn(p[port_idx - 1])

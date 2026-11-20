@@ -284,7 +284,7 @@ def _read_collections(v3, expected: str) -> dict[str, Any]:
     except WsapiV3Error as exc:
         raise _NotRead(NO_ANSWER) from exc
     except WsapiV3LoginRefused as exc:
-        note = SESSION_REFUSED if exc.answer.status in _SESSION_STATUS else UNREADABLE
+        note = SESSION_REFUSED if exc.status in _SESSION_STATUS else UNREADABLE
         raise _NotRead(note) from exc
 
 

@@ -13,7 +13,8 @@ from collections.abc import Callable
 
 from alletra_onboard.application.provisioning.clients import make_rc_cli
 from alletra_onboard.application.replication.read import parse_showport_rcip, parse_showrcopy
-from alletra_onboard.domain.errors import ArrayCliError, answered_error
+from alletra_onboard.domain.array_parse import answered_error
+from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.plan_objects import RcPlanObjects
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (

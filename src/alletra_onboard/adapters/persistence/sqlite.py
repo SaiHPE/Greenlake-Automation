@@ -437,6 +437,7 @@ def _purge_expired_pending_sheets(connection: sqlite3.Connection) -> None:
 def _map_at(data: Any, path: tuple[str, ...], change) -> None:
     """Replace the value at `path` in a JSON tree with change(value), when the path is there."""
     head, rest = path[0], path[1:]
+    children: list[tuple[Any, Any]]
     if head == "*":
         children = list(enumerate(data)) if isinstance(data, list) else []
     else:

@@ -6,6 +6,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from alletra_onboard.domain.discovery import EthernetPort
+from alletra_onboard.domain.replication import RcGroupDetail, ReplicationArrayView
+from alletra_onboard.domain.snapshots import SnapshotArrayView
+from alletra_onboard.domain.unified_file import FileReport
+
 
 @dataclass
 class AsBuiltData:
@@ -67,18 +72,18 @@ class AsBuiltData:
     # SPEC-021: every apply in run order, each with the plan previewed before it: {"plan", "result"}
     replication_applies: list[dict[str, Any]] = field(default_factory=list)
     replication_applied_at: str = ""
-    replication_primary: object | None = None      # ReplicationArrayView read when the document is made (R3)
-    replication_peer: object | None = None         # ReplicationArrayView of the peer, same moment
+    replication_primary: ReplicationArrayView | None = None   # read when the document is made (R3)
+    replication_peer: ReplicationArrayView | None = None      # the peer, same moment
     # BL-64: `showrcopy -d groups <group>` on this array for each group this run configured, same moment:
     # group -> RcGroupDetail, and group -> why it could not be read
-    replication_details: dict[str, Any] = field(default_factory=dict)
+    replication_details: dict[str, RcGroupDetail] = field(default_factory=dict)
     replication_details_errors: dict[str, str] = field(default_factory=dict)
     link_check: dict[str, Any] | None = None                 # SPEC-020 R6: replication.link_checked -> link_check (JSON)
     failover_record: dict[str, Any] | None = None            # SPEC-017 R6; None = the test did not run
     # SPEC-028 R3: the file side, read when the document is made. No section when `file_report` is
     # None (no File ports and the service off) and the read did not fail.
-    file_ports: list[Any] = field(default_factory=list)  # EthernetPort, from showport -file
-    file_report: object | None = None               # FileReport
+    file_ports: list[EthernetPort] = field(default_factory=list)   # from showport -file
+    file_report: FileReport | None = None
     file_read_error: str = ""                       # the read failed: named in the section and the warnings
     # SPEC-023 R8: snapshots. snapshots_tab is None when the workbook has no Snapshots tab.
     snapshots_tab: list[dict[str, Any]] | None = None        # SnapshotRequest dicts, one per row
@@ -86,7 +91,7 @@ class AsBuiltData:
     snapshots_result: dict[str, Any] | None = None           # the latest snapshots.applied / .apply.failed -> result
     snapshots_applies: list[dict[str, Any]] = field(default_factory=list)   # every apply in run order: {"plan", "result"}
     snapshots_applied_at: str = ""
-    snapshots_view: object | None = None           # SnapshotArrayView read when the document is made
+    snapshots_view: SnapshotArrayView | None = None   # read when the document is made
     commands: list[dict[str, Any]] = field(default_factory=list)   # SPEC-019 R2: the run's command log, without output
     # SPEC-026: the handover reads, raw (handover.READS names the command for each); a failed one is in
     # read_errors. handover_read_at is None when the reads were not made: the section is then left out.

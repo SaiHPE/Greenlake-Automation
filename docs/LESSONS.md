@@ -445,3 +445,16 @@ named at the start.
 Rules: when an apply fails with a refusal that names a fact the plan already reads (a version, a model, a
 mode), turn it into a plan blocker at the first read, from the refusal's own words and the runs that
 passed, no wider; and an OS upgrade on a lab array is a reason to re-run the live checks that touch it.
+
+**50. Replacing a library's error check means matching every case it caught, not the ones its name suggests.**
+The move of GreenLake's errors into the domain replaced httpx's `raise_for_status()` with `if response.is_error:`.
+The first raises for every answer outside 2xx; the second is true only for 4xx and 5xx, so a 3xx became a success.
+A 302 on a device add was returned as accepted, its `Location` was taken for the operation to poll, and the poll
+sent the GreenLake token to that address: on a network whose proxy answers with a redirect to its own sign-in
+page, to the proxy. Found on 2026-11-20 by an audit that replayed a 302, not by a test and not by the lab: the two
+tests that covered the old check were edited to expect the new error type, and the lab never answers with a 3xx.
+Rules: when a library's check is replaced by our own, write the test for each class of answer the old one caught
+(here 3xx as well as 4xx and 5xx) before the swap, and success is stated positively (`is_success`), never as the
+absence of the errors we thought of. Caught now by
+`tests/contract/test_http_poll.py::test_a_redirect_is_refused_and_the_token_never_reaches_its_location` and
+`tests/contract/test_auth.py::test_a_redirect_from_the_token_endpoint_is_an_error`.

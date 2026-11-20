@@ -26,7 +26,7 @@ class PeerPortRequest(BaseModel):
 
 
 class PeerPortIntent(BaseModel):
-    ports: list[PeerPortRequest] = Field(default_factory=list)
+    ports: list[PeerPortRequest] = Field(default_factory=list[PeerPortRequest])
 
 
 class PeerPortState(BaseModel):
@@ -76,7 +76,7 @@ class PeerPortView(BaseModel):
     mode_change: dict[str, str] = Field(default_factory=dict)            # `showport -c`: allowed | prohibited
     logins: dict[str, list[str]] = Field(default_factory=dict)           # `showhost -d`, per port
     exports: dict[str, list[str]] = Field(default_factory=dict)          # `showvlun -a`, volumes per port
-    peer_listing: list[PeerPortState] = Field(default_factory=list)      # `showport -peer`, for the as-built
+    peer_listing: list[PeerPortState] = Field(default_factory=list[PeerPortState])  # `showport -peer`, for the as-built
     read_error: str = ""
 
 
@@ -95,7 +95,7 @@ class PeerPortAction(BaseModel):
 
 
 class PeerPortPlan(BaseModel):
-    actions: list[PeerPortAction] = Field(default_factory=list)
+    actions: list[PeerPortAction] = Field(default_factory=list[PeerPortAction])
     blockers: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
 

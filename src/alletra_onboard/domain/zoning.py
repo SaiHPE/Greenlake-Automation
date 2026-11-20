@@ -30,8 +30,8 @@ class ZoneRemediation(BaseModel):
 
 
 class ZoningReport(BaseModel):
-    expected: list[ExpectedZone] = Field(default_factory=list)
-    remediations: list[ZoneRemediation] = Field(default_factory=list)
+    expected: list[ExpectedZone] = Field(default_factory=list[ExpectedZone])
+    remediations: list[ZoneRemediation] = Field(default_factory=list[ZoneRemediation])
     proper: bool = False     # every expected host zoned on both fabrics, none unverified
     # Hosts confirmed zoned on BOTH fabrics. This is the provisioning gate (ADR 0012): the run
     # proceeds for these and excludes the rest by name, rather than one global pass/fail. A partly
@@ -131,10 +131,10 @@ class FabricZonePlan(BaseModel):
     switch_name: str = ""                       # switchshow switchName of the declared switch
     fabric_name: str = ""                       # fabricshow "Fabric Name" ("" when unnamed / unread)
     switch_count: int = 0                       # switches in this fabric per fabricshow (0 = unread)
-    hosts: list[AliasedWwpn] = Field(default_factory=list)        # host HBA ports on this fabric
-    array_ports: list[AliasedWwpn] = Field(default_factory=list)  # array target ports online on this fabric
-    pairs: list[tuple[str, str]] = Field(default_factory=list)    # (host_wwpn, array_wwpn) single-init-single-target
-    already_zoned: list[tuple[str, str]] = Field(default_factory=list)  # subset of pairs the active cfg covers
+    hosts: list[AliasedWwpn] = Field(default_factory=list[AliasedWwpn])        # host HBA ports on this fabric
+    array_ports: list[AliasedWwpn] = Field(default_factory=list[AliasedWwpn])  # array target ports online on this fabric
+    pairs: list[tuple[str, str]] = Field(default_factory=list[tuple[str, str]])    # (host_wwpn, array_wwpn) single-init-single-target
+    already_zoned: list[tuple[str, str]] = Field(default_factory=list[tuple[str, str]])  # subset of pairs the active cfg covers
     # "<host_wwpn>|<array_wwpn>" -> the effective zone name(s) that cover that pair. The operator's
     # first question on the live screen was "zoned by which zone?" — the answer was in the cfgshow we
     # had already read and thrown away.
@@ -143,17 +143,17 @@ class FabricZonePlan(BaseModel):
     # SPEC-025 R7: the peer-port block, its own command set. This array's peer ports (the WWPN read after
     # the change) and the source array's ports on this fabric, the (peer, source) pairs from the sheet with
     # both in this fabric's name server, and those an effective zone already covers.
-    peer_ports: list[AliasedWwpn] = Field(default_factory=list)
-    sources: list[AliasedWwpn] = Field(default_factory=list)
-    peer_pairs: list[tuple[str, str]] = Field(default_factory=list)
-    peer_already_zoned: list[tuple[str, str]] = Field(default_factory=list)
+    peer_ports: list[AliasedWwpn] = Field(default_factory=list[AliasedWwpn])
+    sources: list[AliasedWwpn] = Field(default_factory=list[AliasedWwpn])
+    peer_pairs: list[tuple[str, str]] = Field(default_factory=list[tuple[str, str]])
+    peer_already_zoned: list[tuple[str, str]] = Field(default_factory=list[tuple[str, str]])
 
 
 class ZoningPlan(BaseModel):
     """The read-only assisted zoning plan (ADR 0004): per-fabric host↔array SIST pairs + aliases, for
     the operator to name and the SAN team to apply. The tool never writes to the switch."""
 
-    fabrics: list[FabricZonePlan] = Field(default_factory=list)
+    fabrics: list[FabricZonePlan] = Field(default_factory=list[FabricZonePlan])
     offline_hosts: list[str] = Field(default_factory=list)  # host "name (wwpn)" on no fabric -> cable+power
     notes: list[str] = Field(default_factory=list)
     error: str | None = None

@@ -157,7 +157,7 @@ def build_report(
                     name_by_wwpn[wwpn] = host.name
     arr_by_fabric: dict[Fabric, list[str]] = {"odd": [], "even": []}
     for port in fc_ports:
-        arr_by_fabric[port.fabric].append(port.wwpn)
+        arr_by_fabric[port_fabric[port.label]].append(port.wwpn)
 
     # The array-only fallback below survives for a run with no vCenter, no sheet hosts and no plan —
     # it verifies whatever is logged in.
