@@ -216,13 +216,19 @@ one method to one service:
 - **The run's array.** `array_host(run_id)` returns the Initialisation tab's management IP if set,
   else the Provisioning tab's array host. `array_credential(run_id)` returns the Provisioning tab's
   array admin if it has a password, else the DSCC system credential, else none (ADR 0013).
-- **Background steps and approvals.** `issue_approval(run_id, purpose, arrays)` is the single
-  constructor of `Approval` (`domain/approval.py`) in production code; `is_busy(run_id)` stays true
-  while a step task is running or its approval is unspent. `spawn(run_id, coro, approval=None)`
+- **Background steps, approvals and apply records.** `issue_approval(run_id, purpose, arrays)` is
+  the single constructor of `Approval` (`domain/approval.py`) in production code; `is_busy(run_id)`
+  stays true while a step task is running or its approval is unspent. `spawn(run_id, coro, approval=None)`
   refuses a second task (`RunBusyError`), copies the context, binds the run's command sink into it,
-  and starts the task under `_guarded`. `run_approved(approval, fn)` executes write workers on a
-  thread and spends the approval in that thread's `finally`. `_guarded` turns any exception into
-  `RETRYABLE_FAILURE` plus a `step.crashed` event, so a run is never left in `RUNNING`.
+  and starts the task under `_guarded`. `run_approved(approval, fn)` sets `approval.save_record` to
+  `apply_record(run_id, event_type)` (for `recorded_write` in
+  [`runs/apply_record.py`](../../src/alletra_onboard/application/runs/apply_record.py)) and spends
+  the approval in the worker thread's `finally`. Emitting a terminal apply event calls
+  `close_apply_record(run_id)`. On reopen (`get_run`) and at app start (`recover_interrupted_applies`),
+  `recover_interrupted_apply(run_id)` promotes any unclosed record with no live task or terminal
+  event into the step's existing `*.apply.failed` or `failover.failed` event and `RETRYABLE_FAILURE`
+  status. `_guarded` turns any exception into `RETRYABLE_FAILURE` plus a `step.crashed` event, so a
+  run is never left in `RUNNING`.
 - **State and events.** `set_state(run, status, phase)` updates and upserts the run.
   `emit(run_id, phase, event_type, message, data)` appends the event to the store and publishes it
   on the bus.
@@ -443,12 +449,15 @@ Artifact kinds in use:
 | `replication_report` | `ReplicationSteps` | `ReplicationReport` JSON |
 | `link_check` | `ReplicationSteps` | `LinkCheck` JSON |
 | `replication_result` | `ReplicationSteps` | `ReplicationResult` JSON |
+| `snapshot_result` | `SnapshotSteps` | `SnapshotResult` JSON |
 | `failover_record` | `ReplicationSteps` | `FailoverRecord` JSON |
+| `apply_in_progress` | `RunCoordinator.apply_record` | In-progress apply result or failover checkpoint JSON; cleared on terminal event or recovery (exempt from prune) |
 | `asbuilt_docx` | `DocumentSteps` | The `.docx` bytes |
 
-Retention: `ARTIFACT_RETENTION_RUNS = 20`. Saving an artifact deletes artifacts of runs outside the
-20 most recently updated. The first command of a run does the same for `run_commands`. Runs and
-events are kept.
+Retention: `ARTIFACT_RETENTION_RUNS = 20`. Saving an artifact deletes cached artifacts of runs
+outside the 20 most recently updated, exempting `apply_in_progress` so an interrupted apply stays on
+record until recovered (STANDARD S5; finished results live in `run_events`, which are never pruned).
+The first command of a run prunes `run_commands` the same way. Runs and events are kept.
 
 **Approvals are not stored.** The previewed provisioning plan and its frozen inputs
 (`ProvisioningSteps._plan`), the replication plan (`ReplicationSteps._plan`), the snapshot plan
@@ -748,7 +757,7 @@ the Replication tab.
 | [`link_check.py`](../../src/alletra_onboard/application/replication/link_check.py) | `plan_pairs()`, `run_link_check()`: server on B, client on A, read until the latency, stop both; a ping fallback when no number is printed; re-reads links afterwards. |
 | [`apply.py`](../../src/alletra_onboard/application/replication/apply.py) | `apply_plan()` over WSAPI on both arrays: test volume and set, then per group create, policies and period, admit each volume, peer VV set on B, start. Stops at the first failure. |
 | [`verify.py`](../../src/alletra_onboard/application/replication/verify.py) | `verify()`: links Up, each planned group Started, roles right, volumes Synced. Names HPE's next step per state. |
-| [`failover.py`](../../src/alletra_onboard/application/replication/failover.py) | `run_failover_test()`: stop, failover (7 on B), recover (9), wait for sync, restore (10), reading both arrays after every step. On an unexpected state it stops and records the way back as CLI text. |
+| [`failover.py`](../../src/alletra_onboard/application/replication/failover.py) | `run_failover_test()`: stop, failover (7 on B), recover (9), wait for sync, restore (10), reading both arrays after every step and checkpointing the intended step and recovery guidance before each DR send (aborting if the save before step 1 fails; noting and continuing to restore if a later save fails). On an unexpected state it stops and records the way back as CLI text. |
 | [`steps.py`](../../src/alletra_onboard/application/replication/steps.py) | `ReplicationSteps`: preview, link check, apply, verify, failover test. Holds the plan in memory. |
 
 Gates in `ReplicationSteps`:

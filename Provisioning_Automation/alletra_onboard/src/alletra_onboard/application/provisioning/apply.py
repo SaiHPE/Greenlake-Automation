@@ -23,8 +23,9 @@ from alletra_onboard.application.provisioning.storage_provision import (
     _vvsets,
     planned_host_names,
 )
+from alletra_onboard.application.runs.apply_record import recorded_write
 from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
-from alletra_onboard.domain.approval import Approval
+from alletra_onboard.domain.approval import Approval, SaveRecord
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
     ActionOutcome,
@@ -58,12 +59,26 @@ class StorageInputs:
 
 @dataclass
 class _ApplyState:
+    save: SaveRecord
+    result: ProvisioningResult = field(default_factory=ProvisioningResult)
     outcomes: list[ActionOutcome] = field(default_factory=list)
     export_outcomes: list[ActionOutcome] = field(default_factory=list)
+    export_notes: list[str] = field(default_factory=list)
     doing: tuple[str, str] = ("", "")
     templates: list[VlunTemplate] | None = None
     export_scope: set[tuple[str, str]] = field(default_factory=set)
     reviewed_exports: set[tuple[str, str]] = field(default_factory=set)
+
+
+def _sync_result(state: _ApplyState, after: list[VlunTemplate] | None = None) -> None:
+    """Keep `state.result` current in paste order so each checkpoint holds every confirmed removal."""
+    state.result.outcomes = state.outcomes + state.export_outcomes
+    before = state.templates or []
+    removals, touched = removal_set(state.result.outcomes, before, before if after is None else after,
+                                    scope=state.export_scope)
+    state.result.removals = removals
+    extra = [n for n in state.result.removal_notes if not n.startswith("Not reverted — ")]
+    state.result.removal_notes[:] = touched + extra
 
 
 def _reviewed_exists(plan: ProvisioningPlan) -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
@@ -108,12 +123,14 @@ def _apply_hosts(
     for host_name, wwns in hosts.items():
         state.doing = ("host", host_name)
         persona = personas.get(host_name, "VMware")
-        if wwns or not iqns_of.get(host_name):
-            # FC, or an array host with only an NVMe NQN (ensure_host with no WWN = exists, no write)
-            status = array.ensure_host(host_name, wwns, persona=persona)
-        else:
-            status = array.ensure_iscsi_host(host_name, iqns_of[host_name], persona=persona)
-        state.outcomes.append(ActionOutcome(kind="host", name=host_name, status=status))
+        with recorded_write(state.result, _maybe_made_note("host", host_name), state.save):
+            if wwns or not iqns_of.get(host_name):
+                # FC, or an array host with only an NVMe NQN (ensure_host with no WWN = exists, no write)
+                status = array.ensure_host(host_name, wwns, persona=persona)
+            else:
+                status = array.ensure_iscsi_host(host_name, iqns_of[host_name], persona=persona)
+            state.outcomes.append(ActionOutcome(kind="host", name=host_name, status=status))
+            _sync_result(state)
 
 
 def _apply_core_objects(
@@ -127,18 +144,24 @@ def _apply_core_objects(
 
     for hs in intent.host_sets:
         state.doing = ("hostset", hs.name)
-        status = array.ensure_host_set(hs.name, _members_for(hs, hosts))
-        state.outcomes.append(ActionOutcome(kind="hostset", name=hs.name, status=status))
+        with recorded_write(state.result, _maybe_made_note("hostset", hs.name), state.save):
+            status = array.ensure_host_set(hs.name, _members_for(hs, hosts))
+            state.outcomes.append(ActionOutcome(kind="hostset", name=hs.name, status=status))
+            _sync_result(state)
 
     for v in intent.volumes:
         state.doing = ("volume", v.name)
-        status = array.ensure_volume(v.name, v.cpg, v.size_mib, v.provisioning_type)
-        state.outcomes.append(ActionOutcome(kind="volume", name=v.name, status=status))
+        with recorded_write(state.result, _maybe_made_note("volume", v.name), state.save):
+            status = array.ensure_volume(v.name, v.cpg, v.size_mib, v.provisioning_type)
+            state.outcomes.append(ActionOutcome(kind="volume", name=v.name, status=status))
+            _sync_result(state)
 
     for vvset, vols in _vvsets(intent).items():
         state.doing = ("vvset", vvset)
-        status = array.ensure_volume_set(vvset, vols)
-        state.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
+        with recorded_write(state.result, _maybe_made_note("vvset", vvset), state.save):
+            status = array.ensure_volume_set(vvset, vols)
+            state.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
+            _sync_result(state)
 
     # SPEC-012 R1 (P-8): the Result row names the object the array holds, not only the verb.
     # One read-back of hosts and volumes; sets are described from what was sent.
@@ -166,7 +189,7 @@ def _execute_export(
     vvsets: OrderedDict[str, list[str]],
     members_of: dict[str, list[str]],
     state: _ApplyState,
-) -> ActionOutcome:
+) -> None:
     before = state.templates or []
     verdict, reason = _judge_export(ex, vvsets, before, members_of.get(ex.target_name, []))
     if (ex.source_ref, ex.target_ref) in state.reviewed_exports and verdict != "exists":
@@ -176,10 +199,16 @@ def _execute_export(
             "exists. Rebuild the plan."
         )
     if verdict == "exists":
-        return ActionOutcome(kind="vlun", name=ex.source_name, status="exists", detail=reason)
+        state.export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status="exists", detail=reason))
+        return
     if verdict == "conflict":
-        return ActionOutcome(kind="vlun", name=ex.source_name, status="failed", detail=reason)
+        state.export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status="failed", detail=reason))
+        return
     volumes = list(vvsets.get(ex.source_name, [])) if ex.source_kind == "vvset" else [ex.source_name]
+    note = _maybe_made_note("vlun", f"{ex.source_name} to {ex.target_name}")
+    state.result.removal_notes.append(note)
+    state.export_notes.append(note)
+    state.save(state.result)
     if verdict == "update":
         status = _complete_set_export(array, ex, volumes, before, state.export_scope)
     else:
@@ -191,7 +220,8 @@ def _execute_export(
         )
         state.export_scope.update((v, ex.target_ref) for v in scope_vols)
         status = array.ensure_vlun(ex.source_ref, ex.target_ref, lun=ex.lun)
-    return ActionOutcome(kind="vlun", name=ex.source_name, status=status)
+    state.export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status=status))
+    state.save(state.result)
 
 
 def _apply_exports(
@@ -213,12 +243,18 @@ def _apply_exports(
     state.templates = before
     for ex in exports:
         state.doing = ("vlun", f"{ex.source_name} to {ex.target_name}")
-        state.export_outcomes.append(_execute_export(array, ex, vvsets, members_of, state))
+        _execute_export(array, ex, vvsets, members_of, state)
     # R8: "created" is the array's word; read the templates back ONCE and hold it to it.
     state.doing = ("", "")
     after: list[VlunTemplate] = array.vlun_templates() if exports else before
     if exports:
         _confirm_exports(exports, state.export_outcomes, vvsets, after)
+        for note in state.export_notes:
+            if note in state.result.removal_notes:
+                state.result.removal_notes.remove(note)
+        state.export_notes.clear()
+        _sync_result(state, after=after)
+        state.save(state.result)
     return after
 
 
@@ -250,7 +286,7 @@ def apply_plan(
     exports, _held = _reachable_targets(exports, intent, hosts, inputs.reachable_hosts)
 
     reviewed_objects, reviewed_exports = _reviewed_exists(inputs.plan)
-    state = _ApplyState(reviewed_exports=reviewed_exports)
+    state = _ApplyState(save=approval.require_saver(), result=result, reviewed_exports=reviewed_exports)
     failure_notes: list[str] = []
     # SPEC-007 R6: a failed apply has a removal set too. Writes stop at the first error, inside the
     # array session, so the undo can still be read for what was made before it.
@@ -287,6 +323,9 @@ def apply_plan(
 
 def _maybe_made_note(kind: str, name: str) -> str:
     """SPEC-007 R6: the object whose write failed, for the operator to check by hand."""
+    if kind == "vlun":
+        return (f"The array may have made {_LABEL[kind]} {name} before the error. "
+                "Check `showvlun -t` on the array; if it was not there before this run, remove it with `removevlun -f`.")
     return (f"The array may have made {_LABEL[kind]} {name} before the error. If `{_SHOW[kind].format(n=name)}` lists it "
             f"and it was not there before this run, `{_REMOVE[kind].format(n=name)}` removes it.")
 

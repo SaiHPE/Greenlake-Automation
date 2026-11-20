@@ -103,6 +103,7 @@ class OnboardingService:
         self.snapshots = SnapshotSteps(self.coordinator)
         self.documents = DocumentSteps(self.coordinator, verify_fn=verify_fn)
         self.console = ConsoleService(self.coordinator, cli_factory=make_array_cli)
+        self.coordinator.recover_interrupted_applies()
 
     # ------------------------------------------------------------------ run lifecycle (coordinator)
 

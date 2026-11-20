@@ -15,13 +15,15 @@ the approval, with this plan's (schedule name, source) pairs and nothing else.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from alletra_onboard.application.runs.apply_record import maybe_made, recorded_write
 from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
 from alletra_onboard.application.snapshots.clients import make_snap_writer
 from alletra_onboard.application.snapshots.read import parse_showsched, showsched_readable
 from alletra_onboard.application.snapshots.verify import check_now
-from alletra_onboard.domain.approval import Approval
+from alletra_onboard.domain.approval import Approval, SaveRecord
 from alletra_onboard.domain.array_parse import answered_error
 from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.plan_objects import SnapPlanObjects
@@ -92,6 +94,114 @@ def _whole_set(wsapi, request: SnapshotRequest, action: SnapshotAction, view: Sn
     return True
 
 
+@dataclass
+class _SnapState:
+    result: SnapshotResult
+    save: SaveRecord
+    say: Callable[[str], None]
+    in_flight: tuple[SnapshotAction, set[str]] | None = None
+    current: SnapshotAction | None = None
+    pending_notes: list[str] = field(default_factory=list)
+    written: int = 0
+
+    def record(self, action: SnapshotAction, status: str, detail: str = "") -> None:
+        self.result.outcomes.append(SnapshotOutcome(kind=action.kind, name=action.name, source=action.source,
+                                                    status=status, detail=detail))  # type: ignore[arg-type]
+
+    def remove(self, names: list[str]) -> None:
+        seen = {r.name for r in self.result.removals}
+        self.result.removals.extend(RemovalItem(kind="snapshot", name=n, command=f"removevv -f {n}")
+                                    for n in names if n not in seen)
+        self.result.removals.sort(key=lambda i: REMOVAL_ORDER.get(i.kind, 9))
+
+    def clear_pending(self) -> None:
+        for note in self.pending_notes:
+            if note in self.result.removal_notes:
+                self.result.removal_notes.remove(note)
+        self.pending_notes.clear()
+
+
+def _snap_note(source: str, members: list[str]) -> str:
+    names = " ".join(now_snapshot_name(m) for m in members)
+    return (f"The array may have made snapshots of {source} before the error. Inspect with `showvv {names}` first; "
+            "remove with `removevv -f` each one that was not there before this run.")
+
+
+def _apply_snapshot_action(
+    wsapi, action: SnapshotAction, request: SnapshotRequest, view: SnapshotArrayView, st: _SnapState,
+) -> None:
+    st.current = action
+    whole = _whole_set(wsapi, request, action, view)
+    before = {v.name for v in wsapi.volumes()}
+    st.in_flight = (action, before)
+    st.pending_notes = []
+    if whole:
+        st.say(f"Taking a snapshot of every volume in {request.source} ({len(action.members)})…")
+        note = _snap_note(request.source, action.members)
+        st.pending_notes.append(note)
+        st.result.removal_notes.append(note)
+        st.save(st.result)
+        wsapi.create_set_snapshot(request.source, f"@vvname@{NOW_SUFFIX}", read_only=request.read_only,
+                                  expire_hours=request.expire_hours)
+        st.written += 1
+    else:
+        for member in action.members:
+            st.say(f"Taking a snapshot of {member}…")
+            note = _snap_note(member, [member])
+            st.pending_notes.append(note)
+            st.result.removal_notes.append(note)
+            st.save(st.result)
+            wsapi.create_snapshot(member, now_snapshot_name(member), read_only=request.read_only,
+                                  expire_hours=request.expire_hours)
+            st.written += 1
+    # One read-back per row, as on main; clear the inspect-first note(s) once the diff settles removals.
+    after = wsapi.volumes()
+    st.in_flight = None
+    st.remove(made_by(action, before, after))
+    st.clear_pending()
+    st.save(st.result)
+    ok, detail = check_now(request, action.members, view.model_copy(update={"volumes": after}))
+    if not ok:
+        raise RuntimeError(f"after the snapshot of {request.source}, the array does not show what was asked: {detail}")
+    st.record(action, "created", detail)
+    st.save(st.result)
+
+
+def _apply_schedule_action(cli, action: SnapshotAction, request: SnapshotRequest, st: _SnapState) -> None:
+    st.current = action
+    before = _read_schedules(cli, f"before creating {request.name}")
+    if any(s.name == request.name for s in before):
+        raise ArrayCliError(f"a schedule named {request.name} is on the array now and was not when the "
+                            "plan was read; nothing was written for it. Read the array again")
+    st.say(f"Creating the schedule {request.name}…")
+    line = RemovalItem(kind="schedule", name=request.name, command=f"removesched -f {request.name}")
+    note = maybe_made(f"schedule {request.name}", "showsched", f"removesched -f {request.name}")
+    with recorded_write(st.result, note, st.save):
+        try:
+            out = cli.write(request.createsched_command())
+            st.written += 1
+            if answered_error(out):
+                said = next(ln.strip() for ln in out.splitlines() if ln.strip().lower().startswith("error"))
+                raise ArrayCliError(f"the array refused createsched for {request.name}: {said}")
+            after = _read_schedules(cli, f"after creating {request.name}")
+            if problem := schedule_readback(request, before, after):
+                raise ArrayCliError(problem)
+        except Exception:
+            st.result.removals.append(line)
+            _schedule_after_failure(action, line, cli, st.result)   # while the session is still open
+            if note in st.result.removal_notes:
+                st.result.removal_notes.remove(note)
+            raise
+        st.result.removals.append(line)
+        st.result.removals.sort(key=lambda i: REMOVAL_ORDER.get(i.kind, 9))
+        st.result.schedules_created.append(request.name)
+        st.record(action, "created", f"{request.schedule_words()}; active, next run "
+                  + next(s.next_run for s in after if s.name == request.name))
+        st.result.removal_notes.append(
+            f"Snapshots the schedule {request.name} takes expire on their own after {request.expire_hours} "
+            "hours. To remove them sooner, remove each with removevv -f.")
+
+
 def apply_plan(
     plan: SnapshotPlan, view: SnapshotArrayView, provisioning: ProvisioningIntent, approval: Approval, *,
     wsapi_factory: Callable = make_wsapi_writer, snap_cli_factory: Callable = make_snap_writer,
@@ -107,93 +217,30 @@ def apply_plan(
         result.error = plan.error or "the plan has blocking findings; nothing was applied"
         return result
     by_source = {r.source: r for r in intent.requests}
-    say = progress or (lambda _m: None)
-
-    def record(action: SnapshotAction, status: str, detail: str = "") -> None:
-        result.outcomes.append(SnapshotOutcome(kind=action.kind, name=action.name, source=action.source,
-                                               status=status, detail=detail))  # type: ignore[arg-type]
-
-    def remove(names: list[str]) -> None:
-        seen = {r.name for r in result.removals}
-        result.removals.extend(RemovalItem(kind="snapshot", name=n, command=f"removevv -f {n}")
-                               for n in names if n not in seen)
-
     result.outcomes = [SnapshotOutcome(kind=a.kind, name=a.name, source=a.source, status="exists", detail=a.reason)
                        for a in plan.actions if a.state == "exists"]
     snapshots = [a for a in plan.actions if a.kind == "snapshot" and a.state == "create"]
     schedules = [a for a in plan.actions if a.kind == "schedule" and a.state == "create"]
-    in_flight: tuple[SnapshotAction, set[str]] | None = None
-    current: SnapshotAction | None = None
-    written = 0
+    st = _SnapState(result=result, save=approval.require_saver(), say=progress or (lambda _m: None))
     try:
         if snapshots:
             with wsapi_factory(approval, "snapshots", "A") as wsapi:
-                # (1) every snapshot now over WSAPI
                 for action in snapshots:
-                    current = action
-                    request = by_source[action.source]
-                    whole = _whole_set(wsapi, request, action, view)
-                    before = {v.name for v in wsapi.volumes()}
-                    in_flight = (action, before)
-                    if whole:
-                        say(f"Taking a snapshot of every volume in {request.source} ({len(action.members)})…")
-                        wsapi.create_set_snapshot(request.source, f"@vvname@{NOW_SUFFIX}", read_only=request.read_only,
-                                                  expire_hours=request.expire_hours)
-                        written += 1
-                    else:
-                        for member in action.members:
-                            say(f"Taking a snapshot of {member}…")
-                            wsapi.create_snapshot(member, now_snapshot_name(member), read_only=request.read_only,
-                                                  expire_hours=request.expire_hours)
-                            written += 1
-                    # R5: read back after each write; the removal set is what the read shows was made
-                    after = wsapi.volumes()
-                    in_flight = None
-                    remove(made_by(action, before, after))
-                    ok, detail = check_now(request, action.members, view.model_copy(update={"volumes": after}))
-                    if not ok:
-                        raise RuntimeError(f"after the snapshot of {request.source}, the array does not show what was asked: {detail}")
-                    record(action, "created", detail)
-        # (2) every schedule, over the write-scoped SSH client built for this plan's schedules only
+                    _apply_snapshot_action(wsapi, action, by_source[action.source], view, st)
         if schedules:
-            current = schedules[0]
+            st.current = schedules[0]
             with snap_cli_factory(approval, plan_objects(plan, intent)) as cli:
                 for action in schedules:
-                    current = action
-                    request = by_source[action.source]
-                    before = _read_schedules(cli, f"before creating {request.name}")
-                    if any(s.name == request.name for s in before):
-                        raise ArrayCliError(f"a schedule named {request.name} is on the array now and was not when the "
-                                            "plan was read; nothing was written for it. Read the array again")
-                    say(f"Creating the schedule {request.name}…")
-                    line = RemovalItem(kind="schedule", name=request.name, command=f"removesched -f {request.name}")
-                    result.removals.append(line)              # ADR 0025 condition 4: before the command is sent
-                    try:
-                        out = cli.write(request.createsched_command())
-                        written += 1
-                        if answered_error(out):
-                            said = next(ln.strip() for ln in out.splitlines() if ln.strip().lower().startswith("error"))
-                            raise ArrayCliError(f"the array refused createsched for {request.name}: {said}")
-                        after = _read_schedules(cli, f"after creating {request.name}")
-                        if problem := schedule_readback(request, before, after):
-                            raise ArrayCliError(problem)
-                    except Exception:
-                        _schedule_after_failure(action, line, cli, result)   # while the session is still open
-                        raise
-                    result.schedules_created.append(request.name)
-                    record(action, "created", f"{request.schedule_words()}; active, next run "
-                           + next(s.next_run for s in after if s.name == request.name))
-                    result.removal_notes.append(
-                        f"Snapshots the schedule {request.name} takes expire on their own after {request.expire_hours} "
-                        "hours. To remove them sooner, remove each with removevv -f.")
+                    _apply_schedule_action(cli, action, by_source[action.source], st)
     except Exception as exc:  # the array's words, where it stopped, what to remove
-        if in_flight is not None:
-            _diff_after_failure(in_flight, approval, wsapi_factory, result, remove)
+        if st.in_flight is not None:
+            _diff_after_failure(st.in_flight, approval, wsapi_factory, result, st.remove)
+            st.clear_pending()
         done = sum(1 for o in result.outcomes if o.status == "created")
-        result.error = (f"Stopped after {done} row(s) and {written} write(s): {str(exc).rstrip('.')}. The removal set "
+        result.error = (f"Stopped after {done} row(s) and {st.written} write(s): {str(exc).rstrip('.')}. The removal set "
                         "below undoes exactly what was created before the failure.")
-        if current is not None and all(o.name != current.name or o.kind != current.kind for o in result.outcomes):
-            record(current, "failed", str(exc))
+        if st.current is not None and all(o.name != st.current.name or o.kind != st.current.kind for o in result.outcomes):
+            st.record(st.current, "failed", str(exc))
     result.removals.sort(key=lambda i: REMOVAL_ORDER.get(i.kind, 9))
     return result
 

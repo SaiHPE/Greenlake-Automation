@@ -15,4 +15,4 @@ def make_rc_writer(approval: Approval, side: Side, objects: RcPlanObjects) -> Ar
     )
 
 
-__all__ = ["make_rc_writer"]
+__all__ = ["ArrayRcCliClient", "make_rc_writer"]

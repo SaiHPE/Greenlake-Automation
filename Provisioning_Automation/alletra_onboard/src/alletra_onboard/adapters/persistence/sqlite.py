@@ -303,10 +303,12 @@ class SqliteRunStore:
             # Artifacts include the generated as-built document, hundreds of KB per run, and nothing
             # else ever deletes them. Keep the recent runs — enough to resume anything in flight —
             # and drop the rest, so a long-lived workstation's state file cannot grow without bound.
+            # An in-flight apply record stays until recovered or closed (STANDARD S5).
             connection.execute(
                 """
                 DELETE FROM run_artifacts
-                 WHERE run_id NOT IN (SELECT run_id FROM runs ORDER BY updated_at DESC LIMIT ?)
+                 WHERE kind != 'apply_in_progress'
+                   AND run_id NOT IN (SELECT run_id FROM runs ORDER BY updated_at DESC LIMIT ?)
                 """,
                 (ARTIFACT_RETENTION_RUNS,),
             )
