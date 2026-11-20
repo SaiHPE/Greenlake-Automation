@@ -18,7 +18,7 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "alletra_onboard"
 UNCHECKED_ON_PURPOSE = {
     ("adapters/browser/cloudinit_wizard.py", "CloudinitWizardAdapter.run", "ignore_https_errors=True"):
         "the link-local setup wizard: same cable, no password typed, no certificate to record yet",
-    ("adapters/array/wsapi_client.py", "WsapiClient.connect", "secure=False"):
+    ("adapters/array/wsapi_client.py", "WsapiReader.connect", "secure=False"):
         "a self-signed array certificate; every connection checks the pinned SHA-256 instead",
     ("adapters/device_trust.py", "probe_tls", "check_hostname=False"):
         "the probe only reads the certificate to compare it with the pin; nothing is sent",

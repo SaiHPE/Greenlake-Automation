@@ -28,7 +28,7 @@ SCRIPTS = ("failed_apply_lab.py", "init_walk_lab.py", "ui_live_lab.py", "ui_prov
 # Read by a script but made elsewhere, or built from parts: what to find instead, where, and why.
 ELSEWHERE: dict[str, tuple[str, str, str]] = {
     "Stopped while creating volume set": (
-        "Stopped while creating", "src/alletra_onboard/application/provisioning/storage_provision.py",
+        "Stopped while creating", "src/alletra_onboard/application/provisioning/apply.py",
         "the apply's own error: the backend makes it from the object's kind and name"),
     "The console runs the tool's read-only commands": (
         "The console runs the tool's read-only commands", "src/alletra_onboard/application/runs/console.py",

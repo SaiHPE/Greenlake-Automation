@@ -112,9 +112,6 @@
 "src/alletra_onboard/application/provisioning/peer_ports.py :: read_back_peer_ports :: C901" = 11
 "src/alletra_onboard/application/provisioning/steps.py :: ArrayPortsSteps._run_ports_preview :: PLR0915" = 60
 "src/alletra_onboard/application/provisioning/storage_provision.py :: _ArrayState.__init__ :: PLR0913" = 6
-"src/alletra_onboard/application/provisioning/storage_provision.py :: apply_plan :: C901" = 19
-"src/alletra_onboard/application/provisioning/storage_provision.py :: apply_plan :: PLR0912" = 20
-"src/alletra_onboard/application/provisioning/storage_provision.py :: apply_plan :: PLR0915" = 80
 "src/alletra_onboard/application/provisioning/storage_provision.py :: build_plan :: C901" = 24
 "src/alletra_onboard/application/provisioning/storage_provision.py :: build_plan :: PLR0912" = 22
 "src/alletra_onboard/application/provisioning/storage_provision.py :: build_plan :: PLR0915" = 75
@@ -142,9 +139,9 @@
 "src/alletra_onboard/application/replication/link_check.py :: _check_pair :: PLR0913" = 8
 "src/alletra_onboard/application/replication/link_check.py :: _ping_latency :: PLR0913" = 6
 "src/alletra_onboard/application/replication/link_check.py :: run_link_check :: PLR0913" = 8
-"src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: C901" = 30
-"src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: PLR0912" = 21
-"src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: PLR0915" = 88
+"src/alletra_onboard/application/replication/partnership_apply.py :: apply_partnership :: C901" = 30
+"src/alletra_onboard/application/replication/partnership_apply.py :: apply_partnership :: PLR0912" = 21
+"src/alletra_onboard/application/replication/partnership_apply.py :: apply_partnership :: PLR0915" = 88
 "src/alletra_onboard/application/replication/plan.py :: build_plan :: C901" = 26
 "src/alletra_onboard/application/replication/plan.py :: build_plan :: PLR0912" = 26
 "src/alletra_onboard/application/replication/plan.py :: build_plan :: PLR0915" = 87
@@ -159,8 +156,8 @@
 "src/alletra_onboard/application/service.py :: OnboardingService.__init__ :: PLR0913" = 7
 "src/alletra_onboard/application/service.py :: OnboardingService.record_zoning_render :: PLR0913" = 6
 "src/alletra_onboard/application/service.py :: OnboardingService.start_asbuilt :: PLR0913" = 7
-"src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: C901" = 22
-"src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: PLR0912" = 18
+"src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: C901" = 19
+"src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: PLR0912" = 17
 "src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: PLR0913" = 7
 "src/alletra_onboard/application/snapshots/apply.py :: apply_plan :: PLR0915" = 77
 "src/alletra_onboard/application/snapshots/plan.py :: _count_per_member :: PLR0913" = 6
@@ -187,20 +184,21 @@
 "src/alletra_onboard/adapters/array/cli_client.py :: ArrayCliClient.close :: BLE001" = 1
 "src/alletra_onboard/adapters/array/cli_client.py :: ArrayCliClient.close :: S110" = 1
 "src/alletra_onboard/adapters/array/wsapi_client.py :: <module> :: BLE001" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._array_code :: BLE001" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._array_reason :: BLE001" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._certificate_changed :: BLE001" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._certificate_changed :: S110" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._existing_set_members :: BLE001" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._safe_str :: BLE001" = 2
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.close :: BLE001" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.close :: S110" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.host_set_names :: BLE001" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.volume_set_names :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader._array_code :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader._array_reason :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader._certificate_changed :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader._certificate_changed :: S110" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader.close :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader.close :: S110" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader.host_set_names :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader.volume_set_names :: BLE001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: _record_calls :: SLF001" = 1
+"src/alletra_onboard/adapters/array/wsapi_client.py :: _safe_str :: BLE001" = 2
 "src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client._close_http :: BLE001" = 1
 "src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client._close_http :: S110" = 1
 "src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client.logout :: BLE001" = 1
 "src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client.logout :: S110" = 1
+"src/alletra_onboard/adapters/array/wsapi_writer.py :: WsapiWriter._existing_set_members :: BLE001" = 1
 "src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter._body_text :: BLE001" = 1
 "src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter._dump :: BLE001" = 1
 "src/alletra_onboard/adapters/browser/cloudinit_wizard.py :: CloudinitWizardAdapter._dump :: S110" = 1
@@ -232,8 +230,22 @@
 "src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient._read_luns :: S110" = 1
 "src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient.close :: BLE001" = 1
 "src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient.close :: S110" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_checkhealth_after :: SLF001" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_inventory_after :: SLF001" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _drop_blank_paragraphs_after :: SLF001" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _insert_mono_after :: SLF001" = 2
+"src/alletra_onboard/application/documents/asbuilt.py :: _place_after :: SLF001" = 2
+"src/alletra_onboard/application/documents/asbuilt.py :: _set_cell_text :: SLF001" = 2
+"src/alletra_onboard/application/documents/asbuilt.py :: _start_sections_on_new_pages :: SLF001" = 1
 "src/alletra_onboard/application/documents/asbuilt.py :: _text_parts :: BLE001" = 1
 "src/alletra_onboard/application/documents/asbuilt.py :: _text_parts :: S112" = 1
+"src/alletra_onboard/application/documents/asbuilt.py :: _text_parts :: SLF001" = 1
+"src/alletra_onboard/application/documents/asbuilt_docx.py :: _cell_margins :: SLF001" = 1
+"src/alletra_onboard/application/documents/asbuilt_docx.py :: _no_split :: SLF001" = 1
+"src/alletra_onboard/application/documents/asbuilt_docx.py :: _repeat_header :: SLF001" = 1
+"src/alletra_onboard/application/documents/asbuilt_docx.py :: _shade :: SLF001" = 1
+"src/alletra_onboard/application/documents/asbuilt_docx.py :: _table_borders :: SLF001" = 1
+"src/alletra_onboard/application/documents/asbuilt_docx.py :: hpe_table :: SLF001" = 4
 "src/alletra_onboard/application/documents/asbuilt_snapshots.py :: _requests :: BLE001" = 1
 "src/alletra_onboard/application/documents/asbuilt_snapshots.py :: _requests :: S112" = 1
 "src/alletra_onboard/application/documents/steps.py :: DocumentSteps._collect_asbuilt :: BLE001" = 2
@@ -256,6 +268,7 @@
 "src/alletra_onboard/application/platform/proxy.py :: _win_proxy_for_url :: BLE001" = 1
 "src/alletra_onboard/application/platform/proxy.py :: _win_system_proxy :: BLE001" = 2
 "src/alletra_onboard/application/platform/proxy.py :: _win_system_proxy :: S110" = 1
+"src/alletra_onboard/application/provisioning/apply.py :: apply_plan :: BLE001" = 3
 "src/alletra_onboard/application/provisioning/discovery.py :: _read_file_side :: BLE001" = 2
 "src/alletra_onboard/application/provisioning/discovery.py :: _read_sheet_hosts :: BLE001" = 1
 "src/alletra_onboard/application/provisioning/discovery.py :: _refine_fabrics_from_switches :: BLE001" = 1
@@ -279,13 +292,12 @@
 "src/alletra_onboard/application/provisioning/steps.py :: DiscoveryZoningSteps._save_zoned_hosts :: S110" = 1
 "src/alletra_onboard/application/provisioning/steps.py :: DiscoveryZoningSteps.require_discovery :: BLE001" = 1
 "src/alletra_onboard/application/provisioning/steps.py :: latest_peer_view :: BLE001" = 1
-"src/alletra_onboard/application/provisioning/storage_provision.py :: apply_plan :: BLE001" = 3
 "src/alletra_onboard/application/provisioning/storage_provision.py :: build_plan :: BLE001" = 1
 "src/alletra_onboard/application/provisioning/storage_provision.py :: read_array_objects :: BLE001" = 1
 "src/alletra_onboard/application/provisioning/zoning_plan.py :: build_zoning_plan :: BLE001" = 3
 "src/alletra_onboard/application/replication/apply.py :: apply_plan :: BLE001" = 1
 "src/alletra_onboard/application/replication/failover.py :: run_failover_test :: BLE001" = 6
-"src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: BLE001" = 1
+"src/alletra_onboard/application/replication/partnership_apply.py :: apply_partnership :: BLE001" = 1
 "src/alletra_onboard/application/replication/read.py :: read_array :: BLE001" = 2
 "src/alletra_onboard/application/replication/read.py :: read_array :: S110" = 1
 "src/alletra_onboard/application/replication/read.py :: read_group_details :: BLE001" = 2
@@ -317,10 +329,7 @@
 [pyright]
 # STANDARD T2. `file` = its pyright errors today (`standard` on src, `strict` on src/alletra_onboard/domain;
 # pyrightconfig.json). The count depends on the packages installed: use the dev extra's versions.
-"src/alletra_onboard/adapters/array/wsapi_client.py" = 8
-"src/alletra_onboard/application/provisioning/storage_provision.py" = 9
 "src/alletra_onboard/application/replication/steps.py" = 3
-"src/alletra_onboard/application/snapshots/apply.py" = 4
 "src/alletra_onboard/application/snapshots/steps.py" = 1
 
 [vulture]
@@ -339,16 +348,16 @@
 "frontend/src/api.ts" = 36845
 "frontend/src/steps/ReplicationStep.tsx" = 38526
 "frontend/src/steps/SnapshotsStep.tsx" = 18580
-"src/alletra_onboard/adapters/array/wsapi_client.py" = 41148
+"src/alletra_onboard/adapters/array/wsapi_client.py" = 28398
 "src/alletra_onboard/adapters/browser/cloudinit_wizard.py" = 18251
 "src/alletra_onboard/api/app.py" = 34943
-"src/alletra_onboard/application/documents/asbuilt.py" = 61941
+"src/alletra_onboard/application/documents/asbuilt.py" = 61939
 "src/alletra_onboard/application/documents/steps.py" = 18539
 "src/alletra_onboard/application/platform/init_sheet.py" = 65775
 "src/alletra_onboard/application/provisioning/discovery.py" = 33791
 "src/alletra_onboard/application/provisioning/peer_ports.py" = 22799
-"src/alletra_onboard/application/provisioning/steps.py" = 26908
-"src/alletra_onboard/application/provisioning/storage_provision.py" = 35788
+"src/alletra_onboard/application/provisioning/steps.py" = 26898
+"src/alletra_onboard/application/provisioning/storage_provision.py" = 26026
 "src/alletra_onboard/application/provisioning/zoning_plan.py" = 31031
 "src/alletra_onboard/application/replication/plan.py" = 26605
 "src/alletra_onboard/domain/provisioning.py" = 18310
@@ -405,3 +414,23 @@ folders = [
   "archive/**",
   "reference/**",
 ]
+
+[moves]
+# `new key` = `old key`, written by `scripts/fitness.py --move` when listed code moved or was renamed.
+# scripts/check.py compares a moved entry with its old key at the branch point, so the move is not
+# taken for a new violation. A line is dropped once its entry is gone.
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader._array_code :: BLE001" = "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._array_code :: BLE001"
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader._array_reason :: BLE001" = "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._array_reason :: BLE001"
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader._certificate_changed :: BLE001" = "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._certificate_changed :: BLE001"
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader._certificate_changed :: S110" = "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._certificate_changed :: S110"
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader.close :: BLE001" = "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.close :: BLE001"
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader.close :: S110" = "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.close :: S110"
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader.host_set_names :: BLE001" = "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.host_set_names :: BLE001"
+"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiReader.volume_set_names :: BLE001" = "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.volume_set_names :: BLE001"
+"src/alletra_onboard/adapters/array/wsapi_client.py :: _safe_str :: BLE001" = "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._safe_str :: BLE001"
+"src/alletra_onboard/adapters/array/wsapi_writer.py :: WsapiWriter._existing_set_members :: BLE001" = "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._existing_set_members :: BLE001"
+"src/alletra_onboard/application/provisioning/apply.py :: apply_plan :: BLE001" = "src/alletra_onboard/application/provisioning/storage_provision.py :: apply_plan :: BLE001"
+"src/alletra_onboard/application/replication/partnership_apply.py :: apply_partnership :: BLE001" = "src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: BLE001"
+"src/alletra_onboard/application/replication/partnership_apply.py :: apply_partnership :: C901" = "src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: C901"
+"src/alletra_onboard/application/replication/partnership_apply.py :: apply_partnership :: PLR0912" = "src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: PLR0912"
+"src/alletra_onboard/application/replication/partnership_apply.py :: apply_partnership :: PLR0915" = "src/alletra_onboard/application/replication/partnership.py :: apply_partnership :: PLR0915"

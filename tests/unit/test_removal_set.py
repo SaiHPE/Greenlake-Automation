@@ -10,8 +10,9 @@ from test_plan_truth import (  # sibling module (rootdir conftest, no packages)
     _discovery,
 )
 
+from alletra_onboard.application.provisioning import apply as prov_apply
 from alletra_onboard.application.provisioning import storage_provision as prov
-from alletra_onboard.application.provisioning.storage_provision import render_removal_commands
+from alletra_onboard.application.provisioning.apply import render_removal_commands
 from alletra_onboard.domain.discovery import DiscoveryReport, HostHba
 from alletra_onboard.domain.provisioning import (
     ArrayHostRecord,
@@ -43,9 +44,10 @@ def _intent(**over) -> ProvisioningIntent:
     return ProvisioningIntent(**data)
 
 
-def _apply(fake, intent=None, discovery=None) -> ProvisioningResult:
-    return prov.apply_plan(intent or _intent(), discovery or _discovery(), reachable_hosts=REACHABLE,
-                           wsapi_factory=lambda c: fake)
+def _apply(fake, intent=None, discovery=None, *, plan=None) -> ProvisioningResult:
+    inputs = prov_apply.StorageInputs(intent or _intent(), discovery or _discovery(), REACHABLE,
+                                      plan or prov.ProvisioningPlan())
+    return prov_apply.apply_plan(inputs, wsapi_factory=lambda c: fake)
 
 
 # ------------------------------------------------------------------ R1, R2, R3
@@ -225,7 +227,7 @@ def test_a_session_that_never_opened_wrote_nothing_and_removes_nothing():
     def refuse(creds):
         raise RuntimeError("login refused")
 
-    result = prov.apply_plan(_intent(), _discovery(), reachable_hosts=REACHABLE, wsapi_factory=refuse)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()), wsapi_factory=refuse)
     assert result.error == "login refused" and result.removals == [] and result.outcomes == []
 
 
@@ -271,7 +273,7 @@ def test_the_second_session_cleanup_would_have_been_generated():
         exports=[ExportRequest(source_kind="vvset", source_name="zz_t2_vvs", target_kind="hostset", target_name="zz_t2_hs"),
                  ExportRequest(source_kind="vvset", source_name="zz_t3_vvs", target_kind="hostset", target_name="zz_t3_hs")],
     )
-    result = prov.apply_plan(intent, discovery, reachable_hosts={"10.132.30.136"}, wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, discovery, {"10.132.30.136"}, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
     assert result.error is None
     assert render_removal_commands(result.removals) == [
         "removevlun -f zz_t3_vol01 5 set:zz_t3_hs",
@@ -285,3 +287,163 @@ def test_the_second_session_cleanup_would_have_been_generated():
     ]
     # and with R11 in place the run-2 export is NOT re-sent, so it is not in this apply's set either
     assert not any("zz_t2" in c for c in render_removal_commands(result.removals))
+
+
+# ------------------------------------------------------------------ Astra 4: reviewed-exists VLUN + scoped removal diff
+
+def test_reviewed_exists_export_that_vanished_is_refused_without_writing():
+    """An export the reviewed plan marked 'exists' that vanished before apply must NOT turn into a
+    create; apply refuses and sends zero VLUN writes."""
+    intent = _intent()
+    discovery = _discovery()
+    fake = TruthfulFakeWsapi(
+        hosts=[ArrayHostRecord(name="esx1", persona="VMware", wwns=[WWN_A, WWN_B])],
+        host_sets={"hs": ["esx1"]},
+        volumes=[
+            prov.ArrayVolumeRecord(name="vol01", size_mib=20 * 1024, cpg="SSD_r6", provisioning_type="tpvv"),
+            prov.ArrayVolumeRecord(name="vol02", size_mib=20 * 1024, cpg="SSD_r6", provisioning_type="tpvv"),
+        ],
+        volume_sets={"vvs": ["vol01", "vol02"]},
+        vluns=[
+            VlunTemplate(volume="vol01", target="set:hs", lun=0),
+            VlunTemplate(volume="vol02", target="set:hs", lun=1),
+        ],
+    )
+    plan = prov.build_plan(intent, discovery, reachable_hosts=REACHABLE, wsapi_factory=lambda c: fake)
+    assert all(a.state == "exists" for a in plan.actions)
+
+    # The reviewed export vanishes before apply runs.
+    fake._vluns.clear()
+    fake.writes.clear()
+    result = _apply(fake, intent, discovery, plan=plan)
+    assert result.error is not None and "Rebuild the plan" in result.error
+    assert [w for w in fake.writes if w[0] == "vlun"] == []
+    assert result.removals == []
+
+
+def test_vanished_reviewed_exists_volume_refuses_before_any_write_with_no_false_removal_note():
+    """A reviewed 'exists' volume that vanished before apply must be caught up front before ANY
+    write (including earlier hosts/host sets) and must never emit a 'may have made' removal note."""
+    intent = _intent()
+    discovery = _discovery()
+    fake = TruthfulFakeWsapi(
+        volumes=[prov.ArrayVolumeRecord(name="vol01", size_mib=20 * 1024, cpg="SSD_r6", provisioning_type="tpvv")],
+    )
+    plan = prov.build_plan(intent, discovery, reachable_hosts=REACHABLE, wsapi_factory=lambda c: fake)
+    assert next(a for a in plan.actions if a.kind == "volume" and a.name == "vol01").state == "exists"
+    assert next(a for a in plan.actions if a.kind == "host" and a.name == "esx1").state == "create"
+
+    # vol01 vanishes on the array before apply runs.
+    fake._volumes.clear()
+    fake.writes.clear()
+    result = _apply(fake, intent, discovery, plan=plan)
+
+    assert fake.writes == []
+    assert result.error is not None and "vol01" in result.error and "Rebuild the plan" in result.error
+    assert result.outcomes == []
+    assert result.removals == []
+    assert result.removal_notes == []
+
+
+def test_reviewed_exists_host_missing_a_wwn_still_readds_it_on_apply():
+    """A host the plan marked 'exists' still runs ensure_host on apply so a WWN lost since preview
+    is re-added rather than silently skipped."""
+    intent = _intent()
+    discovery = _discovery()
+    readded: list[tuple[str, list[str]]] = []
+
+    class _ReconcilingHostWsapi(TruthfulFakeWsapi):
+        def ensure_host(self, name, wwns, persona="VMware"):
+            self.writes.append(("host", name))
+            host = next((h for h in self._hosts if h.name == name), None)
+            if host is None:
+                return "created"
+            missing = [w for w in wwns if w not in host.wwns]
+            if not missing:
+                return "exists"
+            host.wwns.extend(missing)
+            readded.append((name, missing))
+            return "updated"
+
+    fake = _ReconcilingHostWsapi(
+        hosts=[ArrayHostRecord(name="esx1", persona="VMware", wwns=[WWN_A, WWN_B])],
+    )
+    fake.created_templates[("set:vvs", "set:hs")] = [
+        VlunTemplate(volume="vol01", target="set:hs", lun=0),
+        VlunTemplate(volume="vol02", target="set:hs", lun=1),
+    ]
+    plan = prov.build_plan(intent, discovery, reachable_hosts=REACHABLE, wsapi_factory=lambda c: fake)
+    assert next(a for a in plan.actions if a.kind == "host" and a.name == "esx1").state == "exists"
+
+    # One WWN drops off esx1 between preview and apply.
+    fake._hosts = [ArrayHostRecord(name="esx1", persona="VMware", wwns=[WWN_A])]
+    result = _apply(fake, intent, discovery, plan=plan)
+
+    assert result.error is None
+    assert readded == [("esx1", [WWN_B])]
+    assert next(o for o in result.outcomes if o.kind == "host" and o.name == "esx1").status == "updated"
+
+
+def test_set_export_removal_set_includes_preexisting_array_members():
+    """createVLUN on a volume set presents every member the array's set holds, including a
+    pre-existing member (OLD_DATA) not in the intent; the removal set must cover it too."""
+    intent = _intent()
+    discovery = _discovery()
+    fake = TruthfulFakeWsapi(
+        hosts=[ArrayHostRecord(name="esx1", persona="VMware", wwns=[WWN_A, WWN_B])],
+        volumes=[
+            prov.ArrayVolumeRecord(name="OLD_DATA", size_mib=20 * 1024, cpg="SSD_r6", provisioning_type="tpvv"),
+            prov.ArrayVolumeRecord(name="vol01", size_mib=20 * 1024, cpg="SSD_r6", provisioning_type="tpvv"),
+            prov.ArrayVolumeRecord(name="vol02", size_mib=20 * 1024, cpg="SSD_r6", provisioning_type="tpvv"),
+        ],
+        volume_sets={"vvs": ["OLD_DATA", "vol01", "vol02"]},
+    )
+    fake.created_templates[("set:vvs", "set:hs")] = [
+        VlunTemplate(volume="OLD_DATA", target="set:hs", lun=0),
+        VlunTemplate(volume="vol01", target="set:hs", lun=1),
+        VlunTemplate(volume="vol02", target="set:hs", lun=2),
+    ]
+    plan = prov.build_plan(intent, discovery, reachable_hosts=REACHABLE, wsapi_factory=lambda c: fake)
+    result = _apply(fake, intent, discovery, plan=plan)
+
+    assert result.error is None
+    vlun_cmds = [i.command for i in result.removals if i.kind == "vlun"]
+    assert vlun_cmds == [
+        "removevlun -f OLD_DATA 0 set:hs",
+        "removevlun -f vol01 1 set:hs",
+        "removevlun -f vol02 2 set:hs",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("label", "foreign"),
+    [
+        ("foreign_volume_on_this_target", VlunTemplate(volume="FOREIGN_VOL", target="set:hs", lun=7)),
+        ("this_volume_on_foreign_target", VlunTemplate(volume="vol01", target="other_host", lun=8)),
+    ],
+)
+def test_concurrent_foreign_export_never_enters_this_runs_removal_set(label, foreign):
+    """Both halves of the (volume, target) scope filter: neither a foreign volume exported to our
+    target nor our volume exported to a foreign target may enter this run's removal set."""
+    intent = _intent()
+    discovery = _discovery()
+
+    class _ConcurrentForeignExportWsapi(TruthfulFakeWsapi):
+        def ensure_vlun(self, volume_name, host_name, lun=None):
+            status = super().ensure_vlun(volume_name, host_name, lun=lun)
+            self._vluns.append(foreign)
+            return status
+
+    fake = _ConcurrentForeignExportWsapi(
+        hosts=[ArrayHostRecord(name="esx1", persona="VMware", wwns=[WWN_A, WWN_B])],
+    )
+    fake.created_templates[("set:vvs", "set:hs")] = [
+        VlunTemplate(volume="vol01", target="set:hs", lun=5),
+        VlunTemplate(volume="vol02", target="set:hs", lun=6),
+    ]
+    plan = prov.build_plan(intent, discovery, reachable_hosts=REACHABLE, wsapi_factory=lambda c: fake)
+    result = _apply(fake, intent, discovery, plan=plan)
+    assert result.error is None
+    vlun_cmds = [i.command for i in result.removals if i.kind == "vlun"]
+    assert vlun_cmds == ["removevlun -f vol01 5 set:hs", "removevlun -f vol02 6 set:hs"]
+    assert f"removevlun -f {foreign.volume} {foreign.lun} {foreign.target}" not in vlun_cmds

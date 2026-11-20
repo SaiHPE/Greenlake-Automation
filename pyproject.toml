@@ -79,9 +79,10 @@ extend-select = [
   "ERA001", "FIX", "TD",                    # C1: no commented-out code, no TODO or FIXME left behind
   "BLE001",                                 # E1: no `except Exception` (per-file-ignores below)
   "S110", "S112",                           # E2: no `except: pass` or `except: continue`
+  "SLF001",                                 # S2: no private member access (stops reader._require() in application code)
 ]
 ignore = [
-  "PYI034",        # the clients' __enter__ returns the concrete class; nothing subclasses them
+  "PYI034",        # the clients' __enter__ returns the concrete class; WsapiWriter overrides it
   "B023",          # zoning_plan's closures are called inside the loop iteration that defines them
 ]
 
@@ -92,8 +93,8 @@ max-complexity = 10
 # STANDARD E1: the only two places a broad catch belongs, the step boundary and the API's error mapping.
 "src/alletra_onboard/application/runs/coordinator.py" = ["BLE001"]
 "src/alletra_onboard/api/app.py" = ["BLE001"]
-# STANDARD L6: local imports in test functions do not hide production import cycles.
-"tests/**" = ["PLC0415"]
+# STANDARD L6/S2: tests may use local imports and inspect client internals under test.
+"tests/**" = ["PLC0415", "SLF001"]
 
 # The dependency rules of docs/STANDARD.md (3.1 to 3.3), checked by `lint-imports` (the `deps` step
 # of scripts/check.py). An `ignore_imports` entry is a violation that exists today: fix it and
@@ -105,39 +106,78 @@ root_package = "alletra_onboard"
 include_external_packages = true
 exclude_type_checking_imports = false
 
-# S2. Not protectable today, so not listed here:
-#   - make_rc_cli and make_snap_cli live in application/provisioning/clients.py with the read
-#     factories every context imports; protecting that module would refuse the readers too.
-#   - adapters/array/wsapi_client.py is one class holding the reads and the 14 writes, so there is
-#     no WSAPI writer module to protect apart from the reader. The contract S2-wsapi-client below
-#     keeps the whole class behind the factory until it is split.
-#   - There is no port-write SSH client.
+# S2 least privilege: each writer adapter is imported only by its single writer-factory module,
+# and each writer-factory module is imported only by the apply modules that need that transport.
+[[tool.importlinter.contracts]]
+id = "S2-wsapi-writer"
+name = "S2 least privilege: the WSAPI writer is imported only by the shared WSAPI writer factory"
+type = "protected"
+protected_modules = ["alletra_onboard.adapters.array.wsapi_writer"]
+allowed_importers = ["alletra_onboard.application.runs.writer_clients"]
+unmatched_ignore_imports_alerting = "error"
+broken_contract_guidance = "STANDARD S2 (least privilege): only application.runs.writer_clients may import wsapi_writer. Use WsapiReader (make_wsapi) for reads, or take a writer from writer_clients inside an approved apply."
+
 [[tool.importlinter.contracts]]
 id = "S2-rc-writer"
 name = "S2 least privilege: the Remote Copy SSH writer is imported only by the factory that builds it"
 type = "protected"
 protected_modules = ["alletra_onboard.adapters.array.rc_cli_client"]
-allowed_importers = ["alletra_onboard.application.provisioning.clients"]
+allowed_importers = ["alletra_onboard.application.replication.clients"]
 unmatched_ignore_imports_alerting = "error"
-broken_contract_guidance = "STANDARD S2 (least privilege): only the writer factory may import a writer module. Take a writer from the factory; put a shared error or plan type in domain. Do not add an ignore_imports line."
+broken_contract_guidance = "STANDARD S2 (least privilege): only application.replication.clients may import rc_cli_client. Put shared error or plan types in domain."
 
 [[tool.importlinter.contracts]]
 id = "S2-snap-writer"
 name = "S2 least privilege: the snapshot-schedule SSH writer is imported only by the factory that builds it"
 type = "protected"
 protected_modules = ["alletra_onboard.adapters.array.snap_cli_client"]
-allowed_importers = ["alletra_onboard.application.provisioning.clients"]
+allowed_importers = ["alletra_onboard.application.snapshots.clients"]
 unmatched_ignore_imports_alerting = "error"
-broken_contract_guidance = "STANDARD S2 (least privilege): only the writer factory may import a writer module. Take a writer from the factory; put a shared error or plan type in domain. Do not add an ignore_imports line."
+broken_contract_guidance = "STANDARD S2 (least privilege): only application.snapshots.clients may import snap_cli_client. Put shared error or plan types in domain."
+
+[[tool.importlinter.contracts]]
+id = "S2-wsapi-factory"
+name = "S2 least privilege: the WSAPI writer factory is imported only by the four apply modules"
+type = "protected"
+protected_modules = ["alletra_onboard.application.runs.writer_clients"]
+allowed_importers = [
+  "alletra_onboard.application.provisioning.apply",
+  "alletra_onboard.application.replication.apply",
+  "alletra_onboard.application.replication.failover",
+  "alletra_onboard.application.snapshots.apply",
+]
+unmatched_ignore_imports_alerting = "error"
+broken_contract_guidance = "STANDARD S2 (least privilege): only the four apply modules may import the WSAPI writer factory. Read-only steps and planners use make_wsapi (WsapiReader)."
+
+[[tool.importlinter.contracts]]
+id = "S2-rc-factory"
+name = "S2 least privilege: the Remote Copy SSH writer factory is imported only by partnership_apply"
+type = "protected"
+protected_modules = ["alletra_onboard.application.replication.clients"]
+allowed_importers = ["alletra_onboard.application.replication.partnership_apply"]
+unmatched_ignore_imports_alerting = "error"
+broken_contract_guidance = "STANDARD S2 (least privilege): only application.replication.partnership_apply may import the Remote Copy SSH writer factory."
+
+[[tool.importlinter.contracts]]
+id = "S2-snap-factory"
+name = "S2 least privilege: the snapshot SSH writer factory is imported only by snapshots.apply"
+type = "protected"
+protected_modules = ["alletra_onboard.application.snapshots.clients"]
+allowed_importers = ["alletra_onboard.application.snapshots.apply"]
+unmatched_ignore_imports_alerting = "error"
+broken_contract_guidance = "STANDARD S2 (least privilege): only application.snapshots.apply may import the snapshot SSH writer factory."
 
 [[tool.importlinter.contracts]]
 id = "S2-wsapi-client"
-name = "S2 least privilege: the WSAPI client, which holds the writes, is imported only by the factory that builds it"
+name = "S2 least privilege: the WSAPI reader is imported only by its factory and WsapiWriter"
 type = "protected"
 protected_modules = ["alletra_onboard.adapters.array.wsapi_client"]
-allowed_importers = ["alletra_onboard.application.provisioning.clients"]
+allowed_importers = [
+  "alletra_onboard.application.provisioning.clients",
+  "alletra_onboard.adapters.array.wsapi_writer",
+]
 unmatched_ignore_imports_alerting = "error"
-broken_contract_guidance = "STANDARD S2 (least privilege): only the factory may import the client that can write. Take a client from the factory; put a shared error or plan type in domain. Do not add an ignore_imports line."
+broken_contract_guidance = "STANDARD S2 (least privilege): take a WSAPI reader from application.provisioning.clients (make_wsapi); put shared error or plan types in domain."
 
 # L1 and L2 in one contract, so a violation is listed once. `config` sits where it is used today:
 # application and the entrypoints read it, adapters and domain do not.

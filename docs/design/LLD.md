@@ -108,9 +108,16 @@ The device clients have no domain protocol. They are injected as **factory calla
 test passes a fake factory:
 
 - [`application/provisioning/clients.py`](../../src/alletra_onboard/application/provisioning/clients.py):
-  `make_wsapi`, `make_wsapi_v3`, `make_array_cli`, `make_rc_cli`, `make_snap_cli`, `make_vcenter`,
-  `make_brocade`, `make_linux_host`, `make_windows_host`. Each takes an `EndpointCreds` (the two
-  write-scoped SSH factories also take the plan's objects) and returns a context-manager client.
+  read-only factories `make_wsapi` (`WsapiReader`), `make_wsapi_v3`, `make_array_cli`, `make_vcenter`,
+  `make_brocade`, `make_linux_host`, `make_windows_host`. Each takes an `EndpointCreds` and returns a
+  context-manager client.
+- Writer factories live in dedicated modules protected by import-linter S2 contracts (ADR 0031):
+  [`application/runs/writer_clients.py`](../../src/alletra_onboard/application/runs/writer_clients.py)
+  (`make_wsapi_writer` returning `WsapiWriter`, imported only by the four apply modules),
+  [`application/replication/clients.py`](../../src/alletra_onboard/application/replication/clients.py)
+  (`make_rc_writer`, imported only by `replication/partnership_apply.py`), and
+  [`application/snapshots/clients.py`](../../src/alletra_onboard/application/snapshots/clients.py)
+  (`make_snap_writer`, imported only by `snapshots/apply.py`).
 - [`application/onboarding/clients.py`](../../src/alletra_onboard/application/onboarding/clients.py):
   `make_greenlake(settings)` returns `GreenLakeClients` (token provider, HTTP client, devices,
   subscriptions, service catalogue). This is also the slot for a future DSCC cloud client (ADR 0006).
@@ -513,16 +520,21 @@ subclasses `ArrayCliClient`. `run()` keeps the read allowlist; `write()` accepts
 is contiguous. Every `write()` is logged with `write=True`. `answered_error()` treats any output line
 starting with `Error` as a failure.
 
-Only `make_rc_cli` builds this client, and only
-[`replication/partnership.py`](../../src/alletra_onboard/application/replication/partnership.py)
+Only `make_rc_writer` (in
+[`replication/clients.py`](../../src/alletra_onboard/application/replication/clients.py)) builds this
+client, and only
+[`replication/partnership_apply.py`](../../src/alletra_onboard/application/replication/partnership_apply.py)
 `apply_partnership` calls that factory, inside the apply of an approved plan. Today it sends
 `controlport rcip addr`, `controlport rcip gw`, `controlport rcip ping -c 3`, `startrcopy` and
 `creatercopytarget`. The link and target removal forms are allowed but not sent by any code path.
 
-### 8.3 WSAPI: `WsapiClient`
+### 8.3 WSAPI: `WsapiReader` and `WsapiWriter`
 
-[`adapters/array/wsapi_client.py`](../../src/alletra_onboard/adapters/array/wsapi_client.py) wraps
-`python-3parclient` (`HPE3ParClient`) against `https://<array>:443/api/v1`. Design points:
+[`adapters/array/wsapi_client.py`](../../src/alletra_onboard/adapters/array/wsapi_client.py)
+(`WsapiReader`) wraps `python-3parclient` (`HPE3ParClient`) against `https://<array>:443/api/v1` for
+reads only; [`adapters/array/wsapi_writer.py`](../../src/alletra_onboard/adapters/array/wsapi_writer.py)
+(`WsapiWriter`, a subclass of `WsapiReader`) adds the 14 mutating calls and is imported only by
+`application/runs/writer_clients.py`. Design points:
 
 - **Certificate pinned** (section 13.1). `connect()` reads the certificate (`device_trust.check_tls`)
   and compares it with the run's pin before the SDK client exists. The SDK runs with `secure=False`
@@ -707,7 +719,8 @@ one per script, including the login probe on each listener (`winrm`).
 | [`zoning_plan.py`](../../src/alletra_onboard/application/provisioning/zoning_plan.py) | `build_zoning_plan`, `render_commands`, `alias_name_warnings`, parsers for `nsshow`, `alishow`, `cfgshow`, `switchshow`, `fabricshow`, `nscamshow`; FOS name rules | Reads both switches. `render_commands` builds the `alicreate`, `zonecreate`, `cfgadd`, `cfgenable` text the SAN team applies. |
 | [`hosts.py`](../../src/alletra_onboard/application/provisioning/hosts.py) | `union_hosts`, `resolve_declared_hosts`, `declared_mismatches` | The host union in trust order: vCenter, Hosts tab, array hosts, fabric (SPEC-003). |
 | [`preflight.py`](../../src/alletra_onboard/application/provisioning/preflight.py) | `run_preflight` | WSAPI reads (system, CPG free space, name collisions, FC ports) and a vCenter check. No writes. |
-| [`storage_provision.py`](../../src/alletra_onboard/application/provisioning/storage_provision.py) | `build_plan`, `apply_plan`, `read_array_objects`, `host_briefs`, `removal_set`, `render_removal_commands` | Plan judges each object as create, exists, update or conflict. Apply order: hosts, host sets, volumes, VV sets, then exports judged against the VLUN templates read once, then a read-back. |
+| [`storage_provision.py`](../../src/alletra_onboard/application/provisioning/storage_provision.py) | `build_plan`, `read_array_objects`, `host_briefs` | Read-only planning over `WsapiReader`. Judges each object as create, exists, update or conflict. |
+| [`apply.py`](../../src/alletra_onboard/application/provisioning/apply.py) | `apply_plan`, `removal_set`, `render_removal_commands` | Verifies every reviewed `exists` object is still present before writing (refusing instead of silently creating a vanished object), then writes over `WsapiWriter` in order: hosts, host sets, volumes, VV sets, and exports judged against the VLUN templates read once (refusing a vanished reviewed `exists` export), then a read-back. |
 | [`path_verify.py`](../../src/alletra_onboard/application/provisioning/path_verify.py) | `verify_provisioned_paths`, `parse_showvlun_active`, `verify_paths`, `attach_esxi_view` | Per host: live, partial or no path. Reports only, never gates. |
 
 The apply gate (`start_storage_apply`) refuses with `StepPreconditionError` when there is no
@@ -723,7 +736,8 @@ the Replication tab.
 |---|---|
 | [`read.py`](../../src/alletra_onboard/application/replication/read.py) | `read_array(creds)`: one read-only SSH session per array into a `ReplicationArrayView`. Parsers pinned to `tests/fixtures/rc_pair/`. |
 | [`plan.py`](../../src/alletra_onboard/application/replication/plan.py) | `check()` (findings, partnership found by link addresses, not target names), `build_plan()` (exists, create or conflict per group, test objects, peer VV set). `GROUP_LIMIT` sync 800, async 2400. |
-| [`partnership.py`](../../src/alletra_onboard/application/replication/partnership.py) | `plan_partnership()` from the Replication network tab; `apply_partnership()` over `ArrayRcCliClient` on both arrays: RCIP addresses and gateways, ping, `startrcopy`, `creatercopytarget`, then waits for links Up (180 s). |
+| [`partnership.py`](../../src/alletra_onboard/application/replication/partnership.py) | `plan_partnership()`, `plan_objects()` from the Replication network tab (read-only). |
+| [`partnership_apply.py`](../../src/alletra_onboard/application/replication/partnership_apply.py) | `apply_partnership()` over `ArrayRcCliClient` on both arrays: RCIP addresses and gateways, ping, `startrcopy`, `creatercopytarget`, then waits for links Up (180 s). |
 | [`link_check.py`](../../src/alletra_onboard/application/replication/link_check.py) | `plan_pairs()`, `run_link_check()`: server on B, client on A, read until the latency, stop both; a ping fallback when no number is printed; re-reads links afterwards. |
 | [`apply.py`](../../src/alletra_onboard/application/replication/apply.py) | `apply_plan()` over WSAPI on both arrays: test volume and set, then per group create, policies and period, admit each volume, peer VV set on B, start. Stops at the first failure. |
 | [`verify.py`](../../src/alletra_onboard/application/replication/verify.py) | `verify()`: links Up, each planned group Started, roles right, volumes Synced. Names HPE's next step per state. |
@@ -857,7 +871,7 @@ SSH and TLS client to an on-site device asks:
   `GreenLakeAsyncOperationError`. Still defined in their adapters: `BrocadeError` and
   `BrocadeRefused`, `VCenterError`, `LinuxHostError`, `WindowsHostError`, `DsccSetupError`,
   `DeviceTrustError`. A poll that runs out of time raises `TimeoutError`.
-  `WsapiClient._translate` turns SDK errors into sentences: not ready (503), wedged WSAPI (timeout,
+  `WsapiReader._translate` turns SDK errors into sentences: not ready (503), wedged WSAPI (timeout,
   restart it with `stopwsapi` and `startwsapi`), subscription not finished. Every other refusal reads
   *Could not <what the tool was doing>. The array said: <the array's reason> (HTTP <status>, code <n>)*.
   The caller passes `where` in plain words (*create volume x*, *add 1 host(s) to host set y*), never an
@@ -870,10 +884,11 @@ SSH and TLS client to an on-site device asks:
 
 | Source | Function | Lines |
 |---|---|---|
-| Provisioning apply (SPEC-007) | `storage_provision.removal_set` | Only what this apply created, in paste order: `removevlun -f <vol> <lun> <target>` (from the template diff before and after), `removevvset -f`, `removevv -f`, `removehostset -f`, `removehost`. Objects that were `updated` are named in a note, not reverted. |
-| Replication groups (SPEC-016 R7) | `replication.apply.apply_plan` | `removals_a` (groups, then the test set, then the test volume) and `removals_b` (peer sets, then the auto-created secondaries). |
-| Partnership (SPEC-021) | `replication.partnership.apply_partnership` | Per side: `removercopytarget <target>`, `stoprcopy -f` (with `-stopgroups -clear` if Remote Copy was started by this run), `controlport rcip delete -f <N:S:P>` for each port this run addressed. |
-| Failover test (SPEC-017) | `replication.failover.recovery_action` | HPE's documented way back for the observed roles. |
+| Provisioning apply (SPEC-007) | `provisioning/apply.removal_set` | Only what this apply created, in paste order: `removevlun -f <vol> <lun> <target>` (from the template diff before and after, filtered to this apply's `(volume, target)` scope including live members of any exported volume set so concurrent foreign exports never enter the set), `removevvset -f`, `removevv -f`, `removehostset -f`, `removehost`. Reviewed `exists` objects and exports that vanished since preview are refused before writing so no false removal line or note is produced. Objects that were `updated` are named in a note, not reverted. |
+| Snapshots apply (SPEC-023) | `snapshots/apply.apply_plan` | `removevv -f <member>.initial` for snapshots created in this apply (by volume diff and exact name) and `removesched -f <name>` recorded before `createsched`. Before taking a whole-set snapshot, live volume-set membership is re-read and any drift since preview is refused with no snapshot taken. |
+| Replication groups (SPEC-016 R7) | `replication/apply.apply_plan` | `removals_a` (groups, then the test set, then the test volume) and `removals_b` (peer sets, then the auto-created secondaries). |
+| Partnership (SPEC-021) | `replication/partnership_apply.apply_partnership` | Per side: `removercopytarget <target>`, `stoprcopy -f` (with `-stopgroups -clear` if Remote Copy was started by this run), `controlport rcip delete -f <N:S:P>` for each port this run addressed. |
+| Failover test (SPEC-017) | `replication/failover.recovery_action` | HPE's documented way back for the observed roles. |
 
 All of these are shown in the UI and written to the as-built. No code path sends them.
 

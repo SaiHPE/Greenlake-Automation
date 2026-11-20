@@ -499,8 +499,8 @@ def test_a_read_found_iscsi_host_the_array_already_has_is_planned_not_refused():
         host_reads=[HostRead(host_name="vmenode3", address="10.132.30.90", os="linux", iqns=[VME_IQN])],
     )
     intent = _intent(DeclaredHost(name="vmenode3", os="vme", address="10.132.30.90", username="root"))
-    assert sp._hosts_by_name(report, intent) == {name: []}
-    assert not any("not supported" in n for n in sp._host_notes(intent, report, None, sp._hosts_by_name(report, intent)))
+    assert sp.hosts_by_name(report, intent) == {name: []}
+    assert not any("not supported" in n for n in sp._host_notes(intent, report, None, sp.hosts_by_name(report, intent)))
 
 
 def test_a_planned_host_with_no_os_from_any_source_is_flagged_not_blocked():
@@ -508,7 +508,7 @@ def test_a_planned_host_with_no_os_from_any_source_is_flagged_not_blocked():
 
     intent = _intent(DeclaredHost(name="mystery", wwpns=["10000090FA8B9999"]))
     report = DiscoveryReport()
-    notes = sp._host_notes(intent, report, None, sp._hosts_by_name(report, intent))
+    notes = sp._host_notes(intent, report, None, sp.hosts_by_name(report, intent))
     assert any(n.startswith("No OS known for mystery") and "VMware persona" in n for n in notes)
 
 

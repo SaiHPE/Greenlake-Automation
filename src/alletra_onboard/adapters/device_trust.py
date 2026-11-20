@@ -234,7 +234,7 @@ class _PinnedContext(ssl.SSLContext):
     """Compares the certificate of every TLS connection made with it, right after the handshake and
     before the caller can send anything (set up by `pinned_context`)."""
 
-    _pin: tuple[str, int, str, DeviceKey]
+    pin: tuple[str, int, str, DeviceKey]
 
     def wrap_socket(self, sock, *args, **kwargs):
         tls = super().wrap_socket(sock, *args, **kwargs)
@@ -248,7 +248,7 @@ class _PinnedContext(ssl.SSLContext):
         return tls
 
     def _compare(self, der: bytes | None) -> None:
-        host, port, device, trusted = self._pin
+        host, port, device, trusted = self.pin
         if not der:
             raise DeviceTrustError(f"{host}:{port} presented no certificate, so the tool sent nothing.")
         offered = tls_key(der)
@@ -269,7 +269,7 @@ def pinned_context(host: str, port: int, *, device: str, trusted: DeviceKey) -> 
     # cannot pass them; every handshake is compared with the run's pinned certificate instead.
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
-    context._pin = (host, port, device, trusted)
+    context.pin = (host, port, device, trusted)
     return context
 
 

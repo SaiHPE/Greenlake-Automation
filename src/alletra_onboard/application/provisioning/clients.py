@@ -1,22 +1,20 @@
-"""Default client factories: build an adapter from EndpointCreds. Injectable so services can be
-unit-tested with fakes (the live clients need an array / vCenter / switches)."""
+"""Read-only default client factories: build an adapter from EndpointCreds (STANDARD S2, L3).
+Injectable so services can be unit-tested with fakes. Every writer factory lives in its own
+protected module (`runs/writer_clients.py`, `replication/clients.py`, `snapshots/clients.py`)."""
 
 from __future__ import annotations
 
 from alletra_onboard.adapters.array.cli_client import ArrayCliClient
-from alletra_onboard.adapters.array.rc_cli_client import ArrayRcCliClient
-from alletra_onboard.adapters.array.snap_cli_client import ArraySnapCliClient
 from alletra_onboard.adapters.array.wsapi_client import (
     SDK_IMPORT_ERROR,
     HPE3ParClient,
-    WsapiClient,
+    WsapiReader,
 )
 from alletra_onboard.adapters.array.wsapi_v3_client import WsapiV3Client
 from alletra_onboard.adapters.fabric.brocade_client import BrocadeClient
 from alletra_onboard.adapters.hosts.linux_ssh import LinuxHostClient, read_linux_host
 from alletra_onboard.adapters.hosts.windows_winrm import WindowsHostClient, read_windows_host
 from alletra_onboard.adapters.vcenter.vcenter_client import VCenterClient
-from alletra_onboard.domain.plan_objects import RcPlanObjects, SnapPlanObjects
 from alletra_onboard.domain.shared import EndpointCreds
 
 
@@ -25,8 +23,8 @@ def wsapi_capability() -> dict[str, object]:
     return {"wsapi_sdk": HPE3ParClient is not None, "wsapi_sdk_error": SDK_IMPORT_ERROR}
 
 
-def make_wsapi(creds: EndpointCreds) -> WsapiClient:
-    return WsapiClient(creds.host, creds.username, creds.password.get_secret_value())
+def make_wsapi(creds: EndpointCreds) -> WsapiReader:
+    return WsapiReader(creds.host, creds.username, creds.password.get_secret_value())
 
 
 def make_wsapi_v3(creds: EndpointCreds) -> WsapiV3Client:
@@ -37,19 +35,6 @@ def make_wsapi_v3(creds: EndpointCreds) -> WsapiV3Client:
 def make_array_cli(creds: EndpointCreds) -> ArrayCliClient:
     # Read-only SSH to the array (showport / showportdev ns) — used for switch-free zoning verify.
     return ArrayCliClient(creds.host, creds.username, creds.password.get_secret_value())
-
-
-def make_rc_cli(creds: EndpointCreds, objects: RcPlanObjects) -> ArrayRcCliClient:
-    # ADR 0015: the write-scoped SSH client for Remote Copy links and targets. Only the apply of an
-    # approved replication plan builds one, with the ports, addresses and target that plan names on
-    # this array (ADR 0025 condition 3).
-    return ArrayRcCliClient(creds.host, creds.username, creds.password.get_secret_value(), objects=objects)
-
-
-def make_snap_cli(creds: EndpointCreds, objects: SnapPlanObjects) -> ArraySnapCliClient:
-    # ADR 0016: the write-scoped SSH client for snapshot schedules. Only the apply of an approved snapshot
-    # plan builds one, with the (schedule name, source) pairs that plan creates (ADR 0025 condition 3).
-    return ArraySnapCliClient(creds.host, creds.username, creds.password.get_secret_value(), objects=objects)
 
 
 def make_vcenter(creds: EndpointCreds) -> VCenterClient:
@@ -72,8 +57,6 @@ __all__ = [
     "make_array_cli",
     "make_brocade",
     "make_linux_host",
-    "make_rc_cli",
-    "make_snap_cli",
     "make_vcenter",
     "make_windows_host",
     "make_wsapi",

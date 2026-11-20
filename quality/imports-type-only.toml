@@ -22,6 +22,7 @@ allowed_importers = [
   "alletra_onboard.application.*.clients",
   "alletra_onboard.application.runs.coordinator",
   "alletra_onboard.application.runs.console",
+  "alletra_onboard.application.runs.writer_clients",
   "alletra_onboard.api",
   "alletra_onboard.cli",
 ]

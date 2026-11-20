@@ -698,7 +698,7 @@ async def test_apply_requires_a_preview_from_this_session(tmp_path, monkeypatch)
 
     approved = _plan_id(service, run.run_id)
     restarted = OnboardingService(Settings(), store, InMemoryEventBus())
-    restarted.discovery_zoning._discovery[run.run_id] = DiscoveryReport()  # discovery does survive
+    restarted.discovery_zoning.discovery[run.run_id] = DiscoveryReport()  # discovery does survive
     with pytest.raises(StepPreconditionError, match="run the provisioning preview first"):
         restarted.start_storage_apply(run.run_id, approved_plan=approved)   # even with the id the operator ticked
 
@@ -748,6 +748,7 @@ async def test_apply_is_gated_on_zoning(tmp_path, monkeypatch):
     state, set when the tool wrote zones itself; the tool no longer writes to a switch, and staging
     was the wrong signal anyway — on 2026-08-31 a staged-but-unactivated zone opened the gate for a
     host that then correctly reported no_path."""
+    from alletra_onboard.application.provisioning import apply as storage_apply
     from alletra_onboard.application.provisioning import storage_provision as sp
     from alletra_onboard.domain.discovery import DiscoveryReport
     from alletra_onboard.domain.provisioning import (
@@ -757,7 +758,7 @@ async def test_apply_is_gated_on_zoning(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr(sp, "build_plan", lambda i, d, **kw: ProvisioningPlan(actions=[]))
-    monkeypatch.setattr(sp, "apply_plan", lambda i, d, **kw: ProvisioningResult(
+    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, **kw: ProvisioningResult(
         outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]
     ))
     service = _service(tmp_path)
@@ -795,13 +796,13 @@ async def test_apply_needs_the_id_of_the_plan_the_operator_ticked(tmp_path, monk
     """BL-52: the approval tick lived only on the screen, so any local caller could POST the apply for
     a plan nobody ticked. The apply now names the plan it approves; the server refuses it without the
     id, and refuses an id from an earlier preview (LESSONS 6 and 7)."""
-    from alletra_onboard.application.provisioning import storage_provision as sp
+    from alletra_onboard.application.provisioning import apply as storage_apply
     from alletra_onboard.application.service import StepPreconditionError
     from alletra_onboard.domain.discovery import DiscoveryReport
     from alletra_onboard.domain.provisioning import ProvisioningResult
 
     applied: list = []
-    monkeypatch.setattr(sp, "apply_plan", lambda i, d, **kw: applied.append(1) or ProvisioningResult())
+    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, **kw: applied.append(1) or ProvisioningResult())
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())
     service._discovery[run.run_id] = DiscoveryReport()
@@ -1037,6 +1038,7 @@ async def test_pending_sheet_stash_mints_run_and_preserves_intent(tmp_path):
 
 
 async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
+    from alletra_onboard.application.provisioning import apply as storage_apply
     from alletra_onboard.application.provisioning import discovery as sd
     from alletra_onboard.application.provisioning import storage_provision as sp
     from alletra_onboard.application.provisioning import zoning as sz
@@ -1057,7 +1059,7 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(sz, "build_report", lambda intent, discovery, zoning_plan=None: zoning_report)
     monkeypatch.setattr(sp, "build_plan", lambda intent, discovery, **kw: ProvisioningPlan(actions=[PlannedAction(kind="host", name="esx1", description="d")]))
-    monkeypatch.setattr(sp, "apply_plan", lambda intent, discovery, **kw: ProvisioningResult(outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]))
+    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, **kw: ProvisioningResult(outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]))
 
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())
@@ -1100,7 +1102,7 @@ async def test_discovery_survives_a_service_restart(tmp_path, monkeypatch):
     await service.wait(run.run_id)
 
     restarted = OnboardingService(Settings(), store, InMemoryEventBus())
-    assert restarted.discovery_zoning._discovery.get(run.run_id) is None  # nothing in memory...
+    assert restarted.discovery_zoning.discovery.get(run.run_id) is None  # nothing in memory...
     report = restarted.discovery_zoning.require_discovery(run.run_id)     # ...read through the store
     assert report.notes == ["from-run-1"]
 

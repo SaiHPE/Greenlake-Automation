@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import SecretStr
 
+from alletra_onboard.application.provisioning import apply as prov_apply
 from alletra_onboard.application.provisioning import storage_provision as prov
 from alletra_onboard.application.provisioning.hosts import union_hosts
 from alletra_onboard.domain.discovery import ArrayHost, DiscoveryReport, HostHba
@@ -174,7 +175,7 @@ def test_plan_and_apply_create_a_sheet_declared_windows_host():
     assert [a.name for a in host_rows] == ["arcus-win137"]
     assert host_rows[0].detail["persona"] == "WindowsServer" and host_rows[0].detail["wwns"] == [WIN_A]
     assert host_rows[0].detail["source"] == "sheet"
-    result = prov.apply_plan(intent, _discovery(), reachable_hosts=reachable, wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovery(), reachable, plan), wsapi_factory=lambda c: fake)
     assert result.error is None
     assert ("host", "arcus-win137", (WIN_A,), "WindowsServer") in fake.calls
     assert ("hostset", "win_hs", ("arcus-win137",)) in fake.calls

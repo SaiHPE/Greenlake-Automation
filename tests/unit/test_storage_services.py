@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 from pydantic import SecretStr
 
+from alletra_onboard.application.provisioning import apply as prov_apply
 from alletra_onboard.application.provisioning import discovery as disc
 from alletra_onboard.application.provisioning import storage_provision as prov
 from alletra_onboard.application.provisioning import zoning
@@ -406,7 +407,7 @@ def test_build_plan_flags_existing_and_lists_actions():
 
 def test_apply_plan_is_idempotent_and_exports_to_host_set():
     fake = FakeWsapi(hosts={"esx1"})
-    result = prov.apply_plan(_intent(), _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent(), _discovered(), _ZONED, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
     statuses = {(o.kind, o.name): o.status for o in result.outcomes}
     assert statuses[("host", "esx1")] == "exists"
     assert statuses[("volume", "CRV_Prod01")] == "created"
@@ -425,7 +426,7 @@ def test_explicit_exports_override_the_default_and_carry_source_target_and_lun()
                       target_name="esx1"),
     ]})
     fake = FakeWsapi(hosts={"esx1"})
-    result = prov.apply_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovered(), _ZONED, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
     # source/target refs get the WSAPI set: prefix; explicit LUN is recorded, auto LUN is not
     assert ("vlun", "set:CRV_VVSet", "set:CRVLZ_Hostset", 100) in fake.calls
     assert ("vlun", "CRV_Prod01", "esx1") in fake.calls
@@ -522,9 +523,9 @@ class _StubSdk:
 
 
 def _client_with(stub):
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+    from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
 
-    c = WsapiClient("192.0.2.1", "u", "p")
+    c = WsapiWriter("192.0.2.1", "u", "p")
     c._client = stub
     return c
 
@@ -698,7 +699,7 @@ def test_apply_creates_only_the_selected_hosts():
     report = _discovered()
     report.host_hbas.append(HostHba(host_name="esx2", wwpn=normalize_wwpn(_C), fabric="odd"))
     fake = FakeWsapi()
-    result = prov.apply_plan(intent, report, reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, report, _ZONED, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
     assert result.error is None
     assert [c[1] for c in fake.calls if c[0] == "host"] == ["esx1"]
 
@@ -715,7 +716,7 @@ def test_default_export_refuses_the_multi_hostset_cross_product():
     ]
     plan = prov.build_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
     assert plan.error and "refusing" in plan.error
-    result = prov.apply_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: FakeWsapi())
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovered(), _ZONED, plan), wsapi_factory=lambda c: FakeWsapi())
     assert result.error and "Compose the exports" in result.error
 
 
@@ -751,9 +752,9 @@ def test_translate_survives_an_exception_whose_str_raises():
     """MEASURED against a wedged WSAPI on the LZ array: the SDK raised its Timeout, our translator
     called str() on it, str() itself raised AttributeError — and the operator saw THAT traceback
     instead of "the array did not respond". Describing a failure must never fail."""
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiNotReady
+    from alletra_onboard.adapters.array.wsapi_client import WsapiNotReady, WsapiReader
 
-    err = WsapiClient("h", "u", "p")._translate(_UndescribableTimeout(), where="login")
+    err = WsapiReader("h", "u", "p")._translate(_UndescribableTimeout(), where="login")
 
     assert isinstance(err, WsapiNotReady)          # classified by TYPE name, not by str()
     assert "did not respond" in str(err)
@@ -763,9 +764,9 @@ def test_translate_survives_an_exception_whose_str_raises():
 def test_a_read_timeout_names_the_wedged_service_not_the_network():
     """A WSAPI that accepts TLS and never answers looks like a firewall problem; showwsapi still
     reports Enabled/Active. The message has to point at the service, or it costs an hour."""
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiNotReady
+    from alletra_onboard.adapters.array.wsapi_client import WsapiNotReady, WsapiReader
 
-    err = WsapiClient("h", "u", "p")._translate(
+    err = WsapiReader("h", "u", "p")._translate(
         Exception("HTTPSConnectionPool(host='10.64.154.225', port=443): Read timed out."),
         where="login",
     )
@@ -773,18 +774,18 @@ def test_a_read_timeout_names_the_wedged_service_not_the_network():
 
 
 def test_safe_str_falls_back_rather_than_raising():
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+    from alletra_onboard.adapters.array.wsapi_client import WsapiReader
 
-    assert "_UndescribableTimeout" in WsapiClient._safe_str(_UndescribableTimeout())
-    assert WsapiClient._safe_str(ValueError("plain")) == "plain"
+    assert "_UndescribableTimeout" in WsapiReader._safe_str(_UndescribableTimeout())
+    assert WsapiReader._safe_str(ValueError("plain")) == "plain"
 
 
 def test_subscription_refusal_is_translated_to_the_onboarding_gate():
     # Hit live on a fresh B10000: every create refused until GreenLake onboarding completes. The
     # raw message reads like a WSAPI defect — the translation names the sequencing fix.
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiError
+    from alletra_onboard.adapters.array.wsapi_client import WsapiError, WsapiReader
 
-    err = WsapiClient("h", "u", "p")._translate(
+    err = WsapiReader("h", "u", "p")._translate(
         Exception("Error: Array has not yet completed the subscription process"),
         where="create volume CRV_Prod01",
     )
@@ -800,7 +801,7 @@ def test_a_refused_write_says_the_arrays_reason_once():
 
     from hpe3parclient import exceptions as hpe_exc
 
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiError
+    from alletra_onboard.adapters.array.wsapi_client import WsapiError, WsapiReader
 
     reason = "client request contains value that is too large"
     # Built the way the SDK raises it: http.request() hands the parsed body to from_response().
@@ -808,7 +809,7 @@ def test_a_refused_write_says_the_arrays_reason_once():
     assert type(exc) is hpe_exc.HTTPBadRequest
     assert str(exc) == f"Bad request (HTTP 400) 28 - {reason}"
 
-    err = WsapiClient("h", "u", "p")._translate(exc, where="create volume zz_bl45_vol02")
+    err = WsapiReader("h", "u", "p")._translate(exc, where="create volume zz_bl45_vol02")
 
     assert type(err) is WsapiError
     assert str(err) == f"Could not create volume zz_bl45_vol02. The array said: {reason} (HTTP 400, code 28)"
@@ -823,14 +824,15 @@ def test_a_refused_volume_name_reads_in_plain_words_with_the_arrays_reason():
 
     from hpe3parclient import exceptions as hpe_exc
 
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiError
+    from alletra_onboard.adapters.array.wsapi_client import WsapiError
+    from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
 
     class Refusing:
         def createVolume(self, name, cpg, size_mib, optional=None):
             raise hpe_exc.from_response(SimpleNamespace(status=400),
                                         {"code": 69, "desc": "illegal character in input", "ref": "name"})
 
-    client = WsapiClient("h", "u", "p")
+    client = WsapiWriter("h", "u", "p")
     client._client = Refusing()
     with pytest.raises(WsapiError) as exc:
         client.ensure_volume("zz_bl45_vol02+", "SSD_r6", 1024, "tpvv")
@@ -845,14 +847,18 @@ def test_no_array_error_names_an_api_call():
     import inspect
     import re
 
-    from alletra_onboard.adapters.array import wsapi_client
+    from alletra_onboard.adapters.array import wsapi_client, wsapi_writer
 
-    tree = ast.parse(inspect.getsource(wsapi_client))
-    wheres = [ast.unparse(kw.value) for node in ast.walk(tree) if isinstance(node, ast.Call)
-              for kw in node.keywords if kw.arg == "where"]
+    wheres = [
+        ast.unparse(kw.value)
+        for mod in (wsapi_client, wsapi_writer)
+        for node in ast.walk(ast.parse(inspect.getsource(mod)))
+        if isinstance(node, ast.Call)
+        for kw in node.keywords if kw.arg == "where"
+    ]
     assert len(wheres) >= 20
     assert not [w for w in wheres if re.search(r"\b[a-z]+[A-Z][a-z]", w)], wheres
-    client = wsapi_client.WsapiClient("h", "u", "p")
+    client = wsapi_client.WsapiReader("h", "u", "p")
     for exc in (RuntimeError("connection reset"), TimeoutError("timed out"), Exception("not ready"),
                 Exception("Array has not yet completed the subscription process")):
         assert "WSAPI" not in str(client._translate(exc, where="create volume v1"))
@@ -864,7 +870,8 @@ def test_a_volume_the_array_finds_too_large_is_refused_with_a_sentence():
 
     from hpe3parclient import exceptions as hpe_exc
 
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiError
+    from alletra_onboard.adapters.array.wsapi_client import WsapiError
+    from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
 
     reason = "client request contains value that is too large"
 
@@ -872,7 +879,7 @@ def test_a_volume_the_array_finds_too_large_is_refused_with_a_sentence():
         def createVolume(self, name, cpg, size_mib, optional=None):
             raise hpe_exc.from_response(SimpleNamespace(status=400), {"code": 28, "desc": reason})
 
-    client = WsapiClient("h", "u", "p")
+    client = WsapiWriter("h", "u", "p")
     client._client = Refusing()
     with pytest.raises(WsapiError) as exc:
         client.ensure_volume("zz_bl45_vol02", "SSD_r6", 1024 * 1024 * 1024, "tpvv")
@@ -882,9 +889,9 @@ def test_a_volume_the_array_finds_too_large_is_refused_with_a_sentence():
 
 
 def test_an_error_without_the_arrays_reason_keeps_its_type_and_text():
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+    from alletra_onboard.adapters.array.wsapi_client import WsapiReader
 
-    err = WsapiClient("h", "u", "p")._translate(RuntimeError("connection reset"), where="log in to the array")
+    err = WsapiReader("h", "u", "p")._translate(RuntimeError("connection reset"), where="log in to the array")
     assert str(err) == "Could not log in to the array: RuntimeError: connection reset"
 
 
@@ -894,9 +901,9 @@ def test_a_refusal_that_mentions_a_timeout_keeps_the_arrays_reason():
 
     from hpe3parclient import exceptions as hpe_exc
 
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiNotReady
+    from alletra_onboard.adapters.array.wsapi_client import WsapiNotReady, WsapiReader
 
-    client = WsapiClient("h", "u", "p")
+    client = WsapiReader("h", "u", "p")
     refused = hpe_exc.from_response(SimpleNamespace(status=400), {"desc": "invalid timeout value"})
     err = client._translate(refused, where="create volume v1")
     assert not isinstance(err, WsapiNotReady)
@@ -913,11 +920,11 @@ def test_a_refusal_that_mentions_a_timeout_keeps_the_arrays_reason():
 def test_the_sdks_own_timeout_still_says_wsapi_did_not_respond():
     from hpe3parclient import exceptions as hpe_exc
 
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiNotReady
+    from alletra_onboard.adapters.array.wsapi_client import WsapiNotReady, WsapiReader
 
     # Raised the way the SDK does when requests times out.
     exc = hpe_exc.Timeout("Timeout: HTTPSConnectionPool(host='h', port=443): Read timed out.")
-    err = WsapiClient("h", "u", "p")._translate(exc, where="login")
+    err = WsapiReader("h", "u", "p")._translate(exc, where="login")
     assert isinstance(err, WsapiNotReady) and "did not respond" in str(err)
 
 
@@ -926,13 +933,13 @@ def test_a_subscription_refusal_with_an_unmapped_status_still_points_at_greenlak
     # fails. The array's words must still be found, and quoted.
     from hpe3parclient import exceptions as hpe_exc
 
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+    from alletra_onboard.adapters.array.wsapi_client import WsapiReader
 
     said = "Array has not yet completed the subscription process"
     exc = hpe_exc.ClientException({"code": 5, "desc": said})
-    assert "subscri" not in WsapiClient._safe_str(exc)
+    assert "subscri" not in WsapiReader._safe_str(exc)
 
-    err = WsapiClient("h", "u", "p")._translate(exc, where="createVolume v1")
+    err = WsapiReader("h", "u", "p")._translate(exc, where="createVolume v1")
     assert "GreenLake" in str(err)
     assert str(err).endswith(f"array said: {said} (code 5)")
 
@@ -943,13 +950,13 @@ def test_a_long_error_body_is_cut_short():
 
     from hpe3parclient import exceptions as hpe_exc
 
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+    from alletra_onboard.adapters.array.wsapi_client import WsapiReader
 
     page = "<html><body>" + "Internal error. " * 320 + "</body></html>"
     assert len(page) > 5000
     exc = hpe_exc.from_response(SimpleNamespace(status=500), page)
 
-    err = str(WsapiClient("h", "u", "p")._translate(exc, where="create volume v1"))
+    err = str(WsapiReader("h", "u", "p")._translate(exc, where="create volume v1"))
     assert err.startswith("Could not create volume v1. The array said: <html><body>Internal error.")
     assert err.endswith("… (HTTP 500)")
     assert len(err) < 360
@@ -1127,7 +1134,7 @@ def test_wsapi_volume_bodies_match_what_the_array_accepts():
     #   {"tpvv": True, "compression": True} -> 400 code 42 "unrecognized name: compression"
     #   {"reduce": True}                    -> 201, reads back provisioningType=6, dedup on
     # `compression` is not a field on this API at all, and `tdvv` is the legacy 3PAR spelling.
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+    from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
 
     class SpyClient:
         def __init__(self) -> None:
@@ -1136,7 +1143,7 @@ def test_wsapi_volume_bodies_match_what_the_array_accepts():
         def createVolume(self, name, cpg, size_mib, optional=None):
             self.calls.append((name, cpg, size_mib, optional))
 
-    client = WsapiClient(host="array", username="3paradm", password="x")
+    client = WsapiWriter(host="array", username="3paradm", password="x")
     spy = SpyClient()
     client._client = spy
 
@@ -1154,7 +1161,7 @@ def test_apply_plan_sets_persona_per_host_os():
         HostHba(host_name="winbox", wwpn=_B, os="Microsoft Windows Server 2022"),
     ])
     fake = FakeWsapi()
-    prov.apply_plan(_intent(members=["esx1", "winbox"]), d, reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    prov_apply.apply_plan(prov_apply.StorageInputs(_intent(members=["esx1", "winbox"]), d, _ZONED, prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
     personas = {c[1]: c[3] for c in fake.calls if c[0] == "host"}  # ("host", name, wwns, persona)
     assert personas == {"esx1": "VMware", "winbox": "WindowsServer"}  # name per host, not hardcoded
 
@@ -1604,14 +1611,14 @@ def test_apply_holds_the_same_exports_the_plan_showed():
     """apply re-derives from the intent rather than replaying the plan, so the filter has to be in
     both places or the array gets an export the operator was told was held."""
     fake = FakeWsapi()
-    prov.apply_plan(_intent(members=["esx1", "esx2"]), _two_hosts(), reachable_hosts=set(), wsapi_factory=lambda c: fake)
+    prov_apply.apply_plan(prov_apply.StorageInputs(_intent(members=["esx1", "esx2"]), _two_hosts(), set(), prov.ProvisioningPlan()), wsapi_factory=lambda c: fake)
     assert not [c for c in fake.calls if c[0] == "vlun"]
     assert [c[1] for c in fake.calls if c[0] == "host"]      # hosts still created
 
 
 def test_apply_still_refuses_when_discovery_found_no_hosts_at_all():
-    result = prov.apply_plan(
-        _intent(), disc.DiscoveryReport(), reachable_hosts=set(), wsapi_factory=lambda c: FakeWsapi(),
+    result = prov_apply.apply_plan(
+        prov_apply.StorageInputs(_intent(), disc.DiscoveryReport(), set(), prov.ProvisioningPlan()), wsapi_factory=lambda c: FakeWsapi(),
     )
     assert result.error and "no hosts" in result.error
 
@@ -2324,7 +2331,7 @@ def test_a_host_set_member_typed_with_the_sheet_name_is_planned_under_the_found_
     assert hs.detail["members"] == ["esx1"]
     assert "Host set CRVLZ_Hostset: sheet host 'esx1.lab.local' is the same server as 'esx1' and is planned under that name." in plan.notes
     fake = FakeWsapi()
-    result = prov.apply_plan(intent, _discovered(), reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovered(), _ZONED, plan), wsapi_factory=lambda c: fake)
     assert result.error is None
     assert ("host", "esx1", (normalize_wwpn(HOST_A), normalize_wwpn(HOST_B)), "VMware") in fake.calls
     assert next(o for o in result.outcomes if o.kind == "hostset").detail == "1 member: esx1"
@@ -2340,8 +2347,8 @@ def test_a_sheet_row_retyping_vcenters_wwpns_is_another_name_for_that_host():
     assert "Host 'esx1-sheet' has only initiators that belong to 'esx1' — treated as another name for it." in notes
     exports = [ExportRequest(source_kind="volume", source_name="CRV_Prod01", target_kind="host", target_name="esx1-sheet")]
     fake = FakeWsapi()
-    prov.apply_plan(_aliased_intent(["esx1-sheet"], [row], exports), _discovered(),
-                    reachable_hosts=_ZONED, wsapi_factory=lambda c: fake)
+    prov_apply.apply_plan(prov_apply.StorageInputs(_aliased_intent(["esx1-sheet"], [row], exports), _discovered(), _ZONED, prov.ProvisioningPlan()),
+                          wsapi_factory=lambda c: fake)
     assert ("vlun", "CRV_Prod01", "esx1") in fake.calls
 
 

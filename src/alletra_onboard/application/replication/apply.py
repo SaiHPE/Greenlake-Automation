@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from alletra_onboard.application.provisioning.clients import make_wsapi
+from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     ReplicationAction,
@@ -30,7 +30,7 @@ def _peer_set_action(plan: ReplicationPlan, group: str) -> ReplicationAction | N
 
 
 def apply_plan(
-    plan: ReplicationPlan, provisioning: ProvisioningIntent, *, wsapi_factory: Callable = make_wsapi,
+    plan: ReplicationPlan, provisioning: ProvisioningIntent, *, wsapi_factory: Callable = make_wsapi_writer,
     progress: Callable[[str], None] | None = None,
 ) -> ReplicationResult:
     result = ReplicationResult()

@@ -13,9 +13,10 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from alletra_onboard.application.provisioning.clients import make_array_cli, make_wsapi
+from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.replication.verify import peer_group_name
+from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     DR_ACTION_FAILOVER,
@@ -101,7 +102,7 @@ def _now() -> str:
 
 def run_failover_test(
     intent: ProvisioningIntent, group: str, *,
-    wsapi_factory: Callable = make_wsapi,
+    wsapi_factory: Callable = make_wsapi_writer,
     read_fn: Callable = replication_read.read_array,
     read_group_fn: Callable = read_group,
     progress: Callable[[str], None] | None = None,

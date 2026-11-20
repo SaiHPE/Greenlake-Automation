@@ -11,10 +11,11 @@ from pydantic import SecretStr
 
 from alletra_onboard.adapters.array.wsapi_client import (
     _WSAPI_PERSONA,
-    WsapiClient,
     WsapiError,
     parse_hosts,
 )
+from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
+from alletra_onboard.application.provisioning import apply as prov_apply
 from alletra_onboard.application.provisioning import storage_provision as prov
 from alletra_onboard.application.provisioning import zoning
 from alletra_onboard.application.provisioning.discovery import parse_showhost
@@ -126,8 +127,8 @@ class _StubSdk:
         self.hosts[name]["iscsi"] += mods.get("iSCSINames", [])
 
 
-def _client(stub) -> WsapiClient:
-    c = WsapiClient("192.0.2.1", "u", "p")
+def _client(stub) -> WsapiWriter:
+    c = WsapiWriter("192.0.2.1", "u", "p")
     c._client = stub
     return c
 
@@ -275,14 +276,14 @@ def test_a_sheet_iscsi_host_is_planned_for_creation_with_its_iqn_and_os_persona(
 
 def test_apply_makes_the_iscsi_host_and_its_removal_line():
     array = _Array()
-    result = prov.apply_plan(_intent([LINUX], ["linux-test"]), DiscoveryReport(), reachable_hosts=set(),
-                             wsapi_factory=lambda c: array)
+    result = prov_apply.apply_plan(prov_apply.StorageInputs(_intent([LINUX], ["linux-test"]), DiscoveryReport(), set(), prov.ProvisioningPlan()),
+                                   wsapi_factory=lambda c: array)
     assert result.error is None
     assert ("iscsi-host", "linux-test", (LINUX_IQN,), "Generic-ALUA") in array.writes
     assert not [w for w in array.writes if w[0] in ("fc-host", "vlun")]
     host = next(o for o in result.outcomes if o.kind == "host")
     assert host.status == "created" and "1 iSCSI name" in host.detail and "WWN" not in host.detail
-    assert "removehost linux-test" in prov.render_removal_commands(result.removals)
+    assert "removehost linux-test" in prov_apply.render_removal_commands(result.removals)
 
 
 def test_an_iscsi_host_whose_iqn_is_logged_in_unclaimed_gets_its_export():
@@ -296,7 +297,7 @@ def test_an_iscsi_host_whose_iqn_is_logged_in_unclaimed_gets_its_export():
     report = zoning.build_report(intent, discovery)
     assert report.iscsi_hosts == {"linux-test": ["0:4:1", "1:4:1"]} and "linux-test" in report.zoned_hosts
     array = _Array()
-    prov.apply_plan(intent, discovery, reachable_hosts=set(report.zoned_hosts), wsapi_factory=lambda c: array)
+    prov_apply.apply_plan(prov_apply.StorageInputs(intent, discovery, set(report.zoned_hosts), prov.ProvisioningPlan()), wsapi_factory=lambda c: array)
     assert ("vlun", "zz_is_vol01", "set:zz_is_hs") in array.writes
 
 
@@ -334,15 +335,15 @@ def test_a_host_with_fc_and_iscsi_is_made_from_fc_only_and_says_so():
     plan = prov.build_plan(intent, DiscoveryReport(), reachable_hosts=set(), wsapi_factory=lambda c: array)
     assert "1 FC WWN" in _row(plan, "host", "dual").description
     assert any("FC and iSCSI both found for dual" in n for n in plan.notes)
-    prov.apply_plan(intent, DiscoveryReport(), reachable_hosts=set(), wsapi_factory=lambda c: array)
+    prov_apply.apply_plan(prov_apply.StorageInputs(intent, DiscoveryReport(), set(), plan), wsapi_factory=lambda c: array)
     assert [w[0] for w in array.writes if w[0].endswith("host")] == ["fc-host"]
 
 
 def test_fc_hosts_still_go_through_ensure_host():
     hbas = [HostHba(host_name="esx1", wwpn=WWN_A, fabric="odd", os="VMware ESXi")]
     array = _Array()
-    prov.apply_plan(_intent([], ["esx1"]), DiscoveryReport(host_hbas=hbas), reachable_hosts=set(),
-                    wsapi_factory=lambda c: array)
+    prov_apply.apply_plan(prov_apply.StorageInputs(_intent([], ["esx1"]), DiscoveryReport(host_hbas=hbas), set(), prov.ProvisioningPlan()),
+                          wsapi_factory=lambda c: array)
     assert ("fc-host", "esx1", (WWN_A,), "VMware") in array.writes
     assert not [w for w in array.writes if w[0] == "iscsi-host"]
 
@@ -358,7 +359,7 @@ def test_an_nvme_host_on_the_array_is_left_as_it_is_not_given_its_nqn_as_an_iqn(
     plan = prov.build_plan(intent, discovery, reachable_hosts=set(), wsapi_factory=lambda c: array)
     row = _row(plan, "host", "nvme1")
     assert row.state == "exists" and "NVMe" in row.reason and NQN not in row.description
-    prov.apply_plan(intent, discovery, reachable_hosts=set(), wsapi_factory=lambda c: array)
+    prov_apply.apply_plan(prov_apply.StorageInputs(intent, discovery, set(), plan), wsapi_factory=lambda c: array)
     assert ("fc-host", "nvme1", (), "Generic-ALUA") in array.writes          # ensure_host with no WWN: no write
     assert not [w for w in array.writes if w[0] == "iscsi-host"]
 

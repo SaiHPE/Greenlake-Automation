@@ -390,7 +390,8 @@ The engineer composes hosts, volumes, sets and exports in a builder over discove
   first. An export to a host the array cannot reach (not logged in on its fabrics) is held back and
   named in the plan. An iSCSI host whose IQN is logged in needs no zoning
   ([ADR 0012](../adr/0012-no-switch-writes-the-tool-emits-a-command-set.md), revision of 2026-09-02).
-- **Apply** writes over WSAPI in a fixed order: hosts, host sets, volumes, volume sets, exports.
+- **Apply** ([apply.py](../../src/alletra_onboard/application/provisioning/apply.py)) writes over
+  `WsapiWriter` in a fixed order: hosts, host sets, volumes, volume sets, exports.
   Each create is idempotent. Exports are judged against the array's VLUN templates before sending,
   then read back. Before any write, the WSAPI login works as a readiness gate: a degraded array
   answers 503 and the tool stops with a sentence
@@ -411,7 +412,8 @@ Replication runs from this run's array to one peer array named on the Replicatio
 1. **Read both arrays** over the read-only SSH client: system, ports, RCIP ports, Remote Copy
    targets, links and groups ([read.py](../../src/alletra_onboard/application/replication/read.py)).
 2. **Partnership, when the Replication network tab is filled** ([SPEC-021](../specs/SPEC-021-rcip-partnership.md),
-   [partnership.py](../../src/alletra_onboard/application/replication/partnership.py)). Plan per
+   [partnership.py](../../src/alletra_onboard/application/replication/partnership.py),
+   [partnership_apply.py](../../src/alletra_onboard/application/replication/partnership_apply.py)). Plan per
    array: RCIP address per port, start Remote Copy, a target pointing at the other array. A port
    with another address or another role is a conflict; the tool never changes a port's role or an
    existing address. On approval it sets the addresses, pings, starts Remote Copy, creates the

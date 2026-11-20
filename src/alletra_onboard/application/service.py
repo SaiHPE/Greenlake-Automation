@@ -303,4 +303,4 @@ class OnboardingService:
     def _discovery(self):
         """The per-run discovery artifacts (owned by the DiscoveryZoning service) — exposed so tests
         can seed discovery without running it."""
-        return self.discovery_zoning._discovery
+        return self.discovery_zoning.discovery

@@ -809,13 +809,14 @@ def _approval_run(tmp_path, *, replication: bool = False):
     item = ArrayWorkItem.model_validate(_work_item_payload())
     run = service.create_run(item, mode=RunMode.REPLICATE if replication else RunMode.PROVISION_ONLY,
                              provisioning_intent=intent)
-    service.discovery_zoning._discovery[run.run_id] = DiscoveryReport()
+    service.discovery_zoning.discovery[run.run_id] = DiscoveryReport()
     return service, run.run_id
 
 
 def test_storage_apply_needs_the_plan_id_the_operator_ticked(tmp_path, monkeypatch):
     # The tick was only on the screen: any local caller could POST /storage/apply for a plan nobody
     # ticked. The body now names the plan; the server refuses without it and refuses a stale one.
+    from alletra_onboard.application.provisioning import apply as storage_apply
     from alletra_onboard.application.provisioning import storage_provision as sp
     from alletra_onboard.domain.provisioning import (
         PlannedAction,
@@ -825,7 +826,7 @@ def test_storage_apply_needs_the_plan_id_the_operator_ticked(tmp_path, monkeypat
 
     monkeypatch.setattr(sp, "build_plan", lambda i, d, **kw: ProvisioningPlan(actions=[PlannedAction(kind="host", name="esx1", description="d")]))
     applied: list = []
-    monkeypatch.setattr(sp, "apply_plan", lambda i, d, **kw: applied.append(1) or ProvisioningResult())
+    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, **kw: applied.append(1) or ProvisioningResult())
     service, rid = _approval_run(tmp_path)
     with TestClient(create_app(service)) as client:
         def preview() -> str:

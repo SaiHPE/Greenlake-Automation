@@ -63,6 +63,7 @@ from alletra_onboard.domain.shared import EndpointCreds                      # n
 from alletra_onboard.domain.provisioning import (                            # noqa: E402
     ExportRequest, HostSetRequest, ProvisioningIntent, VolumeRequest,
 )
+from alletra_onboard.application.provisioning import apply as prov_apply      # noqa: E402
 from alletra_onboard.application.provisioning import discovery as disc       # noqa: E402
 from alletra_onboard.application.provisioning import path_verify             # noqa: E402
 from alletra_onboard.application.provisioning import preflight               # noqa: E402
@@ -183,9 +184,9 @@ def phase_zoning_plan(intent, discovery):
     return plan
 
 
-def phase_preview(intent, discovery):
+def phase_preview(intent, discovery, reachable_hosts):
     head("PHASE 5 - tier-1 PREVIEW (READ-ONLY)  [storage_provision.build_plan]")
-    plan = prov.build_plan(intent, discovery)
+    plan = prov.build_plan(intent, discovery, reachable_hosts=reachable_hosts)
     for a in plan.actions:
         print(f"   {a.kind:8} {a.name:24} exists={str(a.exists):5} {a.description}")
     for n in plan.notes:
@@ -195,10 +196,10 @@ def phase_preview(intent, discovery):
     return plan
 
 
-def phase_apply(intent, discovery):
-    head("PHASE 6 - tier-1 APPLY *** WRITES TO THE ARRAY ***  [storage_provision.apply_plan]")
+def phase_apply(intent, discovery, reachable_hosts, plan):
+    head("PHASE 6 - tier-1 APPLY *** WRITES TO THE ARRAY ***  [provisioning.apply.apply_plan]")
     guard(intent)
-    res = prov.apply_plan(intent, discovery)
+    res = prov_apply.apply_plan(prov_apply.StorageInputs(intent, discovery, reachable_hosts, plan))
     for o in res.outcomes:
         print(f"   {o.kind:8} {o.name:24} -> {o.status:8} {o.detail}")
     failed = [o for o in res.outcomes if o.status == "failed"]
@@ -207,9 +208,9 @@ def phase_apply(intent, discovery):
     return res
 
 
-def phase_paths(intent, discovery):
+def phase_paths(intent, discovery, reachable_hosts):
     head("PHASE 7 - tier-2 PATH VERIFY (READ-ONLY)  [path_verify.verify_provisioned_paths]")
-    rep = path_verify.verify_provisioned_paths(intent, discovery)
+    rep = path_verify.verify_provisioned_paths(intent, discovery, reachable_hosts=reachable_hosts)
     for h in rep.hosts:
         print(f"   {h.host:26} {h.verdict:8} hbas={h.hbas_with_paths} fabrics={h.fabrics}")
         print(f"        {h.detail}")
@@ -249,22 +250,42 @@ def main() -> int:
     if discovery is None:
         print("\nDiscovery failed — the remaining phases need it. Stopping.")
     else:
-        phases = [("3 zoning verify", lambda: phase_zoning_verify(intent, discovery)),
-                  ("4 zoning plan", lambda: phase_zoning_plan(intent, discovery)),
-                  ("5 preview", lambda: phase_preview(intent, discovery))]
+        zoning_rep = None
+        reachable = set() if DO_WRITE else {h.host_name for h in discovery.host_hbas}
+        try:
+            zoning_rep = phase_zoning_verify(intent, discovery)
+            if zoning_rep.zoned_hosts:
+                reachable = set(zoning_rep.zoned_hosts)
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            record("3 zoning verify", False, f"EXCEPTION {type(exc).__name__}: {exc}")
+
+        preview_plan = None
+        try:
+            phase_zoning_plan(intent, discovery)
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            record("4 zoning plan", False, f"EXCEPTION {type(exc).__name__}: {exc}")
+        try:
+            preview_plan = phase_preview(intent, discovery, reachable)
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            record("5 preview", False, f"EXCEPTION {type(exc).__name__}: {exc}")
+
         if DO_WRITE:
-            phases.append(("6 apply", lambda: phase_apply(intent, discovery)))
-            phases.append(("7 paths", lambda: phase_paths(intent, discovery)))
+            if preview_plan is None:
+                record("6 tier-1 apply", False, "skipped — preview did not produce a plan")
+            else:
+                for name, fn in (("6 apply", lambda: phase_apply(intent, discovery, reachable, preview_plan)),
+                                 ("7 paths", lambda: phase_paths(intent, discovery, reachable))):
+                    try:
+                        fn()
+                    except Exception as exc:  # noqa: BLE001
+                        traceback.print_exc()
+                        record(name, False, f"EXCEPTION {type(exc).__name__}: {exc}")
         else:
             record("6 tier-1 apply", None, "set WRITE=1 to run")
             record("7 tier-2 paths", None, "set WRITE=1 to run (needs the applied export)")
-
-        for name, fn in phases:
-            try:
-                fn()
-            except Exception as exc:  # noqa: BLE001
-                traceback.print_exc()
-                record(name, False, f"EXCEPTION {type(exc).__name__}: {exc}")
 
     head("SUMMARY")
     for phase, status, detail in results:

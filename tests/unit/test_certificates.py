@@ -11,7 +11,7 @@ import pytest
 
 from alletra_onboard.adapters import device_trust
 from alletra_onboard.adapters.array import wsapi_client
-from alletra_onboard.adapters.array.wsapi_client import WsapiClient, WsapiError
+from alletra_onboard.adapters.array.wsapi_client import WsapiError, WsapiReader
 from alletra_onboard.adapters.vcenter import vcenter_client
 from alletra_onboard.adapters.vcenter.vcenter_client import VCenterClient, VCenterError
 from alletra_onboard.domain.trust import DevicePin, TrustKind
@@ -103,7 +103,7 @@ def test_a_certificate_is_kept_as_pem_with_the_sha256_openssl_prints():
 def test_wsapi_trusts_the_certificate_on_first_contact_and_every_call_checks_it(sdk, certs, book):
     der = fake_tls.self_signed_der()
     certs.devices[("10.0.0.5", 443)] = der
-    with WsapiClient("10.0.0.5", "3paradm", PW) as client:
+    with WsapiReader("10.0.0.5", "3paradm", PW) as client:
         assert client.system_name() == "array01"
     pin = book.pins[(TrustKind.TLS, "10.0.0.5", 443)]
     fingerprint = device_trust.tls_key(der).fingerprint
@@ -116,10 +116,10 @@ def test_wsapi_trusts_the_certificate_on_first_contact_and_every_call_checks_it(
 def test_a_different_wsapi_certificate_stops_before_the_password_is_sent(sdk, certs, book):
     old, new = fake_tls.self_signed_der(), fake_tls.self_signed_der()
     certs.devices[("10.0.0.5", 443)] = old
-    WsapiClient("10.0.0.5", "3paradm", PW).connect()
+    WsapiReader("10.0.0.5", "3paradm", PW).connect()
     certs.devices[("10.0.0.5", 443)] = new
     with pytest.raises(WsapiError) as caught:
-        WsapiClient("10.0.0.5", "3paradm", PW).connect()
+        WsapiReader("10.0.0.5", "3paradm", PW).connect()
     text = str(caught.value)
     assert text.startswith("The array at 10.0.0.5 presented a different certificate from the one this run trusted.")
     assert device_trust.tls_key(old).fingerprint in text and device_trust.tls_key(new).fingerprint in text
@@ -135,7 +135,7 @@ def test_a_certificate_that_changes_after_login_is_named_and_recorded(sdk, certs
 
     old, new = fake_tls.self_signed_der(), fake_tls.self_signed_der()
     certs.devices[("10.0.0.5", 443)] = old
-    client = WsapiClient("10.0.0.5", "3paradm", PW)
+    client = WsapiReader("10.0.0.5", "3paradm", PW)
     client.connect()
     certs.devices[("10.0.0.5", 443)] = new          # what urllib3's fingerprint check met mid-session
     err = client._translate(hpe_exc.SSLCertFailed("SSL Certificate Verification Failed."), where="getHosts")
@@ -146,7 +146,7 @@ def test_a_certificate_that_changes_after_login_is_named_and_recorded(sdk, certs
 def test_with_no_run_bound_the_client_still_checks_its_own_session(sdk, certs):
     der = fake_tls.self_signed_der()
     certs.devices[("10.0.0.5", 443)] = der
-    WsapiClient("10.0.0.5", "3paradm", PW).connect()
+    WsapiReader("10.0.0.5", "3paradm", PW).connect()
     assert sdk.made[0].http.pinned == [device_trust.tls_key(der).fingerprint]
 
 
@@ -193,6 +193,26 @@ def test_a_pinned_call_goes_through_a_session_that_asserts_the_fingerprint():
         wsapi_client._PINNED_FINGERPRINT.reset(token)
     assert calls == [("plain", "GET", "https://10.0.0.5/api/v1/system"), ("mount", "https://", "AB:CD"),
                      ("session", "GET", "https://10.0.0.5/api/v1/system", False)]
+
+
+def test_a_pinned_call_fails_closed_when_http_adapter_is_missing(monkeypatch):
+    sent: list[tuple[str, str]] = []
+
+    class _Requests:
+        @staticmethod
+        def request(method, url, **kwargs):
+            sent.append((method, url))
+            return "unpinned"
+
+    monkeypatch.setattr(wsapi_client, "_RequestsHTTPAdapter", None)
+    stand_in = wsapi_client._PinnedRequests(_Requests)
+    token = wsapi_client._PINNED_FINGERPRINT.set("AB:CD")
+    try:
+        with pytest.raises(WsapiError, match="unpinned"):
+            stand_in.request("GET", "https://10.0.0.5/api/v1/system", verify=False)
+    finally:
+        wsapi_client._PINNED_FINGERPRINT.reset(token)
+    assert sent == []
 
 
 # ------------------------------------------------------------------ vCenter
@@ -279,7 +299,7 @@ def bundle(tmp_path, book):
 
 
 def test_with_a_device_ca_bundle_wsapi_makes_the_full_check_and_pins_nothing(sdk, certs, book, bundle):
-    WsapiClient("10.0.0.5", "3paradm", PW).connect()
+    WsapiReader("10.0.0.5", "3paradm", PW).connect()
     [made] = sdk.made
     assert made.secure == bundle and made.http.pinned == [None]     # requests checks chain and name
     assert certs.probes == [] and book.pins == {}
@@ -289,7 +309,7 @@ def test_with_a_device_ca_bundle_wsapi_makes_the_full_check_and_pins_nothing(sdk
 def test_a_certificate_the_bundle_does_not_vouch_for_never_falls_back_to_first_contact(sdk, certs, book, bundle):
     from hpe3parclient import exceptions as hpe_exc
 
-    client = WsapiClient("10.0.0.5", "3paradm", PW)
+    client = WsapiReader("10.0.0.5", "3paradm", PW)
     client.connect()
     err = client._translate(hpe_exc.SSLCertFailed("SSL Certificate Verification Failed."), where="login")
     assert str(err).startswith(f"The array at 10.0.0.5 presented a certificate that the device CA bundle at {bundle}")
@@ -300,7 +320,7 @@ def test_a_certificate_the_bundle_does_not_vouch_for_never_falls_back_to_first_c
 def test_a_device_ca_bundle_that_cannot_be_read_stops_the_connection(sdk, certs, book, tmp_path):
     book.device_ca_bundle = str(tmp_path / "missing.pem")
     with pytest.raises(WsapiError, match="device CA bundle set in ALLETRA_DEVICE_CA_BUNDLE .* cannot be read"):
-        WsapiClient("10.0.0.5", "3paradm", PW).connect()
+        WsapiReader("10.0.0.5", "3paradm", PW).connect()
     assert sdk.made == [] and certs.probes == []
 
 
@@ -308,7 +328,7 @@ def test_with_no_run_bound_the_bundle_comes_from_the_environment(sdk, certs, mon
     path = tmp_path / "device-ca.pem"
     path.write_text(ssl.DER_cert_to_PEM_cert(fake_tls.self_signed_der("customer CA")))
     monkeypatch.setenv("ALLETRA_DEVICE_CA_BUNDLE", str(path))
-    WsapiClient("10.0.0.5", "3paradm", PW).connect()
+    WsapiReader("10.0.0.5", "3paradm", PW).connect()
     assert sdk.made[0].secure == str(path) and certs.probes == []
 
 
