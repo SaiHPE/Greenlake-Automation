@@ -4,7 +4,6 @@ import { ReactNode, useState } from 'react';
 import {
   ArrayPort,
   DiscoveredHost,
-  DiscoveryReport,
   EthernetPort,
   PreflightCheck,
   PreflightReport,
@@ -13,6 +12,7 @@ import {
   getStoragePreflight,
   startDiscover,
 } from '../api';
+import { isOf, latestOf } from '../events';
 import { Disclosure, EmptyState, Guidance, Section } from '../ui/blocks';
 import { discoveryReadAt, isDiscoveryStale } from '../ui/discoveryAge';
 import { NotesList, TableSummary } from '../ui/primitives';
@@ -196,19 +196,17 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
   const [checking, setChecking] = useState(false);
   const running = run?.status === 'running';
 
-  const report =
-    ([...events].reverse().find((event) => event.event_type === 'discover.completed')?.data?.report as
-      | DiscoveryReport
-      | undefined) ?? null;
-  const reportAt = [...events].reverse().find((event) => event.event_type === 'discover.completed')?.created_at;
+  const latestDiscovery = latestOf(events, 'discover.completed');
+  const report = latestDiscovery?.data?.report ?? null;
+  const reportAt = latestDiscovery?.created_at;
   const fcPorts = (report?.array_ports ?? []).filter((port) => port.protocol === 'fc');
   const iscsiPorts = (report?.array_ports ?? []).filter((port) => port.protocol === 'iscsi');
   const readyPorts = fcPorts.filter((port) => port.link_state === 'ready').length;
   const hosts = report?.hosts ?? [];
   // SPEC-012 R7 (X-7): the discovery before this one, within the run.
-  const completedDiscoveries = events.filter((event) => event.event_type === 'discover.completed');
+  const completedDiscoveries = events.filter((event) => isOf(event, 'discover.completed'));
   const previousDiscovery = completedDiscoveries.length >= 2 ? completedDiscoveries[completedDiscoveries.length - 2] : null;
-  const previousReport = (previousDiscovery?.data?.report as DiscoveryReport | undefined) ?? null;
+  const previousReport = previousDiscovery?.data?.report ?? null;
   const changes: string[] = [];
   if (report && previousReport) {
     const before = new Set((previousReport.hosts ?? []).map((h) => h.name));

@@ -15,10 +15,13 @@ from alletra_onboard.api.app import create_app
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.service import OnboardingService
 from alletra_onboard.config import Settings
+from alletra_onboard.domain import events
+from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
     DsccSetupConfig,
     NetworkConfig,
+    VerificationReport,
     WorkflowPhase,
 )
 from alletra_onboard.domain.trust import DeviceKey, DevicePin, TrustKind
@@ -132,9 +135,10 @@ async def test_a_step_records_first_contact_as_a_run_event(tmp_path):
     coord = service.coordinator
 
     async def step():
-        coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, "step.started", "Verifying…")
+        coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, events.STEP_STARTED, "Verifying…")
         await asyncio.to_thread(device_trust.check, TrustKind.SSH, "10.0.0.5", 22, "array", KEY_A)
-        coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, "verify.completed", "Verified")
+        coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, events.VERIFY_COMPLETED, "Verified",
+                   events.VerifyData(report=VerificationReport(reachable=True)))
 
     coord.spawn(run.run_id, step())
     await coord.wait(run.run_id)
@@ -155,12 +159,13 @@ async def test_a_refusal_blocks_the_step_even_when_the_step_carried_on(tmp_path)
                                                      device="Linux host", key=KEY_A))
 
     async def step():   # like discovery: one host's failure becomes a note and the step completes
-        coord.emit(run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.started", "Discovering…")
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_DISCOVER, events.STEP_STARTED, "Discovering…")
         try:
             await asyncio.to_thread(device_trust.check, TrustKind.SSH, "10.0.0.9", 22, "Linux host", KEY_B)
         except DeviceTrustError:
             pass
-        coord.emit(run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.completed", "Discovered")
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_DISCOVER, events.DISCOVER_COMPLETED, "Discovered",
+                   events.DiscoveryData(report=DiscoveryReport()))
 
     coord.spawn(run.run_id, step())
     await coord.wait(run.run_id)

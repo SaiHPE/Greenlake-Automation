@@ -14,6 +14,10 @@ import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from pydantic import BaseModel
+
+from alletra_onboard.domain import events
+from alletra_onboard.domain.events import EventType
 from alletra_onboard.domain.trust import (
     DeviceKey,
     DevicePin,
@@ -48,7 +52,7 @@ class RunTrustBook:
     def first_contact(self, pin: DevicePin) -> DevicePin:
         held = self._coord.store.add_device_pin(self.run_id, pin)
         if held == pin:   # this contact recorded it; a concurrent one would hold its own
-            self._emit("device.trusted", trusted_message(held), {"device": DevicePinInfo.of(held).model_dump(mode="json")})
+            self._emit(events.DEVICE_TRUSTED, trusted_message(held), events.DeviceData(device=DevicePinInfo.of(held)))
         return held
 
     def refuse(self, pin: DevicePin, offered: DeviceKey) -> None:
@@ -66,12 +70,12 @@ class RunTrustBook:
         """On the event loop, after the step: one failure event per refused device, in the step's phase,
         so the step shows as stopped even when its code carried on without that device. After a route,
         a note on the run instead: the route's own answer already carried the refusal."""
-        event_type = "device.trust_failed" if self._step else "device.refused"
+        event_type = events.DEVICE_TRUST_FAILED if self._step else events.DEVICE_REFUSED
         for pin, offered in self.refusals:
             stored = self._coord.store.get_device_pin(self.run_id, pin.kind, pin.host, pin.port) or pin
             self._coord.emit(
                 self.run_id, self._phase(), event_type,
-                refusal_message(pin, offered), data={"device": DevicePinInfo.of(stored).model_dump(mode="json")},
+                refusal_message(pin, offered), events.DeviceData(device=DevicePinInfo.of(stored)),
             )
 
     def _phase(self):
@@ -79,9 +83,9 @@ class RunTrustBook:
             return self._coord.step_phase(self.run_id)
         return self._coord.get_run(self.run_id).current_phase
 
-    def _emit(self, event_type: str, message: str, data: dict) -> None:
+    def _emit[D: BaseModel](self, event: EventType[D], message: str, data: D) -> None:
         phase = self._phase()
         if threading.get_ident() == self._loop_thread:
-            self._coord.emit(self.run_id, phase, event_type, message, data)
+            self._coord.emit(self.run_id, phase, event, message, data)
         else:
-            self._loop.call_soon_threadsafe(self._coord.emit, self.run_id, phase, event_type, message, data)
+            self._loop.call_soon_threadsafe(self._coord.emit, self.run_id, phase, event, message, data)

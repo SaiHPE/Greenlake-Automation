@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { IscsiSection, isPartnershipResult, PeerSection, ReplicationResult, RunEvent, RunRecord } from '../api';
+import { isPartnershipResult, RunEvent, RunRecord } from '../api';
 import { ServedStep } from '../modes';
 import { StepState } from './status';
 
@@ -129,10 +129,10 @@ export function deriveStepState(step: ServedStep, run: RunRecord | null, events:
     if (FAILURE.test(type)) return 'failed';
     // Discovery and zoning report completion (or a gate) even when the read itself failed; the error
     // is in the payload, and the step component surfaces it. Z-7: a zoning check with no array ports.
-    if ((signals.complete.includes(type) || signals.gate.includes(type)) && rec(event.data?.report)?.error) return 'failed';
+    if ((signals.complete.includes(type) || signals.gate.includes(type)) && event.data && 'report' in event.data && rec(event.data.report)?.error) return 'failed';
     if (signals.complete.includes(type)) {
       // SPEC-021: setting up the partnership is half the step; the groups are planned after it.
-      if (type === 'replication.applied' && isPartnershipResult(event.data?.result as ReplicationResult | undefined)) return 'action_required';
+      if (event.event_type === 'replication.applied' && isPartnershipResult(event.data?.result)) return 'action_required';
       // A GreenLake dry run reports step.completed too, but nothing was written, so the step is not
       // done. The live run emits from GL_VERIFY_DEVICE; the dry run stays on PREFLIGHT.
       if (step.key === 'greenlake' && event.phase === 'PREFLIGHT') return 'not_started';
@@ -173,14 +173,11 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
     );
   if (!deciding) return '';
 
-  const report = rec(deciding.data?.report);
-  const plan = rec(deciding.data?.plan);
-  const iscsi = deciding.data?.iscsi as IscsiSection | undefined;
-  const peer = deciding.data?.peer as PeerSection | undefined;
   const list = (value: unknown) => (Array.isArray(value) ? value : []);
 
   switch (deciding.event_type) {
     case 'discover.completed': {
+      const report = rec(deciding.data?.report);
       if (report?.error) return 'read failed';
       // Fibre Channel ports only, matching the table the Discovery step shows.
       const fc = (list(report?.array_ports) as { protocol?: string }[]).filter((port) => port.protocol === 'fc').length;
@@ -190,8 +187,8 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       return `${fc} ports · ${inRun} host${inRun === 1 ? '' : 's'} in this run`;
     }
     case 'ports.completed': {
-      const iscsiCount = list(iscsi?.plan?.actions).length;
-      const peers = list(peer?.plan?.actions).length;
+      const iscsiCount = list(deciding.data?.iscsi?.plan?.actions).length;
+      const peers = list(deciding.data?.peer?.plan?.actions).length;
       const parts = [
         iscsiCount ? `${iscsiCount} iSCSI address${iscsiCount === 1 ? '' : 'es'}` : '',
         peers ? `${peers} peer port${peers === 1 ? '' : 's'}` : '',
@@ -199,6 +196,8 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       return parts.length ? `${parts.join(' · ')} in place` : 'nothing to set up';
     }
     case 'ports.previewed': {
+      const iscsi = deciding.data?.iscsi;
+      const peer = deciding.data?.peer;
       const actions = [
         ...list(iscsi?.plan?.actions),
         ...list(peer?.plan?.actions),
@@ -216,6 +215,7 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
     case 'zoning.proper':
       return 'verified on both fabrics';
     case 'zoning.previewed': {
+      const report = rec(deciding.data?.report);
       if (report?.error) return 'not checked';
       // Counted per HOST, as the zoning step presents it — the report carries a row per host and
       // fabric, and quoting zones here would contradict the number on the step itself.
@@ -229,10 +229,11 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       return 'objects created';
     case 'storage.previewed': {
       // P-22: a plan with blockers is not awaiting anyone's approval.
-      const blockers = list(plan?.blockers).length;
+      const blockers = list(rec(deciding.data?.plan)?.blockers).length;
       return blockers ? `${blockers} blocker${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
     }
     case 'verify.completed': {
+      const report = rec(deciding.data?.report);
       const mismatches =
         (list(report?.checks) as { status: string }[]).filter((check) => check.status !== 'pass').length +
         (list(report?.iscsi_vlans) as { status: string }[]).filter((check) => check.status !== 'present').length +
@@ -244,11 +245,11 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
     case 'asbuilt.generated':
       return 'document ready';
     case 'replication.previewed': {
-      const blockers = list(plan?.blockers).length;
+      const blockers = list(rec(deciding.data?.plan)?.blockers).length;
       return blockers ? `${blockers} finding${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
     }
     case 'replication.applied':
-      return isPartnershipResult(deciding.data?.result as ReplicationResult | undefined) ? 'partnership set up' : 'replication configured';
+      return isPartnershipResult(deciding.data?.result) ? 'partnership set up' : 'replication configured';
     case 'replication.preview.failed':
       return 'arrays could not be read';
     case 'replication.apply.failed':
@@ -260,7 +261,7 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
     case 'failover.failed':
       return 'test failed';
     case 'snapshots.previewed': {
-      const blockers = list(plan?.blockers).length;
+      const blockers = list(rec(deciding.data?.plan)?.blockers).length;
       return blockers ? `${blockers} finding${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
     }
     case 'snapshots.applied':

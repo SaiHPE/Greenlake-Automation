@@ -30,6 +30,7 @@ import {
   Transport,
   TRANSPORT_WORDS,
 } from '../api';
+import { isOf, latestOf } from '../events';
 import { CodeBlock, Disclosure, DoneList, EmptyState, Guidance, Panel, PartsBar, Section } from '../ui/blocks';
 import { InlineNotification, NotesList } from '../ui/primitives';
 import { mergedRemovals, RemovalSets } from '../ui/RemovalSets';
@@ -84,13 +85,8 @@ const mono = { fontFamily: 'Consolas, "Courier New", monospace' } as const;
 const noValue = <NoValue />;
 type DoneRow = ComponentProps<typeof DoneList>['items'][number];
 
-function latest<T>(events: RunEvent[], types: string[], key: string): T | null {
-  const event = [...events].reverse().find((item) => types.includes(item.event_type));
-  return (event?.data?.[key] as T) ?? null;
-}
-
 /** Index of the newest event of one of these types, or -1 — to decide which of two artifacts is current. */
-function latestIndex(events: RunEvent[], types: string[]): number {
+function latestIndex(events: RunEvent[], types: readonly string[]): number {
   for (let i = events.length - 1; i >= 0; i -= 1) if (types.includes(events[i].event_type)) return i;
   return -1;
 }
@@ -499,31 +495,32 @@ export function ReplicationStep({ runId, run, events, onDone }: Props) {
   const [acceptLatency, setAcceptLatency] = useState(false);
   const running = run?.status === 'running';
 
-  const report = latest<ReplicationReport>(events, ['replication.previewed', 'replication.preview.failed'], 'report');
-  const plan = latest<ReplicationPlan>(events, ['replication.previewed', 'replication.preview.failed'], 'plan');
+  const preview = latestOf(events, 'replication.previewed', 'replication.preview.failed');
+  const report = preview?.data?.report ?? null;
+  const plan = preview?.data?.plan ?? null;
   const planId = plan?.plan_id ?? '';
   const authorised = !!plan && authorisedFor === planId;
   // A result reflects the plan on screen only while it is newer than the newest preview: a re-read after
   // an apply must offer Configure again (if anything is left to create), not leave the operator stuck.
   const applied = latestIndex(events, ['replication.applied', 'replication.apply.failed']);
   const previewed = latestIndex(events, ['replication.previewed', 'replication.preview.failed']);
-  const result = applied > previewed ? latest<ReplicationResult>(events, ['replication.applied', 'replication.apply.failed'], 'result') : null;
-  const verification = latest<ReplicationVerification>(events, ['replication.verified', 'replication.verify.failed'], 'verification');
+  const result = applied > previewed ? (latestOf(events, 'replication.applied', 'replication.apply.failed')?.data?.result ?? null) : null;
+  const verification = latestOf(events, 'replication.verified', 'replication.verify.failed')?.data?.verification ?? null;
   // SPEC-020: the measured latency, and the progress lines while the check runs
-  const linkCheck = latest<LinkCheck>(events, ['replication.link_checked', 'replication.link_check.failed'], 'link_check');
+  const linkCheck = latestOf(events, 'replication.link_checked', 'replication.link_check.failed')?.data?.link_check ?? null;
   const linkStarted = latestIndex(events, ['replication.link_check.started']);
   const linkDone = latestIndex(events, ['replication.link_checked', 'replication.link_check.failed']);
   const linkRunning = running && linkStarted > linkDone;
   const linkProgress = linkRunning ? events.slice(linkStarted + 1).filter((e) => e.event_type === 'phase.progress').map((e) => e.message) : [];
   // SPEC-021: the partnership apply is half the step; Continue only drops the word "without" once groups were configured
-  const everApplied = events.some((e) => e.event_type === 'replication.applied' && !isPartnershipResult(e.data?.result as ReplicationResult));
+  const everApplied = events.some((e) => isOf(e, 'replication.applied') && !isPartnershipResult(e.data?.result));
   const partnershipPlan = setsUpPartnership(plan);
   const partnershipDone = !!result && !result.error && isPartnershipResult(result);
   // An approval is for the plan on screen: a new read or an apply spends it.
   useEffect(() => setAuthorisedFor(null), [previewed, applied]);
-  const allRemovals = mergedRemovals(events
-    .filter((e) => ['replication.applied', 'replication.apply.failed'].includes(e.event_type) && e.data?.result)
-    .map((e) => e.data!.result as ReplicationResult));
+  const allRemovals = mergedRemovals(events.flatMap((e) =>
+    isOf(e, 'replication.applied', 'replication.apply.failed') && e.data?.result ? [e.data.result] : [],
+  ));
   const hasRemovals = allRemovals.removals_a.length + allRemovals.removals_b.length > 0;
   const blocked = !!plan && plan.blockers.length > 0;
   const count = (state: ReplicationActionState) => (plan ? plan.actions.filter((a) => a.state === state).length : 0);

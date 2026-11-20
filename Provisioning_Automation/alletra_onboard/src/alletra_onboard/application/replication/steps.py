@@ -27,6 +27,7 @@ from alletra_onboard.application.runs.coordinator import (
     check_approval,
     new_plan_id,
 )
+from alletra_onboard.domain import events
 from alletra_onboard.domain.approval import Approval, Purpose
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.provisioning import ProvisioningIntent
@@ -95,7 +96,7 @@ class ReplicationSteps:
 
     def _progress(self, run_id: str, phase: WorkflowPhase) -> Callable[[str], None]:
         loop = asyncio.get_running_loop()
-        return lambda message: loop.call_soon_threadsafe(self._coord.emit, run_id, phase, "phase.progress", message)
+        return lambda message: loop.call_soon_threadsafe(self._coord.emit, run_id, phase, events.PHASE_PROGRESS, message)
 
     def _require_replication(self, run_id: str) -> tuple[ProvisioningIntent, ReplicationIntent]:
         intent = self._coord.get_provisioning_intent(run_id)
@@ -131,7 +132,7 @@ class ReplicationSteps:
         coord = self._coord
         phase = WorkflowPhase.STORAGE_REPLICATE
         coord.set_state(run, RunStatus.RUNNING, phase)
-        coord.emit(run.run_id, phase, "step.started", "Reading Remote Copy on both arrays…")
+        coord.emit(run.run_id, phase, events.STEP_STARTED, "Reading Remote Copy on both arrays…")
         progress = self._progress(run.run_id, phase)
         primary = await asyncio.to_thread(partial(replication_read.read_array, intent.array, progress=progress))
         peer = await asyncio.to_thread(partial(replication_read.read_array, intent.replication.peer, progress=progress))
@@ -143,8 +144,8 @@ class ReplicationSteps:
 
         if plan.error:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
-            coord.emit(run.run_id, phase, "replication.preview.failed", plan.error,
-                       data={"report": report.model_dump(mode="json"), "plan": plan.model_dump(mode="json")})
+            coord.emit(run.run_id, phase, events.REPLICATION_PREVIEW_FAILED, plan.error,
+                       events.ReplicationPlanData(report=report, plan=plan))
             return
         creates = sum(1 for a in plan.actions if a.state == "create")
         exists = sum(1 for a in plan.actions if a.state == "exists")
@@ -156,8 +157,8 @@ class ReplicationSteps:
             summary = (f"Read {a_name} and {b_name} — plan ready: {creates} to create, {exists} already there. "
                        "Review the plan.")
         coord.set_state(run, RunStatus.WAITING_FOR_OPERATOR, phase)
-        coord.emit(run.run_id, phase, "replication.previewed", summary,
-                   data={"report": report.model_dump(mode="json"), "plan": plan.model_dump(mode="json")})
+        coord.emit(run.run_id, phase, events.REPLICATION_PREVIEWED, summary,
+                   events.ReplicationPlanData(report=report, plan=plan))
 
     # ------------------------------------------------------------------ SPEC-020: the link check
 
@@ -188,22 +189,22 @@ class ReplicationSteps:
         coord = self._coord
         phase = WorkflowPhase.STORAGE_REPLICATE
         coord.set_state(run, RunStatus.RUNNING, phase)
-        coord.emit(run.run_id, phase, "replication.link_check.started",
+        coord.emit(run.run_id, phase, events.REPLICATION_LINK_CHECK_STARTED,
                    "Measuring the latency between the arrays with checkrclink…")
         check = await asyncio.to_thread(partial(
             replication_link.run_link_check, intent.array, intent.replication, report,
             duration_s=duration_s, progress=self._progress(run.run_id, phase),
         ))
         coord.save_artifact_best_effort(run.run_id, LINK_CHECK_ARTIFACT, check.model_dump_json().encode("utf-8"))
-        data = {"link_check": check.model_dump(mode="json")}
+        data = events.LinkCheckData(link_check=check)
         failed = [r for r in check.results if r.status == "failed"]
         if check.error or not check.measured:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
-            coord.emit(run.run_id, phase, "replication.link_check.failed",
-                       check.error or "; ".join(r.detail for r in failed) or "No link was measured.", data=data)
+            coord.emit(run.run_id, phase, events.REPLICATION_LINK_CHECK_FAILED,
+                       check.error or "; ".join(r.detail for r in failed) or "No link was measured.", data)
             return
         coord.set_state(run, RunStatus.WAITING_FOR_OPERATOR, phase)
-        coord.emit(run.run_id, phase, "replication.link_checked", self._link_summary(check, failed), data=data)
+        coord.emit(run.run_id, phase, events.REPLICATION_LINK_CHECKED, self._link_summary(check, failed), data)
 
     @staticmethod
     def _link_summary(check: LinkCheck, failed: list) -> str:
@@ -282,7 +283,7 @@ class ReplicationSteps:
         coord = self._coord
         phase = WorkflowPhase.STORAGE_REPLICATE
         coord.set_state(run, RunStatus.RUNNING, phase)
-        coord.emit(run.run_id, phase, "replication.apply.started",
+        coord.emit(run.run_id, phase, events.REPLICATION_APPLY_STARTED,
                    "Setting up the replication ports and the partnership over SSH…" if plan.sets_up_partnership
                    else "Configuring replication over WSAPI…")
         fn = replication_partnership_apply.apply_partnership if plan.sets_up_partnership else replication_apply.apply_plan
@@ -291,11 +292,12 @@ class ReplicationSteps:
         coord.save_artifact_best_effort(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
         if result.error:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
-            coord.emit(run.run_id, phase, "replication.apply.failed", result.error, data={"result": result.model_dump(mode="json")})
+            coord.emit(run.run_id, phase, events.REPLICATION_APPLY_FAILED, result.error,
+                       events.ReplicationResultData(result=result))
             return
         coord.set_state(run, RunStatus.READY, phase)
-        coord.emit(run.run_id, phase, "replication.applied", applied_message(plan, result),
-                   data={"result": result.model_dump(mode="json")})
+        coord.emit(run.run_id, phase, events.REPLICATION_APPLIED, applied_message(plan, result),
+                   events.ReplicationResultData(result=result))
 
     # ------------------------------------------------------------------ R6: verify (read-only)
 
@@ -326,22 +328,23 @@ class ReplicationSteps:
         coord = self._coord
         phase = WorkflowPhase.STORAGE_REPLICATE
         coord.set_state(run, RunStatus.RUNNING, phase)
-        coord.emit(run.run_id, phase, "replication.verify.started", "Reading Remote Copy back on both arrays…")
+        coord.emit(run.run_id, phase, events.REPLICATION_VERIFY_STARTED, "Reading Remote Copy back on both arrays…")
         verification = await asyncio.to_thread(partial(
             replication_verify.verify, intent, plan, progress=self._progress(run.run_id, phase),
             detail_fn=replication_read.read_group_details,
         ))
         coord.set_state(run, RunStatus.RETRYABLE_FAILURE if verification.error else RunStatus.READY, phase)
         if verification.error:
-            coord.emit(run.run_id, phase, "replication.verify.failed", verification.error,
-                       data={"verification": verification.model_dump(mode="json")})
+            coord.emit(run.run_id, phase, events.REPLICATION_VERIFY_FAILED, verification.error,
+                       events.ReplicationVerifyData(verification=verification))
             return
         counts = {"replicating": 0, "syncing": 0, "not_replicating": 0}
         for g in verification.groups:
             counts[g.verdict] += 1
         summary = (f"{counts['replicating']} replicating · {counts['syncing']} syncing · {counts['not_replicating']} not replicating · "
                    + ("links Up" if verification.links_ok else "links NOT all Up"))
-        coord.emit(run.run_id, phase, "replication.verified", summary, data={"verification": verification.model_dump(mode="json")})
+        coord.emit(run.run_id, phase, events.REPLICATION_VERIFIED, summary,
+                   events.ReplicationVerifyData(verification=verification))
 
     # ------------------------------------------------------------------ SPEC-017: the failover test
 
@@ -385,27 +388,27 @@ class ReplicationSteps:
         coord = self._coord
         phase = WorkflowPhase.STORAGE_FAILOVER_TEST
         coord.set_state(run, RunStatus.RUNNING, phase)
-        coord.emit(run.run_id, phase, "failover.started",
+        coord.emit(run.run_id, phase, events.FAILOVER_STARTED,
                    f"Failover test on {group}: stop → fail over to the peer → recover → wait for sync → restore…",
-                   data={"group": group})
+                   events.FailoverStartData(group=group))
         record: FailoverRecord = await coord.run_approved(
             approval, partial(replication_failover.run_failover_test, approval, group, progress=self._progress(run.run_id, phase)),
         )
         coord.save_artifact_best_effort(run.run_id, FAILOVER_ARTIFACT, record.model_dump_json().encode("utf-8"))
-        data = {"record": record.model_dump(mode="json")}
+        data = events.FailoverData(record=record)
         if record.result == "passed":
             coord.set_state(run, RunStatus.READY, phase)
             timing = (f" Failover in {record.time_to_failover_s:g} s, synced back in {record.time_to_synced_s:g} s."
                       if record.time_to_failover_s is not None and record.time_to_synced_s is not None else "")
-            coord.emit(run.run_id, phase, "failover.completed",
+            coord.emit(run.run_id, phase, events.FAILOVER_COMPLETED,
                        f"Failover test passed on {group}: the peer took over and the group is back to its normal state.{timing}",
-                       data=data)
+                       data)
             return
         coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
         where = f" at step {record.failed_step}" if record.failed_step is not None else ""
-        coord.emit(run.run_id, phase, "failover.failed",
+        coord.emit(run.run_id, phase, events.FAILOVER_FAILED,
                    f"Failover test {record.result}{where}: {record.error} " + (f"Way back: {record.recovery_action}" if record.recovery_action else ""),
-                   data=data)
+                   data)
 
     def failover_record(self, run_id: str) -> FailoverRecord | None:
         raw = self._coord.store.load_artifact(run_id, FAILOVER_ARTIFACT)

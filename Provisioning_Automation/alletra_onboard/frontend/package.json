@@ -32,6 +32,7 @@
     "eslint": "10.15.0",
     "eslint-plugin-react-hooks": "7.1.1",
     "knip": "6.46.1",
+    "openapi-typescript": "7.13.0",
     "pyright": "1.1.414",
     "typescript": "^5.7.2",
     "typescript-eslint": "8.73.0",
@@ -39,7 +40,13 @@
     "vitest": "^4.1.12"
   },
   "knip": {
-    "ignore": ["dist/**"],
-    "ignoreDependencies": ["pyright"]
+    "ignore": [
+      "dist/**",
+      "generated/**"
+    ],
+    "ignoreDependencies": [
+      "openapi-typescript",
+      "pyright"
+    ]
   }
 }

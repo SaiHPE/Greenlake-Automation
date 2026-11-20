@@ -24,5 +24,7 @@
 *.pptx binary
 *.db binary
 
-# Built output: reviewers skip it, GitHub collapses it in pull requests.
+# Built and generated output: GitHub collapses it in pull requests. The generated API types keep their
+# text diff: a renamed or removed event field must show there (ADR 0032).
 Provisioning_Automation/alletra_onboard/frontend/dist/** linguist-generated=true -diff
+Provisioning_Automation/alletra_onboard/frontend/generated/** linguist-generated=true

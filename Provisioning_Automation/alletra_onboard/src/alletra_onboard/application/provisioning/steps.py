@@ -33,6 +33,7 @@ from alletra_onboard.application.runs.coordinator import (
     check_approval,
     new_plan_id,
 )
+from alletra_onboard.domain import events
 from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.errors import DeviceError
@@ -98,14 +99,14 @@ class DiscoveryZoningSteps:
     async def _run_discover(self, run: RunRecord, intent) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_DISCOVER)
-        coord.emit(run.run_id, WorkflowPhase.STORAGE_DISCOVER, "step.started", "Discovering array ports, ESXi HBAs and fabric logins…")
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_DISCOVER, events.STEP_STARTED, "Discovering array ports, ESXi HBAs and fabric logins…")
         loop = asyncio.get_running_loop()
 
         def progress(message: str) -> None:
             # discover() runs in a worker thread; the SSE fan-out uses asyncio.Queues (not thread-safe),
             # so marshal each progress event back onto the event loop.
             loop.call_soon_threadsafe(
-                coord.emit, run.run_id, WorkflowPhase.STORAGE_DISCOVER, "phase.progress", message
+                coord.emit, run.run_id, WorkflowPhase.STORAGE_DISCOVER, events.PHASE_PROGRESS, message
             )
 
         report = await asyncio.to_thread(storage_discovery.discover, intent, progress=progress)
@@ -117,20 +118,20 @@ class DiscoveryZoningSteps:
             # from report.error. A run keeps its sheet's credential (ADR 0013), so the fix is a new run.
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, WorkflowPhase.STORAGE_DISCOVER)
             coord.emit(
-                run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.completed",
+                run.run_id, WorkflowPhase.STORAGE_DISCOVER, events.DISCOVER_COMPLETED,
                 f"{report.error} Nothing downstream can run without the array: fix the address or "
                 "credential on the sheet and start a new run.",
-                data={"report": report.model_dump(mode="json")},
+                events.DiscoveryData(report=report),
             )
             return
         coord.set_state(run, RunStatus.READY, WorkflowPhase.STORAGE_DISCOVER)
         vcenter_down = any(n.startswith("vCenter discovery failed") for n in report.notes)
         coord.emit(
-            run.run_id, WorkflowPhase.STORAGE_DISCOVER, "discover.completed",
+            run.run_id, WorkflowPhase.STORAGE_DISCOVER, events.DISCOVER_COMPLETED,
             f"Discovery complete — {len(report.array_ports)} array port(s), {len(report.host_hbas)} host HBA(s)"
             + ("; vCenter was NOT reached — hosts come from the array and the sheet only" if vcenter_down else "")
             + (f"; {len(report.notes)} note(s)" if report.notes else ""),
-            data={"report": report.model_dump(mode="json")},
+            events.DiscoveryData(report=report),
         )
 
     def zoning_plan_payload(self, run_id: str) -> dict | None:
@@ -171,7 +172,7 @@ class DiscoveryZoningSteps:
     async def _run_zoning_preview(self, run: RunRecord, intent, discovery) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
-        coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "step.started", "Verifying SAN zoning on both fabrics…")
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, events.STEP_STARTED, "Verifying SAN zoning on both fabrics…")
         report = await asyncio.to_thread(
             storage_zoning.build_report, intent, discovery, self.zoning_plan_payload(run.run_id)
         )
@@ -182,15 +183,15 @@ class DiscoveryZoningSteps:
             # Z-7 (S-3, 2026-09-17): with no array ports the check said "Zoning needs 0 zone(s)" and
             # "nothing can be provisioned" in one breath. The error is the whole message.
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, WorkflowPhase.STORAGE_ZONING)
-            coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.previewed", report.error,
-                       data={"report": report.model_dump(mode="json")})
+            coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, events.ZONING_PREVIEWED, report.error,
+                       events.ZoningCheckData(report=report))
             return
         coord.set_state(run, RunStatus.READY if report.proper else RunStatus.WAITING_FOR_OPERATOR, WorkflowPhase.STORAGE_ZONING)
         coord.emit(
             run.run_id, WorkflowPhase.STORAGE_ZONING,
-            "zoning.proper" if report.proper else "zoning.previewed",
+            events.ZONING_PROPER if report.proper else events.ZONING_PREVIEWED,
             storage_zoning.summary(report),
-            data={"report": report.model_dump(mode="json")},
+            events.ZoningCheckData(report=report),
         )
 
     def start_zoning_plan(self, run_id: str) -> RunRecord:
@@ -204,7 +205,7 @@ class DiscoveryZoningSteps:
     async def _run_zoning_plan(self, run: RunRecord, intent, discovery) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_ZONING)
-        coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, "step.started",
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_ZONING, events.STEP_STARTED,
                    "Reading both fabric switches (read-only) to build the zoning plan…")
         peer_pairs, peer_nsps = self._peer_zone_input(run.run_id, intent)
         plan = await asyncio.to_thread(partial(
@@ -215,11 +216,11 @@ class DiscoveryZoningSteps:
         pairs = sum(len(f.pairs) for f in plan.fabrics)
         coord.set_state(run, RunStatus.READY, WorkflowPhase.STORAGE_ZONING)
         coord.emit(
-            run.run_id, WorkflowPhase.STORAGE_ZONING, "zoning.plan",
+            run.run_id, WorkflowPhase.STORAGE_ZONING, events.ZONING_PLAN,
             f"Zoning plan: {pairs} single-initiator-single-target zone(s) across the fabrics"
             + (f"; {len(plan.offline_hosts)} host WWPN(s) offline (cable + power)" if plan.offline_hosts else "")
             + (f"; {len(plan.notes)} note(s)" if plan.notes else ""),
-            data={"plan": plan.model_dump(mode="json")},
+            events.ZoningPlanData(plan=plan),
         )
 
 
@@ -301,9 +302,9 @@ class ArrayPortsSteps:
         self._peer.pop(run_id, None)
         if not intent.iscsi_network and intent.peer_ports is None:
             # R8: nothing to read, and the step is complete. The run stays where it is.
-            coord.emit(run_id, WorkflowPhase.STORAGE_PORTS, "ports.completed",
+            coord.emit(run_id, WorkflowPhase.STORAGE_PORTS, events.PORTS_COMPLETED,
                        "The sheet asks for no iSCSI VLANs and no peer ports. Nothing to set up here.",
-                       data={"iscsi": None, "peer": None})
+                       events.PortsData())
             return run
         coord.spawn(run_id, self._run_ports_preview(run, intent))
         return run
@@ -312,31 +313,32 @@ class ArrayPortsSteps:
         coord = self._coord
         phase = WorkflowPhase.STORAGE_PORTS
         coord.set_state(run, RunStatus.RUNNING, phase)
-        coord.emit(run.run_id, phase, "step.started",
+        coord.emit(run.run_id, phase, events.STEP_STARTED,
                    f"Reading {intent.array.host} (read-only): its ports"
                    + (", iSCSI addresses and VLANs" if intent.iscsi_network else "")
                    + (", connection modes, logins and exports" if intent.peer_ports is not None else "") + "…")
         failures: list[str] = []
         pending, summary, done = False, [], []
         name = intent.array.host
-        data: dict = {"iscsi": None, "peer": None}
+        data = events.PortsData()
 
         if intent.iscsi_network:
             rows = list(intent.iscsi_network)
-            section: dict = {"requests": [r.model_dump(mode="json") for r in rows]}
-            data["iscsi"] = section
             try:
                 view = await asyncio.to_thread(iscsi_network.read_port_network, intent.array)
             except (DeviceError, ValueError) as exc:  # the step reports; nothing is planned on half a read
-                section["error"] = f"Could not read {intent.array.host}: {exc}. Nothing was planned. Read the array again."
-                failures.append(section["error"])
+                err = f"Could not read {intent.array.host}: {exc}. Nothing was planned. Read the array again."
+                data.iscsi = events.IscsiSection(requests=rows, error=err)
+                failures.append(err)
             else:
                 plan = iscsi_network.plan_iscsi_vlans(rows, view)
                 self._iscsi[run.run_id] = (plan, view, rows)
-                section.update(view=view.model_dump(mode="json"), plan=plan.model_dump(mode="json"),
-                               commands_text=iscsi_network.command_set_text(plan),
-                               removals_text=iscsi_network.removal_set_text(plan),
-                               gateway_text=iscsi_network.gateway_set_text(plan))
+                data.iscsi = events.IscsiSection(
+                    requests=rows, view=view, plan=plan,
+                    commands_text=iscsi_network.command_set_text(plan),
+                    removals_text=iscsi_network.removal_set_text(plan),
+                    gateway_text=iscsi_network.gateway_set_text(plan),
+                )
                 name = plan.array or name
                 adds = sum(1 for a in plan.actions if a.state == "create")
                 conflicts = sum(1 for a in plan.actions if a.state == "conflict")
@@ -347,12 +349,11 @@ class ArrayPortsSteps:
 
         if intent.peer_ports is not None:
             peer = intent.peer_ports
-            section = {"requests": [r.model_dump(mode="json") for r in peer.ports]}
-            data["peer"] = section
             view = await asyncio.to_thread(storage_peer_ports.read_view, intent.array)
             if view.read_error:
-                section["error"] = f"{view.read_error}. Nothing was planned for the peer ports. Read the array again."
-                failures.append(section["error"])
+                err = f"{view.read_error}. Nothing was planned for the peer ports. Read the array again."
+                data.peer = events.PeerSection(requests=list(peer.ports), error=err)
+                failures.append(err)
             else:
                 zones = self._active_zones(run.run_id)
                 plan = storage_peer_ports.plan_peer_ports(peer, view, zones)
@@ -362,9 +363,8 @@ class ArrayPortsSteps:
                     result = storage_peer_ports.read_back_peer_ports(before[0], before=before[1], after=view)
                 self._peer[run.run_id] = (plan, view, peer)
                 removals = storage_peer_ports.planned_removals(plan)
-                section.update(
-                    view=view.model_dump(mode="json"), plan=plan.model_dump(mode="json"),
-                    result=result.model_dump(mode="json") if result else None, removals=removals,
+                data.peer = events.PeerSection(
+                    requests=list(peer.ports), view=view, plan=plan, result=result, removals=removals,
                     zones_checked=zones is not None,
                     commands_text=storage_peer_ports.command_set_text(plan, name),
                     removals_text=storage_peer_ports.removal_set_text(removals, name),
@@ -380,14 +380,14 @@ class ArrayPortsSteps:
 
         if failures:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
-            coord.emit(run.run_id, phase, "ports.preview.failed", " ".join(failures), data=data)
+            coord.emit(run.run_id, phase, events.PORTS_PREVIEW_FAILED, " ".join(failures), data)
             return
         if not pending:
             coord.set_state(run, RunStatus.READY, phase)
-            coord.emit(run.run_id, phase, "ports.completed", f"Read {name}: {'; '.join(done)}.", data=data)
+            coord.emit(run.run_id, phase, events.PORTS_COMPLETED, f"Read {name}: {'; '.join(done)}.", data)
             return
         coord.set_state(run, RunStatus.WAITING_FOR_OPERATOR, phase)
-        coord.emit(run.run_id, phase, "ports.previewed", f"Read {name}: plan ready, {'; '.join(summary)}.", data=data)
+        coord.emit(run.run_id, phase, events.PORTS_PREVIEWED, f"Read {name}: plan ready, {'; '.join(summary)}.", data)
 
     def _active_zones(self, run_id: str) -> dict[str, dict[str, set[str]] | None] | None:
         """The switches' effective zones from this run's zoning plan read ({switch: None} for a switch it
@@ -482,7 +482,7 @@ class ProvisioningSteps:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
         self.invalidate_plan(run.run_id)   # a new preview withdraws the old approval, even if it fails
-        coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "step.started", "Building the provisioning plan…")
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, events.STEP_STARTED, "Building the provisioning plan…")
         frozen = intent.model_copy(deep=True)
         zoned = set(self._discovery_steps.zoned_hosts(run.run_id))
         zoning = copy.deepcopy(self._discovery_steps.zoning_plan_payload(run.run_id))
@@ -496,9 +496,9 @@ class ProvisioningSteps:
         coord.set_state(run, status, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(
             run.run_id, WorkflowPhase.STORAGE_PROVISION,
-            "storage.preview.failed" if plan.error else "storage.previewed",
+            events.STORAGE_PREVIEW_FAILED if plan.error else events.STORAGE_PREVIEWED,
             plan.error or f"Plan ready — {len(plan.actions)} action(s). Review, then confirm to create.",
-            data={"plan": plan.model_dump(mode="json")},
+            events.StoragePlanData(plan=plan),
         )
 
     def start_storage_apply(self, run_id: str, *, approved_plan: str | None) -> RunRecord:
@@ -529,7 +529,7 @@ class ProvisioningSteps:
     async def _run_storage_apply(self, run: RunRecord, inputs: apply.StorageInputs, approval: Approval) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
-        coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.apply.started", "Creating host, volumes and exports…")
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, events.STORAGE_APPLY_STARTED, "Creating host, volumes and exports…")
         result = await coord.run_approved(approval, partial(apply.apply_plan, inputs, approval))
         created = sum(1 for o in result.outcomes if o.status == "created")
         updated = sum(1 for o in result.outcomes if o.status == "updated")
@@ -541,9 +541,9 @@ class ProvisioningSteps:
         coord.set_state(run, RunStatus.RETRYABLE_FAILURE if result.error else RunStatus.READY, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(
             run.run_id, WorkflowPhase.STORAGE_PROVISION,
-            "storage.apply.failed" if result.error else "storage.applied",
+            events.STORAGE_APPLY_FAILED if result.error else events.STORAGE_APPLIED,
             result.error or summary + ".",
-            data={"result": result.model_dump(mode="json")},
+            events.StorageResultData(result=result),
         )
 
     def start_path_verify(self, run_id: str) -> RunRecord:
@@ -556,7 +556,7 @@ class ProvisioningSteps:
         # actually live, over how many fabrics. Report-only — it never gates the run (ADR 0010).
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
-        coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.paths.checking",
+        coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, events.STORAGE_PATHS_CHECKING,
                    "Reading showvlun -a to verify the exported LUNs are live (read-only)…")
         zoned = self._discovery_steps.zoned_hosts(run.run_id)
         verification = await asyncio.to_thread(partial(
@@ -568,9 +568,9 @@ class ProvisioningSteps:
         coord.set_state(run, status, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(
             run.run_id, WorkflowPhase.STORAGE_PROVISION,
-            "storage.paths.failed" if verification.error else "storage.paths.verified",
+            events.STORAGE_PATHS_FAILED if verification.error else events.STORAGE_PATHS_VERIFIED,
             verification.error or f"Path check: {live}/{len(verification.hosts)} host(s) live on both fabrics (report-only).",
-            data={"verification": verification.model_dump(mode="json")},
+            events.PathsData(verification=verification),
         )
 
     # ------------------------------------------------------------------ provisioning builder (Stage 2)

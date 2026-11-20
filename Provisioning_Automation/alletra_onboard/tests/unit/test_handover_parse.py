@@ -419,7 +419,7 @@ def test_a_refused_or_unreadable_read_is_an_error_and_the_others_still_parse():
 ])
 def test_summarise_gives_the_event_fields(folder, expected):
     """SPEC-026 R10. No performance field since 2026-11-19 (the owner's decision)."""
-    summary = h.summarise(_reads(folder)).as_event()
+    summary = h.summarise(_reads(folder)).model_dump(mode="json")
     assert set(summary) == {"read_at", "alerts_new", "alerts_major", "oldest_alert", "cloud_alert", "read_errors"}
     assert summary["read_at"] == READ_AT[folder].isoformat() and summary["read_errors"] == {}
     assert {k: summary[k] for k in expected} == expected

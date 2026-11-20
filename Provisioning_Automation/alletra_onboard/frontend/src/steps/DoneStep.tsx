@@ -1,6 +1,7 @@
 import { Box, Button, Heading, NameValueList, NameValuePair, Text } from 'grommet';
 import { useState } from 'react';
-import { markComplete, ProvisioningResult, ReplicationReport, ReplicationResult, RunEvent, RunRecord } from '../api';
+import { markComplete, RunEvent, RunRecord } from '../api';
+import { isOf, latestOf } from '../events';
 import { DocList, Section } from '../ui/blocks';
 import { ActivityTimeline } from '../ui/primitives';
 import { PlainPage, runDocuments, when } from '../ui/RunPages';
@@ -22,9 +23,11 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
   const [error, setError] = useState<string | null>(null);
   const complete = run?.status === 'succeeded';
   // A failed apply can have made objects before it stopped (SPEC-007 R6), so both kinds of apply count.
-  const applies = events.filter((event) => ['storage.applied', 'storage.apply.failed'].includes(event.event_type) && event.data?.result);
+  const applies = events
+    .filter((event) => isOf(event, 'storage.applied', 'storage.apply.failed'))
+    .filter((event) => !!event.data?.result);
   const created = applies.some((event) => {
-    const result = event.data!.result as ProvisioningResult;
+    const result = event.data.result;
     return (result.removals ?? []).length > 0 || (result.outcomes ?? []).some((outcome) => outcome.status === 'created');
   });
   // The answer follows the LAST apply: a run whose apply found everything already there is provisioned.
@@ -39,15 +42,14 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
         ? 'Yes'
         : 'Yes. Everything was already on the array.';
   // The removal sets, as the two steps show them: every apply's undo, failed ones included (SPEC-007 R6).
-  const storageResults = applies.map((event) => event.data!.result as ProvisioningResult);
+  const storageResults = applies.map((event) => event.data.result);
   const storageRemovals = storageResults.flatMap((r) => r.removals ?? []);
   const storageNotes = storageResults.flatMap((r) => r.removal_notes ?? []).filter((note, i, all) => all.indexOf(note) === i);
-  const replicationResults = events
-    .filter((e) => ['replication.applied', 'replication.apply.failed'].includes(e.event_type) && e.data?.result)
-    .map((e) => e.data!.result as ReplicationResult);
+  const replicationResults = events.flatMap((e) =>
+    isOf(e, 'replication.applied', 'replication.apply.failed') && e.data?.result ? [e.data.result] : [],
+  );
   const replicationRemovals = mergedRemovals(replicationResults);
-  const replicationRead = [...events].reverse().find((e) => e.event_type === 'replication.previewed' && e.data?.report);
-  const pair = replicationRead?.data?.report as ReplicationReport | undefined;
+  const pair = latestOf(events, 'replication.previewed')?.data?.report;
   const lines = (n: number) => `${n} line${n === 1 ? '' : 's'}`;
   const started = events.find((e) => e.event_type === 'run.created');
   const last = events[events.length - 1];

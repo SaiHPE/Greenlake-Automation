@@ -85,7 +85,7 @@ export function GreenLakeStep({ runId, run, events, onDone }: Props) {
               <Text>{run?.serial_number ?? '--'}</Text>
             </NameValuePair>
             <NameValuePair name="Region">
-              <Text>{String(resources.data?.region ?? 'As configured in the workbook')}</Text>
+              <Text>As configured in the workbook</Text>
             </NameValuePair>
           </NameValueList>
         </Panel>

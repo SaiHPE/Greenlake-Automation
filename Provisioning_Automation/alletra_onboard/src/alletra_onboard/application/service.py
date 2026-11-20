@@ -46,6 +46,7 @@ from alletra_onboard.application.runs.coordinator import (
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.snapshots.steps import SnapshotSteps
 from alletra_onboard.config import Settings
+from alletra_onboard.domain import events
 from alletra_onboard.domain.models import (
     ArrayCredentialInfo,
     ArrayWorkItem,
@@ -170,10 +171,10 @@ class OnboardingService:
         total = sum(len(c) for c in commands.values()) + sum(len(c) for c in peer_commands.values())
         fabrics = sorted({f for f, c in [*commands.items(), *peer_commands.items()] if c})
         self.coordinator.emit(
-            run_id, WorkflowPhase.STORAGE_ZONING, "zoning.rendered",
+            run_id, WorkflowPhase.STORAGE_ZONING, events.ZONING_RENDERED,
             f"Zoning command set generated — {total} command(s) for {', '.join(fabrics) or 'no fabric'}.",
-            data={"commands": commands, "skipped": skipped, "aliases": aliases,
-                  "selected_pairs": [list(p) for p in selected_pairs], "peer_commands": peer_commands},
+            events.ZoningRenderedData(commands=commands, skipped=skipped, aliases=aliases,
+                                      selected_pairs=selected_pairs, peer_commands=peer_commands),
         )
 
     def mark_complete(self, run_id: str) -> RunRecord:

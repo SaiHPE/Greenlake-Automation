@@ -134,6 +134,9 @@ cd frontend && npm run mockups           # design mockups on :5175
 - Browser selectors live in `adapters/browser/locators.py`; use role, label or visible text, never
   CSS classes.
 - Shipped `.ps1` files must be pure ASCII (Windows PowerShell 5.1 reads them as ANSI).
+- Run event evolution (ADR 0032): a field added to an event payload in `domain/events.py` gets a
+  default; a payload field or event type is never renamed or given a new meaning (a new meaning gets
+  a new event type).
 
 ## Writing style (UI text, docs, commit and pull request messages)
 

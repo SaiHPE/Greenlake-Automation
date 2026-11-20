@@ -27,6 +27,7 @@ from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.application.snapshots import read as snapshots_read
 from alletra_onboard.application.unified_file import read as file_read
+from alletra_onboard.domain import events
 from alletra_onboard.domain.discovery import EthernetPort
 from alletra_onboard.domain.errors import DeviceError
 from alletra_onboard.domain.models import ArrayWorkItem, RunRecord, WorkflowPhase
@@ -134,19 +135,19 @@ class DocumentSteps:
         # The run is already COMPLETE; verification is a read-only confidence check and must NEVER
         # change the run status — a failure here can't un-succeed the onboarding.
         coord = self._coord
-        coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, "step.started", "Verifying the array configuration over SSH…")
+        coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, events.STEP_STARTED, "Verifying the array configuration over SSH…")
         try:
             report = await asyncio.to_thread(self._verify_fn, item, username, password)
         except Exception as exc:  # never propagate (the guard would mark the run failed)
             coord.emit(
                 run.run_id,
                 WorkflowPhase.CONFIG_VERIFY,
-                "verify.failed",
+                events.VERIFY_FAILED,
                 f"Verification error: {type(exc).__name__}: {str(exc)[:200]}",
             )
             return
         if not report.reachable:
-            coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, "verify.failed", report.error or "Could not reach the array over SSH.")
+            coord.emit(run.run_id, WorkflowPhase.CONFIG_VERIFY, events.VERIFY_FAILED, report.error or "Could not reach the array over SSH.")
             return
         iscsi = ""
         rows = self._iscsi_rows(run.run_id)
@@ -175,10 +176,10 @@ class DocumentSteps:
         coord.emit(
             run.run_id,
             WorkflowPhase.CONFIG_VERIFY,
-            "verify.completed",
+            events.VERIFY_COMPLETED,
             f"Verified the array — {report.passed} OK, {report.mismatches} mismatch(es), "
             f"{report.health_total} health issue(s).{iscsi}",
-            data={"report": report.model_dump(mode="json")},
+            events.VerifyData(report=report),
         )
 
     def _peer_intent(self, run_id: str) -> PeerPortIntent | None:
@@ -211,7 +212,7 @@ class DocumentSteps:
         # Read-only (SSH show*/checkhealth/showinventory -csvtable) -> the as-built .docx. Post-onboarding
         # and read-only, so like verify it NEVER changes the run status; the UI reacts to the events.
         coord = self._coord
-        coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.started",
+        coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, events.ASBUILT_STARTED,
                    f"Reading {host} (read-only) and building the as-built document…")
         try:
             data = await asyncio.to_thread(self._collect_asbuilt, host, username, password)
@@ -250,7 +251,7 @@ class DocumentSteps:
             docx_bytes, warnings = await asyncio.to_thread(self._render_asbuilt, data)
             status = self._handover_status(data)
         except Exception as exc:  # report, never propagate (would mark the run failed)
-            coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.failed",
+            coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, events.ASBUILT_FAILED,
                        f"As-built generation failed: {type(exc).__name__}: {str(exc)[:200]}")
             return
         self._asbuilt[run.run_id] = docx_bytes
@@ -263,17 +264,19 @@ class DocumentSteps:
             # The document is produced regardless, so the warnings must travel WITH it — in the
             # message and in the event data — or a rushed operator sends an incomplete as-built.
             summary += f" {len(warnings)} item(s) need attention before sending."
-        coord.emit(run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, "asbuilt.generated", summary,
-                   data={"serial": data.serial_no, "name": data.name, "customer": data.customer,
-                         "size": len(docx_bytes), "warnings": warnings, "handover": status})
+        coord.emit(
+            run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, events.ASBUILT_GENERATED, summary,
+            events.AsBuiltData(serial=data.serial_no, name=data.name, customer=data.customer,
+                               size=len(docx_bytes), warnings=warnings, handover=status),
+        )
 
     @staticmethod
-    def _handover_status(data) -> dict | None:
+    def _handover_status(data) -> events.HandoverStatus | None:
         """SPEC-026 R10: the page's Status at handover, from the same reads as the document. None when
         the reads were not made."""
         if data.handover_read_at is None:
             return None
-        return handover.summarise(handover.read_from(data)).as_event()
+        return handover.summarise(handover.read_from(data))
 
     def _collect_asbuilt(self, host: str, username: str, password: str):
         creds = EndpointCreds(host=host, username=username, password=SecretStr(password))

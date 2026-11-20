@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { RemovalItem } from '../api';
 import { removalLines } from '../ui/RemovalSets';
 
-const item = (kind: string, name: string): RemovalItem => ({ kind, name, command: `remove${kind} -f ${name}` });
+const item = (kind: RemovalItem['kind'], name: string): RemovalItem => ({ kind, name, command: `remove${kind} -f ${name}` });
 
 describe('removalLines', () => {
   it('orders the undo so it pastes top to bottom: schedules and exports before what they use', () => {
@@ -16,7 +16,7 @@ describe('removalLines', () => {
   });
 
   it('keeps the order within a kind and puts an unknown kind last', () => {
-    const items = [item('mystery', 'm1'), item('volume', 'b'), item('volume', 'a'), item('host', 'h1')];
+    const items = [item('mystery' as RemovalItem['kind'], 'm1'), item('volume', 'b'), item('volume', 'a'), item('host', 'h1')];
     expect(removalLines(items)).toEqual(['removevolume -f b', 'removevolume -f a', 'removehost -f h1', 'removemystery -f m1']);
   });
 

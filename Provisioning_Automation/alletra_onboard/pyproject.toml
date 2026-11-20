@@ -42,6 +42,8 @@ dev = [
   "pytest>=8.3.0",
   "pytest-asyncio>=0.23.0",
   "respx>=0.21.0",
+  "fastapi==0.163.1",     # exact dev pins so scripts/api_types.py emits identical OpenAPI across machines (ADR 0032)
+  "pydantic==2.14.3",
   "ruff==0.17.0",
   "import-linter==2.17",  # the dependency rules of docs/STANDARD.md (the `deps` step of scripts/check.py)
   "vulture==2.16",  # dead code, STANDARD M3 (the `vulture` step of scripts/check.py)

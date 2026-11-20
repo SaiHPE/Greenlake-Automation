@@ -1337,7 +1337,8 @@ async def test_a_failed_peer_port_read_plans_nothing(tmp_path, monkeypatch):
     (event,) = [e for e in service.list_events(run.run_id) if e.event_type == "ports.preview.failed"]
     assert event.message == ("Could not read 10.132.30.121: timed out. Nothing was planned for the peer ports. "
                              "Read the array again.")
-    assert "plan" not in event.data["peer"] and service.get_ports(run.run_id)["peer_plan_held"] is False
+    # PeerSection serialises unset fields as null rather than omitting keys (ADR 0032).
+    assert event.data["peer"]["plan"] is None and service.get_ports(run.run_id)["peer_plan_held"] is False
 
 
 # ------------------------------------------------------------------ R7: zoning
