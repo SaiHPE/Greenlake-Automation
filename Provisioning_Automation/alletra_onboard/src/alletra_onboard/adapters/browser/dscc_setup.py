@@ -19,10 +19,17 @@ so those locators are best-effort (label/name based) and flagged for first-run v
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
+from alletra_onboard.adapters.browser.debug_browser import (
+    PlaywrightError,
+    PlaywrightTimeoutError,
+    async_playwright,
+    ensure_localhost_no_proxy,
+    save_screenshot,
+)
 from alletra_onboard.adapters.browser.locators import DSCC
+from alletra_onboard.domain.errors import BrowserError, DsccSetupError
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
     BrowserResultStatus,
@@ -30,26 +37,8 @@ from alletra_onboard.domain.models import (
     NetworkConfig,
 )
 
-try:
-    from playwright.async_api import TimeoutError as _PlaywrightTimeoutError
-    from playwright.async_api import async_playwright
-
-    PlaywrightTimeoutError: type[Exception] = _PlaywrightTimeoutError
-except ImportError:  # pragma: no cover - browser deps optional until B/C run.
-    async_playwright = None
-
-    class _FallbackPlaywrightTimeoutError(Exception):
-        pass
-
-    PlaywrightTimeoutError = _FallbackPlaywrightTimeoutError
-
-
 STEP_TIMEOUT_MS = 30_000
 DSCC_HOST_HINT = "data.cloud.hpe.com"
-
-
-class DsccSetupError(Exception):
-    """Operator-actionable problem (e.g. a required secret is missing)."""
 
 
 class DsccSetupAdapter:
@@ -69,43 +58,54 @@ class DsccSetupAdapter:
         if not self.cdp_url:
             return BrowserResultStatus.FAILED_RETRYABLE  # DSCC must attach to a logged-in browser
 
-        self._ensure_localhost_no_proxy()
-        async with async_playwright() as pw:
-            try:
-                browser = await pw.chromium.connect_over_cdp(self.cdp_url)
-            except Exception:  # CDP unreachable / no debug browser.
-                return BrowserResultStatus.FAILED_RETRYABLE
+        ensure_localhost_no_proxy()
+        try:
+            async with async_playwright() as pw:
+                browser = await self._connect(pw, self.cdp_url)
+                if browser is None:
+                    return BrowserResultStatus.FAILED_RETRYABLE
 
-            page = None
-            try:
-                page = await self._pick_open_page(browser)
-                if page is None:
-                    return BrowserResultStatus.FAILED_RETRYABLE  # no DSCC tab to drive
-                page.set_default_timeout(STEP_TIMEOUT_MS)
+                page = None
+                try:
+                    page = await self._pick_open_page(browser)
+                    if page is None:
+                        return BrowserResultStatus.FAILED_RETRYABLE  # no DSCC tab to drive
+                    page.set_default_timeout(STEP_TIMEOUT_MS)
 
-                frame = page.frame_locator(DSCC["iframe"])
-                await frame.locator(DSCC["continue"]).first.wait_for(state="visible")
+                    frame = page.frame_locator(DSCC["iframe"])
+                    await frame.locator(DSCC["continue"]).first.wait_for(state="visible")
 
-                await self._welcome(frame)
-                await self._network_domain(frame, item.network)
-                await self._time(frame, item.network)
-                await self._proxy(frame, item.network)
-                await self._support_contact(frame, item.dscc_setup)
-                await self._system(frame, item.dscc_setup)
+                    await self._welcome(frame)
+                    await self._network_domain(frame, item.network)
+                    await self._time(frame, item.network)
+                    await self._proxy(frame, item.network)
+                    await self._support_contact(frame, item.dscc_setup)
+                    await self._system(frame, item.dscc_setup)
 
-                # STOP on the System screen with everything filled EXCEPT the credential. The
-                # operator picks/creates the system secret (sensitive, and not reliably scriptable),
-                # then clicks Continue -> reviews -> Submits. Confirm we're on System and return.
-                await frame.locator(DSCC["credentials_select"]).wait_for(state="visible")
-                return BrowserResultStatus.WAITING_FOR_OPERATOR
-            except DsccSetupError:
-                # Bad/missing work-item input (e.g. no contact name) — fix the data, then re-run.
-                await self._dump(page, run_id, "operator-action")
-                return BrowserResultStatus.FAILED_TERMINAL
-            except PlaywrightTimeoutError:
-                await self._dump(page, run_id, "timeout")
-                return BrowserResultStatus.FAILED_RETRYABLE
-            # Never close the operator's attached browser.
+                    # STOP on the System screen with everything filled EXCEPT the credential. The
+                    # operator picks/creates the system secret (sensitive, and not reliably scriptable),
+                    # then clicks Continue -> reviews -> Submits. Confirm we're on System and return.
+                    await frame.locator(DSCC["credentials_select"]).wait_for(state="visible")
+                    return BrowserResultStatus.WAITING_FOR_OPERATOR
+                except DsccSetupError:
+                    # Bad/missing work-item input (e.g. no contact name) — fix the data, then re-run.
+                    await self._dump(page, run_id, "operator-action")
+                    return BrowserResultStatus.FAILED_TERMINAL
+                except PlaywrightTimeoutError:
+                    await self._dump(page, run_id, "timeout")
+                    return BrowserResultStatus.FAILED_RETRYABLE
+                except PlaywrightError as exc:
+                    await self._dump(page, run_id, "error")
+                    raise BrowserError(str(exc)) from exc
+                # Never close the operator's attached browser.
+        except PlaywrightError as exc:
+            raise BrowserError(str(exc)) from exc
+
+    async def _connect(self, pw, cdp_url: str):
+        try:
+            return await pw.chromium.connect_over_cdp(cdp_url)
+        except (PlaywrightError, OSError):  # CDP unreachable / no debug browser.
+            return None
 
     # ------------------------------------------------------------------ screens
 
@@ -218,22 +218,5 @@ class DsccSetupAdapter:
         except PlaywrightTimeoutError:
             pass  # inherited value stands; first-run verification will tell us if this matters
 
-    @staticmethod
-    def _ensure_localhost_no_proxy() -> None:
-        existing = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
-        hosts = [h.strip() for h in existing.split(",") if h.strip()]
-        for host in ("localhost", "127.0.0.1"):
-            if host not in hosts:
-                hosts.append(host)
-        value = ",".join(hosts)
-        os.environ["NO_PROXY"] = value
-        os.environ["no_proxy"] = value
-
     async def _dump(self, page, run_id: str, label: str) -> None:
-        if not self.artifact_dir:
-            return
-        try:
-            self.artifact_dir.mkdir(parents=True, exist_ok=True)
-            await page.screenshot(path=str(self.artifact_dir / f"dscc-{run_id}-{label}.png"), full_page=True)
-        except Exception:
-            pass
+        await save_screenshot(self.artifact_dir, page, f"dscc-{run_id}-{label}.png", label)

@@ -161,20 +161,26 @@ class _FailingWsapi(TruthfulFakeWsapi):
         self.failed = False
 
     def _answer(self, kind, name, present):
+        from alletra_onboard.domain.errors import WsapiError
+
         if (kind, name) == self.fail_on:
-            raise RuntimeError("HTTP 400: the array refused the request")
+            raise WsapiError("HTTP 400: the array refused the request")
         return super()._answer(kind, name, present)
 
     def ensure_vlun(self, source_ref, target_ref, lun=None):
+        from alletra_onboard.domain.errors import WsapiError
+
         if ("vlun", source_ref) == self.fail_on:
             self._vluns.extend(self.made_by_the_failed_call)      # the array presented it; the answer was lost
             self.failed = True
-            raise RuntimeError("timed out waiting for the array")
+            raise WsapiError("timed out waiting for the array")
         return super().ensure_vlun(source_ref, target_ref, lun)
 
     def vlun_templates(self):
+        from alletra_onboard.domain.errors import WsapiError
+
         if self.failed and self.read_back_fails:
-            raise RuntimeError("connection reset")
+            raise WsapiError("connection reset")
         return super().vlun_templates()
 
 
@@ -231,8 +237,10 @@ def test_exports_that_cannot_be_read_back_after_a_failure_are_named_in_a_note():
 
 
 def test_a_session_that_never_opened_wrote_nothing_and_removes_nothing():
+    from alletra_onboard.domain.errors import WsapiError
+
     def refuse(approval, purpose, side):
-        raise RuntimeError("login refused")
+        raise WsapiError("login refused")
 
     intent = _intent()
     result = prov_apply.apply_plan(
@@ -461,3 +469,43 @@ def test_concurrent_foreign_export_never_enters_this_runs_removal_set(label, for
     vlun_cmds = [i.command for i in result.removals if i.kind == "vlun"]
     assert vlun_cmds == ["removevlun -f vol01 5 set:hs", "removevlun -f vol02 6 set:hs"]
     assert f"removevlun -f {foreign.volume} {foreign.lun} {foreign.target}" not in vlun_cmds
+
+
+def test_store_failure_during_apply_returns_stopped_result_with_removals(tmp_path, monkeypatch):
+    """A SQLite failure inside the coordinator's apply-record saver raises ApplyRecordError and
+    produces the tailored 'Stopped while creating ...' result with removals, never step.crashed."""
+    import sqlite3
+
+    from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
+    from alletra_onboard.application.runs.coordinator import RunCoordinator
+    from alletra_onboard.application.runs.event_bus import InMemoryEventBus
+    from alletra_onboard.config import Settings
+
+    store = SqliteRunStore(tmp_path / "state.db")
+    store.initialize()
+    coord = RunCoordinator(Settings(), store, InMemoryEventBus())
+    intent = _intent()
+    fake = TruthfulFakeWsapi(hosts=[])
+
+    saves = 0
+    real_save_artifact = store.save_artifact
+
+    def fail_on_6th(run_id: str, kind: str, payload: bytes) -> None:
+        nonlocal saves
+        saves += 1
+        if saves == 6:
+            raise sqlite3.OperationalError("database is locked")
+        real_save_artifact(run_id, kind, payload)
+
+    monkeypatch.setattr(store, "save_artifact", fail_on_6th)
+    approval = _approval(intent)
+    approval.save_record = coord.apply_record("test-run", "storage.apply.failed")
+    inputs = prov_apply.StorageInputs(intent, _discovery(), REACHABLE, prov.ProvisioningPlan())
+    result = prov_apply.apply_plan(inputs, approval, wsapi_factory=lambda a, p, s: fake)
+
+    assert result.error is not None
+    assert result.error.startswith("Stopped while creating ")
+    assert "database is locked" in result.error
+    cmds = render_removal_commands(result.removals)
+    assert "removehostset -f hs" in cmds
+    assert "removehost esx1" in cmds

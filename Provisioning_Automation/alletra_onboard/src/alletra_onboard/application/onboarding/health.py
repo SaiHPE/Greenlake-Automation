@@ -15,6 +15,7 @@ from alletra_onboard.application.onboarding.clients import (
     tls_trust_guidance,
 )
 from alletra_onboard.config import Settings
+from alletra_onboard.domain.policies import redact
 
 
 class ProvisionSummary(BaseModel):
@@ -37,6 +38,10 @@ class GreenLakeCheckReport(BaseModel):
 
 
 async def greenlake_check(settings: Settings) -> GreenLakeCheckReport:
+    """Run the GreenLake readiness probe under the 'report any failure, never crash or leak
+    a secret' contract: TLS trust failures get certificate guidance, and every non-TLS failure
+    (including unexpected response errors) is reported as ok=False with tls_trust_failure=False
+    and secrets redacted."""
     missing = missing_credentials(settings)
     if missing:
         return GreenLakeCheckReport(ok=False, missing_credentials=missing, error="credentials not configured")
@@ -54,14 +59,15 @@ async def greenlake_check(settings: Settings) -> GreenLakeCheckReport:
             "GET", "/service-catalog/v1/service-manager-provisions", bucket="service_catalog_read"
         )
         raw = response.json().get("items", [])
-    except Exception as exc:  # operator-facing health check reports, not crashes.
+    except Exception as exc:  # contract: report any failure (TLS vs non-TLS) with secrets redacted
+        detail = redact(str(exc))
         if is_tls_trust_error(exc):
             return GreenLakeCheckReport(
                 ok=False,
                 tls_trust_failure=True,
-                error=tls_trust_guidance("the HPE GreenLake API") + f" [{type(exc).__name__}: {str(exc)[:160]}]",
+                error=tls_trust_guidance("the HPE GreenLake API") + f" [{type(exc).__name__}: {detail[:160]}]",
             )
-        return GreenLakeCheckReport(ok=False, error=f"{type(exc).__name__}: {str(exc)[:200]}")
+        return GreenLakeCheckReport(ok=False, error=f"{type(exc).__name__}: {detail[:200]}")
 
     provisions = [
         ProvisionSummary(

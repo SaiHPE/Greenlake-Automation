@@ -324,7 +324,7 @@ def _wsapi(name: str) -> dict:
 
 def test_wsapi_records_parse_the_captured_shapes():
     """rack13arcus, 2026-09-13 12:33, zz_t2_* present (tests/fixtures/rack13_wsapi/README.md)."""
-    from alletra_onboard.adapters.array import wsapi_client as wc
+    from alletra_onboard.adapters.array import wsapi_parse as wc
 
     hosts = {h.name: h for h in wc.parse_hosts(_wsapi("hosts"))}
     esx = hosts["10.132.30.136"]
@@ -355,7 +355,7 @@ def test_vlun_templates_are_the_inactive_records_taken_as_is():
     """94 records: 74 active paths (hostname = the MEMBER host, type 5) + 20 templates (hostname as
     the array names the target). The first draft's 'type 5 => prefix set:' would have produced
     `set:10.132.30.136` from every active path."""
-    from alletra_onboard.adapters.array import wsapi_client as wc
+    from alletra_onboard.adapters.array import wsapi_parse as wc
 
     templates = wc.parse_vlun_templates(_wsapi("vluns"))
     assert len(templates) == 20
@@ -374,7 +374,7 @@ def test_vlun_templates_are_the_inactive_records_taken_as_is():
 
 def test_plan_against_the_captured_array_says_everything_exists():
     """S-1 in miniature: the run-2 intent against the array as captured right after run 2."""
-    from alletra_onboard.adapters.array import wsapi_client as wc
+    from alletra_onboard.adapters.array import wsapi_parse as wc
 
     intent = _intent(
         volumes=[VolumeRequest(name="zz_t2_vol01", size_gib=1, cpg="SSD_r6", vvset="zz_t2_vvs"),
@@ -413,7 +413,7 @@ def _wsapi(name: str) -> dict:
 def test_live_wsapi_capture_pins_vlun_templates():
     """rack13arcus reports a set export's ACTIVE paths with hostname = the member host and type 5.
     Templates are the inactive records, as-is — the type-5 prefix rule must never invent set:<host>."""
-    from alletra_onboard.adapters.array import wsapi_client as wc
+    from alletra_onboard.adapters.array import wsapi_parse as wc
 
     templates = wc.parse_vlun_templates(_wsapi("vluns"))
     assert VlunTemplate(volume="zz_t2_vol01", target="set:zz_t2_hs", lun=0) in templates
@@ -425,7 +425,7 @@ def test_live_wsapi_capture_pins_vlun_templates():
 
 
 def test_live_wsapi_capture_pins_volumes_and_hosts():
-    from alletra_onboard.adapters.array import wsapi_client as wc
+    from alletra_onboard.adapters.array import wsapi_parse as wc
 
     vols = {v.name: v for v in wc.parse_volumes(_wsapi("volumes"))}
     assert len(vols) == 51
@@ -654,3 +654,33 @@ def test_result_rows_carry_the_arrays_identifiers():
     assert "LUN 0" in by[("vlun", "vvs")].detail
     # one read-back each, never per object
     assert fake.reads.count("hosts") == 1 and fake.reads.count("volumes") == 1
+
+
+def test_wsapi_parse_and_apply_preserve_id_zero():
+    """Captured arrays assign id 0 to the first host (ESX1) and the admin volume. Parsing must keep
+    id=0 (not turn falsy 0 into None) and the apply Result row must show 'id 0'."""
+    from alletra_onboard.adapters.array import wsapi_parse
+
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures"
+    hosts = {h.name: h for h in wsapi_parse.parse_hosts(
+        json.loads((fixtures / "d22u27_iscsi" / "wsapi_hosts.json").read_text(encoding="utf-8"))
+    )}
+    vols = {v.name: v for v in wsapi_parse.parse_volumes(
+        json.loads((fixtures / "d22u27_snap" / "wsapi_volumes.json").read_text(encoding="utf-8"))
+    )}
+    assert hosts["ESX1"].id == 0
+    assert vols["admin"].id == 0
+
+    host0 = hosts["ESX1"].model_copy(update={"name": "esx1", "wwns": [WWN_A, WWN_B]})
+    vol0 = vols["admin"].model_copy(update={"name": "vol01", "cpg": "SSD_r6"})
+    fake = TruthfulFakeWsapi(hosts=[host0], volumes=[vol0])
+    fake.created_templates[("set:vvs", "set:hs")] = [
+        VlunTemplate(volume="vol01", target="set:hs", lun=0), VlunTemplate(volume="vol02", target="set:hs", lun=1),
+    ]
+    result = prov_apply.apply_plan(
+        prov_apply.StorageInputs(_intent(), _discovery(), REACHABLE, prov.ProvisioningPlan()),
+        _approval(), wsapi_factory=lambda a, p, s: fake,
+    )
+    by = {(o.kind, o.name): o for o in result.outcomes}
+    assert by[("host", "esx1")].detail.startswith("id 0 · ")
+    assert by[("volume", "vol01")].detail.startswith("id 0 · ")

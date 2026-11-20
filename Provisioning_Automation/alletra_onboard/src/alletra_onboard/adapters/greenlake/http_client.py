@@ -9,8 +9,13 @@ from urllib.parse import urlsplit
 import httpx
 
 from alletra_onboard.adapters import command_log
+from alletra_onboard.adapters.greenlake import json_object
 from alletra_onboard.adapters.tls import ssl_context
-from alletra_onboard.domain.errors import GreenLakeAsyncOperationError, GreenLakeHttpError
+from alletra_onboard.domain.errors import (
+    GreenLakeAsyncOperationError,
+    GreenLakeError,
+    GreenLakeHttpError,
+)
 from alletra_onboard.domain.policies import RateBudget, TokenBucket, redact
 
 # Async-operation status vocabulary (Devices/Subscriptions async-operations).
@@ -72,9 +77,9 @@ class GreenLakeHttpClient:
                     base_url=self.base_url, timeout=self.timeout_seconds, verify=ssl_context()
                 ) as client:
                     response = await client.request(method, path, headers=headers, **kwargs)
-            except Exception as exc:
+            except (httpx.HTTPError, httpx.InvalidURL, OSError) as exc:
                 self._record(method, path, kwargs, started, ok=False, result=type(exc).__name__, token=token)
-                raise
+                raise GreenLakeError(f"{type(exc).__name__}: {exc}") from exc
             retrying = response.status_code in RETRYABLE_STATUS and attempt < self.max_retries
             self._record(method, path, kwargs, started, ok=response.is_success,
                          result=f"HTTP {response.status_code}" + (", retrying" if retrying else ""),
@@ -134,7 +139,10 @@ class GreenLakeHttpClient:
         deadline = time.monotonic() + max_wait_seconds
         started = time.monotonic()
         while True:
-            payload = (await self.request("GET", location, bucket=bucket)).json()
+            payload = json_object(
+                await self.request("GET", location, bucket=bucket),
+                where=f"async operation {location}",
+            )
             status = str(payload.get("status") or payload.get("state") or "").upper()
             elapsed = time.monotonic() - started
             if status in TERMINAL_OK:

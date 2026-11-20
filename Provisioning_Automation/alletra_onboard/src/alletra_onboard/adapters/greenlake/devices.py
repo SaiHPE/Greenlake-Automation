@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from alletra_onboard.adapters.greenlake import json_items, json_object
+
 if TYPE_CHECKING:
     from alletra_onboard.adapters.greenlake.http_client import GreenLakeHttpClient
 
@@ -54,12 +56,12 @@ class DevicesClient:
             bucket="device_read",
             params={"filter": f"serialNumber eq '{serial_number}'"},
         )
-        items = response.json().get("items", [])
+        items = json_items(response, where="device lookup")
         return items[0] if items else None
 
     async def get(self, device_id: str) -> dict:
         response = await self.http.request("GET", f"/devices/v1/devices/{device_id}", bucket="device_read")
-        return response.json()
+        return json_object(response, where=f"device {device_id}")
 
     async def assign_application(self, device_id: str, service_manager_id: str, region: str) -> str | None:
         response = await self.http.request(

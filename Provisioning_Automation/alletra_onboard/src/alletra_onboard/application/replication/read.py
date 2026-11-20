@@ -10,6 +10,8 @@ import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
+import structlog
+
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.domain.array_parse import (
     NSP,
@@ -20,6 +22,7 @@ from alletra_onboard.domain.array_parse import (
     parse_showsys,
     parse_showversion,
 )
+from alletra_onboard.domain.errors import DeviceError
 from alletra_onboard.domain.replication import (
     RcGroup,
     RcGroupDetail,
@@ -31,6 +34,8 @@ from alletra_onboard.domain.replication import (
     ReplicationArrayView,
 )
 from alletra_onboard.domain.shared import EndpointCreds
+
+_log = structlog.get_logger(__name__)
 
 
 def _int(text: str) -> int | None:
@@ -260,7 +265,7 @@ def read_group_details(
             for group in groups:
                 try:
                     text = cli.run(group_detail_command(group))
-                except Exception as exc:  # one group's read costs that group only
+                except DeviceError as exc:  # one group's read costs that group only
                     errors[group] = str(exc)
                     continue
                 found = next((g for g in parse_showrcopy_detail(text) if g.name == group), None)
@@ -269,7 +274,7 @@ def read_group_details(
                     errors[group] = first or "the array printed no block for it"
                 else:
                     details[group] = found
-    except Exception as exc:  # a report, never a gate
+    except DeviceError as exc:  # a report, never a gate
         errors = {group: f"Could not read {creds.host}: {exc}" for group in groups if group not in details}
     return details, errors
 
@@ -367,8 +372,8 @@ def read_array(
                 local, view.time_zone = parse_showdate(cli.run("showdate"))
                 if local is not None:
                     view.utc_offset_minutes = utc_offset_minutes(local, datetime.now(UTC))
-            except Exception:  # times are then shown in UTC
-                pass
-    except Exception as exc:  # the step reports, the operator fixes the sheet
+            except (DeviceError, OSError, ValueError) as exc:  # times are then shown in UTC
+                _log.debug("showdate_read_failed", host=creds.host, error=str(exc))
+    except DeviceError as exc:  # the step reports, the operator fixes the sheet
         view.read_error = f"Could not read {creds.host}: {exc}"
     return view

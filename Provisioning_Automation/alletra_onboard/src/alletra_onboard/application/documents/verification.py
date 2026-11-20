@@ -29,7 +29,7 @@ from pydantic import SecretStr
 from alletra_onboard.application.provisioning.clients import make_array_cli, make_wsapi_v3
 from alletra_onboard.application.unified_file.read import read_file_side
 from alletra_onboard.domain.array_parse import parse_showversion
-from alletra_onboard.domain.errors import ArrayCliError
+from alletra_onboard.domain.errors import ArrayCliError, DeviceError
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
     FieldCheck,
@@ -260,7 +260,7 @@ def verify(
                 parse_showversion(outputs["showversion"]), outputs["showport -file"],
             )
             file_checks = _file_checks(ports, report)
-        except Exception:  # the file side cannot sink verification
+        except (DeviceError, ValueError):  # the file side cannot sink verification
             file_checks = _unreadable_file_checks()
     finally:
         client.close()

@@ -28,6 +28,7 @@ from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPre
 from alletra_onboard.application.snapshots import read as snapshots_read
 from alletra_onboard.application.unified_file import read as file_read
 from alletra_onboard.domain.discovery import EthernetPort
+from alletra_onboard.domain.errors import DeviceError
 from alletra_onboard.domain.models import ArrayWorkItem, RunRecord, WorkflowPhase
 from alletra_onboard.domain.network import IscsiVlanRequest
 from alletra_onboard.domain.peer_ports import PeerPortIntent
@@ -157,7 +158,7 @@ class DocumentSteps:
                 report.iscsi_vlans = iscsi_network.verify_iscsi_vlans(rows, vlans)
                 present = sum(1 for c in report.iscsi_vlans if c.status == "present")
                 iscsi = f" iSCSI VLAN addresses: {present} of {len(rows)} present."
-            except Exception as exc:  # one read failing costs its section, not the report
+            except (DeviceError, ValueError) as exc:  # one read failing costs its section, not the report
                 report.iscsi_vlans_error = f"`showport -iscsivlans` could not be read: {exc}"
                 iscsi = " The iSCSI VLAN addresses could not be read."
         peer = self._peer_intent(run.run_id)
@@ -219,24 +220,24 @@ class DocumentSteps:
             data.iscsi_network_rows = [r.model_dump(mode="json") for r in self._iscsi_rows(run.run_id)]
             peer = self._peer_intent(run.run_id)
             data.peer_ports_rows = [r.model_dump(mode="json") for r in peer.ports] if peer is not None else []
+            creds = EndpointCreds(host=host, username=username, password=SecretStr(password))
             replication = self._replication_intent(run.run_id)
             if replication is not None:
                 # SPEC-018 R3: the replication states are read from BOTH arrays now, not copied from the plan
                 data.replication_tab = self._replication_tab(replication)
                 data.replication_primary, data.replication_peer = await asyncio.to_thread(
-                    self._collect_replication, EndpointCreds(host=host, username=username, password=SecretStr(password)), replication.peer,
+                    self._collect_replication, creds, replication.peer,
                 )
                 # BL-64: every volume and the settings of each group this run configured (showrcopy -d)
                 names = rc_group_names(data)
                 if names:
                     data.replication_details, data.replication_details_errors = await asyncio.to_thread(
-                        self._read_replication_details, EndpointCreds(host=host, username=username, password=SecretStr(password)), names)
+                        self._read_replication_details, creds, names)
             snapshots = self._snapshots_intent(run.run_id)
             if snapshots is not None:
                 # SPEC-023 R8: schedules and snapshots are read now, not copied from the plan
                 data.snapshots_tab = [r.model_dump(mode="json") for r in snapshots.requests]
-                data.snapshots_view = await asyncio.to_thread(
-                    self._read_snapshots, EndpointCreds(host=host, username=username, password=SecretStr(password)))
+                data.snapshots_view = await asyncio.to_thread(self._read_snapshots, creds)
             # The step's own fields win over the workbook's — the operator is looking at the
             # document about to be produced, and the sheet may have been filled weeks earlier.
             data.customer = customer or item.customer_name or ""
@@ -253,13 +254,10 @@ class DocumentSteps:
                        f"As-built generation failed: {type(exc).__name__}: {str(exc)[:200]}")
             return
         self._asbuilt[run.run_id] = docx_bytes
-        try:
-            coord.store.save_artifact(run.run_id, "asbuilt_docx", docx_bytes)
-        except Exception:
-            # The document exists and is downloadable from memory. Failing to persist it must not
-            # escape: the guard around this task would mark a finished run failed, which this step
-            # is documented never to do.
-            pass
+        # The document exists and is downloadable from memory. Failing to persist it must not
+        # escape: the guard around this task would mark a finished run failed, which this step
+        # is documented never to do.
+        coord.save_artifact_best_effort(run.run_id, "asbuilt_docx", docx_bytes)
         summary = f"As-built ready for {data.name or data.serial_no or host} — {len(docx_bytes) // 1024} KB."
         if warnings:
             # The document is produced regardless, so the warnings must travel WITH it — in the
@@ -288,21 +286,21 @@ class DocumentSteps:
                 lines.append(outputs[cmd])
             data = parse_asbuilt("\n".join(lines))
             data.showport = outputs.get("showport", "")
-            for attr, cmd in self._ASBUILT_LISTINGS:
-                try:
-                    setattr(data, attr, cli.run(cmd))
-                except Exception as exc:  # R6: name it, keep going
-                    data.read_errors[cmd] = f"{type(exc).__name__}: {exc}"
+            self._read_into(cli, data, self._ASBUILT_LISTINGS)  # R6: name it, keep going
             # SPEC-028 R3: the file side, in the same session; no section on an array without one
             data.file_ports, data.file_report, data.file_read_error = self._collect_file(cli, creds)
             # SPEC-026 R3: the array's clock, alerts and capacity, each failing on its own (R8), read last
             data.handover_read_at = datetime.now(UTC)
-            for attr, cmd in handover.READS:
-                try:
-                    setattr(data, attr, cli.run(cmd))
-                except Exception as exc:  # R8: name it, keep going
-                    data.read_errors[cmd] = f"{type(exc).__name__}: {exc}"
+            self._read_into(cli, data, handover.READS)  # R8: name it, keep going
         return data
+
+    @staticmethod
+    def _read_into(cli, data, pairs: tuple[tuple[str, str], ...]) -> None:
+        for attr, cmd in pairs:
+            try:
+                setattr(data, attr, cli.run(cmd))
+            except DeviceError as exc:
+                data.read_errors[cmd] = f"{type(exc).__name__}: {exc}"
 
     def _run_records(self, run_id: str, data) -> None:
         """Fill the run sections from the run's own events: the latest payload per event type, plus

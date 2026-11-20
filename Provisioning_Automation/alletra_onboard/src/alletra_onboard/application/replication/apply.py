@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from alletra_onboard.application.runs.apply_record import maybe_made, recorded_write
 from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
 from alletra_onboard.domain.approval import Approval, SaveRecord
+from alletra_onboard.domain.errors import ApplyRecordError, DeviceError
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     ReplicationAction,
@@ -173,7 +174,7 @@ def apply_plan(
             _apply_test_objects(plan, st)
             for action in _group_actions(plan):
                 _apply_group(plan, action, st)
-    except Exception as exc:  # the array's message, where it stopped, what was created
+    except (DeviceError, ApplyRecordError) as exc:  # the array's message, where it stopped, what was created
         done = [o for o in result.outcomes if o.status == "created"]
         result.error = (f"Stopped after {len(done)} write(s): {exc} The removal set below undoes exactly what "
                         "was created before the failure.")

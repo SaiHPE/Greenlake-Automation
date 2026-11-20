@@ -172,9 +172,11 @@ class _FakeSdk:
         return {"members": [{"name": k, "setmembers": v} for k, v in self.state.setdefault("host_sets", {}).items()]}
 
     def getHostSet(self, name: str) -> dict[str, Any]:
+        from hpe3parclient import exceptions as hpe_exc
+
         sets = self.state.setdefault("host_sets", {})
         if name not in sets:
-            raise RuntimeError("not found")
+            raise hpe_exc.HTTPNotFound({"code": 23, "desc": "not found"})
         return {"name": name, "setmembers": list(sets[name])}
 
     def getVolumes(self) -> dict[str, list[dict[str, Any]]]:
@@ -184,9 +186,11 @@ class _FakeSdk:
         return {"members": [{"name": k, "setmembers": v} for k, v in self.state.setdefault("vvsets", {}).items()]}
 
     def getVolumeSet(self, name: str) -> dict[str, Any]:
+        from hpe3parclient import exceptions as hpe_exc
+
         sets = self.state.setdefault("vvsets", {})
         if name not in sets:
-            raise RuntimeError("not found")
+            raise hpe_exc.HTTPNotFound({"code": 23, "desc": "not found"})
         return {"name": name, "setmembers": list(sets[name])}
 
     def getVLUNs(self) -> dict[str, list[dict[str, Any]]]:

@@ -161,10 +161,8 @@ class SnapshotSteps:
         result = await coord.run_approved(
             approval, partial(self._apply, plan, view, intent, approval, progress=self._progress(run.run_id)),
         )
-        try:
-            coord.store.save_artifact(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
-        except Exception:  # the writes happened; failing to cache the record must not fail the step
-            pass
+        # the writes happened; failing to cache the record must not fail the step
+        coord.save_artifact_best_effort(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
         data = {"result": result.model_dump(mode="json")}
         if result.error:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, PHASE)
@@ -192,7 +190,7 @@ class SnapshotSteps:
             if event.event_type == "snapshots.previewed" and event.data and event.data.get("plan"):
                 try:
                     return SnapshotPlan.model_validate(event.data["plan"])
-                except Exception:
+                except ValueError:
                     return None
         return None
 

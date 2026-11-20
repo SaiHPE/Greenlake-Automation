@@ -71,6 +71,12 @@ class FakeBrocade:
     def cfgshow(self):
         return self._cfg
 
+    def fabricshow(self):
+        return ""
+
+    def read(self, _command):
+        return ""
+
 
 def _creds(host):
     return EndpointCreds(host=host, username="u", password="p")
@@ -392,6 +398,12 @@ class _RealBrocade:
 
     def cfgshow(self):
         return _fixture(f"{self._label}_cfgactvshow.txt")
+
+    def fabricshow(self):
+        return ""
+
+    def read(self, _command):
+        return ""
 
 
 def _real_factory(creds):

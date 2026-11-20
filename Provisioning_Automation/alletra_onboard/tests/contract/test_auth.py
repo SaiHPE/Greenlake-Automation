@@ -45,3 +45,25 @@ async def test_a_redirect_from_the_token_endpoint_is_an_error():
         await OAuthClientCredentials(TOKEN_URL, "cid", "shh").token()
 
     assert refused.value.status_code == 302
+
+
+async def test_token_transport_error_translates_to_greenlake_error_preserving_tls_cause(monkeypatch):
+    """STANDARD E1: OAuth transport errors become GreenLakeError (DeviceError) with __cause__
+    intact so TLS trust inspection still detects corporate proxy certificate failures."""
+    import ssl
+
+    from alletra_onboard.adapters.tls import is_tls_trust_error
+    from alletra_onboard.domain.errors import DeviceError, GreenLakeError
+
+    tls_err = ssl.SSLCertVerificationError("[SSL: CERTIFICATE_VERIFY_FAILED] unable to get local issuer")
+
+    async def _raise_tls(self, *_args, **_kwargs) -> httpx.Response:
+        raise httpx.ConnectError("connection failed") from tls_err
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", _raise_tls)
+
+    with pytest.raises(GreenLakeError) as exc_info:
+        await OAuthClientCredentials(TOKEN_URL, "cid", "shh").token()
+
+    assert isinstance(exc_info.value, DeviceError)
+    assert is_tls_trust_error(exc_info.value) is True

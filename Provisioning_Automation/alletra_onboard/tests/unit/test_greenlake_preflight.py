@@ -153,3 +153,22 @@ async def test_preflight_service_merges_local_and_live_checks():
 
     assert report.overall_status == CheckStatus.PASS
     assert any(check.name == "greenlake_auth" for check in report.checks)
+
+
+async def test_live_greenlake_preflight_stops_and_redacts_unexpected_non_device_error():
+    """Contract: any failure (even an unexpected KeyError from a malformed token response)
+    stops preflight and redacts secrets before anything reaches the operator."""
+    service = GreenLakeReadPreflightService(
+        FakeTokenProvider(KeyError("access_token missing; client_secret=super-secret")),
+        FakeDevices(),
+        FakeSubscriptions(),
+        FakeServiceCatalog([]),
+    )
+
+    checks = await service.run(_item())
+
+    assert len(checks) == 1
+    assert checks[0].name == "greenlake_auth"
+    assert checks[0].status == CheckStatus.FAIL
+    assert "<redacted>" in checks[0].message
+    assert "super-secret" not in checks[0].message

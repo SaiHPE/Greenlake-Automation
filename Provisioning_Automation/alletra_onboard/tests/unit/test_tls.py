@@ -189,3 +189,26 @@ async def test_greenlake_check_leaves_other_failures_alone(monkeypatch):
     report = await health.greenlake_check(Settings())
     assert report.ok is False and report.tls_trust_failure is False
     assert "401" in (report.error or "")
+
+
+async def test_greenlake_check_redacts_unexpected_non_device_error(monkeypatch):
+    """Contract: any non-TLS failure (even an unexpected KeyError from a malformed token response)
+    reports ok=False, tls_trust_failure=False, and redacts secrets before reaching the screen."""
+    from alletra_onboard.application.onboarding import health
+    from alletra_onboard.config import Settings
+
+    class _Boom:
+        def __init__(self):
+            self.service_catalog = self
+            self.http = self
+
+        async def per_region_service_managers(self):
+            raise KeyError("access_token missing; client_secret=super-secret")
+
+    monkeypatch.setattr(health, "missing_credentials", lambda settings: [])
+    monkeypatch.setattr(health, "make_greenlake", lambda settings: _Boom())
+    report = await health.greenlake_check(Settings())
+    assert report.ok is False and report.tls_trust_failure is False
+    assert "KeyError" in (report.error or "")
+    assert "<redacted>" in (report.error or "")
+    assert "super-secret" not in (report.error or "")

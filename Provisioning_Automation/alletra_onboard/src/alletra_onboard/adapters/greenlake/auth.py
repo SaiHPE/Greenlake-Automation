@@ -7,8 +7,9 @@ from urllib.parse import urlsplit
 import httpx
 
 from alletra_onboard.adapters import command_log
+from alletra_onboard.adapters.greenlake import json_object
 from alletra_onboard.adapters.tls import ssl_context
-from alletra_onboard.domain.errors import GreenLakeHttpError
+from alletra_onboard.domain.errors import GreenLakeError, GreenLakeHttpError
 
 
 class OAuthClientCredentials:
@@ -44,9 +45,9 @@ class OAuthClientCredentials:
                     },
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
                 )
-        except Exception as exc:
+        except (httpx.HTTPError, httpx.InvalidURL, OSError) as exc:
             self._record(started, ok=False, result=type(exc).__name__)
-            raise
+            raise GreenLakeError(f"{type(exc).__name__}: {exc}") from exc
         self._record(started, ok=response.is_success, result=f"HTTP {response.status_code}",
                      output="(token withheld)" if response.is_success else "")
         if not response.is_success:
@@ -55,10 +56,15 @@ class OAuthClientCredentials:
                 response.request.method,
                 response.request.url.path,
             )
-        payload = response.json()
+        payload = json_object(response, where="token endpoint")
+        if not isinstance(payload.get("access_token"), str) or not payload["access_token"]:
+            raise GreenLakeError("Token endpoint returned an unexpected body (missing access_token).")
         token: str = payload["access_token"]
         self._access_token = token
-        expires_in = int(payload.get("expires_in", 900))
+        try:
+            expires_in = int(payload.get("expires_in", 900))
+        except (TypeError, ValueError):
+            expires_in = 900
         self._expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
         return token
 

@@ -11,14 +11,19 @@ import time
 from collections import Counter
 from dataclasses import dataclass
 
+import structlog
+
+from alletra_onboard.adapters import command_log, device_trust
+from alletra_onboard.domain.discovery import HostRead
+from alletra_onboard.domain.errors import LinuxHostError
+from alletra_onboard.domain.shared import normalize_wwpn
+
 try:
     import paramiko
 except ImportError:  # pragma: no cover - bundled in the .exe
     paramiko = None
 
-from alletra_onboard.adapters import command_log, device_trust
-from alletra_onboard.domain.discovery import HostRead
-from alletra_onboard.domain.shared import normalize_wwpn
+_log = structlog.get_logger(__name__)
 
 COMMANDS: dict[str, str] = {
     "hostname": "hostname",
@@ -35,10 +40,6 @@ COMMANDS: dict[str, str] = {
 }
 
 _NO_SERIAL = {"", "0", "none", "not specified", "to be filled by o.e.m.", "default string", "system serial number"}
-
-
-class LinuxHostError(Exception):
-    """Couldn't connect to or authenticate on the host."""
 
 
 def parse_os_release(text: str) -> str:
@@ -209,7 +210,7 @@ class LinuxHostClient:
             _in, stdout, _err = self._client.exec_command(command, timeout=self.exec_timeout)
             out = stdout.read().decode("utf-8", "replace")
             status = stdout.channel.recv_exit_status()
-        except Exception as exc:  # one unreadable file must not sink the host read
+        except device_trust.SSH_ERRORS as exc:  # one unreadable file must not sink the host read
             command_log.record(target=self.host, transport="host-ssh", command=command, started=started,
                                ok=False, result=type(exc).__name__, secrets=[self.password])
             return -1, ""
@@ -226,8 +227,8 @@ class LinuxHostClient:
         if self._client is not None:
             try:
                 self._client.close()
-            except Exception:  # closing a dead session
-                pass
+            except device_trust.SSH_ERRORS as exc:  # closing a dead session
+                _log.debug("linux_ssh_close_failed", host=self.host, error=str(exc))
             self._client = None
 
     def __enter__(self) -> LinuxHostClient:

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from alletra_onboard.adapters.greenlake import json_items
+
 if TYPE_CHECKING:
     from alletra_onboard.adapters.greenlake.http_client import GreenLakeHttpClient
 
@@ -35,7 +37,7 @@ class ServiceCatalogClient:
             "/service-catalog/v1/per-region-service-managers",
             bucket="service_catalog_read",
         )
-        return response.json().get("items", [])
+        return json_items(response, where="service-catalog regions")
 
     async def service_manager_provisions(self, region: str) -> list[ServiceProvision]:
         # The live API rejects `provisionStatus eq ...` and combined `and` filters on
@@ -47,7 +49,9 @@ class ServiceCatalogClient:
             bucket="service_catalog_read",
         )
         provisions: list[ServiceProvision] = []
-        for item in response.json().get("items", []):
+        for item in json_items(response, where="service-catalog provisions"):
+            if not isinstance(item, dict):
+                continue
             if item.get("provisionStatus") != "PROVISIONED":
                 continue
             if region and item.get("region") != region:

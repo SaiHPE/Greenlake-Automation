@@ -25,7 +25,7 @@ from alletra_onboard.application.snapshots.read import parse_showsched, showsche
 from alletra_onboard.application.snapshots.verify import check_now
 from alletra_onboard.domain.approval import Approval, SaveRecord
 from alletra_onboard.domain.array_parse import answered_error
-from alletra_onboard.domain.errors import ArrayCliError
+from alletra_onboard.domain.errors import ApplyRecordError, ArrayCliError, DeviceError, WsapiError
 from alletra_onboard.domain.plan_objects import SnapPlanObjects
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.shared import REMOVAL_ORDER, ArrayVolumeRecord, RemovalItem
@@ -87,7 +87,7 @@ def _whole_set(wsapi, request: SnapshotRequest, action: SnapshotAction, view: Sn
         return False
     live = wsapi.volume_sets().get(request.source)
     if live is None or sorted(live) != sorted(action.members):
-        raise RuntimeError(
+        raise WsapiError(
             f"volume set {request.source} changed on the array since the preview — no snapshot of it was taken. "
             "Read the array again and approve the new plan"
         )
@@ -162,7 +162,7 @@ def _apply_snapshot_action(
     st.save(st.result)
     ok, detail = check_now(request, action.members, view.model_copy(update={"volumes": after}))
     if not ok:
-        raise RuntimeError(f"after the snapshot of {request.source}, the array does not show what was asked: {detail}")
+        raise WsapiError(f"after the snapshot of {request.source}, the array does not show what was asked: {detail}")
     st.record(action, "created", detail)
     st.save(st.result)
 
@@ -232,7 +232,7 @@ def apply_plan(
             with snap_cli_factory(approval, plan_objects(plan, intent)) as cli:
                 for action in schedules:
                     _apply_schedule_action(cli, action, by_source[action.source], st)
-    except Exception as exc:  # the array's words, where it stopped, what to remove
+    except (DeviceError, ApplyRecordError) as exc:  # the array's words, where it stopped, what to remove
         if st.in_flight is not None:
             _diff_after_failure(st.in_flight, approval, wsapi_factory, result, st.remove)
             st.clear_pending()
@@ -259,7 +259,7 @@ def _schedule_after_failure(action: SnapshotAction, line: RemovalItem, cli, resu
     and read well, shows the schedule was not made."""
     try:
         names = {s.name for s in _read_schedules(cli, f"after {action.name} failed")}
-    except Exception:  # the line stays, with a note to check by hand
+    except DeviceError:  # the line stays, with a note to check by hand
         result.removal_notes.append(f"The array was not read after the schedule {action.name} failed. Check with "
                                     f"showsched {action.name}; if it is not there, skip its removesched line.")
         return
@@ -275,7 +275,7 @@ def _diff_after_failure(in_flight: tuple[SnapshotAction, set[str]], approval: Ap
     try:
         with wsapi_factory(approval, "snapshots", "A") as wsapi:
             remove(made_by(action, before, wsapi.volumes()))
-    except Exception:  # the note below stands in for the read that failed
+    except DeviceError:  # the note below stands in for the read that failed
         names = " ".join(now_snapshot_name(m) for m in action.members)
         result.removal_notes.append(
             f"The array was not read after the snapshot of {action.source} failed. Check with showvv {names}; "

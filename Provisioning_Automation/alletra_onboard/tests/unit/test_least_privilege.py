@@ -97,7 +97,9 @@ class _RecordingSdk:
         return {"members": []}
 
     def getHostSet(self, _name: str) -> dict[str, Any]:
-        raise RuntimeError("not found")
+        from hpe3parclient import exceptions as hpe_exc
+
+        raise hpe_exc.HTTPNotFound({"code": 23, "desc": "not found"})
 
     def getVolumes(self) -> dict[str, list[dict[str, Any]]]:
         return {"members": []}
@@ -106,7 +108,9 @@ class _RecordingSdk:
         return {"members": []}
 
     def getVolumeSet(self, _name: str) -> dict[str, Any]:
-        raise RuntimeError("not found")
+        from hpe3parclient import exceptions as hpe_exc
+
+        raise hpe_exc.HTTPNotFound({"code": 23, "desc": "not found"})
 
     def getVLUNs(self) -> dict[str, list[dict[str, Any]]]:
         return {"members": []}

@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 import time
 
+import structlog
+
 from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.domain.errors import ArrayCliError
 
@@ -17,6 +19,8 @@ try:
     import paramiko
 except ImportError:  # pragma: no cover - bundled in the .exe; optional for non-SSH runs
     paramiko = None
+
+_log = structlog.get_logger(__name__)
 
 # The ONLY commands this client may ever run. All read-only inspection commands — anything else is
 # refused. `checkhealth` only inspects + reports (it never changes the array).
@@ -235,8 +239,8 @@ class ArrayCliClient:
         if self._client is not None:
             try:
                 self._client.close()
-            except Exception:
-                pass
+            except device_trust.SSH_ERRORS as exc:
+                _log.debug("array_ssh_close_failed", host=self.host, error=str(exc))
             self._client = None
 
     def __enter__(self) -> ArrayCliClient:

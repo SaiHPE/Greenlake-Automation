@@ -649,3 +649,158 @@ def test_the_host_password_round_trips_the_state_db_and_nowhere_else(tmp_path):
     store.save_provisioning_intent("r1", intent)
     back = store.get_provisioning_intent("r1")
     assert back.declared_hosts[0].password.get_secret_value() == "host-pw"
+
+
+def test_host_adapters_subclass_device_error_and_handle_transport_faults(monkeypatch):
+    """STANDARD E1, E2: LinuxHostError and WindowsHostError are DeviceError subclasses,
+    and per-command transport/WinRM faults degrade cleanly without raising."""
+    import paramiko
+    from winrm.exceptions import WinRMOperationTimeoutError, WinRMTransportError
+
+    from alletra_onboard.adapters.hosts import windows_winrm
+    from alletra_onboard.domain.errors import DeviceError, LinuxHostError, WindowsHostError
+
+    assert issubclass(LinuxHostError, DeviceError)
+    assert issubclass(WindowsHostError, DeviceError)
+
+    class _BrokenSsh:
+        def exec_command(self, _cmd, timeout=None):
+            raise paramiko.SSHException("channel closed")
+
+        def close(self):
+            raise paramiko.SSHException("transport gone")
+
+    linux = linux_ssh.LinuxHostClient("10.0.0.20", "root", "pw")
+    linux._client = _BrokenSsh()
+    assert linux.run("multipath") == (-1, "")
+    linux.close()
+    assert linux._client is None
+
+    class _FailingWinSession:
+        def __init__(self, *_a, **_k):
+            pass
+
+        def run_ps(self, _script):
+            raise WinRMTransportError("http", 500)
+
+    monkeypatch.setattr(windows_winrm, "winrm", type("W", (), {"Session": _FailingWinSession}))
+    with pytest.raises(WindowsHostError, match="WinRMTransportError"):
+        windows_winrm.WindowsHostClient("10.0.0.21", "administrator", "pw").connect()
+
+    class _TimeoutSession:
+        def run_ps(self, _script):
+            raise WinRMOperationTimeoutError("timed out")
+
+    win = windows_winrm.WindowsHostClient("10.0.0.21", "administrator", "pw")
+    win._session = _TimeoutSession()
+    assert win.read("mpio") == ""
+
+
+def test_windows_winrm_http_200_without_ntlm_survives_discovery_through_real_pywinrm():
+    """Real WindowsHostClient + real pywinrm against a local HTTP listener answering 200 without
+    NTLM: pywinrm raises a bare AttributeError ('NoneType' has no attribute 'wrap'), which _run_ps
+    translates to WindowsHostError so discovery keeps the array ports and records the host error."""
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    from alletra_onboard.adapters.hosts.windows_winrm import WindowsHostClient
+
+    class _Http200NoNtlm(BaseHTTPRequestHandler):
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", "0"))
+            if length:
+                self.rfile.read(length)
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *_args):
+            return None
+
+    server = HTTPServer(("127.0.0.1", 0), _Http200NoNtlm)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    class _LocalPortWinClient(WindowsHostClient):
+        def _session_for(self, url: str, ca_bundle: str | None = None):
+            # Rewrite both 5985 and 5986 to our local HTTP-200 listener while driving real pywinrm.
+            return super()._session_for(f"http://127.0.0.1:{port}/wsman", ca_bundle)
+
+    class _ArrayWithPort(_Cli):
+        def run(self, cmd, **kw):
+            if cmd == "showport":
+                return (
+                    "N:S:P Mode State ----Node_WWN---- -Port_WWN/HW_Addr- Type Protocol Label\n"
+                    "0:3:1 target ready 2FF70002AC02F629 20310002AC02F629 host FC -\n"
+                )
+            return ""
+
+    try:
+        report = disc.discover(
+            _intent(DeclaredHost(name="win-http200", os="windows", address="127.0.0.1",
+                                 username="administrator", password=SecretStr("win-pw"))),
+            array_cli_factory=lambda _c: _ArrayWithPort(),
+            vcenter_factory=lambda _c: _VCenter(),
+            windows_host_factory=lambda c: _LocalPortWinClient(
+                c.host, c.username, c.password.get_secret_value(), timeout=15
+            ),
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert report.error is None
+    assert [p.label for p in report.array_ports] == ["0:3:1"]
+    assert len(report.host_reads) == 1
+    assert "could not reach WinRM" in report.host_reads[0].error
+    assert "(5985/5986: AttributeError)" in report.host_reads[0].error
+    assert any("win-http200" in note and "AttributeError" in note for note in report.notes)
+
+
+def test_winrm_401_on_later_read_does_not_crash_discovery(monkeypatch):
+    """A session that answers twice (connect + hostname) then raises InvalidCredentialsError on
+    later reads must not crash discovery: array ports survive and the host row degrades cleanly."""
+    from alletra_onboard.adapters.hosts import windows_winrm
+
+    class _Resp:
+        status_code = 0
+        std_out = b"WIN-PARTIAL\r\n"
+
+    class _ExpiringSession:
+        def __init__(self, *_a, **_k):
+            self.calls = 0
+
+        def run_ps(self, _script):
+            self.calls += 1
+            if self.calls <= 2:
+                return _Resp()
+            raise windows_winrm.InvalidCredentialsError("401 Unauthorized on later read")
+
+    class _ArrayWithPort(_Cli):
+        def run(self, cmd, **kw):
+            if cmd == "showport":
+                return (
+                    "N:S:P Mode State ----Node_WWN---- -Port_WWN/HW_Addr- Type Protocol Label\n"
+                    "0:3:1 target ready 2FF70002AC02F629 20310002AC02F629 host FC -\n"
+                )
+            return ""
+
+    monkeypatch.setattr(windows_winrm, "winrm", type("W", (), {"Session": _ExpiringSession}))
+    report = disc.discover(
+        _intent(DeclaredHost(name="win-partial", os="windows", address="10.0.0.22",
+                             username="administrator", password=SecretStr("win-pw"))),
+        array_cli_factory=lambda _c: _ArrayWithPort(),
+        vcenter_factory=lambda _c: _VCenter(),
+        windows_host_factory=lambda c: windows_winrm.WindowsHostClient(
+            c.host, c.username, c.password.get_secret_value()
+        ),
+    )
+
+    assert report.error is None
+    assert [p.label for p in report.array_ports] == ["0:3:1"]
+    assert len(report.host_reads) == 1
+    assert report.host_reads[0].hostname == "WIN-PARTIAL"
+    assert report.host_reads[0].os_text == ""
+    assert report.host_reads[0].notes  # degraded reads recorded as notes, no raise

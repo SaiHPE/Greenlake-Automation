@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+import structlog
 
 from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.domain.errors import (
@@ -39,6 +40,8 @@ from alletra_onboard.domain.errors import (
     WsapiV3LoginRefused,
     WsapiV3TrustError,
 )
+
+_log = structlog.get_logger(__name__)
 
 API_ROOT = "/api/v3"
 _CREDENTIALS = f"{API_ROOT}/credentials"
@@ -109,8 +112,8 @@ class WsapiV3Client:
         try:
             if self._http is not None and self._key:
                 self._send("DELETE", f"{_CREDENTIALS}/{self._key}")
-        except Exception:  # recorded in the command log by _send; nothing to undo
-            pass
+        except WsapiV3Error as exc:  # already recorded in the command log by _send
+            _log.debug("wsapi_v3_logout_failed", host=self.host, error=str(exc))
         finally:
             self._key, self._cookies = "", []
             self._close_http()
@@ -175,7 +178,7 @@ class WsapiV3Client:
                                ok=False, result="refused: the certificate is not the one the run trusts",
                                secrets=secrets)
             raise WsapiV3TrustError(str(exc)) from exc
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, OSError) as exc:
             command_log.record(target=self.host, transport="wsapi", command=command, started=started,
                                ok=False, result=f"no answer: {type(exc).__name__}: {exc}", secrets=secrets)
             raise WsapiV3Error(f"{method} {shown}: no answer from {self.host} ({type(exc).__name__}: {exc})") from exc
@@ -200,6 +203,6 @@ class WsapiV3Client:
         if self._http is not None:
             try:
                 self._http.close()
-            except Exception:
-                pass
+            except (httpx.HTTPError, OSError) as exc:
+                _log.debug("wsapi_v3_close_failed", host=self.host, error=str(exc))
             self._http = None

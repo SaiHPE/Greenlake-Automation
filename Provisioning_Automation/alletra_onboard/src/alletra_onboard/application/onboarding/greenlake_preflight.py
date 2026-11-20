@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Protocol
 
 from alletra_onboard.application.onboarding.clients import make_greenlake
@@ -75,15 +76,14 @@ class GreenLakeReadPreflightService:
         return checks
 
     async def _check_auth(self) -> PreflightCheck:
-        try:
-            await self.token_provider.token()
-        except Exception as exc:  # operator-facing preflight should report all failures.
-            return _failed_check(
-                "greenlake_auth",
-                "Could not fetch a GreenLake OAuth token",
-                exc,
-                "Check GL_CLIENT_ID, GL_CLIENT_SECRET, and service account status.",
-            )
+        _, failed = await _run_preflight_probe(
+            "greenlake_auth",
+            "Could not fetch a GreenLake OAuth token",
+            "Check GL_CLIENT_ID, GL_CLIENT_SECRET, and service account status.",
+            self.token_provider.token,
+        )
+        if failed is not None:
+            return failed
         return PreflightCheck(
             name="greenlake_auth",
             status=CheckStatus.PASS,
@@ -91,15 +91,14 @@ class GreenLakeReadPreflightService:
         )
 
     async def _check_service_catalog(self, item: ArrayWorkItem) -> PreflightCheck:
-        try:
-            provisions = await self.service_catalog.service_manager_provisions(item.service_catalog_region_id)
-        except Exception as exc:
-            return _failed_check(
-                "greenlake_service_catalog",
-                "Could not read Service Catalog provisions",
-                exc,
-                "Grant read access to Service Catalog and confirm the requested region.",
-            )
+        provisions, failed = await _run_preflight_probe(
+            "greenlake_service_catalog",
+            "Could not read Service Catalog provisions",
+            "Grant read access to Service Catalog and confirm the requested region.",
+            lambda: self.service_catalog.service_manager_provisions(item.service_catalog_region_id),
+        )
+        if failed is not None:
+            return failed
 
         if not provisions:
             return PreflightCheck(
@@ -124,15 +123,14 @@ class GreenLakeReadPreflightService:
         )
 
     async def _check_device_lookup(self, item: ArrayWorkItem) -> PreflightCheck:
-        try:
-            device = await self.devices.find_by_serial(item.serial_number)
-        except Exception as exc:
-            return _failed_check(
-                "greenlake_device_lookup",
-                "Could not read Device Management inventory",
-                exc,
-                "Grant read access to Device Management and retry.",
-            )
+        device, failed = await _run_preflight_probe(
+            "greenlake_device_lookup",
+            "Could not read Device Management inventory",
+            "Grant read access to Device Management and retry.",
+            lambda: self.devices.find_by_serial(item.serial_number),
+        )
+        if failed is not None:
+            return failed
 
         if device is None:
             return PreflightCheck(
@@ -152,15 +150,14 @@ class GreenLakeReadPreflightService:
         )
 
     async def _check_subscription_lookup(self, item: ArrayWorkItem) -> PreflightCheck:
-        try:
-            subscription = await self.subscriptions.find_by_key(item.subscription_key.get_secret_value())
-        except Exception as exc:
-            return _failed_check(
-                "greenlake_subscription_lookup",
-                "Could not read Subscription Management inventory",
-                exc,
-                "Grant read access to Subscription Management and retry.",
-            )
+        subscription, failed = await _run_preflight_probe(
+            "greenlake_subscription_lookup",
+            "Could not read Subscription Management inventory",
+            "Grant read access to Subscription Management and retry.",
+            lambda: self.subscriptions.find_by_key(item.subscription_key.get_secret_value()),
+        )
+        if failed is not None:
+            return failed
 
         if subscription is None:
             return PreflightCheck(
@@ -174,6 +171,24 @@ class GreenLakeReadPreflightService:
             status=CheckStatus.PASS,
             message=f"Subscription key is already present as {_resource_id(subscription)}.",
         )
+
+
+async def _run_preflight_probe[T](
+    name: str,
+    prefix: str,
+    remediation: str,
+    probe: Callable[[], Awaitable[T]],
+) -> tuple[T | None, PreflightCheck | None]:
+    """Run one GreenLake preflight probe under the 'stops and redacts any failure' contract.
+
+    Operator-facing preflight must never leak a secret or crash on an unexpected error
+    (such as a KeyError from a malformed token response): any failure becomes a redacted
+    FAIL check so the caller can stop immediately or report safely.
+    """
+    try:
+        return await probe(), None
+    except Exception as exc:  # contract: preflight stops and redacts any failure
+        return None, _failed_check(name, prefix, exc, remediation)
 
 
 def build_greenlake_read_preflight(settings: Settings) -> GreenLakePreflightRunner:

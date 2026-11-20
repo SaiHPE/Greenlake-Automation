@@ -15,7 +15,11 @@ from collections.abc import Callable
 from alletra_onboard.adapters import command_log
 from alletra_onboard.adapters.array.cli_client import refusal
 from alletra_onboard.adapters.system.terminal import launch_terminal
-from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
+from alletra_onboard.application.runs.coordinator import (
+    RunCoordinator,
+    RunNotFoundError,
+    StepPreconditionError,
+)
 from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.shared import EndpointCreds
 
@@ -46,7 +50,7 @@ class ConsoleService:
     def _peer(self, run_id: str) -> EndpointCreds | None:
         try:
             intent = self.coord.get_provisioning_intent(run_id)
-        except Exception:  # a run without the provisioning tabs has no peer
+        except (RunNotFoundError, StepPreconditionError):  # a run without the provisioning tabs has no peer
             return None
         rep = getattr(intent, "replication", None)
         return rep.peer if rep is not None else None
@@ -92,7 +96,7 @@ class ConsoleService:
                                                                 "command line cannot take safely; open SSH yourself."}
         try:
             self.launcher(["ssh", f"{creds.username}@{creds.host}"])
-        except Exception as exc:
+        except (OSError, RuntimeError, ValueError) as exc:
             return {"launched": False, "command": line, "error": f"Could not open a terminal ({exc}). Run: {line}"}
         return {"launched": True, "command": line, "error": None}
 

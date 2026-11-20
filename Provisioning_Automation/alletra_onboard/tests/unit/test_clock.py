@@ -126,3 +126,13 @@ def test_set_system_utc_rejects_non_windows(monkeypatch):
 
 def test_is_elevated_returns_bool():
     assert isinstance(is_elevated(), bool)
+
+
+@respx.mock
+async def test_bad_date_header_falls_through_to_next_time_source():
+    respx.get("https://bad-date.test/").mock(return_value=httpx.Response(200, headers={"Date": "not-a-date"}))
+    respx.get(TIME_SOURCES[0]).mock(
+        return_value=httpx.Response(200, headers={"Date": "Sat, 13 Jun 2026 04:47:16 GMT"})
+    )
+    status = await clock_status("https://bad-date.test/")
+    assert status.source == TIME_SOURCES[0] and status.error is None

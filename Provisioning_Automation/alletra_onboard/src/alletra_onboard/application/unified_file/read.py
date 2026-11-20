@@ -25,6 +25,7 @@ from alletra_onboard.domain.array_parse import (
 )
 from alletra_onboard.domain.discovery import EthernetPort
 from alletra_onboard.domain.errors import (
+    DeviceError,
     WsapiV3Error,
     WsapiV3LoginRefused,
     WsapiV3TrustError,
@@ -242,7 +243,7 @@ def _same_serial(a: str, b: str) -> bool:
 def _run_serial(cli) -> str:
     try:
         return parse_showsys(cli.run("showsys")).get("serial", "")
-    except Exception:  # a serial that cannot be read cannot match: the read is refused
+    except DeviceError:  # a serial that cannot be read cannot match: the read is refused
         return ""
 
 

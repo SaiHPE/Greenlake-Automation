@@ -320,7 +320,9 @@ class _Cli:
     def run(self, cmd, timeout=None):
         self.ran.append(cmd)
         if self.fail and cmd.startswith(self.fail):
-            raise RuntimeError(f"{cmd} failed on purpose")
+            from alletra_onboard.domain.errors import ArrayCliError
+
+            raise ArrayCliError(f"{cmd} failed on purpose")
         return self.outputs.get(cmd, f"# {cmd}\n")
 
 
