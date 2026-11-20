@@ -1,5 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API, getEvents, getRun, RunEvent, RunRecord } from './api';
+import { API, CommandRecord, consoleStreamUrl, getEvents, getRun, RunEvent, RunRecord } from './api';
+
+/** Subscribe to a run's command console SSE stream (STANDARD F1: EventSource lives here). */
+export function subscribeConsoleStream(
+  runId: string,
+  onRecord: (record: CommandRecord) => void,
+): () => void {
+  const source = new EventSource(consoleStreamUrl(runId));
+  source.onmessage = (message) => {
+    try {
+      onRecord(JSON.parse(message.data) as CommandRecord);
+    } catch {
+      /* heartbeat or partial frame */
+    }
+  };
+  return () => source.close();
+}
 
 /** Live view of one run: initial fetch + SSE stream; refetches the run record on every event. */
 export function useRunEvents(runId: string | null) {

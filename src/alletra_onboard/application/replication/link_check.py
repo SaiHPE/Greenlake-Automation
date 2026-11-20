@@ -15,9 +15,9 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from alletra_onboard.adapters.array.cli_client import ArrayCliError
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.replication.read import parse_showrcopy
+from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.replication import (
     LINK_CHECK_TIME_DEFAULT,
     LinkCheck,

@@ -19,15 +19,12 @@ from __future__ import annotations
 import ipaddress
 import re
 import time
-from dataclasses import dataclass
 from typing import Any
 
 from alletra_onboard.adapters import command_log
-from alletra_onboard.adapters.array.cli_client import (
-    _FORBIDDEN_CHARS,
-    ArrayCliClient,
-    ArrayCliError,
-)
+from alletra_onboard.adapters.array.cli_client import _FORBIDDEN_CHARS, ArrayCliClient
+from alletra_onboard.domain.errors import ArrayCliError, answered_error
+from alletra_onboard.domain.plan_objects import RcPlanObjects
 
 _NSP = r"\d{1,2}:\d{1,2}:\d{1,2}"
 _IPV4 = r"(?:\d{1,3}\.){3}\d{1,3}"
@@ -52,17 +49,6 @@ RC_WRITE_FORMS: tuple[tuple[str, re.Pattern[str]], ...] = (
 # that sends it.
 
 UNBOUND = "refused: this client was not built from an approved replication plan, so it writes nothing"
-
-
-@dataclass(frozen=True)
-class RcPlanObjects:
-    """What the approved plan names on one array: the only objects that array's write client may act on
-    (ADR 0025 condition 3). `startrcopy` names nothing and needs only a bound client."""
-
-    ports: frozenset[str] = frozenset()             # this array's RCIP ports, N:S:P
-    addresses: frozenset[str] = frozenset()         # addresses set on those ports: RCIP address, gateway
-    peer_addresses: frozenset[str] = frozenset()    # the other array's RCIP addresses: pinged, linked to
-    targets: frozenset[str] = frozenset()           # Remote Copy targets on this array
 
 
 def _valid_ipv4(text: str) -> bool:
@@ -128,11 +114,6 @@ def rc_object_refusal(command: str, objects: RcPlanObjects) -> str | None:
     if target and target not in objects.targets:
         return f"refused: target {target} is not in the approved plan"
     return None
-
-
-def answered_error(text: str) -> bool:
-    """The array's refusal: a line starting with 'Error', or a failed confirmation."""
-    return any(line.strip().lower().startswith("error") for line in text.splitlines())
 
 
 class ArrayRcCliClient(ArrayCliClient):

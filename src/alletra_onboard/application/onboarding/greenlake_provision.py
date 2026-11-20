@@ -16,21 +16,19 @@ import asyncio
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import httpx
-
-from alletra_onboard.adapters.greenlake.devices import DevicesClient
-from alletra_onboard.adapters.greenlake.http_client import (
-    GreenLakeAsyncOperationError,
-    GreenLakeHttpClient,
-)
-from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogClient
-from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
 from alletra_onboard.application.onboarding.clients import make_greenlake, missing_credentials  # noqa: F401 - missing_credentials re-exported
 from alletra_onboard.config import Settings
+from alletra_onboard.domain.errors import GreenLakeAsyncOperationError, GreenLakeHttpError
 from alletra_onboard.domain.models import ArrayWorkItem, WorkflowPhase
 from alletra_onboard.domain.policies import redact
+
+if TYPE_CHECKING:
+    from alletra_onboard.adapters.greenlake.devices import DevicesClient
+    from alletra_onboard.adapters.greenlake.http_client import GreenLakeHttpClient
+    from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogClient
+    from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
 
 ASSIGNED_STATE_TARGET = "ASSIGNED_TO_SERVICE"
 
@@ -251,7 +249,7 @@ class GreenLakeProvisioningService:
             location = await self.devices.apply_subscription(result.device_id, result.subscription_id)
             if location:
                 await self.http.poll_async(location, bucket="device_async_poll")
-        except (GreenLakeAsyncOperationError, httpx.HTTPStatusError) as exc:
+        except (GreenLakeAsyncOperationError, GreenLakeHttpError) as exc:
             hint = ""
             if str(result.subscription_available_quantity) == "0":
                 hint = (
@@ -378,38 +376,9 @@ def _current_phase(result: ProvisionResult) -> WorkflowPhase:
 
 
 def _exception_detail(exc: Exception) -> str:
-    import httpx
-
-    if isinstance(exc, httpx.HTTPStatusError):
-        base = f"HTTP {exc.response.status_code} from {exc.request.method} {exc.request.url.path}"
-        body = _greenlake_error_text(exc.response)
-        return f"{base} — {body}" if body else base
+    if isinstance(exc, GreenLakeHttpError):
+        return str(exc)
     return redact(str(exc) or exc.__class__.__name__)
-
-
-def _greenlake_error_text(response: Any) -> str:
-    """Pull the human-readable message + field issues out of a GreenLake error body."""
-    try:
-        data = response.json()
-    except Exception:  # error bodies are not always JSON.
-        return redact((response.text or "").strip()[:300])
-    if not isinstance(data, dict):
-        return ""
-    parts: list[str] = []
-    if data.get("message"):
-        parts.append(str(data["message"]))
-    if data.get("errorCode"):
-        parts.append(f"[{data['errorCode']}]")
-    for detail in data.get("badRequestErrorDetails") or []:
-        issues = detail.get("issues") if isinstance(detail, dict) else None
-        for issue in issues or []:
-            if not isinstance(issue, dict):
-                continue
-            description = issue.get("description") or issue.get("subject")
-            source = issue.get("source")
-            if description:
-                parts.append(f"{source + ': ' if source else ''}{description}")
-    return redact("; ".join(parts))[:500]
 
 
 def _res_id(value: dict[str, Any]) -> str:

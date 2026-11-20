@@ -15,8 +15,8 @@ from pydantic import SecretStr
 
 from alletra_onboard.adapters.array.wsapi_client import parse_sets, parse_volumes
 from alletra_onboard.application.snapshots.read import read_array
-from alletra_onboard.domain.provisioning import ArrayVolumeRecord, ProvisioningIntent
-from alletra_onboard.domain.shared import EndpointCreds
+from alletra_onboard.domain.provisioning import ProvisioningIntent
+from alletra_onboard.domain.shared import ArrayVolumeRecord, EndpointCreds
 from alletra_onboard.domain.snapshots import (
     ArraySchedule,
     SnapshotArrayView,

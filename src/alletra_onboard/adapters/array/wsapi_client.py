@@ -27,20 +27,22 @@ never monkey-patch, so it stays dormant).
 
 from __future__ import annotations
 
-import os
 import time
 from contextvars import ContextVar
 
 from alletra_onboard.adapters import command_log, device_trust
+from alletra_onboard.domain.errors import WsapiError, WsapiNotReady
 
 try:
     from hpe3parclient import exceptions as hpe_exc
+    from hpe3parclient import http as sdk_http
     from hpe3parclient.client import HPE3ParClient
 
     SDK_IMPORT_ERROR: str | None = None
 except Exception as _exc:  # import may pull eventlet; keep import errors non-fatal at module load
     HPE3ParClient = None
     hpe_exc = None
+    sdk_http = None
     # Keep the REASON. A frozen build that fails this import degrades silently until WSAPI is first
     # touched (v0.14.0-rc.1 shipped that way), and "not available" without the cause forces a
     # diagnose-by-rebuild loop. Served via /app/profile capabilities and appended to the error.
@@ -49,13 +51,13 @@ except Exception as _exc:  # import may pull eventlet; keep import errors non-fa
 from alletra_onboard.domain.discovery import ArrayPort
 from alletra_onboard.domain.network import IscsiVlanInterface
 from alletra_onboard.domain.peer_ports import PeerPortState, PortParams
-from alletra_onboard.domain.provisioning import ArrayHostRecord, ArrayVolumeRecord, VlunTemplate
+from alletra_onboard.domain.provisioning import ArrayHostRecord, VlunTemplate
 from alletra_onboard.domain.replication import (
     DR_ACTION_FAILOVER,
     DR_ACTION_RECOVER,
     DR_ACTION_RESTORE,
 )
-from alletra_onboard.domain.shared import normalize_wwpn
+from alletra_onboard.domain.shared import ArrayVolumeRecord, normalize_wwpn
 
 # A request that got no answer, known by its type. socket.timeout is TimeoutError.
 _TIMEOUT_TYPES: tuple[type[BaseException], ...] = (TimeoutError,)
@@ -284,10 +286,6 @@ def parse_iscsi_vlans_wsapi(nsp: str, body: object) -> list[IscsiVlanInterface]:
     return out
 
 
-class WsapiError(Exception):
-    """Couldn't reach, authenticate to, or drive WSAPI on the array."""
-
-
 # ADR 0026. The SDK opens a new connection for every call (it calls the module-level `requests.request`),
 # so a probe before login covers only that moment. A pinned client binds its certificate's SHA-256 for
 # each call it makes, and the stand-in for `requests` inside the SDK sends that call through a session
@@ -324,9 +322,7 @@ class _PinnedRequests:
 
 
 def _install_pinned_transport() -> None:
-    from hpe3parclient import http as sdk_http
-
-    if not isinstance(sdk_http.requests, _PinnedRequests):
+    if sdk_http is not None and not isinstance(sdk_http.requests, _PinnedRequests):
         sdk_http.requests = _PinnedRequests(sdk_http.requests)
 
 
@@ -347,20 +343,6 @@ def _pin_calls(client, fingerprint: str) -> None:
             _PINNED_FINGERPRINT.reset(token)
 
     http.request = pinned
-
-
-class WsapiNotReady(WsapiError):
-    """The array's WSAPI is reachable but not serving (503 'services not ready') — retry later."""
-
-
-def _bypass_proxy_for(host: str) -> None:
-    """Ensure requests (the SDK transport) talks to the array directly, not via HTTP(S)_PROXY."""
-    for var in ("NO_PROXY", "no_proxy"):
-        current = os.environ.get(var, "")
-        hosts = {h.strip() for h in current.split(",") if h.strip()}
-        if host not in hosts:
-            hosts.add(host)
-            os.environ[var] = ",".join(sorted(hosts))
 
 
 def _record_calls(client, host: str, api_url: str, password: str) -> None:
@@ -418,7 +400,7 @@ class WsapiClient:
             raise WsapiError(
                 f"python-3parclient is not available in this build ({SDK_IMPORT_ERROR})."
             )
-        _bypass_proxy_for(self.host)
+        device_trust.bypass_proxy_for(self.host)
         # ADR 0026: with the customer's device CA bundle the SDK makes the full check (requests takes a path
         # as `verify`), with no fallback. Without one, read the certificate and compare it with the run's
         # pin before the password goes anywhere.
@@ -457,7 +439,7 @@ class WsapiClient:
         self.connect()
         return self
 
-    def __exit__(self, *exc_info: object) -> None:
+    def __exit__(self, *_exc_info: object) -> None:
         self.close()
 
     # ------------------------------------------------------------------ reads
@@ -581,7 +563,7 @@ class WsapiClient:
         by the SDK's findHost (see wwn_owners for why)."""
         return self.wwn_owners().get(normalize_wwpn(wwn))
 
-    # ------------------------------------------------------------------ writes (idempotent)
+    # ------------------------------------------------------------------ idempotent writes
 
     def ensure_host(self, name: str, fc_wwns: list[str], persona: str = "VMware") -> str:
         """Create ONE host carrying all FC WWNs at the given persona NAME (default 'VMware'), resolved to

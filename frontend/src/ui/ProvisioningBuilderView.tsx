@@ -8,7 +8,7 @@ import {
   ProvisioningObjects,
   saveStorageBuilder,
 } from '../api';
-import { Surface } from '../ui/primitives';
+import { Surface } from './primitives';
 
 // The operator dropdown-builder (ADR 0010 Stage 2): compose host-set membership + the exports
 // (source volume/VV-set → target host/host-set → LUN) over discovered + to-be-created objects, and
@@ -85,7 +85,7 @@ const memberOptions = (o: ProvisioningObjects): Opt[] => {
 };
 
 // SPEC-008 R6 (P-20): what the closed multi-select shows — the names, "4 hosts: a, b, c, …" past three.
-export const memberLabel = (names: string[]): string | undefined => {
+const memberLabel = (names: string[]): string | undefined => {
   if (names.length === 0) return undefined;              // let the placeholder show
   if (names.length <= 3) return names.join(', ');
   return `${names.length} hosts: ${names.slice(0, 3).join(', ')}, …`;
@@ -177,8 +177,8 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
       o.host_sets.forEach((hs) => { seed[hs.name] = hs.members; });
       setMembers(seed);
       setRows(o.exports.length ? o.exports.map(exportToRow) : []);
-    } catch (e: any) {
-      setError(String(e.message ?? e));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy('');
     }
@@ -201,8 +201,8 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
       const comp = await saveStorageBuilder(runId, builder);
       const assigned = comp.host_sets.reduce((n, h) => n + h.members.length, 0);
       setSaved(`Saved: ${comp.exports.length} export(s), ${assigned} host set member(s). Build the plan to see what will be created.`);
-    } catch (e: any) {
-      setError(String(e.message ?? e));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy('');
     }

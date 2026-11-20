@@ -8,6 +8,8 @@ table at the end of the document and returns it, so the caller can reposition it
 
 from __future__ import annotations
 
+import re
+
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
@@ -143,3 +145,44 @@ def hpe_table(doc, headers: list[str], rows, *, widths=None, font_size=8, header
             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             _reorder(cell._tc.get_or_add_tcPr(), _TCPR_ORDER)
     return tbl
+
+
+def content_widths(headers: list[str], rows) -> list[float]:
+    """Column-width fractions proportional to the widest cell in each column (min 4% each)."""
+    n = len(headers)
+    widest = [max([len(headers[i])] + [len(r[i]) for r in rows if i < len(r)]) for i in range(n)]
+    total = sum(widest) or n
+    return [max(0.04, w / total) for w in widest]
+
+
+def add_h1(doc, title: str):
+    return doc.add_paragraph(title, style="Heading 1")
+
+
+def add_para(doc, text: str, *, bold: bool = False):
+    p = doc.add_paragraph()
+    p.add_run(text).bold = bold
+    return p
+
+
+def add_mono(doc, lines: list[str]):
+    p = doc.add_paragraph()
+    for i, line in enumerate(lines):
+        run = p.add_run(line or " ")
+        run.font.name = "Consolas"
+        run.font.size = Pt(7)
+        if i < len(lines) - 1:
+            run.add_break()
+    return p
+
+
+def add_table(doc, headers: list[str], rows: list[list[str]], widths=None):
+    hpe_table(doc, headers, rows, widths=widths or content_widths(headers, rows), font_size=7, header_size=7)
+
+
+def format_when(iso: str) -> str:
+    """'2026-09-13T00:05:12.123+00:00' -> '2026-09-13 00:05 UTC' (anything else passes through)."""
+    m = re.match(r"^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]00:00)?", iso or "")
+    if not m:
+        return iso
+    return f"{m.group(1)} {m.group(2)}" + (" UTC" if m.group(3) else "")

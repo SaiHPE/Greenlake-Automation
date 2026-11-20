@@ -179,7 +179,7 @@ class FakeWsapi:
         return {n: ["esx1"] for n in self._host_sets}
 
     def volumes(self):
-        from alletra_onboard.domain.provisioning import ArrayVolumeRecord
+        from alletra_onboard.domain.shared import ArrayVolumeRecord
         return [ArrayVolumeRecord(name=n, size_mib=1024 * 1024, cpg="SSD_r6", provisioning_type="tpvv")
                 for n in self._volumes]
 

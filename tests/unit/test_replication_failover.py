@@ -257,7 +257,7 @@ def test_the_sync_sequence_passes_and_ends_in_the_starting_state():
     assert after[2] == ("Primary", "Stopped", "Primary-Rev", "Stopped")
     assert after[4] == ("Secondary-Rev", "Started", "Primary-Rev", "Started")
     assert after[6] == ("Primary", "Started", "Secondary", "Started") and rec.steps[6].primary.synced == 1
-    # R3: measured
+    # R3 - measured
     assert rec.time_to_failover_s is not None and rec.time_to_synced_s is not None
     assert all(s.seconds is not None and s.started_at and s.ended_at for s in rec.steps)
     assert rec.data_loss_bound == ""                     # sync: no bound to state

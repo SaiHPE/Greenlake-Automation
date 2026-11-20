@@ -91,10 +91,10 @@ class BrocadeClient:
         self.connect()
         return self
 
-    def __exit__(self, *exc_info: object) -> None:
+    def __exit__(self, *_exc_info: object) -> None:
         self.close()
 
-    # ------------------------------------------------------------------ reads (read-only)
+    # ------------------------------------------------------------------ read-only reads
 
     def read(self, command: str) -> str:
         self._guard(command)

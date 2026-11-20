@@ -7,16 +7,14 @@ where, and what is stored.
 This document is written from the code. Where it and the code disagree, the code is right and this
 document needs fixing. Related documents:
 
-- [HLD.md](HLD.md): the high-level design (system context, control planes, deployment). It is being
-  written on a sibling branch; this LLD assumes it and does not repeat it.
-- [ARCHITECTURE.md](../ARCHITECTURE.md): the v0.12 snapshot and the refactor seams. Section 19 of
-  this document lists where that snapshot is now out of date.
+- [HLD.md](HLD.md): the high-level design (system context, control planes, deployment).
+- [STANDARD.md](../STANDARD.md): the engineering standard and fitness rules enforced by the gate.
 - [CONTEXT.md](../../CONTEXT.md): the domain words (run, array, fabric, VV set, removal set, ...).
 - [AGENTS.md](../../../../AGENTS.md): the hard rules. This LLD shows where each rule is enforced.
 - [docs/adr/](../adr/) and [docs/specs/](../specs/): why things are the way they are.
 
 All paths below are relative to the app folder `Provisioning_Automation/alletra_onboard/` unless a
-link says otherwise. `src/` means `src/alletra_onboard/`.
+link says otherwise.
 
 ---
 
@@ -54,13 +52,13 @@ flowchart TB
 
 | Layer | Package | Owns | Must not |
 |---|---|---|---|
-| Domain | [`src/domain/`](../../src/alletra_onboard/domain/) | Pydantic models, enums, the step registry, port protocols, rate-limit and redaction policy | import an adapter or do I/O |
-| Application | [`src/application/`](../../src/alletra_onboard/application/) | One package per bounded context (ADR 0011). Step services, plans, apply and verify logic | import FastAPI |
-| Adapters | [`src/adapters/`](../../src/alletra_onboard/adapters/) | One package per outside system. Allowlists, protocol details, parsing of wire formats | call another adapter's system |
-| API | [`src/api/`](../../src/alletra_onboard/api/) | HTTP routes, SSE streams, static UI serving, error-to-status mapping | hold step logic |
-| CLI | [`src/cli/main.py`](../../src/alletra_onboard/cli/main.py) | `onboard ui`, `onboard api`, `onboard check` | |
+| Domain | [`src/alletra_onboard/domain/`](../../src/alletra_onboard/domain/) | Pydantic models, enums, the step registry, port protocols, rate-limit and redaction policy | import an adapter or do I/O |
+| Application | [`src/alletra_onboard/application/`](../../src/alletra_onboard/application/) | One package per bounded context (ADR 0011). Step services, plans, apply and verify logic | import FastAPI |
+| Adapters | [`src/alletra_onboard/adapters/`](../../src/alletra_onboard/adapters/) | One package per outside system. Allowlists, protocol details, parsing of wire formats | call another adapter's system |
+| API | [`src/alletra_onboard/api/`](../../src/alletra_onboard/api/) | HTTP routes, SSE streams, static UI serving, error-to-status mapping | hold step logic |
+| CLI | [`src/alletra_onboard/cli/main.py`](../../src/alletra_onboard/cli/main.py) | `onboard ui`, `onboard api`, `onboard check` | |
 
-Configuration is [`src/config.py`](../../src/alletra_onboard/config.py): `Settings` (pydantic-settings,
+Configuration is [`src/alletra_onboard/config.py`](../../src/alletra_onboard/config.py): `Settings` (pydantic-settings,
 reads `.env`). Key fields: `api_host`/`api_port` (127.0.0.1:8765), `alletra_profile`
 (`full` or `init-only`), `gl_client_id`, `gl_client_secret`, `gl_token_url`, `gl_base_url`
 (`https://global.api.greenlake.hpe.com`), `state_database_path` (`.alletra_onboard/state.db`),
@@ -1028,16 +1026,3 @@ and types), `useRunEvents.ts` (history plus SSE), `modes.ts` (types for the serv
 blocks). Step lists come from `/app/profile`. Step state comes from `useStepState` and the run's
 events. Every write action has a confirmation tick before its button works. See
 [UX-GUIDELINES.md](../UX-GUIDELINES.md).
-
----
-
-## 19. Where ARCHITECTURE.md is out of date
-
-- It lists the previewed provisioning plan as a durable artifact. It is not: approvals are held in
-  memory only (section 7).
-- It says `modes.ts` mirrors the step registry by hand. The registry is now served by
-  `/app/profile`; `modes.ts` keeps types and display text only.
-- Its module tables predate `application/replication/`, `adapters/hosts/`, `adapters/command_log.py`,
-  `application/runs/console.py`, the write-scoped RC client and the `run_commands` table.
-- It names `storage/clients.py`; the module is `application/provisioning/clients.py`. The docstrings of
-  `service.py` and `runs/coordinator.py` have the same old name.

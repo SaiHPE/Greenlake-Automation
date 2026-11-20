@@ -263,3 +263,13 @@ def pinned_context(host: str, port: int, *, device: str, trusted: DeviceKey) -> 
     context.verify_mode = ssl.CERT_NONE
     context._pin = (host, port, device, trusted)
     return context
+
+
+def bypass_proxy_for(host: str) -> None:
+    """Ensure HTTP clients (requests/httpx) talk to an on-site array directly, not via HTTP(S)_PROXY."""
+    for var in ("NO_PROXY", "no_proxy"):
+        current_val = os.environ.get(var, "")
+        hosts = {h.strip() for h in current_val.split(",") if h.strip()}
+        if host not in hosts:
+            hosts.add(host)
+            os.environ[var] = ",".join(sorted(hosts))

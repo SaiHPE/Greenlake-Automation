@@ -17,18 +17,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from alletra_onboard.adapters.array.cli_client import ArrayCliError
-from alletra_onboard.adapters.array.rc_cli_client import answered_error
-from alletra_onboard.adapters.array.snap_cli_client import SnapPlanObjects
 from alletra_onboard.application.provisioning.clients import make_snap_cli, make_wsapi
 from alletra_onboard.application.snapshots.read import parse_showsched, showsched_readable
 from alletra_onboard.application.snapshots.verify import check_now
-from alletra_onboard.domain.provisioning import (
-    REMOVAL_ORDER,
-    ArrayVolumeRecord,
-    ProvisioningIntent,
-    RemovalItem,
-)
+from alletra_onboard.domain.errors import ArrayCliError, answered_error
+from alletra_onboard.domain.plan_objects import SnapPlanObjects
+from alletra_onboard.domain.provisioning import ProvisioningIntent
+from alletra_onboard.domain.shared import REMOVAL_ORDER, ArrayVolumeRecord, RemovalItem
 from alletra_onboard.domain.snapshots import (
     NOW_SUFFIX,
     ArraySchedule,

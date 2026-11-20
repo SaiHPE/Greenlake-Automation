@@ -9,7 +9,7 @@ from pydantic import SecretStr
 
 from alletra_onboard.adapters import command_log
 from alletra_onboard.adapters.array import cli_client
-from alletra_onboard.adapters.array.cli_client import ArrayCliClient, ArrayCliError
+from alletra_onboard.adapters.array.cli_client import ArrayCliClient
 from alletra_onboard.adapters.array.wsapi_client import _record_calls
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
 from alletra_onboard.application.runs.console import REFUSED, console_text
@@ -17,6 +17,7 @@ from alletra_onboard.application.runs.coordinator import StepPreconditionError
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
 from alletra_onboard.application.service import OnboardingService
 from alletra_onboard.config import Settings
+from alletra_onboard.domain.errors import ArrayCliError, GreenLakeHttpError
 from alletra_onboard.domain.models import ArrayWorkItem, DsccSetupConfig, NetworkConfig, RunRecord
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import ProtectionRequest, ReplicationIntent
@@ -500,7 +501,7 @@ async def test_greenlake_calls_are_recorded_as_method_and_path_only(monkeypatch,
         await SubscriptionsClient(http).find_by_key(SUB_KEY)
         await SubscriptionsClient(http).add_subscription(SUB_KEY)
         await DevicesClient(http).add_storage_device("SGH123", "S0B84A", {}, dry_run=True)
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(GreenLakeHttpError):
             await DevicesClient(http).assign_application("dev-1", "sm-1", "ap-northeast")
     retried, read, subscribe, dry_run, assign = recorded
     assert {e["target"] for e in recorded} == {"api.example"} and {e["transport"] for e in recorded} == {"greenlake"}
@@ -529,7 +530,7 @@ async def test_the_greenlake_token_request_shows_neither_the_secret_nor_the_toke
                                           httpx.Response(401, text=f"bad secret {GL_SECRET}")])
         assert await provider.token() == JWT
         provider._expires_at = provider._expires_at.replace(year=2000)
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(GreenLakeHttpError):
             await provider.token()
     ok, refused = recorded
     assert (ok["target"], ok["transport"], ok["command"], ok["output"], ok["write"]) == (

@@ -19,7 +19,7 @@ import { NotesList, TableSummary } from '../ui/primitives';
 import { NoValue, RESULT, StatusIndicator } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
 import { StepShell, StepStatus } from '../ui/StepShell';
-import { FileServiceView } from './FileServiceView';
+import { FileServiceView } from '../ui/FileServiceView';
 
 interface Props {
   runId: string;
@@ -263,8 +263,8 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
     setError(null);
     try {
       await startDiscover(runId);
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     }
   };
 
@@ -273,8 +273,8 @@ export function DiscoveryStep({ runId, run, events, onDone }: Props) {
     setChecking(true);
     try {
       setPreflight(await getStoragePreflight(runId));
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setChecking(false);
     }

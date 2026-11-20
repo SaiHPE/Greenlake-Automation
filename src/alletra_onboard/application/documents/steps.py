@@ -8,6 +8,8 @@ to the emitted events instead.
 from __future__ import annotations
 
 import asyncio
+import os
+import tempfile
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from types import MappingProxyType
@@ -394,8 +396,6 @@ class DocumentSteps:
         return ports, report, ""
 
     def _render_asbuilt(self, data) -> tuple[bytes, list[str]]:
-        import os
-        import tempfile
         fd, path = tempfile.mkstemp(suffix=".docx")
         os.close(fd)
         try:

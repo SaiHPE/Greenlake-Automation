@@ -11,6 +11,7 @@ from docx.oxml.ns import qn
 
 from alletra_onboard.application.documents import asbuilt_parse as ap
 from alletra_onboard.application.documents.asbuilt import AsBuiltData, generate_asbuilt
+from alletra_onboard.domain.array_parse import parse_cli_sets
 from alletra_onboard.domain.provisioning import VlunTemplate
 
 FIX = Path(__file__).resolve().parents[1] / "fixtures" / "rack13_array"
@@ -89,19 +90,19 @@ def test_parse_showvv_showcols_is_header_driven():
 # ------------------------------------------------------------------ R1, R2, R10 — sets
 
 def test_parse_cli_sets_pins_hostset_and_vvset_captures():
-    hs = ap.parse_cli_sets(_fx("showhostset.txt"))
+    hs = parse_cli_sets(_fx("showhostset.txt"))
     assert len(hs) == 6
     assert hs["zz_t2_hs"] == ["10.132.30.136"]
     assert hs["grp3_alletra"] == ["grp3_vmenode1", "grp3_vmenode2", "grp3_vmenode3"]
 
-    vs = ap.parse_cli_sets(_fx("showvvset.txt"))
+    vs = parse_cli_sets(_fx("showvvset.txt"))
     assert len(vs) == 9
     assert vs["vol1"] == ["vol1.0", "vol1.1", "vol1.2"]
     assert len(vs["vol11788928808342783376"]) == 12
     assert vs["test.Snapset"] == []                              # `--` = empty
     assert vs["VortexTestinstanc-3IUw"] == ["root-KVx6"]
-    assert ap.parse_cli_sets(_fx("showvvset_none.txt")) == {}
-    assert ap.parse_cli_sets("") == {}
+    assert parse_cli_sets(_fx("showvvset_none.txt")) == {}
+    assert parse_cli_sets("") == {}
 
 
 # ------------------------------------------------------------------ R3, R10 — templates

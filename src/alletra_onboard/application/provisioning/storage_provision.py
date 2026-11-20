@@ -18,10 +18,8 @@ from alletra_onboard.application.provisioning.clients import make_wsapi
 from alletra_onboard.application.provisioning.hosts import declared_mismatches, union_hosts
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
-    REMOVAL_ORDER,
     ActionOutcome,
     ArrayHostRecord,
-    ArrayVolumeRecord,
     DiscoveredHostBrief,
     ExportRequest,
     PlannedAction,
@@ -37,7 +35,7 @@ from alletra_onboard.domain.provisioning import (
     volume_set_name_problem,
     volume_too_large,
 )
-from alletra_onboard.domain.shared import normalize_wwpn
+from alletra_onboard.domain.shared import REMOVAL_ORDER, ArrayVolumeRecord, normalize_wwpn
 
 
 def _union(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None):

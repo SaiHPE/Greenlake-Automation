@@ -308,3 +308,22 @@ class VerificationReport(BaseModel):
     @property
     def health_total(self) -> int:
         return sum(i.qty for i in self.health_issues)
+
+
+class ClockStatus(BaseModel):
+    in_sync: bool
+    skew_seconds: float | None  # local - server (positive = clock ahead); None if unreachable
+    local_utc: str
+    server_utc: str | None
+    is_admin: bool
+    source: str
+    error: str | None = None
+
+
+class ClockSyncResult(BaseModel):
+    changed: bool
+    skew_seconds_before: float
+    local_utc_before: str
+    local_utc_after: str
+    server_utc: str
+    source: str

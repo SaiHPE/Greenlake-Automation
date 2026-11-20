@@ -13,7 +13,8 @@ from alletra_onboard.domain.migration import MigrationIntent
 from alletra_onboard.domain.network import IscsiVlanRequest
 from alletra_onboard.domain.peer_ports import PeerPortIntent
 from alletra_onboard.domain.replication import ReplicationIntent
-from alletra_onboard.domain.shared import EndpointCreds
+from alletra_onboard.domain.shared import ActionKind, EndpointCreds, PlanState, RemovalItem
+from alletra_onboard.domain.snapshots import SnapshotIntent
 
 ProvisioningType = Literal["tpvv", "reduce"]
 
@@ -352,11 +353,6 @@ class PreflightReport(BaseModel):
 
 # ------------------------------------------------------------------ provisioning plan + result
 
-ActionKind = Literal["host", "hostset", "volume", "vvset", "vlun", "schedule", "snapshot"]
-
-# What the plan predicts apply will do to one object (SPEC-001 R1). `conflict` blocks apply.
-PlanState = Literal["create", "exists", "update", "conflict"]
-
 
 class PlannedAction(BaseModel):
     kind: ActionKind
@@ -384,23 +380,6 @@ class ActionOutcome(BaseModel):
     detail: str = ""
 
 
-#: SPEC-007 R3 and SPEC-023 R6: the order a removal set pastes in, top to bottom. A schedule first, so it
-#: takes no more snapshots; snapshots before their base volume (`removevv` refuses a volume that still
-#: has snapshots); exports, sets and members after. The one order every renderer sorts by (LESSONS 19).
-REMOVAL_ORDER: dict[str, int] = {
-    "schedule": 0, "snapshot": 1, "vlun": 2, "vvset": 3, "volume": 4, "hostset": 5, "host": 6,
-}
-
-
-class RemovalItem(BaseModel):
-    """One CLI line that undoes one thing THIS apply created (SPEC-007). Text the operator pastes;
-    the tool never runs it. `kind` orders the block so it can be pasted top to bottom."""
-
-    kind: ActionKind
-    name: str                 # the object; for an export "<volume> LUN <n> → <target>"
-    command: str
-
-
 class ProvisioningResult(BaseModel):
     outcomes: list[ActionOutcome] = Field(default_factory=list)
     removals: list[RemovalItem] = Field(default_factory=list)      # SPEC-007: what this apply created, as undo lines
@@ -409,8 +388,6 @@ class ProvisioningResult(BaseModel):
 
 
 # ------------------------------------------------------------------ array state, read-only (SPEC-001 §4)
-
-ArrayProvisioningType = Literal["full", "tpvv", "snp", "peer", "unknown", "reduce", "dds"]
 
 
 class ArrayHostRecord(BaseModel):
@@ -422,20 +399,6 @@ class ArrayHostRecord(BaseModel):
     wwns: list[str] = Field(default_factory=list)
     iqns: list[str] = Field(default_factory=list)
     id: int | None = None          # SPEC-012 R1: the array's host id, for the Result row
-
-
-class ArrayVolumeRecord(BaseModel):
-    name: str
-    size_mib: int
-    cpg: str
-    provisioning_type: ArrayProvisioningType
-    id: int | None = None          # SPEC-012 R1
-    wwn: str = ""
-    # SPEC-023 R3: a snapshot names its base in copy_of; times are WSAPI's ISO 8601 text, "" when unset.
-    copy_of: str = ""
-    read_only: bool = False
-    created: str = ""
-    expires: str = ""
 
 
 class VlunTemplate(BaseModel):
@@ -521,10 +484,3 @@ class PathVerification(BaseModel):
     hosts: list[HostPathStatus] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     error: str | None = None
-
-
-# domain/snapshots.py reads ArrayVolumeRecord and PlanState from this module, so it is imported once
-# they exist; the intent's `snapshots` field is resolved then.
-from alletra_onboard.domain.snapshots import SnapshotIntent
-
-ProvisioningIntent.model_rebuild()

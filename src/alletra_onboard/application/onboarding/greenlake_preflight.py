@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-import httpx
-
-from alletra_onboard.adapters.greenlake.service_catalog import ServiceProvision
 from alletra_onboard.application.onboarding.clients import make_greenlake
 from alletra_onboard.config import Settings
+from alletra_onboard.domain.errors import GreenLakeHttpError
 from alletra_onboard.domain.models import ArrayWorkItem, CheckStatus, PreflightCheck
 from alletra_onboard.domain.policies import redact
+
+if TYPE_CHECKING:
+    from alletra_onboard.adapters.greenlake.service_catalog import ServiceProvision
 
 
 class GreenLakePreflightRunner(Protocol):
@@ -213,10 +214,8 @@ def _failed_check(name: str, prefix: str, exc: Exception, remediation: str) -> P
 
 
 def _format_exception(exc: Exception) -> str:
-    if isinstance(exc, httpx.HTTPStatusError):
-        response = exc.response
-        request = response.request
-        return f"HTTP {response.status_code} from {request.method} {request.url.path}"
+    if isinstance(exc, GreenLakeHttpError):
+        return exc.short_detail
     return redact(str(exc) or exc.__class__.__name__)
 
 

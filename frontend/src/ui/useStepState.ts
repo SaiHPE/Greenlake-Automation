@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
-import { isPartnershipResult, RunEvent, RunRecord } from '../api';
+import { IscsiSection, isPartnershipResult, PeerSection, ReplicationResult, RunEvent, RunRecord } from '../api';
 import { ServedStep } from '../modes';
 import { StepState } from './status';
+
+const rec = (value: unknown): Record<string, unknown> | undefined =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
 
 /**
  * The single progress model.
@@ -17,7 +20,7 @@ import { StepState } from './status';
  */
 
 /** Which workflow phases belong to a step. GreenLake spans the whole GL_* chain from PREFLIGHT. */
-export function owns(step: ServedStep, phase: string): boolean {
+function owns(step: ServedStep, phase: string): boolean {
   if (phase === step.phase) return true;
   return step.phase === 'PREFLIGHT' && phase.startsWith('GL_');
 }
@@ -126,10 +129,10 @@ export function deriveStepState(step: ServedStep, run: RunRecord | null, events:
     if (FAILURE.test(type)) return 'failed';
     // Discovery and zoning report completion (or a gate) even when the read itself failed; the error
     // is in the payload, and the step component surfaces it. Z-7: a zoning check with no array ports.
-    if ((signals.complete.includes(type) || signals.gate.includes(type)) && event.data?.report?.error) return 'failed';
+    if ((signals.complete.includes(type) || signals.gate.includes(type)) && rec(event.data?.report)?.error) return 'failed';
     if (signals.complete.includes(type)) {
       // SPEC-021: setting up the partnership is half the step; the groups are planned after it.
-      if (type === 'replication.applied' && isPartnershipResult(event.data?.result)) return 'action_required';
+      if (type === 'replication.applied' && isPartnershipResult(event.data?.result as ReplicationResult | undefined)) return 'action_required';
       // A GreenLake dry run reports step.completed too, but nothing was written, so the step is not
       // done. The live run emits from GL_VERIFY_DEVICE; the dry run stays on PREFLIGHT.
       if (step.key === 'greenlake' && event.phase === 'PREFLIGHT') return 'not_started';
@@ -170,38 +173,41 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
     );
   if (!deciding) return '';
 
-  const report = deciding.data?.report;
+  const report = rec(deciding.data?.report);
+  const plan = rec(deciding.data?.plan);
+  const iscsi = deciding.data?.iscsi as IscsiSection | undefined;
+  const peer = deciding.data?.peer as PeerSection | undefined;
   const list = (value: unknown) => (Array.isArray(value) ? value : []);
 
   switch (deciding.event_type) {
     case 'discover.completed': {
       if (report?.error) return 'read failed';
       // Fibre Channel ports only, matching the table the Discovery step shows.
-      const fc = list(report?.array_ports).filter((port: { protocol?: string }) => port.protocol === 'fc').length;
+      const fc = (list(report?.array_ports) as { protocol?: string }[]).filter((port) => port.protocol === 'fc').length;
       // SPEC-009: the hint counts the hosts this run is about, as the step does (older runs: vCenter/sheet sourced).
       const hosts = list(report?.hosts) as { in_run?: boolean; sources?: string[] }[];
       const inRun = hosts.filter((h) => h.in_run ?? (h.sources ?? []).some((s) => s === 'vcenter' || s === 'sheet')).length;
       return `${fc} ports · ${inRun} host${inRun === 1 ? '' : 's'} in this run`;
     }
     case 'ports.completed': {
-      const iscsi = list(deciding.data?.iscsi?.plan?.actions).length;
-      const peers = list(deciding.data?.peer?.plan?.actions).length;
+      const iscsiCount = list(iscsi?.plan?.actions).length;
+      const peers = list(peer?.plan?.actions).length;
       const parts = [
-        iscsi ? `${iscsi} iSCSI address${iscsi === 1 ? '' : 'es'}` : '',
+        iscsiCount ? `${iscsiCount} iSCSI address${iscsiCount === 1 ? '' : 'es'}` : '',
         peers ? `${peers} peer port${peers === 1 ? '' : 's'}` : '',
       ].filter(Boolean);
       return parts.length ? `${parts.join(' · ')} in place` : 'nothing to set up';
     }
     case 'ports.previewed': {
       const actions = [
-        ...list(deciding.data?.iscsi?.plan?.actions),
-        ...list(deciding.data?.peer?.plan?.actions),
+        ...list(iscsi?.plan?.actions),
+        ...list(peer?.plan?.actions),
       ] as { state: string }[];
       // a peer plan's blockers already include its conflicts
       const findings =
-        (list(deciding.data?.iscsi?.plan?.actions) as { state: string }[]).filter((a) => a.state === 'conflict').length +
-        list(deciding.data?.peer?.plan?.blockers).length +
-        (deciding.data?.peer?.result?.error ? 1 : 0);
+        (list(iscsi?.plan?.actions) as { state: string }[]).filter((a) => a.state === 'conflict').length +
+        list(peer?.plan?.blockers).length +
+        (peer?.result?.error ? 1 : 0);
       const todo = actions.filter((a) => a.state === 'create').length;
       return findings ? `${findings} finding${findings === 1 ? '' : 's'} to resolve` : `${todo} to set up`;
     }
@@ -214,35 +220,35 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       // Counted per HOST, as the zoning step presents it — the report carries a row per host and
       // fabric, and quoting zones here would contradict the number on the step itself.
       const hosts = new Set<string>();
-      list(report?.expected)
-        .filter((zone: { present: boolean }) => !zone.present)
-        .forEach((zone: { name: string }) => hosts.add(zone.name.replace(/_(odd|even)$/, '')));
+      (list(report?.expected) as { present: boolean; name: string }[])
+        .filter((zone) => !zone.present)
+        .forEach((zone) => hosts.add(zone.name.replace(/_(odd|even)$/, '')));
       return hosts.size ? `${hosts.size} host${hosts.size === 1 ? '' : 's'} outstanding` : '';
     }
     case 'storage.applied':
       return 'objects created';
     case 'storage.previewed': {
       // P-22: a plan with blockers is not awaiting anyone's approval.
-      const blockers = list(deciding.data?.plan?.blockers).length;
+      const blockers = list(plan?.blockers).length;
       return blockers ? `${blockers} blocker${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
     }
     case 'verify.completed': {
       const mismatches =
-        list(report?.checks).filter((check: { status: string }) => check.status !== 'pass').length +
-        list(report?.iscsi_vlans).filter((check: { status: string }) => check.status !== 'present').length +
+        (list(report?.checks) as { status: string }[]).filter((check) => check.status !== 'pass').length +
+        (list(report?.iscsi_vlans) as { status: string }[]).filter((check) => check.status !== 'present').length +
         (report?.iscsi_vlans_error ? 1 : 0) +
-        list(report?.peer_ports).filter((check: { ok: boolean }) => !check.ok).length +
+        (list(report?.peer_ports) as { ok: boolean }[]).filter((check) => !check.ok).length +
         (report?.peer_ports_error ? 1 : 0);
       return mismatches ? `${mismatches} to review` : 'configuration matches';
     }
     case 'asbuilt.generated':
       return 'document ready';
     case 'replication.previewed': {
-      const blockers = list(deciding.data?.plan?.blockers).length;
+      const blockers = list(plan?.blockers).length;
       return blockers ? `${blockers} finding${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
     }
     case 'replication.applied':
-      return isPartnershipResult(deciding.data?.result) ? 'partnership set up' : 'replication configured';
+      return isPartnershipResult(deciding.data?.result as ReplicationResult | undefined) ? 'partnership set up' : 'replication configured';
     case 'replication.preview.failed':
       return 'arrays could not be read';
     case 'replication.apply.failed':
@@ -254,7 +260,7 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
     case 'failover.failed':
       return 'test failed';
     case 'snapshots.previewed': {
-      const blockers = list(deciding.data?.plan?.blockers).length;
+      const blockers = list(plan?.blockers).length;
       return blockers ? `${blockers} finding${blockers === 1 ? '' : 's'} to resolve` : 'awaiting approval';
     }
     case 'snapshots.applied':

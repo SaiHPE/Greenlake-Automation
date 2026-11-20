@@ -16,7 +16,8 @@ import pytest
 from alletra_onboard.application.platform.init_sheet import parse_workbook_bytes
 from alletra_onboard.domain import provisioning
 from alletra_onboard.domain.models import RunMode
-from alletra_onboard.domain.provisioning import ArrayVolumeRecord, VolumeRequest
+from alletra_onboard.domain.provisioning import VolumeRequest
+from alletra_onboard.domain.shared import ArrayVolumeRecord
 from tests.unit.test_init_sheet import _PROV_TARGETS, _fill_tabs
 from tests.unit.test_plan_truth import TruthfulFakeWsapi, _intent, _plan, _row
 

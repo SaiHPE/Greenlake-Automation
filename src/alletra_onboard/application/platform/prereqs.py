@@ -12,10 +12,9 @@ requirement details for HPE Alletra Storage MP B10000".
 from __future__ import annotations
 
 import asyncio
-import socket
 from dataclasses import dataclass
-from urllib.parse import urlparse
 
+from alletra_onboard.application.platform.clients import probe_tcp, probe_via_proxy
 from alletra_onboard.application.platform.proxy import ProxyResolver
 
 # (fqdn, port, initiator, purpose). All outbound TCP 443.
@@ -97,46 +96,6 @@ class ConnectivityResult:
     via: str = ""  # the proxy used ("" = tested directly)
 
 
-async def _check_one(host: str, port: int, timeout: float) -> ConnectivityResult:
-    try:
-        future = asyncio.open_connection(host, port)
-        _reader, writer = await asyncio.wait_for(future, timeout=timeout)
-        writer.close()
-        try:
-            await writer.wait_closed()
-        except Exception:  # closing is best-effort
-            pass
-        return ConnectivityResult(host, port, True, "reachable")
-    except TimeoutError:
-        return ConnectivityResult(host, port, False, "timed out - the port is filtered or blocked")
-    except socket.gaierror:
-        return ConnectivityResult(host, port, False, "DNS could not resolve the host")
-    except OSError as exc:
-        return ConnectivityResult(host, port, False, f"blocked ({type(exc).__name__})")
-
-
-async def _check_via_proxy(host: str, port: int, proxy_url: str, timeout: float) -> ConnectivityResult:
-    """Reachability THROUGH the proxy — an HTTP CONNECT tunnel, exactly how the tool's traffic goes."""
-    parsed = urlparse(proxy_url)
-    phost, pport = parsed.hostname or "", parsed.port or 8080
-    try:
-        reader, writer = await asyncio.wait_for(asyncio.open_connection(phost, pport), timeout=timeout)
-    except Exception:
-        return ConnectivityResult(host, port, False, f"proxy {phost}:{pport} not reachable", via=proxy_url)
-    try:
-        writer.write(f"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n".encode())
-        await writer.drain()
-        line = (await asyncio.wait_for(reader.readline(), timeout=timeout)).decode("latin1", "replace").strip()
-        if "407" in line:
-            return ConnectivityResult(host, port, False, "proxy requires authentication (407)", via=proxy_url)
-        ok = " 200 " in f" {line} " or "200 connection" in line.lower()
-        return ConnectivityResult(host, port, ok, "reachable via proxy" if ok else f"proxy said: {line}", via=proxy_url)
-    except Exception as exc:
-        return ConnectivityResult(host, port, False, f"proxy error ({type(exc).__name__})", via=proxy_url)
-    finally:
-        writer.close()
-
-
 async def check_connectivity(
     region: str = "jp1", timeout: float = 6.0, manual_proxy: str | None = None
 ) -> list[ConnectivityResult]:
@@ -149,6 +108,10 @@ async def check_connectivity(
 
     async def _check(host: str) -> ConnectivityResult:
         proxy = resolver.for_url(f"https://{host}")
-        return await (_check_via_proxy(host, 443, proxy, timeout) if proxy else _check_one(host, 443, timeout))
+        if proxy:
+            reachable, detail = await probe_via_proxy(host, 443, proxy, timeout)
+            return ConnectivityResult(host, 443, reachable, detail, via=proxy)
+        reachable, detail = await probe_tcp(host, 443, timeout)
+        return ConnectivityResult(host, 443, reachable, detail)
 
     return list(await asyncio.gather(*[_check(h) for h in hosts]))

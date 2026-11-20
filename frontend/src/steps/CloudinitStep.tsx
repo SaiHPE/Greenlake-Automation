@@ -17,7 +17,7 @@ interface Props {
 }
 
 /** IPv4 169.254.x.x (not the 169.254.0.0 placeholder) or bracketed IPv6 fe80::, zone optional. */
-export function isLinkLocalWizardUrl(raw: string): boolean {
+function isLinkLocalWizardUrl(raw: string): boolean {
   const value = (raw ?? '').trim();
   if (!/^https:\/\//i.test(value)) return false;
   const ipv4 = /^https:\/\/169\.254\.\d{1,3}\.\d{1,3}(?::\d+)?(?:\/.*)?$/i;
@@ -74,8 +74,8 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
     setError(null);
     try {
       await startCloudinit(runId, url.trim(), true);
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     }
   };
 
@@ -89,8 +89,8 @@ export function CloudinitStep({ runId, run, events, form, onDone }: Props) {
           ? { ok: true, text: `Opened ${result.path?.split('\\').pop() ?? 'the Discovery Tool'}` }
           : { ok: false, text: result.error ?? 'The Discovery Tool could not be opened' },
       );
-    } catch (exc: any) {
-      setDiscovery({ ok: false, text: String(exc.message ?? exc) });
+    } catch (exc: unknown) {
+      setDiscovery({ ok: false, text: exc instanceof Error ? exc.message : String(exc) });
     } finally {
       setDiscoveryBusy(false);
     }

@@ -41,8 +41,8 @@ export function GreenLakeStep({ runId, run, events, onDone }: Props) {
     setError(null);
     try {
       await startProvision(runId, dryRun);
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     }
   };
 

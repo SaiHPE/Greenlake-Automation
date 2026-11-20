@@ -26,16 +26,12 @@ from __future__ import annotations
 
 import re
 import time
-from dataclasses import dataclass
 from typing import Any
 
 from alletra_onboard.adapters import command_log
-from alletra_onboard.adapters.array.cli_client import (
-    _FORBIDDEN_CHARS,
-    ArrayCliClient,
-    ArrayCliError,
-)
-from alletra_onboard.adapters.array.rc_cli_client import answered_error
+from alletra_onboard.adapters.array.cli_client import _FORBIDDEN_CHARS, ArrayCliClient
+from alletra_onboard.domain.errors import ArrayCliError, answered_error
+from alletra_onboard.domain.plan_objects import SnapPlanObjects
 
 #: `help createsv`: -exp takes 1 minute to 1825 days; the form takes whole hours, 1 to 43800.
 EXPIRE_HOURS_MAX = 43800
@@ -66,13 +62,6 @@ _CRON_RANGES = {"minute": 59, "hour": 23, "dow": 6}
 FORM_TEXT = (f'createsched -f "createsv -f [-ro] -exp <n>h {SCHEDULE_PATTERN} <set:name|volume>" '
              '"<min> <hour> * * <dow>" <name>')
 UNBOUND = "refused: this client was not built from an approved snapshot plan, so it writes nothing"
-
-
-@dataclass(frozen=True)
-class SnapPlanObjects:
-    """What the approved plan creates: the only schedules this client may write (ADR 0025 condition 3)."""
-
-    schedules: frozenset[tuple[str, str]] = frozenset()    # (schedule name, source_ref) of the plan's creates
 
 
 def _cron_refusal(cron: str) -> str | None:

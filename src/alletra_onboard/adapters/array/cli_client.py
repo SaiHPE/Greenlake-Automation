@@ -11,6 +11,7 @@ import re
 import time
 
 from alletra_onboard.adapters import command_log, device_trust
+from alletra_onboard.domain.errors import ArrayCliError
 
 try:
     import paramiko
@@ -66,10 +67,6 @@ _DIAGNOSTIC_FORMS = (
 )
 DIAGNOSTIC_TIME_RANGE = (300, 172800)       # the array's documented range for <time>
 DIAGNOSTIC_PING_MAX = 20
-
-
-class ArrayCliError(Exception):
-    """Couldn't connect, authenticate, or run a command on the array."""
 
 
 def refusal(command: str) -> str | None:
@@ -241,5 +238,5 @@ class ArrayCliClient:
         self.connect()
         return self
 
-    def __exit__(self, *exc_info: object) -> None:
+    def __exit__(self, *_exc_info: object) -> None:
         self.close()

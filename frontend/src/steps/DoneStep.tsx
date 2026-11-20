@@ -5,8 +5,7 @@ import { DocList, Section } from '../ui/blocks';
 import { ActivityTimeline } from '../ui/primitives';
 import { PlainPage, runDocuments, when } from '../ui/RunPages';
 import { NoValue } from '../ui/status';
-import { RemovalSet } from './ProvisionStep';
-import { mergedRemovals, RemovalSets } from './ReplicationStep';
+import { mergedRemovals, RemovalSet, RemovalSets } from '../ui/RemovalSets';
 
 interface Props {
   runId: string | null;
@@ -61,8 +60,8 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
     setError(null);
     try {
       await markComplete(runId);
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setBusy(false);
     }

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import ssl
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal
@@ -20,6 +19,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 DEFAULT_PORTS = {"ssh": 22, "tls": 443}
+_PEM_HEADER = "-----BEGIN CERTIFICATE-----"
+_PEM_FOOTER = "-----END CERTIFICATE-----"
 
 
 class TrustKind(StrEnum):
@@ -108,6 +109,15 @@ def _the(device: str) -> str:
     return device if device == "vCenter" else f"the {device}"
 
 
+def _pem_cert_to_der(pem: str) -> bytes:
+    """Pure-Python PEM certificate decoder (same rules as ssl.PEM_cert_to_DER_cert, without ssl)."""
+    stripped = pem.strip()
+    if not pem.startswith(_PEM_HEADER) or not stripped.endswith(_PEM_FOOTER):
+        raise ValueError("invalid PEM certificate framing")
+    body = stripped[len(_PEM_HEADER):-len(_PEM_FOOTER)]
+    return base64.decodebytes(body.encode("ascii", "strict"))
+
+
 def key_readable(key: DeviceKey) -> bool:
     """Whether a stored key still decodes: an SSH key's base64 holds a blob that names its own type, a
     certificate's PEM holds DER. Only a damaged run state (`state.db`) holds one that does not."""
@@ -116,7 +126,7 @@ def key_readable(key: DeviceKey) -> bool:
             blob = base64.b64decode(key.data, validate=True)
             size = int.from_bytes(blob[:4], "big")
             return blob[4:4 + size] == key.key_type.encode()
-        return bool(ssl.PEM_cert_to_DER_cert(key.data))
+        return bool(_pem_cert_to_der(key.data))
     except (binascii.Error, ValueError, TypeError):
         return False
 

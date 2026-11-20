@@ -58,14 +58,12 @@ const PREPARE = STEPS.filter((s) => s.stage === 'Prepare');
 const RUN_STEPS = STEPS.filter((s) => s.stage !== 'Prepare' && s.key !== 'finish');
 
 /** "Prepare · step 1 of 3" before the run exists; "Step 1 of 7" inside it (Finish is not a step). */
-export function stepLabel(key: string): string {
+export const stepLabel = (key: string): string => {
   const p = PREPARE.findIndex((s) => s.key === key);
   if (p >= 0) return `Prepare · step ${p + 1} of ${PREPARE.length}`;
   const r = RUN_STEPS.findIndex((s) => s.key === key);
   return `Step ${r + 1} of ${RUN_STEPS.length}`;
-}
-
-export const stepNo = (key: string) => STEPS.findIndex((s) => s.key === key) + 1;
+};
 
 export const RUN: RunSummary = {
   array: 'AlletraMP_D22U27',

@@ -3,7 +3,7 @@
 > The **canonical scope and status** of the tool, in the nine areas the scope owner defined
 > (2026-09-12). It replaces the earlier seven-stage lifecycle matrix. The architecture that carries
 > it is [ADR 0006 — hybrid control plane](adr/0006-hybrid-control-plane.md); the language is fixed in
-> [CONTEXT.md](../CONTEXT.md); the current-state module map is [ARCHITECTURE.md](ARCHITECTURE.md).
+> [CONTEXT.md](../CONTEXT.md); the structure is in [design/HLD.md](design/HLD.md) and [STANDARD.md](STANDARD.md).
 > Status here is checked against the code, not against plans. Last checked: **v0.18.0 + integration/2026-11-17-builds** (2026-11-17).
 > **Open items, owners and blockers live in [TRACKER.md](TRACKER.md)** — this file is the per-area summary.
 >

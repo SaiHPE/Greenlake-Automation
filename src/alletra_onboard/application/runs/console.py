@@ -9,16 +9,17 @@ from __future__ import annotations
 
 import asyncio
 import re
-import shutil
-import subprocess
-import sys
 import time
 from collections.abc import Callable
 
-from alletra_onboard.adapters import command_log
-from alletra_onboard.adapters.array.cli_client import ArrayCliError, refusal
-from alletra_onboard.application.provisioning.clients import make_array_cli
+from alletra_onboard.application.runs.clients import (
+    command_refusal,
+    launch_terminal,
+    make_array_cli,
+    record_command,
+)
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
+from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.shared import EndpointCreds
 
 REFUSED = ("The console runs the tool's read-only commands (show…, checkhealth). Changes go through a plan "
@@ -32,7 +33,7 @@ class ConsoleService:
                  launcher: Callable[[list[str]], None] | None = None) -> None:
         self.coord = coordinator
         self.cli_factory = cli_factory
-        self.launcher = launcher or _launch
+        self.launcher = launcher or launch_terminal
 
     def targets(self, run_id: str) -> dict[str, str]:
         """target key -> 'user@host' for the arrays this run may read."""
@@ -69,10 +70,10 @@ class ConsoleService:
         command = " ".join(command.split())
         creds = self._creds(run_id, target)
         with self.coord.recording(run_id):
-            why = refusal(command)
+            why = command_refusal(command)
             if why:
-                command_log.record(target=creds.host, transport="ssh", command=command, started=time.monotonic(),
-                                   ok=False, result=f"{why} (console)")
+                record_command(target=creds.host, transport="ssh", command=command, started=time.monotonic(),
+                               ok=False, result=f"{why} (console)")
                 return {"ok": False, "refused": True, "output": REFUSED, "target": creds.host}
 
             def read() -> str:
@@ -110,18 +111,3 @@ def console_text(entries: list[dict]) -> str:
         if out:
             lines.extend("    " + line for line in out.splitlines())
     return "\n".join(lines) + "\n"
-
-
-def _launch(argv: list[str]) -> None:
-    """A new terminal window with `argv` in it; no password is passed (R5)."""
-    if sys.platform == "win32":
-        subprocess.Popen(["cmd", "/c", "start", "", "cmd", "/k", *argv])
-        return
-    if sys.platform == "darwin":
-        script = " ".join(argv).replace('"', '\\"')
-        subprocess.Popen(["osascript", "-e", f'tell application "Terminal" to do script "{script}"'])
-        return
-    term = shutil.which("x-terminal-emulator") or shutil.which("gnome-terminal")
-    if term is None:
-        raise RuntimeError("no terminal program found")
-    subprocess.Popen([term, "--", *argv])

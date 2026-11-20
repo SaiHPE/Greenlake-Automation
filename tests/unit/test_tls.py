@@ -12,10 +12,9 @@ from __future__ import annotations
 import ssl
 from pathlib import Path
 
+from alletra_onboard.adapters.tls import ca_bundle_override, ssl_context
 from alletra_onboard.application.platform.tls import (
-    ca_bundle_override,
     is_tls_trust_error,
-    ssl_context,
     tls_trust_guidance,
 )
 

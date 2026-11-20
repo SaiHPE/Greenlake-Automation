@@ -210,7 +210,7 @@ class RunFromSheetRequest(BaseModel):
     )
 
 
-# ------------------------------------------------------------------ preflight (existing)
+# ------------------------------------------------------------------ existing preflight
 
 class PreflightRequest(BaseModel):
     work_item: ArrayWorkItem
