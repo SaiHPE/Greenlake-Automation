@@ -878,7 +878,8 @@ async def test_normal_apply_removal_set_is_byte_identical_with_and_without_apply
     plan = storage_provision.build_plan(intent, discovery, reachable_hosts={"esx1"})
     plain = prov_apply.apply_plan(
         prov_apply.StorageInputs(intent, discovery, {"esx1"}, plan),
-        Approval("direct", "storage", {"A": intent.array}),
+        Approval("direct", "storage", {"A": intent.array},
+                 save_record=lambda m: m.model_dump(mode="json")),
     )
 
     assert recorded.model_dump(mode="json") == plain.model_dump(mode="json")
@@ -928,7 +929,8 @@ async def test_normal_rc_groups_removal_set_is_byte_identical(tmp_path, monkeypa
     assert not store.load_artifact(rc_run.run_id, APPLY_RECORD_ARTIFACT)
     rc_plain = rc_apply.apply_plan(
         ReplicationPlan.model_validate(rc_plan_ev.data["plan"]), rc_intent,
-        Approval("plain", "rc_groups", {"A": rc_intent.array, "B": _creds(B_HOST)}),
+        Approval("plain", "rc_groups", {"A": rc_intent.array, "B": _creds(B_HOST)},
+                 save_record=lambda m: m.model_dump(mode="json")),
     )
     assert (rc_recorded["removals_a"], rc_recorded["removals_b"]) == (rc_plain.removals_a, rc_plain.removals_b)
     assert not any("may have" in n for n in rc_recorded["notes"])
@@ -964,7 +966,8 @@ async def test_normal_partnership_and_snapshots_removal_sets_are_byte_identical(
     monkeypatch.setattr(device_trust, "open_ssh", lambda host, *_a, **_kw: _FakePartnerSsh("A" if host == A_HOST else "B", s2))
     p_plain = rc_partner_apply.apply_partnership(
         ReplicationPlan.model_validate(p_plan_ev.data["plan"]), p_intent,
-        Approval("plain", "rc_partnership", {"A": p_intent.array, "B": _creds(B_HOST)}),
+        Approval("plain", "rc_partnership", {"A": p_intent.array, "B": _creds(B_HOST)},
+                 save_record=lambda m: m.model_dump(mode="json")),
     )
     assert (p_recorded["removals_a"], p_recorded["removals_b"]) == (p_plain.removals_a, p_plain.removals_b)
     assert p_recorded["notes"] == p_plain.notes == []
@@ -996,7 +999,8 @@ async def test_normal_partnership_and_snapshots_removal_sets_are_byte_identical(
     monkeypatch.setattr(device_trust, "open_ssh", lambda *_a, **_kw: _FakeSnapSsh([]))
     s_plain = snap_apply.apply_plan(
         SnapshotPlan.model_validate(s_plan_ev.data["plan"]), view, s_intent,
-        Approval("plain", "snapshots", {"A": s_intent.array}),
+        Approval("plain", "snapshots", {"A": s_intent.array},
+                 save_record=lambda m: m.model_dump(mode="json")),
     )
     assert [r["command"] for r in s_recorded["removals"]] == [r.command for r in s_plain.removals]
     assert s_recorded["removal_notes"] == s_plain.removal_notes
@@ -1040,7 +1044,8 @@ def test_multiple_existing_exports_of_one_vvset_do_not_collapse_or_shift_confirm
     plan = storage_provision.build_plan(intent, discovery, reachable_hosts={"esx1"})
     result = prov_apply.apply_plan(
         prov_apply.StorageInputs(intent, discovery, {"esx1"}, plan),
-        Approval("test", "storage", {"A": intent.array}),
+        Approval("test", "storage", {"A": intent.array},
+                 save_record=lambda m: m.model_dump(mode="json")),
     )
     assert result.error is None
     vluns = [o for o in result.outcomes if o.kind == "vlun"]
@@ -1085,7 +1090,8 @@ def test_partnership_removal_line_is_on_record_before_error_or_timeout(
     monkeypatch.setattr(device_trust, "open_ssh",
                         lambda host, *_a, **_kw: _FailPartnerSsh("A" if host == A_HOST else "B", ssh_state))
     result = rc_partner_apply.apply_partnership(
-        plan, intent, Approval("test", "rc_partnership", {"A": intent.array, "B": _creds(B_HOST)}),
+        plan, intent, Approval("test", "rc_partnership", {"A": intent.array, "B": _creds(B_HOST)},
+                               save_record=lambda m: m.model_dump(mode="json")),
     )
     assert result.error is not None
     assert expected_line in result.removals_a
@@ -1165,7 +1171,7 @@ async def test_get_run_during_live_apply_leaves_it_running_with_no_failed_event(
 def test_approval_without_bound_saver_is_refused():
     """Smaller shape: a missing saver on Approval is impossible in production, never a silent no-op."""
     approval = Approval("run-1", "storage", {"A": _creds()})
-    approval.save_record = None
+    assert approval.save_record is None
     with pytest.raises(ApprovalError, match="no apply record saver bound"):
         approval.require_saver()
 

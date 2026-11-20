@@ -30,7 +30,13 @@ from alletra_onboard.application.provisioning.clients import (
 )
 from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
 from alletra_onboard.application.unified_file.read import UNREADABLE, read_file_report
-from alletra_onboard.domain.array_parse import NSP, nsp_parts, parse_file_ports, parse_showversion
+from alletra_onboard.domain.array_parse import (
+    NSP,
+    nsp_parts,
+    nsp_rows,
+    parse_file_ports,
+    parse_showversion,
+)
 from alletra_onboard.domain.discovery import (
     ArrayHost,
     ArrayPort,
@@ -56,12 +62,7 @@ _LOGICAL_NAME_RE = re.compile(r"^\s*Logical Name:\s*(\S+)", re.IGNORECASE)
 
 def parse_iscsi_ips(showport_iscsi: str) -> dict[str, str]:
     """`showport -iscsi` -> {n:s:p: target IP}. Columns: N:S:P State IPAddr ... (offline -> '')."""
-    ips: dict[str, str] = {}
-    for line in (showport_iscsi or "").splitlines():
-        p = line.split()
-        if len(p) >= 3 and p[0][:1].isdigit() and ":" in p[0]:
-            ips[p[0]] = "" if p[1] == "offline" else p[2]
-    return ips
+    return {p[0]: "" if p[1] == "offline" else p[2] for p in nsp_rows(showport_iscsi, 3)}
 
 
 def _header_rows(text: str, command: str, required: tuple[str, ...]) -> list[dict[str, str]]:
@@ -176,9 +177,8 @@ def parse_ports(showport: str, iscsi_ips: dict[str, str]) -> list[ArrayPort]:
     than read as a single token.
     """
     out: list[ArrayPort] = []
-    for line in (showport or "").splitlines():
-        p = line.split()
-        if len(p) < 7 or not p[0][:1].isdigit() or ":" not in p[0] or p[1] != "target":
+    for p in nsp_rows(showport, 7):
+        if p[1] != "target":
             continue
         protocol = p[6]
         if protocol not in ("FC", "iSCSI"):
@@ -219,10 +219,7 @@ def parse_replication_ports(showport: str) -> list[EthernetPort]:
     array's own inter-node links.
     """
     out: list[EthernetPort] = []
-    for line in (showport or "").splitlines():
-        p = line.split()
-        if len(p) < 7 or not p[0][:1].isdigit() or ":" not in p[0]:
-            continue
+    for p in nsp_rows(showport, 7):
         mode, state, port_type, protocol = p[1], p[2], p[5], p[6]
         if mode != "peer" or protocol != "IP" or port_type == "cluster":
             continue
@@ -255,10 +252,7 @@ def parse_rcip_detail(showport_rcip: str) -> dict[str, dict[str, str]]:
     nothing else, and an operator configuring replication needs the subnet it sits on.
     """
     out: dict[str, dict[str, str]] = {}
-    for line in (showport_rcip or "").splitlines():
-        p = line.split()
-        if len(p) < 8 or not p[0][:1].isdigit() or ":" not in p[0]:
-            continue
+    for p in nsp_rows(showport_rcip, 8):
         # "-" is the CLI's "unset" marker, normalised to "" exactly as parse_file_ports does — on LZ
         # the RCIP links carry no gateway and the raw "-" reached the UI as literal text.
         clean = lambda v: "" if v in ("-", "") else v

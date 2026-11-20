@@ -224,7 +224,7 @@
 "src/alletra_onboard/application/documents/asbuilt.py" = 62034
 "src/alletra_onboard/application/documents/steps.py" = 18478
 "src/alletra_onboard/application/platform/init_sheet.py" = 65775
-"src/alletra_onboard/application/provisioning/discovery.py" = 34056
+"src/alletra_onboard/application/provisioning/discovery.py" = 33741
 "src/alletra_onboard/application/provisioning/peer_ports.py" = 22760
 "src/alletra_onboard/application/provisioning/steps.py" = 26881
 "src/alletra_onboard/application/provisioning/storage_provision.py" = 26000

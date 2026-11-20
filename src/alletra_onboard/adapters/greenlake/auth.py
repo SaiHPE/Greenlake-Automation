@@ -60,12 +60,19 @@ class OAuthClientCredentials:
         if not isinstance(payload.get("access_token"), str) or not payload["access_token"]:
             raise GreenLakeError("Token endpoint returned an unexpected body (missing access_token).")
         token: str = payload["access_token"]
-        self._access_token = token
+        raw_expires = payload.get("expires_in", 900)
+        if isinstance(raw_expires, bool):
+            raise GreenLakeError(
+                f"Token endpoint returned an invalid expires_in value ({type(raw_expires).__name__})."
+            )
         try:
-            expires_in = int(payload.get("expires_in", 900))
-        except (TypeError, ValueError):
-            expires_in = 900
-        self._expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
+            expires_at = datetime.now(UTC) + timedelta(seconds=int(raw_expires))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise GreenLakeError(
+                f"Token endpoint returned an invalid expires_in value ({type(raw_expires).__name__})."
+            ) from exc
+        self._access_token = token
+        self._expires_at = expires_at
         return token
 
     def _record(self, started: float, *, ok: bool, result: str, output: str = "") -> None:

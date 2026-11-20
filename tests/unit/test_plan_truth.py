@@ -275,7 +275,8 @@ def test_plan_summary_counts_come_from_state_not_the_old_boolean():
 def _approval(intent=None):
     from alletra_onboard.domain.approval import Approval
 
-    return Approval("test-run", "storage", {"A": (intent or _intent()).array})
+    return Approval("test-run", "storage", {"A": (intent or _intent()).array},
+                    save_record=lambda m: m.model_dump(mode="json"))
 
 
 # ------------------------------------------------------------------ R7 / R8 apply

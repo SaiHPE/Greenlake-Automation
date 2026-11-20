@@ -47,7 +47,8 @@ def _intent(**over) -> ProvisioningIntent:
 def _approval(intent=None):
     from alletra_onboard.domain.approval import Approval
 
-    return Approval("test-run", "storage", {"A": (intent or _intent()).array})
+    return Approval("test-run", "storage", {"A": (intent or _intent()).array},
+                    save_record=lambda m: m.model_dump(mode="json"))
 
 
 def _apply(fake, intent=None, discovery=None, *, plan=None) -> ProvisioningResult:

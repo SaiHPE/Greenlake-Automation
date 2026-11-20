@@ -568,3 +568,18 @@ async def test_partnership_service_apply_passes_rc_partnership_approval_for_both
     assert seen_hosts == [("192.0.2.1", "192.0.2.9")]
     assert any(e.event_type == "replication.applied" for e in service.list_events(run_id))
 
+
+def test_writer_factory_modules_do_not_reexport_writer_classes() -> None:
+    """STANDARD S2: apply modules may only obtain writers through the approval-checked factories,
+    never by importing the writer class directly from the factory module at runtime."""
+    from alletra_onboard.application.replication import clients as rc_clients
+    from alletra_onboard.application.runs import writer_clients
+    from alletra_onboard.application.snapshots import clients as snap_clients
+
+    assert writer_clients.__all__ == ["make_wsapi_writer"]
+    assert not hasattr(writer_clients, "WsapiWriter")
+    assert rc_clients.__all__ == ["make_rc_writer"]
+    assert not hasattr(rc_clients, "ArrayRcCliClient")
+    assert snap_clients.__all__ == ["make_snap_writer"]
+    assert not hasattr(snap_clients, "ArraySnapCliClient")
+

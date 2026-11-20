@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict
+from collections.abc import Iterator
 from typing import Any
 
 from alletra_onboard.domain.discovery import EthernetPort
@@ -36,6 +37,14 @@ def nsp_parts(token: str) -> tuple[int, int, int] | None:
     except ValueError:
         return None
     return node, slot, card_port
+
+
+def nsp_rows(text: str, min_cols: int) -> Iterator[list[str]]:
+    """Split lines of `text` that start with an N:S:P-like token and carry at least `min_cols` tokens."""
+    for line in (text or "").splitlines():
+        p = line.split()
+        if len(p) >= min_cols and p[0][:1].isdigit() and ":" in p[0]:
+            yield p
 
 
 def answered_error(text: str) -> bool:
@@ -143,10 +152,7 @@ def parse_file_ports(showport_file: str) -> list[EthernetPort]:
     value of 1:4:2 — the pair must be read together or a covered port looks simply dead.
     """
     out: list[EthernetPort] = []
-    for line in (showport_file or "").splitlines():
-        p = line.split()
-        if len(p) < 12 or not p[0][:1].isdigit() or ":" not in p[0]:
-            continue
+    for p in nsp_rows(showport_file, 12):
         nsp = nsp_parts(p[0])
         if nsp is None:
             continue

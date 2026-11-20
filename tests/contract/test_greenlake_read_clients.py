@@ -1,6 +1,9 @@
+import pytest
+
 from alletra_onboard.adapters.greenlake.devices import DevicesClient
 from alletra_onboard.adapters.greenlake.service_catalog import ServiceCatalogClient
 from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
+from alletra_onboard.domain.errors import GreenLakeError
 
 
 class FakeResponse:
@@ -73,3 +76,11 @@ async def test_service_catalog_provisions_filter_client_side_by_region_and_statu
             "bucket": "service_catalog_read",
         }
     ]
+
+
+@pytest.mark.parametrize(("bad_item", "type_name"), [("not-an-object", "str"), (42, "int"), (None, "NoneType")])
+async def test_service_catalog_provisions_raises_on_non_object_item(bad_item, type_name):
+    http = RecordingHttp({"items": [bad_item]})
+
+    with pytest.raises(GreenLakeError, match=type_name):
+        await ServiceCatalogClient(http).service_manager_provisions("ap-northeast")

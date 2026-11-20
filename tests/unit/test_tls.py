@@ -12,6 +12,8 @@ from __future__ import annotations
 import ssl
 from pathlib import Path
 
+import pytest
+
 from alletra_onboard.adapters.tls import (
     ca_bundle_override,
     is_tls_trust_error,
@@ -212,3 +214,38 @@ async def test_greenlake_check_redacts_unexpected_non_device_error(monkeypatch):
     assert "KeyError" in (report.error or "")
     assert "<redacted>" in (report.error or "")
     assert "super-secret" not in (report.error or "")
+
+
+@pytest.mark.parametrize("provisions_body", [
+    {"items": None},
+    {"items": ["not-an-object"]},
+    {"items": [{"region": "eu-central", "serviceManager": "not-an-object"}]},
+    ["a", "list", "body"],
+])
+async def test_greenlake_check_reports_a_malformed_provisions_list(monkeypatch, provisions_body):
+    """The health check's contract holds through the real GreenLake clients: a malformed provisions
+    answer is reported as a failure, never a crash (/config/check must not answer 500)."""
+    import httpx
+    import respx
+
+    from alletra_onboard.application.onboarding import clients as onboarding_clients
+    from alletra_onboard.application.onboarding import health
+    from alletra_onboard.config import Settings
+
+    settings = Settings(gl_base_url="https://api.example", gl_token_url="https://sso.example/token",
+                        gl_client_id="cid", gl_client_secret="shh")
+    monkeypatch.setattr(health, "missing_credentials", lambda s: [])
+    monkeypatch.setattr(health, "make_greenlake", lambda s: onboarding_clients.make_greenlake(settings))
+    with respx.mock:
+        respx.post("https://sso.example/token").mock(
+            return_value=httpx.Response(200, json={"access_token": "jwt", "expires_in": 900}))
+        respx.get("https://api.example/service-catalog/v1/per-region-service-managers").mock(
+            return_value=httpx.Response(200, json={"items": []}))
+        respx.get("https://api.example/service-catalog/v1/service-manager-provisions").mock(
+            return_value=httpx.Response(200, json=provisions_body))
+        report = await health.greenlake_check(settings)
+
+    assert report.ok is False
+    assert report.tls_trust_failure is False
+    assert report.error
+    assert "shh" not in report.error

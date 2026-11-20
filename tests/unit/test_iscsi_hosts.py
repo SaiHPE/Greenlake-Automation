@@ -276,7 +276,8 @@ def test_a_sheet_iscsi_host_is_planned_for_creation_with_its_iqn_and_os_persona(
 def _approval(intent):
     from alletra_onboard.domain.approval import Approval
 
-    return Approval("test-run", "storage", {"A": intent.array})
+    return Approval("test-run", "storage", {"A": intent.array},
+                    save_record=lambda m: m.model_dump(mode="json"))
 
 
 def test_apply_makes_the_iscsi_host_and_its_removal_line():

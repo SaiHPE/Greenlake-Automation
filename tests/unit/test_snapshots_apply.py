@@ -583,7 +583,8 @@ class _Ssh:
 def _snap_approval(creds=None):
     from alletra_onboard.domain.approval import Approval
 
-    return Approval("test-run", "snapshots", {"A": creds or _creds()})
+    return Approval("test-run", "snapshots", {"A": creds or _creds()},
+                    save_record=lambda m: m.model_dump(mode="json"))
 
 
 def _apply(requests, fake: _ArrayWsapi, volumes=None, ssh: _Ssh | None = None):

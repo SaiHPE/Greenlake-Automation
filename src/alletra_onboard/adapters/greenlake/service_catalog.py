@@ -39,19 +39,21 @@ class ServiceCatalogClient:
         )
         return json_items(response, where="service-catalog regions")
 
-    async def service_manager_provisions(self, region: str) -> list[ServiceProvision]:
-        # The live API rejects `provisionStatus eq ...` and combined `and` filters on
-        # this endpoint with HTTP 400, so fetch unfiltered (a workspace has very few
-        # provisions) and filter client-side by region + PROVISIONED status.
+    async def all_provisions(self) -> list[dict]:
+        """Every service-manager provision in the workspace, any region or status. The live API
+        rejects `provisionStatus eq ...` and combined `and` filters on this endpoint with HTTP 400,
+        so it is read unfiltered (a workspace has very few provisions)."""
         response = await self.http.request(
             "GET",
             "/service-catalog/v1/service-manager-provisions",
             bucket="service_catalog_read",
         )
+        return json_items(response, where="service-catalog provisions")
+
+    async def service_manager_provisions(self, region: str) -> list[ServiceProvision]:
+        """The PROVISIONED ones in `region` (filtered here, see all_provisions)."""
         provisions: list[ServiceProvision] = []
-        for item in json_items(response, where="service-catalog provisions"):
-            if not isinstance(item, dict):
-                continue
+        for item in await self.all_provisions():
             if item.get("provisionStatus") != "PROVISIONED":
                 continue
             if region and item.get("region") != region:

@@ -179,7 +179,8 @@ def test_plan_and_apply_create_a_sheet_declared_windows_host():
 
     result = prov_apply.apply_plan(
         prov_apply.StorageInputs(intent, _discovery(), reachable, plan),
-        Approval("test-run", "storage", {"A": intent.array}),
+        Approval("test-run", "storage", {"A": intent.array},
+                 save_record=lambda m: m.model_dump(mode="json")),
         wsapi_factory=lambda a, p, s: fake,
     )
     assert result.error is None
