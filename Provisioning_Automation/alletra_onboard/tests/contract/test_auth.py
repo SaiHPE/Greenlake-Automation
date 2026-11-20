@@ -3,7 +3,7 @@ import pytest
 import respx
 
 from alletra_onboard.adapters.greenlake.auth import OAuthClientCredentials
-from alletra_onboard.domain.errors import GreenLakeHttpError
+from alletra_onboard.domain.errors import GreenLakeError, GreenLakeHttpError
 
 TOKEN_URL = "https://global.api.greenlake.hpe.com/authorization/v2/oauth2/tid/token"
 
@@ -67,3 +67,29 @@ async def test_token_transport_error_translates_to_greenlake_error_preserving_tl
 
     assert isinstance(exc_info.value, DeviceError)
     assert is_tls_trust_error(exc_info.value) is True
+
+
+@pytest.mark.parametrize("bad_expires", ["never", None, {}, [], True, 10**30])
+@respx.mock
+async def test_unparseable_expires_in_fails_authentication(bad_expires):
+    respx.post(TOKEN_URL).mock(
+        return_value=httpx.Response(200, json={"access_token": "jwt-abc", "expires_in": bad_expires})
+    )
+    provider = OAuthClientCredentials(TOKEN_URL, "cid", "shh")
+
+    with pytest.raises(GreenLakeError, match="expires_in"):
+        await provider.token()
+    assert provider._access_token is None
+
+
+@respx.mock
+async def test_an_expires_in_too_large_for_a_date_fails_authentication():
+    """`1e999` arrives as JSON text and parses to infinity; it must fail like any other bad value."""
+    respx.post(TOKEN_URL).mock(return_value=httpx.Response(
+        200, content=b'{"access_token": "jwt-abc", "expires_in": 1e999}',
+        headers={"Content-Type": "application/json"}))
+    provider = OAuthClientCredentials(TOKEN_URL, "cid", "shh")
+
+    with pytest.raises(GreenLakeError, match="expires_in"):
+        await provider.token()
+    assert provider._access_token is None

@@ -127,7 +127,8 @@ class _FakeWsapi:
 def _approval(prov):
     from alletra_onboard.domain.approval import Approval
 
-    return Approval("test-run", "rc_groups", {"A": prov.array, "B": prov.replication.peer})
+    return Approval("test-run", "rc_groups", {"A": prov.array, "B": prov.replication.peer},
+                    save_record=lambda m: m.model_dump(mode="json"))
 
 
 def _factory(log, *, a: _FakeWsapi | None = None, b: _FakeWsapi | None = None):

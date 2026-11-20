@@ -19,9 +19,15 @@ def json_object(response: Any, *, where: str = "GreenLake response") -> dict[str
 
 
 def json_items(response: Any, *, where: str = "GreenLake response") -> list[dict[str, Any]]:
-    """Parse a 2xx list-envelope body (`{items: [...]}`); non-object or non-list `items` becomes GreenLakeError."""
+    """Parse a 2xx list-envelope body (`{items: [...]}`); non-object or non-list `items`, or any
+    non-object entry, becomes GreenLakeError."""
     body = json_object(response, where=where)
     items = body.get("items", [])
     if not isinstance(items, list):
         raise GreenLakeError(f"Unexpected 'items' ({type(items).__name__}) in {where} (expected list).")
+    for item in items:
+        if not isinstance(item, dict):
+            raise GreenLakeError(
+                f"Unexpected {type(item).__name__} item in {where} (expected JSON object)."
+            )
     return items

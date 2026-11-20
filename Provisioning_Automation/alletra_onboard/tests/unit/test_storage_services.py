@@ -444,7 +444,8 @@ def test_build_plan_flags_existing_and_lists_actions():
 def _storage_approval(intent=None):
     from alletra_onboard.domain.approval import Approval
 
-    return Approval("test-run", "storage", {"A": (intent or _intent()).array})
+    return Approval("test-run", "storage", {"A": (intent or _intent()).array},
+                    save_record=lambda m: m.model_dump(mode="json"))
 
 
 def test_apply_plan_is_idempotent_and_exports_to_host_set():

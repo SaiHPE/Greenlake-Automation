@@ -153,7 +153,8 @@ def _approval():
     from alletra_onboard.domain.approval import Approval
 
     intent = _intent()
-    return Approval("test-run", "failover", {"A": intent.array, "B": intent.replication.peer})
+    return Approval("test-run", "failover", {"A": intent.array, "B": intent.replication.peer},
+                    save_record=lambda m: m.model_dump(mode="json"))
 
 
 def _run(pair: FakePair, **kw):

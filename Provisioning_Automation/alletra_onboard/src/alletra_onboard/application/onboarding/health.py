@@ -55,10 +55,15 @@ async def greenlake_check(settings: Settings) -> GreenLakeCheckReport:
             for sm in region.get("serviceManagers", [])
             if "data service" in str(sm.get("name", "")).lower()
         }
-        response = await clients.http.request(
-            "GET", "/service-catalog/v1/service-manager-provisions", bucket="service_catalog_read"
-        )
-        raw = response.json().get("items", [])
+        provisions = [
+            ProvisionSummary(
+                region=str(p.get("region")),
+                status=str(p.get("provisionStatus")),
+                service_manager_id=(p.get("serviceManager") or {}).get("id") or "",
+                is_data_services=((p.get("serviceManager") or {}).get("id") in ds_ids),
+            )
+            for p in await clients.service_catalog.all_provisions()
+        ]
     except Exception as exc:  # contract: report any failure (TLS vs non-TLS) with secrets redacted
         detail = redact(str(exc))
         if is_tls_trust_error(exc):
@@ -69,14 +74,5 @@ async def greenlake_check(settings: Settings) -> GreenLakeCheckReport:
             )
         return GreenLakeCheckReport(ok=False, error=f"{type(exc).__name__}: {detail[:200]}")
 
-    provisions = [
-        ProvisionSummary(
-            region=str(p.get("region")),
-            status=str(p.get("provisionStatus")),
-            service_manager_id=(p.get("serviceManager") or {}).get("id") or "",
-            is_data_services=((p.get("serviceManager") or {}).get("id") in ds_ids),
-        )
-        for p in raw
-    ]
     ready = any(p.is_data_services and p.status == "PROVISIONED" for p in provisions)
     return GreenLakeCheckReport(ok=True, ready=ready, provisions=provisions)

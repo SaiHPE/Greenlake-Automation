@@ -1,6 +1,8 @@
 from pydantic import SecretStr
 
+from alletra_onboard.adapters.greenlake.devices import DevicesClient
 from alletra_onboard.adapters.greenlake.service_catalog import ServiceProvision
+from alletra_onboard.adapters.greenlake.subscriptions import SubscriptionsClient
 from alletra_onboard.application.onboarding.greenlake_preflight import (
     GreenLakeReadPreflightService,
     build_greenlake_read_preflight,
@@ -172,3 +174,48 @@ async def test_live_greenlake_preflight_stops_and_redacts_unexpected_non_device_
     assert checks[0].status == CheckStatus.FAIL
     assert "<redacted>" in checks[0].message
     assert "super-secret" not in checks[0].message
+
+
+async def test_preflight_reports_non_object_items_entry_as_redacted_failed_check():
+    """Real DevicesClient and SubscriptionsClient reject non-object `items` entries via json_items
+    so preflight reports redacted FAIL checks instead of crashing with AttributeError."""
+
+    class _FakeResp:
+        def __init__(self, payload: object) -> None:
+            self._payload = payload
+
+        def json(self) -> object:
+            return self._payload
+
+    class _FakeHttp:
+        def __init__(self, payload: object) -> None:
+            self._payload = payload
+
+        async def request(self, _method: str, _path: str, **_kwargs: object) -> _FakeResp:
+            return _FakeResp(self._payload)
+
+    secret_entry = "client_secret=super-secret-value"
+    service = GreenLakeReadPreflightService(
+        FakeTokenProvider(),
+        DevicesClient(_FakeHttp({"items": [secret_entry]})),
+        SubscriptionsClient(_FakeHttp({"items": [secret_entry]})),
+        FakeServiceCatalog(
+            [
+                ServiceProvision(
+                    service_manager_id="svc-123",
+                    region="ap-northeast",
+                    provision_status="PROVISIONED",
+                )
+            ]
+        ),
+    )
+
+    checks = await service.run(_item())
+    by_name = {check.name: check for check in checks}
+
+    for check_name in ("greenlake_device_lookup", "greenlake_subscription_lookup"):
+        check = by_name[check_name]
+        assert check.status == CheckStatus.FAIL
+        assert "str" in check.message
+        assert "expected JSON object" in check.message
+        assert "super-secret-value" not in check.message

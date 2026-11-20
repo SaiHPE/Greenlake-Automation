@@ -394,7 +394,8 @@ class _RcCli:
 def _approval():
     from alletra_onboard.domain.approval import Approval
 
-    return Approval("test-run", "rc_partnership", {"A": _creds(A_HOST), "B": _creds(B_HOST)})
+    return Approval("test-run", "rc_partnership", {"A": _creds(A_HOST), "B": _creds(B_HOST)},
+                    save_record=lambda m: m.model_dump(mode="json"))
 
 
 def _apply(plan, network=None, **kw):
