@@ -9,6 +9,7 @@ from collections.abc import Callable
 from alletra_onboard.application.replication.clients import make_rc_writer
 from alletra_onboard.application.replication.partnership import plan_objects
 from alletra_onboard.application.replication.read import parse_showport_rcip, parse_showrcopy
+from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.array_parse import answered_error
 from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.provisioning import ProvisioningIntent
@@ -26,8 +27,8 @@ LINKS_UP_POLL_S = 10.0
 
 
 def apply_partnership(
-    plan: ReplicationPlan, provisioning: ProvisioningIntent, *, rc_cli_factory: Callable = make_rc_writer,
-    progress: Callable[[str], None] | None = None, sleep: Callable[[float], None] = time.sleep,
+    plan: ReplicationPlan, provisioning: ProvisioningIntent, approval: Approval, *,
+    rc_cli_factory: Callable = make_rc_writer, progress: Callable[[str], None] | None = None,
 ) -> ReplicationResult:
     """SPEC-021 R4: ports on A, ports on B, ping each pair, start Remote Copy, a target each way, links
     Up. Stops at the first refusal; the removal set (R5) covers exactly what was created."""
@@ -59,8 +60,8 @@ def apply_partnership(
         return [x for x in plan.actions if x.kind == kind and x.where == side and x.state == "create"]
 
     try:
-        with (rc_cli_factory(provisioning.array, plan_objects(plan, "A")) as a_cli,
-              rc_cli_factory(intent.peer, plan_objects(plan, "B")) as b_cli):
+        with (rc_cli_factory(approval, "A", plan_objects(plan, "A")) as a_cli,
+              rc_cli_factory(approval, "B", plan_objects(plan, "B")) as b_cli):
             cli = {"A": a_cli, "B": b_cli}
 
             def write(side: str, command: str) -> str:
@@ -135,7 +136,7 @@ def apply_partnership(
                         down.append(f"{side}: no link on target '{target}'")
                 if not down or waited >= LINKS_UP_WAIT_S:
                     break
-                sleep(LINKS_UP_POLL_S)
+                time.sleep(LINKS_UP_POLL_S)
                 waited += LINKS_UP_POLL_S
             if down:
                 raise ArrayCliError(f"links not Up after {LINKS_UP_WAIT_S:g} s: {'; '.join(down)}")

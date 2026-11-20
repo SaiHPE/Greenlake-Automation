@@ -24,6 +24,7 @@ from alletra_onboard.application.provisioning.storage_provision import (
     planned_host_names,
 )
 from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
+from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
     ActionOutcome,
@@ -223,6 +224,7 @@ def _apply_exports(
 
 def apply_plan(
     inputs: StorageInputs,
+    approval: Approval,
     *,
     wsapi_factory: Callable = make_wsapi_writer,
 ) -> ProvisioningResult:
@@ -253,7 +255,7 @@ def apply_plan(
     # SPEC-007 R6: a failed apply has a removal set too. Writes stop at the first error, inside the
     # array session, so the undo can still be read for what was made before it.
     try:
-        with wsapi_factory(intent.array) as array:
+        with wsapi_factory(approval, "storage", "A") as array:
             try:
                 _check_reviewed_objects(array, reviewed_objects)
                 _apply_core_objects(array, resolved, hosts, state)

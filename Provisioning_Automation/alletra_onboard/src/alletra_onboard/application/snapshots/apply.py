@@ -21,6 +21,7 @@ from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
 from alletra_onboard.application.snapshots.clients import make_snap_writer
 from alletra_onboard.application.snapshots.read import parse_showsched, showsched_readable
 from alletra_onboard.application.snapshots.verify import check_now
+from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.array_parse import answered_error
 from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.plan_objects import SnapPlanObjects
@@ -92,12 +93,12 @@ def _whole_set(wsapi, request: SnapshotRequest, action: SnapshotAction, view: Sn
 
 
 def apply_plan(
-    plan: SnapshotPlan, view: SnapshotArrayView, provisioning: ProvisioningIntent, *,
+    plan: SnapshotPlan, view: SnapshotArrayView, provisioning: ProvisioningIntent, approval: Approval, *,
     wsapi_factory: Callable = make_wsapi_writer, snap_cli_factory: Callable = make_snap_writer,
-    progress: Callable[[str], None] | None = None, clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    progress: Callable[[str], None] | None = None,
 ) -> SnapshotResult:
     """`view` is the read the plan was built from (LESSONS 37)."""
-    result = SnapshotResult(started_at=clock().isoformat())
+    result = SnapshotResult(started_at=datetime.now(UTC).isoformat())
     intent = provisioning.snapshots
     if intent is None:
         result.error = "this run has no Snapshots tab"
@@ -126,7 +127,7 @@ def apply_plan(
     written = 0
     try:
         if snapshots:
-            with wsapi_factory(provisioning.array) as wsapi:
+            with wsapi_factory(approval, "snapshots", "A") as wsapi:
                 # (1) every snapshot now over WSAPI
                 for action in snapshots:
                     current = action
@@ -156,7 +157,7 @@ def apply_plan(
         # (2) every schedule, over the write-scoped SSH client built for this plan's schedules only
         if schedules:
             current = schedules[0]
-            with snap_cli_factory(provisioning.array, plan_objects(plan, intent)) as cli:
+            with snap_cli_factory(approval, plan_objects(plan, intent)) as cli:
                 for action in schedules:
                     current = action
                     request = by_source[action.source]
@@ -187,7 +188,7 @@ def apply_plan(
                         "hours. To remove them sooner, remove each with removevv -f.")
     except Exception as exc:  # the array's words, where it stopped, what to remove
         if in_flight is not None:
-            _diff_after_failure(in_flight, provisioning, wsapi_factory, result, remove)
+            _diff_after_failure(in_flight, approval, wsapi_factory, result, remove)
         done = sum(1 for o in result.outcomes if o.status == "created")
         result.error = (f"Stopped after {done} row(s) and {written} write(s): {str(exc).rstrip('.')}. The removal set "
                         "below undoes exactly what was created before the failure.")
@@ -219,13 +220,13 @@ def _schedule_after_failure(action: SnapshotAction, line: RemovalItem, cli, resu
         result.removals.remove(line)
 
 
-def _diff_after_failure(in_flight: tuple[SnapshotAction, set[str]], provisioning: ProvisioningIntent,
+def _diff_after_failure(in_flight: tuple[SnapshotAction, set[str]], approval: Approval,
                         wsapi_factory: Callable, result: SnapshotResult, remove: Callable[[list[str]], None]) -> None:
     """A write that failed, or whose read-back failed, may still have made snapshots: read once more and
     name what the diff shows. When even that read fails, say which names to check by hand."""
     action, before = in_flight
     try:
-        with wsapi_factory(provisioning.array) as wsapi:
+        with wsapi_factory(approval, "snapshots", "A") as wsapi:
             remove(made_by(action, before, wsapi.volumes()))
     except Exception:  # the note below stands in for the read that failed
         names = " ".join(now_snapshot_name(m) for m in action.members)

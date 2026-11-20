@@ -119,8 +119,20 @@ class _Exec:
         return None, out, err
 
 
+def _rc_approval():
+    from pydantic import SecretStr
+
+    from alletra_onboard.domain.approval import Approval
+    from alletra_onboard.domain.shared import EndpointCreds
+
+    return Approval(
+        "test-run", "rc_partnership",
+        {"A": EndpointCreds(host="10.132.30.121", username="3paradm", password=SecretStr("pw"))},
+    )
+
+
 def _bound(objects: RcPlanObjects | None = ALLETRA_OBJECTS, answer: str = "") -> ArrayRcCliClient:
-    client = ArrayRcCliClient("10.132.30.121", "3paradm", "pw", objects=objects)
+    client = ArrayRcCliClient("10.132.30.121", "3paradm", "pw", approval=_rc_approval(), objects=objects)
     client._client = _Exec(answer)
     return client
 
@@ -205,7 +217,7 @@ def test_a_client_built_without_the_plans_objects_refuses_every_write(recorded):
             client.write(command)
     assert client._client.commands == []
     assert len(recorded) == len(_live_writes()) + 1 and all(not e["ok"] and e["result"] == UNBOUND for e in recorded)
-    assert ArrayRcCliClient("10.132.30.121", "3paradm", "pw").write_refusal("startrcopy") == UNBOUND
+    assert ArrayRcCliClient("10.132.30.121", "3paradm", "pw", approval=_rc_approval()).write_refusal("startrcopy") == UNBOUND
 
 
 def test_an_empty_plan_still_allows_only_startrcopy():

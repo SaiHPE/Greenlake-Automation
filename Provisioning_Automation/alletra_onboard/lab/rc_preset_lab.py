@@ -282,7 +282,7 @@ def main():
         check("7c rerun: showrcopy groups unchanged", fl.run(p, "showrcopy groups " + GROUP).split("\n")[:4] == snap.split("\n")[:4])
 
         fl.banner("Run 1: failover test, verify, as-built")
-        ev = step(run1, "/replication/failover-test", ["failover.completed", "failover.failed"], "failover", body={})
+        ev = step(run1, "/replication/failover-test", ["failover.completed", "failover.failed"], "failover", body={"authorised": True})
         rec = ev["data"]["record"]
         check("7d failover test passed, group back to normal", rec["result"] == "passed",
               "failover %ss, synced back %ss; %s" % (rec.get("time_to_failover_s"), rec.get("time_to_synced_s"), rec.get("error") or ""))

@@ -17,7 +17,7 @@ from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.replication.verify import peer_group_name
 from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
-from alletra_onboard.domain.provisioning import ProvisioningIntent
+from alletra_onboard.domain.approval import Approval, require_approval
 from alletra_onboard.domain.replication import (
     DR_ACTION_FAILOVER,
     DR_ACTION_RECOVER,
@@ -101,7 +101,7 @@ def _now() -> str:
 
 
 def run_failover_test(
-    intent: ProvisioningIntent, group: str, *,
+    approval: Approval, group: str, *,
     wsapi_factory: Callable = make_wsapi_writer,
     read_fn: Callable = replication_read.read_array,
     read_group_fn: Callable = read_group,
@@ -111,16 +111,15 @@ def run_failover_test(
     limits: dict[str, int] | None = None,
 ) -> FailoverRecord:
     """The R2 sequence on `group`, as the record. Writes only through `wsapi_factory`; every state
-    through the read functions. Returns, never raises: a failure is a record with `result` failed."""
+    through the read functions. Returns, never raises for device failures: a failure is a record
+    with `result` failed."""
+    live = require_approval(approval)
+    p_creds = live.creds_for("failover", "A")
+    s_creds = live.creds_for("failover", "B")
     lim = {"stop": STOP_WAIT_S, "failover": FAILOVER_WAIT_S, "recover": RECOVER_WAIT_S, "sync": SYNC_WAIT_S,
            "restore": RESTORE_WAIT_S, "poll": POLL_S, "auto_start": AUTO_START_WAIT_S}
     lim.update(limits or {})
-    rep = intent.replication
     record = FailoverRecord(group=group, started_at=_now())
-    if rep is None:
-        record.error = "this run has no Replication tab"
-        return record
-    p_creds, s_creds = intent.array, rep.peer
 
     def _p(message: str) -> None:
         if progress:
@@ -216,7 +215,7 @@ def run_failover_test(
         step.primary, step.peer, step.outcome = p, s, "ok"
         step.seconds, step.ended_at = round(clock() - start, 1), _now()
 
-    with wsapi_factory(p_creds) as wp, wsapi_factory(s_creds) as ws:
+    with wsapi_factory(approval, "failover", "A") as wp, wsapi_factory(approval, "failover", "B") as ws:
         # 1. stop on P
         t = begin(s1)
         _p(f"Stopping {group} on {record.primary_array}…")

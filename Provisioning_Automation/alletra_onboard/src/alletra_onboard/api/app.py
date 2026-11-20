@@ -488,9 +488,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         _get_run_or_404(run_id)
         try:
             return RunResponse(run=start())
-        except RunBusyError as exc:
-            raise HTTPException(status_code=409, detail="a step is already running for this run") from exc
-        except StepPreconditionError as exc:
+        except (RunBusyError, StepPreconditionError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except RunNotFoundError as exc:
             # e.g. a provisioning step on a run that has no provisioning intent
@@ -642,7 +640,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         _get_run_or_404(run_id)
         try:
             return service.set_provisioning_builder(run_id, request)
-        except StepPreconditionError as exc:
+        except (RunBusyError, StepPreconditionError) as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.post("/runs/{run_id}/storage/preview", response_model=RunResponse)
@@ -687,9 +685,14 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     @app.post("/runs/{run_id}/replication/failover-test", response_model=RunResponse)
     async def run_failover_test(run_id: str, request: FailoverTestRequest | None = None) -> RunResponse:
         # SPEC-017: stop -> failover -> recover -> wait -> restore on one group over WSAPI's DR action;
-        # the UI's own tick-box and button gate it (R4). Role changes on two arrays: never implicit.
+        # requires authorised=True (R4). Role changes on two arrays: never implicit.
         req = request or FailoverTestRequest()
-        return _start_step(run_id, lambda: service.start_failover_test(run_id, group=req.group, confirm=req.confirm))
+        return _start_step(
+            run_id,
+            lambda: service.start_failover_test(
+                run_id, group=req.group, confirm=req.confirm, authorised=req.authorised,
+            ),
+        )
 
     @app.get("/runs/{run_id}/snapshots", response_model=SnapshotsResponse)
     async def snapshots_tab(run_id: str) -> SnapshotsResponse:

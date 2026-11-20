@@ -211,7 +211,7 @@ def run_all(run_id):
     check("verify: every group replicating", bool(ver.get("groups")) and all(x["verdict"] == "replicating" for x in ver["groups"]),
           "; ".join("%s %s" % (x["group"], x["verdict"]) for x in ver.get("groups", [])))
     check_group_details(run_id, plan, ver)
-    ev = step(run_id, "/replication/failover-test", ["failover.completed", "failover.failed"], "failover", body={})
+    ev = step(run_id, "/replication/failover-test", ["failover.completed", "failover.failed"], "failover", body={"authorised": True})
     rec = ev["data"].get("record") or {}
     check("failover test passed", rec.get("result") == "passed", ev["message"][:200])
     ev = step(run_id, "/asbuilt", ["asbuilt.generated", "asbuilt.failed"], "asbuilt")
@@ -292,7 +292,11 @@ def main():
         shutil.rmtree(OUT)
     os.makedirs(OUT)
     fl.OUT = pl.OUT = OUT
+    from pydantic import SecretStr
+
     from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
+    from alletra_onboard.domain.approval import Approval
+    from alletra_onboard.domain.shared import EndpointCreds
 
     password = fl.lab_secret("RCIP_PAIR_PW")
     a, p = fl.ssh(A_HOST, password), fl.ssh(P_HOST, password)
@@ -314,7 +318,8 @@ def main():
     results = []
     try:
         fl.banner("2. Test volume and set on the Alletra")
-        with WsapiWriter(A_HOST, "3paradm", password) as w:
+        lab_approval = Approval("lab", "storage", {"A": EndpointCreds(host=A_HOST, username="3paradm", password=SecretStr(password))})
+        with WsapiWriter(A_HOST, "3paradm", password, approval=lab_approval) as w:
             check("volume %s created" % VOL, w.ensure_volume(VOL, "SSD_r6", 1024, "tpvv") == "created")
             check("volume set %s created" % VVSET, w.ensure_volume_set(VVSET, [VOL]) == "created")
         run_id = compose(password)

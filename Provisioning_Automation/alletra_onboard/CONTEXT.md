@@ -276,6 +276,15 @@ fonts, and Table 01 preserved). An engagement **deliverable**, not a live monito
 _Avoid_: confusing it with **Post-init verification** (that *checks* the config against the sheet; the
 as-built *documents* what the array actually has).
 
+**Approval**:
+An in-memory, single-use token (`domain/approval.py`, `Approval`) issued only by `RunCoordinator`
+after the operator ticks a reviewed plan or authorises the failover test. It binds one run, one
+write operation kind (`storage`, `rc_groups`, `rc_partnership`, `snapshots`, or `failover`), and the
+array credentials that plan named; every array writer requires it, refuses writes once it is spent,
+and the worker thread spends it when it returns. Never stored or serialised.
+_Avoid_: confusing the approval's write-operation kind (`Approval.purpose`) with the as-built's
+narrative field *purpose* (below).
+
 **Narrative fields (as-built)**:
 The values the template asks for in prose that the array cannot know, so an operator supplies them:
 **customer name**, **site/location**, **application/workload** (what runs on the array, e.g. "VMware

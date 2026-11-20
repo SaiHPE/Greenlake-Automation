@@ -237,7 +237,7 @@ async def _fc_run(tmp_path, monkeypatch, *, rtt_ms, mode="async"):
 
     a, b = _working_fc_pair()
     monkeypatch.setattr(replication_read, "read_array", lambda creds, progress=None: a if creds.host == "a" else b)
-    monkeypatch.setattr(replication_apply, "apply_plan", lambda plan, provisioning, *, progress=None, **kw: ReplicationResult(
+    monkeypatch.setattr(replication_apply, "apply_plan", lambda plan, provisioning, approval, *, progress=None, **kw: ReplicationResult(
         outcomes=[ReplicationOutcome(kind="group", name="HS_rcg", status="created")], groups_created=["HS_rcg"]))
     intent = _prov_intent()
     intent.volumes[0].vvset = "HS"
@@ -364,8 +364,8 @@ def test_groups_plan_apply_and_verify_over_fibre_channel_make_the_same_calls_as_
 
     ip_log: list = []
     fc_log: list = []
-    ip_result = apply_plan(ip_plan, prov, wsapi_factory=rc_apply._factory(ip_log))
-    fc_result = apply_plan(fc_plan, prov, wsapi_factory=rc_apply._factory(fc_log))
+    ip_result = apply_plan(ip_plan, prov, rc_apply._approval(prov), wsapi_factory=rc_apply._factory(ip_log))
+    fc_result = apply_plan(fc_plan, prov, rc_apply._approval(prov), wsapi_factory=rc_apply._factory(fc_log))
     assert fc_result.error is None and fc_log == ip_log
     assert (fc_result.removals_a, fc_result.removals_b) == (ip_result.removals_a, ip_result.removals_b)
 

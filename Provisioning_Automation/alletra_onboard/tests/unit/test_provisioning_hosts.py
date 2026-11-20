@@ -175,7 +175,13 @@ def test_plan_and_apply_create_a_sheet_declared_windows_host():
     assert [a.name for a in host_rows] == ["arcus-win137"]
     assert host_rows[0].detail["persona"] == "WindowsServer" and host_rows[0].detail["wwns"] == [WIN_A]
     assert host_rows[0].detail["source"] == "sheet"
-    result = prov_apply.apply_plan(prov_apply.StorageInputs(intent, _discovery(), reachable, plan), wsapi_factory=lambda c: fake)
+    from alletra_onboard.domain.approval import Approval
+
+    result = prov_apply.apply_plan(
+        prov_apply.StorageInputs(intent, _discovery(), reachable, plan),
+        Approval("test-run", "storage", {"A": intent.array}),
+        wsapi_factory=lambda a, p, s: fake,
+    )
     assert result.error is None
     assert ("host", "arcus-win137", (WIN_A,), "WindowsServer") in fake.calls
     assert ("hostset", "win_hs", ("arcus-win137",)) in fake.calls

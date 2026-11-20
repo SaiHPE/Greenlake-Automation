@@ -122,11 +122,18 @@ class _FakeWsapi:
         return "started" if status == "created" else status
 
 
+def _approval(prov):
+    from alletra_onboard.domain.approval import Approval
+
+    return Approval("test-run", "rc_groups", {"A": prov.array, "B": prov.replication.peer})
+
+
 def _factory(log, *, a: _FakeWsapi | None = None, b: _FakeWsapi | None = None):
     a = a or _FakeWsapi("A", log)
     b = b or _FakeWsapi("B", log)
 
-    def make(creds):
+    def make(approval, purpose, side):
+        creds = approval.creds_for(purpose, side)
         return a if creds.host == "10.64.122.99" else b
     return make
 
@@ -137,7 +144,7 @@ def test_apply_writes_in_the_fixed_order_and_builds_both_removal_blocks():
     prov = _prov()
     plan = _plan(prov)
     log: list = []
-    result = apply_plan(plan, prov, wsapi_factory=_factory(log))
+    result = apply_plan(plan, prov, _approval(prov), wsapi_factory=_factory(log))
     assert result.error is None
     assert result.groups_created == ["zz_rc_vvs_rcg", "zz_rc_test_rcg"]
     assert log == [
@@ -180,7 +187,7 @@ def test_apply_starts_on_the_peer_when_the_target_policy_is_no_mirror_config():
     a, b = _views(a_overrides={"showrcopy": rc_a})
     plan = build_plan(check(a, b, prov.replication), prov.replication, prov)
     log: list = []
-    result = apply_plan(plan, prov, wsapi_factory=_factory(log))
+    result = apply_plan(plan, prov, _approval(prov), wsapi_factory=_factory(log))
     assert result.error is None
     assert log[-1] == ("B", "startrcopygroup zz_rc_vvs_rcg")
     assert next(o for o in result.outcomes if o.kind == "start").where == "B"
@@ -194,7 +201,7 @@ def test_rerun_reports_exists_and_puts_nothing_pre_existing_in_the_removal_set()
     log: list = []
     a = _FakeWsapi("A", log, existing={"zz_rc_vvs_rcg", "zz_rc_vol01->zz_rc_vvs_rcg", "zz_rc_vol02->zz_rc_vvs_rcg"})
     b = _FakeWsapi("B", log, existing={"zz_rc_vvs_rc"})
-    result = apply_plan(plan, prov, wsapi_factory=_factory(log, a=a, b=b))
+    result = apply_plan(plan, prov, _approval(prov), wsapi_factory=_factory(log, a=a, b=b))
     assert result.error is None and result.groups_created == []
     assert result.removals_a == [] and result.removals_b == []
     assert {o.status for o in result.outcomes if o.kind in ("group", "volume_admit", "peer_vvset")} == {"exists"}
@@ -206,7 +213,7 @@ def test_a_failure_mid_way_stops_and_the_removal_set_covers_only_what_was_create
     plan = _plan(prov)
     log: list = []
     a = _FakeWsapi("A", log, fail_at="admitrcopyvv zz_rc_vol02->zz_rc_vvs_rcg")
-    result = apply_plan(plan, prov, wsapi_factory=_factory(log, a=a))
+    result = apply_plan(plan, prov, _approval(prov), wsapi_factory=_factory(log, a=a))
     assert result.error.startswith("Stopped after 3 write(s): array refused admitrcopyvv zz_rc_vol02->zz_rc_vvs_rcg: simulated")
     assert log[-1] == ("A", "admitrcopyvv zz_rc_vol02->zz_rc_vvs_rcg")          # nothing after the failure
     assert result.removals_a == [
@@ -223,9 +230,9 @@ def test_apply_refuses_a_plan_with_findings_or_an_error():
     prov = _prov()
     plan = ReplicationPlan(blockers=["No Remote Copy partnership between A and B."])
     log: list = []
-    result = apply_plan(plan, prov, wsapi_factory=_factory(log))
+    result = apply_plan(plan, prov, _approval(prov), wsapi_factory=_factory(log))
     assert result.error == "the plan has blocking findings; nothing was applied" and log == []
-    result = apply_plan(ReplicationPlan(error="Could not read 10.64.122.99: Login failed"), prov, wsapi_factory=_factory(log))
+    result = apply_plan(ReplicationPlan(error="Could not read 10.64.122.99: Login failed"), prov, _approval(prov), wsapi_factory=_factory(log))
     assert result.error.startswith("Could not read") and log == []
 
 
@@ -257,8 +264,9 @@ class _StubRcSdk:
 
 def _wsapi(stub):
     from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
+    from alletra_onboard.domain.approval import Approval
 
-    c = WsapiWriter("192.0.2.1", "u", "p")
+    c = WsapiWriter("192.0.2.1", "u", "p", approval=Approval("test-run", "rc_groups", {"A": _creds("192.0.2.1")}))
     c._client = stub
     return c
 
@@ -488,7 +496,7 @@ def test_the_b_block_removes_what_a_primera_peer_kept_after_the_a_block():
     log_text = (Path(__file__).resolve().parents[1] / "fixtures" / "rcip_pair" / "cleanup_2026-11-03.txt").read_text()
     assert log_text.count("Manual cleanup required on target system") == 2
     prov = _prov()
-    result = apply_plan(_plan(prov), prov, wsapi_factory=_factory([]))
+    result = apply_plan(_plan(prov), prov, _approval(prov), wsapi_factory=_factory([]))
     b = result.removals_b
     assert [line.split()[0] for line in b] == ["removevvset"] * 2 + ["removevv"] * 3       # sets before volumes
     for line in b:

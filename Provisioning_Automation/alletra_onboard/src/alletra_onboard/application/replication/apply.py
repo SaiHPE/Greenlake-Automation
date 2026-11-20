@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
+from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     ReplicationAction,
@@ -30,8 +31,8 @@ def _peer_set_action(plan: ReplicationPlan, group: str) -> ReplicationAction | N
 
 
 def apply_plan(
-    plan: ReplicationPlan, provisioning: ProvisioningIntent, *, wsapi_factory: Callable = make_wsapi_writer,
-    progress: Callable[[str], None] | None = None,
+    plan: ReplicationPlan, provisioning: ProvisioningIntent, approval: Approval, *,
+    wsapi_factory: Callable = make_wsapi_writer, progress: Callable[[str], None] | None = None,
 ) -> ReplicationResult:
     result = ReplicationResult()
     if plan.error or plan.blockers:
@@ -67,7 +68,7 @@ def apply_plan(
         result.removals_b = [*peer_set_lines, *secondary_lines]
 
     try:
-        with wsapi_factory(provisioning.array) as a, wsapi_factory(intent.peer) as b:
+        with wsapi_factory(approval, "rc_groups", "A") as a, wsapi_factory(approval, "rc_groups", "B") as b:
             # 1. the failover test's own volume and set, through the same calls provisioning uses
             for action in (x for x in plan.actions if x.kind == "test_volume" and x.state == "create"):
                 _p(f"Creating {action.name} on A…")

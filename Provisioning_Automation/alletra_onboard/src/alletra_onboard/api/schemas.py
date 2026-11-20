@@ -279,10 +279,11 @@ class ConsoleTerminalRequest(BaseModel):
 
 class FailoverTestRequest(BaseModel):
     """SPEC-017 R1: blank group = the tool's own test group. A group this run did not create needs its
-    name typed back in `confirm`."""
+    name typed back in `confirm`. `authorised` must be True (the operator ticked the confirmation)."""
 
     group: str | None = None
     confirm: str | None = None
+    authorised: bool = False
 
 
 class LinkCheckRequest(BaseModel):

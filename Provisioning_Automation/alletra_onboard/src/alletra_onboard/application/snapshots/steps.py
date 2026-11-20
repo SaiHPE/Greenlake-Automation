@@ -21,6 +21,7 @@ from alletra_onboard.application.snapshots import apply as snapshots_apply
 from alletra_onboard.application.snapshots import read as snapshots_read
 from alletra_onboard.application.snapshots import verify as snapshots_verify
 from alletra_onboard.application.snapshots.plan import plan_snapshots
+from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.snapshots import SnapshotArrayView, SnapshotPlan, SnapshotVerification
@@ -147,17 +148,19 @@ class SnapshotSteps:
             raise StepPreconditionError("nothing to create — every snapshot and schedule in the plan is already there")
         # LESSONS 7: the operator's tick reaches the server as the id of the plan it was given for.
         check_approval(approved_plan, plan.plan_id)
-        coord.spawn(run_id, self._run_apply(run, intent, plan, view))
+        approval = coord.issue_approval(run_id, "snapshots", {"A": intent.array})
+        self._plan.pop(run_id, None)
+        coord.spawn(run_id, self._run_apply(run, intent, plan, view, approval), approval=approval)
         return run
 
     async def _run_apply(self, run: RunRecord, intent: ProvisioningIntent, plan: SnapshotPlan,
-                         view: SnapshotArrayView) -> None:
+                         view: SnapshotArrayView, approval: Approval) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, PHASE)
         coord.emit(run.run_id, PHASE, "snapshots.apply.started", "Creating the snapshots and schedules…")
-        result = await asyncio.to_thread(partial(self._apply, plan, view, intent, progress=self._progress(run.run_id)))
-        # the approval is spent: a second apply needs a fresh read and plan
-        self._plan.pop(run.run_id, None)
+        result = await coord.run_approved(
+            approval, partial(self._apply, plan, view, intent, approval, progress=self._progress(run.run_id)),
+        )
         try:
             coord.store.save_artifact(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
         except Exception:  # the writes happened; failing to cache the record must not fail the step

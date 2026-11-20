@@ -596,7 +596,10 @@ export interface ReplicationAction {
 export interface ReplicationPlan {
   actions: ReplicationAction[]; blockers: string[]; notes: string[]; existing_groups: string[]; error: string | null; plan_id?: string;
 }
-export const replicationPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/preview`);
+const runPost = (runId: string, tail: string, body?: unknown) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/${tail}`, body);
+
+export const replicationPreview = (runId: string) => runPost(runId, 'replication/preview');
 // R4/R7: what the arrays said per write, and the removal lines per array (the operator pastes; the tool never runs them).
 export interface ReplicationOutcome {
   kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset' | 'volume_admit' | 'start' | 'policy'
@@ -614,7 +617,7 @@ export const setsUpPartnership = (plan: ReplicationPlan | null | undefined) =>
 export const isPartnershipResult = (result: ReplicationResult | null | undefined) =>
   !!result && result.outcomes.length > 0 && result.outcomes.every((o) => PARTNERSHIP_KINDS.includes(o.kind));
 export const replicationApply = (runId: string, approvedPlan: string | null, acceptLatency = false) =>
-  request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/apply`, { approved_plan: approvedPlan, accept_latency: acceptLatency });
+  runPost(runId, 'replication/apply', { approved_plan: approvedPlan, accept_latency: acceptLatency });
 // SPEC-020: the latency between the arrays measured with checkrclink (server on B, client on A, read until
 // the latency is printed, stop both). RTT_LIMIT_MS mirrors the domain's HPE limits per transport and mode
 // (SPEC-031 R6: 10 ms for both modes over Fibre Channel); read it through rttLimitMs, which names the transport.
@@ -632,7 +635,7 @@ export interface LinkCheck {
   at: string; duration_s: number; results: LinkCheckResult[]; unchecked: string[]; modes: string[]; notes: string[]; error: string | null;
 }
 export const replicationLinkCheck = (runId: string, durationS = 600) =>
-  request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/link-check`, { duration_s: durationS });
+  runPost(runId, 'replication/link-check', { duration_s: durationS });
 // R6: read-only verdict per planned group from `showrcopy` on both arrays.
 export type GroupVerdict = 'replicating' | 'syncing' | 'not_replicating';
 // `showrcopy -d groups <group>` on this array (BL-64): every column as the array printed it ("NA", "none", "").
@@ -651,7 +654,7 @@ export interface GroupVerification {
   config?: RcGroupDetail | null;
 }
 export interface ReplicationVerification { links_ok: boolean; links_detail: string; groups: GroupVerification[]; notes: string[]; error: string | null; }
-export const replicationVerify = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/verify`);
+export const replicationVerify = (runId: string) => runPost(runId, 'replication/verify');
 
 // SPEC-017: the failover test record. P = this run's array, S = the peer.
 export type FailoverOutcome = 'pending' | 'ok' | 'failed' | 'skipped';
@@ -670,8 +673,8 @@ export interface FailoverRecord {
   time_to_failover_s: number | null; time_to_synced_s: number | null; data_loss_bound: string;
   observed_state: string; recovery_action: string; error: string | null;
 }
-export const failoverTest = (runId: string, group: string | null, confirm: string | null) =>
-  request<{ run: RunRecord }>('POST', `/runs/${runId}/replication/failover-test`, { group, confirm });
+export const failoverTest = (runId: string, group: string | null, confirm: string | null, authorised: boolean) =>
+  runPost(runId, 'replication/failover-test', { group, confirm, authorised });
 
 export const launchBrowser = (url?: string) =>
   request<{ cdp_url: string; profile_dir: string; executable: string }>('POST', '/browser/launch', { port: 9222, url });

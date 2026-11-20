@@ -1,13 +1,19 @@
-"""WSAPI v1 mutating client for the Alletra MP B10000 (STANDARD S2).
+"""WSAPI v1 mutating client for the Alletra MP B10000 (STANDARD S2, S3).
 
 Extends `WsapiReader` with the 14 mutating calls for provisioning, snapshots, Remote Copy groups
 and disaster-recovery failover tests. Only `application/runs/writer_clients.py` may import this
 module (import-linter `S2-wsapi-writer`).
+
+Idempotency: every create is lookup-before-create (getHosts-derived WWN ownership) or catches the
+array's HTTPConflict so a re-run reports "exists" rather than failing — EXISTENT_HOST / EXISTENT_SV
+(volume; NOT EXISTENT_VV) / EXISTENT_VLUN, and EXISTENT_PATH (a WWN already on another host) which
+is a real conflict we do NOT swallow.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from alletra_onboard.adapters.array.wsapi_client import (
     _WSAPI_PERSONA,
@@ -16,6 +22,7 @@ from alletra_onboard.adapters.array.wsapi_client import (
     _iscsi_names,
     _members,
 )
+from alletra_onboard.domain.approval import Approval, require_approval
 from alletra_onboard.domain.errors import WsapiError
 from alletra_onboard.domain.replication import (
     DR_ACTION_FAILOVER,
@@ -29,6 +36,16 @@ _DR_ACTION = {DR_ACTION_FAILOVER: "failover", DR_ACTION_RECOVER: "recover", DR_A
 
 class WsapiWriter(WsapiReader):
     """Mutating WSAPI v1 client: session and reads from `WsapiReader`, plus the 14 array writes."""
+
+    def __init__(
+        self, host: str, username: str, password: str, *, approval: Approval, **kwargs: Any,
+    ) -> None:
+        super().__init__(host, username, password, **kwargs)
+        self._approval = require_approval(approval)
+
+    def _write_sdk(self) -> Any:
+        self._approval.require_live()
+        return self._require()
 
     def __enter__(self) -> WsapiWriter:
         self.connect()
@@ -46,6 +63,7 @@ class WsapiWriter(WsapiReader):
         real conflict the operator must resolve, not something to silently adopt.
         """
         # ONE getHosts read answers both questions: who owns each WWN, and does the host exist.
+        sdk = self._write_sdk()
         owners_map = self.wwn_owners()
         host_exists = name in set(self.host_names())
         by_norm = {w: normalize_wwpn(w) for w in fc_wwns}
@@ -64,7 +82,7 @@ class WsapiWriter(WsapiReader):
             if persona_id is None:
                 raise WsapiError(f"unknown host persona '{persona}' (expected one of {sorted(_WSAPI_PERSONA)})")
             try:
-                self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": persona_id})
+                sdk.createHost(name, FCWwns=fc_wwns, optional={"persona": persona_id})
                 return "created"
             except Exception as exc:
                 if not self._is_conflict(exc):
@@ -76,7 +94,7 @@ class WsapiWriter(WsapiReader):
         # (the array answers EXISTENT_PATH even for a WWN already on the SAME host — proven live),
         # and never removing or adopting anyone else's.
         try:
-            self._require().modifyHost(
+            sdk.modifyHost(
                 name,
                 {"pathOperation": getattr(HPE3ParClient, "HOST_EDIT_ADD", 1), "FCWWNs": missing},
             )
@@ -94,9 +112,10 @@ class WsapiWriter(WsapiReader):
         Raises WsapiError when an IQN belongs to a different host, or when the host of that name
         carries FC WWNs: WSAPI refuses FC and iSCSI names in one request, and this tool does not put
         both on one host (not proven on the array)."""
+        sdk = self._write_sdk()
         if not iqns:
             raise WsapiError(f"no iSCSI name given for host '{name}'")
-        members = {m.get("name", ""): m for m in _members(self._require().getHosts()) if m.get("name")}
+        members = {m.get("name", ""): m for m in _members(sdk.getHosts()) if m.get("name")}
         owners = {i.lower(): n for n, m in members.items() for i in _iscsi_names(m)}
         other = sorted({owners[i.lower()] for i in iqns if owners.get(i.lower(), name) != name})
         if other:
@@ -118,14 +137,14 @@ class WsapiWriter(WsapiReader):
             if persona_id is None:
                 raise WsapiError(f"unknown host persona '{persona}' (expected one of {sorted(_WSAPI_PERSONA)})")
             try:
-                self._require().createHost(name, iscsiNames=list(iqns), optional={"persona": persona_id})
+                sdk.createHost(name, iscsiNames=list(iqns), optional={"persona": persona_id})
                 return "created"
             except Exception as exc:
                 if not self._is_conflict(exc):
                     raise self._translate(exc, where=f"create iSCSI host {name}") from exc
                 # EXISTENT_HOST race, as in ensure_host: add the names to the host someone just made.
         try:
-            self._require().modifyHost(
+            sdk.modifyHost(
                 name,
                 {"pathOperation": getattr(HPE3ParClient, "HOST_EDIT_ADD", 1), "iSCSINames": missing},
             )
@@ -147,20 +166,21 @@ class WsapiWriter(WsapiReader):
     def ensure_host_set(self, name: str, members: list[str]) -> str:
         """Create the host set, or ADD any missing members to an existing one (additive only — a
         member someone else added is never removed). 'exists' means every requested member verified."""
-        existing = self._existing_set_members(self._require().getHostSet, name)
+        sdk = self._write_sdk()
+        existing = self._existing_set_members(sdk.getHostSet, name)
         if existing is None:
             try:
-                self._require().createHostSet(name, setmembers=list(members))
+                sdk.createHostSet(name, setmembers=list(members))
                 return "created"
             except Exception as exc:
                 if not self._is_conflict(exc):
                     raise self._translate(exc, where=f"create host set {name}") from exc
-                existing = self._existing_set_members(self._require().getHostSet, name) or []
+                existing = self._existing_set_members(sdk.getHostSet, name) or []
         missing = [m for m in members if m not in existing]
         if not missing:
             return "exists"
         try:
-            self._require().modifyHostSet(
+            sdk.modifyHostSet(
                 name, action=getattr(HPE3ParClient, "SET_MEM_ADD", 1), setmembers=missing,
             )
             return "updated"
@@ -176,9 +196,10 @@ class WsapiWriter(WsapiReader):
         # required: tpvv,reduce", and `compression` returns code 42 "unrecognized name" in ANY
         # body. `{"reduce": True}` alone is accepted and reads back provisioningType=6 with
         # deduplication on -- so do not "restore" the compression flag; the array has no such field.
+        sdk = self._write_sdk()
         optional = {"reduce": True} if provisioning_type == "reduce" else {"tpvv": True}
         try:
-            self._require().createVolume(name, cpg, size_mib, optional=optional)
+            sdk.createVolume(name, cpg, size_mib, optional=optional)
             return "created"
         except Exception as exc:
             if self._is_conflict(exc):
@@ -196,20 +217,21 @@ class WsapiWriter(WsapiReader):
 
     def ensure_volume_set(self, name: str, members: list[str]) -> str:
         """Create the VV set, or ADD any missing members to an existing one (additive only)."""
-        existing = self._existing_set_members(self._require().getVolumeSet, name)
+        sdk = self._write_sdk()
+        existing = self._existing_set_members(sdk.getVolumeSet, name)
         if existing is None:
             try:
-                self._require().createVolumeSet(name, setmembers=list(members))
+                sdk.createVolumeSet(name, setmembers=list(members))
                 return "created"
             except Exception as exc:
                 if not self._is_conflict(exc):
                     raise self._translate(exc, where=f"create volume set {name}") from exc
-                existing = self._existing_set_members(self._require().getVolumeSet, name) or []
+                existing = self._existing_set_members(sdk.getVolumeSet, name) or []
         missing = [m for m in members if m not in existing]
         if not missing:
             return "exists"
         try:
-            self._require().modifyVolumeSet(
+            sdk.modifyVolumeSet(
                 name, action=getattr(HPE3ParClient, "SET_MEM_ADD", 1), setmembers=missing,
             )
             return "updated"
@@ -222,11 +244,12 @@ class WsapiWriter(WsapiReader):
         """Export a source to a target as a VLUN. ``volume_name`` is a bare volume or ``set:<vvset>``;
         ``host_name`` is a bare host or ``set:<hostset>``. ``lun=None`` lets the array auto-assign;
         an explicit ``lun`` presents at that number. Returns 'created' or 'exists' (idempotent)."""
+        sdk = self._write_sdk()
         try:
             if lun is None:
-                self._require().createVLUN(volume_name, hostname=host_name, auto=True)
+                sdk.createVLUN(volume_name, hostname=host_name, auto=True)
             else:
-                self._require().createVLUN(volume_name, lun=lun, hostname=host_name, auto=False)
+                sdk.createVLUN(volume_name, lun=lun, hostname=host_name, auto=False)
             return "created"
         except Exception as exc:
             if self._is_conflict(exc):
@@ -242,30 +265,29 @@ class WsapiWriter(WsapiReader):
     # over WSAPI is confirmed on the lab before the live run (work packet, live check 2).
 
     def create_snapshot(self, volume: str, name: str, *, read_only: bool, expire_hours: int) -> None:
+        sdk = self._write_sdk()
         try:
-            self._require().createSnapshot(name, volume, optional={"readOnly": read_only, "expirationHours": expire_hours})
+            sdk.createSnapshot(name, volume, optional={"readOnly": read_only, "expirationHours": expire_hours})
         except Exception as exc:
             raise self._translate(exc, where=f"create snapshot {name} of volume {volume}") from exc
 
     def create_set_snapshot(self, vvset: str, pattern: str, *, read_only: bool, expire_hours: int) -> None:
+        sdk = self._write_sdk()
         try:
-            self._require().createSnapshotOfVolumeSet(
+            sdk.createSnapshotOfVolumeSet(
                 pattern, vvset, optional={"readOnly": read_only, "expirationHours": expire_hours})
         except Exception as exc:
             raise self._translate(exc, where=f"create snapshots {pattern} of volume set {vvset}") from exc
 
     # ------------------------------------------------------------------ Remote Copy groups & DR (SPEC-016, SPEC-017)
-    # The `/remotecopygroups` resource, confirmed on WSAPI 1.15 (B10000, OS 10.5.0, both lab
-    # arrays): group records carry `role` 1/2, `targets[].mode` 1 sync / 2 periodic,
-    # `targets[].policies.{autoRecover,autoSynchronize,…}`, `targets[].syncPeriod`,
-    # `remoteGroupName`, `volumes[].remoteVolumes[].syncStatus` (tests/fixtures/rc_pair/README.md).
 
     def create_remote_copy_group(self, name: str, *, target: str, mode: str, peer_cpg: str, local_cpg: str = "") -> str:
         """`creatercopygroup -usr_cpg <local> <target>:<peer_cpg> <name> <target>:<sync|periodic>`."""
+        sdk = self._write_sdk()
         targets = [{"targetName": target, "mode": 1 if mode == "sync" else 2, "userCPG": peer_cpg}]
         optional = {"localUserCPG": local_cpg} if local_cpg else None
         try:
-            self._require().createRemoteCopyGroup(name, targets, optional=optional)
+            sdk.createRemoteCopyGroup(name, targets, optional=optional)
             return "created"
         except Exception as exc:
             if self._is_conflict(exc):
@@ -279,21 +301,22 @@ class WsapiWriter(WsapiReader):
         AlletraMP_D22U27 (WSAPI 1.15, 2026-10-09): one body carrying both draws HTTP 400 code 44
         "parameters cannot be present at the same time - policies, syncPeriod". Returns a note when
         the array refused `autoSynchronize` as a WSAPI field (then only `autoRecover` was set)."""
+        sdk = self._write_sdk()
         if period_seconds:
             try:
-                self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "syncPeriod": period_seconds}]})
+                sdk.modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "syncPeriod": period_seconds}]})
             except Exception as exc:
                 raise self._translate(exc, where=f"set the sync period of Remote Copy group {name}") from exc
         policies = {"autoRecover": auto_recover, "autoSynchronize": auto_synchronize}
         try:
-            self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": policies}]})
+            sdk.modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": policies}]})
             return ""
         except Exception as exc:
             detail = self._safe_str(exc).lower()
             if "autosynchronize" not in detail and "unrecognized" not in detail:
                 raise self._translate(exc, where=f"set the policies of Remote Copy group {name}") from exc
         try:
-            self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": {"autoRecover": auto_recover}}]})
+            sdk.modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": {"autoRecover": auto_recover}}]})
         except Exception as exc:
             raise self._translate(exc, where=f"set the policies of Remote Copy group {name}") from exc
         return (f"The array did not accept 'autoSynchronize' for {name}; auto_recover and the "
@@ -301,9 +324,10 @@ class WsapiWriter(WsapiReader):
 
     def admit_remote_copy_volume(self, group: str, volume: str, *, target: str, secondary: str | None = None) -> str:
         """`admitrcopyvv -createvv <volume> <group> <target>:<secondary>` — the secondary is auto-created."""
+        sdk = self._write_sdk()
         targets = [{"targetName": target, "secVolumeName": secondary or volume}]
         try:
-            self._require().addVolumeToRemoteCopyGroup(group, volume, targets, optional={"volumeAutoCreation": True})
+            sdk.addVolumeToRemoteCopyGroup(group, volume, targets, optional={"volumeAutoCreation": True})
             return "created"
         except Exception as exc:
             if self._is_conflict(exc):
@@ -311,8 +335,9 @@ class WsapiWriter(WsapiReader):
             raise self._translate(exc, where=f"add volume {volume} to Remote Copy group {group}") from exc
 
     def start_remote_copy_group(self, name: str) -> str:
+        sdk = self._write_sdk()
         try:
-            self._require().startRemoteCopy(name)
+            sdk.startRemoteCopy(name)
             return "started"
         except Exception as exc:
             if self._is_conflict(exc) or "already" in self._safe_str(exc).lower():
@@ -320,8 +345,9 @@ class WsapiWriter(WsapiReader):
             raise self._translate(exc, where=f"start Remote Copy group {name}") from exc
 
     def stop_remote_copy_group(self, name: str) -> str:
+        sdk = self._write_sdk()
         try:
-            self._require().stopRemoteCopy(name)
+            sdk.stopRemoteCopy(name)
             return "stopped"
         except Exception as exc:
             if self._is_conflict(exc) or "already" in self._safe_str(exc).lower():
@@ -332,7 +358,8 @@ class WsapiWriter(WsapiReader):
         """`setrcopygroup failover|recover|restore -f <name>` as the WSAPI disaster-recovery action
         (7 / 9 / 10) on `/remotecopygroups/<name>`. Issued on the array that holds the group under
         that name; the array mirrors the role change to its partner. SPEC-017."""
+        sdk = self._write_sdk()
         try:
-            self._require().recoverRemoteCopyGroupFromDisaster(name, action)
+            sdk.recoverRemoteCopyGroupFromDisaster(name, action)
         except Exception as exc:
             raise self._translate(exc, where=f"run {_DR_ACTION.get(action, f'action {action}')} on Remote Copy group {name}") from exc

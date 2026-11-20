@@ -149,6 +149,13 @@ class _Wsapi:
         self.pair.dr(self.host, name, action)
 
 
+def _approval():
+    from alletra_onboard.domain.approval import Approval
+
+    intent = _intent()
+    return Approval("test-run", "failover", {"A": intent.array, "B": intent.replication.peer})
+
+
 def _run(pair: FakePair, **kw):
     clock = {"t": 0.0}
 
@@ -157,8 +164,8 @@ def _run(pair: FakePair, **kw):
         return clock["t"]
 
     return run_failover_test(
-        _intent(), G,
-        wsapi_factory=lambda creds: _Wsapi(pair, creds.host),
+        _approval(), G,
+        wsapi_factory=lambda approval, purpose, side: _Wsapi(pair, approval.creds_for(purpose, side).host),
         read_fn=lambda creds, progress=None: pair.view(creds.host),
         read_group_fn=lambda creds, name: pair.group(creds.host, name),
         sleep=lambda s: None, clock=tick,
@@ -321,7 +328,8 @@ def test_nothing_is_written_unless_the_group_starts_primary_started_and_synced()
 def test_an_unreadable_array_aborts_before_any_write():
     pair = FakePair()
     bad = ReplicationArrayView(host=S, read_error="Could not read 10.64.154.190: Login failed")
-    rec = run_failover_test(_intent(), G, wsapi_factory=lambda c: _Wsapi(pair, c.host),
+    rec = run_failover_test(_approval(), G,
+                            wsapi_factory=lambda a, p, s: _Wsapi(pair, a.creds_for(p, s).host),
                             read_fn=lambda c, progress=None: bad if c.host == S else pair.view(c.host),
                             read_group_fn=lambda c, n: pair.group(c.host, n), sleep=lambda s: None)
     assert rec.result == "aborted" and rec.failed_step == 0 and rec.error.startswith("Could not read 10.64.154.190") and pair.calls == []

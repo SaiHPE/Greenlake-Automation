@@ -199,7 +199,10 @@ def phase_preview(intent, discovery, reachable_hosts):
 def phase_apply(intent, discovery, reachable_hosts, plan):
     head("PHASE 6 - tier-1 APPLY *** WRITES TO THE ARRAY ***  [provisioning.apply.apply_plan]")
     guard(intent)
-    res = prov_apply.apply_plan(prov_apply.StorageInputs(intent, discovery, reachable_hosts, plan))
+    from alletra_onboard.domain.approval import Approval
+
+    approval = Approval("validation", "storage", {"A": intent.array})
+    res = prov_apply.apply_plan(prov_apply.StorageInputs(intent, discovery, reachable_hosts, plan), approval)
     for o in res.outcomes:
         print(f"   {o.kind:8} {o.name:24} -> {o.status:8} {o.detail}")
     failed = [o for o in res.outcomes if o.status == "failed"]

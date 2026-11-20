@@ -232,10 +232,15 @@ def admit_wsapi(host, pw, group, volume, target, secondary):
     """The product's own path: WSAPI addVolumeToRemoteCopyGroup with the EXISTING secondary (no
     volumeAutoCreation). WSAPI answers with an error where the CLI would sit on a prompt."""
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+    from pydantic import SecretStr
+
     from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
+    from alletra_onboard.domain.approval import Approval
+    from alletra_onboard.domain.shared import EndpointCreds
     print("[%s] WSAPI addVolumeToRemoteCopyGroup %s %s -> %s:%s" % (host, group, volume, target, secondary))
     try:
-        with WsapiWriter(host, "3paradm", pw) as w:
+        lab_approval = Approval("lab", "rc_groups", {"A": EndpointCreds(host=host, username="3paradm", password=SecretStr(pw))})
+        with WsapiWriter(host, "3paradm", pw, approval=lab_approval) as w:
             w._require().addVolumeToRemoteCopyGroup(group, volume, [{"targetName": target, "secVolumeName": secondary}])
         print("    admitted")
         return ""

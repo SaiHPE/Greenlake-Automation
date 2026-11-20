@@ -118,7 +118,7 @@ export function FailoverTestStep({ runId, run, events, onDone }: Props) {
     onClick: passed
       ? () => setAgain(record?.started_at ?? '')
       : call(async () => {
-          await failoverTest(runId, group, other ? typed.trim() : null);
+          await failoverTest(runId, group, other ? typed.trim() : null, authorised);
           setAuthorised(false);
         }),
     blocked: !group

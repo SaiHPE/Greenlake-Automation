@@ -8,6 +8,7 @@ whenever the step is re-run and spent by an apply.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from functools import partial
 
 from alletra_onboard.application.replication import apply as replication_apply
@@ -20,17 +21,21 @@ from alletra_onboard.application.replication import plan as replication_plan
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.replication import verify as replication_verify
 from alletra_onboard.application.runs.coordinator import (
+    APPROVAL_REQUIRED,
     RunCoordinator,
     StepPreconditionError,
     check_approval,
     new_plan_id,
 )
+from alletra_onboard.domain.approval import Approval, Purpose
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
+from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     LINK_CHECK_TIME_DEFAULT,
     TEST_GROUP,
     FailoverRecord,
     LinkCheck,
+    ReplicationIntent,
     ReplicationPlan,
     ReplicationReport,
     ReplicationResult,
@@ -88,14 +93,18 @@ class ReplicationSteps:
         self._coord = coord
         self._plan: dict[str, tuple[ReplicationPlan, ReplicationReport]] = {}
 
-    def _require_replication(self, run_id: str):
+    def _progress(self, run_id: str, phase: WorkflowPhase) -> Callable[[str], None]:
+        loop = asyncio.get_running_loop()
+        return lambda message: loop.call_soon_threadsafe(self._coord.emit, run_id, phase, "phase.progress", message)
+
+    def _require_replication(self, run_id: str) -> tuple[ProvisioningIntent, ReplicationIntent]:
         intent = self._coord.get_provisioning_intent(run_id)
         if intent.replication is None:
             raise StepPreconditionError(
                 "this run's workbook has no Replication tab — add the peer array and the volume sets to "
                 "protect, then start a new run"
             )
-        return intent
+        return intent, intent.replication
 
     def current_report(self, run_id: str) -> ReplicationReport | None:
         raw = self._coord.store.load_artifact(run_id, REPORT_ARTIFACT)
@@ -113,7 +122,7 @@ class ReplicationSteps:
     def start_replication_preview(self, run_id: str) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
-        intent = self._require_replication(run_id)
+        intent, _rep = self._require_replication(run_id)
         self._plan.pop(run_id, None)
         coord.spawn(run_id, self._run_preview(run, intent))
         return run
@@ -123,11 +132,7 @@ class ReplicationSteps:
         phase = WorkflowPhase.STORAGE_REPLICATE
         coord.set_state(run, RunStatus.RUNNING, phase)
         coord.emit(run.run_id, phase, "step.started", "Reading Remote Copy on both arrays…")
-        loop = asyncio.get_running_loop()
-
-        def progress(message: str) -> None:
-            loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
-
+        progress = self._progress(run.run_id, phase)
         primary = await asyncio.to_thread(partial(replication_read.read_array, intent.array, progress=progress))
         peer = await asyncio.to_thread(partial(replication_read.read_array, intent.replication.peer, progress=progress))
         report = replication_plan.check(primary, peer, intent.replication)
@@ -171,7 +176,7 @@ class ReplicationSteps:
     def start_link_check(self, run_id: str, *, duration_s: int = LINK_CHECK_TIME_DEFAULT) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
-        intent = self._require_replication(run_id)
+        intent, _rep = self._require_replication(run_id)
         report = self.current_report(run_id)
         if report is None or report.error:
             raise StepPreconditionError("read both arrays first — the link check needs the ports and links the read found")
@@ -188,14 +193,9 @@ class ReplicationSteps:
         coord.set_state(run, RunStatus.RUNNING, phase)
         coord.emit(run.run_id, phase, "replication.link_check.started",
                    "Measuring the latency between the arrays with checkrclink…")
-        loop = asyncio.get_running_loop()
-
-        def progress(message: str) -> None:
-            loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
-
         check = await asyncio.to_thread(partial(
             replication_link.run_link_check, intent.array, intent.replication, report,
-            duration_s=duration_s, progress=progress,
+            duration_s=duration_s, progress=self._progress(run.run_id, phase),
         ))
         try:
             coord.store.save_artifact(run.run_id, LINK_CHECK_ARTIFACT, check.model_dump_json().encode("utf-8"))
@@ -262,7 +262,7 @@ class ReplicationSteps:
     def start_replication_apply(self, run_id: str, *, approved_plan: str | None, accept_latency: bool = False) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
-        intent = self._require_replication(run_id)
+        intent, rep = self._require_replication(run_id)
         entry = self._plan.get(run_id)
         if entry is None:
             raise StepPreconditionError("no replication plan to apply — read both arrays first")
@@ -275,28 +275,25 @@ class ReplicationSteps:
             raise StepPreconditionError("nothing to create — every object in the plan already exists")
         # LESSONS 7: the operator's tick reaches the server as the id of the plan it was given for.
         check_approval(approved_plan, plan.plan_id)
-        notes = self._gate_on_link(run_id, report, accept_latency, intent.replication.rtt_ms)
-        coord.spawn(run_id, self._run_apply(run, intent, plan, notes))
+        notes = self._gate_on_link(run_id, report, accept_latency, rep.rtt_ms)
+        purpose: Purpose = "rc_partnership" if plan.sets_up_partnership else "rc_groups"
+        approval = coord.issue_approval(run_id, purpose, {"A": intent.array, "B": rep.peer})
+        self._plan.pop(run_id, None)
+        coord.spawn(run_id, self._run_apply(run, intent, plan, approval, notes), approval=approval)
         return run
 
-    async def _run_apply(self, run: RunRecord, intent, plan: ReplicationPlan, notes: list[str] | None = None) -> None:
+    async def _run_apply(
+        self, run: RunRecord, intent, plan: ReplicationPlan, approval: Approval, notes: list[str] | None = None,
+    ) -> None:
         coord = self._coord
         phase = WorkflowPhase.STORAGE_REPLICATE
         coord.set_state(run, RunStatus.RUNNING, phase)
         coord.emit(run.run_id, phase, "replication.apply.started",
                    "Setting up the replication ports and the partnership over SSH…" if plan.sets_up_partnership
                    else "Configuring replication over WSAPI…")
-        loop = asyncio.get_running_loop()
-
-        def progress(message: str) -> None:
-            loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
-
-        result = await asyncio.to_thread(partial(
-            replication_partnership_apply.apply_partnership if plan.sets_up_partnership else replication_apply.apply_plan,
-            plan, intent, progress=progress))
+        fn = replication_partnership_apply.apply_partnership if plan.sets_up_partnership else replication_apply.apply_plan
+        result = await coord.run_approved(approval, partial(fn, plan, intent, approval, progress=self._progress(run.run_id, phase)))
         result.notes.extend(notes or [])
-        # the approval is spent: a second apply needs a fresh read and plan
-        self._plan.pop(run.run_id, None)
         try:
             coord.store.save_artifact(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
         except Exception:  # the writes happened; failing to cache the record must not fail the step
@@ -314,7 +311,7 @@ class ReplicationSteps:
     def start_replication_verify(self, run_id: str) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
-        intent = self._require_replication(run_id)
+        intent, _rep = self._require_replication(run_id)
         plan = self._plan_for_verify(run_id)
         if plan is None:
             raise StepPreconditionError("nothing to verify yet — read both arrays first so the tool knows which groups to look for")
@@ -339,13 +336,10 @@ class ReplicationSteps:
         phase = WorkflowPhase.STORAGE_REPLICATE
         coord.set_state(run, RunStatus.RUNNING, phase)
         coord.emit(run.run_id, phase, "replication.verify.started", "Reading Remote Copy back on both arrays…")
-        loop = asyncio.get_running_loop()
-
-        def progress(message: str) -> None:
-            loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
-
-        verification = await asyncio.to_thread(partial(replication_verify.verify, intent, plan, progress=progress,
-                                                        detail_fn=replication_read.read_group_details))
+        verification = await asyncio.to_thread(partial(
+            replication_verify.verify, intent, plan, progress=self._progress(run.run_id, phase),
+            detail_fn=replication_read.read_group_details,
+        ))
         coord.set_state(run, RunStatus.RETRYABLE_FAILURE if verification.error else RunStatus.READY, phase)
         if verification.error:
             coord.emit(run.run_id, phase, "replication.verify.failed", verification.error,
@@ -373,9 +367,9 @@ class ReplicationSteps:
     def failover_group_choice(self, run_id: str, group: str | None, confirm: str | None) -> str:
         """SPEC-017 R1: the tool's own test group by default; a group this run created may be picked;
         any other group only when its name is typed back in the confirmation field."""
-        intent = self._require_replication(run_id)
-        chosen = (group or "").strip() or intent.replication.failover_group_name
-        offered = {TEST_GROUP, intent.replication.failover_group_name, *self.groups_created(run_id)}
+        _intent, rep = self._require_replication(run_id)
+        chosen = (group or "").strip() or rep.failover_group_name
+        offered = {TEST_GROUP, rep.failover_group_name, *self.groups_created(run_id)}
         if chosen not in offered and (confirm or "").strip() != chosen:
             raise StepPreconditionError(
                 f"'{chosen}' was not created by this run. To test failover on it, type its name in the confirmation "
@@ -383,27 +377,29 @@ class ReplicationSteps:
             )
         return chosen
 
-    def start_failover_test(self, run_id: str, *, group: str | None = None, confirm: str | None = None) -> RunRecord:
+    def start_failover_test(
+        self, run_id: str, *, group: str | None = None, confirm: str | None = None, authorised: bool = False,
+    ) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
-        intent = self._require_replication(run_id)
+        intent, rep = self._require_replication(run_id)
         chosen = self.failover_group_choice(run_id, group, confirm)
-        coord.spawn(run_id, self._run_failover(run, intent, chosen))
+        if not authorised:
+            raise StepPreconditionError(APPROVAL_REQUIRED)
+        approval = coord.issue_approval(run_id, "failover", {"A": intent.array, "B": rep.peer})
+        coord.spawn(run_id, self._run_failover(run, chosen, approval), approval=approval)
         return run
 
-    async def _run_failover(self, run: RunRecord, intent, group: str) -> None:
+    async def _run_failover(self, run: RunRecord, group: str, approval: Approval) -> None:
         coord = self._coord
         phase = WorkflowPhase.STORAGE_FAILOVER_TEST
         coord.set_state(run, RunStatus.RUNNING, phase)
         coord.emit(run.run_id, phase, "failover.started",
                    f"Failover test on {group}: stop → fail over to the peer → recover → wait for sync → restore…",
                    data={"group": group})
-        loop = asyncio.get_running_loop()
-
-        def progress(message: str) -> None:
-            loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
-
-        record: FailoverRecord = await asyncio.to_thread(partial(replication_failover.run_failover_test, intent, group, progress=progress))
+        record: FailoverRecord = await coord.run_approved(
+            approval, partial(replication_failover.run_failover_test, approval, group, progress=self._progress(run.run_id, phase)),
+        )
         try:
             coord.store.save_artifact(run.run_id, FAILOVER_ARTIFACT, record.model_dump_json().encode("utf-8"))
         except Exception:  # the test ran; failing to cache the record must not fail the step

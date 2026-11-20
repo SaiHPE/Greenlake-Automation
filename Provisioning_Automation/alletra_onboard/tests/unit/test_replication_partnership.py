@@ -391,15 +391,27 @@ class _RcCli:
         raise AssertionError(command)
 
 
+def _approval():
+    from alletra_onboard.domain.approval import Approval
+
+    return Approval("test-run", "rc_partnership", {"A": _creds(A_HOST), "B": _creds(B_HOST)})
+
+
 def _apply(plan, network=None, **kw):
+    from unittest.mock import patch
+
     state = {"A": {"rcip": {}, "rc": "", "targets": {}},
              "B": {"rcip": {"0:1:1": ("10.93.18.19", "255.255.254.0"), "1:1:1": ("10.93.18.20", "255.255.254.0")},
                    "rc": "Started", "targets": {}}}
     log: list = []
     hosts = {A_HOST: "A", B_HOST: "B"}
-    result = partnership_apply.apply_partnership(
-        plan, _prov(_intent(network)), sleep=lambda s: None,
-        rc_cli_factory=lambda creds, objects: _RcCli(hosts[creds.host], objects, state, log, **kw))
+    with patch.object(partnership_apply.time, "sleep", lambda _s: None):
+        result = partnership_apply.apply_partnership(
+            plan, _prov(_intent(network)), _approval(),
+            rc_cli_factory=lambda approval, side, objects: _RcCli(
+                hosts[approval.creds_for("rc_partnership", side).host], objects, state, log, **kw,
+            ),
+        )
     return result, log, state
 
 
@@ -412,7 +424,7 @@ def test_each_arrays_client_is_bound_to_what_the_plan_names_on_that_array():
     assert partnership.plan_objects(plan, "B") == PRIMERA_OBJECTS
     routed = partnership.plan_objects(_plan(ROUTED, a_over=WITH_SET, b_over=_without_fc_target()), "A")
     assert routed.addresses == {"10.93.18.11", "10.93.18.13", "10.93.18.1"}          # the gateway it sets
-    assert make_rc_writer(_creds(A_HOST), ALLETRA_OBJECTS).objects == ALLETRA_OBJECTS   # the apply's default factory
+    assert make_rc_writer(_approval(), "A", ALLETRA_OBJECTS).objects == ALLETRA_OBJECTS   # the apply's default factory
 
 
 def test_an_address_the_plan_will_not_set_is_not_given_to_the_client():

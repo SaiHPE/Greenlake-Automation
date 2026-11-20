@@ -211,8 +211,8 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
 
     applied: list = []
 
-    def fake_apply(plan, provisioning, *, wsapi_factory=None, progress=None):
-        applied.append([a.name for a in plan.actions])
+    def fake_apply(plan, provisioning, approval, *, wsapi_factory=None, progress=None):
+        assert (approval.creds_for("rc_groups", "A").host, approval.creds_for("rc_groups", "B").host) == ("a", "b") and (applied.append([a.name for a in plan.actions]) or True)
         return ReplicationResult(
             outcomes=[ReplicationOutcome(kind="group", name="HS_rcg", status="created", detail="async → ArrayB"),
                       ReplicationOutcome(kind="peer_vvset", name="HS_rc", where="B", status="created")],
@@ -304,7 +304,7 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
 
     tested: list = []
 
-    def fake_failover(intent, group, *, progress=None, **kw):
+    def fake_failover(approval, group, *, progress=None, **kw):
         tested.append(group)
         side = FailoverSide(array="ArrayA", group=group, role="Primary", status="Started", volumes=1, synced=1)
         return FailoverRecord(group=group, peer_group=f"{group}.r100", mode="async", primary_array="ArrayA", peer_array="ArrayB",
@@ -312,7 +312,7 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
                               steps=[FailoverStepRecord(seq=0, title="Read both arrays", outcome="ok", primary=side)])
 
     monkeypatch.setattr(replication_failover, "run_failover_test", fake_failover)
-    service.start_failover_test(run.run_id, group="HS_rcg")
+    service.start_failover_test(run.run_id, group="HS_rcg", authorised=True)
     await service.wait(run.run_id)
     assert tested == ["HS_rcg"]
     assert service.get_run(run.run_id).status == RunStatus.READY
@@ -324,13 +324,13 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     assert FailoverRecord.model_validate_json(service.store.load_artifact(run.run_id, FAILOVER_ARTIFACT)).result == "passed"
     assert service.replication.failover_record(run.run_id).time_to_synced_s == 31.0
 
-    def failed_failover(intent, group, *, progress=None, **kw):
+    def failed_failover(approval, group, *, progress=None, **kw):
         return FailoverRecord(group=group, result="failed", failed_step=4, error="ArrayB refused the recover: ROLE_CONFLICT",
                               observed_state="ArrayA: Primary/Stopped · ArrayB: Primary-Rev/Stopped",
                               recovery_action="On ArrayB: setrcopygroup recover -f HS_rcg.r100 ; then setrcopygroup restore -f HS_rcg.r100")
 
     monkeypatch.setattr(replication_failover, "run_failover_test", failed_failover)
-    service.start_failover_test(run.run_id, group="HS_rcg")
+    service.start_failover_test(run.run_id, group="HS_rcg", authorised=True)
     await service.wait(run.run_id)
     assert service.get_run(run.run_id).status == RunStatus.RETRYABLE_FAILURE
     failed = next(e for e in reversed(service.list_events(run.run_id)) if e.event_type == "failover.failed")
@@ -422,7 +422,7 @@ async def test_the_link_gate_refuses_over_the_limit_without_the_tick_and_records
         at="2026-10-12T07:00:00+00:00", duration_s=duration_s, modes=["sync"],
         results=[LinkCheckResult(pair=pair, latency_ms=12.0, pings_lost_pct=1.0)]))
     applied: list = []
-    monkeypatch.setattr(replication_apply, "apply_plan", lambda plan, prov, **kw: applied.append(1) or ReplicationResult(groups_created=["HS_rcg"]))
+    monkeypatch.setattr(replication_apply, "apply_plan", lambda plan, prov, approval, **kw: applied.append(1) or ReplicationResult(groups_created=["HS_rcg"]))
 
     intent = _prov_intent()
     intent.array = EndpointCreds(host="a", username="u", password=SecretStr("p"))
@@ -758,7 +758,7 @@ async def test_apply_is_gated_on_zoning(tmp_path, monkeypatch):
     )
 
     monkeypatch.setattr(sp, "build_plan", lambda i, d, **kw: ProvisioningPlan(actions=[]))
-    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, **kw: ProvisioningResult(
+    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, approval, **kw: ProvisioningResult(
         outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]
     ))
     service = _service(tmp_path)
@@ -802,7 +802,7 @@ async def test_apply_needs_the_id_of_the_plan_the_operator_ticked(tmp_path, monk
     from alletra_onboard.domain.provisioning import ProvisioningResult
 
     applied: list = []
-    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, **kw: applied.append(1) or ProvisioningResult())
+    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, approval, **kw: applied.append(1) or ProvisioningResult())
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())
     service._discovery[run.run_id] = DiscoveryReport()
@@ -1059,7 +1059,7 @@ async def test_discover_then_zoning_then_provision_flow(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(sz, "build_report", lambda intent, discovery, zoning_plan=None: zoning_report)
     monkeypatch.setattr(sp, "build_plan", lambda intent, discovery, **kw: ProvisioningPlan(actions=[PlannedAction(kind="host", name="esx1", description="d")]))
-    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, **kw: ProvisioningResult(outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]))
+    monkeypatch.setattr(storage_apply, "apply_plan", lambda inputs, approval, **kw: ProvisioningResult(outcomes=[ActionOutcome(kind="host", name="esx1", status="created")]))
 
     service = _service(tmp_path)
     run = service.create_run(_item(), provisioning_intent=_prov_intent())

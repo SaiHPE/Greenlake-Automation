@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -19,6 +19,7 @@ from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.application.runs.event_bus import ConsoleBus, InMemoryEventBus
 from alletra_onboard.application.runs.trust import RunTrustBook
 from alletra_onboard.config import Settings, load_settings
+from alletra_onboard.domain.approval import Approval, ApprovalError, Purpose, Side
 from alletra_onboard.domain.models import (
     ArrayCredential,
     ArrayWorkItem,
@@ -30,6 +31,7 @@ from alletra_onboard.domain.models import (
 )
 from alletra_onboard.domain.ports import RunStore, StoredCredentialsUnreadableError
 from alletra_onboard.domain.provisioning import ProvisioningIntent
+from alletra_onboard.domain.shared import EndpointCreds
 from alletra_onboard.domain.snapshots import SNAPSHOTS_TAB_NEEDED
 from alletra_onboard.domain.trust import DevicePin, TrustKind, retrust, retrusted_message
 from alletra_onboard.domain.workflow import NOT_BUILT_STEPS, enabled_steps, initial_phase
@@ -42,9 +44,16 @@ class RunNotFoundError(LookupError):
 class RunBusyError(RuntimeError):
     """A background step is already executing for this run."""
 
+    def __init__(self, run_id: str = "") -> None:
+        self.run_id = run_id
+        super().__init__("a step is already running for this run")
+
 
 class StepPreconditionError(RuntimeError):
     """A step was requested before its prerequisite ran (e.g. zoning/provision before discovery)."""
+
+
+APPROVAL_REQUIRED = "Tick the approval for this plan first."
 
 
 def new_plan_id() -> str:
@@ -56,7 +65,7 @@ def check_approval(approved_plan: str | None, held_plan_id: str) -> None:
     screen. Not authentication: any local caller can read the id from the run's events. It makes the
     approval explicit and tied to one plan, so a plan rebuilt between the tick and the click is caught."""
     if not approved_plan:
-        raise StepPreconditionError("Tick the approval for this plan first.")
+        raise StepPreconditionError(APPROVAL_REQUIRED)
     if approved_plan != held_plan_id:
         raise StepPreconditionError("The plan changed since it was approved. Review the new plan and tick again.")
 
@@ -77,6 +86,8 @@ class RunCoordinator:
         self.events = events
         self.console = ConsoleBus()
         self._tasks: dict[str, asyncio.Task] = {}
+        self._approvals: dict[str, Approval] = {}
+        self._dispatched: set[int] = set()
         self._last_phase: dict[str, WorkflowPhase] = {}
 
     def current_settings(self) -> Settings:
@@ -260,18 +271,52 @@ class RunCoordinator:
 
     # ------------------------------------------------------------------ step infrastructure
 
-    def spawn(self, run_id: str, coro) -> None:
+    def is_busy(self, run_id: str, *, ignoring: Approval | None = None) -> bool:
+        """True while a step task is running or another unspent write approval is active."""
         existing = self._tasks.get(run_id)
         if existing is not None and not existing.done():
+            return True
+        approval = self._approvals.get(run_id)
+        return approval is not None and not approval.spent and approval is not ignoring
+
+    def issue_approval(
+        self, run_id: str, purpose: Purpose, arrays: Mapping[Side, EndpointCreds],
+    ) -> Approval:
+        """Issue a single-use approval for `run_id` after verifying the run is idle."""
+        self.get_run(run_id)
+        if self.is_busy(run_id):
+            raise RunBusyError(run_id)
+        approval = Approval(run_id=run_id, purpose=purpose, arrays=arrays)
+        self._approvals[run_id] = approval
+        return approval
+
+    def spawn(self, run_id: str, coro, approval: Approval | None = None) -> None:
+        if self.is_busy(run_id, ignoring=approval):
             coro.close()
             raise RunBusyError(run_id)
+        if approval is not None and (approval is not self._approvals.get(run_id) or approval.spent):
+            coro.close()
+            raise ApprovalError("This approval is not valid for this run.")
         # the step's task, and every asyncio.to_thread it starts, records its commands to this run and
         # checks every device it reaches against this run's pins (ADR 0026)
         ctx = contextvars.copy_context()
         ctx.run(command_log.bind, self.command_sink(run_id))
         trust = self.trust_book(run_id)
         ctx.run(device_trust.bind, trust)
-        self._tasks[run_id] = asyncio.create_task(self._guarded(run_id, coro, trust), context=ctx)
+        self._tasks[run_id] = asyncio.create_task(self._guarded(run_id, coro, trust, approval), context=ctx)
+
+    async def run_approved[T](self, approval: Approval, fn: Callable[[], T]) -> T:
+        """Run a write worker on its thread and spend `approval` in that thread's finally."""
+        self._dispatched.add(id(approval))
+
+        def _work() -> T:
+            try:
+                return fn()
+            finally:
+                approval.spent = True
+                self._dispatched.discard(id(approval))
+
+        return await asyncio.to_thread(_work)
 
     # ------------------------------------------------------------------ SPEC-019 command log
 
@@ -352,7 +397,9 @@ class RunCoordinator:
     def list_commands(self, run_id: str, since: int = 0) -> list[dict]:
         return self.store.list_commands(run_id, since)
 
-    async def _guarded(self, run_id: str, coro, trust: RunTrustBook | None = None) -> None:
+    async def _guarded(
+        self, run_id: str, coro, trust: RunTrustBook | None = None, approval: Approval | None = None,
+    ) -> None:
         # A crash must never leave a run stuck in RUNNING with no trace.
         try:
             await coro
@@ -367,6 +414,8 @@ class RunCoordinator:
                 str(exc) if isinstance(exc, StoredCredentialsUnreadableError) else f"{type(exc).__name__}: {str(exc)[:300]}",
             )
         finally:
+            if approval is not None and id(approval) not in self._dispatched:
+                approval.spent = True
             if trust is not None:
                 try:
                     trust.finish()
