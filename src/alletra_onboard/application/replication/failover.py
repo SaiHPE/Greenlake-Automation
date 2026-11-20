@@ -11,13 +11,16 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Callable
+from contextlib import ExitStack
 from datetime import UTC, datetime
 
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.replication.verify import peer_group_name
+from alletra_onboard.application.runs.apply_record import try_save_record
 from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
-from alletra_onboard.domain.approval import Approval, require_approval
+from alletra_onboard.domain.approval import Approval, SaveRecord, require_approval
+from alletra_onboard.domain.errors import DeviceError
 from alletra_onboard.domain.replication import (
     DR_ACTION_FAILOVER,
     DR_ACTION_RECOVER,
@@ -100,6 +103,93 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+def _precheck_group(record: FailoverRecord, p_side: FailoverSide, s_side: FailoverSide) -> str | None:
+    if not p_side.present:
+        return f"Group '{record.group}' is not on {record.primary_array}; nothing was done."
+    if not s_side.present:
+        return f"Group '{record.peer_group}' is not on {record.peer_array}; nothing was done."
+    if p_side.role != "Primary" or p_side.status.lower() != "started" or s_side.role != "Secondary" or s_side.status.lower() != "started":
+        return ("The group is not Primary/Started here with Secondary/Started on the peer; the test starts only from "
+                "the normal state. Nothing was done.")
+    if p_side.volumes == 0 or p_side.synced != p_side.volumes:
+        return (f"{p_side.synced} of {p_side.volumes} volume(s) Synced; the test starts only when every volume is "
+                "Synced. Nothing was done.")
+    return None
+
+
+def _checkpoint_recovery(
+    step_seq: int, observed: tuple[FailoverSide, FailoverSide], after: tuple[FailoverSide, FailoverSide],
+) -> str:
+    if_done, if_not = recovery_action(*after), recovery_action(*observed)
+    if if_done == if_not:
+        return if_done
+    return f"Check `showrcopy groups` on both arrays: if step {step_seq} took effect: {if_done} ; if not: {if_not}"
+
+
+def _checkpoint(
+    save: SaveRecord,
+    record: FailoverRecord,
+    step: FailoverStepRecord,
+    observed: tuple[FailoverSide, FailoverSide],
+    after: tuple[FailoverSide, FailoverSide],
+) -> str | None:
+    """Save the in-progress record with only the last-read sides and recovery for both outcomes."""
+    p, s = observed
+    snap = record.model_copy(update={
+        "result": "failed",
+        "failed_step": step.seq,
+        "observed_state": f"{p.array}: {p.summary} · {s.array}: {s.summary}",
+        "recovery_action": _checkpoint_recovery(step.seq, observed, after),
+        "error": (f"Interrupted during step {step.seq} ({step.title}). "
+                  "Check `showrcopy groups` on both arrays before running any recovery command."),
+    })
+    return try_save_record(save, snap)
+
+
+def _fail(
+    record: FailoverRecord,
+    step: FailoverStepRecord,
+    detail: str,
+    sides: tuple[FailoverSide, FailoverSide],
+    *,
+    aborted: bool = False,
+) -> FailoverRecord:
+    p, s = sides
+    step.outcome, step.detail, step.ended_at = "failed", detail, _now()
+    step.primary, step.peer = p, s
+    for later in record.steps[record.steps.index(step) + 1:]:
+        later.outcome = "skipped"
+    record.result = "aborted" if aborted else "failed"
+    record.failed_step = step.seq
+    record.observed_state = f"{p.array}: {p.summary} · {s.array}: {s.summary}"
+    record.recovery_action = recovery_action(p, s)
+    record.error = detail
+    record.ended_at = _now()
+    return record
+
+
+def _note_checkpoint(
+    save: SaveRecord,
+    record: FailoverRecord,
+    step: FailoverStepRecord,
+    observed: tuple[FailoverSide, FailoverSide],
+    after: tuple[FailoverSide, FailoverSide],
+) -> None:
+    if err := _checkpoint(save, record, step, observed, after):
+        note = f"Checkpoint save before step {step.seq} failed ({err}); continuing to restore."
+        step.detail = f"{step.detail} {note}".strip()
+
+
+def _async_setup(mode: str, group_obj: RcGroup | None, p_side: FailoverSide) -> tuple[str, int]:
+    """Pure helper: for an async group, compute its data-loss-bound text and period wait margin."""
+    if mode != "async":
+        return "", 0
+    bound = (f"last sync before failover {p_side.last_sync}" if p_side.last_sync
+             else "no last sync time was shown before failover")
+    period = period_seconds(group_obj.period if group_obj else "")
+    return bound, (period + PERIOD_MARGIN_S if period else 0)
+
+
 def run_failover_test(
     approval: Approval, group: str, *,
     wsapi_factory: Callable = make_wsapi_writer,
@@ -114,16 +204,14 @@ def run_failover_test(
     through the read functions. Returns, never raises for device failures: a failure is a record
     with `result` failed."""
     live = require_approval(approval)
+    save = live.require_saver()
     p_creds = live.creds_for("failover", "A")
     s_creds = live.creds_for("failover", "B")
     lim = {"stop": STOP_WAIT_S, "failover": FAILOVER_WAIT_S, "recover": RECOVER_WAIT_S, "sync": SYNC_WAIT_S,
            "restore": RESTORE_WAIT_S, "poll": POLL_S, "auto_start": AUTO_START_WAIT_S}
     lim.update(limits or {})
     record = FailoverRecord(group=group, started_at=_now())
-
-    def _p(message: str) -> None:
-        if progress:
-            progress(message)
+    _p = progress or (lambda _m: None)
 
     # ---- step 0: both arrays, in full (names, system id, the group's mode)
     step0 = FailoverStepRecord(seq=0, title="Read both arrays", where="-", action="(read)", started_at=_now(),
@@ -143,38 +231,11 @@ def run_failover_test(
     step0.primary, step0.peer, step0.seconds, step0.ended_at = p_side, s_side, round(clock() - t0, 1), _now()
     record.mode = p_side.mode
 
-    def fail(step: FailoverStepRecord, detail: str, p: FailoverSide, s: FailoverSide, *, aborted: bool = False) -> FailoverRecord:
-        step.outcome, step.detail, step.ended_at = "failed", detail, _now()
-        step.primary, step.peer = p, s
-        for later in record.steps[record.steps.index(step) + 1:]:
-            later.outcome = "skipped"
-        record.result = "aborted" if aborted else "failed"
-        record.failed_step = step.seq
-        record.observed_state = f"{p.array}: {p.summary} · {s.array}: {s.summary}"
-        record.recovery_action = recovery_action(p, s)
-        record.error = detail
-        record.ended_at = _now()
-        return record
-
-    if not p_side.present:
-        return fail(step0, f"Group '{group}' is not on {record.primary_array}; nothing was done.", p_side, s_side, aborted=True)
-    if not s_side.present:
-        return fail(step0, f"Group '{record.peer_group}' is not on {record.peer_array}; nothing was done.", p_side, s_side, aborted=True)
-    if p_side.role != "Primary" or p_side.status.lower() != "started" or s_side.role != "Secondary" or s_side.status.lower() != "started":
-        return fail(step0, "The group is not Primary/Started here with Secondary/Started on the peer; the test starts only from "
-                           "the normal state. Nothing was done.", p_side, s_side, aborted=True)
-    if p_side.volumes == 0 or p_side.synced != p_side.volumes:
-        return fail(step0, f"{p_side.synced} of {p_side.volumes} volume(s) Synced; the test starts only when every volume is "
-                           "Synced. Nothing was done.", p_side, s_side, aborted=True)
+    if err := _precheck_group(record, p_side, s_side):
+        return _fail(record, step0, err, (p_side, s_side), aborted=True)
     step0.outcome = "ok"
-    if record.mode == "async":
-        record.data_loss_bound = (f"last sync before failover {p_side.last_sync}" if p_side.last_sync
-                                  else "no last sync time was shown before failover")
-        # a periodic group may only show Synced after its next period
-        period = period_seconds(a.group(group).period if a.group(group) else "")
-        if period:
-            for key in ("sync", "restore"):
-                lim[key] = max(lim[key], period + PERIOD_MARGIN_S)
+    record.data_loss_bound, margin = _async_setup(record.mode, a.group(group), p_side)
+    lim["sync"], lim["restore"] = max(lim["sync"], margin), max(lim["restore"], margin)
 
     def both() -> tuple[FailoverSide, FailoverSide]:
         return (side_of(record.primary_array, group, read_group_fn(p_creds, group)),
@@ -215,31 +276,41 @@ def run_failover_test(
         step.primary, step.peer, step.outcome = p, s, "ok"
         step.seconds, step.ended_at = round(clock() - start, 1), _now()
 
-    with wsapi_factory(approval, "failover", "A") as wp, wsapi_factory(approval, "failover", "B") as ws:
+    t = begin(s1)
+    with ExitStack() as stack:
+        try:
+            wp = stack.enter_context(wsapi_factory(approval, "failover", "A"))
+            ws = stack.enter_context(wsapi_factory(approval, "failover", "B"))
+        except DeviceError as exc:
+            return _fail(record, s1, f"Could not open a write session before step 1: {exc}. Nothing was sent to either array.", (p_side, s_side), aborted=True)
+        if err := _checkpoint(
+            save, record, s1, (p_side, s_side),
+            (p_side.model_copy(update={"status": "Stopped"}), s_side.model_copy(update={"status": "Stopped"})),
+        ):
+            return _fail(record, s1, f"Could not save the failover record before step 1: {err}. Nothing was sent to either array.", (p_side, s_side), aborted=True)
         # 1. stop on P
-        t = begin(s1)
         _p(f"Stopping {group} on {record.primary_array}…")
         try:
             wp.stop_remote_copy_group(group)
         except Exception as exc:
-            p, s = both()
-            return fail(s1, f"{record.primary_array} refused the stop: {exc}", p, s)
+            return _fail(record, s1, f"{record.primary_array} refused the stop: {exc}", both())
         ok, p, s, _w = wait_for(lambda p, s: p.status.lower() == "stopped" and s.status.lower() == "stopped", lim["stop"])
         if not ok:
-            return fail(s1, f"Not Stopped on both sides within {lim['stop']} s.", p, s)
+            return _fail(record, s1, f"Not Stopped on both sides within {lim['stop']} s.", (p, s))
         finish(s1, p, s, t)
 
         # 2. failover on S
         t = begin(s2)
+        _note_checkpoint(save, record, s2, (p, s), (p.model_copy(update={"role": "Primary", "status": "Stopped"}),
+                                                    s.model_copy(update={"role": "Primary-Rev", "status": "Stopped"})))
         _p(f"Failing over: {record.peer_group} on {record.peer_array} becomes Primary-Rev…")
         try:
             ws.remote_copy_dr_action(record.peer_group, DR_ACTION_FAILOVER)
         except Exception as exc:
-            p, s = both()
-            return fail(s2, f"{record.peer_array} refused the failover: {exc}", p, s)
+            return _fail(record, s2, f"{record.peer_array} refused the failover: {exc}", both())
         ok, p, s, waited = wait_for(lambda p, s: s.role in ("Primary-Rev", "Primary"), lim["failover"])
         if not ok:
-            return fail(s2, f"The peer did not show Primary-Rev within {lim['failover']} s.", p, s)
+            return _fail(record, s2, f"The peer did not show Primary-Rev within {lim['failover']} s.", (p, s))
         finish(s2, p, s, t)
         record.time_to_failover_s = s2.seconds
         if record.mode == "async" and record.data_loss_bound:
@@ -264,17 +335,19 @@ def run_failover_test(
             s4.detail = (f"Recover was not needed: the array made {p.array} Secondary-Rev and started the group from "
                          f"{s.array} by itself after the failover.")
         else:
+            _note_checkpoint(save, record, s4, (p, s), (p.model_copy(update={"role": "Secondary-Rev", "status": "Started"}),
+                                                        s.model_copy(update={"role": "Primary-Rev", "status": "Started"})))
             _p(f"Recovering: {group} on {record.primary_array} becomes Secondary-Rev, syncing back…")
             try:
                 ws.remote_copy_dr_action(record.peer_group, DR_ACTION_RECOVER)
             except Exception as exc:
                 p, s = both()
                 if not recovered(p, s):
-                    return fail(s4, f"{record.peer_array} refused the recover: {exc}", p, s)
+                    return _fail(record, s4, f"{record.peer_array} refused the recover: {exc}", (p, s))
                 s4.detail = f"{record.peer_array} answered '{exc}', and the group is already in the recovered state."
             ok, p, s, _w = wait_for(recovered, lim["recover"])
             if not ok:
-                return fail(s4, f"Not Secondary-Rev on P with Primary-Rev/Started on S within {lim['recover']} s.", p, s)
+                return _fail(record, s4, f"Not Secondary-Rev on P with Primary-Rev/Started on S within {lim['recover']} s.", (p, s))
         finish(s4, p, s, t)
 
         # 5. wait for the sync back
@@ -282,7 +355,7 @@ def run_failover_test(
         _p("Waiting until every volume is Synced…")
         ok, p, s, waited = wait_for(lambda p, s: s.volumes > 0 and s.synced == s.volumes and p.synced == p.volumes, lim["sync"])
         if not ok:
-            return fail(s5, f"Not every volume was Synced within {lim['sync'] // 60} min ({s.synced}/{s.volumes} on {s.array}).", p, s)
+            return _fail(record, s5, f"Not every volume was Synced within {lim['sync'] // 60} min ({s.synced}/{s.volumes} on {s.array}).", (p, s))
         finish(s5, p, s, t)
         record.time_to_synced_s = waited
 
@@ -296,41 +369,43 @@ def run_failover_test(
         flipped = lambda p, s: p.role == "Secondary" and s.role == "Primary"
         p, s = both()
         if not flipped(p, s) and p.role != "Secondary":
+            _note_checkpoint(save, record, s6, (p, s), (p, s))
             _p(f"Restoring the natural direction: {group} Primary on {record.primary_array} again…")
             try:
                 ws.remote_copy_dr_action(record.peer_group, DR_ACTION_RESTORE)
             except Exception as exc:
                 p, s = both()
                 if not flipped(p, s) and p.role != "Secondary":
-                    return fail(s6, f"{record.peer_array} refused the restore: {exc}", p, s)
+                    return _fail(record, s6, f"{record.peer_array} refused the restore: {exc}", (p, s))
                 s6.detail = f"{record.peer_array} answered '{exc}': the array had already made it the natural primary. "
         if flipped(p, s) or p.role == "Secondary":
             ok, p, s, _w = wait_for(flipped, lim["auto_start"])
             if not ok:
-                return fail(s6, f"The array did not settle on {record.peer_array} as primary within {lim['auto_start']} s.", p, s)
+                return _fail(record, s6, f"The array did not settle on {record.peer_array} as primary within {lim['auto_start']} s.", (p, s))
             s6.title, s6.where = "Fail back to this array", "P"
             s6.action = (f"PUT /remotecopygroups/{record.peer_group} {{action: stop}} on S; "
                          f"POST /remotecopygroups/{group} {{action: 7}} on P")
             s6.cli = f"stoprcopygroup -f {record.peer_group}  (on S) ; setrcopygroup failover -f {group}  (on P)"
             s6.detail += (f"The array had made {record.peer_array} the natural primary after the sync, so the group was "
                           f"failed back the same way: stopped on {record.peer_array}, failed over on {record.primary_array}.")
+            _note_checkpoint(save, record, s6, (p, s), (p.model_copy(update={"status": "Stopped"}),
+                                                        s.model_copy(update={"status": "Stopped"})))
             _p(f"Failing back: stopping {record.peer_group} on {record.peer_array}, then failing over to {record.primary_array}…")
             try:
                 ws.stop_remote_copy_group(record.peer_group)
             except Exception as exc:
-                p, s = both()
-                return fail(s6, f"{record.peer_array} refused the stop: {exc}", p, s)
+                return _fail(record, s6, f"{record.peer_array} refused the stop: {exc}", both())
             ok, p, s, _w = wait_for(lambda p, s: p.status.lower() == "stopped" and s.status.lower() == "stopped", lim["stop"])
             if not ok:
-                return fail(s6, f"Not Stopped on both sides within {lim['stop']} s.", p, s)
+                return _fail(record, s6, f"Not Stopped on both sides within {lim['stop']} s.", (p, s))
+            _note_checkpoint(save, record, s6, (p, s), (p.model_copy(update={"role": "Primary-Rev"}), s))
             try:
                 wp.remote_copy_dr_action(group, DR_ACTION_FAILOVER)
             except Exception as exc:
-                p, s = both()
-                return fail(s6, f"{record.primary_array} refused the failover back: {exc}", p, s)
+                return _fail(record, s6, f"{record.primary_array} refused the failover back: {exc}", both())
         ok, p, s, _w = wait_for(normal, lim["restore"])
         if not ok:
-            return fail(s6, f"Not back to Primary/Started on P and Secondary/Started on S with every volume Synced within {lim['restore']} s.", p, s)
+            return _fail(record, s6, f"Not back to Primary/Started on P and Secondary/Started on S with every volume Synced within {lim['restore']} s.", (p, s))
         finish(s6, p, s, t)
 
     record.result = "passed"

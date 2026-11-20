@@ -12,4 +12,4 @@ def make_wsapi_writer(approval: Approval, purpose: Purpose, side: Side) -> Wsapi
     return WsapiWriter(creds.host, creds.username, creds.password.get_secret_value(), approval=live)
 
 
-__all__ = ["make_wsapi_writer"]
+__all__ = ["WsapiWriter", "make_wsapi_writer"]

@@ -495,3 +495,72 @@ async def test_builder_save_refused_during_preview_and_storage_applies_frozen_in
         service.start_storage_apply(run_id, approved_plan=second_id)
     assert wsapi_writes == []
 
+
+async def test_partnership_service_apply_passes_rc_partnership_approval_for_both_sides(tmp_path, monkeypatch):
+    """Stage 2 gap: partnership apply through OnboardingService issues an `rc_partnership` approval
+    carrying both A and B credentials (and refusing `rc_groups`)."""
+    from alletra_onboard.application.replication import partnership_apply as rc_partner_apply
+    from alletra_onboard.application.replication import read as replication_read
+    from alletra_onboard.domain.replication import (
+        PortRole,
+        RcipPortRequest,
+        ReplicationArrayView,
+        ReplicationOutcome,
+        ReplicationResult,
+    )
+
+    service, run_id = _service_and_run(tmp_path, replication=True)
+    intent = service.get_provisioning_intent(run_id).model_copy(deep=True)
+    assert intent.replication is not None
+    intent.replication.network = [
+        RcipPortRequest(side="A", nsp="0:4:4", ip="10.93.18.11", netmask="255.255.254.0"),
+        RcipPortRequest(side="A", nsp="1:4:4", ip="10.93.18.13", netmask="255.255.254.0"),
+        RcipPortRequest(side="B", nsp="0:1:1", ip="10.93.18.19", netmask="255.255.254.0"),
+        RcipPortRequest(side="B", nsp="1:1:1", ip="10.93.18.20", netmask="255.255.254.0"),
+    ]
+    service.store.save_provisioning_intent(run_id, intent)
+
+    view_a = ReplicationArrayView(
+        host="192.0.2.1", name="ArrayA", system_id=100, os_version="10.5.55",
+        ports={
+            "0:4:4": PortRole(nsp="0:4:4", mode="peer", state="ready", type="free", protocol="IP"),
+            "1:4:4": PortRole(nsp="1:4:4", mode="peer", state="ready", type="free", protocol="IP"),
+        },
+        vvsets={"vvs_reviewed": ["vol_reviewed"]}, volume_size_mib={"vol_reviewed": 10240},
+        cpg_free_mib={"SSD_r6": 100_000},
+    )
+    view_b = ReplicationArrayView(
+        host="192.0.2.9", name="ArrayB", system_id=200, os_version="10.5.55",
+        ports={
+            "0:1:1": PortRole(nsp="0:1:1", mode="peer", state="ready", type="free", protocol="IP"),
+            "1:1:1": PortRole(nsp="1:1:1", mode="peer", state="ready", type="free", protocol="IP"),
+        },
+        cpg_free_mib={"SSD_r6": 100_000},
+    )
+    monkeypatch.setattr(replication_read, "read_array", lambda creds, progress=None: view_a if creds.host == "192.0.2.1" else view_b)
+
+    seen_hosts: list[tuple[str, str]] = []
+
+    def fake_partner(plan, provisioning, approval, *, rc_cli_factory=None, progress=None):
+        assert plan.sets_up_partnership is True
+        a_host = approval.creds_for("rc_partnership", "A").host
+        b_host = approval.creds_for("rc_partnership", "B").host
+        with pytest.raises(ApprovalError):
+            approval.creds_for("rc_groups", "B")
+        seen_hosts.append((a_host, b_host))
+        return ReplicationResult(
+            outcomes=[ReplicationOutcome(kind="target", name="ArrayB", where="A", status="created")],
+            removals_a=["removercopytarget ArrayB"],
+        )
+
+    monkeypatch.setattr(rc_partner_apply, "apply_partnership", fake_partner)
+
+    service.start_replication_preview(run_id)
+    await service.wait(run_id)
+    plan_id = next(e for e in service.list_events(run_id) if e.event_type == "replication.previewed").data["plan"]["plan_id"]
+    service.start_replication_apply(run_id, approved_plan=plan_id)
+    await service.wait(run_id)
+
+    assert seen_hosts == [("192.0.2.1", "192.0.2.9")]
+    assert any(e.event_type == "replication.applied" for e in service.list_events(run_id))
+

@@ -201,7 +201,7 @@ def phase_apply(intent, discovery, reachable_hosts, plan):
     guard(intent)
     from alletra_onboard.domain.approval import Approval
 
-    approval = Approval("validation", "storage", {"A": intent.array})
+    approval = Approval("validation", "storage", {"A": intent.array}, save_record=lambda _m: None)
     res = prov_apply.apply_plan(prov_apply.StorageInputs(intent, discovery, reachable_hosts, plan), approval)
     for o in res.outcomes:
         print(f"   {o.kind:8} {o.name:24} -> {o.status:8} {o.detail}")

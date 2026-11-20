@@ -146,7 +146,10 @@ def main():
     if input("\nType APPLY to write these %d calls to the arrays: " % len(calls)).strip() != "APPLY":
         sys.exit("not applied")
     started = time.strftime("%H:%M:%S")
-    approval = Approval("lab", "rc_groups", {"A": intent.array, "B": intent.replication.peer})
+    approval = Approval(
+        "lab", "rc_groups", {"A": intent.array, "B": intent.replication.peer},
+        save_record=lambda m: save("result.json", m.model_dump_json(indent=2)),
+    )
     result = apply_plan(plan, intent, approval, progress=print)
     save("result.json", result.model_dump_json(indent=2))
     print("\n==== Result (apply started %s):" % started)

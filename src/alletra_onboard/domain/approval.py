@@ -8,15 +8,18 @@ stored or serialised, and compares by identity only (`eq=False`).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal
+
+from pydantic import BaseModel
 
 from alletra_onboard.domain.shared import EndpointCreds
 
 Purpose = Literal["storage", "rc_groups", "rc_partnership", "snapshots", "failover"]
 Side = Literal["A", "B"]
+SaveRecord = Callable[[BaseModel], None]
 
 
 class ApprovalError(RuntimeError):
@@ -36,6 +39,7 @@ class Approval:
     purpose: Purpose
     arrays: Mapping[Side, EndpointCreds]
     spent: bool = False
+    save_record: SaveRecord | None = None
 
     def __post_init__(self) -> None:
         self.arrays = MappingProxyType(dict(self.arrays))
@@ -44,6 +48,13 @@ class Approval:
         """Raise ApprovalError once this approval has been spent."""
         if self.spent:
             raise ApprovalError("This approval has already been used. Review and approve a new plan first.")
+
+    def require_saver(self) -> SaveRecord:
+        """Return the in-progress record saver bound by `run_approved`; never silently absent."""
+        self.require_live()
+        if self.save_record is None:
+            raise ApprovalError("This approval has no apply record saver bound.")
+        return self.save_record
 
     def creds_for(self, purpose: Purpose, side: Side) -> EndpointCreds:
         """Return the credentials for `side` when this approval is live and matches `purpose`."""

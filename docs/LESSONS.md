@@ -458,3 +458,16 @@ Rules: when a library's check is replaced by our own, write the test for each cl
 absence of the errors we thought of. Caught now by
 `tests/contract/test_http_poll.py::test_a_redirect_is_refused_and_the_token_never_reaches_its_location` and
 `tests/contract/test_auth.py::test_a_redirect_from_the_token_endpoint_is_an_error`.
+
+**51. A durability record nobody reads — or that can raise inside a DR sequence — does not protect the operator.**
+An earlier undo-journal branch wrote a separate per-object journal that no screen or document read and that
+the 20-run artifact prune deleted; meanwhile its SQLite checkpoints inside `run_failover_test` could raise
+after the DR failover and leave the pair stopped with no `FailoverRecord` or way back.
+Rules: persist the existing result model before each write and promote an orphaned record on reopen to the
+existing `*.apply.failed` / `failover.failed` event so screens, Finish and the as-built need no second
+reader; exempt undo records from artifact pruning; and in a failover sequence, a checkpoint failure before
+the first DR send aborts cleanly while a failure after it is noted and never raises out of the restore path.
+Caught now by
+`tests/unit/test_least_privilege_stage3.py::test_crash_mid_apply_storage_recovers_confirmed_removals_and_inspect_first_note`
+and
+`tests/unit/test_least_privilege_stage3.py::test_failover_save_failure_after_first_send_notes_and_completes_to_restore`.

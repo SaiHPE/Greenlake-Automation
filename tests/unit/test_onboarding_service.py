@@ -198,12 +198,22 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     # ---- R4/R7 through the service: apply the approved plan; the approval is then spent
     import pytest
 
-    from alletra_onboard.application.replication import apply as replication_apply
-    from alletra_onboard.application.replication import verify as replication_verify
-    from alletra_onboard.application.replication.steps import RESULT_ARTIFACT
+    from alletra_onboard.application.replication import (
+        apply as replication_apply,
+    )
+    from alletra_onboard.application.replication import (
+        link_check as replication_link,
+    )
+    from alletra_onboard.application.replication import (
+        verify as replication_verify,
+    )
+    from alletra_onboard.application.replication.steps import LINK_CHECK_ARTIFACT, RESULT_ARTIFACT
     from alletra_onboard.application.service import StepPreconditionError
     from alletra_onboard.domain.replication import (
         GroupVerification,
+        LinkCheck,
+        LinkCheckResult,
+        LinkPair,
         ReplicationOutcome,
         ReplicationResult,
         ReplicationVerification,
@@ -212,7 +222,8 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     applied: list = []
 
     def fake_apply(plan, provisioning, approval, *, wsapi_factory=None, progress=None):
-        assert (approval.creds_for("rc_groups", "A").host, approval.creds_for("rc_groups", "B").host) == ("a", "b") and (applied.append([a.name for a in plan.actions]) or True)
+        assert (approval.creds_for("rc_groups", "A").host, approval.creds_for("rc_groups", "B").host) == ("a", "b")
+        applied.append([a.name for a in plan.actions])
         return ReplicationResult(
             outcomes=[ReplicationOutcome(kind="group", name="HS_rcg", status="created", detail="async → ArrayB"),
                       ReplicationOutcome(kind="peer_vvset", name="HS_rc", where="B", status="created")],
@@ -223,9 +234,6 @@ async def test_replication_preview_reads_both_arrays_and_holds_the_plan(tmp_path
     monkeypatch.setattr(replication_apply, "apply_plan", fake_apply)
 
     # ---- SPEC-020 R4: on RCIP the link must have been checked in this run before the apply
-    from alletra_onboard.application.replication import link_check as replication_link
-    from alletra_onboard.application.replication.steps import LINK_CHECK_ARTIFACT
-    from alletra_onboard.domain.replication import LinkCheck, LinkCheckResult, LinkPair
 
     # BL-52: the server checks the operator's approval itself: the apply names the plan that was ticked
     approved = event.data["plan"]["plan_id"]

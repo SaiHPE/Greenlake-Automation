@@ -9,17 +9,27 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import json
 import threading
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from pydantic import BaseModel
+
 from alletra_onboard.adapters import command_log, device_trust
+from alletra_onboard.application.runs.apply_record import (
+    APPLY_RECORD_ARTIFACT,
+    APPLY_RECORDS,
+    INTERRUPTED_APPLY_ERROR,
+    PURPOSE_EVENT,
+    TERMINAL_APPLY_EVENTS,
+)
 from alletra_onboard.application.runs.event_bus import ConsoleBus, InMemoryEventBus
 from alletra_onboard.application.runs.trust import RunTrustBook
 from alletra_onboard.config import Settings, load_settings
-from alletra_onboard.domain.approval import Approval, ApprovalError, Purpose, Side
+from alletra_onboard.domain.approval import Approval, ApprovalError, Purpose, SaveRecord, Side
 from alletra_onboard.domain.models import (
     ArrayCredential,
     ArrayWorkItem,
@@ -202,6 +212,7 @@ class RunCoordinator:
         return intent
 
     def get_run(self, run_id: str) -> RunRecord:
+        self.recover_interrupted_apply(run_id)
         run = self.store.get_run(run_id)
         if run is None:
             raise RunNotFoundError(run_id)
@@ -305,15 +316,63 @@ class RunCoordinator:
         ctx.run(device_trust.bind, trust)
         self._tasks[run_id] = asyncio.create_task(self._guarded(run_id, coro, trust, approval), context=ctx)
 
+    def apply_record(self, run_id: str, event_type: str) -> SaveRecord:
+        if event_type not in APPLY_RECORDS:
+            raise ValueError(f"unknown apply record event type: {event_type}")
+        after = len(self.store.list_events(run_id))
+
+        def save(model: BaseModel) -> None:
+            blob = json.dumps({"event_type": event_type, "after": after,
+                               "payload": model.model_dump(mode="json")}).encode("utf-8")
+            self.store.save_artifact(run_id, APPLY_RECORD_ARTIFACT, blob)
+
+        return save
+
+    def close_apply_record(self, run_id: str) -> None:
+        if self.store.load_artifact(run_id, APPLY_RECORD_ARTIFACT):
+            self.store.save_artifact(run_id, APPLY_RECORD_ARTIFACT, b"")
+
+    def recover_interrupted_apply(self, run_id: str) -> bool:
+        """Promote a saved in-progress record with no live task or terminal event to `*.apply.failed`."""
+        if self.is_busy(run_id) or not (raw := self.store.load_artifact(run_id, APPLY_RECORD_ARTIFACT)):
+            return False
+        try:
+            doc = json.loads(raw.decode("utf-8"))
+            event_type, payload, after = doc["event_type"], dict(doc["payload"]), int(doc.get("after", 0))
+            phase, ok_ev, key = APPLY_RECORDS[event_type]
+        except Exception:
+            self.close_apply_record(run_id)
+            return False
+        if any(e.event_type in (ok_ev, event_type) for e in self.store.list_events(run_id)[after:]):
+            self.close_apply_record(run_id)
+            return False
+        payload.setdefault("error", None)
+        payload["error"] = payload["error"] or INTERRUPTED_APPLY_ERROR
+        message = payload["error"]
+        if event_type == "failover.failed" and payload.get("recovery_action"):
+            message = f"{message} Way back: {payload['recovery_action']}"
+        if (run := self.store.get_run(run_id)) is not None:
+            self.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
+        self.emit(run_id, phase, event_type, message, data={key: payload})
+        return True
+
+    def recover_interrupted_applies(self) -> None:
+        """Startup sweep: promote any unclosed in-progress apply left behind by a previous process."""
+        for run in self.store.list_runs():
+            if run.status == RunStatus.RUNNING:
+                self.recover_interrupted_apply(run.run_id)
+
     async def run_approved[T](self, approval: Approval, fn: Callable[[], T]) -> T:
-        """Run a write worker on its thread and spend `approval` in that thread's finally."""
+        """Run a write worker on its thread, binding its apply record and spending `approval` in finally."""
         self._dispatched.add(id(approval))
+        approval.save_record = self.apply_record(approval.run_id, PURPOSE_EVENT[approval.purpose])
 
         def _work() -> T:
             try:
                 return fn()
             finally:
                 approval.spent = True
+                approval.save_record = None
                 self._dispatched.discard(id(approval))
 
         return await asyncio.to_thread(_work)
@@ -435,4 +494,6 @@ class RunCoordinator:
         event = RunEvent(run_id=run_id, phase=phase, event_type=event_type, message=message, data=data or {})
         self._last_phase[run_id] = phase
         self.store.append_event(event)
+        if event_type in TERMINAL_APPLY_EVENTS:
+            self.close_apply_record(run_id)
         self.events.publish_sync(event)
