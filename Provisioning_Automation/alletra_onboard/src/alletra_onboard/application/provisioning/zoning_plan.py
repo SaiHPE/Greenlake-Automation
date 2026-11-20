@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable
+from typing import Literal
 
 from alletra_onboard.application.provisioning.clients import make_brocade
 from alletra_onboard.application.provisioning.hosts import (
@@ -266,7 +267,7 @@ def _suggest_alias(existing: list[str], role: str, nsp: str, alias_freq: dict[st
     return pool[0]
 
 
-def _aliased(wwpn: str, role: str, fabric: str, aliases: dict[str, list[str]],
+def _aliased(wwpn: str, role: Literal["host", "array"], fabric: str, aliases: dict[str, list[str]],
              alias_freq: dict[str, int], *, nsp: str = "", host_name: str = "",
              host_source: str = "", caution: str = "", os: str = "", placed_on_switch: str = "",
              hba_index: int = 1, serial: str = "") -> AliasedWwpn:
@@ -299,7 +300,7 @@ def build_zoning_plan(
     plan = ZoningPlan()
 
     # 1) Read each fabric switch (F1 = odd, F2 = even), read-only.
-    ns: dict[str, dict[str, dict]] = {}
+    ns: dict[str, dict[str, NsDevice]] = {}
     # Aliases are PER FABRIC. One flat pool looks harmless but is wrong twice over: an alias that
     # exists only on F2 would suppress the F1 alicreate (leaving F1's zonecreate referencing an
     # undefined name, which the switch rejects), and "uniquely bound" for suggestions must mean
@@ -538,9 +539,8 @@ def build_zoning_plan(
             for wwpn in host_by_wwpn if fabric_of(wwpn) == label
         ]
         ports = [
-            _aliased(p.wwpn, "array", label, aliases[label], alias_freq[label], nsp=p.label,
-                     caution=_caution(p),
-                     serial=(ns.get(label, {}).get(p.wwpn).array_serial if ns.get(label, {}).get(p.wwpn) else ""))
+            _aliased(p.wwpn, "array", label, aliases[label], alias_freq[label], nsp=p.label, caution=_caution(p),
+                     serial=(dev.array_serial if (dev := ns.get(label, {}).get(p.wwpn)) else ""))
             for p in array_ports if fabric_of(p.wwpn) == label
         ]
         pairs = [(host.wwpn, port.wwpn) for host in hosts for port in ports]

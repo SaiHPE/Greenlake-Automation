@@ -162,6 +162,8 @@ class ArrayCliClient:
         return self._exec(command, timeout)
 
     def _exec(self, command: str, timeout: float | None) -> str:
+        if self._client is None:
+            raise ArrayCliError("not connected")
         try:
             _stdin, stdout, stderr = self._client.exec_command(command, timeout=timeout or self.exec_timeout)
             out = stdout.read().decode("utf-8", "replace")
@@ -203,8 +205,11 @@ class ArrayCliClient:
         deadline = time.monotonic() + (timeout or self.exec_timeout)
         chunks: list[bytes] = []
         matched = False
+        transport = self._client.get_transport() if self._client is not None else None
+        if transport is None:
+            raise ArrayCliError("not connected")
         try:
-            channel = self._client.get_transport().open_session()
+            channel = transport.open_session()
             channel.settimeout(1.0)
             channel.exec_command(command)
             try:

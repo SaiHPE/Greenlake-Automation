@@ -46,7 +46,7 @@ class FileNodeStatus(BaseModel):
 
     node: int               # nodeNum
     status: str             # fileserviceStatus: NODE_RUNNING, or "stopped" when the service is off
-    ports: list[FilePortStatus] = Field(default_factory=list)   # portStatus, in the array's order
+    ports: list[FilePortStatus] = Field(default_factory=list[FilePortStatus])   # portStatus, in the array's order
 
 
 class FileCapacity(BaseModel):
@@ -71,7 +71,7 @@ class FileService(BaseModel):
     system_wwn: str = ""                # systemWWN
     domain: str = ""                    # domain: "" when the service is in no domain
     ransomware_check: bool | None = None  # enabledRansomwareCheck (10.6.0 only)
-    nodes: list[FileNodeStatus] = Field(default_factory=list)  # fileServiceSummary
+    nodes: list[FileNodeStatus] = Field(default_factory=list[FileNodeStatus])  # fileServiceSummary
     capacity: FileCapacity | None = None                        # capacitySummary
 
     @property
@@ -112,7 +112,7 @@ class ClientGroup(BaseModel):
     id: int | None = None               # id
     name: str                           # name
     state: str                          # state
-    clients: list[ClientRule] = Field(default_factory=list)   # clientInfo
+    clients: list[ClientRule] = Field(default_factory=list[ClientRule])   # clientInfo
     host_count: int | None = None       # hostCount
     share_count: int | None = None      # sharecount
 
@@ -147,9 +147,9 @@ class FileReport(BaseModel):
     os_version: str = ""                # showversion "Release version"
     array_serial: str = ""              # the serial showsys prints; every collection named it
     service: FileService | None = None  # GET /api/v3/fileservice
-    file_systems: list[FileSystemRecord] = Field(default_factory=list)   # GET /api/v3/filesystems
-    client_groups: list[ClientGroup] = Field(default_factory=list)       # GET /api/v3/filesharesettings
-    shares: list[FileShareRecord] = Field(default_factory=list)          # GET /api/v3/fileshares
+    file_systems: list[FileSystemRecord] = Field(default_factory=list[FileSystemRecord])   # GET /api/v3/filesystems
+    client_groups: list[ClientGroup] = Field(default_factory=list[ClientGroup])       # GET /api/v3/filesharesettings
+    shares: list[FileShareRecord] = Field(default_factory=list[FileShareRecord])          # GET /api/v3/fileshares
     notes: list[str] = Field(default_factory=list)                       # R2, one sentence each
 
     def clients_of(self, share: FileShareRecord) -> list[ClientRule]:

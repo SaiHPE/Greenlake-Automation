@@ -49,17 +49,18 @@ class OAuthClientCredentials:
             raise
         self._record(started, ok=response.is_success, result=f"HTTP {response.status_code}",
                      output="(token withheld)" if response.is_success else "")
-        if response.is_error:
+        if not response.is_success:
             raise GreenLakeHttpError(
                 response.status_code,
                 response.request.method,
                 response.request.url.path,
             )
         payload = response.json()
-        self._access_token = payload["access_token"]
+        token: str = payload["access_token"]
+        self._access_token = token
         expires_in = int(payload.get("expires_in", 900))
         self._expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
-        return self._access_token
+        return token
 
     def _record(self, started: float, *, ok: bool, result: str, output: str = "") -> None:
         """The token request: its path, never the form body (the client secret) or the answer (the token)."""

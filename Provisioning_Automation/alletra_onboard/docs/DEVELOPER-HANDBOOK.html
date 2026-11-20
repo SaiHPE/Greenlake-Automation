@@ -317,6 +317,7 @@ export PIP_CERT=~/hpe-ca.pem NODE_EXTRA_CA_CERTS=~/hpe-ca.pem</code></pre>
 <tr><td>The rules, the folder layout, the commands</td><td><code>AGENTS.md</code> at the repository root. Short. Coding assistants read it too.</td></tr>
 <tr><td>What is built, what is proven on hardware, what is next</td><td><code>docs/SCOPE.md</code>: the product in nine areas with a status for each.</td></tr>
 <tr><td>What the words mean (array, run, fabric, VV set, export, …)</td><td><code>CONTEXT.md</code> in the app folder, and the glossary at the end of this page.</td></tr>
+<tr><td>What good code means here, and which check enforces each rule</td><td><code>docs/STANDARD.md</code>: the engineering standard. <code>scripts/check.py</code> runs its checks.</td></tr>
 <tr><td>Why a rule exists</td><td><code>docs/LESSONS.md</code>: every incident we had and the rule it left. Read it before touching the wizards, run state or anything large.</td></tr>
 <tr><td>Why a design decision was made</td><td><code>docs/adr/</code>: fifteen short decision records, 0001 to 0015. Each gives the situation, the decision and the consequences.</td></tr>
 <tr><td>What a feature must do</td><td><code>docs/specs/</code>: twenty specs, SPEC-001 to SPEC-020, one per feature, with numbered requirements the tests refer to.</td></tr>
@@ -774,7 +775,7 @@ Decision record 0015 says the tool will one day set up Remote Copy links and tar
 </ul>
 
 <h3>Platform</h3>
-<p><code>application/platform/</code> is what every other part needs: the spreadsheet parser and the composer that lab scripts use (<code>init_sheet.py</code>); a <code>.env</code> writer that updates one key in place and never wipes a saved secret with a blank field (<code>configuring.py</code>); proxy resolution that takes the engineer's override first, then the environment, then the Windows system proxy, and never sends traffic for on-premises addresses through a proxy (<code>proxy.py</code>); a bridge to the operating system's trusted certificates (<code>tls.py</code>); and the GreenLake prerequisites with the firewall rules per region (<code>prereqs.py</code>).</p>
+<p><code>application/platform/</code> is what every other part needs: the spreadsheet parser and the composer that lab scripts use (<code>init_sheet.py</code>); a <code>.env</code> writer that updates one key in place and never wipes a saved secret with a blank field (<code>configuring.py</code>); proxy resolution that takes the engineer's override first, then the environment, then the Windows system proxy, and never sends traffic for on-premises addresses through a proxy (<code>proxy.py</code>); and the GreenLake prerequisites with the firewall rules per region (<code>prereqs.py</code>).</p>
 
 <h2 id="frontend">21. The frontend, in brief</h2>
 <p class="where">Where this fits: the browser box in section 2.</p>
@@ -1029,7 +1030,7 @@ cd frontend && npm run typecheck                                # TypeScript onl
     'app.py': 'src/alletra_onboard/api/app.py', 'schemas.py': 'src/alletra_onboard/api/schemas.py',
     'command_log.py': 'src/alletra_onboard/adapters/command_log.py',
     'init_sheet.py': 'src/alletra_onboard/application/platform/init_sheet.py', 'configuring.py': 'src/alletra_onboard/application/platform/configuring.py',
-    'proxy.py': 'src/alletra_onboard/application/platform/proxy.py', 'tls.py': 'src/alletra_onboard/application/platform/tls.py',
+    'proxy.py': 'src/alletra_onboard/application/platform/proxy.py', 'tls.py': 'src/alletra_onboard/adapters/tls.py',
     'prereqs.py': 'src/alletra_onboard/application/platform/prereqs.py',
     'asbuilt_parse.py': 'src/alletra_onboard/application/documents/asbuilt_parse.py', 'asbuilt_docx.py': 'src/alletra_onboard/application/documents/asbuilt_docx.py', 'handover.py': 'src/alletra_onboard/application/documents/handover.py'
   };

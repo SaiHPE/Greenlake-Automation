@@ -23,7 +23,7 @@ Everything lives under `Provisioning_Automation/alletra_onboard/` (called "the a
 | Open work | github.hpe.com issues (one per item, `BL-NN` titles); history in `docs/TRACKER.md` |
 | How the code is laid out | `docs/design/HLD.md`, `docs/STANDARD.md`; the full guide for new developers is `docs/DEVELOPER-HANDBOOK.html` (open it in a browser) |
 | Domain words (array, run, fabric, VV set, ...) | `CONTEXT.md` |
-| Why things are the way they are | `docs/adr/` (0001 to 0015) and `docs/specs/` |
+| Why things are the way they are | `docs/adr/` and `docs/specs/` |
 | Mistakes we already made, and the rule each one left | `docs/LESSONS.md` (read before touching wizards, state or a refactor) |
 | How the UI must look and read | `docs/UX-GUIDELINES.md` |
 | GreenLake API reference (offline mirror) | `reference/greenlake_api_docs/greenlake/` (repo root; start at `services.md` and `guides.md`) |
@@ -64,7 +64,7 @@ Everything lives under `Provisioning_Automation/alletra_onboard/` (called "the a
 src/alletra_onboard/
   domain/        models, workflow (step registry), policies (rate limits, redact), ports. No I/O.
   application/   one package per context: onboarding/, provisioning/, replication/, documents/,
-                 platform/ (sheet, proxy, TLS), runs/ (coordinator, events). service.py wires them.
+                 platform/ (sheet, proxy, prerequisites), runs/ (coordinator, events). service.py wires them.
   adapters/      one package per outside system: greenlake/, browser/ (Playwright), array/
                  (SSH + WSAPI), vcenter/, fabric/ (Brocade), hosts/ (Linux SSH, Windows WinRM),
                  persistence/ (SQLite). command_log.py records every device command for the console.
@@ -114,6 +114,8 @@ cd frontend && npm run mockups           # design mockups on :5175
 - Run lab scripts, or call an array, switch, vCenter or GreenLake, without the user asking.
 - Add a command to an allowlist, or a write path, without a test and without saying so plainly.
 - Bypass checks (`--no-verify`, skipping `check.py`) or weaken a test to make it pass.
+- Set `ALLOW_LISTS=1`, `ALLOW_CONFIG=1` or `ALLOW_DIST=1` for `check.py` unless the owner asked for
+  that change. The check prints a WARN line when one was used; say why in the pull request.
 
 ## Domain facts that are easy to get wrong
 

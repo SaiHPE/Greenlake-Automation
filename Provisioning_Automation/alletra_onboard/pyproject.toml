@@ -63,8 +63,10 @@ filterwarnings = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-# The gate is the app and its tests; lab and packaging scripts are one-off tools, not linted.
-extend-exclude = ["docs", "lab", "scripts", "build", "ui-smoke", "tools", "cloudinit", "packaging", "playwright captures"]
+# The gate is the app, its tests and the gate's own two scripts (scripts/check.py, scripts/fitness.py);
+# lab, capture and packaging scripts are one-off tools, not linted.
+extend-exclude = ["docs", "lab", "scripts/capture_*.py", "scripts/discovery", "scripts/provisioning",
+                  "scripts/validation", "build", "ui-smoke", "tools", "cloudinit", "packaging", "playwright captures"]
 
 [tool.ruff.lint]
 # ruff is pinned in the dev extra so everyone gets the same rules. The gate is the `lint` and
@@ -165,8 +167,8 @@ allow_indirect_imports = true
 unmatched_ignore_imports_alerting = "error"
 broken_contract_guidance = "STANDARD L4: network, SSH, browser and process I/O lives in an adapter. Put the call in an adapter and hand its result (or a domain error) to the application code. Do not add an ignore_imports line."
 
-# The first ignore_imports line is the rule's own allowance (the store the entrypoint opens), not
-# a violation; the rest are today's.
+# The one ignore_imports line is the rule's own allowance (the store the entrypoint opens), not a
+# violation.
 [[tool.importlinter.contracts]]
 id = "L5-entrypoints"
 name = "L5 entrypoints never import an adapter except the store they open"

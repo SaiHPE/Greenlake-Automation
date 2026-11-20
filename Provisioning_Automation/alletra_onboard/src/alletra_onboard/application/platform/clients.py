@@ -1,5 +1,5 @@
-"""Platform client seam — wraps system adapters (net probe, clock, discovery tool) for the
-platform context and entrypoints (STANDARD L3, L5)."""
+"""The system adapters the platform context and the entrypoints use: the clock, the discovery
+tool and the reachability probes (STANDARD L3, L5)."""
 
 from __future__ import annotations
 

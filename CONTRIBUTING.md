@@ -135,7 +135,7 @@ gate. From the app folder:
 | tests | the whole pytest suite; a test that reaches the network fails | fix the code, or the test if behaviour changed on purpose (say so in the pull request) |
 | deps | the import rules of `docs/STANDARD.md` (import-linter) | the contract it prints says which rule and what to do |
 | lint, complexity | ruff with the pinned version, compared per function with `quality/ceilings.toml` | fix the function the NEW or WORSE line names; delete the line a STALE one names |
-| fitness | long files may not grow, documents name only code that exists, Markdown stays in today's folders, a new lesson names its test | each line says what to do |
+| fitness | long files may not grow, a file may not gain a `type: ignore`, `noqa` or `eslint-disable`, documents name only code that exists, Markdown stays in today's folders, a new lesson names its test | each line says what to do |
 | vulture, knip | dead code in `src` and in `frontend/` | delete it or use it |
 | pyright | backend type errors per file | fix the types in the file it names |
 | types | `npm run typecheck` in `frontend/` | fix the TypeScript error |
@@ -144,13 +144,15 @@ gate. From the app folder:
 | ui-tests | the frontend unit tests (`npm test` in `frontend/`) | fix the code, or the test if behaviour changed on purpose |
 | dist | nothing under `frontend/dist` changed on your branch | it prints the command that drops those changes |
 | secrets | no token, private key or lab password in the lines you added | remove it, and tell the owner if it was ever pushed |
-| lists | (warning) a known violation your branch added to a list or raised | say why in the pull request |
+| lists | no known violation is added to a list or raised on your branch | fix the code and take the line back out; the owner alone lets one through (`ALLOW_LISTS=1`) |
+| config | the gate's scripts and the tools' settings (ruff, pyright, eslint, tsc, knip, the import contracts) are unchanged on your branch | take the change back out; a rule change is its own pull request with an ADR, and the owner lets it through (`ALLOW_CONFIG=1`) |
 | ignored | (warning) files under `src/`, `tests/` or `frontend/src/` that `.gitignore` hides | see section 9 |
 
 The rules behind these lines are in `docs/STANDARD.md` (app folder). Violations that existed when a
 check was added are listed, in `quality/ceilings.toml`, in the import contracts and in
 `frontend/eslint-suppressions.json`. The lists only get shorter: fix the code rather than add a
-line, and after a fix run `.venv/bin/python scripts/fitness.py --tighten`.
+line, and after a fix run `.venv/bin/python scripts/fitness.py --tighten`. When you move or rename
+listed code, take its entry along with `scripts/fitness.py --move 'OLD KEY' 'NEW KEY'`.
 
 It ends with a block to paste into the pull request.
 

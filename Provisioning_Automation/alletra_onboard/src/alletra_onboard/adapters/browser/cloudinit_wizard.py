@@ -27,17 +27,23 @@ from alletra_onboard.domain.cloudinit_url import is_valid_cloudinit_url
 from alletra_onboard.domain.models import ArrayWorkItem, BrowserResultStatus, NetworkConfig
 
 try:
-    from playwright.async_api import Error as PlaywrightError
-    from playwright.async_api import TimeoutError as PlaywrightTimeoutError
+    from playwright.async_api import Error as _PlaywrightError
+    from playwright.async_api import TimeoutError as _PlaywrightTimeoutError
     from playwright.async_api import async_playwright
+
+    PlaywrightError: type[Exception] = _PlaywrightError
+    PlaywrightTimeoutError: type[Exception] = _PlaywrightTimeoutError
 except ImportError:  # pragma: no cover - browser deps optional until B/C run.
     async_playwright = None
 
-    class PlaywrightError(Exception):
+    class _FallbackPlaywrightError(Exception):
         pass
 
-    class PlaywrightTimeoutError(PlaywrightError):
+    class _FallbackPlaywrightTimeoutError(_FallbackPlaywrightError):
         pass
+
+    PlaywrightError = _FallbackPlaywrightError
+    PlaywrightTimeoutError = _FallbackPlaywrightTimeoutError
 
 
 STEP_TIMEOUT_MS = 30_000
@@ -79,11 +85,12 @@ class CloudinitWizardAdapter:
             return BrowserResultStatus.WAITING_FOR_OPERATOR  # playwright not installed
 
         self._ensure_localhost_no_proxy()  # keep the local CDP connect off a lab proxy
-        attached = self.cdp_url is not None
+        cdp_url = self.cdp_url
+        attached = cdp_url is not None
         async with async_playwright() as pw:
             try:
-                if attached:
-                    browser = await pw.chromium.connect_over_cdp(self.cdp_url)
+                if cdp_url is not None:
+                    browser = await pw.chromium.connect_over_cdp(cdp_url)
                 else:
                     # Drive the already-installed Chrome/Edge (channel) when present, so no
                     # bundled/downloaded Chromium is needed; None -> Playwright's own Chromium.

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 
+from alletra_onboard.application.platform.prereqs import check_connectivity
 from alletra_onboard.application.platform.proxy import (
     DIRECT,
     ProxyResolver,
@@ -214,3 +216,20 @@ def test_win_system_proxy_reads_then_frees_a_real_pointer(monkeypatch):
 
     monkeypatch.setattr(proxy, "_winhttp", lambda: FakeWH())
     assert proxy._win_system_proxy("https://common.cloud.hpe.com") == "http://1.2.3.4:8080"
+
+
+async def test_a_proxy_answer_too_long_to_read_fails_its_rows_not_the_whole_check():
+    """A proxy that answers CONNECT with a page instead of a status line: one line past the reader's
+    limit. Every endpoint gets its own row saying so; the check itself still answers."""
+    async def page(reader, writer):
+        await reader.readline()
+        writer.write(b"x" * 100_000)
+        await writer.drain()
+        writer.close()
+
+    async with await asyncio.start_server(page, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        results = await check_connectivity("jp1", timeout=5.0, manual_proxy=f"http://127.0.0.1:{port}")
+
+    assert results
+    assert {(r.reachable, r.detail) for r in results} == {(False, "proxy error (ValueError)")}

@@ -94,7 +94,7 @@ class BrocadeClient:
     def __exit__(self, *_exc_info: object) -> None:
         self.close()
 
-    # ------------------------------------------------------------------ read-only reads
+    # ------------------------------------------------------------------ reads
 
     def read(self, command: str) -> str:
         self._guard(command)
@@ -150,6 +150,8 @@ class BrocadeClient:
             raise BrocadeError("not connected")
         try:
             transport = self._client.get_transport()
+            if transport is None:
+                raise BrocadeError("not connected")
             chan = transport.open_session()
             chan.settimeout(self.exec_timeout)
             chan.exec_command(command)

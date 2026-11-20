@@ -95,6 +95,8 @@ class WindowsHostClient:
         self._session = None
 
     def _session_for(self, url: str, ca_bundle: str | None = None):
+        if winrm is None:
+            raise WindowsHostError("WinRM support (pywinrm) is not available in this build.")
         if ca_bundle:
             # ADR 0026: the customer's device CA bundle makes 5986 a full check, with no fallback
             checks = {"server_cert_validation": "validate", "ca_trust_path": ca_bundle}

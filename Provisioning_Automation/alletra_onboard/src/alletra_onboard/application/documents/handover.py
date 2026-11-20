@@ -350,8 +350,8 @@ def cloud_alert(alerts: Iterable[Alert]) -> Alert | None:
 
 def oldest(alerts: Iterable[Alert]) -> Alert | None:
     """The alert that first happened earliest (by its first occurrence, not its ``Time``)."""
-    dated = [a for a in alerts if a.first_seen_local is not None]
-    return min(dated, key=lambda a: a.first_seen_local) if dated else None
+    dated = [(a.first_seen_local, a) for a in alerts if a.first_seen_local is not None]
+    return min(dated, key=lambda pair: pair[0])[1] if dated else None
 
 
 def _newest_first(alerts: Iterable[Alert]) -> list[Alert]:

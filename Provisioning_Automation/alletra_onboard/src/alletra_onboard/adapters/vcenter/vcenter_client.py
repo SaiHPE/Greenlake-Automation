@@ -188,7 +188,8 @@ class VCenterClient:
     def close(self) -> None:
         if self._si is not None:
             try:
-                Disconnect(self._si)
+                if Disconnect is not None:
+                    Disconnect(self._si)
             except Exception:
                 pass
             self._si = None
@@ -204,9 +205,16 @@ class VCenterClient:
         """One HostHba per ESXi FC HBA port (WWPN + host name + ESXi version)."""
         return self._recorded_read(READ_FC_HBAS, self._read_fc_hbas)
 
-    def _read_fc_hbas(self) -> list[HostHba]:
+    def _host_view(self):
+        if self._si is None or vim is None:
+            raise VCenterError("not connected")
         content = self._si.RetrieveContent()
-        view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
+        if content.viewManager is None:
+            raise VCenterError("vCenter returned no viewManager")
+        return content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
+
+    def _read_fc_hbas(self) -> list[HostHba]:
+        view = self._host_view()
         hbas: list[HostHba] = []
         # One physical port can surface as SEVERAL adapter objects — a CNA reports the same
         # portWorldWideName through more than one vmhba. Measured live on the VZ ESXi 8.0.3 hosts:
@@ -217,16 +225,17 @@ class VCenterClient:
         try:
             for esxi in view.view:
                 os_version = self._os_string(esxi)
+                host_name = str(esxi.name)
                 adapters = getattr(getattr(esxi.config, "storageDevice", None), "hostBusAdapter", []) or []
                 for hba in adapters:
-                    if isinstance(hba, vim.host.FibreChannelHba):
+                    if vim is not None and isinstance(hba, vim.host.FibreChannelHba):
                         wwpn = _wwpn_hex(hba.portWorldWideName)
-                        if (esxi.name, wwpn) in seen:
+                        if (host_name, wwpn) in seen:
                             continue
-                        seen.add((esxi.name, wwpn))
+                        seen.add((host_name, wwpn))
                         hbas.append(
                             HostHba(
-                                host_name=esxi.name,
+                                host_name=host_name,
                                 wwpn=wwpn,
                                 model=getattr(hba, "model", None),
                                 os=os_version,
@@ -244,12 +253,11 @@ class VCenterClient:
         return self._recorded_read(READ_IDENTITIES, self._read_identities)
 
     def _read_identities(self) -> list[HostIdentity]:
-        content = self._si.RetrieveContent()
-        view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
+        view = self._host_view()
         out: list[HostIdentity] = []
         try:
             for esxi in view.view:
-                ident = identity_from_host(esxi, is_iscsi=lambda hba: isinstance(hba, vim.host.InternetScsiHba))
+                ident = identity_from_host(esxi, is_iscsi=lambda hba: vim is not None and isinstance(hba, vim.host.InternetScsiHba))
                 ident.os = self._os_string(esxi)
                 out.append(ident)
         finally:
@@ -266,12 +274,11 @@ class VCenterClient:
         return self._recorded_read(READ_LUNS, self._read_luns)
 
     def _read_luns(self) -> list[EsxiLun]:
-        content = self._si.RetrieveContent()
-        view = content.viewManager.CreateContainerView(content.rootFolder, [vim.HostSystem], True)
+        view = self._host_view()
         out: list[EsxiLun] = []
         try:
             for esxi in view.view:
-                out.extend(parse_storage_device(esxi.name, getattr(esxi.config, "storageDevice", None)))
+                out.extend(parse_storage_device(str(esxi.name), getattr(esxi.config, "storageDevice", None)))
         finally:
             try:
                 view.Destroy()

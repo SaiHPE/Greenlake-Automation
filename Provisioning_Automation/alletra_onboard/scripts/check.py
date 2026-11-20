@@ -12,7 +12,8 @@ reviewer relies on. It checks, against the branch point with origin/main:
              today's offenders are listed per function in quality/ceilings.toml (scripts/fitness.py)
   complexity ruff C901, PLR0913, PLR0912, PLR0915 per function, each with today's number as its
              ceiling in quality/ceilings.toml
-  fitness    scripts/fitness.py: a source file over 500 lines may not grow, no suppress(Exception),
+  fitness    scripts/fitness.py: a long source file may not grow, no suppress(Exception),
+             a file may not gain a suppression comment (`type: ignore`, `noqa`, `eslint-disable`),
              every code path a document names exists, Markdown only in today's folders, a new
              lesson names the test or lint rule that catches its defect
   vulture    dead Python code at 80% confidence; today's findings are listed in quality/ceilings.toml
@@ -24,10 +25,15 @@ reviewer relies on. It checks, against the branch point with origin/main:
              frontend/eslint-suppressions.json
   knip       dead frontend code: unused files, exports, types and dependencies, listed like vulture's
   ui-tests   the frontend unit tests (npm test: vitest, no browser)
+  config     what the gate measures is not changed: its two scripts, the settings of ruff, pyright,
+             eslint, tsc and knip, the npm scripts, and the import contracts (deleting an
+             ignore_imports line is a fix, not a change). ALLOW_CONFIG=1 turns the failure into a
+             warning; that is the owner's call, with an ADR
   dist       frontend/dist is not changed: it is built from frontend/src after each merge
   secrets    no token, private key or lab password in the lines this branch adds
-  lists      a known violation this branch added to a list, or raised (a warning: the lists only
-             go down, so the pull request says why)
+  lists      no known violation is added to a list, or raised: the lists only go down. Every such
+             key is printed. ALLOW_LISTS=1 turns the failure into a warning; that is the owner's
+             call (a new check that brings its list), and the pull request says why
   ignored    files under src/, tests/ or frontend/src/ that .gitignore hides (a warning)
 
 A FAIL line names the rule of docs/STANDARD.md it breaks and what to do. The last line is the time
@@ -59,6 +65,11 @@ TOKEN = re.compile(r"ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|gh[osu]_[
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 PLACEHOLDER_DOMAINS = ("example.com", "example.org", "example.net")
 FIXTURES = f"{APP_REL}/tests/fixtures/"
+IMPORT_CONFIGS = ("pyproject.toml", "quality/imports-type-only.toml")
+# Files that decide, whole, what the gate measures. gate_settings() adds the parts of pyproject.toml,
+# frontend/package.json and the import contracts that do.
+GATE_FILES = ("scripts/check.py", "scripts/fitness.py", "pyrightconfig.json", "frontend/eslint.config.js",
+              "frontend/tsconfig.json")
 LINT_IMPORTS = "import sys; from importlinter.cli import lint_imports_command; sys.exit(lint_imports_command())"
 FITNESS_LINE = r"^fitness\["   # the last line scripts/fitness.py prints: listed, new, worse, stale
 LISTED = "each NEW, WORSE and STALE line above names the rule and says what to do"
@@ -68,34 +79,34 @@ PYTHON_STEPS = (
     # violation of L3 or L6 passed (seen with import-linter 2.17, grimp 3.20). Uncached takes under a second.
     ("deps", ["-c", LINT_IMPORTS, "pyproject.toml", "quality/imports-type-only.toml", "--no-logo", "--no-cache"],
      r"^Contracts: |^No matches for ignored import",
-     "STANDARD S2, L1 to L6, B1 (import-linter): an import breaks a dependency rule; the contract above "
-     "says which and what to do. `No matches for ignored import` means a listed violation is gone: "
-     "delete its ignore_imports line"),
+     ("STANDARD S2, L1 to L6, B1 (import-linter): an import breaks a dependency rule; the contract above "
+      "says which and what to do. `No matches for ignored import` means a listed violation is gone: "
+      "delete its ignore_imports line")),
     ("lint", ["scripts/fitness.py", "lint"], FITNESS_LINE, f"STANDARD L6, T3, C1, E1, E2 (ruff): {LISTED}"),
     ("complexity", ["scripts/fitness.py", "complexity"], FITNESS_LINE,
-     "STANDARD M1 (ruff C901, PLR0913, PLR0912, PLR0915): a new function stays within the limits and a "
-     "listed one may not get worse; see the lines above"),
-    ("fitness", ["scripts/fitness.py", "files", "suppress", "docs", "lessons"], FITNESS_LINE,
-     f"STANDARD M2, E2, C2, C3, C4 (scripts/fitness.py): {LISTED}"),
+     ("STANDARD M1 (ruff C901, PLR0913, PLR0912, PLR0915): a new function stays within the limits and a "
+      "listed one may not get worse; see the lines above")),
+    ("fitness", ["scripts/fitness.py", "files", "suppress", "suppressions", "docs", "lessons"], FITNESS_LINE,
+     f"STANDARD M2, E2, T3, C2, C3, C4 (scripts/fitness.py): {LISTED}"),
     ("vulture", ["scripts/fitness.py", "vulture"], FITNESS_LINE,
      "STANDARD M3 (vulture): new dead code; delete it or use it, as the lines above say"),
 )
 # name, npm arguments (or a fitness.py section), the package it needs, the output line to show, the rule
 FRONTEND_STEPS = (
     ("pyright", ["scripts/fitness.py", "pyright"], "pyright", FITNESS_LINE,
-     "STANDARD T2 (pyright): a file may not gain type errors; the lines above name the file and its "
-     "first errors"),
-    ("types", ["run", "-s", "typecheck"], "typescript", "", "the frontend does not type-check (tsc): fix the "
-     "errors above"),
+     ("STANDARD T2 (pyright): a file may not gain type errors; the lines above name the file and its "
+      "first errors")),
+    ("types", ["run", "-s", "typecheck"], "typescript", "",
+     "the frontend does not type-check (tsc): fix the errors above"),
     ("mockups", ["exec", "--no", "--", "tsc", "-p", "mockups", "--noEmit"], "typescript", "",
      "the design mockups do not type-check (tsc -p mockups): fix the errors above"),
     ("ui-lint", ["run", "-s", "lint"], "eslint", r"problems? \(|suppressions left",
-     "STANDARD T3, T4, F1, F2, F3 (eslint): fix the errors above; do not add to "
-     "frontend/eslint-suppressions.json. If it says suppressions are left, a listed violation is gone: "
-     "delete its entry with `npx eslint src --prune-suppressions` in frontend/"),
+     ("STANDARD T3, T4, F1, F2, F3 (eslint): fix the errors above; do not add to "
+      "frontend/eslint-suppressions.json. If it says suppressions are left, a listed violation is gone: "
+      "delete its entry with `npx eslint src --prune-suppressions` in frontend/")),
     ("knip", ["scripts/fitness.py", "knip"], "knip", FITNESS_LINE,
-     "STANDARD M3 (knip): a new unused file, export, type or dependency in the frontend; delete it or "
-     "use it, as the lines above say"),
+     ("STANDARD M3 (knip): a new unused file, export, type or dependency in the frontend; delete it or "
+      "use it, as the lines above say")),
     ("ui-tests", ["run", "-s", "test"], "vitest", r"^\s*Tests\s", "fix the failing frontend tests above"),
 )
 RESULTS: list[tuple[str, str, str]] = []
@@ -152,16 +163,23 @@ def tool_env() -> dict[str, str]:
     return env
 
 
-def run_step(name: str, cmd: list[str], cwd: Path, summary_line: str = "", rule: str = "",
-             quiet: str = "no errors") -> None:
+def quiet(name: str) -> str:
+    """What to show for a step that printed nothing."""
+    if name != "ui-lint":
+        return "no errors"
+    listed = sum(entry["count"] for rules in json.loads(on_disk("frontend/eslint-suppressions.json") or "{}").values()
+                 for entry in rules.values())
+    return f"{listed} listed, 0 new, 0 stale"
+
+
+def run_step(name: str, cmd: list[str], cwd: Path, summary_line: str = "", rule: str = "") -> None:
     """Runs one step. `summary_line`, a regex, picks the output line to show instead of the last one.
-    `rule` names the STANDARD rule a failure breaks and what to do about it. `quiet` is shown for a
-    step that printed nothing."""
+    `rule` names the STANDARD rule a failure breaks and what to do about it."""
     started = time.monotonic()
     proc = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False, env=tool_env())
     tail = [line for line in (proc.stdout + proc.stderr).strip().splitlines() if line.strip()]
     picked = [line.strip() for line in tail if summary_line and re.search(summary_line, line)]
-    summary = picked[-1] if picked else tail[-1] if tail else quiet
+    summary = picked[-1] if picked else tail[-1] if tail else quiet(name)
     if proc.returncode == 0:
         record(name, "PASS", f"{summary} ({time.monotonic() - started:.0f} s)")
     else:
@@ -169,18 +187,17 @@ def run_step(name: str, cmd: list[str], cwd: Path, summary_line: str = "", rule:
         record(name, "FAIL", f"{summary} ({time.monotonic() - started:.0f} s). {rule}".rstrip(" ."))
 
 
-def known_violations(text_of) -> dict[str, int] | None:
+def known_violations(text_of) -> dict[str, int]:
     """Every violation the gate's lists hold, with its number: quality/ceilings.toml, the import
-    contracts' ignore_imports and eslint's suppressions. None when there is no ceilings file."""
-    ceilings = text_of("quality/ceilings.toml")
-    if not ceilings:
-        return None
+    contracts' ignore_imports and eslint's suppressions."""
     out: dict[str, int] = {}
-    for table, entries in tomllib.loads(ceilings).items():
+    for table, entries in tomllib.loads(text_of("quality/ceilings.toml") or "").items():
+        if table == "moves":
+            continue
         for key, value in entries.items():
             out.update({f"{table}: {key}": value} if isinstance(value, int)
                        else {f"{table}: {item}": 1 for item in value})
-    for config in ("pyproject.toml", "quality/imports-type-only.toml"):
+    for config in IMPORT_CONFIGS:
         contracts = tomllib.loads(text_of(config) or "").get("tool", {}).get("importlinter", {}).get("contracts", [])
         out.update({f"{contract['id']}: {line}": 1 for contract in contracts
                     for line in contract.get("ignore_imports", [])})
@@ -193,18 +210,8 @@ def on_disk(path: str) -> str:
     return (APP / path).read_text(encoding="utf-8") if (APP / path).is_file() else ""
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--quick", action="store_true", help="skip the test suite")
-    args = parser.parse_args()
-
-    started = time.monotonic()
-    base = base_ref()
-    branch = git("rev-parse", "--abbrev-ref", "HEAD").strip()
-    head = git("log", "-1", "--format=%h %s").strip()
-    print(f"Checking {branch} @ {head}\n  against {base[:10]} (branch point with origin/main)\n")
-
-    if args.quick:
+def run_tools(quick: bool) -> None:
+    if quick:
         record("tests", "SKIP", "--quick")
     else:
         run_step("tests", [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"], APP,
@@ -225,20 +232,78 @@ def main() -> int:
         elif cmd[0] == "scripts/fitness.py":
             run_step(name, [sys.executable, *cmd], APP, summary_line, rule)
         else:
-            listed = sum(entry["count"] for rules in json.loads(on_disk("frontend/eslint-suppressions.json") or "{}")
-                         .values() for entry in rules.values())
-            run_step(name, [npm, *cmd], frontend, summary_line, rule,
-                     quiet=f"{listed} listed, 0 new, 0 stale" if name == "ui-lint" else "no errors")
+            run_step(name, [npm, *cmd], frontend, summary_line, rule)
 
-    now = known_violations(on_disk)
-    before = known_violations(lambda path: git("show", f"{base}:{APP_REL}/{path}"))
-    grown = sorted(key for key, value in (now or {}).items() if value > (before or {}).get(key, 0))
-    if before is not None and grown:
-        record("lists", "WARN", f"{len(grown)} known violation(s) added or raised since the branch point. The "
-               f"lists only go down (STANDARD, rule 3): say why in the pull request. "
-               + "; ".join(grown[:3]) + (" ..." if len(grown) > 3 else ""))
 
-    changed = changed_files(base)
+def grown(now_text_of, before_text_of) -> list[str]:
+    """The known violations listed now that were not listed before, or had a lower number. A key that
+    `fitness.py --move` recorded is compared with its old key, when that key is gone and no other
+    key claims it."""
+    now, before = known_violations(now_text_of), known_violations(before_text_of)
+    moves = tomllib.loads(now_text_of("quality/ceilings.toml") or "").get("moves", {})
+
+    def ceiling(listed: str) -> int:
+        table, _, key = listed.partition(": ")
+        old = f"{table}: {moves.get(key)}"
+        moved = old not in now and list(moves.values()).count(moves.get(key)) == 1
+        return before.get(listed, before.get(old, 0) if moved else 0)
+
+    return sorted(key for key, value in now.items() if value > ceiling(key))
+
+
+def at(base: str):
+    """Reads a file of the app folder as it was at the branch point."""
+    return lambda path: git("show", f"{base}:{APP_REL}/{path}")
+
+
+def check_lists(base: str) -> None:
+    keys = grown(on_disk, at(base)) if at(base)("quality/ceilings.toml") else []
+    count = f"{len(keys)} known violation(s) added or raised since the branch point"
+    if not keys:
+        record("lists", "PASS", "no known violation added or raised")
+    elif os.environ.get("ALLOW_LISTS") == "1":
+        record("lists", "WARN", f"{count}, let through by ALLOW_LISTS=1: say why in the pull request")
+    else:
+        print("\n".join(f"  grown: {key}" for key in keys))
+        record("lists", "FAIL", f"{count}, each printed above. STANDARD rule 3: the lists only go down. Fix the "
+               f"code and take the line back out. ALLOW_LISTS=1 lets it through; that is the owner's call")
+
+
+def gate_settings(text_of) -> dict[str, object]:
+    """What decides what the gate measures, by name. The ignore_imports lists are left out: deleting
+    a line there is a fix, and `lists` fails a line that is added."""
+    out: dict[str, object] = {path: text_of(path) or "" for path in GATE_FILES}
+    out["pyproject.toml [tool.ruff]"] = tomllib.loads(text_of("pyproject.toml") or "").get("tool", {}).get("ruff")
+    package = json.loads(text_of("frontend/package.json") or "{}")
+    out["frontend/package.json scripts"] = package.get("scripts")
+    out["frontend/package.json knip"] = package.get("knip")
+    for config in IMPORT_CONFIGS:
+        linter = tomllib.loads(text_of(config) or "").get("tool", {}).get("importlinter", {})
+        contracts = [{key: value for key, value in contract.items() if key != "ignore_imports"}
+                     for contract in linter.get("contracts", [])]
+        out[f"{config} [tool.importlinter]"] = {**linter, "contracts": contracts}
+    return out
+
+
+def changed_settings(now_text_of, before_text_of) -> list[str]:
+    now, before = gate_settings(now_text_of), gate_settings(before_text_of)
+    return sorted(name for name in now if now[name] != before[name])
+
+
+def check_config(base: str) -> None:
+    names = ", ".join(changed_settings(on_disk, at(base)))
+    if not names:
+        record("config", "PASS", "the gate's scripts and the tools' settings are unchanged")
+    elif os.environ.get("ALLOW_CONFIG") == "1":
+        record("config", "WARN", f"changed since the branch point: {names}. Let through by ALLOW_CONFIG=1: name "
+               f"the ADR in the pull request")
+    else:
+        record("config", "FAIL", f"changed since the branch point: {names}. STANDARD rule 4: what the gate "
+               f"measures changes with an ADR, not inside another change. Take the change back out. "
+               f"ALLOW_CONFIG=1 lets it through; that is the owner's call")
+
+
+def check_dist(base: str, changed: list[str]) -> None:
     dist = [f for f in changed if f.startswith(DIST)]
     if dist and os.environ.get("ALLOW_DIST") != "1":
         record("dist", "FAIL", f"{len(dist)} file(s) under frontend/dist changed. It is rebuilt after merge; "
@@ -246,6 +311,8 @@ def main() -> int:
     else:
         record("dist", "PASS", "frontend/dist untouched")
 
+
+def check_secrets(base: str, changed: list[str]) -> None:
     secrets = lab_passwords()
     leaks, people = [], []
     for path, line in added_lines(base):
@@ -262,12 +329,34 @@ def main() -> int:
     else:
         record("secrets", "PASS", f"{len(changed)} changed file(s) scanned")
 
+
+def check_ignored() -> None:
     ignored = [f for f in git("ls-files", "--others", "--ignored", "--exclude-standard", "--",
-                                f"{APP_REL}/src", f"{APP_REL}/tests", f"{APP_REL}/frontend/src").split()
+                              f"{APP_REL}/src", f"{APP_REL}/tests", f"{APP_REL}/frontend/src").split()
                if "__pycache__" not in f and not f.endswith((".pyc", ".DS_Store", "Thumbs.db"))]
     if ignored:
         record("ignored", "WARN", "hidden by .gitignore, not committed: " + ", ".join(ignored[:5])
                + (" ..." if len(ignored) > 5 else ""))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--quick", action="store_true", help="skip the test suite")
+    args = parser.parse_args()
+
+    started = time.monotonic()
+    base = base_ref()
+    branch = git("rev-parse", "--abbrev-ref", "HEAD").strip()
+    head = git("log", "-1", "--format=%h %s").strip()
+    print(f"Checking {branch} @ {head}\n  against {base[:10]} (branch point with origin/main)\n")
+
+    run_tools(args.quick)
+    check_lists(base)
+    check_config(base)
+    changed = changed_files(base)
+    check_dist(base, changed)
+    check_secrets(base, changed)
+    check_ignored()
 
     failed = [name for name, status, _ in RESULTS if status == "FAIL"]
     print("\n---- paste this into the pull request ----")

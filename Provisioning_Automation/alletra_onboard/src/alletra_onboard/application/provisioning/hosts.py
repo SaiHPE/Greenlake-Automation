@@ -13,7 +13,12 @@ import ipaddress
 from collections import OrderedDict
 
 from alletra_onboard.domain.discovery import DiscoveryReport, node_name_from_iqn
-from alletra_onboard.domain.provisioning import DeclaredHost, ProvisionableHost, persona_for_os
+from alletra_onboard.domain.provisioning import (
+    DeclaredHost,
+    HostSource,
+    ProvisionableHost,
+    persona_for_os,
+)
 from alletra_onboard.domain.shared import normalize_wwpn
 
 # The array files every login with no host object under one nameless row (discovery.UNCLAIMED_HOST).
@@ -183,7 +188,7 @@ def union_hosts(
     attempted: dict[str, set[str]] = {}  # host name -> every initiator a source gave it
     nameless = 0
 
-    def claim(name: str, source: str, *, wwpns=(), iqns=(), os_: str = "", persona: str | None = None) -> None:
+    def claim(name: str, source: HostSource, *, wwpns=(), iqns=(), os_: str = "", persona: str | None = None) -> None:
         nonlocal nameless
         if not name:
             nameless += sum(1 for w in wwpns if w not in owner) + sum(1 for i in iqns if i not in owner)

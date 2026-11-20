@@ -12,6 +12,8 @@ from datetime import UTC, datetime, timedelta
 
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.domain.array_parse import (
+    NSP,
+    blank_unset,
     parse_cli_sets,
     parse_showport_rcip,
     parse_showport_roles,
@@ -30,8 +32,6 @@ from alletra_onboard.domain.replication import (
 )
 from alletra_onboard.domain.shared import EndpointCreds
 
-_NSP = re.compile(r"^\d+:\d+:\d+$")
-
 
 def _int(text: str) -> int | None:
     try:
@@ -40,20 +40,16 @@ def _int(text: str) -> int | None:
         return None
 
 
-def _clean(value: str) -> str:
-    return "" if value in ("-", "--", "") else value
-
-
 def parse_showrctransport_rcip(text: str) -> list[RcTransport]:
     """`showrctransport -rcip`: N:S:P State HwAddr IPAddress PeerIPAddress Netmask/PrefixLen Gateway MTU Rate Duplex."""
     out: list[RcTransport] = []
     for line in (text or "").splitlines():
         p = line.split()
-        if len(p) < 6 or not _NSP.match(p[0]):
+        if len(p) < 6 or not NSP.match(p[0]):
             continue
         out.append(RcTransport(
-            nsp=p[0], state=p[1], ip=_clean(p[3]), peer_ip=_clean(p[4]), netmask=_clean(p[5]),
-            gateway=_clean(p[6]) if len(p) > 6 else "",
+            nsp=p[0], state=p[1], ip=blank_unset(p[3]), peer_ip=blank_unset(p[4]), netmask=blank_unset(p[5]),
+            gateway=blank_unset(p[6]) if len(p) > 6 else "",
         ))
     return out
 
@@ -107,7 +103,7 @@ def parse_showrcopy(text: str) -> dict:
                 continue
             targets.append(RcTarget(
                 name=tokens[0], id=_int(tokens[1]), type=tokens[2], status=tokens[3],
-                options=_clean(tokens[4]) if len(tokens) > 4 else "",
+                options=blank_unset(tokens[4]) if len(tokens) > 4 else "",
                 policy=tokens[5] if len(tokens) > 5 else "",
             ))
             continue

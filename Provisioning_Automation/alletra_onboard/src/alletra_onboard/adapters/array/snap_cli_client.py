@@ -30,7 +30,8 @@ from typing import Any
 
 from alletra_onboard.adapters import command_log
 from alletra_onboard.adapters.array.cli_client import _FORBIDDEN_CHARS, ArrayCliClient
-from alletra_onboard.domain.errors import ArrayCliError, answered_error
+from alletra_onboard.domain.array_parse import answered_error
+from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.plan_objects import SnapPlanObjects
 
 #: `help createsv`: -exp takes 1 minute to 1825 days; the form takes whole hours, 1 to 43800.

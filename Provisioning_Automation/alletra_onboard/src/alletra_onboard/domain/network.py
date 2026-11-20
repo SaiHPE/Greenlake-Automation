@@ -62,8 +62,8 @@ class PortNetworkView(BaseModel):
     mgmt_ip: str = ""
     mgmt_netmask: str = ""
     roles: dict[str, PortRole] = Field(default_factory=dict)
-    iscsi_ports: list[IscsiPortAddress] = Field(default_factory=list)
-    vlans: list[IscsiVlanInterface] = Field(default_factory=list)
+    iscsi_ports: list[IscsiPortAddress] = Field(default_factory=list[IscsiPortAddress])
+    vlans: list[IscsiVlanInterface] = Field(default_factory=list[IscsiVlanInterface])
     # Addresses the array already uses elsewhere: address -> "RCIP port 0:4:3" / "file port 0:4:1".
     other_addresses: dict[str, str] = Field(default_factory=dict)
     # iSCSI initiators logged in per port now (`showhost -d`, one row per initiator and port): the
@@ -89,7 +89,7 @@ class IscsiVlanAction(BaseModel):
 
 class IscsiNetworkPlan(BaseModel):
     array: str = ""
-    actions: list[IscsiVlanAction] = Field(default_factory=list)
+    actions: list[IscsiVlanAction] = Field(default_factory=list[IscsiVlanAction])
     blockers: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     # One sentence per port for the network team (R3). Never a switch command.

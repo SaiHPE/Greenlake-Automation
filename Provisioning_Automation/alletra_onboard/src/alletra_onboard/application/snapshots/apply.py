@@ -20,7 +20,8 @@ from datetime import UTC, datetime
 from alletra_onboard.application.provisioning.clients import make_snap_cli, make_wsapi
 from alletra_onboard.application.snapshots.read import parse_showsched, showsched_readable
 from alletra_onboard.application.snapshots.verify import check_now
-from alletra_onboard.domain.errors import ArrayCliError, answered_error
+from alletra_onboard.domain.array_parse import answered_error
+from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.plan_objects import SnapPlanObjects
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.shared import REMOVAL_ORDER, ArrayVolumeRecord, RemovalItem

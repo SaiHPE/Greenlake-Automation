@@ -6,8 +6,6 @@ importing adapter modules or transport libraries.
 
 from __future__ import annotations
 
-from typing import Any
-
 
 class DeviceError(RuntimeError):
     """Base error for failures talking to an array, switch, host, vCenter or cloud API."""
@@ -38,10 +36,10 @@ class WsapiV3TrustError(WsapiV3Error):
 class WsapiV3LoginRefused(DeviceError):
     """The array answered the login but gave no session (a 4xx or 5xx, or no `key`)."""
 
-    def __init__(self, answer: Any) -> None:
-        status = getattr(answer, "status", "unknown")
+    def __init__(self, status: int, body: object) -> None:
         super().__init__(f"the array answered the login with HTTP {status}")
-        self.answer: Any = answer
+        self.status = status
+        self.body = body
 
 
 class GreenLakeError(DeviceError):
@@ -53,7 +51,7 @@ class GreenLakeAsyncOperationError(GreenLakeError):
 
 
 class GreenLakeHttpError(GreenLakeError):
-    """An HTTP 4xx/5xx answer from GreenLake, translated out of httpx at the adapter edge."""
+    """An HTTP answer from GreenLake that is not a 2xx, translated out of httpx at the adapter edge."""
 
     def __init__(self, status_code: int, method: str, path: str, body_detail: str = "") -> None:
         self.status_code = status_code
@@ -66,8 +64,3 @@ class GreenLakeHttpError(GreenLakeError):
     @property
     def short_detail(self) -> str:
         return f"HTTP {self.status_code} from {self.method} {self.path}"
-
-
-def answered_error(text: str) -> bool:
-    """Whether an array CLI answer reported an error line."""
-    return any(line.strip().lower().startswith("error") for line in text.splitlines())

@@ -15,12 +15,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from alletra_onboard.application.runs.clients import (
-    bind_command_log,
-    bind_device_trust,
-    unbind_command_log,
-    unbind_device_trust,
-)
+from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.application.runs.event_bus import ConsoleBus, InMemoryEventBus
 from alletra_onboard.application.runs.trust import RunTrustBook
 from alletra_onboard.config import Settings, load_settings
@@ -273,9 +268,9 @@ class RunCoordinator:
         # the step's task, and every asyncio.to_thread it starts, records its commands to this run and
         # checks every device it reaches against this run's pins (ADR 0026)
         ctx = contextvars.copy_context()
-        ctx.run(bind_command_log, self.command_sink(run_id))
+        ctx.run(command_log.bind, self.command_sink(run_id))
         trust = self.trust_book(run_id)
-        ctx.run(bind_device_trust, trust)
+        ctx.run(device_trust.bind, trust)
         self._tasks[run_id] = asyncio.create_task(self._guarded(run_id, coro, trust), context=ctx)
 
     # ------------------------------------------------------------------ SPEC-019 command log
@@ -302,14 +297,14 @@ class RunCoordinator:
     def recording(self, run_id: str) -> Iterator[None]:
         """For reads made outside a spawned step (a route's to_thread, the console prompt): the command
         log and the run's device pins, as a spawned step has them."""
-        token = bind_command_log(self.command_sink(run_id))
+        token = command_log.bind(self.command_sink(run_id))
         trust = self.trust_book(run_id, step=False)
-        trust_token = bind_device_trust(trust)
+        trust_token = device_trust.bind(trust)
         try:
             yield
         finally:
-            unbind_device_trust(trust_token)
-            unbind_command_log(token)
+            device_trust.unbind(trust_token)
+            command_log.unbind(token)
             try:
                 trust.finish()
             except Exception:  # a note on the run must not replace the route's own answer

@@ -12,19 +12,11 @@ own. Kept apart from asbuilt.py, which calls `add_snapshots_section` and `snapsh
 from __future__ import annotations
 
 from alletra_onboard.application.documents.asbuilt_docx import (
-    add_h1 as _h1,
-)
-from alletra_onboard.application.documents.asbuilt_docx import (
-    add_mono as _mono,
-)
-from alletra_onboard.application.documents.asbuilt_docx import (
-    add_para as _para,
-)
-from alletra_onboard.application.documents.asbuilt_docx import (
-    add_table as _table,
-)
-from alletra_onboard.application.documents.asbuilt_docx import (
-    format_when as _when,
+    add_h1,
+    add_mono,
+    add_para,
+    add_table,
+    format_when,
 )
 from alletra_onboard.application.documents.asbuilt_model import AsBuiltData
 from alletra_onboard.application.snapshots.read import parse_createsv
@@ -145,19 +137,19 @@ def _add_rows(doc, data: AsBuiltData, view: SnapshotArrayView | None) -> None:
             held = f"{n} snapshot(s)"
         by = "configured by this run" if request.name in created else "not configured by this run"
         rows.append([request.source, request.name, f"{request.schedule_words()} ({by})", state, held])
-    _para(doc, "What the Snapshots tab asked for", bold=True)
-    _table(doc, ["Volume set or volume", "Schedule", "In words", "Status (as read)", "It holds now"], rows,
-           widths=[0.16, 0.16, 0.36, 0.18, 0.14])
+    add_para(doc, "What the Snapshots tab asked for", bold=True)
+    add_table(doc, ["Volume set or volume", "Schedule", "In words", "Status (as read)", "It holds now"], rows,
+              widths=[0.16, 0.16, 0.36, 0.18, 0.14])
     if created:
-        _para(doc, "The array will take a snapshot of each source above on its schedule until someone removes the "
-                   "schedule; each snapshot expires on its own after its Keep for.")
+        add_para(doc, "The array will take a snapshot of each source above on its schedule until someone removes the "
+                      "schedule; each snapshot expires on its own after its Keep for.")
 
 
 def _add_taken_now(doc, data: AsBuiltData, view: SnapshotArrayView | None) -> None:
-    _para(doc, "Snapshots taken now", bold=True)
+    add_para(doc, "Snapshots taken now", bold=True)
     taken = _taken_now(data)
     if not taken:
-        _para(doc, "None: this run took no snapshot now." if _results(data) else "The snapshots were not applied in this run.")
+        add_para(doc, "None: this run took no snapshot now." if _results(data) else "The snapshots were not applied in this run.")
         return
     rows = []
     for name, base in taken:
@@ -166,30 +158,30 @@ def _add_taken_now(doc, data: AsBuiltData, view: SnapshotArrayView | None) -> No
             rows.append([name, base, "—", "not on the array when this document was made"])
         else:
             rows.append([name, snap.copy_of or base, "yes" if snap.read_only else "no", snap.expires or "no expiry"])
-    _table(doc, ["Snapshot", "Of", "Read-only", "Expires (as read)"], rows, widths=[0.30, 0.25, 0.12, 0.33])
+    add_table(doc, ["Snapshot", "Of", "Read-only", "Expires (as read)"], rows, widths=[0.30, 0.25, 0.12, 0.33])
 
 
 def _add_array_schedules(doc, data: AsBuiltData, view: SnapshotArrayView | None) -> None:
-    _para(doc, "Snapshot schedules on the array", bold=True)
+    add_para(doc, "Snapshot schedules on the array", bold=True)
     if view is None:
-        _para(doc, "The array was not read, so its schedules are not listed.")
+        add_para(doc, "The array was not read, so its schedules are not listed.")
         return
     if not view.schedules:
-        _para(doc, "The array holds no schedule (showsched: No scheduled tasks listed).")
+        add_para(doc, "The array holds no schedule (showsched: No scheduled tasks listed).")
         return
     mine = schedules_created(data)
     sources = {r.source_ref for r in _requests(data)}
     zone = f" Times are in the array's own time zone, {view.time_zone}." if view.time_zone else ""
-    _para(doc, "Every schedule on the array when this document was made, as showsched printed it. A schedule keeps "
-               f"running after the run ends, until someone removes it.{zone}")
-    _table(doc, ["Schedule", "Runs", "Minute Hour Day Month Weekday", "Status", "Next run", "This run"],
-           [[s.name, s.command, s.cron, _STATUS.get(s.status.lower(), s.status), s.next_run,
-             "configured by this run" if s.name in mine else "not configured by this run"] for s in view.schedules],
-           widths=[0.14, 0.34, 0.14, 0.09, 0.14, 0.15])
+    add_para(doc, "Every schedule on the array when this document was made, as showsched printed it. A schedule keeps "
+                  f"running after the run ends, until someone removes it.{zone}")
+    add_table(doc, ["Schedule", "Runs", "Minute Hour Day Month Weekday", "Status", "Next run", "This run"],
+              [[s.name, s.command, s.cron, _STATUS.get(s.status.lower(), s.status), s.next_run,
+                "configured by this run" if s.name in mine else "not configured by this run"] for s in view.schedules],
+              widths=[0.14, 0.34, 0.14, 0.09, 0.14, 0.15])
     others = sorted({s.name for s in view.schedules if s.name not in mine
                      and parse_createsv(s.command).get("source") in sources})
     if others:
-        _para(doc, f"Also taking snapshots of the sources on the tab, not configured by this run: {', '.join(others)}.")
+        add_para(doc, f"Also taking snapshots of the sources on the tab, not configured by this run: {', '.join(others)}.")
 
 
 def _add_calls(doc, data: AsBuiltData) -> None:
@@ -201,44 +193,44 @@ def _add_calls(doc, data: AsBuiltData) -> None:
             if (action.get("kind"), action.get("name")) in made:
                 rows.append([action.get("name", ""), action.get("call", ""), action.get("cli", "")])
     if rows:
-        _para(doc, "The calls the tool made", bold=True)
-        _table(doc, ["What", "Call", "The CLI it equals"], rows, widths=[0.18, 0.46, 0.36])
+        add_para(doc, "The calls the tool made", bold=True)
+        add_table(doc, ["What", "Call", "The CLI it equals"], rows, widths=[0.18, 0.46, 0.36])
 
 
 def _add_removal(doc, data: AsBuiltData, view: SnapshotArrayView | None) -> None:
-    _para(doc, "To remove what the Snapshots step created", bold=True)
+    add_para(doc, "To remove what the Snapshots step created", bold=True)
     lines = [i["command"] for i in snapshot_removal_items(data)]
     _items, sentences = _held(data, view)
     if lines:
-        _para(doc, "The schedule first, so it takes no more snapshots, then each snapshot this run made or its schedule "
-                   "holds now. Objects that were there before the run are not listed. Review before pasting; the tool "
-                   "never runs these. The same lines head the removal set under Provisioning performed.")
-        _mono(doc, lines)
+        add_para(doc, "The schedule first, so it takes no more snapshots, then each snapshot this run made or its schedule "
+                      "holds now. Objects that were there before the run are not listed. Review before pasting; the tool "
+                      "never runs these. The same lines head the removal set under Provisioning performed.")
+        add_mono(doc, lines)
     else:
-        _para(doc, "Nothing — this run created no snapshot and no schedule.")
+        add_para(doc, "Nothing — this run created no snapshot and no schedule.")
     notes: list[str] = []
     for result in _results(data):
         notes += [n for n in result.get("removal_notes") or [] if n not in notes]
     for text in [*sentences, *notes]:
-        _para(doc, text)
+        add_para(doc, text)
 
 
 def add_snapshots_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    _h1(doc, "Snapshots")
+    add_h1(doc, "Snapshots")
     raw = data.snapshots_view
     if isinstance(raw, SnapshotArrayView) and raw.read_error:
-        _para(doc, f"The array could not be read for this section: {raw.read_error}")
+        add_para(doc, f"The array could not be read for this section: {raw.read_error}")
         warnings.append(f"The snapshots section could not read the array ({raw.read_error}); its states are missing.")
     view = _view(data)
     results = _results(data)
     if not results:
-        _para(doc, "A snapshot plan was built but not applied." if data.snapshots_plan
-              else "The Snapshots step was not run in this run.")
+        add_para(doc, "A snapshot plan was built but not applied." if data.snapshots_plan
+                 else "The Snapshots step was not run in this run.")
     else:
-        when = f" Applied at {_when(data.snapshots_applied_at)}." if data.snapshots_applied_at else ""
+        when = f" Applied at {format_when(data.snapshots_applied_at)}." if data.snapshots_applied_at else ""
         failed = [r["error"] for r in results if r.get("error")]
-        _para(doc, f"States are as read when this document was made.{when}"
-                   + (f" An apply stopped: {failed[-1]}" if failed else ""))
+        add_para(doc, f"States are as read when this document was made.{when}"
+                      + (f" An apply stopped: {failed[-1]}" if failed else ""))
     _add_rows(doc, data, view)
     _add_taken_now(doc, data, view)
     _add_array_schedules(doc, data, view)

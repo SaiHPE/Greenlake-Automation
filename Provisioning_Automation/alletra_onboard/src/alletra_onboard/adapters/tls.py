@@ -60,7 +60,7 @@ def ssl_context() -> ssl.SSLContext:
     for loader in (_load_certifi, _load_override):
         try:
             loader(context)
-        except (ssl.SSLError, OSError):  # a source we cannot read must not break the others
+        except (OSError, ValueError):  # a source we cannot read must not break the others
             continue
     return context
 
@@ -74,3 +74,35 @@ def _load_override(context: ssl.SSLContext) -> None:
     override = ca_bundle_override()
     if override:
         context.load_verify_locations(cafile=override)
+
+
+def is_tls_trust_error(exc: BaseException) -> bool:
+    """Is this failure "I could not verify the certificate", as opposed to a network or auth error?"""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, ssl.SSLCertVerificationError):
+            return True
+        text = str(current).upper()
+        if "CERTIFICATE_VERIFY_FAILED" in text or "UNABLE TO GET LOCAL ISSUER" in text:
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def tls_trust_guidance(host: str = "the HPE cloud endpoint") -> str:
+    """What the operator should actually DO about a trust failure — the error text alone reads like
+    a credential problem, which sends people to re-check their client secret for an hour."""
+    bundle = ca_bundle_override()
+    where = f" (currently using the CA bundle at {bundle})" if bundle else ""
+    return (
+        f"The TLS certificate presented for {host} could not be verified against this machine's "
+        f"trusted certificate authorities{where}. Your credentials were not the problem — they were "
+        "never sent. This is what a network that inspects TLS traffic (Zscaler, Netskope, a "
+        "corporate proxy) looks like when its root certificate is not available to the tool. "
+        "Ask IT for the corporate root CA certificate (PEM/CER), then either install it in the "
+        "Windows 'Trusted Root Certification Authorities' store (the tool reads that store) or set "
+        "ALLETRA_CA_BUNDLE to the file's path and restart the app. If this machine reaches the "
+        "internet through a proxy, also confirm the proxy setting on this screen is correct."
+    )

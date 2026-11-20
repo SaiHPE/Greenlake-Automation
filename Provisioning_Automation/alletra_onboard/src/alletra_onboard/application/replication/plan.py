@@ -120,7 +120,7 @@ def find_partnership(primary: ReplicationArrayView, peer: ReplicationArrayView, 
     forward, backward = _targets_towards(primary, peer), _targets_towards(peer, primary)
     if not forward or not backward:
         return None
-    transports = {_transport(t) for t, _ in forward + backward}
+    transports: set[Transport] = {_transport(t) for t, _ in forward + backward}
     if len(transports) != 1:
         return None
     transport = transports.pop()
@@ -447,7 +447,7 @@ def _group_calls(row: ProtectionRequest, members: list[str], target: str, local_
         + f", policies: {{autoRecover: {str(row.auto_recover).lower()}, autoSynchronize: {str(row.auto_synchronize).lower()}}}}}]"
     cli_lines = []
     if row.period_seconds:
-        cli_lines.append(f"setrcopygroup period {row.rpo_minutes * 30 // 60}m {target} {g}")
+        cli_lines.append(f"setrcopygroup period {row.period_seconds // 60}m {target} {g}")
     for pol, on in (("auto_recover", policies["autoRecover"]), ("auto_synchronize", policies["autoSynchronize"])):
         cli_lines.append(f"setrcopygroup pol {pol if on else 'no_' + pol} {g}")
     calls.append(PlannedCall(where="A", wsapi=f"PUT /remotecopygroups/{g} {{{body}}}", cli=" ; ".join(cli_lines)))

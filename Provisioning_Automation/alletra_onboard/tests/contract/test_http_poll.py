@@ -2,10 +2,13 @@ import httpx
 import pytest
 import respx
 
+from alletra_onboard.adapters import command_log
+from alletra_onboard.adapters.greenlake.devices import DevicesClient
 from alletra_onboard.adapters.greenlake.http_client import (
     GreenLakeAsyncOperationError,
     GreenLakeHttpClient,
 )
+from alletra_onboard.domain.errors import GreenLakeHttpError
 
 
 class StaticToken:
@@ -192,3 +195,24 @@ async def test_request_retries_on_429_then_succeeds(monkeypatch):
 
     assert response.status_code == 200
     assert route.call_count == 2
+
+
+@respx.mock
+async def test_a_redirect_is_refused_and_the_token_never_reaches_its_location():
+    """A proxy that intercepts TLS answers a write with a redirect to its own sign-in page. Taken as
+    the Location of an accepted write, that page would be polled with the GreenLake token."""
+    add = respx.post("https://api.example/devices/v2beta1/devices").mock(
+        return_value=httpx.Response(302, headers={"Location": "https://login.example/sso"}))
+    sign_in = respx.get("https://login.example/sso").mock(return_value=httpx.Response(200, json={"status": "SUCCEEDED"}))
+    http = GreenLakeHttpClient("https://api.example", StaticToken())
+    recorded: list[dict] = []
+    bound = command_log.bind(recorded.append)
+    try:
+        with pytest.raises(GreenLakeHttpError) as refused:
+            await http.poll_async(await DevicesClient(http).add_storage_device("SGH123", "S0B84A", {}))
+    finally:
+        command_log.unbind(bound)
+
+    assert refused.value.status_code == 302
+    assert add.call_count == 1 and not sign_in.called
+    assert [(entry["ok"], entry["result"]) for entry in recorded] == [(False, "HTTP 302")]

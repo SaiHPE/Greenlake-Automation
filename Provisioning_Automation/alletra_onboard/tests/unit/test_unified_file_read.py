@@ -33,6 +33,7 @@ from alletra_onboard.application.unified_file.read import (
     read_array_file,
     read_file_report,
 )
+from alletra_onboard.domain.array_parse import parse_file_ports
 from alletra_onboard.domain.unified_file import (
     FILE_CLI_SYNTAX,
     NODE_RUNNING,
@@ -217,6 +218,17 @@ def test_a_record_missing_a_field_it_needs_is_refused(array, resource, field, pa
     del next(iter(body["members"].values()))[field]
     with pytest.raises(UnexpectedAnswer):
         parse(body)
+
+
+def test_only_the_single_dash_showport_file_prints_reads_as_unset():
+    """`showport -file` prints one "-" for an unset Gateway or FailoverIPs (this capture, and the first
+    array's in test_storage_services). Anything else is kept as the array printed it."""
+    captured = _text("d22u27", "showport_file")
+    assert [(p.gateway, p.failover_ips) for p in parse_file_ports(captured)] == [("10.54.95.254", [])] * 4
+    unset = parse_file_ports(captured.replace(" 10.54.95.254 ", " - "))
+    assert [p.gateway for p in unset] == [""] * 4
+    doubled = parse_file_ports(captured.replace(" 10.54.95.254 ", " -- ").replace("  -\n", " --\n"))
+    assert [(p.gateway, p.failover_ips) for p in doubled] == [("--", ["--"])] * 4
 
 
 def test_an_empty_showport_file_reply_is_not_no_file_ports():
@@ -419,7 +431,7 @@ def test_a_session_turned_down_after_a_good_login_is_the_session_note(status):
 
 
 def test_a_refused_login_is_the_session_note():
-    refused = WsapiV3LoginRefused(V3Answer(401, {"code": 5, "desc": "invalid username or password"}))
+    refused = WsapiV3LoginRefused(401, {"code": 5, "desc": "invalid username or password"})
     report, _ = _d22u27(login_error=refused)
     assert report.notes == [SESSION_REFUSED]
 

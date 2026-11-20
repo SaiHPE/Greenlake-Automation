@@ -158,7 +158,7 @@ class SnapshotRequest(BaseModel):
     every: int | None = None
     unit: SnapshotUnit | None = None
     at_hour: int = 0
-    days: list[int] = Field(default_factory=list)   # 0 = Sunday … 6 = Saturday; empty = every day
+    days: list[int] = Field(default_factory=list[int])   # 0 = Sunday … 6 = Saturday; empty = every day
     expire_hours: int
     retain_hours: int | None = None
     read_only: bool = True
@@ -244,7 +244,7 @@ class SnapshotRequest(BaseModel):
 class SnapshotIntent(BaseModel):
     """The Snapshots tab, parsed: one request per row."""
 
-    requests: list[SnapshotRequest] = Field(default_factory=list)
+    requests: list[SnapshotRequest] = Field(default_factory=list[SnapshotRequest])
 
 
 class ArraySchedule(BaseModel):
@@ -275,9 +275,9 @@ class SnapshotArrayView(BaseModel):
     name: str = ""
     os_version: str = ""
     time_zone: str = ""                     # as the array prints it: Asia/Calcutta and Asia/Kolkata both occur
-    volumes: list[ArrayVolumeRecord] = Field(default_factory=list)
+    volumes: list[ArrayVolumeRecord] = Field(default_factory=list[ArrayVolumeRecord])
     vvsets: dict[str, list[str]] = Field(default_factory=dict)
-    schedules: list[ArraySchedule] = Field(default_factory=list)
+    schedules: list[ArraySchedule] = Field(default_factory=list[ArraySchedule])
     cpg_free_mib: dict[str, int] = Field(default_factory=dict)
     retention_max_hours: int = 0            # GET /system VVRetentionTimeMax / 3600; the lock's cap, once allowed
     read_error: str = ""
@@ -303,7 +303,7 @@ class SnapshotAction(BaseModel):
 
 
 class SnapshotPlan(BaseModel):
-    actions: list[SnapshotAction] = Field(default_factory=list)
+    actions: list[SnapshotAction] = Field(default_factory=list[SnapshotAction])
     notes: list[str] = Field(default_factory=list)
     blockers: list[str] = Field(default_factory=list)
     error: str | None = None
@@ -322,8 +322,8 @@ class SnapshotOutcome(BaseModel):
 class SnapshotResult(BaseModel):
     """What one apply did (SPEC-023 R5) and the lines that undo it (R6), in REMOVAL_ORDER."""
 
-    outcomes: list[SnapshotOutcome] = Field(default_factory=list)
-    removals: list[RemovalItem] = Field(default_factory=list)
+    outcomes: list[SnapshotOutcome] = Field(default_factory=list[SnapshotOutcome])
+    removals: list[RemovalItem] = Field(default_factory=list[RemovalItem])
     removal_notes: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     schedules_created: list[str] = Field(default_factory=list)
@@ -348,6 +348,6 @@ class SnapshotRowCheck(BaseModel):
 
 
 class SnapshotVerification(BaseModel):
-    rows: list[SnapshotRowCheck] = Field(default_factory=list)
+    rows: list[SnapshotRowCheck] = Field(default_factory=list[SnapshotRowCheck])
     notes: list[str] = Field(default_factory=list)
     error: str | None = None

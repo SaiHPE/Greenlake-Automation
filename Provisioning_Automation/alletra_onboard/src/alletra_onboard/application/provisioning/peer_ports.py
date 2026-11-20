@@ -17,7 +17,7 @@ from collections.abc import Callable
 
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.provisioning.discovery import UNCLAIMED_HOST, parse_showhost
-from alletra_onboard.domain.array_parse import parse_showport_roles
+from alletra_onboard.domain.array_parse import NSP, parse_showport_roles
 from alletra_onboard.domain.peer_ports import (
     PeerPortAction,
     PeerPortCheck,
@@ -30,7 +30,6 @@ from alletra_onboard.domain.peer_ports import (
 )
 from alletra_onboard.domain.shared import EndpointCreds
 
-_NSP = re.compile(r"^\d+:\d+:\d+$")
 _WWN = re.compile(r"^[0-9A-Fa-f]{16}$")
 # `showport -par` on rack13-ARCUS (OS 10.6.0) and in the CLI's own help:
 # N:S:P Connmode ConnType CfgRate MaxRate Class2 UniqNodeWwn VCN IntCoal TMWO
@@ -89,7 +88,7 @@ def parse_showport_par(text: str) -> dict[str, PortParams]:
             header_ok = p[:3] == _PAR_HEADER
             intcoal_at = p.index("IntCoal") if "IntCoal" in p else None
             continue
-        if header_ok and len(p) >= 3 and _NSP.match(p[0]):
+        if header_ok and len(p) >= 3 and NSP.match(p[0]):
             intcoal = p[intcoal_at] if intcoal_at is not None and len(p) > intcoal_at else ""
             out[p[0]] = PortParams(nsp=p[0], connmode=p[1], conntype=p[2],
                                    intcoal=intcoal if intcoal in ("enabled", "disabled") else "")
@@ -104,7 +103,7 @@ def parse_showport_c(text: str) -> dict[str, str]:
     out: dict[str, str] = {}
     for line in (text or "").splitlines():
         p = line.split()
-        if len(p) >= 3 and _NSP.match(p[0]) and p[-1] in ("allowed", "prohibited"):
+        if len(p) >= 3 and NSP.match(p[0]) and p[-1] in ("allowed", "prohibited"):
             out[p[0]] = p[-1]
     return out
 
@@ -118,7 +117,7 @@ def parse_showport_peer(text: str) -> list[PeerPortState]:
     out: list[PeerPortState] = []
     for line in (text or "").splitlines():
         p = line.split()
-        if len(p) >= 5 and _NSP.match(p[0]):
+        if len(p) >= 5 and NSP.match(p[0]):
             out.append(PeerPortState(
                 nsp=p[0], mode=p[1], state=p[2],
                 node_wwn=p[3].upper() if _WWN.match(p[3]) else "",
@@ -151,7 +150,7 @@ def _exports_by_port(showvlun_a: str) -> dict[str, list[str]]:
         p = line.split()
         if len(p) < 7 or not p[0].isdigit():
             continue
-        idx = next((i for i, tok in enumerate(p) if _NSP.match(tok)), None)
+        idx = next((i for i, tok in enumerate(p) if NSP.match(tok)), None)
         if idx is None or idx < 4:
             continue
         volume = " ".join(p[1:idx - 2])

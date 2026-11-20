@@ -22,7 +22,7 @@ What the code does today (checked against `main` at b7006373, 2026-11-17):
 
 | Endpoint | Code (`src/alletra_onboard/`) | Today |
 |---|---|---|
-| GreenLake API, token, clock check | `adapters/greenlake/http_client.py`, `adapters/greenlake/auth.py`, `adapters/system/clock.py` | `verify=ssl_context()` from `application/platform/tls.py`: the Windows store, certifi and an optional PEM (`ALLETRA_CA_BUNDLE`, `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`). No setting turns it off. |
+| GreenLake API, token, clock check | `adapters/greenlake/http_client.py`, `adapters/greenlake/auth.py`, `adapters/system/clock.py` | `verify=ssl_context()` from `adapters/tls.py`: the Windows store, certifi and an optional PEM (`ALLETRA_CA_BUNDLE`, `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`). No setting turns it off. |
 | DSCC | `adapters/browser/dscc_setup.py` | Attaches over CDP to the operator's own Chrome on `localhost:9222`, started with no certificate flags. Chrome checks the certificate. |
 | Setup wizard (`https://169.254.x.x` or `fe80::`) | `adapters/browser/cloudinit_wizard.py` | `ignore_https_errors=True` in the browser the tool launches; attached over CDP, the operator's Chrome shows its own warning. `domain/cloudinit_url.py` refuses any address that is not link-local. The wizard is given network values only; no password is typed. |
 | Array WSAPI (the array and the peer) | `adapters/array/wsapi_client.py` | `HPE3ParClient(..., secure=False, suppress_ssl_warnings=True)`. The SDK passes `secure` to `requests` as `verify`; `suppress_ssl_warnings` turns off urllib3's warnings for the whole process. The admin password, then the session key, go to whoever answers. |

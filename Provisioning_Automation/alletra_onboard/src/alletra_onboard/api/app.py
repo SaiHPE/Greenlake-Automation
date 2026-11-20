@@ -77,8 +77,10 @@ from alletra_onboard.api.schemas import (
     TrustedDevicesResponse,
     VerifyStepRequest,
 )
+from alletra_onboard.application.onboarding.clients import launch_debug_browser
 from alletra_onboard.application.onboarding.health import greenlake_check
 from alletra_onboard.application.onboarding.preflight_service import PreflightService
+from alletra_onboard.application.platform import clients as platform_clients
 from alletra_onboard.application.platform import prereqs
 from alletra_onboard.application.platform.configuring import (
     masked_gl_credentials,
@@ -100,6 +102,7 @@ from alletra_onboard.application.platform.proxy import (
     normalize_proxy,
     os_system_proxy,
 )
+from alletra_onboard.application.provisioning.clients import wsapi_capability
 from alletra_onboard.application.provisioning.zoning_plan import (
     alias_name_warnings,
     render_commands,
@@ -114,11 +117,6 @@ from alletra_onboard.application.service import (
     RunBusyError,
     RunNotFoundError,
     StepPreconditionError,
-    clock_status,
-    launch_debug_browser,
-    launch_discovery_tool,
-    sync_clock,
-    wsapi_capability,
 )
 from alletra_onboard.config import load_settings
 from alletra_onboard.domain.models import ClockStatus, ClockSyncResult, RunMode
@@ -838,16 +836,16 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     @app.post("/tools/discovery/launch", response_model=DiscoveryToolResponse)
     async def discovery_launch() -> DiscoveryToolResponse:
         # Runs on the jump box; opens the on-Desktop HPE Discovery Tool .exe for the operator.
-        return DiscoveryToolResponse(**launch_discovery_tool())
+        return DiscoveryToolResponse(**platform_clients.launch_discovery_tool())
 
     @app.get("/system/clock", response_model=ClockStatus)
     async def get_clock(url: str | None = None) -> ClockStatus:
-        return await clock_status(url)
+        return await platform_clients.clock_status(url)
 
     @app.post("/system/clock/sync", response_model=ClockSyncResult)
     async def post_clock_sync(url: str | None = None) -> ClockSyncResult:
         try:
-            return await sync_clock(url)
+            return await platform_clients.sync_clock(url)
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except (RuntimeError, OSError) as exc:

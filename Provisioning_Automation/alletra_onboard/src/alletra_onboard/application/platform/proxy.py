@@ -14,14 +14,13 @@ import fnmatch
 import ipaddress
 import os
 import sys
+import urllib.request
+from collections.abc import Callable
 from urllib.parse import urlparse
 
-try:
-    from urllib.request import getproxies_registry
-except ImportError:  # Windows-only in the standard library; never called elsewhere (see _IS_WINDOWS)
-
-    def getproxies_registry() -> dict[str, str]:
-        return {}
+getproxies_registry: Callable[[], dict[str, str]] = getattr(
+    urllib.request, "getproxies_registry", dict,
+)
 
 _IS_WINDOWS = sys.platform == "win32"
 

@@ -19,7 +19,7 @@ import os
 import socket
 import ssl
 from contextvars import ContextVar, Token
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from alletra_onboard.domain.trust import (
     DeviceKey,
@@ -134,7 +134,13 @@ def _known_hosts_name(host: str, port: int) -> str:
     return host if port == 22 else f"[{host}]:{port}"
 
 
-class FirstContactPolicy(paramiko.MissingHostKeyPolicy if paramiko is not None else object):
+if TYPE_CHECKING:
+    from paramiko import MissingHostKeyPolicy as _MissingHostKeyPolicy
+else:
+    _MissingHostKeyPolicy = paramiko.MissingHostKeyPolicy if paramiko is not None else object
+
+
+class FirstContactPolicy(_MissingHostKeyPolicy):
     """Called by paramiko only when no key is known for the host: the run's first contact, or a pin
     whose key does not decode. The key goes through `check()`: recorded on first contact, refused when
     another read pinned a different key meanwhile or the pin cannot be read."""
@@ -154,11 +160,13 @@ def open_ssh(host: str, port: int, *, device: str, username: str, password: str,
     difference. paramiko checks the host key before it authenticates, so a refused device never gets
     the password. Every SSH client in the tool connects through here.
     """
+    if paramiko is None:
+        raise RuntimeError("paramiko is required for SSH connections")
     client = paramiko.SSHClient()
     book = current()
     pin = book.pin(TrustKind.SSH, host, port) if book is not None else None
     stored = _stored_ssh_key(pin) if pin is not None else None
-    if stored is not None:
+    if pin is not None and stored is not None:
         client.get_host_keys().add(_known_hosts_name(host, port), pin.key.key_type, stored)
     else:
         pin = None    # nothing preloaded: the policy meets the key, and `check()` compares it with the pin
@@ -181,7 +189,7 @@ def open_ssh(host: str, port: int, *, device: str, username: str, password: str,
 
 def _stored_ssh_key(pin: DevicePin):
     """The pinned key as paramiko compares it, or None when the run's record of it cannot be read."""
-    if not key_readable(pin.key):
+    if paramiko is None or not key_readable(pin.key):
         return None
     try:
         return paramiko.PKey.from_type_string(pin.key.key_type, base64.b64decode(pin.key.data))

@@ -119,7 +119,7 @@ class _FakeClient:
 
 
 def _factory(client):
-    def make(*, host, username, password):
+    def make(creds):
         return client
 
     return make
@@ -315,8 +315,8 @@ def _file_array(array: str = "d22u27", **override):
 def _verify_file(outputs, v3, **client):
     seen = []
 
-    def v3_factory(*, host, username, password):
-        seen.append((host, username, password))
+    def v3_factory(creds):
+        seen.append((creds.host, creds.username, creds.password.get_secret_value()))
         return v3
 
     report = verify(_item(), "3paradm", "pw", client_factory=_factory(_FakeClient(outputs, **client)),
