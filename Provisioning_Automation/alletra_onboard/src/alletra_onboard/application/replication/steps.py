@@ -13,7 +13,9 @@ from functools import partial
 from alletra_onboard.application.replication import apply as replication_apply
 from alletra_onboard.application.replication import failover as replication_failover
 from alletra_onboard.application.replication import link_check as replication_link
-from alletra_onboard.application.replication import partnership as replication_partnership
+from alletra_onboard.application.replication import (
+    partnership_apply as replication_partnership_apply,
+)
 from alletra_onboard.application.replication import plan as replication_plan
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.replication import verify as replication_verify
@@ -290,7 +292,7 @@ class ReplicationSteps:
             loop.call_soon_threadsafe(coord.emit, run.run_id, phase, "phase.progress", message)
 
         result = await asyncio.to_thread(partial(
-            replication_partnership.apply_partnership if plan.sets_up_partnership else replication_apply.apply_plan,
+            replication_partnership_apply.apply_partnership if plan.sets_up_partnership else replication_apply.apply_plan,
             plan, intent, progress=progress))
         result.notes.extend(notes or [])
         # the approval is spent: a second apply needs a fresh read and plan

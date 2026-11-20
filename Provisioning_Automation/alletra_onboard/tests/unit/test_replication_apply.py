@@ -256,9 +256,9 @@ class _StubRcSdk:
 
 
 def _wsapi(stub):
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+    from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
 
-    c = WsapiClient("192.0.2.1", "u", "p")
+    c = WsapiWriter("192.0.2.1", "u", "p")
     c._client = stub
     return c
 

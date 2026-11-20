@@ -334,7 +334,7 @@ def main():
         shutil.rmtree(OUT)
     os.makedirs(OUT)
     fl.OUT = pl.OUT = OUT
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+    from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
 
     password = fl.lab_secret("RCIP_PAIR_PW")
     if not check("the app answers on %s" % fl.APP, api("GET", "/app/profile")[0] == 200):
@@ -346,7 +346,7 @@ def main():
     if not check("the pair has no partnership and nothing zz_rc_*", ok and not left, why + "; ".join(left)):
         sys.exit("Not at the starting point")
     try:
-        with WsapiClient(A_HOST, "3paradm", password) as w:
+        with WsapiWriter(A_HOST, "3paradm", password) as w:
             check("volume %s and set %s created" % (pl.VOL, pl.VVSET),
                   w.ensure_volume(pl.VOL, "SSD_r6", 1024, "tpvv") == "created" and w.ensure_volume_set(pl.VVSET, [pl.VOL]) == "created")
         for scenario in (mixed, half, gateway, peer):

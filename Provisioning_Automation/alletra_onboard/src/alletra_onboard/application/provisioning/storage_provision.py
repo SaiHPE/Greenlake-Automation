@@ -1,8 +1,8 @@
-"""Storage provisioning: host(s) -> host set -> volumes -> (optional VV set) -> export (VLUN).
+"""Storage provisioning planning (read-only; STANDARD S2): host(s) -> host set -> volumes ->
+(optional VV set) -> export (VLUN).
 
-build_plan() reads the array and produces a preview (what will be created, what already exists) for
-the operator to confirm. apply_plan() executes it idempotently — each create reports created/exists,
-never failing on a re-run (EXISTENT_HOST / EXISTENT_SV / EXISTENT_VLUN).
+build_plan() reads the array through `WsapiReader` and produces a preview (what will be created,
+what already exists) for the operator to confirm. Executing the plan lives in `apply.py`.
 
 Modelled on the verified design: ONE host definition per ESXi server carrying ALL its FC WWNs at
 the VMware persona, grouped in the cluster host set, with volumes exported to the host SET so every
@@ -18,7 +18,6 @@ from alletra_onboard.application.provisioning.clients import make_wsapi
 from alletra_onboard.application.provisioning.hosts import declared_mismatches, union_hosts
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import (
-    ActionOutcome,
     ArrayHostRecord,
     DiscoveredHostBrief,
     ExportRequest,
@@ -26,8 +25,6 @@ from alletra_onboard.domain.provisioning import (
     PlanState,
     ProvisioningIntent,
     ProvisioningPlan,
-    ProvisioningResult,
-    RemovalItem,
     VlunTemplate,
     VolumeRequest,
     host_name_problem,
@@ -35,15 +32,15 @@ from alletra_onboard.domain.provisioning import (
     volume_set_name_problem,
     volume_too_large,
 )
-from alletra_onboard.domain.shared import REMOVAL_ORDER, ArrayVolumeRecord, normalize_wwpn
+from alletra_onboard.domain.shared import ActionKind, ArrayVolumeRecord, normalize_wwpn
 
 
-def _union(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None):
+def _union(intent: ProvisioningIntent | None, discovery: DiscoveryReport, zoning_plan: dict | None):
     """SPEC-003 R4: the one host union plan, apply, verification and the dropdown all derive from."""
     return union_hosts(discovery, getattr(intent, "declared_hosts", None) or [], zoning_plan)
 
 
-def _hosts_by_name(
+def hosts_by_name(
     discovery: DiscoveryReport, intent: ProvisioningIntent | None = None, zoning_plan: dict | None = None,
 ) -> OrderedDict[str, list[str]]:
     """host name -> FC WWPNs, for every host the run can name (vCenter, sheet, array, fabric). An
@@ -157,7 +154,7 @@ def _selected_hosts(
     ideal subset) — never the whole inventory. On a shared vCenter, creating an array host object for
     every ESXi server in the inventory is pollution, not provisioning. No host sets, or host sets with
     no members, select no hosts (SPEC-005)."""
-    all_hosts = _hosts_by_name(discovery, intent, zoning_plan)
+    all_hosts = hosts_by_name(discovery, intent, zoning_plan)
     wanted = {m for hs in intent.host_sets for m in _members_for(hs, all_hosts)}
     return OrderedDict((n, w) for n, w in all_hosts.items() if n in wanted)
 
@@ -197,7 +194,7 @@ def _fabric_logins(discovery: DiscoveryReport, zoning_plan: dict | None) -> dict
     for hba in discovery.host_hbas:
         if hba.fabric:
             array_side.setdefault(hba.host_name, set()).add(hba.fabric)
-    port_fabric = {p.label: p.fabric for p in discovery.array_ports if getattr(p, "fabric", None)}
+    port_fabric: dict[str, str] = {p.label: p.fabric for p in discovery.array_ports if p.fabric}
     for ah in discovery.array_hosts:
         for ports in list(ah.wwpns.values()) + list(ah.iqns.values()):
             for port in ports:
@@ -421,7 +418,7 @@ def build_plan(
         )
         return plan
 
-    def add(kind: str, name: str, description: str, verdict: tuple[PlanState, str], detail: dict) -> None:
+    def add(kind: ActionKind, name: str, description: str, verdict: tuple[PlanState, str], detail: dict) -> None:
         st, reason = verdict
         plan.actions.append(PlannedAction(
             kind=kind, name=name, description=description, state=st, reason=reason,
@@ -650,216 +647,6 @@ def _judge_export(
     return "exists", f"already exported at {luns}"
 
 
-def apply_plan(
-    intent: ProvisioningIntent,
-    discovery: DiscoveryReport,
-    *,
-    reachable_hosts: set[str],
-    wsapi_factory: Callable = make_wsapi,
-    zoning_plan: dict | None = None,
-) -> ProvisioningResult:
-    """Create the objects. `reachable_hosts` and `zoning_plan` must be the SAME inputs `build_plan`
-    was given: apply re-derives everything from the intent rather than replaying the plan, so
-    without them here the held-back exports would be cosmetic and the host list would differ."""
-    result = ProvisioningResult()
-    intent, _ = planned_host_names(intent, discovery, zoning_plan)
-    empty_sets = _empty_host_sets(intent)
-    if empty_sets:
-        result.error = "; ".join(_empty_set_blocker(n) for n in empty_sets)
-        return result
-    hosts = _selected_hosts(intent, discovery, zoning_plan)
-    if not hosts:
-        result.error = "No host is selected for any host set — refusing to provision with no hosts."
-        return result
-    try:
-        exports = _resolve_exports(intent)
-    except ExportDefaultError as exc:
-        result.error = str(exc)
-        return result
-    exports, _held = _reachable_targets(exports, intent, hosts, reachable_hosts)
-
-    personas = _persona_by_host(discovery, intent, zoning_plan)
-    iqns_of = _iqns_by_host(discovery, intent, zoning_plan)
-    # SPEC-007 R6: a failed apply has a removal set too. Writes stop at the first error, inside the
-    # array session, so the undo can still be read for what was made before it.
-    doing = ("", "")                              # (kind, name) of the object being written, named in the error
-    templates: list[VlunTemplate] | None = None   # the exports before this apply's; None = not reached
-    export_outcomes: list[ActionOutcome] = []
-    failure_notes: list[str] = []
-    try:
-        with wsapi_factory(intent.array) as array:
-            try:
-                for host_name, wwns in hosts.items():
-                    doing = ("host", host_name)
-                    persona = personas.get(host_name, "VMware")
-                    if wwns or not iqns_of.get(host_name):
-                        # FC, or an array host with only an NVMe NQN (ensure_host with no WWN = exists, no write)
-                        status = array.ensure_host(host_name, wwns, persona=persona)
-                    else:
-                        status = array.ensure_iscsi_host(host_name, iqns_of[host_name], persona=persona)
-                    result.outcomes.append(ActionOutcome(kind="host", name=host_name, status=status))
-
-                for hs in intent.host_sets:
-                    doing = ("hostset", hs.name)
-                    status = array.ensure_host_set(hs.name, _members_for(hs, hosts))
-                    result.outcomes.append(ActionOutcome(kind="hostset", name=hs.name, status=status))
-
-                for v in intent.volumes:
-                    doing = ("volume", v.name)
-                    status = array.ensure_volume(v.name, v.cpg, v.size_mib, v.provisioning_type)
-                    result.outcomes.append(ActionOutcome(kind="volume", name=v.name, status=status))
-
-                for vvset, vols in _vvsets(intent).items():
-                    doing = ("vvset", vvset)
-                    status = array.ensure_volume_set(vvset, vols)
-                    result.outcomes.append(ActionOutcome(kind="vvset", name=vvset, status=status))
-
-                # SPEC-012 R1 (P-8): the Result row names the object the array holds, not only the verb.
-                # One read-back of hosts and volumes; sets are described from what was sent.
-                doing = ("", "")
-                _describe_outcomes(result.outcomes, array.hosts(), array.volumes(),
-                                   {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}, _vvsets(intent))
-
-                # SPEC-001 R11 (P-21, live 2026-09-14 12:39): judge every export against the templates BEFORE
-                # sending it, exactly as the plan did. `createVLUN(auto=True)` never raises EXISTENT_VLUN —
-                # the array just picks the next LUN — so the conflict-swallow that makes the other ensure_*
-                # idempotent never fired here, and an export the approved plan called Exists (LUN 0, 1) was
-                # presented a second time at LUN 3, 4. One read; skip what exists, refuse what conflicts,
-                # complete a partial set member by member (never re-sending the whole set).
-                vvsets = _vvsets(intent)
-                members_of = {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}
-                templates = array.vlun_templates()
-                for ex in exports:
-                    doing = ("vlun", f"{ex.source_name} to {ex.target_name}")
-                    verdict, reason = _judge_export(ex, vvsets, templates, members_of.get(ex.target_name, []))
-                    if verdict == "exists":
-                        export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status="exists", detail=reason))
-                        continue
-                    if verdict == "conflict":
-                        export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status="failed", detail=reason))
-                        continue
-                    if verdict == "update":
-                        volumes = list(vvsets.get(ex.source_name, []))
-                        present = {t.volume for t in templates if t.target == ex.target_ref and t.volume in volumes}
-                        statuses = [
-                            array.ensure_vlun(v, ex.target_ref, lun=None if ex.lun is None else ex.lun + volumes.index(v))
-                            for v in volumes if v not in present
-                        ]
-                        status = "created" if "created" in statuses else "exists"
-                    else:
-                        status = array.ensure_vlun(ex.source_ref, ex.target_ref, lun=ex.lun)
-                    export_outcomes.append(ActionOutcome(kind="vlun", name=ex.source_name, status=status))
-
-                # R8: "created" is the array's word; read the templates back ONCE and hold it to it.
-                doing = ("", "")
-                after = array.vlun_templates() if exports else templates
-                if exports:
-                    _confirm_exports(exports, export_outcomes, vvsets, after)
-            except Exception as exc:  # stop at the first failure; the undo still covers what was made
-                kind, name = doing
-                result.error = f"Stopped while creating {_LABEL[kind]} {name}: {exc}" if kind else str(exc)
-                if kind in _REMOVE:
-                    # The array may have made it before the answer was lost (a timeout, a 5xx). It is not
-                    # put in the set: it may have been there before this run, and nothing here can tell.
-                    failure_notes.append(_maybe_made_note(kind, name))
-                after = templates or []
-                if templates is not None:
-                    # Stopped among the exports: what the array presents now is the only record of
-                    # which LUNs this apply made, the failed call's included.
-                    try:
-                        after = array.vlun_templates()
-                    except Exception:
-                        failure_notes.append("The exports could not be read back after the failure. Check `showvlun -t` "
-                                             "on the array for exports this apply made; they are not in this removal set.")
-            result.outcomes.extend(export_outcomes)
-            # SPEC-007: the undo for exactly what this apply created, from the same reads.
-            result.removals, notes = removal_set(result.outcomes, templates or [], after)
-            result.removal_notes = notes + failure_notes
-    except Exception as exc:  # no session (nothing was written), or it failed to close
-        result.error = result.error or str(exc)
-    return result
-
-
-# The paste order is REMOVAL_ORDER (domain/provisioning.py).
-# How each object is named on screen, read on the array and removed (`-f` where the CLI prompts).
-_LABEL = {"host": "host", "hostset": "host set", "volume": "volume", "vvset": "volume set", "vlun": "export of"}
-_SHOW = {"host": "showhost {n}", "hostset": "showhostset {n}", "volume": "showvv {n}", "vvset": "showvvset {n}"}
-_REMOVE = {"host": "removehost {n}", "hostset": "removehostset -f {n}", "volume": "removevv -f {n}", "vvset": "removevvset -f {n}"}
-
-
-def _maybe_made_note(kind: str, name: str) -> str:
-    """SPEC-007 R6: the object whose write failed, for the operator to check by hand."""
-    return (f"The array may have made {_LABEL[kind]} {name} before the error. If `{_SHOW[kind].format(n=name)}` lists it "
-            f"and it was not there before this run, `{_REMOVE[kind].format(n=name)}` removes it.")
-
-
-def _describe_outcomes(
-    outcomes: list[ActionOutcome], hosts: list[ArrayHostRecord], volumes: list[ArrayVolumeRecord],
-    set_members: dict[str, list[str]], vvsets: dict[str, list[str]],
-) -> None:
-    """SPEC-012 R1: fill each object outcome's `detail` with the array's own identifiers from ONE
-    read-back (host id / persona / WWN count; volume id / WWN / size / type / CPG) and, for sets, the
-    members this run sent. Rows the read-back does not hold keep whatever detail they had."""
-    host_by = {h.name: h for h in hosts}
-    vol_by = {v.name: v for v in volumes}
-
-    def plural(n: int, word: str) -> str:
-        return f"{n} {word}{'' if n == 1 else 's'}"
-
-    for o in outcomes:
-        if o.detail:
-            continue
-        if o.kind == "host" and o.name in host_by:
-            h = host_by[o.name]
-            initiators = plural(len(h.wwns), "WWN") if h.wwns or not h.iqns else plural(len(h.iqns), "iSCSI name")
-            parts = [f"id {h.id}" if h.id is not None else "", f"persona {h.persona}" if h.persona else "", initiators]
-            o.detail = " · ".join(p for p in parts if p)
-        elif o.kind == "volume" and o.name in vol_by:
-            v = vol_by[o.name]
-            parts = [f"id {v.id}" if v.id is not None else "", f"WWN {v.wwn}" if v.wwn else "",
-                     f"{v.size_mib} MiB {v.provisioning_type} on {v.cpg}".strip()]
-            o.detail = " · ".join(p for p in parts if p)
-        elif o.kind == "hostset" and o.name in set_members:
-            members = set_members[o.name]
-            o.detail = f"{plural(len(members), 'member')}: {', '.join(members)}" if members else "no members"
-        elif o.kind == "vvset" and o.name in vvsets:
-            vols = vvsets[o.name]
-            o.detail = f"{plural(len(vols), 'volume')}: {', '.join(vols)}" if vols else "no volumes"
-
-
-def removal_set(
-    outcomes: list[ActionOutcome], before: list[VlunTemplate], after: list[VlunTemplate],
-) -> tuple[list[RemovalItem], list[str]]:
-    """SPEC-007 R1/R2: undo lines for what THIS apply created — objects by `created` status, exports
-    by the template diff (after − before), so a set completed member by member removes only the new
-    member's LUN and a pre-existing LUN is never named. `updated` objects are not reverted (their
-    members or WWNs were someone's before this run) and are named in a note instead."""
-    items: list[RemovalItem] = []
-    seen = {(t.volume, t.target, t.lun) for t in before}
-    for t in after:
-        if (t.volume, t.target, t.lun) not in seen:
-            items.append(RemovalItem(kind="vlun", name=f"{t.volume} LUN {t.lun} → {t.target}",
-                                     command=f"removevlun -f {t.volume} {t.lun} {t.target}"))
-    for o in outcomes:
-        if o.status == "created" and o.kind in _REMOVE:
-            items.append(RemovalItem(kind=o.kind, name=o.name, command=_REMOVE[o.kind].format(n=o.name)))
-    touched = [f"{o.kind} {o.name}" for o in outcomes if o.status == "updated"]
-    notes = ["Not reverted — members, WWNs or iSCSI names were added to: " + ", ".join(touched) + ". They existed before this run."] if touched else []
-    # S-12 (2026-09-14): the runner pasted the raw list and removed hosts before their set. The LIST
-    # is in paste order, not only the rendering.
-    items.sort(key=lambda i: REMOVAL_ORDER.get(i.kind, 9))
-    return items, notes
-
-
-def render_removal_commands(items: list[RemovalItem]) -> list[str]:
-    """R3: dependency order, one command per object, de-duplicated — usable across several applies."""
-    out: list[str] = []
-    for item in sorted(items, key=lambda i: REMOVAL_ORDER.get(i.kind, 9)):
-        if item.command not in out:
-            out.append(item.command)
-    return out
-
-
 def _luns_text(volumes: list[str], templates: list[VlunTemplate], target_ref: str) -> str:
     """"LUN 0, LUN 1" — or "LUN 0/3" when a volume sits at more than one LUN on that target: the
     duplicate the P-21 apply produced must be visible, not collapsed to whichever LUN came last."""
@@ -868,23 +655,3 @@ def _luns_text(volumes: list[str], templates: list[VlunTemplate], target_ref: st
         if t.target == target_ref and t.volume in volumes:
             by_vol.setdefault(t.volume, []).append(t.lun)
     return ", ".join("LUN " + "/".join(str(n) for n in sorted(by_vol[v])) for v in volumes if v in by_vol)
-
-
-def _confirm_exports(
-    exports: list[ExportRequest],
-    outcomes: list[ActionOutcome],
-    vvsets: OrderedDict[str, list[str]],
-    templates: list[VlunTemplate],
-) -> None:
-    """Annotate each export outcome with the LUN(s) the array actually recorded. A `created` export
-    with no template on read-back becomes `failed` — the silent-dead-export case R8 exists for."""
-    for ex, out in zip(exports, outcomes):
-        if out.status == "failed":
-            continue                                     # refused before it was sent; keep the reason
-        volumes = list(vvsets.get(ex.source_name, [])) if ex.source_kind == "vvset" else [ex.source_name]
-        luns = _luns_text(volumes, templates, ex.target_ref)
-        if luns:
-            out.detail = f"{luns} → {ex.target_ref}"
-        elif out.status == "created":
-            out.status = "failed"
-            out.detail = f"the array reported created but no export {ex.source_ref} → {ex.target_ref} was found on read-back"

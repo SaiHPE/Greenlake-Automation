@@ -247,7 +247,7 @@ def main():
         shutil.rmtree(OUT)
     os.makedirs(OUT)
     fl.OUT = OUT
-    from alletra_onboard.adapters.array.wsapi_client import WsapiClient
+    from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
 
     password = fl.lab_secret("RCIP_PAIR_PW")
     a, p = fl.ssh(A_HOST, password), fl.ssh(P_HOST, password)
@@ -264,7 +264,7 @@ def main():
     removals = ([], [])
     try:
         fl.banner("2. Test volume and volume set on the Alletra (the app's WSAPI client)")
-        with WsapiClient(A_HOST, "3paradm", password) as w:
+        with WsapiWriter(A_HOST, "3paradm", password) as w:
             check("volume %s created" % VOL, w.ensure_volume(VOL, "SSD_r6", 1024, "tpvv") == "created")
             check("volume set %s created" % VVSET, w.ensure_volume_set(VVSET, [VOL]) == "created")
         fl.banner("3. The app's replication steps")

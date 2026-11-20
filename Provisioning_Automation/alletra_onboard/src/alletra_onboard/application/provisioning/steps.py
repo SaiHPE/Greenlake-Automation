@@ -16,8 +16,8 @@ import asyncio
 import json
 from functools import partial
 
+from alletra_onboard.application.provisioning import apply, iscsi_network, storage_provision
 from alletra_onboard.application.provisioning import discovery as storage_discovery
-from alletra_onboard.application.provisioning import iscsi_network, storage_provision
 from alletra_onboard.application.provisioning import path_verify as storage_path_verify
 from alletra_onboard.application.provisioning import peer_ports as storage_peer_ports
 from alletra_onboard.application.provisioning import preflight as storage_preflight
@@ -54,7 +54,7 @@ class DiscoveryZoningSteps:
         self._coord = coord
         # Per-run discovery cache over the durable run_artifacts store (C7): the store is the truth
         # (a server restart mid-engagement must not force re-discovery), the dict avoids re-parsing.
-        self._discovery: dict[str, DiscoveryReport] = {}
+        self.discovery: dict[str, DiscoveryReport] = {}
 
     def current_discovery(self, run_id: str) -> DiscoveryReport | None:
         """The discovery in effect, or None. Unlike require_discovery this never raises — callers use
@@ -65,13 +65,13 @@ class DiscoveryZoningSteps:
             return None
 
     def require_discovery(self, run_id: str) -> DiscoveryReport:
-        report = self._discovery.get(run_id)
+        report = self.discovery.get(run_id)
         if report is None:
             raw = self._coord.store.load_artifact(run_id, "discovery")
             if raw is not None:
                 try:
                     report = DiscoveryReport.model_validate_json(raw)
-                    self._discovery[run_id] = report
+                    self.discovery[run_id] = report
                 except Exception:
                     # A stored report the current model can no longer read (an upgrade changed the
                     # schema, or the row is damaged). Treat it as absent so the operator can simply
@@ -102,7 +102,7 @@ class DiscoveryZoningSteps:
             )
 
         report = await asyncio.to_thread(storage_discovery.discover, intent, progress=progress)
-        self._discovery[run.run_id] = report
+        self.discovery[run.run_id] = report
         try:
             coord.store.save_artifact(run.run_id, "discovery", report.model_dump_json().encode("utf-8"))
         except Exception:  # discovery succeeded; failing to cache it must not fail the step.
@@ -517,17 +517,17 @@ class ProvisioningSteps:
             )
         # LESSONS 7: the operator's tick reaches the server as the id of the plan it was given for.
         check_approval(approved_plan, plan.plan_id)
-        coord.spawn(run_id, self._run_storage_apply(run, intent, discovery))
+        coord.spawn(run_id, self._run_storage_apply(run, intent, discovery, plan))
         return run
 
-    async def _run_storage_apply(self, run: RunRecord, intent, discovery) -> None:
+    async def _run_storage_apply(self, run: RunRecord, intent, discovery, plan) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.STORAGE_PROVISION)
         coord.emit(run.run_id, WorkflowPhase.STORAGE_PROVISION, "storage.apply.started", "Creating host, volumes and exports…")
         zoned = self._discovery_steps.zoned_hosts(run.run_id)
         result = await asyncio.to_thread(
-            partial(storage_provision.apply_plan, intent, discovery, reachable_hosts=zoned,
-                    zoning_plan=self._zoning_plan_payload(run.run_id))
+            apply.apply_plan,
+            apply.StorageInputs(intent, discovery, zoned, plan, self._zoning_plan_payload(run.run_id)),
         )
         created = sum(1 for o in result.outcomes if o.status == "created")
         updated = sum(1 for o in result.outcomes if o.status == "updated")

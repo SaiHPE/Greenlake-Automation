@@ -299,7 +299,7 @@ def verify_provisioned_paths(
     # fabric-named host is verified, not reported as pathless because vCenter never heard of it.
     wwpns_by_host: dict[str, set[str]] = {
         name: {normalize_wwpn(w) for w in wwpns}
-        for name, wwpns in storage_provision._hosts_by_name(discovery, intent, zoning_plan).items()
+        for name, wwpns in storage_provision.hosts_by_name(discovery, intent, zoning_plan).items()
     }
     # Discovery resolved each port's REAL fabric from the switch it attaches to (parity is only its
     # fallback) — hand that to the classifier so non-standard cabling can't fake dual-fabric redundancy.

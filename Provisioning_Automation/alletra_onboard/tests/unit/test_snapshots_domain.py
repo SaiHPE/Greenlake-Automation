@@ -242,7 +242,7 @@ def test_a_schedule_starting_with_others_in_the_same_minute_gets_a_note_not_a_bl
 # ------------------------------------------------------------------ R6: removal order
 
 def test_removal_runs_schedule_then_snapshots_then_the_provisioning_lines():
-    from alletra_onboard.application.provisioning.storage_provision import render_removal_commands
+    from alletra_onboard.application.provisioning.apply import render_removal_commands
     from alletra_onboard.domain.provisioning import RemovalItem
 
     items = [

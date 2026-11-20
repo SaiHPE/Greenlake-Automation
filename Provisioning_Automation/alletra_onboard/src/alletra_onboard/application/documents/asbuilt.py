@@ -314,7 +314,7 @@ def _drop_blank_paragraphs_after(heading) -> None:
 def _set_cell_text(cell, text: str) -> None:
     first = cell.paragraphs[0]
     for run in list(first.runs):
-        run._element.getparent().remove(run._element)
+        run.element.getparent().remove(run.element)
     first.add_run(text or "-")
     for extra in cell.paragraphs[1:]:
         extra._element.getparent().remove(extra._element)

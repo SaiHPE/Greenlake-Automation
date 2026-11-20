@@ -17,7 +17,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from alletra_onboard.application.provisioning.clients import make_snap_cli, make_wsapi
+from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
+from alletra_onboard.application.snapshots.clients import make_snap_writer
 from alletra_onboard.application.snapshots.read import parse_showsched, showsched_readable
 from alletra_onboard.application.snapshots.verify import check_now
 from alletra_onboard.domain.array_parse import answered_error
@@ -75,15 +76,24 @@ def schedule_readback(request: SnapshotRequest, before: list[ArraySchedule], aft
     return ""
 
 
-def _whole_set(request: SnapshotRequest, action: SnapshotAction, view: SnapshotArrayView) -> bool:
+def _whole_set(wsapi, request: SnapshotRequest, action: SnapshotAction, view: SnapshotArrayView) -> bool:
     """One call for the set (one point in time) when every member lacks its snapshot, as the plan judged
-    from the same read; each missing member on its own otherwise."""
-    return request.kind == "set" and sorted(action.members) == sorted(view.vvsets.get(request.source, []))
+    from the same read; each missing member on its own otherwise. Before taking a whole-set snapshot,
+    re-read live membership and refuse if it differs from the reviewed members."""
+    if request.kind != "set" or sorted(action.members) != sorted(view.vvsets.get(request.source, [])):
+        return False
+    live = wsapi.volume_sets().get(request.source)
+    if live is None or sorted(live) != sorted(action.members):
+        raise RuntimeError(
+            f"volume set {request.source} changed on the array since the preview — no snapshot of it was taken. "
+            "Read the array again and approve the new plan"
+        )
+    return True
 
 
 def apply_plan(
     plan: SnapshotPlan, view: SnapshotArrayView, provisioning: ProvisioningIntent, *,
-    wsapi_factory: Callable = make_wsapi, snap_cli_factory: Callable = make_snap_cli,
+    wsapi_factory: Callable = make_wsapi_writer, snap_cli_factory: Callable = make_snap_writer,
     progress: Callable[[str], None] | None = None, clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> SnapshotResult:
     """`view` is the read the plan was built from (LESSONS 37)."""
@@ -103,45 +113,46 @@ def apply_plan(
                                                status=status, detail=detail))  # type: ignore[arg-type]
 
     def remove(names: list[str]) -> None:
-        for name in names:
-            if all(r.name != name for r in result.removals):
-                result.removals.append(RemovalItem(kind="snapshot", name=name, command=f"removevv -f {name}"))
+        seen = {r.name for r in result.removals}
+        result.removals.extend(RemovalItem(kind="snapshot", name=n, command=f"removevv -f {n}")
+                               for n in names if n not in seen)
 
-    for action in plan.actions:
-        if action.state == "exists":
-            record(action, "exists", action.reason)
+    result.outcomes = [SnapshotOutcome(kind=a.kind, name=a.name, source=a.source, status="exists", detail=a.reason)
+                       for a in plan.actions if a.state == "exists"]
     snapshots = [a for a in plan.actions if a.kind == "snapshot" and a.state == "create"]
     schedules = [a for a in plan.actions if a.kind == "schedule" and a.state == "create"]
     in_flight: tuple[SnapshotAction, set[str]] | None = None
     current: SnapshotAction | None = None
     written = 0
     try:
-        with wsapi_factory(provisioning.array) if snapshots else _Nothing() as wsapi:
-            # (1) every snapshot now over WSAPI
-            for action in snapshots:
-                current = action
-                request = by_source[action.source]
-                before = {v.name for v in wsapi.volumes()}
-                in_flight = (action, before)
-                if _whole_set(request, action, view):
-                    say(f"Taking a snapshot of every volume in {request.source} ({len(action.members)})…")
-                    wsapi.create_set_snapshot(request.source, f"@vvname@{NOW_SUFFIX}", read_only=request.read_only,
-                                              expire_hours=request.expire_hours)
-                    written += 1
-                else:
-                    for member in action.members:
-                        say(f"Taking a snapshot of {member}…")
-                        wsapi.create_snapshot(member, now_snapshot_name(member), read_only=request.read_only,
-                                              expire_hours=request.expire_hours)
+        if snapshots:
+            with wsapi_factory(provisioning.array) as wsapi:
+                # (1) every snapshot now over WSAPI
+                for action in snapshots:
+                    current = action
+                    request = by_source[action.source]
+                    whole = _whole_set(wsapi, request, action, view)
+                    before = {v.name for v in wsapi.volumes()}
+                    in_flight = (action, before)
+                    if whole:
+                        say(f"Taking a snapshot of every volume in {request.source} ({len(action.members)})…")
+                        wsapi.create_set_snapshot(request.source, f"@vvname@{NOW_SUFFIX}", read_only=request.read_only,
+                                                  expire_hours=request.expire_hours)
                         written += 1
-                # R5: read back after each write; the removal set is what the read shows was made
-                after = wsapi.volumes()
-                in_flight = None
-                remove(made_by(action, before, after))
-                ok, detail = check_now(request, action.members, view.model_copy(update={"volumes": after}))
-                if not ok:
-                    raise RuntimeError(f"after the snapshot of {request.source}, the array does not show what was asked: {detail}")
-                record(action, "created", detail)
+                    else:
+                        for member in action.members:
+                            say(f"Taking a snapshot of {member}…")
+                            wsapi.create_snapshot(member, now_snapshot_name(member), read_only=request.read_only,
+                                                  expire_hours=request.expire_hours)
+                            written += 1
+                    # R5: read back after each write; the removal set is what the read shows was made
+                    after = wsapi.volumes()
+                    in_flight = None
+                    remove(made_by(action, before, after))
+                    ok, detail = check_now(request, action.members, view.model_copy(update={"volumes": after}))
+                    if not ok:
+                        raise RuntimeError(f"after the snapshot of {request.source}, the array does not show what was asked: {detail}")
+                    record(action, "created", detail)
         # (2) every schedule, over the write-scoped SSH client built for this plan's schedules only
         if schedules:
             current = schedules[0]
@@ -163,8 +174,7 @@ def apply_plan(
                             said = next(ln.strip() for ln in out.splitlines() if ln.strip().lower().startswith("error"))
                             raise ArrayCliError(f"the array refused createsched for {request.name}: {said}")
                         after = _read_schedules(cli, f"after creating {request.name}")
-                        problem = schedule_readback(request, before, after)
-                        if problem:
+                        if problem := schedule_readback(request, before, after):
                             raise ArrayCliError(problem)
                     except Exception:
                         _schedule_after_failure(action, line, cli, result)   # while the session is still open
@@ -185,16 +195,6 @@ def apply_plan(
             record(current, "failed", str(exc))
     result.removals.sort(key=lambda i: REMOVAL_ORDER.get(i.kind, 9))
     return result
-
-
-class _Nothing:
-    """No WSAPI session when the plan has no snapshot to take now."""
-
-    def __enter__(self):
-        return None
-
-    def __exit__(self, *exc):
-        return None
 
 
 def _read_schedules(cli, when: str) -> list[ArraySchedule]:

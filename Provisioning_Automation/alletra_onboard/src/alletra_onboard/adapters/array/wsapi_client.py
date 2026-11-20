@@ -1,7 +1,9 @@
-"""WSAPI write/read client for the Alletra MP B10000 — wraps the official python-3parclient.
+"""Read-only WSAPI v1 client for the Alletra MP B10000 — wraps the official python-3parclient.
 
-Drives provisioning over WSAPI v1 (https://<array>:443/api/v1), the verified-correct endpoint for
-the B10000 (see ADR 0003 + the deep-research findings in the runbook). Design points baked in here:
+Drives reads over WSAPI v1 (https://<array>:443/api/v1), the verified-correct endpoint for
+the B10000 (see ADR 0003 + the deep-research findings in the runbook). Mutating calls live in
+`wsapi_writer.py` (`WsapiWriter`), which extends `WsapiReader` and is imported only by
+`application/runs/writer_clients.py` (STANDARD S2). Design points baked in here:
 
 - **python-3parclient >= 4.2.14** (pinned in pyproject) — earlier versions POST to /credentials
   instead of /api/v1/credentials and fail to authenticate to the B10000.
@@ -29,6 +31,7 @@ from __future__ import annotations
 
 import time
 from contextvars import ContextVar
+from typing import Any
 
 from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.domain.errors import WsapiError, WsapiNotReady
@@ -52,26 +55,24 @@ from alletra_onboard.domain.discovery import ArrayPort
 from alletra_onboard.domain.network import IscsiVlanInterface
 from alletra_onboard.domain.peer_ports import PeerPortState, PortParams
 from alletra_onboard.domain.provisioning import ArrayHostRecord, VlunTemplate
-from alletra_onboard.domain.replication import (
-    DR_ACTION_FAILOVER,
-    DR_ACTION_RECOVER,
-    DR_ACTION_RESTORE,
+from alletra_onboard.domain.shared import (
+    ArrayProvisioningType,
+    ArrayVolumeRecord,
+    normalize_wwpn,
 )
-from alletra_onboard.domain.shared import ArrayVolumeRecord, normalize_wwpn
 
 # A request that got no answer, known by its type. socket.timeout is TimeoutError.
 _TIMEOUT_TYPES: tuple[type[BaseException], ...] = (TimeoutError,)
-_DR_ACTION = {DR_ACTION_FAILOVER: "failover", DR_ACTION_RECOVER: "recover", DR_ACTION_RESTORE: "restore"}
 if hpe_exc is not None:
     _TIMEOUT_TYPES += (hpe_exc.Timeout,)
 try:
     import requests
-    from requests.adapters import HTTPAdapter
+    from requests.adapters import HTTPAdapter as _RequestsHTTPAdapter
 
     _TIMEOUT_TYPES += (requests.exceptions.Timeout,)
 except ImportError:
     requests = None
-    HTTPAdapter = object
+    _RequestsHTTPAdapter = None
 
 # WSAPI host-persona ids, resolved by NAME. The values are hpe3parclient's HOST_PERSONA_* constants —
 # the array's WSAPI persona enum: VMware=8, WindowsServer=11, Generic-ALUA=2. Verified 2026-07-22 against
@@ -122,7 +123,9 @@ _PERSONA_NAME: dict[int, str] = {v: k for k, v in _WSAPI_PERSONA.items()}
 
 # WSAPI volume `provisioningType` enum. 6 (TDVV) is what a `{"reduce": True}` create reads back as on
 # the Alletra MP (observed live, see ensure_volume) — so 6 IS "reduce" in this tool's vocabulary.
-_PROVISIONING_TYPE: dict[object, str] = {1: "full", 2: "tpvv", 3: "snp", 4: "peer", 5: "unknown", 6: "reduce", 7: "dds"}
+_PROVISIONING_TYPE: dict[object, ArrayProvisioningType] = {
+    1: "full", 2: "tpvv", 3: "snp", 4: "peer", 5: "unknown", 6: "reduce", 7: "dds",
+}
 
 # WSAPI VLUN `type` enum value for a host-set export (kept for readers of the records; the parser
 # below does not need it — see parse_vlun_templates).
@@ -145,9 +148,14 @@ def parse_hosts(body: object) -> list[ArrayHostRecord]:
             w = normalize_wwpn(str(p.get("wwn", "")))
             if len(w) == 16 and w not in wwns:
                 wwns.append(w)
+        persona = (
+            _PERSONA_NAME.get(persona_id, str(persona_id))
+            if isinstance(persona_id, int)
+            else (str(persona_id) if persona_id is not None else "")
+        )
         out.append(ArrayHostRecord(
             name=name,
-            persona=_PERSONA_NAME.get(persona_id, str(persona_id) if persona_id is not None else ""),
+            persona=persona,
             wwns=wwns,
             iqns=_iscsi_names(m),
             id=int(m["id"]) if str(m.get("id", "")).isdigit() else None,
@@ -293,29 +301,35 @@ def parse_iscsi_vlans_wsapi(nsp: str, body: object) -> list[IscsiVlanInterface]:
 _PINNED_FINGERPRINT: ContextVar[str | None] = ContextVar("alletra_wsapi_fingerprint", default=None)
 
 
-class _FingerprintAdapter(HTTPAdapter):
-    def __init__(self, fingerprint: str) -> None:
-        self._fingerprint = fingerprint      # read by init_poolmanager, which HTTPAdapter.__init__ calls
-        super().__init__()
+if _RequestsHTTPAdapter is not None:
 
-    def init_poolmanager(self, *args, **kwargs) -> None:
-        kwargs["assert_fingerprint"] = self._fingerprint
-        super().init_poolmanager(*args, **kwargs)
+    class _FingerprintAdapter(_RequestsHTTPAdapter):
+        def __init__(self, fingerprint: str) -> None:
+            self._fingerprint = fingerprint      # read by init_poolmanager, which HTTPAdapter.__init__ calls
+            super().__init__()
+
+        def init_poolmanager(self, connections: int, maxsize: int, block: bool = False, **pool_kwargs: object) -> None:
+            pool_kwargs["assert_fingerprint"] = self._fingerprint
+            super().init_poolmanager(connections, maxsize, block=block, **pool_kwargs)
 
 
 class _PinnedRequests:
     """Stands in for the `requests` module inside `hpe3parclient.http`; everything else passes through."""
 
-    def __init__(self, real) -> None:
+    def __init__(self, real: Any) -> None:
         self._real = real
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Any:
         return getattr(self._real, name)
 
-    def request(self, method, url, **kwargs):
+    def request(self, method: str, url: str, **kwargs: object) -> Any:
         fingerprint = _PINNED_FINGERPRINT.get()
         if fingerprint is None:
             return self._real.request(method, url, **kwargs)
+        if _RequestsHTTPAdapter is None:
+            raise WsapiError(
+                "Certificate pinning requires requests.adapters.HTTPAdapter; refusing to send an unpinned request."
+            )
         with self._real.Session() as session:
             session.mount("https://", _FingerprintAdapter(fingerprint))
             return session.request(method=method, url=url, **kwargs)
@@ -326,7 +340,7 @@ def _install_pinned_transport() -> None:
         sdk_http.requests = _PinnedRequests(sdk_http.requests)
 
 
-if HPE3ParClient is not None and requests is not None:
+if HPE3ParClient is not None:
     _install_pinned_transport()
 
 
@@ -345,11 +359,34 @@ def _pin_calls(client, fingerprint: str) -> None:
     http.request = pinned
 
 
+def _safe_str(exc: BaseException) -> str:
+    """``str(exc)`` without trusting the exception to be describable.
+
+    MEASURED against a wedged WSAPI: ``str()`` on hpe3parclient's own ``Timeout`` RAISES —
+    its ``__str__`` reads a ``.message`` attribute that no longer exists on modern Python — so
+    this translator crashed with ``AttributeError`` and the operator saw that instead of "the
+    array did not respond". Describing a failure must never fail.
+    """
+    try:
+        text = str(exc)
+    except Exception:  # the exception's own __str__ is broken
+        text = ""
+    if not text:
+        # Its args may still carry the detail. Only use them when there ARE any: repr(()) is
+        # the string "''", which is truthy and would mask the type-name fallback below.
+        try:
+            args = exc.args
+            text = "; ".join(str(a) for a in args) if args else ""
+        except Exception:
+            text = ""
+    return text or f"{type(exc).__name__} (no detail available)"
+
+
 def _record_calls(client, host: str, api_url: str, password: str) -> None:
     """SPEC-019 R1: every HTTP call the SDK makes goes through `http._time_request(url, method, **kw)`."""
     http = getattr(client, "http", None)
     inner = getattr(http, "_time_request", None)
-    if inner is None:
+    if http is None or inner is None:
         return
 
     def timed(url, method, **kwargs):
@@ -370,7 +407,7 @@ def _record_calls(client, host: str, api_url: str, password: str) -> None:
         except Exception as exc:
             status = getattr(exc, "http_status", None) or getattr(exc, "code", None) or type(exc).__name__
             command_log.record(target=host, transport="wsapi", command=command, started=started, ok=False,
-                               result=f"HTTP {status}: {WsapiClient._safe_str(exc)}", secrets=[password],
+                               result=f"HTTP {status}: {_safe_str(exc)}", secrets=[password],
                                write=write)
             raise
         status = getattr(resp, "status_code", None) or getattr(resp, "status", None) or ""
@@ -382,7 +419,7 @@ def _record_calls(client, host: str, api_url: str, password: str) -> None:
     http._time_request = timed
 
 
-class WsapiClient:
+class WsapiReader:
     def __init__(self, host: str, username: str, password: str, port: int = 443, timeout: float = 30.0) -> None:
         self.host = host
         self.username = username
@@ -390,7 +427,7 @@ class WsapiClient:
         self.port = port
         self.api_url = f"https://{host}:{port}/api/v1"
         self.timeout = timeout
-        self._client = None
+        self._client: Any = None
         self._ca_bundle: str | None = None
 
     # ------------------------------------------------------------------ lifecycle
@@ -415,7 +452,9 @@ class WsapiClient:
             raise self._translate(exc, where="log in to the array") from exc
         try:
             if trusted is None:
-                client = HPE3ParClient(self.api_url, secure=self._ca_bundle, timeout=self.timeout)
+                # requests accepts a CA bundle path as `verify` (the SDK forwards `secure` to `verify`).
+                sdk_factory: Any = HPE3ParClient
+                client = sdk_factory(self.api_url, secure=self._ca_bundle, timeout=self.timeout)
             else:
                 # TRUST-OFF: a certificate the array made for itself cannot pass a chain check, so the SDK's
                 # is off; every connection this client opens checks the pinned SHA-256 instead (_pin_calls).
@@ -435,7 +474,7 @@ class WsapiClient:
                 pass
             self._client = None
 
-    def __enter__(self) -> WsapiClient:
+    def __enter__(self) -> WsapiReader:
         self.connect()
         return self
 
@@ -563,231 +602,7 @@ class WsapiClient:
         by the SDK's findHost (see wwn_owners for why)."""
         return self.wwn_owners().get(normalize_wwpn(wwn))
 
-    # ------------------------------------------------------------------ idempotent writes
-
-    def ensure_host(self, name: str, fc_wwns: list[str], persona: str = "VMware") -> str:
-        """Create ONE host carrying all FC WWNs at the given persona NAME (default 'VMware'), resolved to
-        the WSAPI persona id via `_WSAPI_PERSONA`. Returns 'created', 'updated' (the host existed but was
-        missing some of these WWNs — they were added), or 'exists' (already carries every WWN). The
-        persona of an existing host is never modified.
-
-        Raises WsapiError if any WWN already belongs to a *different* host (EXISTENT_PATH) — that is a
-        real conflict the operator must resolve, not something to silently adopt.
-        """
-        # ONE getHosts read answers both questions: who owns each WWN, and does the host exist.
-        owners_map = self.wwn_owners()
-        host_exists = name in set(self.host_names())
-        by_norm = {w: normalize_wwpn(w) for w in fc_wwns}
-        other = {owners_map[n] for n in by_norm.values() if n in owners_map and owners_map[n] != name}
-        if other:
-            raise WsapiError(
-                f"WWN(s) for host '{name}' already belong to another host definition: {sorted(other)}. "
-                "Resolve this on the array before provisioning."
-            )
-        missing = [w for w, n in by_norm.items() if owners_map.get(n) != name]
-        if host_exists and not missing:
-            return "exists"
-        if not host_exists:
-            # Checked here only: an existing host keeps whatever persona the array gave it (e.g. Generic).
-            persona_id = _WSAPI_PERSONA.get(persona)
-            if persona_id is None:
-                raise WsapiError(f"unknown host persona '{persona}' (expected one of {sorted(_WSAPI_PERSONA)})")
-            try:
-                self._require().createHost(name, FCWwns=fc_wwns, optional={"persona": persona_id})
-                return "created"
-            except Exception as exc:
-                if not self._is_conflict(exc):
-                    raise self._translate(exc, where=f"create host {name}") from exc
-                # EXISTENT_HOST race: someone created the name since our read — fall through and add.
-        # The host object exists but lacks some of these WWNs. Reporting "exists" here would be the
-        # silent single-path trap: the object looks green while the unregistered HBAs' paths never
-        # light up. Reconcile by ADDing exactly the missing WWNs — never re-adding present ones
-        # (the array answers EXISTENT_PATH even for a WWN already on the SAME host — proven live),
-        # and never removing or adopting anyone else's.
-        try:
-            self._require().modifyHost(
-                name,
-                {"pathOperation": getattr(HPE3ParClient, "HOST_EDIT_ADD", 1), "FCWWNs": missing},
-            )
-            return "updated"
-        except Exception as exc:
-            # No conflict-swallow here: `missing` excludes WWNs already on this host, so a 409 now
-            # means a real race or another owner — masking it as 'exists' is how the live bug hid.
-            raise self._translate(exc, where=f"add {len(missing)} WWN(s) to host {name}") from exc
-
-    def ensure_iscsi_host(self, name: str, iqns: list[str], persona: str = "VMware") -> str:
-        """The iSCSI twin of ensure_host: ONE host carrying these iSCSI names (`createhost -iscsi`).
-        Returns 'created', 'updated' (the IQNs it lacked were added) or 'exists'. The array takes an
-        IQN it has never seen a session from, so this does not wait for a login.
-
-        Raises WsapiError when an IQN belongs to a different host, or when the host of that name
-        carries FC WWNs: WSAPI refuses FC and iSCSI names in one request, and this tool does not put
-        both on one host (not proven on the array)."""
-        if not iqns:
-            raise WsapiError(f"no iSCSI name given for host '{name}'")
-        members = {m.get("name", ""): m for m in _members(self._require().getHosts()) if m.get("name")}
-        owners = {i.lower(): n for n, m in members.items() for i in _iscsi_names(m)}
-        other = sorted({owners[i.lower()] for i in iqns if owners.get(i.lower(), name) != name})
-        if other:
-            raise WsapiError(
-                f"iSCSI name(s) for host '{name}' already belong to another host definition: {other}. "
-                "Resolve this on the array before provisioning."
-            )
-        existing = members.get(name)
-        if existing is not None and any(p.get("wwn") for p in existing.get("FCPaths") or []):
-            raise WsapiError(
-                f"host '{name}' exists with FC WWNs; this tool does not add iSCSI names to an FC host. "
-                "Use another host name, or add the IQN on the array."
-            )
-        missing = [i for i in iqns if owners.get(i.lower()) != name]
-        if existing is not None and not missing:
-            return "exists"
-        if existing is None:
-            persona_id = _WSAPI_PERSONA.get(persona)
-            if persona_id is None:
-                raise WsapiError(f"unknown host persona '{persona}' (expected one of {sorted(_WSAPI_PERSONA)})")
-            try:
-                self._require().createHost(name, iscsiNames=list(iqns), optional={"persona": persona_id})
-                return "created"
-            except Exception as exc:
-                if not self._is_conflict(exc):
-                    raise self._translate(exc, where=f"create iSCSI host {name}") from exc
-                # EXISTENT_HOST race, as in ensure_host: add the names to the host someone just made.
-        try:
-            self._require().modifyHost(
-                name,
-                {"pathOperation": getattr(HPE3ParClient, "HOST_EDIT_ADD", 1), "iSCSINames": missing},
-            )
-            return "updated"
-        except Exception as exc:
-            raise self._translate(exc, where=f"add {len(missing)} iSCSI name(s) to host {name}") from exc
-
-    def _existing_set_members(self, getter, name: str) -> list[str] | None:
-        """The set's current members, or None if the set does not exist. Sets share ensure_host's
-        reconciliation problem: exists-with-missing-members must gain them, never report 'exists'."""
-        try:
-            data = getter(name)
-        except Exception:  # not-found raises in the SDK
-            return None
-        if isinstance(data, dict):
-            return list(data.get("setmembers") or [])
-        return list(getattr(data, "setmembers", None) or [])
-
-    def ensure_host_set(self, name: str, members: list[str]) -> str:
-        """Create the host set, or ADD any missing members to an existing one (additive only — a
-        member someone else added is never removed). 'exists' means every requested member verified."""
-        existing = self._existing_set_members(self._require().getHostSet, name)
-        if existing is None:
-            try:
-                self._require().createHostSet(name, setmembers=list(members))
-                return "created"
-            except Exception as exc:
-                if not self._is_conflict(exc):
-                    raise self._translate(exc, where=f"create host set {name}") from exc
-                existing = self._existing_set_members(self._require().getHostSet, name) or []
-        missing = [m for m in members if m not in existing]
-        if not missing:
-            return "exists"
-        try:
-            self._require().modifyHostSet(
-                name, action=getattr(HPE3ParClient, "SET_MEM_ADD", 1), setmembers=missing,
-            )
-            return "updated"
-        except Exception as exc:
-            if self._is_conflict(exc):
-                return "exists"
-            raise self._translate(exc, where=f"add {len(missing)} host(s) to host set {name}") from exc
-
-    def ensure_volume(self, name: str, cpg: str, size_mib: int, provisioning_type: str) -> str:
-        # Data reduction is ONE flag on the Alletra MP WSAPI: `reduce`. The legacy 3PAR pair
-        # {"tdvv": True, "compression": True} is rejected outright -- proven live on a B10000
-        # (WSAPI 1.15.60 / OS 10.5.60.36): `tdvv` returns code 78 "one of the parameters is
-        # required: tpvv,reduce", and `compression` returns code 42 "unrecognized name" in ANY
-        # body. `{"reduce": True}` alone is accepted and reads back provisioningType=6 with
-        # deduplication on -- so do not "restore" the compression flag; the array has no such field.
-        optional = {"reduce": True} if provisioning_type == "reduce" else {"tpvv": True}
-        try:
-            self._require().createVolume(name, cpg, size_mib, optional=optional)
-            return "created"
-        except Exception as exc:
-            if self._is_conflict(exc):
-                return "exists"
-            # Live on rack13-ARCUS, 2026-11-16: a 1 PiB volume was refused with HTTP 400 code 28,
-            # "client request contains value that is too large". The size is the one number in the body.
-            if self._array_code(exc) == "28":
-                size = f"{size_mib // 1024} GiB" if size_mib % 1024 == 0 else f"{size_mib} MiB"
-                raise WsapiError(
-                    f"the array says {size} is more than it can create in one volume. Make it smaller on the "
-                    f"sheet's Volumes tab, then build the plan again. Array said: "
-                    f"{self._array_reason(exc) or self._safe_str(exc)}"
-                ) from exc
-            raise self._translate(exc, where=f"create volume {name}") from exc
-
-    def ensure_volume_set(self, name: str, members: list[str]) -> str:
-        """Create the VV set, or ADD any missing members to an existing one (additive only)."""
-        existing = self._existing_set_members(self._require().getVolumeSet, name)
-        if existing is None:
-            try:
-                self._require().createVolumeSet(name, setmembers=list(members))
-                return "created"
-            except Exception as exc:
-                if not self._is_conflict(exc):
-                    raise self._translate(exc, where=f"create volume set {name}") from exc
-                existing = self._existing_set_members(self._require().getVolumeSet, name) or []
-        missing = [m for m in members if m not in existing]
-        if not missing:
-            return "exists"
-        try:
-            self._require().modifyVolumeSet(
-                name, action=getattr(HPE3ParClient, "SET_MEM_ADD", 1), setmembers=missing,
-            )
-            return "updated"
-        except Exception as exc:
-            if self._is_conflict(exc):
-                return "exists"
-            raise self._translate(exc, where=f"add {len(missing)} volume(s) to volume set {name}") from exc
-
-    def ensure_vlun(self, volume_name: str, host_name: str, lun: int | None = None) -> str:
-        """Export a source to a target as a VLUN. ``volume_name`` is a bare volume or ``set:<vvset>``;
-        ``host_name`` is a bare host or ``set:<hostset>``. ``lun=None`` lets the array auto-assign;
-        an explicit ``lun`` presents at that number. Returns 'created' or 'exists' (idempotent)."""
-        try:
-            if lun is None:
-                self._require().createVLUN(volume_name, hostname=host_name, auto=True)
-            else:
-                self._require().createVLUN(volume_name, lun=lun, hostname=host_name, auto=False)
-            return "created"
-        except Exception as exc:
-            if self._is_conflict(exc):
-                return "exists"
-            raise self._translate(exc, where=f"export {volume_name} to {host_name}") from exc
-
-    # ------------------------------------------------------------------ snapshots (SPEC-023 R5)
-    # hpe3parclient 4.5 `createSnapshot` and `createSnapshotOfVolumeSet` (read 2026-11-17, LESSONS 29):
-    # plain WSAPI, no SSH. POST /volumes/<vol> and /volumesets/<set> with {action: createSnapshot,
-    # parameters: {name, readOnly, expirationHours}}; a set's `name` may be a VV name pattern. Never
-    # `retentionHours`: no lock in the first slice (ADR 0016 decision 2). A duplicate name is the array's
-    # refusal, never "exists": the plan judged that from its read (LESSONS 29, 37). `@vvname@.initial`
-    # over WSAPI is confirmed on the lab before the live run (work packet, live check 2).
-
-    def create_snapshot(self, volume: str, name: str, *, read_only: bool, expire_hours: int) -> None:
-        try:
-            self._require().createSnapshot(name, volume, optional={"readOnly": read_only, "expirationHours": expire_hours})
-        except Exception as exc:
-            raise self._translate(exc, where=f"create snapshot {name} of volume {volume}") from exc
-
-    def create_set_snapshot(self, vvset: str, pattern: str, *, read_only: bool, expire_hours: int) -> None:
-        try:
-            self._require().createSnapshotOfVolumeSet(
-                pattern, vvset, optional={"readOnly": read_only, "expirationHours": expire_hours})
-        except Exception as exc:
-            raise self._translate(exc, where=f"create snapshots {pattern} of volume set {vvset}") from exc
-
-    # ------------------------------------------------------------------ Remote Copy groups (SPEC-016 R4)
-    # The `/remotecopygroups` resource, confirmed on WSAPI 1.15 (B10000, OS 10.5.0, both lab
-    # arrays): group records carry `role` 1/2, `targets[].mode` 1 sync / 2 periodic,
-    # `targets[].policies.{autoRecover,autoSynchronize,…}`, `targets[].syncPeriod`,
-    # `remoteGroupName`, `volumes[].remoteVolumes[].syncStatus` (tests/fixtures/rc_pair/README.md).
+    # ------------------------------------------------------------------ Remote Copy group reads (SPEC-016)
 
     def remote_copy_groups(self) -> list[dict]:
         try:
@@ -803,83 +618,6 @@ class WsapiClient:
             if hpe_exc is not None and isinstance(exc, hpe_exc.HTTPNotFound):
                 return None
             raise self._translate(exc, where=f"read Remote Copy group {name}") from exc
-
-    def create_remote_copy_group(self, name: str, *, target: str, mode: str, peer_cpg: str, local_cpg: str = "") -> str:
-        """`creatercopygroup -usr_cpg <local> <target>:<peer_cpg> <name> <target>:<sync|periodic>`."""
-        targets = [{"targetName": target, "mode": 1 if mode == "sync" else 2, "userCPG": peer_cpg}]
-        optional = {"localUserCPG": local_cpg} if local_cpg else None
-        try:
-            self._require().createRemoteCopyGroup(name, targets, optional=optional)
-            return "created"
-        except Exception as exc:
-            if self._is_conflict(exc):
-                return "exists"
-            raise self._translate(exc, where=f"create Remote Copy group {name}") from exc
-
-    def set_remote_copy_group(
-        self, name: str, *, target: str, period_seconds: int | None, auto_recover: bool, auto_synchronize: bool,
-    ) -> str:
-        """`setrcopygroup period …` then `setrcopygroup pol …` — as TWO PUTs. Proven live on
-        AlletraMP_D22U27 (WSAPI 1.15, 2026-10-09): one body carrying both draws HTTP 400 code 44
-        "parameters cannot be present at the same time - policies, syncPeriod". Returns a note when
-        the array refused `autoSynchronize` as a WSAPI field (then only `autoRecover` was set)."""
-        if period_seconds:
-            try:
-                self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "syncPeriod": period_seconds}]})
-            except Exception as exc:
-                raise self._translate(exc, where=f"set the sync period of Remote Copy group {name}") from exc
-        policies = {"autoRecover": auto_recover, "autoSynchronize": auto_synchronize}
-        try:
-            self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": policies}]})
-            return ""
-        except Exception as exc:
-            detail = self._safe_str(exc).lower()
-            if "autosynchronize" not in detail and "unrecognized" not in detail:
-                raise self._translate(exc, where=f"set the policies of Remote Copy group {name}") from exc
-        try:
-            self._require().modifyRemoteCopyGroup(name, optional={"targets": [{"targetName": target, "policies": {"autoRecover": auto_recover}}]})
-        except Exception as exc:
-            raise self._translate(exc, where=f"set the policies of Remote Copy group {name}") from exc
-        return (f"The array did not accept 'autoSynchronize' for {name}; auto_recover and the "
-                f"period were set. Set it on the array: setrcopygroup pol {'auto_synchronize' if auto_synchronize else 'no_auto_synchronize'} {name}")
-
-    def admit_remote_copy_volume(self, group: str, volume: str, *, target: str, secondary: str | None = None) -> str:
-        """`admitrcopyvv -createvv <volume> <group> <target>:<secondary>` — the secondary is auto-created."""
-        targets = [{"targetName": target, "secVolumeName": secondary or volume}]
-        try:
-            self._require().addVolumeToRemoteCopyGroup(group, volume, targets, optional={"volumeAutoCreation": True})
-            return "created"
-        except Exception as exc:
-            if self._is_conflict(exc):
-                return "exists"
-            raise self._translate(exc, where=f"add volume {volume} to Remote Copy group {group}") from exc
-
-    def start_remote_copy_group(self, name: str) -> str:
-        try:
-            self._require().startRemoteCopy(name)
-            return "started"
-        except Exception as exc:
-            if self._is_conflict(exc) or "already" in self._safe_str(exc).lower():
-                return "exists"
-            raise self._translate(exc, where=f"start Remote Copy group {name}") from exc
-
-    def stop_remote_copy_group(self, name: str) -> str:
-        try:
-            self._require().stopRemoteCopy(name)
-            return "stopped"
-        except Exception as exc:
-            if self._is_conflict(exc) or "already" in self._safe_str(exc).lower():
-                return "exists"
-            raise self._translate(exc, where=f"stop Remote Copy group {name}") from exc
-
-    def remote_copy_dr_action(self, name: str, action: int) -> None:
-        """`setrcopygroup failover|recover|restore -f <name>` as the WSAPI disaster-recovery action
-        (7 / 9 / 10) on `/remotecopygroups/<name>`. Issued on the array that holds the group under
-        that name; the array mirrors the role change to its partner. SPEC-017."""
-        try:
-            self._require().recoverRemoteCopyGroupFromDisaster(name, action)
-        except Exception as exc:
-            raise self._translate(exc, where=f"run {_DR_ACTION.get(action, f'action {action}')} on Remote Copy group {name}") from exc
 
     # ------------------------------------------------------------------ internals
 
@@ -903,28 +641,7 @@ class WsapiClient:
             return ""
         return "" if code in (None, "") else str(code)
 
-    @staticmethod
-    def _safe_str(exc: BaseException) -> str:
-        """``str(exc)`` without trusting the exception to be describable.
-
-        MEASURED against a wedged WSAPI: ``str()`` on hpe3parclient's own ``Timeout`` RAISES —
-        its ``__str__`` reads a ``.message`` attribute that no longer exists on modern Python — so
-        this translator crashed with ``AttributeError`` and the operator saw that instead of "the
-        array did not respond". Describing a failure must never fail.
-        """
-        try:
-            text = str(exc)
-        except Exception:  # the exception's own __str__ is broken
-            text = ""
-        if not text:
-            # Its args may still carry the detail. Only use them when there ARE any: repr(()) is
-            # the string "''", which is truthy and would mask the type-name fallback below.
-            try:
-                args = tuple(getattr(exc, "args", ()) or ())
-                text = "; ".join(str(a) for a in args) if args else ""
-            except Exception:
-                text = ""
-        return text or f"{type(exc).__name__} (no detail available)"
+    _safe_str = staticmethod(_safe_str)
 
     def _translate(self, exc: Exception, *, where: str) -> WsapiError:
         """The error the operator reads. `where` is what the tool was doing, in plain words ("create
@@ -1016,8 +733,9 @@ class WsapiClient:
             if len(desc) > 300:
                 desc = desc[:300].rstrip() + "…"
             facts = []
-            if getattr(exc, "http_status", None):
-                facts.append(f"HTTP {exc.http_status}")
+            http_status = getattr(exc, "http_status", None)
+            if http_status:
+                facts.append(f"HTTP {http_status}")
             if exc.get_code() not in (None, ""):
                 facts.append(f"code {exc.get_code()}")
             # Rarely sent, but str(exc) carried them, so they stay.

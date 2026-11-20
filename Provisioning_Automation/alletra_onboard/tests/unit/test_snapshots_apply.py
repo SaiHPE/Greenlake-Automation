@@ -643,6 +643,54 @@ def test_when_the_array_cannot_be_read_after_a_failed_write_the_names_to_check_a
         "zz_sn_vol02.initial; remove with removevv -f each one that was not there before this run.")]
 
 
+def test_whole_set_snapshot_refuses_when_set_membership_changed_after_preview():
+    """Astra 6: a member added to a volume set after preview must not get an unreviewed snapshot
+    from a whole-set call; apply re-reads live membership and refuses with a plain message."""
+    from alletra_onboard.application.snapshots.apply import apply_plan
+    from alletra_onboard.application.snapshots.plan import plan_snapshots
+
+    fake = _ArrayWsapi(_base(), {"zz_sn_vvs": ["zz_sn_vol01", "zz_sn_vol02"]})
+    view = SnapshotArrayView(name="AlletraMP_D22U27", os_version="10.5.0", volumes=list(fake.vols),
+                             vvsets=dict(fake.sets), schedules=[], cpg_free_mib={"SSD_r6": 403200})
+    intent = SnapshotIntent(requests=[_req(snapshot_now=True, expire_hours=2)])
+    plan = plan_snapshots(intent, view)
+    creds = _creds()
+    prov = ProvisioningIntent(array=creds, vcenter=creds, switch_f1=creds, switch_f2=creds, snapshots=intent)
+
+    # Another volume is added to the set on the array after the operator reviewed the preview.
+    fake.sets = {"zz_sn_vvs": ["zz_sn_vol01", "zz_sn_vol02", "zz_sn_vol03"]}
+    result = apply_plan(plan, view, prov, wsapi_factory=lambda c: fake, snap_cli_factory=_Ssh([]).client)
+
+    assert fake.calls == []                                              # zero writes sent
+    assert result.error is not None
+    assert "volume set zz_sn_vvs changed on the array since the preview — no snapshot of it was taken" in result.error
+    assert "read the array again" in result.error.lower()
+    assert result.removals == []
+    assert result.removal_notes == []
+    assert [(o.source, o.status) for o in result.outcomes] == [("zz_sn_vvs", "failed")]
+
+
+def test_whole_set_snapshot_succeeds_in_one_call_when_set_membership_is_unchanged():
+    """Astra 6: when live set membership matches the preview, apply still takes one whole-set snapshot."""
+    from alletra_onboard.application.snapshots.apply import apply_plan
+    from alletra_onboard.application.snapshots.plan import plan_snapshots
+
+    fake = _ArrayWsapi(_base(), {"zz_sn_vvs": ["zz_sn_vol01", "zz_sn_vol02"]})
+    view = SnapshotArrayView(name="AlletraMP_D22U27", os_version="10.5.0", volumes=list(fake.vols),
+                             vvsets=dict(fake.sets), schedules=[], cpg_free_mib={"SSD_r6": 403200})
+    intent = SnapshotIntent(requests=[_req(snapshot_now=True, expire_hours=2)])
+    plan = plan_snapshots(intent, view)
+    creds = _creds()
+    prov = ProvisioningIntent(array=creds, vcenter=creds, switch_f1=creds, switch_f2=creds, snapshots=intent)
+
+    result = apply_plan(plan, view, prov, wsapi_factory=lambda c: fake, snap_cli_factory=_Ssh([]).client)
+
+    assert result.error is None
+    assert fake.calls == [("set", "zz_sn_vvs", "@vvname@.initial", True, 2)]
+    assert [(o.source, o.status) for o in result.outcomes] == [("zz_sn_vvs", "created")]
+    assert [r.name for r in result.removals] == ["zz_sn_vol01.initial", "zz_sn_vol02.initial"]
+
+
 # ------------------------------------------------------------------ R5, R6: schedules over the write client (ADR 0016)
 
 @pytest.mark.parametrize("os_10_6", [False, True])
