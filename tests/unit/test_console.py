@@ -564,3 +564,19 @@ def test_the_as_built_names_vcenter_host_and_greenlake_calls(tmp_path):
         ["vc.lab", "vCenter", "login {user, password: ********}", "1"],
         ["10.0.0.20", "Linux host (SSH)", "multipath -ll", "1"],
         ["10.0.0.21", "Windows host (WinRM)", "$env:COMPUTERNAME", "1"]]
+
+
+def test_command_log_record_tolerates_closed_loop_or_store_failure():
+    """STANDARD E2: a broken sink (closed event loop or locked SQLite) never breaks the command."""
+    import sqlite3
+
+    for exc in (RuntimeError("Event loop is closed"), sqlite3.OperationalError("database is locked")):
+        def _broken(_entry, err=exc):
+            raise err
+
+        token = command_log.bind(_broken)
+        try:
+            command_log.record(target="10.0.0.1", transport="ssh", command="showsys",
+                               started=0.0, ok=True, result="ok")
+        finally:
+            command_log.unbind(token)

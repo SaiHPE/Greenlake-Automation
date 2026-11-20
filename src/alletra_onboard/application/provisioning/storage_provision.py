@@ -17,6 +17,7 @@ from collections.abc import Callable
 from alletra_onboard.application.provisioning.clients import make_wsapi
 from alletra_onboard.application.provisioning.hosts import declared_mismatches, union_hosts
 from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.errors import DeviceError
 from alletra_onboard.domain.provisioning import (
     ArrayHostRecord,
     DiscoveredHostBrief,
@@ -182,7 +183,7 @@ def read_array_objects(intent: ProvisioningIntent, *, wsapi_factory: Callable = 
                 "volume_sets": sorted(array.volume_set_names()),
                 "error": None,
             }
-    except Exception as exc:  # the palette still works without the existing objects
+    except DeviceError as exc:  # the palette still works without the existing objects
         return {"cpgs": [], "hosts": [], "host_sets": [], "volumes": [], "volume_sets": [], "error": str(exc)}
 
 
@@ -402,7 +403,7 @@ def build_plan(
                 vluns=array.vlun_templates(),
                 cpgs=set(array.cpg_names()),
             )
-    except Exception as exc:
+    except DeviceError as exc:
         plan.error = f"Could not read the array over WSAPI: {exc}"
         return plan
 
@@ -431,22 +432,22 @@ def build_plan(
     iqns_of = _iqns_by_host(discovery, intent, zoning_plan)
     sources = {n: h.source for n, h in _union(intent, discovery, zoning_plan)[0].items()}
     for host_name, wwns in hosts.items():
-        persona = personas.get(host_name, "VMware")
+        persona, src = personas.get(host_name, "VMware"), sources.get(host_name, "")
         if wwns:
             add("host", host_name, f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona}",
-                _new_host_name(_judge_host(host_name, wwns, persona, state.hosts), host_name, sources.get(host_name, "")),
-                {"wwns": wwns, "persona": persona, "source": sources.get(host_name, "")})
+                _new_host_name(_judge_host(host_name, wwns, persona, state.hosts), host_name, src),
+                {"wwns": wwns, "persona": persona, "source": src})
             continue
         iqns = iqns_of.get(host_name, [])
         if not iqns:
             # An array host with only an NVMe NQN: it joins sets as it is, never changed.
             add("host", host_name, f"Host {host_name} — on the array, persona {persona}",
                 ("exists", "exists on the array (NVMe initiator; not changed by this tool)"),
-                {"wwns": [], "persona": persona, "source": sources.get(host_name, "")})
+                {"wwns": [], "persona": persona, "source": src})
             continue
         add("host", host_name, f"Host {host_name} — iSCSI {', '.join(iqns)}, persona {persona}",
-            _new_host_name(_judge_iscsi_host(host_name, iqns, persona, state.hosts), host_name, sources.get(host_name, "")),
-            {"wwns": [], "iqns": iqns, "persona": persona, "source": sources.get(host_name, "")})
+            _new_host_name(_judge_iscsi_host(host_name, iqns, persona, state.hosts), host_name, src),
+            {"wwns": [], "iqns": iqns, "persona": persona, "source": src})
 
     for hs in intent.host_sets:
         members = _members_for(hs, hosts)

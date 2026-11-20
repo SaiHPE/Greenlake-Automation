@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from alletra_onboard.adapters.greenlake import json_items
+
 if TYPE_CHECKING:
     from alletra_onboard.adapters.greenlake.http_client import GreenLakeHttpClient
 
@@ -30,5 +32,5 @@ class SubscriptionsClient:
             bucket="subscription_read",
             params={"filter": f"key eq '{subscription_key}'"},
         )
-        items = response.json().get("items", [])
+        items = json_items(response, where="subscription lookup")
         return items[0] if items else None

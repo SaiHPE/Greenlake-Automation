@@ -179,7 +179,9 @@ class _FakeCli:
 
     def __enter__(self):
         if self.fail_login:
-            raise RuntimeError("Login failed for 3paradm@10.0.0.9")
+            from alletra_onboard.domain.errors import ArrayCliError
+
+            raise ArrayCliError("Login failed for 3paradm@10.0.0.9")
         return self
 
     def __exit__(self, *exc):
@@ -212,3 +214,18 @@ def test_read_array_reports_a_failed_login_instead_of_raising():
                       array_cli_factory=lambda creds: _FakeCli("D22U27", fail_login=True))
     assert view.read_error == "Could not read 10.0.0.9: Login failed for 3paradm@10.0.0.9"
     assert view.groups == [] and view.host == "10.0.0.9"
+
+
+def test_read_array_surfaces_programming_bugs_instead_of_swallowing():
+    import pytest
+
+    class _BuggyCli:
+        def __enter__(self):
+            raise KeyError("unexpected parser bug")
+
+        def __exit__(self, *exc):
+            return None
+
+    with pytest.raises(KeyError, match="unexpected parser bug"):
+        read_array(EndpointCreds(host="10.0.0.9", username="u", password="p"),
+                   array_cli_factory=lambda creds: _BuggyCli())

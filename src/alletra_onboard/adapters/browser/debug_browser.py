@@ -14,6 +14,55 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
+
+import structlog
+
+from alletra_onboard.domain.errors import BrowserError
+
+_log = structlog.get_logger(__name__)
+
+try:
+    from playwright.async_api import Error as _PlaywrightError
+    from playwright.async_api import TimeoutError as _PlaywrightTimeoutError
+    from playwright.async_api import async_playwright
+
+    PlaywrightError: type[Exception] = _PlaywrightError
+    PlaywrightTimeoutError: type[Exception] = _PlaywrightTimeoutError
+except ImportError:  # pragma: no cover - browser deps optional until B/C run.
+    async_playwright = None
+
+    class _FallbackPlaywrightError(Exception):
+        pass
+
+    class _FallbackPlaywrightTimeoutError(_FallbackPlaywrightError):
+        pass
+
+    PlaywrightError = _FallbackPlaywrightError
+    PlaywrightTimeoutError = _FallbackPlaywrightTimeoutError
+
+
+def ensure_localhost_no_proxy() -> None:
+    """Add localhost to NO_PROXY so the CDP connection isn't routed through a lab proxy."""
+    existing = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
+    hosts = [h.strip() for h in existing.split(",") if h.strip()]
+    for host in ("localhost", "127.0.0.1"):
+        if host not in hosts:
+            hosts.append(host)
+    value = ",".join(hosts)
+    os.environ["NO_PROXY"] = value
+    os.environ["no_proxy"] = value
+
+
+async def save_screenshot(artifact_dir: Path | None, page: Any, filename: str, label: str) -> None:
+    """Capture a full-page diagnostic screenshot; a failed capture logs and never hides the original error."""
+    if not artifact_dir or page is None:
+        return
+    try:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        await page.screenshot(path=str(artifact_dir / filename), full_page=True)
+    except (PlaywrightError, OSError) as exc:
+        _log.debug("browser_screenshot_failed", label=label, error=str(exc))
 
 # Chrome first (what the wizards were validated against), Edge as a fallback.
 _BROWSER_CANDIDATES = (
@@ -122,7 +171,7 @@ def launch_debug_browser(
     """
     exe = find_browser()
     if not exe:
-        raise RuntimeError(
+        raise BrowserError(
             "No Chrome/Edge found. Install Google Chrome, or pass an explicit path. "
             "Searched: " + ", ".join(c for c in _BROWSER_CANDIDATES if c)
         )

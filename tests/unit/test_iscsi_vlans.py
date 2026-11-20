@@ -286,7 +286,7 @@ def test_offline_iscsi_ports_have_no_address_and_no_iscsivlans_row():
     """VZ (OS 10.5.51, 2026-11-17): four iSCSI ports, all `target offline free iSCSI`, no address.
     `showport -iscsivlans` then answers `no ports listed`, the words D22U27 uses with no iSCSI port
     at all: the view lists addresses, not ports, so only `showport` says which iSCSI ports exist."""
-    from alletra_onboard.adapters.array.wsapi_client import parse_iscsi_vlans_wsapi
+    from alletra_onboard.adapters.array.wsapi_parse import parse_iscsi_vlans_wsapi
     from alletra_onboard.application.provisioning.discovery import (
         parse_iscsi_vlans,
         parse_showport_iscsi,
@@ -360,7 +360,7 @@ def test_wsapi_iscsivlans_answer_has_its_own_envelope_and_leaves_out_the_untagge
     """rack13-ARCUS (OS 10.6.0) answered GET /ports/<n:s:p>/iSCSIVlans/ on all four iSCSI ports.
     0:4:1 and 1:4:1 carry an untagged address and the answer is still empty; `GET /ports` says
     `iSCSIPortInfo.vlan` 0 and carries `iSCSIVlans: []` on every port. OS 10.5.60 differs (below)."""
-    from alletra_onboard.adapters.array.wsapi_client import parse_iscsi_vlans_wsapi
+    from alletra_onboard.adapters.array.wsapi_parse import parse_iscsi_vlans_wsapi
 
     for nsp in ("0:4:1", "0:4:2", "1:4:1", "1:4:2"):
         body = json.loads((RACK13 / "wsapi" / f"ports_{nsp.replace(':', '_')}_iscsivlans.json").read_text())
@@ -382,7 +382,7 @@ def test_wsapi_on_os_10_5_60_lists_the_untagged_address_as_vlan_tag_0_and_the_pa
     GET /ports carries the same record in each iSCSI port's `iSCSIVlans`. Tag 0 is the untagged
     address, not a VLAN interface. These are the first real records in hand: their field names are
     the ones the parser reads."""
-    from alletra_onboard.adapters.array.wsapi_client import parse_iscsi_vlans_wsapi
+    from alletra_onboard.adapters.array.wsapi_parse import parse_iscsi_vlans_wsapi
     from alletra_onboard.application.provisioning.discovery import parse_showport_iscsi
     from alletra_onboard.domain.network import IscsiVlanInterface
 
@@ -423,7 +423,7 @@ def test_discovery_reads_a_starred_iscsi_address_without_its_star():
 
 def test_a_tagged_wsapi_iscsivlans_record_parses():
     """The record's field names are seen on E18U31's untagged record (OS 10.5.60); this pins a tagged one."""
-    from alletra_onboard.adapters.array.wsapi_client import parse_iscsi_vlans_wsapi
+    from alletra_onboard.adapters.array.wsapi_parse import parse_iscsi_vlans_wsapi
 
     found = []
     for path in sorted((TAGGED / "wsapi").glob("ports_*_iscsivlans.json")):
@@ -890,10 +890,11 @@ async def test_with_no_iscsi_rows_the_step_reads_nothing_and_is_complete(tmp_pat
 
 async def test_the_preview_reads_the_array_plans_and_holds_the_plan_until_a_new_read(tmp_path, monkeypatch):
     from alletra_onboard.application.provisioning import iscsi_network
+    from alletra_onboard.domain.errors import ArrayCliError
     from alletra_onboard.domain.models import RunStatus, WorkflowPhase
 
     view, _ = _read(RACK13)
-    reads = iter([view, RuntimeError("SSH connection refused")])
+    reads = iter([view, ArrayCliError("SSH connection refused")])
 
     def read(creds):
         answer = next(reads)
@@ -998,7 +999,9 @@ async def test_the_verify_step_compares_the_sheets_iscsi_rows_read_only(tmp_path
     assert statuses == [("0:4:1", "present"), ("1:4:1", "missing")]
 
     def refused(creds):
-        raise RuntimeError("connection reset")
+        from alletra_onboard.domain.errors import ArrayCliError
+
+        raise ArrayCliError("connection reset")
 
     service.documents._read_iscsi_vlans = refused
     service.start_verify(run.run_id)

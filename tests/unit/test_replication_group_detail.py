@@ -154,8 +154,10 @@ def test_read_group_details_sends_one_read_per_group_and_names_a_missing_one():
 
 
 def test_a_failed_login_is_every_groups_reason():
+    from alletra_onboard.domain.errors import ArrayCliError
+
     def refuse(creds):
-        raise RuntimeError("Login failed")
+        raise ArrayCliError("Login failed")
     details, errors = read_group_details(_creds("a"), ["g1", "g2"], array_cli_factory=refuse)
     assert details == {} and errors == {"g1": "Could not read a: Login failed", "g2": "Could not read a: Login failed"}
 

@@ -9,16 +9,17 @@ from __future__ import annotations
 import json
 import time
 
+from alletra_onboard.adapters import command_log, device_trust
+from alletra_onboard.domain.discovery import HostRead
+from alletra_onboard.domain.errors import WindowsHostError
+from alletra_onboard.domain.shared import normalize_wwpn
+
 try:
     import winrm
     from winrm.exceptions import InvalidCredentialsError
 except ImportError:  # pragma: no cover - bundled in the .exe
     winrm = None
     InvalidCredentialsError = Exception
-
-from alletra_onboard.adapters import command_log, device_trust
-from alletra_onboard.domain.discovery import HostRead
-from alletra_onboard.domain.shared import normalize_wwpn
 
 SCRIPTS: dict[str, str] = {
     "hostname": "$env:COMPUTERNAME",
@@ -37,10 +38,6 @@ SCRIPTS: dict[str, str] = {
 }
 
 _NO_SERIAL = {"", "0", "none", "not specified", "to be filled by o.e.m.", "default string", "system serial number"}
-
-
-class WindowsHostError(Exception):
-    """Couldn't connect to or authenticate on the host."""
 
 
 def _json(text: str):
@@ -118,7 +115,7 @@ class WindowsHostClient:
             ca_bundle = device_trust.device_ca_bundle()
         except device_trust.DeviceTrustError as exc:
             raise WindowsHostError(str(exc)) from exc
-        last: Exception | None = None
+        last: WindowsHostError | None = None
         for url in (f"http://{self.host}:5985/wsman", f"https://{self.host}:5986/wsman"):
             session = self._session_for(url, ca_bundle)
             try:
@@ -130,15 +127,16 @@ class WindowsHostClient:
                 raise WindowsHostError(
                     f"login failed for {self.username}@{self.host} — check the Hosts tab login{hint}"
                 ) from exc
-            except Exception as exc:  # refused / timeout / TLS: try the next listener
+            except WindowsHostError as exc:  # refused / timeout / TLS / non-NTLM listener: try the next listener
                 last = exc
                 continue
             self._session = session
             return
+        cause = (last.__cause__ or last) if last is not None else None
         raise WindowsHostError(
-            f"could not reach WinRM on {self.host} (5985/5986: {type(last).__name__}) — is WinRM enabled and "
+            f"could not reach WinRM on {self.host} (5985/5986: {type(cause).__name__}) — is WinRM enabled and "
             "the port open from the jump box?"
-        )
+        ) from last
 
     def read(self, key: str) -> str:
         """Run the fixed script named `key`; stdout, or '' when it failed."""
@@ -146,20 +144,30 @@ class WindowsHostClient:
             raise WindowsHostError("not connected")
         try:
             response = self._run_ps(self._session, key)
-        except Exception:  # one failed read must not sink the host read
+        except (WindowsHostError, InvalidCredentialsError):  # one failed read must not sink the host read
             return ""
         return response.std_out.decode("utf-8", "replace") if response.status_code == 0 else ""
 
     def _run_ps(self, session, key: str):
-        """Run the fixed script named `key` on `session`, recording it in the command log."""
+        """Run the fixed script named `key` on `session`, recording it in the command log.
+
+        Translates every non-credential failure once at the pywinrm boundary into
+        `WindowsHostError` (preserving `__cause__`). A broad translate-at-the-boundary is right
+        here because pywinrm / requests_ntlm raises outside its own exception hierarchy (e.g. a
+        bare `AttributeError` when a listener on 5985 answers HTTP 200 without an NTLM challenge).
+        """
         script = SCRIPTS[key]
         started = time.monotonic()
         try:
             response = session.run_ps(script)
-        except Exception as exc:
+        except InvalidCredentialsError as exc:
             command_log.record(target=self.host, transport="winrm", command=script, started=started, ok=False,
                                result=type(exc).__name__, secrets=[self.password])
             raise
+        except Exception as exc:  # pywinrm boundary: translate every non-credential failure once
+            command_log.record(target=self.host, transport="winrm", command=script, started=started, ok=False,
+                               result=type(exc).__name__, secrets=[self.password])
+            raise WindowsHostError(f"{type(exc).__name__}: {exc}") from exc
         command_log.record(target=self.host, transport="winrm", command=script, started=started,
                            ok=response.status_code == 0, result=f"exit {response.status_code}",
                            output=response.std_out.decode("utf-8", "replace"), secrets=[self.password])

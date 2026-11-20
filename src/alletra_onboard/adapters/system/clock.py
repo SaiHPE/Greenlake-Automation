@@ -36,7 +36,7 @@ def is_elevated() -> bool:
         return False
     try:
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except Exception:
+    except (AttributeError, OSError):
         return False
 
 
@@ -78,15 +78,19 @@ async def _server_utc(preferred: str | None = None) -> _Reading:
             if date:
                 return _Reading(parsedate_to_datetime(date).astimezone(UTC), t0 + (t1 - t0) / 2, url)
             last = f"no Date header from {url}"
-        except Exception as exc:  # try the next source
+        except (httpx.HTTPError, OSError, ValueError, TypeError) as exc:  # try the next source
             last = f"{type(exc).__name__} from {url}: {str(exc)[:80]}"
     raise RuntimeError(last)
 
 
 async def clock_status(url: str | None = None) -> ClockStatus:
+    """Return the host clock's skew against an HTTPS time source.
+
+    Returns, never raises: a clock-check failure must never block or crash the UI banner.
+    """
     try:
         reading = await _server_utc(url)
-    except Exception as exc:  # status must never raise; the UI just won't warn.
+    except Exception as exc:  # returns, never raises: status check must never break the UI
         return ClockStatus(
             in_sync=True,
             skew_seconds=None,

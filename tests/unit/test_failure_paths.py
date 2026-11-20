@@ -12,6 +12,7 @@ from alletra_onboard.adapters.vcenter import vcenter_client
 from alletra_onboard.application.provisioning import discovery as disc
 from alletra_onboard.application.provisioning import zoning
 from alletra_onboard.domain.discovery import DiscoveryReport, HostHba
+from alletra_onboard.domain.errors import DeviceError
 from tests.unit import fake_tls
 from tests.unit.test_storage_services import _ARRAY_BLOCKS, FakeArrayCli, FakeVCenter, _intent
 
@@ -21,7 +22,7 @@ class _Refuses:
         self.message = message
 
     def __enter__(self):
-        raise RuntimeError(self.message)
+        raise DeviceError(self.message)
 
     def __exit__(self, *exc_info: object) -> None:
         pass
@@ -78,3 +79,78 @@ def test_vcenter_invalid_login_reads_as_one_sentence(monkeypatch):
         raise AssertionError("connect() should have raised")
     assert text.startswith("Login failed for zz_nobody@vsphere.local@vc — check the vCenter username/password")
     assert "incorrect user name or password" in text and "dynamicType" not in text
+
+
+def test_vcenter_read_fault_translates_to_device_error_and_destroy_tolerates_fault():
+    """STANDARD E1, E2: pyVmomi read faults become VCenterError (DeviceError) with .msg preserved,
+    and view.Destroy() / Disconnect failures log and do not raise."""
+    import pytest
+    from pyVmomi import vmodl
+
+    from alletra_onboard.domain.errors import DeviceError, VCenterError
+
+    class _FailingSi:
+        def RetrieveContent(self):
+            fault = vmodl.fault.HostNotConnected()
+            fault.msg = "The host is not connected."
+            raise fault
+
+    client = vcenter_client.VCenterClient("vc", "u", "p")
+    client._si = _FailingSi()
+    with pytest.raises(VCenterError, match="The host is not connected.") as exc_info:
+        client.host_fc_hbas()
+    assert isinstance(exc_info.value, DeviceError)
+
+    class _FailingView:
+        view: tuple[object, ...] = ()
+
+        def Destroy(self):
+            raise vmodl.fault.SystemError()
+
+    class _ViewSi:
+        def RetrieveContent(self):
+            class _VM:
+                def CreateContainerView(self, *_a):
+                    return _FailingView()
+
+            return type("C", (), {"viewManager": _VM(), "rootFolder": None})()
+
+    client._si = _ViewSi()
+    assert client.host_fc_hbas() == []
+    client.close()
+    assert client._si is None
+
+
+def test_provisioning_catches_device_error_and_surfaces_bugs():
+    """STANDARD E1: real adapter DeviceError becomes report.error, while a non-DeviceError bug surfaces."""
+    import pytest
+
+    from alletra_onboard.domain.errors import ArrayCliError
+
+    class _ArrayErrorCli:
+        def __enter__(self):
+            raise ArrayCliError("Could not reach the array at 10.0.0.5:22 (TimeoutError)")
+
+        def __exit__(self, *a):
+            return False
+
+    class _BuggyCli:
+        def __enter__(self):
+            raise KeyError("unexpected bug")
+
+        def __exit__(self, *a):
+            return False
+
+    report = disc.discover(
+        _intent(),
+        array_cli_factory=lambda c: _ArrayErrorCli(),
+        vcenter_factory=lambda c: FakeVCenter([HostHba(host_name="esx1", wwpn="10000000C9000001")]),
+    )
+    assert report.error and "TimeoutError" in report.error
+
+    with pytest.raises(KeyError, match="unexpected bug"):
+        disc.discover(
+            _intent(),
+            array_cli_factory=lambda c: _BuggyCli(),
+            vcenter_factory=lambda c: FakeVCenter([]),
+        )

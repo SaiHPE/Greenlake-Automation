@@ -220,3 +220,84 @@ async def test_wizard_unknown_page_timeout_reports_what_it_shows(monkeypatch):
     assert await adapter._await_wizard_ready(page, "r1") is False
     # The error names what the page actually says, so an unfamiliar state identifies itself.
     assert any("some entirely different hpe page" in status.lower() for status in statuses)
+
+
+async def test_cloudinit_escaping_playwright_error_becomes_browser_error(monkeypatch):
+    """STANDARD E1: a Playwright error escaping CloudinitWizardAdapter becomes BrowserError
+    (DeviceError) with the page's/driver's own message and __cause__ preserved."""
+    import pytest
+
+    from alletra_onboard.adapters.browser import cloudinit_wizard as cw
+    from alletra_onboard.domain.errors import BrowserError, DeviceError
+
+    class _FailingPlaywright:
+        async def __aenter__(self):
+            raise cw.PlaywrightError("Target page, context or browser has been closed")
+
+        async def __aexit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(cw, "async_playwright", lambda: _FailingPlaywright())
+    with pytest.raises(BrowserError, match="Target page, context or browser has been closed") as exc_info:
+        await cw.CloudinitWizardAdapter(headless=True).run(_item("https://169.254.239.27/cloudinit"), run_id="r1")
+
+    assert isinstance(exc_info.value, DeviceError)
+    assert isinstance(exc_info.value.__cause__, cw.PlaywrightError)
+
+
+async def test_dscc_playwright_error_becomes_browser_error(monkeypatch):
+    """STANDARD E1: a non-timeout Playwright error in DsccSetupAdapter becomes BrowserError
+    (DeviceError) with the page's own message and __cause__ preserved."""
+    import pytest
+
+    from alletra_onboard.adapters.browser import dscc_setup as ds
+    from alletra_onboard.domain.errors import BrowserError, DeviceError
+
+    class _FailingLocator:
+        @property
+        def first(self):
+            return self
+
+        async def wait_for(self, **_kwargs):
+            raise ds.PlaywrightError("Frame was detached while loading DSCC wizard")
+
+    class _FakeFrame:
+        def locator(self, _selector):
+            return _FailingLocator()
+
+    class _FakePage:
+        url = "https://data.cloud.hpe.com/setup"
+
+        async def bring_to_front(self):
+            return None
+
+        def set_default_timeout(self, _ms):
+            return None
+
+        def frame_locator(self, _selector):
+            return _FakeFrame()
+
+    class _FakeBrowser:
+        contexts = (type("Ctx", (), {"pages": (_FakePage(),)})(),)
+
+    class _FakeChromium:
+        async def connect_over_cdp(self, _url):
+            return _FakeBrowser()
+
+    class _FakePlaywright:
+        chromium = _FakeChromium()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(ds, "async_playwright", lambda: _FakePlaywright())
+    with pytest.raises(BrowserError, match="Frame was detached while loading DSCC wizard") as exc_info:
+        await ds.DsccSetupAdapter(cdp_url="http://localhost:9222").run(
+            _item("https://169.254.239.27/cloudinit"), run_id="r1"
+        )
+
+    assert isinstance(exc_info.value, DeviceError)
+    assert isinstance(exc_info.value.__cause__, ds.PlaywrightError)

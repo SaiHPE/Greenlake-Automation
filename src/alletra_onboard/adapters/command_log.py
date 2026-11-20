@@ -9,12 +9,17 @@ redaction policy masks anything shaped like a bearer token, client secret or sub
 from __future__ import annotations
 
 import json
+import sqlite3
 import time
 from collections.abc import Callable, Iterable
 from contextvars import ContextVar, Token
 from datetime import UTC, datetime
 
+import structlog
+
 from alletra_onboard.domain.policies import redact as redact_policy
+
+_log = structlog.get_logger(__name__)
 
 MAX_OUTPUT_BYTES = 64 * 1024
 REDACTED = "********"
@@ -83,5 +88,5 @@ def record(
     }
     try:
         sink(entry)
-    except Exception:  # the log must never break the command it describes
-        pass
+    except (RuntimeError, OSError, sqlite3.Error) as exc:  # the log must never break the command it describes
+        _log.debug("command_log_sink_failed", target=target, command=entry["command"], error=str(exc))

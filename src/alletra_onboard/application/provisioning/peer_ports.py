@@ -18,6 +18,7 @@ from collections.abc import Callable
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.provisioning.discovery import UNCLAIMED_HOST, parse_showhost
 from alletra_onboard.domain.array_parse import NSP, parse_showport_roles
+from alletra_onboard.domain.errors import DeviceError
 from alletra_onboard.domain.peer_ports import (
     PeerPortAction,
     PeerPortCheck,
@@ -220,12 +221,11 @@ def read_view(
             for command in READS:
                 try:
                     answers[command] = cli.run(command)
-                except Exception:
-                    # an optional read may fail and is left out; a required one fails the read
+                except DeviceError:
                     if command in _REQUIRED:
                         raise
                     answers[command] = ""
-    except Exception as exc:  # the step reports, the operator decides
+    except DeviceError as exc:
         return PeerPortView(host=creds.host, read_error=f"Could not read {creds.host}: {exc}")
     for command in READS:
         first = answers[command].strip().splitlines()[0] if answers[command].strip() else ""

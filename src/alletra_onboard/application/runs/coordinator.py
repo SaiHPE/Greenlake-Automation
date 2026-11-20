@@ -10,12 +10,14 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import json
+import sqlite3
 import threading
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import structlog
 from pydantic import BaseModel
 
 from alletra_onboard.adapters import command_log, device_trust
@@ -30,6 +32,7 @@ from alletra_onboard.application.runs.event_bus import ConsoleBus, InMemoryEvent
 from alletra_onboard.application.runs.trust import RunTrustBook
 from alletra_onboard.config import Settings, load_settings
 from alletra_onboard.domain.approval import Approval, ApprovalError, Purpose, SaveRecord, Side
+from alletra_onboard.domain.errors import ApplyRecordError
 from alletra_onboard.domain.models import (
     ArrayCredential,
     ArrayWorkItem,
@@ -45,6 +48,8 @@ from alletra_onboard.domain.shared import EndpointCreds
 from alletra_onboard.domain.snapshots import SNAPSHOTS_TAB_NEEDED
 from alletra_onboard.domain.trust import DevicePin, TrustKind, retrust, retrusted_message
 from alletra_onboard.domain.workflow import NOT_BUILT_STEPS, enabled_steps, initial_phase
+
+_log = structlog.get_logger(__name__)
 
 
 class RunNotFoundError(LookupError):
@@ -316,6 +321,13 @@ class RunCoordinator:
         ctx.run(device_trust.bind, trust)
         self._tasks[run_id] = asyncio.create_task(self._guarded(run_id, coro, trust, approval), context=ctx)
 
+    def save_artifact_best_effort(self, run_id: str, kind: str, payload: bytes) -> None:
+        """Persist a cached step artifact; a store failure logs and never overrides the step's result."""
+        try:
+            self.store.save_artifact(run_id, kind, payload)
+        except (OSError, sqlite3.Error) as exc:
+            _log.warning("save_artifact_failed", run_id=run_id, kind=kind, error=str(exc))
+
     def apply_record(self, run_id: str, event_type: str) -> SaveRecord:
         if event_type not in APPLY_RECORDS:
             raise ValueError(f"unknown apply record event type: {event_type}")
@@ -324,7 +336,10 @@ class RunCoordinator:
         def save(model: BaseModel) -> None:
             blob = json.dumps({"event_type": event_type, "after": after,
                                "payload": model.model_dump(mode="json")}).encode("utf-8")
-            self.store.save_artifact(run_id, APPLY_RECORD_ARTIFACT, blob)
+            try:
+                self.store.save_artifact(run_id, APPLY_RECORD_ARTIFACT, blob)
+            except (sqlite3.Error, OSError) as exc:
+                raise ApplyRecordError(str(exc)) from exc
 
         return save
 
@@ -411,8 +426,8 @@ class RunCoordinator:
             command_log.unbind(token)
             try:
                 trust.finish()
-            except Exception:  # a note on the run must not replace the route's own answer
-                pass
+            except Exception as exc:  # a note on the run must not replace the route's own answer
+                _log.warning("trust_finish_failed", run_id=run_id, error=str(exc))
 
     # ------------------------------------------------------------------ ADR 0026 device trust
 
@@ -478,8 +493,8 @@ class RunCoordinator:
             if trust is not None:
                 try:
                     trust.finish()
-                except Exception:  # reporting a refusal must not crash the app
-                    pass
+                except Exception as exc:  # reporting a refusal must not crash the app
+                    _log.warning("trust_finish_failed", run_id=run_id, error=str(exc))
 
     def set_state(self, run: RunRecord, status: RunStatus, phase: WorkflowPhase | None = None) -> None:
         run.status = status

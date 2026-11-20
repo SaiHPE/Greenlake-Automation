@@ -17,6 +17,8 @@ import copy
 import json
 from functools import partial
 
+import structlog
+
 from alletra_onboard.application.provisioning import apply, iscsi_network, storage_provision
 from alletra_onboard.application.provisioning import discovery as storage_discovery
 from alletra_onboard.application.provisioning import path_verify as storage_path_verify
@@ -33,6 +35,7 @@ from alletra_onboard.application.runs.coordinator import (
 )
 from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.errors import DeviceError
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.network import IscsiNetworkPlan, IscsiVlanRequest, PortNetworkView
 from alletra_onboard.domain.peer_ports import (
@@ -47,6 +50,8 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningComposition,
     ProvisioningObjects,
 )
+
+_log = structlog.get_logger(__name__)
 
 
 class DiscoveryZoningSteps:
@@ -74,7 +79,7 @@ class DiscoveryZoningSteps:
                 try:
                     report = DiscoveryReport.model_validate_json(raw)
                     self.discovery[run_id] = report
-                except Exception:
+                except ValueError:
                     # A stored report the current model can no longer read (an upgrade changed the
                     # schema, or the row is damaged). Treat it as absent so the operator can simply
                     # re-run discovery, instead of every step failing with a 500 and no way out.
@@ -105,10 +110,8 @@ class DiscoveryZoningSteps:
 
         report = await asyncio.to_thread(storage_discovery.discover, intent, progress=progress)
         self.discovery[run.run_id] = report
-        try:
-            coord.store.save_artifact(run.run_id, "discovery", report.model_dump_json().encode("utf-8"))
-        except Exception:  # discovery succeeded; failing to cache it must not fail the step.
-            pass
+        # discovery succeeded; failing to cache it must not fail the step.
+        coord.save_artifact_best_effort(run.run_id, "discovery", report.model_dump_json().encode("utf-8"))
         if report.error:
             # D-10: the event's own message says what failed and what to do; the UI marks the step failed
             # from report.error. A run keeps its sheet's credential (ADR 0013), so the fix is a new run.
@@ -154,10 +157,8 @@ class DiscoveryZoningSteps:
         return {h for h in raw.decode("utf-8", "replace").split("\n") if h}
 
     def _save_zoned_hosts(self, run_id: str, hosts: list[str]) -> None:
-        try:
-            self._coord.store.save_artifact(run_id, "zoned_hosts", "\n".join(hosts).encode("utf-8"))
-        except Exception:  # the step succeeded; persisting the gate must not fail it
-            pass
+        # the step succeeded; persisting the gate must not fail it
+        self._coord.save_artifact_best_effort(run_id, "zoned_hosts", "\n".join(hosts).encode("utf-8"))
 
     def start_zoning_preview(self, run_id: str) -> RunRecord:
         coord = self._coord
@@ -208,11 +209,9 @@ class DiscoveryZoningSteps:
         peer_pairs, peer_nsps = self._peer_zone_input(run.run_id, intent)
         plan = await asyncio.to_thread(partial(
             storage_zoning_plan.build_zoning_plan, intent, discovery, peer_pairs=peer_pairs, peer_nsps=peer_nsps))
-        try:
-            # The Array ports step's peer-port plan names a free port still zoned (SPEC-025 R3) from this read.
-            coord.store.save_artifact(run.run_id, ACTIVE_ZONES_ARTIFACT, json.dumps(plan.active_zones).encode("utf-8"))
-        except Exception:  # the plan stands; failing to keep the zones only loses a note
-            pass
+        # The Array ports step's peer-port plan names a free port still zoned (SPEC-025 R3) from this read.
+        # the plan stands; failing to keep the zones only loses a note
+        coord.save_artifact_best_effort(run.run_id, ACTIVE_ZONES_ARTIFACT, json.dumps(plan.active_zones).encode("utf-8"))
         pairs = sum(len(f.pairs) for f in plan.fabrics)
         coord.set_state(run, RunStatus.READY, WorkflowPhase.STORAGE_ZONING)
         coord.emit(
@@ -248,7 +247,7 @@ def latest_peer_view(coord: RunCoordinator, run_id: str) -> PeerPortView | None:
         if view:
             try:
                 return PeerPortView.model_validate(view)
-            except Exception:  # an unreadable stored view means "read the array again"
+            except ValueError:  # an unreadable stored view means "read the array again"
                 return None
     return None
 
@@ -328,7 +327,7 @@ class ArrayPortsSteps:
             data["iscsi"] = section
             try:
                 view = await asyncio.to_thread(iscsi_network.read_port_network, intent.array)
-            except Exception as exc:  # the step reports; nothing is planned on half a read
+            except (DeviceError, ValueError) as exc:  # the step reports; nothing is planned on half a read
                 section["error"] = f"Could not read {intent.array.host}: {exc}. Nothing was planned. Read the array again."
                 failures.append(section["error"])
             else:
@@ -400,7 +399,7 @@ class ArrayPortsSteps:
             stored = json.loads(raw)
             zones = {switch: None if active is None else {zone: set(members) for zone, members in active.items()}
                      for switch, active in stored.items()}
-        except Exception:  # unreadable: say the zones were not checked
+        except (ValueError, TypeError, AttributeError):  # unreadable: say the zones were not checked
             return None
         return zones if any(active is not None for active in zones.values()) else None
 
@@ -419,7 +418,8 @@ class ArrayPortsSteps:
             try:
                 plan = PeerPortPlan.model_validate(section["plan"])
                 view = PeerPortView.model_validate(section["view"])
-            except Exception:  # an unreadable stored plan is no plan to judge against
+            except (ValueError, KeyError, TypeError) as exc:  # an unreadable stored plan is no plan to judge against
+                _log.debug("stored_peer_plan_unreadable", run_id=run_id, error=str(exc))
                 continue
             for action in plan.actions:
                 if action.state == "create" and action.nsp not in creates:

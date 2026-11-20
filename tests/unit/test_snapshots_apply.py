@@ -13,7 +13,7 @@ import pytest
 from docx.oxml.ns import qn
 from pydantic import SecretStr
 
-from alletra_onboard.adapters.array.wsapi_client import parse_sets, parse_volumes
+from alletra_onboard.adapters.array.wsapi_parse import parse_sets, parse_volumes
 from alletra_onboard.application.snapshots.read import read_array
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.shared import ArrayVolumeRecord, EndpointCreds
@@ -37,7 +37,9 @@ class _Cli:
 
     def __enter__(self):
         if self.fail:
-            raise RuntimeError("Login failed for 3paradm@10.64.122.99")
+            from alletra_onboard.domain.errors import ArrayCliError
+
+            raise ArrayCliError("Login failed for 3paradm@10.64.122.99")
         return self
 
     def __exit__(self, *exc):
@@ -466,7 +468,9 @@ class _ArrayWsapi:
 
     def volumes(self):
         if self.unreadable:
-            raise RuntimeError("WSAPI getVolumes failed: connection reset")
+            from alletra_onboard.domain.errors import WsapiError
+
+            raise WsapiError("WSAPI getVolumes failed: connection reset")
         return list(self.vols)
 
     def volume_sets(self):
@@ -888,3 +892,15 @@ async def test_the_page_reads_the_tab_in_words_and_whether_the_plan_is_still_hel
     await _settle(service, run.run_id)
     held = client.get(f"/runs/{run.run_id}/snapshots").json()["held_plan_id"]
     assert held and held == _last(service, run.run_id, "snapshots.previewed").data["plan"]["plan_id"]
+
+
+def test_snapshot_read_surfaces_programming_bugs_instead_of_swallowing():
+    class _BuggyCli:
+        def __enter__(self):
+            raise KeyError("unexpected parser bug")
+
+        def __exit__(self, *exc):
+            return None
+
+    with pytest.raises(KeyError, match="unexpected parser bug"):
+        read_array(_creds(), array_cli_factory=lambda c: _BuggyCli(), wsapi_factory=lambda c: _Wsapi("d22u27_snap"))

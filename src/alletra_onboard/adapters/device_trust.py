@@ -35,6 +35,10 @@ try:
 except ImportError:  # pragma: no cover - bundled in the .exe; optional for non-SSH runs
     paramiko = None
 
+SSH_ERRORS: tuple[type[BaseException], ...] = (
+    (OSError, EOFError, paramiko.SSHException) if paramiko is not None else (OSError, EOFError)
+)
+
 
 class TrustBook(Protocol):
     """One run's pins as the clients see them. The run coordinator implements it."""

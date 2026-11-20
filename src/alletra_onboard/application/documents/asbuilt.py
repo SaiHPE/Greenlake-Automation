@@ -27,6 +27,7 @@ from pathlib import Path
 from types import EllipsisType
 
 import docx
+import structlog
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt
@@ -83,6 +84,8 @@ from alletra_onboard.domain.replication import (
 )
 from alletra_onboard.domain.shared import REMOVAL_ORDER
 from alletra_onboard.domain.unified_file import NODE_RUNNING
+
+_log = structlog.get_logger(__name__)
 
 #: Narrative placeholders in the template -> the AsBuiltData field that fills them. Matched
 #: case-insensitively; HPE's own template varies the capitalisation of the same field.
@@ -153,14 +156,13 @@ def _load_document(template: str | Path | None):
         return docx.Document()
     template = Path(template)
     if template.suffix.lower() == ".dotx":
-        zin = zipfile.ZipFile(template)
-        ct = zin.read("[Content_Types].xml").decode("utf-8").replace(
-            "wordprocessingml.template.main+xml", "wordprocessingml.document.main+xml")
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zout:
-            for item in zin.namelist():
-                zout.writestr(item, ct.encode("utf-8") if item == "[Content_Types].xml" else zin.read(item))
-        zin.close()
+        with zipfile.ZipFile(template) as zin:
+            ct = zin.read("[Content_Types].xml").decode("utf-8").replace(
+                "wordprocessingml.template.main+xml", "wordprocessingml.document.main+xml")
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.namelist():
+                    zout.writestr(item, ct.encode("utf-8") if item == "[Content_Types].xml" else zin.read(item))
         buf.seek(0)
         return docx.Document(buf)
     return docx.Document(str(template))
@@ -179,15 +181,15 @@ def _text_parts(doc):
     """
     yield doc.element.body
     for section in doc.sections:
-        for part in (
-            section.first_page_header, section.header, section.even_page_header,
-            section.first_page_footer, section.footer, section.even_page_footer,
-        ):
+        for attr in ("first_page_header", "header", "even_page_header",
+                     "first_page_footer", "footer", "even_page_footer"):
             try:
+                part = getattr(section, attr)
                 if part.is_linked_to_previous:
                     continue
                 yield part._element
-            except Exception:  # a malformed part must not stop the fill
+            except (AttributeError, KeyError, ValueError) as exc:
+                _log.debug("docx_part_unreadable", error=str(exc))
                 continue
 
 
@@ -607,13 +609,18 @@ def _add_hosts_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
                       widths=[0.50, 0.30, 0.20])
         else:
             add_para(doc, "Every initiator logged in on the array belongs to a host object.")
-    add_para(doc, "Host sets", bold=True)
-    if not _read_failed(doc, data, "showhostset", warnings):
+    _add_sets_table(doc, data, warnings, "Host", sets)
+
+
+def _add_sets_table(doc, data: AsBuiltData, warnings: list[str], kind: str, sets: OrderedDict[str, list[str]]) -> None:
+    add_para(doc, f"{kind} sets", bold=True)
+    cmd = "showhostset" if kind == "Host" else "showvvset"
+    if not _read_failed(doc, data, cmd, warnings):
         if sets:
-            add_table(doc, ["Host set", "Members"], [[n, ", ".join(m) or "—"] for n, m in sets.items()],
+            add_table(doc, [f"{kind} set", "Members"], [[n, ", ".join(m) or "—"] for n, m in sets.items()],
                       widths=[0.35, 0.65])
         else:
-            add_para(doc, "The array reports no host sets.")
+            add_para(doc, f"The array reports no {kind.lower()} sets.")
 
 
 def _gib(mib: str) -> str:
@@ -665,13 +672,7 @@ def _add_volumes_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
         else:
             add_para(doc, "The array reports no user volumes.")
         add_para(doc, f"Not listed: {len(system)} system volume(s) and {len(snapshots)} snapshot(s).")
-    add_para(doc, "Volume sets", bold=True)
-    if not _read_failed(doc, data, "showvvset", warnings):
-        if sets:
-            add_table(doc, ["Volume set", "Members"], [[n, ", ".join(m) or "—"] for n, m in sets.items()],
-                      widths=[0.35, 0.65])
-        else:
-            add_para(doc, "The array reports no volume sets.")
+    _add_sets_table(doc, data, warnings, "Volume", sets)
 
 
 def _add_presentations_section(doc, data: AsBuiltData, warnings: list[str]) -> None:

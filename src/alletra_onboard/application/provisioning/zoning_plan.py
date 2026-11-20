@@ -24,6 +24,7 @@ from alletra_onboard.application.provisioning.hosts import (
 )
 from alletra_onboard.application.provisioning.zoning import parse_active_zones
 from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.errors import DeviceError
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.shared import normalize_wwpn, wwpn_colons
 from alletra_onboard.domain.zoning import AliasedWwpn, FabricZonePlan, NsDevice, ZoningPlan
@@ -343,15 +344,14 @@ def build_zoning_plan(
                         "no effect until they are in an enabled configuration. Check cfgactvshow on the "
                         "switch and ask the SAN owner before pasting."
                     )
-                # Identity reads are best-effort: a fake or an older FOS without them must not sink
-                # the plan, which is complete without names.
+                # Identity reads are optional.
                 try:
                     switch_name[label], _domain = parse_switchshow(switch.read("switchshow"))
-                except Exception:
+                except DeviceError:
                     switch_name[label] = ""
                 try:
                     fabric_name[label], fabric_switches[label] = parse_fabricshow(switch.fabricshow())
-                except Exception:
+                except DeviceError:
                     fabric_name[label], fabric_switches[label] = "", {}
                 if not local_ns[label]:
                     # Measured live 2026-08-15: one plan run got an empty local NS from a healthy
@@ -363,7 +363,7 @@ def build_zoning_plan(
                         "(nsshow) — devices plugged into that switch (typically this deployment's "
                         "array ports) cannot be placed. Likely transient: rebuild the plan."
                     )
-        except Exception as exc:  # one unreachable switch must not sink the plan
+        except DeviceError as exc:
             plan.active_zones[f"the {label} switch {creds.host or '(none on the sheet)'}"] = None
             ns[label] = {}
             local_ns[label] = {}

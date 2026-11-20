@@ -9,17 +9,14 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from alletra_onboard.adapters.array.wsapi_client import (
-    _WSAPI_PERSONA,
-    WsapiError,
-    parse_hosts,
-)
+from alletra_onboard.adapters.array.wsapi_parse import _WSAPI_PERSONA, parse_hosts
 from alletra_onboard.adapters.array.wsapi_writer import WsapiWriter
 from alletra_onboard.application.provisioning import apply as prov_apply
 from alletra_onboard.application.provisioning import storage_provision as prov
 from alletra_onboard.application.provisioning import zoning
 from alletra_onboard.application.provisioning.discovery import parse_showhost
 from alletra_onboard.domain.discovery import ArrayHost, ArrayPort, DiscoveryReport, HostHba
+from alletra_onboard.domain.errors import WsapiError
 from alletra_onboard.domain.provisioning import (
     ArrayHostRecord,
     DeclaredHost,

@@ -16,6 +16,7 @@ import re
 from collections import OrderedDict
 from collections.abc import Callable
 
+import structlog
 from pydantic import SecretStr
 
 from alletra_onboard.application.provisioning.clients import (
@@ -42,10 +43,13 @@ from alletra_onboard.domain.discovery import (
     os_from_persona,
     os_from_switch_string,
 )
+from alletra_onboard.domain.errors import DeviceError
 from alletra_onboard.domain.network import IscsiPortAddress, IscsiVlanInterface
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.shared import EndpointCreds, Fabric, normalize_wwpn
 from alletra_onboard.domain.unified_file import FileReport
+
+_log = structlog.get_logger(__name__)
 
 _LOGICAL_NAME_RE = re.compile(r"^\s*Logical Name:\s*(\S+)", re.IGNORECASE)
 
@@ -705,7 +709,8 @@ def _refine_fabrics_from_switches(cli, array_ports: list[ArrayPort], *, progress
             progress(f"Resolving the fabric switch for port {port.label} (probe {probed}, {len(switch_by_label)}/{len(ready)} ports resolved)…")
         try:
             text = cli.run(f"showportdev fcfabric {port.label}", timeout=_FCFABRIC_TIMEOUT)
-        except Exception:  # one flaky/slow lookup must not sink discovery
+        except DeviceError as exc:  # one flaky/slow lookup must not sink discovery
+            _log.debug("fcfabric_probe_failed", port=port.label, error=str(exc))
             continue
         for other in ready:
             if other.label not in switch_by_label and (sw := switch_for_wwpn(text, other.wwpn)):
@@ -735,7 +740,7 @@ def _read_sheet_hosts(
         try:
             with factory(creds) as client:
                 out.append(reader(client, d.name, d.address))
-        except Exception as exc:  # one host's login must not sink discovery
+        except (DeviceError, OSError) as exc:  # one host's login must not sink discovery
             hint = " (OS is blank on the Hosts tab, so it was tried as Linux; set it to windows for a WinRM read)" if not d.os else ""
             out.append(HostRead(host_name=d.name, address=d.address, method=method, error=f"{exc}{hint}"))
     return out
@@ -748,7 +753,7 @@ def _read_file_side(cli, intent: ProvisioningIntent, file_ports: list[EthernetPo
     storage is not affected."""
     try:
         os_version = parse_showversion(cli.run("showversion"))
-    except Exception:  # without it the file API is read only when there are File ports
+    except DeviceError:  # without it the file API is read only when there are File ports
         os_version = ""
     if file_ports:
         progress("Reading the file service, file systems and shares (read-only)…")
@@ -777,8 +782,8 @@ def discover(
         if progress:
             try:
                 progress(message)
-            except Exception:  # progress reporting must never break discovery
-                pass
+            except (RuntimeError, OSError) as exc:  # progress reporting must never break discovery
+                _log.debug("discovery_progress_failed", error=str(exc))
 
     # 1) Array (one SSH session): all FC + iSCSI target ports + the curated host view, then refine each
     #    FC port's fabric from the switch it attaches to (showportdev fcfabric; parity is the fallback).
@@ -797,7 +802,7 @@ def discover(
             # covers only CONFIGURED ports, so it enriches the list above rather than replacing it.
             try:
                 detail = parse_rcip_detail(cli.run("showport -rcip"))
-            except Exception:  # enrichment only; the ports are already listed
+            except DeviceError:  # enrichment only; the ports are already listed
                 detail = {}
             for port in report.replication_ports:
                 extra = detail.get(port.label)
@@ -808,7 +813,7 @@ def discover(
             # without file configured — an empty result is normal, not a failure.
             try:
                 report.file_ports = parse_file_ports(cli.run("showport -file"))
-            except Exception:  # `showport -file` is unsupported on some releases
+            except DeviceError:  # `showport -file` is unsupported on some releases
                 report.notes.append("Could not read 'showport -file' — file ports not reported.")
             report.file = _read_file_side(cli, intent, report.file_ports, wsapi_v3_factory, _p)
             _p("Reading the array's host view (showhost)…")
@@ -830,7 +835,7 @@ def discover(
             _p(f"Array: {fc} FC + {isc} iSCSI target port(s){role_text}, {named} host(s){extra}. "
                "Resolving fabrics…")
             report.notes.extend(_refine_fabrics_from_switches(cli, report.array_ports, progress=_p))
-    except Exception as exc:
+    except DeviceError as exc:
         # D-10 (S-3, 2026-09-17): the array is THE subject of discovery. Without it the zoning check has
         # no ports and the plan cannot read WSAPI, so this is the step's error, not note 1 of 7.
         report.error = f"Array discovery (SSH) failed: {exc}"
@@ -842,10 +847,10 @@ def discover(
             report.host_hbas = vcenter.host_fc_hbas()
             try:
                 report.host_identities = vcenter.host_identities()
-            except Exception as exc:  # serial/IQN are enrichment; the HBAs stand alone
+            except DeviceError as exc:  # serial/IQN are enrichment; the HBAs stand alone
                 report.notes.append(f"vCenter host serial/IQN read failed: {exc}")
         _p(f"vCenter: {len(report.host_hbas)} ESXi host HBA(s).")
-    except Exception as exc:
+    except DeviceError as exc:
         report.notes.append(f"vCenter discovery failed: {exc}")
 
     # 2b) SPEC-014 R4: sheet hosts that carry a login report their own serial, WWPNs, IQN, multipath.

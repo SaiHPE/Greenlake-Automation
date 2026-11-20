@@ -98,7 +98,9 @@ class _FakeWsapi:
         key = f"{what} {name}"
         self.log.append((self.label, key))
         if self.fail_at == key:
-            raise RuntimeError(f"array refused {key}: simulated")
+            from alletra_onboard.domain.errors import WsapiError
+
+            raise WsapiError(f"array refused {key}: simulated")
         return "exists" if name in self.existing else "created"
 
     def ensure_volume(self, name, cpg, size_mib, ptype):

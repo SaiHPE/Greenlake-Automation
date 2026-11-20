@@ -463,7 +463,7 @@ def test_wsapi_and_the_cli_read_every_rack13_port_alike():
     1 disk / 2 host; connectionType 2 point / 99 eth; linkState 12 link_idle_for_reset)."""
     import json
 
-    from alletra_onboard.adapters.array.wsapi_client import parse_port_states
+    from alletra_onboard.adapters.array.wsapi_parse import parse_port_states
     from alletra_onboard.application.provisioning.peer_ports import (
         parse_showport_par,
         parse_showport_ports,
@@ -483,7 +483,7 @@ def test_wsapi_reads_an_fc_peer_port_like_showport():
     (peer), connectionMode 4 (peer), connectionType 2 (point). python-3parclient's type 6 is confirmed."""
     import json
 
-    from alletra_onboard.adapters.array.wsapi_client import parse_port_states
+    from alletra_onboard.adapters.array.wsapi_parse import parse_port_states
     from alletra_onboard.application.provisioning.peer_ports import parse_showport_ports
 
     body = json.loads(_text(E18U31_WSAPI_PORTS))
@@ -508,7 +508,7 @@ def test_wsapi_and_the_cli_read_the_10_5_arrays_alike(folder, left_out):
     ports of Type free or file (rack13 on 10.6.0 lists them): a WSAPI read is not the full port list."""
     import json
 
-    from alletra_onboard.adapters.array.wsapi_client import parse_port_states
+    from alletra_onboard.adapters.array.wsapi_parse import parse_port_states
     from alletra_onboard.application.provisioning.peer_ports import (
         parse_showport_par,
         parse_showport_ports,
@@ -541,7 +541,9 @@ class _ReadCli:
         assert refusal(command) is None, command
         self.sent.append(command)
         if command == self.fail:
-            raise RuntimeError("channel closed")
+            from alletra_onboard.domain.errors import ArrayCliError
+
+            raise ArrayCliError("channel closed")
         if command in self.answer:
             return self.answer[command]
         return _text(self.folder / (command.replace(" -", "_").replace(" ", "_") + ".txt"))
@@ -1303,7 +1305,9 @@ def test_a_switch_the_zoning_plan_could_not_read_leaves_its_zones_unchecked(tmp_
     from alletra_onboard.domain.shared import EndpointCreds
 
     def refuse(creds):
-        raise ConnectionError("no route")
+        from alletra_onboard.domain.errors import BrocadeError
+
+        raise BrocadeError("no route")
 
     creds = {k: EndpointCreds(host=k, username="u", password="p") for k in ("array", "vc", "sw-f1", "sw-f2")}
     prov = ProvisioningIntent(array=creds["array"], vcenter=creds["vc"], switch_f1=creds["sw-f1"], switch_f2=creds["sw-f2"])
@@ -1385,6 +1389,12 @@ class _Switch:
 
     def cfgshow(self):
         return self.cfg
+
+    def fabricshow(self):
+        return ""
+
+    def read(self, _command):
+        return ""
 
 
 def _peer_zoning_plan():

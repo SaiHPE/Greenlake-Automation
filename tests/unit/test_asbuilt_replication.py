@@ -29,7 +29,9 @@ class _Cli:
 
     def __enter__(self):
         if self.fail:
-            raise RuntimeError("Login failed")
+            from alletra_onboard.domain.errors import ArrayCliError
+
+            raise ArrayCliError("Login failed")
         return self
 
     def __exit__(self, *exc):

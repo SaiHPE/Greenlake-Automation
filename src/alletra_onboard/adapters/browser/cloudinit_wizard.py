@@ -16,34 +16,26 @@ Selectors live in ``locators.CLOUDINIT`` (HPE exposes stable name / data-test-id
 
 from __future__ import annotations
 
-import os
 import time
 from collections.abc import Callable
 from pathlib import Path
 
-from alletra_onboard.adapters.browser.debug_browser import preferred_channel
+import structlog
+
+from alletra_onboard.adapters.browser.debug_browser import (
+    PlaywrightError,
+    PlaywrightTimeoutError,
+    async_playwright,
+    ensure_localhost_no_proxy,
+    preferred_channel,
+    save_screenshot,
+)
 from alletra_onboard.adapters.browser.locators import CLOUDINIT, CLOUDINIT_TEXT
 from alletra_onboard.domain.cloudinit_url import is_valid_cloudinit_url
+from alletra_onboard.domain.errors import BrowserError
 from alletra_onboard.domain.models import ArrayWorkItem, BrowserResultStatus, NetworkConfig
 
-try:
-    from playwright.async_api import Error as _PlaywrightError
-    from playwright.async_api import TimeoutError as _PlaywrightTimeoutError
-    from playwright.async_api import async_playwright
-
-    PlaywrightError: type[Exception] = _PlaywrightError
-    PlaywrightTimeoutError: type[Exception] = _PlaywrightTimeoutError
-except ImportError:  # pragma: no cover - browser deps optional until B/C run.
-    async_playwright = None
-
-    class _FallbackPlaywrightError(Exception):
-        pass
-
-    class _FallbackPlaywrightTimeoutError(_FallbackPlaywrightError):
-        pass
-
-    PlaywrightError = _FallbackPlaywrightError
-    PlaywrightTimeoutError = _FallbackPlaywrightTimeoutError
+_log = structlog.get_logger(__name__)
 
 
 STEP_TIMEOUT_MS = 30_000
@@ -84,87 +76,94 @@ class CloudinitWizardAdapter:
         if async_playwright is None:
             return BrowserResultStatus.WAITING_FOR_OPERATOR  # playwright not installed
 
-        self._ensure_localhost_no_proxy()  # keep the local CDP connect off a lab proxy
+        ensure_localhost_no_proxy()  # keep the local CDP connect off a lab proxy
         cdp_url = self.cdp_url
         attached = cdp_url is not None
-        async with async_playwright() as pw:
-            try:
-                if cdp_url is not None:
-                    browser = await pw.chromium.connect_over_cdp(cdp_url)
-                else:
-                    # Drive the already-installed Chrome/Edge (channel) when present, so no
-                    # bundled/downloaded Chromium is needed; None -> Playwright's own Chromium.
-                    browser = await pw.chromium.launch(
-                        headless=self.headless,
-                        channel=preferred_channel(),
-                        args=[] if self.headless else ["--start-maximized"],
-                    )
-            except Exception:  # no browser (chromium missing, or CDP unreachable).
-                return BrowserResultStatus.WAITING_FOR_OPERATOR
+        try:
+            async with async_playwright() as pw:
+                browser = await self._open_browser(pw, cdp_url)
+                if browser is None:
+                    return BrowserResultStatus.WAITING_FOR_OPERATOR
 
-            context = None
-            page = None
-            try:
-                if attached:
-                    page = await self._pick_open_page(browser, item.cloudinit_url)
-                    if page is None:
-                        return BrowserResultStatus.WAITING_FOR_OPERATOR  # no open tab to drive
-                else:
-                    context = await browser.new_context(
-                        # TRUST-OFF: the wizard is reached only at a link-local address (checked in
-                        # domain/cloudinit_url.py), which is not routed, so in practice over the same cable
-                        # as the array; no password is typed here, only network values; and a fresh array
-                        # has no certificate anyone could have recorded before this moment (ADR 0026).
-                        ignore_https_errors=True,
-                        no_viewport=not self.headless,
-                    )
-                    page = await context.new_page()
-                    await page.goto(item.cloudinit_url, wait_until="domcontentloaded")
+                context = None
+                page = None
+                try:
+                    if attached:
+                        page = await self._pick_open_page(browser, item.cloudinit_url)
+                        if page is None:
+                            return BrowserResultStatus.WAITING_FOR_OPERATOR  # no open tab to drive
+                    else:
+                        context = await browser.new_context(
+                            # TRUST-OFF: the wizard is reached only at a link-local address (checked in
+                            # domain/cloudinit_url.py), which is not routed, so in practice over the same cable
+                            # as the array; no password is typed here, only network values; and a fresh array
+                            # has no certificate anyone could have recorded before this moment (ADR 0026).
+                            ignore_https_errors=True,
+                            no_viewport=not self.headless,
+                        )
+                        page = await context.new_page()
+                        await page.goto(item.cloudinit_url, wait_until="domcontentloaded")
 
-                page.set_default_timeout(STEP_TIMEOUT_MS)
-                # Readiness first: at goto time the page is a blank still-mounting SPA, so even the
-                # already-connected check would miss its text if it ran before anything rendered.
-                if not await self._await_wizard_ready(page, run_id):
+                    page.set_default_timeout(STEP_TIMEOUT_MS)
+                    # Readiness first: at goto time the page is a blank still-mounting SPA, so even the
+                    # already-connected check would miss its text if it ran before anything rendered.
+                    if not await self._await_wizard_ready(page, run_id):
+                        return BrowserResultStatus.FAILED_RETRYABLE
+                    if await self._page_has_any(page, CLOUDINIT_TEXT["success"]):
+                        return BrowserResultStatus.ALREADY_DONE  # connected; never touches Modify/Launch
+                    await self._welcome(page)
+                    await self._eula(page)
+                    await self._network(page, item.network)
+                    await self._proxy(page, item.network)
+                    await self._time(page, item.network)  # advancing from Time lands on the Review screen
+                    if auto_submit:
+                        # Operator already reviewed the values in the web app; fill + submit in one
+                        # motion (no idle window), but verify the Review screen first — see below.
+                        return await self._guarded_submit(page, item.network, run_id)
+                    # Manual mode (CLI without --auto-submit): stop at Review and let the operator
+                    # Submit themselves. NOTE: the wizard decays the Network boxes to the array's
+                    # link-local default after ~10s idle, so this path can show stale values — the
+                    # product flow uses auto_submit, which re-verifies right before Submit.
+                    self._on_status("review_ready")
+                    return await self._wait_for_operator_submit(page, run_id)
+                except PlaywrightTimeoutError as exc:
+                    await self._dump(page, run_id, "timeout")
+                    # Say WHAT the automation was waiting for — either our own diagnostic (raised by the
+                    # fill/verify guards) or Playwright's "waiting for <locator>" line. The bare
+                    # "did not complete" message left the operator with only a screenshot to go on.
+                    lines = [line.strip() for line in str(exc).splitlines() if line.strip()]
+                    detail = next((line for line in lines if "waiting for" in line), lines[0] if lines else "")
+                    if detail:
+                        self._on_status(f"error:Timed out {detail[:200]}" if "waiting for" in detail else f"error:{detail[:200]}")
                     return BrowserResultStatus.FAILED_RETRYABLE
-                if await self._page_has_any(page, CLOUDINIT_TEXT["success"]):
-                    return BrowserResultStatus.ALREADY_DONE  # connected; never touches Modify/Launch
-                await self._welcome(page)
-                await self._eula(page)
-                await self._network(page, item.network)
-                await self._proxy(page, item.network)
-                await self._time(page, item.network)  # advancing from Time lands on the Review screen
-                if auto_submit:
-                    # Operator already reviewed the values in the web app; fill + submit in one
-                    # motion (no idle window), but verify the Review screen first — see below.
-                    return await self._guarded_submit(page, item.network, run_id)
-                # Manual mode (CLI without --auto-submit): stop at Review and let the operator
-                # Submit themselves. NOTE: the wizard decays the Network boxes to the array's
-                # link-local default after ~10s idle, so this path can show stale values — the
-                # product flow uses auto_submit, which re-verifies right before Submit.
-                self._on_status("review_ready")
-                return await self._wait_for_operator_submit(page, run_id)
-            except PlaywrightTimeoutError as exc:
-                await self._dump(page, run_id, "timeout")
-                # Say WHAT the automation was waiting for — either our own diagnostic (raised by the
-                # fill/verify guards) or Playwright's "waiting for <locator>" line. The bare
-                # "did not complete" message left the operator with only a screenshot to go on.
-                lines = [line.strip() for line in str(exc).splitlines() if line.strip()]
-                detail = next((line for line in lines if "waiting for" in line), lines[0] if lines else "")
-                if detail:
-                    self._on_status(f"error:Timed out {detail[:200]}" if "waiting for" in detail else f"error:{detail[:200]}")
-                return BrowserResultStatus.FAILED_RETRYABLE
-            except PlaywrightError as exc:
-                # Navigation / cert / driver errors (e.g. ERR_ADDRESS_UNREACHABLE on a wrong or
-                # offline URL): capture an artifact, relay the message, and fail cleanly — don't
-                # let it escape as an uncaught crash with no screenshot.
-                await self._dump(page, run_id, "error")
-                self._on_status(f"error:{str(exc).splitlines()[0][:200]}")
-                return BrowserResultStatus.FAILED_RETRYABLE
-            finally:
-                if not attached:  # only close what we launched; never close the operator's browser
-                    if context is not None:
-                        await context.close()
-                    await browser.close()
+                except PlaywrightError as exc:
+                    # Navigation / cert / driver errors (e.g. ERR_ADDRESS_UNREACHABLE on a wrong or
+                    # offline URL): capture an artifact, relay the message, and fail cleanly — don't
+                    # let it escape as an uncaught crash with no screenshot.
+                    await self._dump(page, run_id, "error")
+                    self._on_status(f"error:{str(exc).splitlines()[0][:200]}")
+                    return BrowserResultStatus.FAILED_RETRYABLE
+                finally:
+                    if not attached:  # only close what we launched; never close the operator's browser
+                        if context is not None:
+                            await context.close()
+                        await browser.close()
+        except PlaywrightError as exc:
+            raise BrowserError(str(exc)) from exc
+
+    async def _open_browser(self, pw, cdp_url: str | None):
+        try:
+            if cdp_url is not None:
+                return await pw.chromium.connect_over_cdp(cdp_url)
+            # Drive the already-installed Chrome/Edge (channel) when present, so no
+            # bundled/downloaded Chromium is needed; None -> Playwright's own Chromium.
+            return await pw.chromium.launch(
+                headless=self.headless,
+                channel=preferred_channel(),
+                args=[] if self.headless else ["--start-maximized"],
+            )
+        except (PlaywrightError, OSError):  # no browser (chromium missing, or CDP unreachable).
+            return None
 
     # ------------------------------------------------------------------ screens
 
@@ -396,8 +395,8 @@ class CloudinitWizardAdapter:
                     await target.first.scroll_into_view_if_needed(timeout=500)
                     await target.first.click(timeout=1_500)
                     return
-                except Exception:  # may be re-virtualized; scroll more and retry
-                    pass
+                except PlaywrightError as exc:  # may be re-virtualized; scroll more and retry
+                    _log.debug("cloudinit_select_retry", error=str(exc))
             await page.mouse.wheel(0, 400)
             await page.wait_for_timeout(100)
         await target.first.click()
@@ -430,7 +429,7 @@ class CloudinitWizardAdapter:
                 return BrowserResultStatus.FAILED_RETRYABLE
             try:
                 await page.wait_for_timeout(2_000)
-            except Exception:  # the page may close mid-wait.
+            except PlaywrightError:  # the page may close mid-wait.
                 return BrowserResultStatus.WAITING_FOR_OPERATOR
         return BrowserResultStatus.WAITING_FOR_OPERATOR
 
@@ -450,30 +449,12 @@ class CloudinitWizardAdapter:
     async def _body_text(self, page) -> str:
         try:
             return await page.inner_text("body")
-        except Exception:
+        except PlaywrightError:
             return ""
 
     async def _page_has_any(self, page, signals) -> bool:
         text = (await self._body_text(page)).lower()
         return any(signal in text for signal in signals)
 
-    @staticmethod
-    def _ensure_localhost_no_proxy() -> None:
-        """Add localhost to NO_PROXY so the CDP connection isn't routed through a lab proxy."""
-        existing = os.environ.get("NO_PROXY") or os.environ.get("no_proxy") or ""
-        hosts = [h.strip() for h in existing.split(",") if h.strip()]
-        for host in ("localhost", "127.0.0.1"):
-            if host not in hosts:
-                hosts.append(host)
-        value = ",".join(hosts)
-        os.environ["NO_PROXY"] = value
-        os.environ["no_proxy"] = value
-
     async def _dump(self, page, run_id: str, label: str) -> None:
-        if not self.artifact_dir or page is None:
-            return
-        try:
-            self.artifact_dir.mkdir(parents=True, exist_ok=True)
-            await page.screenshot(path=str(self.artifact_dir / f"cloudinit-{run_id}-{label}.png"), full_page=True)
-        except Exception:
-            pass
+        await save_screenshot(self.artifact_dir, page, f"cloudinit-{run_id}-{label}.png", label)

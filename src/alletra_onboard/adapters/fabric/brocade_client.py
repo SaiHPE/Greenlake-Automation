@@ -22,12 +22,17 @@ from __future__ import annotations
 
 import time
 
+import structlog
+
 from alletra_onboard.adapters import command_log, device_trust
+from alletra_onboard.domain.errors import BrocadeError, BrocadeRefused
 
 try:
     import paramiko
 except ImportError:  # pragma: no cover - bundled in the .exe
     paramiko = None
+
+_log = structlog.get_logger(__name__)
 
 ALLOWED_READ = (
     "cfgshow", "zoneshow", "alishow", "nsshow", "nscamshow", "nsallshow", "fabricshow", "switchshow",
@@ -36,14 +41,6 @@ ALLOWED_READ = (
 # `;` stays forbidden everywhere: with no write verbs there is no command whose quoted argument
 # legitimately contains one.
 _FORBIDDEN_CHARS = set(";|&`$><\n\r")
-
-
-class BrocadeError(Exception):
-    """Couldn't connect, authenticate, or run a command on the switch."""
-
-
-class BrocadeRefused(BrocadeError):
-    """A command was refused by the read-only allowlist / metacharacter guard (never sent)."""
 
 
 class BrocadeClient:
@@ -83,8 +80,8 @@ class BrocadeClient:
         if self._client is not None:
             try:
                 self._client.close()
-            except Exception:
-                pass
+            except device_trust.SSH_ERRORS as exc:
+                _log.debug("brocade_ssh_close_failed", host=self.host, error=str(exc))
             self._client = None
 
     def __enter__(self) -> BrocadeClient:

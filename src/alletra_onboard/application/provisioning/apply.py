@@ -27,6 +27,7 @@ from alletra_onboard.application.runs.apply_record import recorded_write
 from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
 from alletra_onboard.domain.approval import Approval, SaveRecord
 from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.errors import ApplyRecordError, DeviceError
 from alletra_onboard.domain.provisioning import (
     ActionOutcome,
     ArrayHostRecord,
@@ -43,6 +44,10 @@ from alletra_onboard.domain.shared import REMOVAL_ORDER, ArrayVolumeRecord
 _LABEL = {"host": "host", "hostset": "host set", "volume": "volume", "vvset": "volume set", "vlun": "export of"}
 _SHOW = {"host": "showhost {n}", "hostset": "showhostset {n}", "volume": "showvv {n}", "vvset": "showvvset {n}"}
 _REMOVE = {"host": "removehost {n}", "hostset": "removehostset -f {n}", "volume": "removevv -f {n}", "vvset": "removevvset -f {n}"}
+
+
+class _PlanDriftError(RuntimeError):
+    """An object the reviewed plan marked 'exists' vanished from the array before apply."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +111,7 @@ def _check_reviewed_objects(array, reviewed: set[tuple[str, str]]) -> None:
         present = read_names()
         for name in wanted:
             if name not in present:
-                raise RuntimeError(
+                raise _PlanDriftError(
                     f"{_LABEL[kind]} {name} existed when the plan was reviewed but is no longer on the array — "
                     "refusing to create an object the plan marked exists. Rebuild the plan."
                 )
@@ -193,7 +198,7 @@ def _execute_export(
     before = state.templates or []
     verdict, reason = _judge_export(ex, vvsets, before, members_of.get(ex.target_name, []))
     if (ex.source_ref, ex.target_ref) in state.reviewed_exports and verdict != "exists":
-        raise RuntimeError(
+        raise _PlanDriftError(
             f"export of {ex.source_name} to {ex.target_name} existed when the plan was reviewed "
             "but is no longer present on the array — refusing to create an export the plan marked "
             "exists. Rebuild the plan."
@@ -296,7 +301,7 @@ def apply_plan(
                 _check_reviewed_objects(array, reviewed_objects)
                 _apply_core_objects(array, resolved, hosts, state)
                 after = _apply_exports(array, intent, hosts, exports, state)
-            except Exception as exc:  # stop at the first failure; the undo still covers what was made
+            except (DeviceError, ApplyRecordError, _PlanDriftError) as exc:  # stop at the first failure; the undo still covers what was made
                 kind, name = state.doing
                 result.error = f"Stopped while creating {_LABEL[kind]} {name}: {exc}" if kind else str(exc)
                 if kind in _REMOVE:
@@ -309,14 +314,14 @@ def apply_plan(
                     # which LUNs this apply made, the failed call's included.
                     try:
                         after = array.vlun_templates()
-                    except Exception:
+                    except DeviceError:
                         failure_notes.append("The exports could not be read back after the failure. Check `showvlun -t` "
                                              "on the array for exports this apply made; they are not in this removal set.")
             result.outcomes = state.outcomes + state.export_outcomes
             # SPEC-007: the undo for exactly what this apply created, from the same reads.
             result.removals, notes = removal_set(result.outcomes, state.templates or [], after, scope=state.export_scope)
             result.removal_notes = notes + failure_notes
-    except Exception as exc:  # no session (nothing was written), or it failed to close
+    except DeviceError as exc:  # no session (nothing was written), or it failed to close
         result.error = result.error or str(exc)
     return result
 

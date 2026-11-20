@@ -112,7 +112,7 @@ class ReplicationSteps:
             return None
         try:
             return ReplicationReport.model_validate_json(raw)
-        except Exception:  # an unreadable stored report means "read again"
+        except ValueError:  # an unreadable stored report means "read again"
             return None
 
     def previewed_plan(self, run_id: str) -> ReplicationPlan | None:
@@ -138,10 +138,7 @@ class ReplicationSteps:
         report = replication_plan.check(primary, peer, intent.replication)
         # The identity the apply must quote back: a new read is a new plan to approve.
         plan = replication_plan.build_plan(report, intent.replication, intent).model_copy(update={"plan_id": new_plan_id()})
-        try:
-            coord.store.save_artifact(run.run_id, REPORT_ARTIFACT, report.model_dump_json().encode("utf-8"))
-        except Exception:  # the read succeeded; failing to cache it must not fail the step
-            pass
+        coord.save_artifact_best_effort(run.run_id, REPORT_ARTIFACT, report.model_dump_json().encode("utf-8"))
         self._plan[run.run_id] = (plan, report)
 
         if plan.error:
@@ -170,7 +167,7 @@ class ReplicationSteps:
             return None
         try:
             return LinkCheck.model_validate_json(raw)
-        except Exception:  # an unreadable stored check means "check again"
+        except ValueError:  # an unreadable stored check means "check again"
             return None
 
     def start_link_check(self, run_id: str, *, duration_s: int = LINK_CHECK_TIME_DEFAULT) -> RunRecord:
@@ -197,10 +194,7 @@ class ReplicationSteps:
             replication_link.run_link_check, intent.array, intent.replication, report,
             duration_s=duration_s, progress=self._progress(run.run_id, phase),
         ))
-        try:
-            coord.store.save_artifact(run.run_id, LINK_CHECK_ARTIFACT, check.model_dump_json().encode("utf-8"))
-        except Exception:  # the test ran; failing to cache it must not fail the step
-            pass
+        coord.save_artifact_best_effort(run.run_id, LINK_CHECK_ARTIFACT, check.model_dump_json().encode("utf-8"))
         data = {"link_check": check.model_dump(mode="json")}
         failed = [r for r in check.results if r.status == "failed"]
         if check.error or not check.measured:
@@ -294,10 +288,7 @@ class ReplicationSteps:
         fn = replication_partnership_apply.apply_partnership if plan.sets_up_partnership else replication_apply.apply_plan
         result = await coord.run_approved(approval, partial(fn, plan, intent, approval, progress=self._progress(run.run_id, phase)))
         result.notes.extend(notes or [])
-        try:
-            coord.store.save_artifact(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
-        except Exception:  # the writes happened; failing to cache the record must not fail the step
-            pass
+        coord.save_artifact_best_effort(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
         if result.error:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
             coord.emit(run.run_id, phase, "replication.apply.failed", result.error, data={"result": result.model_dump(mode="json")})
@@ -327,7 +318,7 @@ class ReplicationSteps:
             if event.event_type == "replication.previewed" and event.data and event.data.get("plan"):
                 try:
                     return ReplicationPlan.model_validate(event.data["plan"])
-                except Exception:
+                except ValueError:
                     return None
         return None
 
@@ -400,10 +391,7 @@ class ReplicationSteps:
         record: FailoverRecord = await coord.run_approved(
             approval, partial(replication_failover.run_failover_test, approval, group, progress=self._progress(run.run_id, phase)),
         )
-        try:
-            coord.store.save_artifact(run.run_id, FAILOVER_ARTIFACT, record.model_dump_json().encode("utf-8"))
-        except Exception:  # the test ran; failing to cache the record must not fail the step
-            pass
+        coord.save_artifact_best_effort(run.run_id, FAILOVER_ARTIFACT, record.model_dump_json().encode("utf-8"))
         data = {"record": record.model_dump(mode="json")}
         if record.result == "passed":
             coord.set_state(run, RunStatus.READY, phase)
@@ -425,5 +413,5 @@ class ReplicationSteps:
             return None
         try:
             return FailoverRecord.model_validate_json(raw)
-        except Exception:
+        except ValueError:
             return None

@@ -87,8 +87,20 @@ class FakeBrocade:
     def nsshow(self):
         return self._ns
 
+    def nscamshow(self):
+        return ""
+
+    def alishow(self):
+        return ""
+
     def cfgshow(self):
         return self._cfg
+
+    def fabricshow(self):
+        return ""
+
+    def read(self, _command):
+        return ""
 
     def apply(self, commands):
         self.applied.extend(commands)
@@ -377,6 +389,30 @@ def test_the_switch_client_cannot_write_at_all():
     assert not hasattr(zoning, "apply_remediation")   # the legacy remediation text is never executed
 
 
+def test_brocade_errors_subclass_device_error_and_close_tolerates_ssh_fault():
+    """STANDARD E1, E2: BrocadeError/BrocadeRefused inherit DeviceError and close() tolerates dead SSH."""
+    import paramiko
+
+    from alletra_onboard.adapters.fabric.brocade_client import (
+        BrocadeClient,
+        BrocadeError,
+        BrocadeRefused,
+    )
+    from alletra_onboard.domain.errors import DeviceError
+
+    assert issubclass(BrocadeError, DeviceError)
+    assert issubclass(BrocadeRefused, BrocadeError)
+
+    class _DeadSsh:
+        def close(self):
+            raise paramiko.SSHException("closed")
+
+    client = BrocadeClient("10.0.1.2", "admin", "pw")
+    client._client = _DeadSsh()
+    client.close()
+    assert client._client is None
+
+
 def test_the_stage_module_and_its_models_are_gone():
     """The removal is at every layer, not just the button (ADR 0012)."""
     import importlib
@@ -461,8 +497,10 @@ def test_read_array_objects_returns_sorted_existing_and_degrades_on_error():
     assert objs["volumes"] == ["v1", "v2"] and objs["hosts"] == ["h1"]
     assert objs["error"] is None
 
+    from alletra_onboard.domain.errors import WsapiError
+
     def boom(_creds):
-        raise RuntimeError("array down")
+        raise WsapiError("array down")
     degraded = prov.read_array_objects(_intent(), wsapi_factory=boom)
     assert degraded["hosts"] == [] and degraded["volumes"] == []
     assert "array down" in degraded["error"]
@@ -492,7 +530,7 @@ def test_wsapi_persona_ids_match_the_array_enum():
     # Regression guard for the CLI-vs-WSAPI persona trap. createHost needs the WSAPI enum
     # (VMware=8, WindowsServer=11, Generic-ALUA=2), NOT the CLI `showhost -listpersona` numbers
     # (where VMware=11). Verified against hpe3parclient's HOST_PERSONA_* constants + a live array.
-    from alletra_onboard.adapters.array.wsapi_client import _WSAPI_PERSONA
+    from alletra_onboard.adapters.array.wsapi_parse import _WSAPI_PERSONA
 
     assert _WSAPI_PERSONA["VMware"] == 8
     assert _WSAPI_PERSONA["WindowsServer"] == 11
@@ -976,8 +1014,10 @@ class _StubSdkSets(_StubSdk):
         self.sets = {n: list(m) for n, m in (sets or {}).items()}
 
     def getHostSet(self, name):
+        from hpe3parclient import exceptions as hpe_exc
+
         if name not in self.sets:
-            raise LookupError(name)
+            raise hpe_exc.HTTPNotFound({"code": 23, "desc": f"set {name} does not exist"})
         return {"setmembers": list(self.sets[name])}
 
     getVolumeSet = getHostSet
@@ -1013,6 +1053,95 @@ def test_ensure_host_set_creates_when_absent():
     assert stub.calls == [("createset", "HS", ["esx1"])]
 
 
+def test_wsapi_reader_translates_sdk_read_errors_and_never_returns_empty_sets():
+    """STANDARD E1, E3: WSAPI read methods translate SDK/transport errors into WsapiError (DeviceError),
+    and host_set_names/volume_set_names raise instead of returning [] when the array cannot be read."""
+    import requests
+    from hpe3parclient import exceptions as hpe_exc
+
+    from alletra_onboard.adapters.array.wsapi_client import WsapiReader
+    from alletra_onboard.domain.errors import DeviceError, WsapiError, WsapiNotReady
+
+    class _FailingSdk:
+        def getHostSets(self):
+            raise hpe_exc.HTTPInternalServerError({"code": 99, "desc": "internal failure"})
+
+        def getVolumeSets(self):
+            raise hpe_exc.HTTPServiceUnavailable({"code": 68, "desc": "system services not ready"})
+
+        def getHosts(self):
+            raise requests.exceptions.ReadTimeout("read timed out")
+
+    reader = WsapiReader("192.0.2.1", "3paradm", "pw")
+    reader._client = _FailingSdk()
+
+    with pytest.raises(WsapiError, match="internal failure") as exc_hs:
+        reader.host_set_names()
+    assert isinstance(exc_hs.value, DeviceError)
+
+    with pytest.raises(WsapiNotReady, match="not ready"):
+        reader.volume_set_names()
+
+    with pytest.raises(WsapiNotReady, match="did not respond"):
+        reader.hosts()
+
+
+def test_wsapi_writer_set_lookup_raises_on_non_404_error():
+    """STANDARD E1: _existing_set_members treats only HTTPNotFound as absent, never a 503 or KeyError."""
+    from hpe3parclient import exceptions as hpe_exc
+
+    from alletra_onboard.domain.errors import WsapiError, WsapiNotReady
+
+    class _UnavailableSetSdk(_StubSdkSets):
+        def getHostSet(self, name):
+            raise hpe_exc.HTTPServiceUnavailable({"code": 68, "desc": "system services not ready"})
+
+    class _KeyErrorSetSdk(_StubSdkSets):
+        def getHostSet(self, name):
+            raise KeyError("unexpected payload bug")
+
+    class _NotFoundSetSdk(_StubSdkSets):
+        def getHostSet(self, name):
+            raise hpe_exc.HTTPNotFound({"code": 23, "desc": "set does not exist"})
+
+    with pytest.raises(WsapiNotReady, match="not ready"):
+        _client_with(_UnavailableSetSdk()).ensure_host_set("HS", ["esx1"])
+
+    key_err_stub = _KeyErrorSetSdk()
+    with pytest.raises(WsapiError, match="unexpected payload bug"):
+        _client_with(key_err_stub).ensure_host_set("HS", ["esx1"])
+    assert key_err_stub.calls == []  # never treated KeyError as absent and created the set
+
+    stub = _NotFoundSetSdk()
+    assert _client_with(stub).ensure_host_set("HS", ["esx1"]) == "created"
+
+
+def test_array_cli_and_wsapi_close_tolerate_dead_transport():
+    """STANDARD E2: closing a dead SSH or WSAPI session logs and cleans up without raising."""
+    from hpe3parclient import exceptions as hpe_exc
+
+    from alletra_onboard.adapters.array.cli_client import ArrayCliClient
+    from alletra_onboard.adapters.array.wsapi_client import WsapiReader
+
+    class _BrokenSsh:
+        def close(self):
+            raise OSError("socket already closed")
+
+    class _BrokenWsapi:
+        def logout(self):
+            raise hpe_exc.HTTPInternalServerError({"code": 1, "desc": "gone"})
+
+    cli = ArrayCliClient("192.0.2.1", "3paradm", "pw")
+    cli._client = _BrokenSsh()
+    cli.close()
+    assert cli._client is None
+
+    reader = WsapiReader("192.0.2.1", "3paradm", "pw")
+    reader._client = _BrokenWsapi()
+    reader.close()
+    assert reader._client is None
+
+
 # ---------------- readiness preflight (read-only; runs BEFORE discovery) ----------------
 
 def _preflight(*, wsapi=None, hbas=(), **intent_over):
@@ -1037,9 +1166,11 @@ def test_preflight_all_green_when_array_and_vcenter_are_ready():
 
 
 def test_preflight_fails_loudly_when_the_array_is_unreachable_but_still_reports_vcenter():
+    from alletra_onboard.domain.errors import WsapiError
+
     class Dead:
         def __enter__(self):
-            raise OSError("connection refused")
+            raise WsapiError("connection refused")
 
         def __exit__(self, *a):
             return False
@@ -1119,7 +1250,7 @@ def test_preflight_fails_when_every_fc_port_is_initiator_mode():
 def test_wsapi_port_enums_map_to_the_cli_vocabulary():
     # ArrayPort.link_state is documented as "ready | offline | loss_sync"; the WSAPI reports integers.
     # Leaking "4" into that field would break every consumer that compares against "ready".
-    from alletra_onboard.adapters.array.wsapi_client import _PORT_LINK_STATE, _PORT_MODE
+    from alletra_onboard.adapters.array.wsapi_parse import _PORT_LINK_STATE, _PORT_MODE
 
     assert _PORT_LINK_STATE[4] == "ready"
     assert _PORT_MODE[2] == "target" and _PORT_MODE[3] == "initiator"
@@ -1490,7 +1621,9 @@ def test_verify_provisioned_paths_reads_showvlun_and_reports():
 
 class _Unreachable:
     def __enter__(self):
-        raise RuntimeError("off")
+        from alletra_onboard.domain.errors import DeviceError
+
+        raise DeviceError("off")
 
     def __exit__(self, *a):
         return False

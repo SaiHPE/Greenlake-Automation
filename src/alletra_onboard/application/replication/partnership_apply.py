@@ -14,7 +14,7 @@ from alletra_onboard.application.replication.read import parse_showport_rcip, pa
 from alletra_onboard.application.runs.apply_record import maybe_made, recorded_write
 from alletra_onboard.domain.approval import Approval, SaveRecord
 from alletra_onboard.domain.array_parse import answered_error
-from alletra_onboard.domain.errors import ArrayCliError
+from alletra_onboard.domain.errors import ApplyRecordError, ArrayCliError, DeviceError
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     ReplicationAction,
@@ -176,7 +176,7 @@ def apply_partnership(
             _ping_pairs(intent, st)
             _apply_service_and_targets(plan, st)
             _wait_links_up(plan, st)
-    except Exception as exc:  # the array's words, where it stopped, what to remove
+    except (DeviceError, ApplyRecordError) as exc:  # the array's words, where it stopped, what to remove
         done = sum(1 for o in result.outcomes if o.status == "created")
         result.error = (f"Stopped after {done} step(s): {exc}. The removal set below undoes exactly what was "
                         "created before the failure.")

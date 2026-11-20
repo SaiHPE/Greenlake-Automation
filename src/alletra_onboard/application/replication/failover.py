@@ -126,6 +126,10 @@ def _checkpoint_recovery(
     return f"Check `showrcopy groups` on both arrays: if step {step_seq} took effect: {if_done} ; if not: {if_not}"
 
 
+def _sides_summary(p: FailoverSide, s: FailoverSide) -> str:
+    return f"{p.array}: {p.summary} · {s.array}: {s.summary}"
+
+
 def _checkpoint(
     save: SaveRecord,
     record: FailoverRecord,
@@ -134,11 +138,10 @@ def _checkpoint(
     after: tuple[FailoverSide, FailoverSide],
 ) -> str | None:
     """Save the in-progress record with only the last-read sides and recovery for both outcomes."""
-    p, s = observed
     snap = record.model_copy(update={
         "result": "failed",
         "failed_step": step.seq,
-        "observed_state": f"{p.array}: {p.summary} · {s.array}: {s.summary}",
+        "observed_state": _sides_summary(*observed),
         "recovery_action": _checkpoint_recovery(step.seq, observed, after),
         "error": (f"Interrupted during step {step.seq} ({step.title}). "
                   "Check `showrcopy groups` on both arrays before running any recovery command."),
@@ -161,7 +164,7 @@ def _fail(
         later.outcome = "skipped"
     record.result = "aborted" if aborted else "failed"
     record.failed_step = step.seq
-    record.observed_state = f"{p.array}: {p.summary} · {s.array}: {s.summary}"
+    record.observed_state = _sides_summary(p, s)
     record.recovery_action = recovery_action(p, s)
     record.error = detail
     record.ended_at = _now()
@@ -188,6 +191,38 @@ def _async_setup(mode: str, group_obj: RcGroup | None, p_side: FailoverSide) -> 
              else "no last sync time was shown before failover")
     period = period_seconds(group_obj.period if group_obj else "")
     return bound, (period + PERIOD_MARGIN_S if period else 0)
+
+
+def _stopped(p: FailoverSide, s: FailoverSide) -> bool:
+    return p.status.lower() == "stopped" and s.status.lower() == "stopped"
+
+
+def _run_dr_call(fn: Callable[..., object], *args: object) -> Exception | None:
+    """Run a DR call under failover's 'returns, never raises' contract."""
+    try:
+        fn(*args)
+        return None
+    except Exception as exc:  # returns, never raises
+        return exc
+
+
+def _build_plan(group: str, pg: str) -> list[FailoverStepRecord]:
+    def _dr(seq: int, title: str, act: int, verb: str, expected: str) -> FailoverStepRecord:
+        return FailoverStepRecord(
+            seq=seq, title=title, where="S", action=f"POST /remotecopygroups/{pg} {{action: {act}}}",
+            cli=f"setrcopygroup {verb} -f {pg}", expected=expected,
+        )
+
+    return [
+        FailoverStepRecord(seq=1, title="Stop the group", where="P", action=f"PUT /remotecopygroups/{group} {{action: stop}}",
+                           cli=f"stoprcopygroup -f {group}", expected="Stopped on both arrays"),
+        _dr(2, "Fail over to the peer", 7, "failover", "Primary-Rev on S; with both arrays up the array also makes P Secondary-Rev"),
+        FailoverStepRecord(seq=3, title="The peer's volumes are now read/write", where="-", action="(read)",
+                           expected="recorded, not written to"),
+        _dr(4, "Recover", 9, "recover", "Primary-Rev/Started on S; Secondary-Rev on P; syncing back to P"),
+        FailoverStepRecord(seq=5, title="Wait until Synced", where="-", action="(read)", expected="every volume Synced"),
+        _dr(6, "Restore the natural direction", 10, "restore", "Primary/Started on P; Secondary/Started on S; Synced"),
+    ]
 
 
 def run_failover_test(
@@ -251,20 +286,7 @@ def run_failover_test(
                 return False, p, s, round(clock() - start, 1)
             sleep(lim["poll"])
 
-    plan = [
-        FailoverStepRecord(seq=1, title="Stop the group", where="P", action=f"PUT /remotecopygroups/{group} {{action: stop}}",
-                           cli=f"stoprcopygroup -f {group}", expected="Stopped on both arrays"),
-        FailoverStepRecord(seq=2, title="Fail over to the peer", where="S", action=f"POST /remotecopygroups/{record.peer_group} {{action: 7}}",
-                           cli=f"setrcopygroup failover -f {record.peer_group}",
-                           expected="Primary-Rev on S; with both arrays up the array also makes P Secondary-Rev"),
-        FailoverStepRecord(seq=3, title="The peer's volumes are now read/write", where="-", action="(read)",
-                           expected="recorded, not written to"),
-        FailoverStepRecord(seq=4, title="Recover", where="S", action=f"POST /remotecopygroups/{record.peer_group} {{action: 9}}",
-                           cli=f"setrcopygroup recover -f {record.peer_group}", expected="Primary-Rev/Started on S; Secondary-Rev on P; syncing back to P"),
-        FailoverStepRecord(seq=5, title="Wait until Synced", where="-", action="(read)", expected="every volume Synced"),
-        FailoverStepRecord(seq=6, title="Restore the natural direction", where="S", action=f"POST /remotecopygroups/{record.peer_group} {{action: 10}}",
-                           cli=f"setrcopygroup restore -f {record.peer_group}", expected="Primary/Started on P; Secondary/Started on S; Synced"),
-    ]
+    plan = _build_plan(group, record.peer_group)
     record.steps.extend(plan)
     s1, s2, s3, s4, s5, s6 = plan
 
@@ -290,11 +312,9 @@ def run_failover_test(
             return _fail(record, s1, f"Could not save the failover record before step 1: {err}. Nothing was sent to either array.", (p_side, s_side), aborted=True)
         # 1. stop on P
         _p(f"Stopping {group} on {record.primary_array}…")
-        try:
-            wp.stop_remote_copy_group(group)
-        except Exception as exc:
+        if (exc := _run_dr_call(wp.stop_remote_copy_group, group)) is not None:
             return _fail(record, s1, f"{record.primary_array} refused the stop: {exc}", both())
-        ok, p, s, _w = wait_for(lambda p, s: p.status.lower() == "stopped" and s.status.lower() == "stopped", lim["stop"])
+        ok, p, s, _w = wait_for(_stopped, lim["stop"])
         if not ok:
             return _fail(record, s1, f"Not Stopped on both sides within {lim['stop']} s.", (p, s))
         finish(s1, p, s, t)
@@ -304,9 +324,7 @@ def run_failover_test(
         _note_checkpoint(save, record, s2, (p, s), (p.model_copy(update={"role": "Primary", "status": "Stopped"}),
                                                     s.model_copy(update={"role": "Primary-Rev", "status": "Stopped"})))
         _p(f"Failing over: {record.peer_group} on {record.peer_array} becomes Primary-Rev…")
-        try:
-            ws.remote_copy_dr_action(record.peer_group, DR_ACTION_FAILOVER)
-        except Exception as exc:
+        if (exc := _run_dr_call(ws.remote_copy_dr_action, record.peer_group, DR_ACTION_FAILOVER)) is not None:
             return _fail(record, s2, f"{record.peer_array} refused the failover: {exc}", both())
         ok, p, s, waited = wait_for(lambda p, s: s.role in ("Primary-Rev", "Primary"), lim["failover"])
         if not ok:
@@ -338,9 +356,7 @@ def run_failover_test(
             _note_checkpoint(save, record, s4, (p, s), (p.model_copy(update={"role": "Secondary-Rev", "status": "Started"}),
                                                         s.model_copy(update={"role": "Primary-Rev", "status": "Started"})))
             _p(f"Recovering: {group} on {record.primary_array} becomes Secondary-Rev, syncing back…")
-            try:
-                ws.remote_copy_dr_action(record.peer_group, DR_ACTION_RECOVER)
-            except Exception as exc:
+            if (exc := _run_dr_call(ws.remote_copy_dr_action, record.peer_group, DR_ACTION_RECOVER)) is not None:
                 p, s = both()
                 if not recovered(p, s):
                     return _fail(record, s4, f"{record.peer_array} refused the recover: {exc}", (p, s))
@@ -371,9 +387,7 @@ def run_failover_test(
         if not flipped(p, s) and p.role != "Secondary":
             _note_checkpoint(save, record, s6, (p, s), (p, s))
             _p(f"Restoring the natural direction: {group} Primary on {record.primary_array} again…")
-            try:
-                ws.remote_copy_dr_action(record.peer_group, DR_ACTION_RESTORE)
-            except Exception as exc:
+            if (exc := _run_dr_call(ws.remote_copy_dr_action, record.peer_group, DR_ACTION_RESTORE)) is not None:
                 p, s = both()
                 if not flipped(p, s) and p.role != "Secondary":
                     return _fail(record, s6, f"{record.peer_array} refused the restore: {exc}", (p, s))
@@ -391,17 +405,13 @@ def run_failover_test(
             _note_checkpoint(save, record, s6, (p, s), (p.model_copy(update={"status": "Stopped"}),
                                                         s.model_copy(update={"status": "Stopped"})))
             _p(f"Failing back: stopping {record.peer_group} on {record.peer_array}, then failing over to {record.primary_array}…")
-            try:
-                ws.stop_remote_copy_group(record.peer_group)
-            except Exception as exc:
+            if (exc := _run_dr_call(ws.stop_remote_copy_group, record.peer_group)) is not None:
                 return _fail(record, s6, f"{record.peer_array} refused the stop: {exc}", both())
-            ok, p, s, _w = wait_for(lambda p, s: p.status.lower() == "stopped" and s.status.lower() == "stopped", lim["stop"])
+            ok, p, s, _w = wait_for(_stopped, lim["stop"])
             if not ok:
                 return _fail(record, s6, f"Not Stopped on both sides within {lim['stop']} s.", (p, s))
             _note_checkpoint(save, record, s6, (p, s), (p.model_copy(update={"role": "Primary-Rev"}), s))
-            try:
-                wp.remote_copy_dr_action(group, DR_ACTION_FAILOVER)
-            except Exception as exc:
+            if (exc := _run_dr_call(wp.remote_copy_dr_action, group, DR_ACTION_FAILOVER)) is not None:
                 return _fail(record, s6, f"{record.primary_array} refused the failover back: {exc}", both())
         ok, p, s, _w = wait_for(normal, lim["restore"])
         if not ok:

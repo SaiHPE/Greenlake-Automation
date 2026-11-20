@@ -13,23 +13,31 @@ from __future__ import annotations
 import ssl
 import time
 from collections.abc import Callable
+from typing import Any
+
+import structlog
 
 try:
     from pyVim.connect import Disconnect, SmartConnect
-    from pyVmomi import vim
-except Exception:  # bundled in the .exe; optional otherwise
+    from pyVmomi import vim, vmodl
+except (ImportError, OSError, AttributeError):  # bundled in the .exe; optional otherwise
     SmartConnect = None
     Disconnect = None
     vim = None
+    vmodl = None
 
 from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.domain.discovery import HostHba, HostIdentity
+from alletra_onboard.domain.errors import VCenterError
 from alletra_onboard.domain.provisioning import EsxiLun
 from alletra_onboard.domain.shared import normalize_wwpn
 
-
-class VCenterError(Exception):
-    """Couldn't reach, authenticate to, or read inventory from vCenter."""
+_log = structlog.get_logger(__name__)
+_VIM_ERRORS: tuple[type[BaseException], ...] = (
+    (OSError, RuntimeError, AttributeError, vmodl.MethodFault)
+    if vmodl is not None
+    else (OSError, RuntimeError, AttributeError)
+)
 
 
 LOGIN = "login {user, password: ********}"
@@ -38,7 +46,7 @@ READ_IDENTITIES = "read HostSystem hardware.systemInfo, config.storageDevice.hos
 READ_LUNS = "read HostSystem config.storageDevice.scsiLun, multipathInfo (LUNs and paths)"
 
 
-def _fault_text(exc: Exception) -> str:
+def _fault_text(exc: BaseException) -> str:
     # D-11 (S-3, 2026-09-17): str() of a vim fault is its whole property dump; `.msg` is the sentence.
     return str(getattr(exc, "msg", "") or exc).strip()[:200]
 
@@ -178,9 +186,13 @@ class VCenterClient:
         started = time.monotonic()
         try:
             found = read()
-        except Exception as exc:
+        except VCenterError as exc:
             self._record(command, started, ok=False, result=f"{type(exc).__name__}: {_fault_text(exc)}")
             raise
+        except Exception as exc:
+            detail = _fault_text(exc)
+            self._record(command, started, ok=False, result=f"{type(exc).__name__}: {detail}")
+            raise VCenterError(f"vCenter read failed on {self.host}: {type(exc).__name__}: {detail}") from exc
         self._record(command, started, ok=True, result=f"ok, {len(found)} found",
                      output=[item.model_dump(mode="json") for item in found])
         return found
@@ -190,9 +202,15 @@ class VCenterClient:
             try:
                 if Disconnect is not None:
                     Disconnect(self._si)
-            except Exception:
-                pass
+            except _VIM_ERRORS as exc:
+                _log.debug("vcenter_disconnect_failed", host=self.host, error=_fault_text(exc))
             self._si = None
+
+    def _destroy_view(self, view: Any) -> None:
+        try:
+            view.Destroy()
+        except _VIM_ERRORS as exc:
+            _log.debug("vcenter_view_destroy_failed", host=self.host, error=_fault_text(exc))
 
     def __enter__(self) -> VCenterClient:
         self.connect()
@@ -242,10 +260,7 @@ class VCenterClient:
                             )
                         )
         finally:
-            try:
-                view.Destroy()
-            except Exception:
-                pass
+            self._destroy_view(view)
         return hbas
 
     def host_identities(self) -> list[HostIdentity]:
@@ -261,10 +276,7 @@ class VCenterClient:
                 ident.os = self._os_string(esxi)
                 out.append(ident)
         finally:
-            try:
-                view.Destroy()
-            except Exception:
-                pass
+            self._destroy_view(view)
         return out
 
     def host_luns(self) -> list[EsxiLun]:
@@ -280,10 +292,7 @@ class VCenterClient:
             for esxi in view.view:
                 out.extend(parse_storage_device(str(esxi.name), getattr(esxi.config, "storageDevice", None)))
         finally:
-            try:
-                view.Destroy()
-            except Exception:
-                pass
+            self._destroy_view(view)
         return out
 
     @staticmethod

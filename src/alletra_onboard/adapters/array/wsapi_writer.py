@@ -16,9 +16,12 @@ from collections.abc import Callable
 from typing import Any
 
 from alletra_onboard.adapters.array.wsapi_client import (
-    _WSAPI_PERSONA,
+    _HTTP_NOT_FOUND,
     HPE3ParClient,
     WsapiReader,
+)
+from alletra_onboard.adapters.array.wsapi_parse import (
+    _WSAPI_PERSONA,
     _iscsi_names,
     _members,
 )
@@ -115,7 +118,7 @@ class WsapiWriter(WsapiReader):
         sdk = self._write_sdk()
         if not iqns:
             raise WsapiError(f"no iSCSI name given for host '{name}'")
-        members = {m.get("name", ""): m for m in _members(sdk.getHosts()) if m.get("name")}
+        members = {m.get("name", ""): m for m in _members(self._read("getHosts")) if m.get("name")}
         owners = {i.lower(): n for n, m in members.items() for i in _iscsi_names(m)}
         other = sorted({owners[i.lower()] for i in iqns if owners.get(i.lower(), name) != name})
         if other:
@@ -152,13 +155,17 @@ class WsapiWriter(WsapiReader):
         except Exception as exc:
             raise self._translate(exc, where=f"add {len(missing)} iSCSI name(s) to host {name}") from exc
 
-    def _existing_set_members(self, getter: Callable[[str], object], name: str) -> list[str] | None:
+    def _existing_set_members(self, getter: Callable[[str], object], name: str, *, where: str) -> list[str] | None:
         """The set's current members, or None if the set does not exist. Sets share ensure_host's
         reconciliation problem: exists-with-missing-members must gain them, never report 'exists'."""
         try:
             data = getter(name)
-        except Exception:  # not-found raises in the SDK
+        except _HTTP_NOT_FOUND:
             return None
+        except WsapiError:
+            raise
+        except Exception as exc:
+            raise self._translate(exc, where=where) from exc
         if isinstance(data, dict):
             return list(data.get("setmembers") or [])
         return list(getattr(data, "setmembers", None) or [])
@@ -167,7 +174,7 @@ class WsapiWriter(WsapiReader):
         """Create the host set, or ADD any missing members to an existing one (additive only — a
         member someone else added is never removed). 'exists' means every requested member verified."""
         sdk = self._write_sdk()
-        existing = self._existing_set_members(sdk.getHostSet, name)
+        existing = self._existing_set_members(sdk.getHostSet, name, where=f"read host set {name}")
         if existing is None:
             try:
                 sdk.createHostSet(name, setmembers=list(members))
@@ -175,7 +182,7 @@ class WsapiWriter(WsapiReader):
             except Exception as exc:
                 if not self._is_conflict(exc):
                     raise self._translate(exc, where=f"create host set {name}") from exc
-                existing = self._existing_set_members(sdk.getHostSet, name) or []
+                existing = self._existing_set_members(sdk.getHostSet, name, where=f"read host set {name}") or []
         missing = [m for m in members if m not in existing]
         if not missing:
             return "exists"
@@ -218,7 +225,7 @@ class WsapiWriter(WsapiReader):
     def ensure_volume_set(self, name: str, members: list[str]) -> str:
         """Create the VV set, or ADD any missing members to an existing one (additive only)."""
         sdk = self._write_sdk()
-        existing = self._existing_set_members(sdk.getVolumeSet, name)
+        existing = self._existing_set_members(sdk.getVolumeSet, name, where=f"read volume set {name}")
         if existing is None:
             try:
                 sdk.createVolumeSet(name, setmembers=list(members))
@@ -226,7 +233,7 @@ class WsapiWriter(WsapiReader):
             except Exception as exc:
                 if not self._is_conflict(exc):
                     raise self._translate(exc, where=f"create volume set {name}") from exc
-                existing = self._existing_set_members(sdk.getVolumeSet, name) or []
+                existing = self._existing_set_members(sdk.getVolumeSet, name, where=f"read volume set {name}") or []
         missing = [m for m in members if m not in existing]
         if not missing:
             return "exists"

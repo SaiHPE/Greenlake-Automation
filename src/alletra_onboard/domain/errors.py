@@ -64,3 +64,35 @@ class GreenLakeHttpError(GreenLakeError):
     @property
     def short_detail(self) -> str:
         return f"HTTP {self.status_code} from {self.method} {self.path}"
+
+
+class VCenterError(DeviceError):
+    """Couldn't reach, authenticate to, or read inventory from vCenter."""
+
+
+class LinuxHostError(DeviceError):
+    """Couldn't connect to or authenticate on a Linux host over SSH."""
+
+
+class WindowsHostError(DeviceError):
+    """Couldn't connect to or authenticate on a Windows host over WinRM."""
+
+
+class BrocadeError(DeviceError):
+    """Couldn't connect, authenticate, or run a command on a Brocade SAN switch."""
+
+
+class BrocadeRefused(BrocadeError):
+    """A switch command was refused by the read-only allowlist or metacharacter guard."""
+
+
+class BrowserError(DeviceError):
+    """A Playwright browser automation or debug-browser launch call failed."""
+
+
+class DsccSetupError(BrowserError):
+    """Operator-actionable problem in the DSCC Setup wizard (e.g. a required secret is missing)."""
+
+
+class ApplyRecordError(RuntimeError):
+    """Saving the durable in-progress apply record to the run store failed."""

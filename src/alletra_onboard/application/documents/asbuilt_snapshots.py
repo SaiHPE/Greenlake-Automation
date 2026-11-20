@@ -11,6 +11,8 @@ own. Kept apart from asbuilt.py, which calls `add_snapshots_section` and `snapsh
 
 from __future__ import annotations
 
+import structlog
+
 from alletra_onboard.application.documents.asbuilt_docx import (
     add_h1,
     add_mono,
@@ -25,6 +27,7 @@ from alletra_onboard.domain.shared import REMOVAL_ORDER
 from alletra_onboard.domain.snapshots import SnapshotArrayView, SnapshotRequest, now_snapshot_name
 
 _STATUS = {"active": "Active", "suspended": "Suspended"}
+_log = structlog.get_logger(__name__)
 
 
 def _view(data: AsBuiltData) -> SnapshotArrayView | None:
@@ -39,7 +42,8 @@ def _requests(data: AsBuiltData) -> list[SnapshotRequest]:
     for row in data.snapshots_tab or []:
         try:
             out.append(SnapshotRequest.model_validate(row))
-        except Exception:  # a row that no longer reads is left out, never guessed
+        except ValueError as exc:  # a row that no longer reads is left out, never guessed
+            _log.debug("snapshot_row_unreadable", error=str(exc))
             continue
     return out
 

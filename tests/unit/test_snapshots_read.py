@@ -94,7 +94,7 @@ def test_createsv_commands_are_read_into_their_options():
 
 
 def test_parse_volumes_keeps_the_snapshot_fields_of_the_rack13_capture():
-    from alletra_onboard.adapters.array.wsapi_client import parse_volumes
+    from alletra_onboard.adapters.array.wsapi_parse import parse_volumes
 
     body = json.loads((FIX / "rack13_wsapi" / "volumes.json").read_text(encoding="utf-8"))
     by_name = {v.name: v for v in parse_volumes(body)}
@@ -153,7 +153,7 @@ def test_a_showsched_table_with_a_row_or_header_it_cannot_read_is_not_a_read(fol
 
 
 def test_showvv_snapshot_columns_of_the_rack13_capture():
-    from alletra_onboard.adapters.array.wsapi_client import parse_volumes
+    from alletra_onboard.adapters.array.wsapi_parse import parse_volumes
     from alletra_onboard.application.snapshots.read import SHOWVV_SNAPCOLS, parse_showvv_snapcols
 
     text = _snap("showvv_snapcols.txt")
@@ -314,7 +314,7 @@ def test_showsched_on_e18u31_with_no_schedules_is_an_empty_list():
 def test_showvv_and_wsapi_agree_on_every_snapshot_its_expiry_and_its_lock(
     folder, total, snapshots, expiring, locked,
 ):
-    from alletra_onboard.adapters.array.wsapi_client import parse_volumes
+    from alletra_onboard.adapters.array.wsapi_parse import parse_volumes
     from alletra_onboard.application.snapshots.read import parse_showvv_snapcols
 
     cli = {r["Name"]: r for r in parse_showvv_snapcols(_fix(folder, "showvv_snapcols.txt"))}
@@ -345,7 +345,7 @@ def test_the_d22u27_schedules_ran_in_the_arrays_local_time_with_their_expiry_and
     """SPEC-023 open question 5: a schedule's cron hour is the array's local time. Pol-999 runs at
     minutes 0,15,30,45 of hours 8 to 20 and test_CRV_snapschedule at hours 0,4,8,12,16,20; their
     snapshots were created at those times in IST (+05:30), each with the schedule's -exp and -retain."""
-    from alletra_onboard.adapters.array.wsapi_client import parse_volumes
+    from alletra_onboard.adapters.array.wsapi_parse import parse_volumes
 
     body = json.loads(_fix("d22u27_snap", "wsapi_volumes.json"))
     raw = {m["name"]: m for m in body["members"]}
@@ -378,7 +378,7 @@ def test_the_d22u27_schedules_ran_in_the_arrays_local_time_with_their_expiry_and
 
 
 def test_e18u31_snapshots_have_no_expiry_and_no_lock():
-    from alletra_onboard.adapters.array.wsapi_client import parse_volumes
+    from alletra_onboard.adapters.array.wsapi_parse import parse_volumes
 
     body = json.loads(_fix("e18u31_snap", "wsapi_volumes.json"))
     snaps = {v.name: v for v in parse_volumes(body) if v.copy_of}
@@ -395,7 +395,7 @@ def test_remote_copy_snapshots_also_name_the_base_in_copy_of():
     """Why a schedule's snapshots cannot be counted by copyOf alone (SPEC-023 §2.2): Remote Copy's own
     snapshots of a member carry the same copyOf, and on a secondary array snapshots arrive from the
     primary's schedule with no schedule of their own."""
-    from alletra_onboard.adapters.array.wsapi_client import parse_volumes
+    from alletra_onboard.adapters.array.wsapi_parse import parse_volumes
     from alletra_onboard.application.snapshots.read import parse_createsv, parse_showsched
 
     d22 = {m["name"]: m for m in json.loads(_fix("d22u27_snap", "wsapi_volumes.json"))["members"]}

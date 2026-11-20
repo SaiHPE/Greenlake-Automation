@@ -18,6 +18,10 @@ import urllib.request
 from collections.abc import Callable
 from urllib.parse import urlparse
 
+import structlog
+
+_log = structlog.get_logger(__name__)
+
 getproxies_registry: Callable[[], dict[str, str]] = getattr(
     urllib.request, "getproxies_registry", dict,
 )
@@ -166,7 +170,7 @@ if _IS_WINDOWS:
         """Per-URL system proxy via WinHTTP: WinINET static, else PAC/WPAD — as the browser resolves it."""
         try:
             wh = _winhttp()
-        except Exception:  # winhttp unavailable
+        except (OSError, AttributeError):  # winhttp unavailable
             return None
         cfg = _IE_PROXY_CONFIG()
         static: str | None = None
@@ -177,8 +181,8 @@ if _IS_WINDOWS:
                 static = _first_proxy(_wstr(cfg.lpszProxy))
                 auto_detect = bool(cfg.fAutoDetect)
                 pac_url = _wstr(cfg.lpszAutoConfigUrl)
-        except Exception:
-            pass
+        except (OSError, ValueError, TypeError) as exc:
+            _log.debug("winhttp_ie_proxy_config_failed", error=str(exc))
         finally:
             _global_free(cfg.lpszAutoConfigUrl, cfg.lpszProxy, cfg.lpszProxyBypass)
 
@@ -201,7 +205,7 @@ if _IS_WINDOWS:
             info = _PROXY_INFO()
             try:
                 ok = wh.WinHttpGetProxyForUrl(session, url, ctypes.byref(opts), ctypes.byref(info))
-            except Exception:
+            except (OSError, ValueError, TypeError):
                 return None
             if not ok:
                 return None
@@ -222,8 +226,8 @@ if _IS_WINDOWS:
             if value:
                 try:
                     k32.GlobalFree(value)  # value is the real WinHTTP address (int), not a Python object
-                except Exception:
-                    pass
+                except (OSError, ValueError, TypeError) as exc:
+                    _log.debug("winhttp_global_free_failed", error=str(exc))
 
 else:  # pragma: no cover - the packaged app is Windows-only
     def _win_system_proxy(url: str) -> str | None:

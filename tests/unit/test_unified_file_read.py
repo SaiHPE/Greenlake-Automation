@@ -464,6 +464,20 @@ def test_a_showsys_without_a_serial_refuses_the_read():
     assert report.service is None
 
 
+def test_a_showsys_device_error_refuses_the_read():
+    from alletra_onboard.domain.errors import ArrayCliError
+
+    class _FailingShowsys(CapturedCli):
+        def run(self, command: str, timeout=None) -> str:
+            if command == "showsys":
+                raise ArrayCliError("running 'showsys' failed: TimeoutError")
+            return super().run(command, timeout)
+
+    report = read_file_report(_FailingShowsys("d22u27"), CapturedV3("d22u27"), "10.5.0", _ports("d22u27"))
+    assert report.notes == [OTHER_ARRAY.format(found="CZ2D320BT1", expected="(no serial given)")]
+    assert report.service is None
+
+
 def test_an_answer_the_tool_cannot_read_is_a_note_and_shows_nothing_of_the_read():
     def drop_mountpath(body):
         del next(iter(body["members"].values()))["mountpath"]

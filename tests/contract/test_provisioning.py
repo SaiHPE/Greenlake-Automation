@@ -270,3 +270,38 @@ async def test_discover_with_no_provision_fails_clearly():
     assert result.succeeded is False
     assert result.error is not None
     assert "No PROVISIONED" in result.error
+
+
+@respx.mock
+@pytest.mark.parametrize("case", ["list_body", "string_body", "items_null", "invalid_url"])
+async def test_malformed_2xx_and_invalid_url_return_phase_error_and_keep_earlier_ids(case):
+    """Malformed 2xx JSON (list/string/items:null) and httpx.InvalidURL translate to GreenLakeError
+    and provision()'s contract records the failed phase while keeping earlier IDs intact."""
+    respx.get(f"{BASE}/service-catalog/v1/service-manager-provisions").mock(return_value=_provisions())
+    if case == "list_body":
+        respx.get(f"{BASE}/subscriptions/v1/subscriptions").mock(return_value=httpx.Response(200, json=[]))
+        result = await _service().provision(_item())
+        assert result.succeeded is False and result.error is not None
+        assert result.service_manager_id == "svc-1"
+        assert _phase(result, WorkflowPhase.GL_ADD_SUBSCRIPTION).status == FAILED
+        return
+
+    respx.get(f"{BASE}/subscriptions/v1/subscriptions").mock(
+        return_value=httpx.Response(200, json={"items": [{"id": "sub-1"}]})
+    )
+    if case == "string_body":
+        respx.get(f"{BASE}/devices/v1/devices").mock(return_value=httpx.Response(200, json="unexpected"))
+    elif case == "items_null":
+        respx.get(f"{BASE}/devices/v1/devices").mock(return_value=httpx.Response(200, json={"items": None}))
+    else:  # invalid_url on the polled 202 Location header
+        respx.get(f"{BASE}/devices/v1/devices").mock(return_value=httpx.Response(200, json={"items": []}))
+        respx.post(f"{BASE}/devices/v2beta1/devices").mock(
+            return_value=httpx.Response(202, headers={"Location": "http://[::1"})
+        )
+
+    result = await _service().provision(_item())
+
+    assert result.succeeded is False and result.error is not None
+    assert result.service_manager_id == "svc-1"
+    assert result.subscription_id == "sub-1"
+    assert _phase(result, WorkflowPhase.GL_REGISTER_DEVICE).status == FAILED

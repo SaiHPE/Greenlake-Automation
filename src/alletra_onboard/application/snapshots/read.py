@@ -21,6 +21,7 @@ from collections.abc import Callable
 
 from alletra_onboard.application.provisioning.clients import make_array_cli, make_wsapi
 from alletra_onboard.application.replication.read import parse_showcpg_free, parse_showversion
+from alletra_onboard.domain.errors import ArrayCliError, DeviceError
 from alletra_onboard.domain.shared import EndpointCreds
 from alletra_onboard.domain.snapshots import ArraySchedule, SnapshotArrayView
 
@@ -204,7 +205,7 @@ def read_array(
             sched = cli.run("showsched")
             if not showsched_readable(sched):
                 first = next((ln.strip() for ln in sched.splitlines() if ln.strip()), "nothing")
-                raise RuntimeError(f"showsched did not list the schedules; it answered: {first}")
+                raise ArrayCliError(f"showsched did not list the schedules; it answered: {first}")
             view.schedules = parse_showsched(sched)
             view.cpg_free_mib = parse_showcpg_free(cli.run("showcpg"))
         with wsapi_factory(creds) as wsapi:
@@ -216,6 +217,6 @@ def read_array(
             view.retention_max_hours = int(seconds) // 3600 if isinstance(seconds, int | float) else 0
             view.volumes = wsapi.volumes()
             view.vvsets = wsapi.volume_sets()
-    except Exception as exc:  # the step reports it; the operator fixes access and reads again
+    except DeviceError as exc:  # the step reports it; the operator fixes access and reads again
         view.read_error = f"Could not read {creds.host}: {exc}"
     return view

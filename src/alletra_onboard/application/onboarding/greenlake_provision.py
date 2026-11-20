@@ -20,7 +20,11 @@ from typing import TYPE_CHECKING, Any
 
 from alletra_onboard.application.onboarding.clients import make_greenlake, missing_credentials  # noqa: F401 - missing_credentials re-exported
 from alletra_onboard.config import Settings
-from alletra_onboard.domain.errors import GreenLakeAsyncOperationError, GreenLakeHttpError
+from alletra_onboard.domain.errors import (
+    DeviceError,
+    GreenLakeAsyncOperationError,
+    GreenLakeHttpError,
+)
 from alletra_onboard.domain.models import ArrayWorkItem, WorkflowPhase
 from alletra_onboard.domain.policies import redact
 
@@ -81,6 +85,13 @@ class GreenLakeProvisioningService:
         self.device_state_timeout = device_state_timeout
 
     async def provision(self, item: ArrayWorkItem, *, dry_run: bool = False) -> ProvisionResult:
+        """Run the six-phase GreenLake provisioning pipeline under the 'records the failed phase
+        and keeps the ids already made, whatever fails' contract.
+
+        Any failure (device, HTTP, malformed payload, or unexpected error) is redacted, recorded
+        against the failing phase, and returned in `ProvisionResult` with every earlier resource
+        ID intact so the caller persists them and never loses progress on a crash.
+        """
         result = ProvisionResult(serial=item.serial_number, dry_run=dry_run)
         try:
             await self._discover(item, result)
@@ -90,7 +101,7 @@ class GreenLakeProvisioningService:
             await self._apply_subscription(result, dry_run=dry_run)
             await self._verify(result, dry_run=dry_run)
             result.succeeded = not dry_run and all(p.status != FAILED for p in result.phases)
-        except Exception as exc:  # operator-facing pipeline must report, not crash.
+        except Exception as exc:  # contract: record the failed phase and keep earlier ids, whatever fails
             detail = _exception_detail(exc)
             phase = _current_phase(result)
             result.error = detail
@@ -188,7 +199,7 @@ class GreenLakeProvisioningService:
         """Is the subscription key queryable yet? Ends the add poll early. Unreadable = 'not yet'."""
         try:
             return await self.subscriptions.find_by_key(key) is not None
-        except Exception:
+        except (DeviceError, ValueError):
             return False
 
     async def _serial_in_inventory(self, serial: str) -> bool:
@@ -196,7 +207,7 @@ class GreenLakeProvisioningService:
         answer must never end the poll — an unreachable read is 'not yet', not 'done'."""
         try:
             return await self.devices.find_by_serial(serial) is not None
-        except Exception:
+        except (DeviceError, ValueError):
             return False
 
     async def _assign_application(self, result: ProvisionResult, *, dry_run: bool) -> None:
@@ -300,7 +311,7 @@ class GreenLakeProvisioningService:
             return False
         try:
             return _assigned_state(await self.devices.get(device_id)) == ASSIGNED_STATE_TARGET
-        except Exception:
+        except (DeviceError, ValueError):
             return False
 
     async def _wait_for_device_state(self, device_id: str, target_state: str) -> dict[str, Any]:
