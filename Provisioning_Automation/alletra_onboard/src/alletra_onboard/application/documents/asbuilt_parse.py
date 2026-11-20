@@ -9,16 +9,13 @@ from __future__ import annotations
 
 import csv
 import re
-from collections import OrderedDict
 
-from alletra_onboard.application.documents.asbuilt import AsBuiltData
+from alletra_onboard.application.documents.asbuilt_model import AsBuiltData
+from alletra_onboard.domain.array_parse import table_lines as _table_lines
 from alletra_onboard.domain.provisioning import VlunTemplate
 
 _NSP = re.compile(r"^\d+:\d+:\d+$")
 _IPV4 = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
-_TOTAL = re.compile(r"^\s*\d+\s+total\b")
-_RULE = re.compile(r"^\s*-{4,}\s*$")
-_NONE_LISTED = re.compile(r"^\s*No \S.* listed\s*$", re.IGNORECASE)
 
 
 def split_sections(dump: str) -> dict[str, str]:
@@ -252,15 +249,6 @@ def parse_asbuilt(dump: str) -> AsBuiltData:
 
 # ------------------------------------------------------------------ SPEC-002: array-state listings
 
-def _table_lines(text: str) -> list[str]:
-    """The data lines of a CLI listing: header first; rules, totals and blank lines dropped."""
-    out: list[str] = []
-    for line in (text or "").splitlines():
-        if not line.strip() or _RULE.match(line) or _TOTAL.match(line) or _NONE_LISTED.match(line):
-            continue
-        out.append(line.rstrip())
-    return out
-
 
 def parse_showvv(text: str) -> list[dict[str, str]]:
     """``showvv`` (any ``-showcols`` form) -> one dict per row keyed by the header tokens.
@@ -280,25 +268,6 @@ def parse_showvv(text: str) -> list[dict[str, str]]:
             continue
         rows.append(dict(zip(header, toks)))
     return rows
-
-
-def parse_cli_sets(text: str) -> OrderedDict[str, list[str]]:
-    """``showhostset`` / ``showvvset`` -> ``{set name: [members]}`` in listing order.
-
-    Columns ``Id Name Members``; a set with several members continues on indented lines carrying
-    only the member; ``--`` is an empty set; "No … listed" is no sets at all."""
-    out: OrderedDict[str, list[str]] = OrderedDict()
-    lines = _table_lines(text)
-    current: str | None = None
-    for line in lines[1:]:
-        toks = line.split()
-        if toks[0].isdigit() and len(toks) >= 2 and not line.startswith(" " * 8):
-            current = toks[1]
-            members = toks[2:]
-            out[current] = [] if members == ["--"] else members
-        elif current is not None:
-            out[current].extend(t for t in toks if t != "--")
-    return out
 
 
 def parse_showvlun_templates_cli(text: str) -> list[VlunTemplate]:

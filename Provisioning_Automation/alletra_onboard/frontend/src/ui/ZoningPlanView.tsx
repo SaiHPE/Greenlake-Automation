@@ -1,10 +1,21 @@
-import { Box, Button, CheckBox, DataTable, Heading, Text, TextInput } from 'grommet';
+import { Box, Button, CheckBox, Text, TextInput } from 'grommet';
 import { StatusGood } from 'grommet-icons';
-import { ComponentProps, ReactNode, useMemo, useState } from 'react';
-import { AliasedWwpn, FabricZonePlan, ZoningPlan, ZoningRenderResult, renderZoningCommands } from '../api';
-import { DoneList, Section } from '../ui/blocks';
-import { InlineNotification, NotesList, Surface, TableSummary } from '../ui/primitives';
-import { NoValue, RESULT, ResultWord, StatusIndicator } from '../ui/status';
+import { ComponentProps, ReactNode, useState } from 'react';
+import { ZoningPlan, ZoningRenderResult, renderZoningCommands } from '../api';
+import { DoneList, Section } from './blocks';
+import { InlineNotification, NotesList, Surface } from './primitives';
+import {
+  aliasProblem,
+  aliasSuggestion,
+  fabricTitle,
+  hostName,
+  hostSource,
+  mono,
+  nameClashes,
+  pairKey,
+  wwpnTitle,
+} from './zoningHelpers';
+import { CommandSet, CurrentZoningTable, FabricOverview } from './ZoningSwitchView';
 
 // ADR 0004 + ADR 0012: the zoning screen, redesigned after the 2026-09-12 live test
 // (docs/ux/ZONING-REDESIGN.md), then calmed by SPEC-030 (BL-59 P8a). One step, in parts:
@@ -15,293 +26,6 @@ import { NoValue, RESULT, ResultWord, StatusIndicator } from '../ui/status';
 //   E  Command set      — the deliverable, per fabric; activation kept apart               (Hand off)
 // The data is exactly what the backend plan carries; commands are rendered by POST /zoning/render so
 // the grammar has one implementation. The tool has no switch write path at any layer.
-
-const mono = { fontFamily: 'ui-monospace, Consolas, monospace' };
-const pairKey = (host: string, arr: string) => `${host}|${arr}`;
-
-// ---------------------------------------------------------------- vocabulary (docs/ux/ZONING-REDESIGN §3)
-
-const fabricTitle = (fab: FabricZonePlan) => `Fabric ${fab.fabric} (${fab.fabric === 'F1' ? 'odd' : 'even'})`;
-
-const SOURCE_LABEL: Record<string, string> = {
-  vcenter: 'from vCenter',
-  sheet: 'from the sheet (Hosts tab)',
-  array: 'array host object',
-  switch: 'from the fabric name server',
-};
-
-function hostName(w: AliasedWwpn): string {
-  // QLogic HBAs advertise no HN: on the fabric — the WWPN is the only identity we have.
-  return w.host_name || w.display;
-}
-
-function hostSource(w: AliasedWwpn): string {
-  if (w.host_source === 'array' && !w.host_name) return 'array login only — no host object yet';
-  return SOURCE_LABEL[w.host_source] ?? '';
-}
-
-// Array target WWPNs on this family encode the port: 2N:SP:00:02:AC:<system> — node N, slot S, port P.
-function wwpnTitle(w: AliasedWwpn): string {
-  if (w.role === 'array') return `Array port ${w.nsp}${w.node != null ? ` on controller node ${w.node}` : ''} — WWPN ${w.display}`;
-  return `HBA port WWPN ${w.display}`;
-}
-
-// Brocade FOS zone-object names (mirrors zoning_plan.fos_name_problem / fos_name_warning — the
-// backend stays authoritative; this only lets the operator see a problem before clicking Generate).
-const FOS_NAME = /^[A-Za-z0-9][A-Za-z0-9_\-$^]*$/;
-const FOS_ENHANCED = /^[0-9]|[-$^]/;
-function aliasProblem(name: string): { tone: 'critical' | 'warning' | 'ok'; text: string } {
-  if (!name) return { tone: 'critical', text: 'Enter a name' };
-  if (name.length > 64) return { tone: 'critical', text: `${name.length} characters — FOS allows 64` };
-  if (!FOS_NAME.test(name)) return { tone: 'critical', text: 'Letters, digits and _ only' };
-  if (FOS_ENHANCED.test(name)) return { tone: 'warning', text: 'Needs FOS 8.1.0+ on every switch (- $ ^ or leading digit)' };
-  return { tone: 'ok', text: 'Valid' };
-}
-
-// SPEC-010 R3: mirrors zoning_plan.fos_name_suggestion — the closest name FOS accepts.
-function aliasSuggestion(name: string): string {
-  if (name && aliasProblem(name).tone !== 'critical') return name;
-  let folded = (name || '').replace(/[^A-Za-z0-9_\-$^]+/g, '_').replace(/^[_\-$^]+|[_\-$^]+$/g, '');
-  if (!folded || !/^[A-Za-z0-9]/.test(folded)) folded = `a${folded}`;
-  return folded.slice(0, 64);
-}
-
-// BL-09: the name clashes zoning_plan.render_commands skips a pair for, said before Generate.
-function nameClashes(plan: ZoningPlan, selectedPairs: [string, string][], aliases: Record<string, string>) {
-  const port: Record<string, string> = {};   // wwpn -> why its new alias cannot be created
-  const zone: Record<string, string> = {};   // pairKey -> why its zone cannot be created
-  const chosen = new Set(selectedPairs.map(([h, a]) => pairKey(h, a)));
-  plan.fabrics.forEach((fab) => {
-    const defined = new Set(fab.defined_names ?? []);
-    const entry = new Map([...fab.hosts, ...fab.array_ports].map((w) => [w.wwpn, w]));
-    const label = (wwpn: string) => { const w = entry.get(wwpn); return w?.role === 'array' ? `array port ${w.nsp}` : (w ? hostName(w) : wwpn); };
-    const pairs = fab.pairs.filter(([h, a]) => chosen.has(pairKey(h, a)));
-    const typedFor = new Map<string, string[]>();
-    new Set(pairs.flat()).forEach((wwpn) => {
-      const name = aliases[wwpn] ?? '';
-      if (!name || entry.get(wwpn)?.existing_aliases.includes(name)) return;
-      if (defined.has(name)) port[wwpn] = 'Already on the switch for another device';
-      else typedFor.set(name, [...(typedFor.get(name) ?? []), wwpn]);
-    });
-    typedFor.forEach((wwpns) => {
-      if (wwpns.length > 1) wwpns.forEach((w) => { port[w] = `Same name as ${wwpns.filter((o) => o !== w).map(label).join(', ')}`; });
-    });
-    pairs.forEach(([h, a]) => {
-      const name = `${aliases[h] ?? ''}_${aliases[a] ?? ''}`;
-      if (defined.has(name)) zone[pairKey(h, a)] = `zone ${name} already exists on the switch`;
-      else if (name.length > 64) zone[pairKey(h, a)] = `zone ${name} is ${name.length} characters — FOS allows 64; shorten an alias`;
-    });
-  });
-  return { port, zone };
-}
-
-function download(filename: string, text: string) {
-  const blob = new Blob([text], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-// ---------------------------------------------------------------- status (colour + icon + shape + text)
-
-type PairState = 'zoned' | 'partial' | 'unzoned' | 'offline' | 'new';
-
-const PAIR: Record<PairState, ResultWord> = {
-  zoned: RESULT.zoned,
-  partial: RESULT.partly_zoned,
-  unzoned: RESULT.not_zoned,
-  offline: RESULT.not_on_fabric,
-  new: { state: 'not_started', label: 'New zone' },
-};
-
-/** A block inside the folded section: its heading is an h3 under the section's h2. */
-function SubPanel({ title, description, right, children }: { title: string; description: ReactNode; right?: ReactNode; children: ReactNode }) {
-  return (
-    <Box gap="small" flex={false}>
-      <Box direction="row" justify="between" align="center" gap="small" wrap>
-        <Heading level={3} size="xsmall" weight={500} margin="none">
-          {title}
-        </Heading>
-        {right}
-      </Box>
-      <Text size="small" color="text-weak">
-        {description}
-      </Text>
-      {children}
-    </Box>
-  );
-}
-
-// ---------------------------------------------------------------- A. Fabrics
-
-function FabricOverview({ plan }: { plan: ZoningPlan }) {
-  return (
-    <SubPanel title="Fabrics" description="The two switches named on the sheet, read read-only. Every array port is cabled to exactly one of them; a zone only works inside one fabric.">
-      <Box gap="small">
-        {plan.fabrics.map((fab) => (
-          <Box key={fab.fabric} gap="xxsmall" pad={{ bottom: 'xsmall' }} border={{ side: 'bottom', color: 'border' }}>
-            <Box direction="row" gap="small" align="baseline" wrap>
-              <Text size="medium" weight={600}>{fabricTitle(fab)}</Text>
-              <Text size="small">switch <Text size="small" style={mono}>{fab.switch_host}</Text>{fab.switch_name ? ` ${fab.switch_name}` : ''}</Text>
-              {fab.fabric_name && (
-                <Text size="small" color="text-weak">
-                  fabric {fab.fabric_name}{fab.switch_count ? ` · ${fab.switch_count} switch${fab.switch_count === 1 ? '' : 'es'}` : ''}
-                </Text>
-              )}
-              <Text size="small">active cfg <Text size="small" weight={600} style={mono}>{fab.active_cfg || 'not read'}</Text></Text>
-            </Box>
-            <Text size="small" color="text-weak">
-              {fab.array_ports.length === 0
-                ? 'No array port is online on this fabric.'
-                : 'Array ports here: ' + fab.array_ports.map((p) => `${p.nsp}${p.node != null ? ` (node ${p.node})` : ''}`).join(' · ')}
-            </Text>
-          </Box>
-        ))}
-      </Box>
-    </SubPanel>
-  );
-}
-
-// ---------------------------------------------------------------- B. Current zoning
-
-interface HbaRow {
-  key: string;
-  host: string;
-  meta: string;              // "ESXi 8.0.2 · from vCenter"
-  wwpn: string;
-  fabric: string;            // "F1" | "F2" | ""
-  placed: string;            // remote switch name or ""
-  zonedPorts: string[];      // n:s:p already zoned to this HBA on this fabric
-  totalPorts: number;
-  zones: string[];
-  state: PairState;
-}
-
-function hbaRows(plan: ZoningPlan): HbaRow[] {
-  const rows: HbaRow[] = [];
-  plan.fabrics.forEach((fab) => {
-    const zoned = new Set(fab.already_zoned.map(([h, a]) => pairKey(h, a)));
-    fab.hosts.forEach((h) => {
-      const zonedPorts: string[] = [];
-      const zones = new Set<string>();
-      fab.array_ports.forEach((p) => {
-        if (zoned.has(pairKey(h.wwpn, p.wwpn))) {
-          zonedPorts.push(p.nsp || p.display);
-          (fab.zone_names?.[pairKey(h.wwpn, p.wwpn)] ?? []).forEach((z) => zones.add(z));
-        }
-      });
-      const total = fab.array_ports.length;
-      const state: PairState = zonedPorts.length === 0 ? 'unzoned' : zonedPorts.length < total ? 'partial' : 'zoned';
-      rows.push({
-        key: `${fab.fabric}|${h.wwpn}`, host: hostName(h),
-        meta: [h.os, hostSource(h)].filter(Boolean).join(' · '),
-        wwpn: h.display, fabric: fab.fabric, placed: h.placed_on_switch ?? '',
-        zonedPorts, totalPorts: total, zones: [...zones], state,
-      });
-    });
-  });
-  plan.offline_hosts.forEach((entry) => {
-    const m = /^(.*) \(([0-9a-f:]+)\)$/i.exec(entry);
-    rows.push({
-      key: `off|${entry}`, host: m ? m[1] : entry, meta: '', wwpn: m ? m[2] : '', fabric: '', placed: '',
-      zonedPorts: [], totalPorts: 0, zones: [], state: 'offline',
-    });
-  });
-  rows.sort((a, b) => a.host.localeCompare(b.host) || a.fabric.localeCompare(b.fabric) || a.wwpn.localeCompare(b.wwpn));
-  return rows;
-}
-
-function exportText(plan: ZoningPlan, rows: HbaRow[]): string {
-  const lines = ['Current zoning — as observed from the array and both fabric switches (read-only)', ''];
-  plan.fabrics.forEach((fab) => {
-    lines.push(`${fabricTitle(fab)}: switch ${fab.switch_host} ${fab.switch_name ?? ''} · fabric ${fab.fabric_name || '-'} · active cfg ${fab.active_cfg || '-'}`);
-    lines.push('  array ports: ' + fab.array_ports.map((p) => `${p.nsp} ${p.display}`).join(', '));
-  });
-  lines.push('', 'Host | HBA port | Fabric | Zoned to array ports | Zone(s) | Status');
-  rows.forEach((r) => lines.push([
-    r.host, r.wwpn, r.fabric ? `${r.fabric}${r.placed ? ` (on ${r.placed})` : ''}` : '-',
-    r.zonedPorts.join(' ') || '-', r.zones.join(' ') || '-', PAIR[r.state].label,
-  ].join(' | ')));
-  return lines.join('\n') + '\n';
-}
-
-function CurrentZoningTable({ plan }: { plan: ZoningPlan }) {
-  const rows = useMemo(() => hbaRows(plan), [plan]);
-  const needWork = rows.filter((r) => r.state !== 'zoned');
-  const [onlyNeeding, setOnlyNeeding] = useState(needWork.length > 0 && needWork.length < rows.length);
-  const shown = onlyNeeding ? needWork : rows;
-  const hosts = new Set(rows.map((r) => r.host));
-  const fullyZonedHosts = [...hosts].filter((h) => rows.filter((r) => r.host === h).every((r) => r.state === 'zoned'));
-
-  return (
-    <SubPanel
-      title="Current zoning"
-      description="One row per host HBA port. “Zoned” is read from the array (a login is only possible through an effective zone) and the zone name from the switch's effective configuration."
-      right={<Button size="small" label="Export .txt" onClick={() => download('current-zoning.txt', exportText(plan, rows))} />}
-    >
-      {rows.length === 0 ? (
-        <Text size="small" color="text-weak">No host HBA port is online on either fabric.</Text>
-      ) : (
-        <>
-          <DataTable
-            primaryKey="key"
-            data={shown}
-            a11yTitle="Current zoning: one row per host HBA port with the array ports it is zoned to"
-            columns={[
-              {
-                property: 'host', header: 'Host', pin: true,
-                render: (r: HbaRow) => (
-                  <Box>
-                    <Text size="small" weight={600}>{r.host}</Text>
-                    {r.meta && <Text size="xsmall" color="text-weak">{r.meta}</Text>}
-                  </Box>
-                ),
-              },
-              { property: 'wwpn', header: 'HBA port (WWPN)', render: (r: HbaRow) => (r.wwpn ? <Text size="small" style={mono}>{r.wwpn}</Text> : <NoValue />) },
-              {
-                property: 'fabric', header: 'Fabric',
-                render: (r: HbaRow) => (
-                  <Box>
-                    {r.fabric ? <Text size="small">{r.fabric}</Text> : <NoValue />}
-                    {r.placed && <Text size="xsmall" color="text-weak">on {r.placed} via ISL</Text>}
-                  </Box>
-                ),
-              },
-              {
-                property: 'zonedPorts', header: 'Zoned to array ports',
-                render: (r: HbaRow) => (r.zonedPorts.length ? <Text size="small">{r.zonedPorts.join(', ')}</Text> : <NoValue />),
-              },
-              { property: 'zones', header: 'Zone', render: (r: HbaRow) => (r.zones.length ? <Text size="small" style={mono}>{r.zones.join(', ')}</Text> : <NoValue />) },
-              {
-                property: 'state', header: 'Status',
-                render: (r: HbaRow) => (
-                  <StatusIndicator
-                    state={PAIR[r.state].state}
-                    label={PAIR[r.state].label}
-                    detail={r.state === 'partial' ? `${r.zonedPorts.length} of ${r.totalPorts} ports` : undefined}
-                  />
-                ),
-              },
-            ]}
-          />
-          <Box direction="row" justify="between" align="center" wrap gap="small">
-            <TableSummary>
-              {fullyZonedHosts.length} of {hosts.size} hosts zoned on every fabric they are cabled to ·{' '}
-              {needWork.filter((r) => r.state !== 'offline').length} HBA port(s) need zones ·{' '}
-              {needWork.filter((r) => r.state === 'offline').length} not on any fabric
-            </TableSummary>
-            {needWork.length > 0 && needWork.length < rows.length && (
-              <CheckBox label="Show only HBA ports that need zones" checked={onlyNeeding} onChange={(e) => setOnlyNeeding(e.target.checked)} />
-            )}
-          </Box>
-        </>
-      )}
-    </SubPanel>
-  );
-}
 
 // ---------------------------------------------------------------- C. Design new zones
 
@@ -481,104 +205,6 @@ function AliasReview({
   );
 }
 
-// ---------------------------------------------------------------- E. Command set
-
-const ACTIVATION = ['cfgsave', 'cfgenable'];
-const isActivation = (c: string) => ACTIVATION.some((verb) => c.startsWith(verb));
-const isPrecheck = (c: string) => c.startsWith('cfgtransshow');
-const PRECHECK_EXPECT = 'There is no outstanding zoning transaction';
-
-/** The command set for one fabric, in FOS order (SPEC-010): 1. check, 2. paste block, 3. activate.
- *
- * Activation is separated from the additive commands on purpose. Until 2026-09-02 it was rendered
- * in the same block as commands the tool had just executed, so the screen drew no boundary between
- * "done" and "yours to do" — and an operator could reasonably select the whole block and paste it.
- * `cfgsave` commits the transaction; `cfgenable` replaces the effective config fabric-wide. Both
- * belong to the SAN team, in a window, deliberately. The check is its own block for the same reason:
- * pasted with the rest it would be a line of output nobody reads before the alicreates land. */
-function CommandSet({ fab, commands }: { fab: FabricZonePlan; commands: string[] }) {
-  const precheck = commands.filter(isPrecheck);
-  const additive = commands.filter((c) => !isActivation(c) && !isPrecheck(c));
-  const activation = commands.filter(isActivation);
-  const [copied, setCopied] = useState<'' | 'check' | 'paste'>('');
-  if (commands.length === 0) {
-    return <Text size="small" color="text-weak">{fabricTitle(fab)}: no commands — nothing selected here that does not already exist.</Text>;
-  }
-  const header = [
-    `# ${fabricTitle(fab)} — switch ${fab.switch_host} ${fab.switch_name ?? ''} — active cfg ${fab.active_cfg || 'NOT READ'}`,
-    `# Generated ${new Date().toISOString()} by Alletra Onboard. Additive only: creates nothing that exists, removes nothing.`,
-    `# Paste only after cfgtransshow reported "${PRECHECK_EXPECT}".`,
-  ];
-  const copyText = async (text: string, which: 'check' | 'paste') => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(which);
-      setTimeout(() => setCopied(''), 2000);
-    } catch {
-      setCopied('');   // clipboard blocked; the text is on screen to select by hand
-    }
-  };
-  const save = () => download(
-    `zoning_${fab.fabric}_${fab.switch_host.replace(/[^0-9a-zA-Z]+/g, '-')}.txt`,
-    [
-      ...header, '',
-      `# --- 1. check: must reply "${PRECHECK_EXPECT}" — stop if it does not ---`, ...precheck, '',
-      '# --- 2. paste block (additive) ---', ...additive, '',
-      '# --- 3. save and activate: SAN team, in a window ---',
-      ...(activation.length ? activation : ['# none: no effective zoning configuration was read on this switch - see the plan notes']), '',
-    ].join('\n'),
-  );
-  return (
-    <Box gap="xsmall">
-      <Box direction="row" gap="small" align="baseline" wrap>
-        <Text size="small" weight={600}>{fabricTitle(fab)}</Text>
-        <Text size="small" color="text-weak">switch {fab.switch_host} {fab.switch_name ?? ''} · cfg <Text size="small" style={mono}>{fab.active_cfg || 'not read'}</Text></Text>
-      </Box>
-      {precheck.length > 0 && (
-        <Box gap="xxsmall">
-          <Text size="small" weight={600}>1. Check — run alone first</Text>
-          <Box direction="row" gap="small" align="center" wrap>
-            <Box background="background-contrast" round="xsmall" pad={{ horizontal: 'small', vertical: 'xsmall' }}>
-              {precheck.map((c, i) => <Text key={i} size="small" style={mono}>{c}</Text>)}
-            </Box>
-            <Button size="small" label={copied === 'check' ? 'Copied' : 'Copy'} onClick={() => copyText(precheck.join('\n'), 'check')} />
-            <Text size="small" color="text-weak">Expected reply: <i>{PRECHECK_EXPECT}</i>. Anything else: stop and ask the SAN team.</Text>
-          </Box>
-        </Box>
-      )}
-      <Text size="small" weight={600}>2. Paste block — additive only</Text>
-      <Box background="background-contrast" round="xsmall" pad="small" tabIndex={0} style={{ overflowX: 'auto' }}>
-        {additive.map((c, i) => <Text key={i} size="small" style={{ ...mono, whiteSpace: 'pre-wrap' }}>{c}</Text>)}
-      </Box>
-      <Box direction="row" gap="small" align="center" wrap>
-        <Button size="small" label={copied === 'paste' ? 'Copied' : 'Copy paste block'} onClick={() => copyText([...header, ...additive].join('\n'), 'paste')} />
-        <Button size="small" label="Download .txt (all three steps)" onClick={save} />
-      </Box>
-      {activation.length > 0 && (
-        <Box border={{ color: 'status-warning', side: 'left', size: 'medium' }} pad={{ left: 'small', vertical: 'xsmall' }} gap="xxsmall">
-          <Text size="small" weight={600}>3. Save and activate — SAN team, in a window</Text>
-          <Text size="small" color="text-weak">
-            Not part of the paste above. <Text size="small" style={mono}>cfgsave</Text> commits the defined
-            configuration and closes the zoning transaction; <Text size="small" style={mono}>cfgenable</Text> replaces
-            the effective configuration across the whole fabric, so the SAN team runs it in a maintenance window.
-          </Text>
-          {activation.map((c, i) => <Text key={i} size="small" style={mono}>{c}</Text>)}
-        </Box>
-      )}
-      {activation.length === 0 && additive.length > 0 && (
-        <Box border={{ color: 'status-critical', side: 'left', size: 'medium' }} pad={{ left: 'small', vertical: 'xsmall' }} gap="xxsmall">
-          <Text size="small" weight={600}>3. Save and activate — cannot be generated for this switch</Text>
-          <Text size="small">
-            No effective zoning configuration was read on {fab.switch_host}, so there is no <Text size="small" style={mono}>cfgadd</Text> or{' '}
-            <Text size="small" style={mono}>cfgenable</Text>. The zones in the paste block take no effect until they are in an enabled
-            configuration. Run <Text size="small" style={mono}>cfgactvshow</Text> on the switch and ask the SAN owner before pasting.
-          </Text>
-        </Box>
-      )}
-    </Box>
-  );
-}
-
 // ---------------------------------------------------------------- F. Peer ports (SPEC-025 R7)
 
 /** The pairs the sheet's Peer ports tab asks for, on the fabric where both ports are, with their names.
@@ -712,8 +338,8 @@ export function ZoningPlanView({ plan, runId, done = [] }: { plan: ZoningPlan; r
     setError(null);
     try {
       setResult(await renderZoningCommands(plan, aliases, selectedPairs, runId));
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setBusy(false);
     }

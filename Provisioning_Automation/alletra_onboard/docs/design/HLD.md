@@ -94,8 +94,7 @@ for GreenLake and DSCC.
 - One process. A FastAPI backend serves the React UI and the API on **`http://127.0.0.1:8765`**
   ([config.py](../../src/alletra_onboard/config.py)), loopback only, with live progress over
   Server-Sent Events. The API has no login of its own; the operator's Windows session is the boundary.
-- Blocking device calls (SSH, WSAPI, vCenter) run on worker threads under `asyncio.to_thread`
-  ([ARCHITECTURE.md](../ARCHITECTURE.md) §2).
+- Blocking device calls (SSH, WSAPI, vCenter) run on worker threads under `asyncio.to_thread`.
 - State lives in a local SQLite file, `.alletra_onboard/state.db`. In the packaged `.exe` it sits
   next to the executable ([packaging/app_main.py](../../packaging/app_main.py)).
 - Run it as Administrator so the *Sync system clock* button can set the clock
@@ -192,7 +191,7 @@ The firewall list the operator can download from the Prerequisites page is in
 ### 4.1 Layers
 
 The backend uses ports and adapters. Dependencies point inward
-([ARCHITECTURE.md](../ARCHITECTURE.md) §3, [ADR 0011](../adr/0011-bounded-context-refactor-decoupled-ux.md)).
+([ADR 0011](../adr/0011-bounded-context-refactor-decoupled-ux.md), [STANDARD.md](../STANDARD.md) §3.2).
 
 ```mermaid
 flowchart TB

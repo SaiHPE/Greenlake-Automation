@@ -9,17 +9,14 @@ from urllib.parse import urlsplit
 import httpx
 
 from alletra_onboard.adapters import command_log
-from alletra_onboard.application.platform.tls import ssl_context
-from alletra_onboard.domain.policies import RateBudget, TokenBucket
+from alletra_onboard.adapters.tls import ssl_context
+from alletra_onboard.domain.errors import GreenLakeAsyncOperationError, GreenLakeHttpError
+from alletra_onboard.domain.policies import RateBudget, TokenBucket, redact
 
 # Async-operation status vocabulary (Devices/Subscriptions async-operations).
 TERMINAL_OK = {"SUCCEEDED", "SUCCESS", "OK", "COMPLETE", "COMPLETED", "DONE"}
 TERMINAL_FAIL = {"FAILED", "FAILURE", "ERROR", "TIMEDOUT", "TIMEOUT", "PAUSED", "CANCELLED"}
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-
-
-class GreenLakeAsyncOperationError(RuntimeError):
-    """A polled GreenLake async-operation reached a terminal failure state."""
 
 
 def default_rate_buckets() -> dict[str, TokenBucket]:
@@ -86,7 +83,13 @@ class GreenLakeHttpClient:
                 attempt += 1
                 await asyncio.sleep(_retry_delay(response, attempt))
                 continue
-            response.raise_for_status()
+            if response.is_error:
+                raise GreenLakeHttpError(
+                    response.status_code,
+                    response.request.method,
+                    response.request.url.path,
+                    _greenlake_error_text(response),
+                )
             return response
 
     def _record(self, method: str, path: str, kwargs: dict[str, Any], started: float, *, ok: bool,
@@ -202,3 +205,28 @@ def _async_error_detail(payload: dict[str, Any]) -> str:
     if payload.get("logMessages"):
         return str(payload["logMessages"])
     return "no error detail in async-operation payload"
+
+
+def _greenlake_error_text(response: httpx.Response) -> str:
+    """Pull the human-readable message + field issues out of a GreenLake error body."""
+    try:
+        data = response.json()
+    except ValueError:  # error bodies are not always JSON.
+        return redact((response.text or "").strip()[:300])
+    if not isinstance(data, dict):
+        return ""
+    parts: list[str] = []
+    if data.get("message"):
+        parts.append(str(data["message"]))
+    if data.get("errorCode"):
+        parts.append(f"[{data['errorCode']}]")
+    for detail in data.get("badRequestErrorDetails") or []:
+        issues = detail.get("issues") if isinstance(detail, dict) else None
+        for issue in issues or []:
+            if not isinstance(issue, dict):
+                continue
+            description = issue.get("description") or issue.get("subject")
+            source = issue.get("source")
+            if description:
+                parts.append(f"{source + ': ' if source else ''}{description}")
+    return redact("; ".join(parts))[:500]

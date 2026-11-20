@@ -21,14 +21,14 @@ from collections.abc import Callable
 
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.provisioning.discovery import (
-    parse_file_ports,
     parse_iscsi_untagged_ports,
     parse_iscsi_vlans,
     parse_showhost,
     parse_showport_iscsi,
 )
 from alletra_onboard.application.provisioning.peer_ports import OFFLINE_ASKS
-from alletra_onboard.application.replication.read import (
+from alletra_onboard.domain.array_parse import (
+    parse_file_ports,
     parse_showport_rcip,
     parse_showport_roles,
     parse_showsys,

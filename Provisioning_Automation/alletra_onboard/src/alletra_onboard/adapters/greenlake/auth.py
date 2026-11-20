@@ -7,7 +7,8 @@ from urllib.parse import urlsplit
 import httpx
 
 from alletra_onboard.adapters import command_log
-from alletra_onboard.application.platform.tls import ssl_context
+from alletra_onboard.adapters.tls import ssl_context
+from alletra_onboard.domain.errors import GreenLakeHttpError
 
 
 class OAuthClientCredentials:
@@ -48,7 +49,12 @@ class OAuthClientCredentials:
             raise
         self._record(started, ok=response.is_success, result=f"HTTP {response.status_code}",
                      output="(token withheld)" if response.is_success else "")
-        response.raise_for_status()
+        if response.is_error:
+            raise GreenLakeHttpError(
+                response.status_code,
+                response.request.method,
+                response.request.url.path,
+            )
         payload = response.json()
         self._access_token = payload["access_token"]
         expires_in = int(payload.get("expires_in", 900))

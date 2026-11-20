@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RemovalItem } from '../api';
-import { removalLines } from './ProvisionStep';
+import { removalLines } from '../ui/RemovalSets';
 
 const item = (kind: string, name: string): RemovalItem => ({ kind, name, command: `remove${kind} -f ${name}` });
 

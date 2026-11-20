@@ -274,8 +274,8 @@ export function SnapshotsStep({ runId, run, events, onDone }: Props) {
     setError(null);
     try {
       await action();
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     }
   };
 

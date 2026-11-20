@@ -67,7 +67,8 @@ function when(iso: string): string {
 
 export function FailoverTestStep({ runId, run, events, onDone }: Props) {
   const { nextTitle, openLog } = useStepContext();
-  const wide = useContext(ResponsiveContext) === 'large' || useContext(ResponsiveContext) === 'xlarge';
+  const size = useContext(ResponsiveContext);
+  const wide = size === 'large' || size === 'xlarge';
   const [error, setError] = useState<string | null>(null);
   // started_at of a passed test the operator chose to run again
   const [again, setAgain] = useState<string | null>(null);
@@ -99,8 +100,8 @@ export function FailoverTestStep({ runId, run, events, onDone }: Props) {
     setError(null);
     try {
       await action();
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     }
   };
 

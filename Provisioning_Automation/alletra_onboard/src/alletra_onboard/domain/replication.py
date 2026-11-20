@@ -546,7 +546,7 @@ class ReplicationResult(BaseModel):
     error: str | None = None
 
 
-# ------------------------------------------------------------------ verify (R6)
+# ------------------------------------------------------------------ verify, R6
 
 GroupVerdict = Literal["replicating", "syncing", "not_replicating"]
 

@@ -1,8 +1,8 @@
 import { Box, DataTable, Text } from 'grommet';
 import { ClientGroup, EthernetPort, FileNodeStatus, FileReport, FileShareRecord, FileSystemRecord } from '../api';
-import { Section } from '../ui/blocks';
-import { InlineNotification, NotesList, TableSummary } from '../ui/primitives';
-import { NoValue, StatusIndicator } from '../ui/status';
+import { Section } from './blocks';
+import { InlineNotification, NotesList, TableSummary } from './primitives';
+import { NoValue, StatusIndicator } from './status';
 
 const mono = { fontFamily: 'ui-monospace, Consolas, monospace' };
 

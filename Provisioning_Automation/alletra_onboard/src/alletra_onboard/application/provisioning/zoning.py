@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 
+from alletra_onboard.application.provisioning.hosts import union_hosts
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.shared import Fabric, normalize_wwpn, wwpn_colons
@@ -238,10 +239,6 @@ def _hosts_in_scope(
 ) -> tuple[dict[str, set[str]], dict[str, list[str]]]:
     """Expected hosts: the provisioning union (see build_report), as (FC host -> WWPNs, iSCSI-only
     host -> IQNs). Array hosts in no host set are other teams' objects and are left out."""
-    from alletra_onboard.application.provisioning.hosts import (
-        union_hosts,  # local: avoid import cycle
-    )
-
     in_a_set = {m for hs in getattr(intent, "host_sets", []) for m in hs.members}
     host_wwpns: dict[str, set[str]] = {}
     iscsi_only: dict[str, list[str]] = {}

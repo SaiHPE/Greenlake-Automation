@@ -18,13 +18,17 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from alletra_onboard.adapters.array.wsapi_v3_client import (
+from alletra_onboard.domain.array_parse import (
+    parse_file_ports,
+    parse_showsys,
+    parse_showversion,
+)
+from alletra_onboard.domain.discovery import EthernetPort
+from alletra_onboard.domain.errors import (
     WsapiV3Error,
     WsapiV3LoginRefused,
     WsapiV3TrustError,
 )
-from alletra_onboard.application.replication.read import parse_showsys, parse_showversion
-from alletra_onboard.domain.discovery import EthernetPort
 from alletra_onboard.domain.unified_file import (
     ClientGroup,
     ClientRule,
@@ -160,13 +164,9 @@ def parse_fileshares(body: Any) -> list[FileShareRecord]:
 
 
 def parse_showport_file(text: str) -> list[EthernetPort]:
-    """`showport -file` -> the File ports, through Discovery's own `parse_file_ports` (one reader for
-    one fact). The array's *"There is no specified port information."* means none. Any other answer
-    without a port row is refused: an error or an empty reply is not "no File ports"."""
-    # Imported here, not at the top: Discovery imports this module to read the file side, and this
-    # is the one place the file context needs Discovery back.
-    from alletra_onboard.application.provisioning.discovery import parse_file_ports
-
+    """`showport -file` -> the File ports, through `parse_file_ports` (one reader for one fact).
+    The array's *"There is no specified port information."* means none. Any other answer without
+    a port row is refused: an error or an empty reply is not "no File ports"."""
     ports = parse_file_ports(text)
     if ports or NO_PORT_INFORMATION in (text or ""):
         return ports

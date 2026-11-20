@@ -52,6 +52,18 @@ function HandoverBlock({ status }: { status: HandoverStatus }) {
   );
 }
 
+function asBuiltFromEvent(data: Record<string, unknown> | undefined): AsBuiltResult | null {
+  if (!data || typeof data.size !== 'number' || !Array.isArray(data.warnings)) return null;
+  return {
+    serial: typeof data.serial === 'string' ? data.serial : '',
+    name: typeof data.name === 'string' ? data.name : '',
+    customer: typeof data.customer === 'string' ? data.customer : '',
+    size: data.size,
+    warnings: data.warnings.map(String),
+    handover: (data.handover as HandoverStatus | null | undefined) ?? null,
+  };
+}
+
 export function AsBuiltStep({ runId, run, events, onDone }: Props) {
   const credential = useArrayCredential(runId);
   const { nextTitle } = useStepContext();
@@ -68,8 +80,7 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
   const terminal = [...mine]
     .reverse()
     .find((event) => event.event_type === 'asbuilt.generated' || event.event_type === 'asbuilt.failed');
-  const result =
-    terminal?.event_type === 'asbuilt.generated' ? ((terminal.data as unknown as AsBuiltResult) ?? null) : null;
+  const result = terminal?.event_type === 'asbuilt.generated' ? asBuiltFromEvent(terminal.data) : null;
   const failure = terminal?.event_type === 'asbuilt.failed' ? terminal.message : null;
   const warnings = result?.warnings ?? [];
   const fileName = `as-built-${result?.serial || 'array'}.docx`;
@@ -82,8 +93,8 @@ export function AsBuiltStep({ runId, run, events, onDone }: Props) {
         runId, override, customer.trim(), site.trim(),
         workload.trim(), purpose.trim(),
       );
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setSubmitting(false);
     }

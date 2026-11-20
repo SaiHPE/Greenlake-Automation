@@ -20,7 +20,7 @@ export interface RunEvent {
   event_type: string;
   message: string;
   created_at: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 export interface FieldCheck {
@@ -31,7 +31,7 @@ export interface FieldCheck {
   critical: boolean;
   match?: 'exact' | 'contains' | 'includes';   // SPEC-011 R3: how the comparison was made
 }
-export interface HealthDetail { identifier: string; description: string; resolution: string; }
+interface HealthDetail { identifier: string; description: string; resolution: string; }
 export interface HealthIssue {
   component: string;
   summary: string;
@@ -52,7 +52,7 @@ export interface VerificationReport {
   peer_ports_error?: string | null;
 }
 /** SPEC-025 R6: one planned peer port as the array reads it. */
-export interface PeerPortCheck { nsp: string; ok: boolean; sentence: string; }
+interface PeerPortCheck { nsp: string; ok: boolean; sentence: string; }
 
 export interface CheckReport {
   ok: boolean;
@@ -137,9 +137,6 @@ export interface AppProfile {
 }
 export const getAppProfile = () => request<AppProfile>('GET', '/app/profile');
 
-export const getConfig = () => request<{ configured: boolean; values: Record<string, string> }>('GET', '/config');
-export const saveConfig = (values: Record<string, string | null>) =>
-  request<{ configured: boolean; values: Record<string, string> }>('POST', '/config', values);
 export const checkConfig = () => request<{ report: CheckReport }>('POST', '/config/check');
 
 // Note: the CSV intake and direct run creation endpoints still exist for the CLI, but the UI mints
@@ -147,7 +144,7 @@ export const checkConfig = () => request<{ report: CheckReport }>('POST', '/conf
 
 export interface InitSheetUploadResult {
   token: string; // single-use hold for the parsed sheet; the run is minted from it + the chosen mode
-  work_item: any; // parsed values for review (admin/device passwords never included)
+  work_item: import('./workItem').ParsedWorkItem; // parsed values for review (admin/device passwords never included)
   credentials_saved: boolean;
   // The sheet's device endpoints without passwords (array/vcenter/switch/peer _host and _user); SPEC-006 R1.
   targets?: Record<string, string>;
@@ -176,7 +173,7 @@ export interface ArrayCredentialInfo {
   host: string;
 }
 export const getRun = (runId: string) =>
-  request<{ run: RunRecord; work_item: any; array_credential: ArrayCredentialInfo | null }>('GET', `/runs/${runId}`);
+  request<{ run: RunRecord; work_item: import('./workItem').ParsedWorkItem; array_credential: ArrayCredentialInfo | null }>('GET', `/runs/${runId}`);
 export const listRuns = () => request<{ runs: RunRecord[] }>('GET', '/runs');
 
 // ------------------------------------------------------------------ device trust (trusted on first contact)
@@ -296,13 +293,13 @@ export interface EthernetPort {
   gateway: string; vlan: string; mtu: string; rate: string;
   eth: string; link: string; duplex: string; autoneg: string; failover_ips: string[];
 }
-export interface HostHba {
+interface HostHba {
   host_name: string; wwpn: string; model: string | null; os: string | null;
   fabric: 'odd' | 'even' | null;
 }
 // From `showhost -d` — the array's curated host view: each FC WWPN -> the n:s:p ports it's logged
 // into (empty = configured but not logged in / not zoned).
-export interface ArrayHost {
+interface ArrayHost {
   name: string; persona: string; wwpns: Record<string, string[]>;
   iqns: Record<string, string[]>; addresses: Record<string, string>;
 }
@@ -335,18 +332,18 @@ export interface DiscoveredHost {
 }
 // The array's file side (Unified File), read over its file API. The File ports themselves stay in
 // DiscoveryReport.file_ports (`showport -file`); nothing here repeats them.
-export interface FilePortStatus { configured: boolean; online: boolean; mtu: number; }
+interface FilePortStatus { configured: boolean; online: boolean; mtu: number; }
 export interface FileNodeStatus { node: number; status: string; ports: FilePortStatus[]; }
 // MiB. OS 10.5.0 sends only total, used and available; the rest is null there.
-export interface FileCapacity {
+interface FileCapacity {
   total: number; used: number; available: number;
   limit_percentage: number | null; file_systems: number | null; file_shares: number | null;
 }
-export interface FileService {
+interface FileService {
   uid: string; enabled: boolean; name: string; system_wwn: string; domain: string;
   ransomware_check: boolean | null; nodes: FileNodeStatus[]; capacity: FileCapacity | null;
 }
-export interface ClientRule { address: string; access: string; options: string; }
+interface ClientRule { address: string; access: string; options: string; }
 export interface FileSystemRecord {
   uid: string; id: number | null; name: string; state: string; size_mib: number; vv_size_mib: number | null;
   reduce: boolean; prov: string; share_count: number; owner_node: number; volumes: string[];
@@ -377,11 +374,11 @@ export interface DiscoveryReport {
   notes: string[];
   error: string | null;
 }
-export interface ExpectedZone {
+interface ExpectedZone {
   fabric: 'odd' | 'even'; switch_host: string; name: string;
   host_wwpn: string; array_wwpn: string; present: boolean;
 }
-export interface ZoneRemediation {
+interface ZoneRemediation {
   fabric: 'odd' | 'even'; switch_host: string; cfg_name: string; commands: string[];
 }
 export interface ZoningReport {
@@ -441,7 +438,7 @@ export type PlanState = 'create' | 'exists' | 'update' | 'conflict';
 export interface PlannedAction {
   kind: string; name: string; description: string;
   state: PlanState; reason: string;           // SPEC-001: what apply will do, and why
-  exists: boolean; detail: Record<string, any>;
+  exists: boolean; detail: Record<string, unknown>;
 }
 // plan_id: the apply quotes it back, and the server refuses any other (an older event may lack it).
 export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; blockers: string[]; error: string | null; plan_id?: string; }
@@ -452,8 +449,8 @@ export interface ProvisioningResult {
 }
 
 // The plural provisioning intent pieces + the operator dropdown-builder (ADR 0010 Stage 2).
-export interface VolumeRequest { name: string; size_gib: number; provisioning_type: 'tpvv' | 'reduce'; cpg: string; vvset: string | null; }
-export interface HostSetRequest { name: string; members: string[]; }
+interface VolumeRequest { name: string; size_gib: number; provisioning_type: 'tpvv' | 'reduce'; cpg: string; vvset: string | null; }
+interface HostSetRequest { name: string; members: string[]; }
 export interface ExportRequest { source_kind: 'volume' | 'vvset'; source_name: string; target_kind: 'host' | 'hostset'; target_name: string; lun: number | null; }
 export interface DiscoveredHostBrief {
   name: string; status: string; wwpns: string[];
@@ -491,8 +488,8 @@ export const storageApply = (runId: string, approvedPlan: string | null) =>
 // exported LUN is actually live and over how many fabrics. Read-only; report-only (never gates).
 export type PathVerdict = 'live' | 'partial' | 'no_path';
 // SPEC-013: the ESXi host's own view, read through vCenter. Never changes the verdict.
-export type EsxiViewState = 'ok' | 'degraded' | 'absent' | 'not_in_vcenter' | 'not_read' | 'not_checked';
-export interface EsxiLunPaths {
+type EsxiViewState = 'ok' | 'degraded' | 'absent' | 'not_in_vcenter' | 'not_read' | 'not_checked';
+interface EsxiLunPaths {
   volume: string; naa: string; present: boolean;
   paths_total: number; paths_active: number; paths_dead: number; adapters: string[];
 }
@@ -508,10 +505,10 @@ export const verifyPaths = (runId: string) => request<{ run: RunRecord }>('POST'
 // SPEC-024: the Array ports step. VLAN-tagged iSCSI addresses from the sheet's iSCSI network tab, planned
 // against what the array has. The first slice prints the array's own CLI lines; the tool sends none.
 export interface IscsiVlanRequest { nsp: string; vlan_id: number; ip: string; netmask: string; gateway: string; }
-export interface PortRole { nsp: string; mode: string; state: string; type: string; protocol: string; node_wwn: string; }
-export interface IscsiPortAddress { nsp: string; ip: string; netmask: string; gateway: string; peer_enabled: boolean; vlans: string; }
-export interface IscsiVlanInterface { nsp: string; vlan_id: number; ip: string; netmask: string; gateway: string; mtu: string; }
-export interface PortNetworkView {
+interface PortRole { nsp: string; mode: string; state: string; type: string; protocol: string; node_wwn: string; }
+interface IscsiPortAddress { nsp: string; ip: string; netmask: string; gateway: string; peer_enabled: boolean; vlans: string; }
+interface IscsiVlanInterface { nsp: string; vlan_id: number; ip: string; netmask: string; gateway: string; mtu: string; }
+interface PortNetworkView {
   name: string; mgmt_ip: string; mgmt_netmask: string;
   roles: Record<string, PortRole>; iscsi_ports: IscsiPortAddress[]; vlans: IscsiVlanInterface[];
   other_addresses: Record<string, string>;
@@ -519,7 +516,7 @@ export interface PortNetworkView {
 export type IscsiVlanActionState = 'create' | 'exists' | 'conflict';
 // `cli` is the addr line only; a gateway goes in the separate change-window set (`gateway_window`), never sent.
 export interface IscsiVlanAction { nsp: string; vlan_id: number; state: IscsiVlanActionState; reason: string; cli: string; undo?: string; gateway_cli?: string; }
-export interface IscsiNetworkPlan {
+interface IscsiNetworkPlan {
   array: string; actions: IscsiVlanAction[]; blockers: string[]; notes: string[]; switch_handoff: string[];
   removal_lines?: string[]; gateway_window?: string[]; gateway_notes?: string[];
 }
@@ -532,15 +529,15 @@ export interface IscsiSection {
 // the commands and their undo for a consultant to paste; the tool sends none.
 export interface PeerPortRequest { nsp: string; source_wwpns: string[]; }
 export interface PeerPortIntent { ports: PeerPortRequest[]; }
-export interface PeerPortState {
+interface PeerPortState {
   nsp: string; mode: string; state: string; type: string; protocol: string;
   node_wwn: string; port_wwn: string; label: string; partner: string; failover_state: string;
 }
-export interface PeerPortView { host: string; ports: Record<string, PeerPortState>; params: Record<string, { nsp: string; connmode: string; conntype: string }>; }
+interface PeerPortView { host: string; ports: Record<string, PeerPortState>; params: Record<string, { nsp: string; connmode: string; conntype: string }>; }
 export type PeerPortActionState = 'create' | 'exists' | 'conflict';
 export interface PeerPortAction { nsp: string; state: PeerPortActionState; reason: string; commands: string[]; undo: string[]; partner?: string; }
-export interface PeerPortPlan { actions: PeerPortAction[]; blockers: string[]; notes: string[]; }
-export interface PeerPortResult { changed: string[]; removals: string[]; error: string | null; sentences: string[]; }
+interface PeerPortPlan { actions: PeerPortAction[]; blockers: string[]; notes: string[]; }
+interface PeerPortResult { changed: string[]; removals: string[]; error: string | null; sentences: string[]; }
 /** The peer section of a ports.* event: the rows, and after a read the view, the plan, the command set and
  *  its removal set, and the judgement of a read after the paste. */
 export interface PeerSection {
@@ -559,10 +556,10 @@ export const portsPreview = (runId: string) => request<{ run: RunRecord }>('POST
 // partnership found by link address, the findings, and the exists/create/conflict plan.
 // SPEC-031: a partnership is over RCIP ('IP', found by address) or Fibre Channel ('FC', found by port WWN).
 export type Transport = 'IP' | 'FC';
-export interface RcipPort { nsp: string; state: string; ip: string; netmask: string; gateway: string; mtu: string; rate: string; }
-export interface RcTarget { name: string; id: number | null; type: string; status: string; options: string; policy: string; }
-export interface RcLink { target: string; nsp: string; address: string; status: string; }
-export interface RcGroupVolume {
+interface RcipPort { nsp: string; state: string; ip: string; netmask: string; gateway: string; mtu: string; rate: string; }
+interface RcTarget { name: string; id: number | null; type: string; status: string; options: string; policy: string; }
+interface RcLink { target: string; nsp: string; address: string; status: string; }
+interface RcGroupVolume {
   local_name: string; local_id: number | null; remote_name: string; remote_id: number | null; sync_status: string; last_sync: string;
 }
 export interface RcGroup {
@@ -574,7 +571,7 @@ export interface ReplicationArrayView {
   rc_status: string; rc_health: string; rcip_ports: RcipPort[]; targets: RcTarget[]; links: RcLink[]; groups: RcGroup[];
   cpg_free_mib: Record<string, number>; vvsets: Record<string, string[]>; read_error: string | null;
 }
-export interface PartnerTarget {
+interface PartnerTarget {
   name: string; peer_name: string; transport?: Transport; links_up: number; links_total: number; peer_links_up: number; peer_links_total: number;
   mirror_config: boolean; modes: string[]; groups: number; own_modes: string[];
 }
@@ -590,11 +587,11 @@ export interface ReplicationReport {
   // Replication tab, which stands in for the link check over FC; the modes this run's groups replicate in.
   mixed_transports?: boolean; rtt_ms?: number | null; modes?: string[];
 }
-export interface PlannedCall { where: 'A' | 'B'; wsapi: string; cli: string; seq: number; }
+interface PlannedCall { where: 'A' | 'B'; wsapi: string; cli: string; seq: number; }
 export type ReplicationActionState = 'create' | 'exists' | 'conflict';
 export interface ReplicationAction {
   kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset' | 'rcip_port' | 'rc_service' | 'target'; name: string; where: 'A' | 'B';
-  state: ReplicationActionState; reason: string; calls: PlannedCall[]; detail: Record<string, any>;
+  state: ReplicationActionState; reason: string; calls: PlannedCall[]; detail: Record<string, unknown>;
 }
 export interface ReplicationPlan {
   actions: ReplicationAction[]; blockers: string[]; notes: string[]; existing_groups: string[]; error: string | null; plan_id?: string;
@@ -621,13 +618,13 @@ export const replicationApply = (runId: string, approvedPlan: string | null, acc
 // SPEC-020: the latency between the arrays measured with checkrclink (server on B, client on A, read until
 // the latency is printed, stop both). RTT_LIMIT_MS mirrors the domain's HPE limits per transport and mode
 // (SPEC-031 R6: 10 ms for both modes over Fibre Channel); read it through rttLimitMs, which names the transport.
-export const RTT_LIMIT_MS: Record<Transport, Record<string, number>> = {
+const RTT_LIMIT_MS: Record<Transport, Record<string, number>> = {
   IP: { sync: 10, async: 200 },
   FC: { sync: 10, async: 10 },
 };
 export const rttLimitMs = (transport: Transport, mode: string): number => RTT_LIMIT_MS[transport][mode] ?? 0;
 export const TRANSPORT_WORDS: Record<Transport, string> = { IP: 'over RCIP', FC: 'over Fibre Channel' };
-export interface LinkPair { nsp_a: string; ip_a: string; nsp_b: string; ip_b: string; }
+interface LinkPair { nsp_a: string; ip_a: string; nsp_b: string; ip_b: string; }
 export interface LinkCheckResult {
   pair: LinkPair; status: 'measured' | 'failed'; latency_ms: number | null; pings_lost_pct: number | null; detail: string; output: string;
 }
@@ -658,8 +655,8 @@ export const replicationVerify = (runId: string) => request<{ run: RunRecord }>(
 
 // SPEC-017: the failover test record. P = this run's array, S = the peer.
 export type FailoverOutcome = 'pending' | 'ok' | 'failed' | 'skipped';
-export type FailoverResult = 'passed' | 'failed' | 'aborted';
-export interface FailoverSide {
+type FailoverResult = 'passed' | 'failed' | 'aborted';
+interface FailoverSide {
   array: string; group: string; present: boolean; role: string; status: string; mode: string; volumes: number; synced: number; last_sync: string;
 }
 export interface FailoverStepRecord {
@@ -727,7 +724,7 @@ export interface SnapshotRowCheck {
   next_run: string; taken: number; now_ok: boolean | null; now_detail: string;
 }
 export interface SnapshotVerification { rows: SnapshotRowCheck[]; notes: string[]; error: string | null; }
-export interface SnapshotRow { source: string; kind: string; schedule: string; summary: string; }
+interface SnapshotRow { source: string; kind: string; schedule: string; summary: string; }
 // The tab's rows in words, and the id of the plan the server still holds ('' when none: it was used, or the app restarted).
 export interface SnapshotsTab { rows: SnapshotRow[]; held_plan_id: string; }
 export const getSnapshots = (runId: string) => request<SnapshotsTab>('GET', `/runs/${runId}/snapshots`);

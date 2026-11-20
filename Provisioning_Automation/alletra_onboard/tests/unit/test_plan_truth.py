@@ -16,14 +16,13 @@ from alletra_onboard.domain.discovery import DiscoveryReport, HostHba
 from alletra_onboard.domain.provisioning import (
     ActionOutcome,
     ArrayHostRecord,
-    ArrayVolumeRecord,
     ExportRequest,
     HostSetRequest,
     ProvisioningIntent,
     VlunTemplate,
     VolumeRequest,
 )
-from alletra_onboard.domain.shared import EndpointCreds
+from alletra_onboard.domain.shared import ArrayVolumeRecord, EndpointCreds
 
 # Normalised form (what normalize_wwpn produces and every domain record carries).
 WWN_A = "10000000C9000001"

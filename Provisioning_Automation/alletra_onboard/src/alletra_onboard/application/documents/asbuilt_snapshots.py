@@ -11,17 +11,25 @@ own. Kept apart from asbuilt.py, which calls `add_snapshots_section` and `snapsh
 
 from __future__ import annotations
 
-from alletra_onboard.application.documents.asbuilt import (
-    AsBuiltData,
-    _h1,
-    _mono,
-    _para,
-    _table,
-    _when,
+from alletra_onboard.application.documents.asbuilt_docx import (
+    add_h1 as _h1,
 )
+from alletra_onboard.application.documents.asbuilt_docx import (
+    add_mono as _mono,
+)
+from alletra_onboard.application.documents.asbuilt_docx import (
+    add_para as _para,
+)
+from alletra_onboard.application.documents.asbuilt_docx import (
+    add_table as _table,
+)
+from alletra_onboard.application.documents.asbuilt_docx import (
+    format_when as _when,
+)
+from alletra_onboard.application.documents.asbuilt_model import AsBuiltData
 from alletra_onboard.application.snapshots.read import parse_createsv
 from alletra_onboard.application.snapshots.verify import scheduled_snapshots, twins
-from alletra_onboard.domain.provisioning import REMOVAL_ORDER
+from alletra_onboard.domain.shared import REMOVAL_ORDER
 from alletra_onboard.domain.snapshots import SnapshotArrayView, SnapshotRequest, now_snapshot_name
 
 _STATUS = {"active": "Active", "suspended": "Suspended"}

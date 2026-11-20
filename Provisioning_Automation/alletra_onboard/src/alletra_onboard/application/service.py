@@ -18,13 +18,22 @@ from collections.abc import Callable
 
 from alletra_onboard.application.documents.steps import DocumentSteps
 from alletra_onboard.application.documents.verification import verify
-from alletra_onboard.application.onboarding.steps import (
-    OnboardingSteps,
+from alletra_onboard.application.onboarding.clients import (
     default_cloudinit_factory,
     default_dscc_factory,
+    launch_debug_browser,
+)
+from alletra_onboard.application.onboarding.steps import (
+    OnboardingSteps,
     default_provision_factory,
 )
+from alletra_onboard.application.platform.clients import (
+    clock_status,
+    launch_discovery_tool,
+    sync_clock,
+)
 from alletra_onboard.application.platform.init_sheet import parse_workbook_bytes
+from alletra_onboard.application.provisioning.clients import wsapi_capability
 from alletra_onboard.application.provisioning.steps import (
     ArrayPortsSteps,
     DiscoveryZoningSteps,
@@ -68,6 +77,11 @@ __all__ = [
     "RunBusyError",
     "RunNotFoundError",
     "StepPreconditionError",
+    "clock_status",
+    "launch_debug_browser",
+    "launch_discovery_tool",
+    "sync_clock",
+    "wsapi_capability",
 ]
 
 

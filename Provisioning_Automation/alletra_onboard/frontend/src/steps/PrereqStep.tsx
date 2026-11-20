@@ -85,8 +85,8 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
       const response = await checkConnectivity(region);
       setConnectivity(response.results);
       setAllReachable(response.all_reachable);
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setBusy(false);
     }
@@ -100,8 +100,8 @@ export function PrereqStep({ onDone, state }: { onDone: () => void; state: StepS
       setProxy(status);
       setProxyInput(status.forced_direct ? '' : status.manual ?? '');
       await test();
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setSavingProxy(false);
     }

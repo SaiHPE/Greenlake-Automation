@@ -17,7 +17,7 @@ from collections.abc import Callable
 
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.provisioning.discovery import UNCLAIMED_HOST, parse_showhost
-from alletra_onboard.application.replication.read import parse_showport_roles
+from alletra_onboard.domain.array_parse import parse_showport_roles
 from alletra_onboard.domain.peer_ports import (
     PeerPortAction,
     PeerPortCheck,

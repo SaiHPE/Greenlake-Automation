@@ -33,3 +33,42 @@ class EndpointCreds(BaseModel):
     host: str
     username: str
     password: SecretStr
+
+
+ActionKind = Literal["host", "hostset", "volume", "vvset", "vlun", "schedule", "snapshot"]
+
+# What the plan predicts apply will do to one object (SPEC-001 R1). `conflict` blocks apply.
+PlanState = Literal["create", "exists", "update", "conflict"]
+
+#: SPEC-007 R3 and SPEC-023 R6: the order a removal set pastes in, top to bottom. A schedule first, so it
+#: takes no more snapshots; snapshots before their base volume (`removevv` refuses a volume that still
+#: has snapshots); exports, sets and members after. The one order every renderer sorts by (LESSONS 19).
+REMOVAL_ORDER: dict[str, int] = {
+    "schedule": 0, "snapshot": 1, "vlun": 2, "vvset": 3, "volume": 4, "hostset": 5, "host": 6,
+}
+
+
+class RemovalItem(BaseModel):
+    """One CLI line that undoes one thing THIS apply created (SPEC-007). Text the operator pastes;
+    the tool never runs it. `kind` orders the block so it can be pasted top to bottom."""
+
+    kind: ActionKind
+    name: str                 # the object; for an export "<volume> LUN <n> → <target>"
+    command: str
+
+
+ArrayProvisioningType = Literal["full", "tpvv", "snp", "peer", "unknown", "reduce", "dds"]
+
+
+class ArrayVolumeRecord(BaseModel):
+    name: str
+    size_mib: int
+    cpg: str
+    provisioning_type: ArrayProvisioningType
+    id: int | None = None          # SPEC-012 R1
+    wwn: str = ""
+    # SPEC-023 R3: a snapshot names its base in copy_of; times are WSAPI's ISO 8601 text, "" when unset.
+    copy_of: str = ""
+    read_only: bool = False
+    created: str = ""
+    expires: str = ""

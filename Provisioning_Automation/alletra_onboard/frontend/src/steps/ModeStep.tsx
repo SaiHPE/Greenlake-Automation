@@ -80,8 +80,8 @@ export function ModeStep({ mode, custom, setMode, setCustom, onConfirm, locked, 
     setError(null);
     try {
       await onConfirm();
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setBusy(false);
     }

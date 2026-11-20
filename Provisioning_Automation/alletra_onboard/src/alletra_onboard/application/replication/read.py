@@ -10,14 +10,18 @@ import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
-from alletra_onboard.application.documents.asbuilt_parse import parse_cli_sets
 from alletra_onboard.application.provisioning.clients import make_array_cli
+from alletra_onboard.domain.array_parse import (
+    parse_cli_sets,
+    parse_showport_rcip,
+    parse_showport_roles,
+    parse_showsys,
+    parse_showversion,
+)
 from alletra_onboard.domain.replication import (
-    PortRole,
     RcGroup,
     RcGroupDetail,
     RcGroupVolume,
-    RcipPort,
     RcLink,
     RcTarget,
     RcTransport,
@@ -27,11 +31,6 @@ from alletra_onboard.domain.replication import (
 from alletra_onboard.domain.shared import EndpointCreds
 
 _NSP = re.compile(r"^\d+:\d+:\d+$")
-_SHOWSYS_ROW = re.compile(
-    r"^(?P<id>0x[0-9A-Fa-f]+)\s+(?P<name>\S+)\s+(?P<model>.*?)\s+(?P<serial>[A-Z0-9]{6,})"
-    # A Primera (OS 4.6.20, 2026-11-03) prints a ClusterLED column ("Green") between Master and TotalCap.
-    r"\s+(?P<nodes>\d+)\s+(?P<master>\d+)(?:\s+[A-Za-z]+)?\s+\d+\s+\d+\s+\d+\s+\d+\s*$"
-)
 
 
 def _int(text: str) -> int | None:
@@ -43,40 +42,6 @@ def _int(text: str) -> int | None:
 
 def _clean(value: str) -> str:
     return "" if value in ("-", "--", "") else value
-
-
-def parse_showsys(text: str) -> dict:
-    """`showsys` -> {id (decimal), name, model, serial}. The Model column carries spaces
-    ("HPE Alletra Storage MP"), so the row is matched as a whole, not split."""
-    for line in (text or "").splitlines():
-        m = _SHOWSYS_ROW.match(line.strip())
-        if m:
-            return {
-                "id": int(m.group("id"), 16), "name": m.group("name"),
-                "model": " ".join(m.group("model").split()), "serial": m.group("serial"),
-            }
-    return {}
-
-
-def parse_showversion(text: str) -> str:
-    """`showversion` -> the release version string ("10.5.0")."""
-    m = re.search(r"Release version\s+(\S+)", text or "")
-    return m.group(1) if m else ""
-
-
-def parse_showport_rcip(text: str) -> list[RcipPort]:
-    """`showport -rcip`: N:S:P State HwAddr IPAddr Netmask/PrefixLen Gateway MTU Rate Duplex AutoNeg.
-    "There is no specified port information" (no RCIP configured) -> []."""
-    out: list[RcipPort] = []
-    for line in (text or "").splitlines():
-        p = line.split()
-        if len(p) < 6 or not _NSP.match(p[0]):
-            continue
-        out.append(RcipPort(
-            nsp=p[0], state=p[1], ip=_clean(p[3]), netmask=_clean(p[4]), gateway=_clean(p[5]),
-            mtu=_clean(p[6]) if len(p) > 6 else "", rate=_clean(p[7]) if len(p) > 7 else "",
-        ))
-    return out
 
 
 def parse_showrctransport_rcip(text: str) -> list[RcTransport]:
@@ -338,28 +303,6 @@ def parse_showvv_sizes(text: str) -> dict[str, int]:
             continue
         out[p[0]] = int(p[-1])
     return out
-
-
-def parse_showport_roles(text: str) -> tuple[dict[str, PortRole], str]:
-    """`showport`: N:S:P Mode State Node_WWN/IP Port_WWN/HW_Addr Type Protocol Label [Partner FailoverState]
-    -> ({n:s:p: role}, the first FC row's node WWN). Columns are fixed on both lab arrays (Alletra MP OS
-    10.5.55, Primera OS 4.6.20, 2026-11-03); a row with fewer than 7 columns is not a port. FC rows keep
-    their node WWN and their port WWN (SPEC-031 R1): every row's, since a peer port carries a node WWN of
-    its own (E18U31, 2026-11-17)."""
-    roles: dict[str, PortRole] = {}
-    node_wwn = ""
-    for line in (text or "").splitlines():
-        p = line.split()
-        if len(p) < 7 or not re.fullmatch(r"\d+:\d+:\d+", p[0]):
-            continue
-        role = PortRole(nsp=p[0], mode=p[1], state=p[2], type=p[5], protocol=p[6])
-        if role.protocol.upper() == "FC" and re.fullmatch(r"[0-9A-Fa-f]{16}", p[3]):
-            role.node_wwn = p[3].upper()
-            node_wwn = node_wwn or role.node_wwn
-        if role.protocol.upper() == "FC" and re.fullmatch(r"[0-9A-Fa-f]{16}", p[4]):
-            role.port_wwn = p[4].upper()
-        roles[p[0]] = role
-    return roles, node_wwn
 
 
 _SHOWDATE_ROW = re.compile(r"^\s*\d+\s+(?P<when>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)\s+(?P<zone>\S.*?)\s*$")

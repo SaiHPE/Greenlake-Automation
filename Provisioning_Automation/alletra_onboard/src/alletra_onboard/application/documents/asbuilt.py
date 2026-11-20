@@ -22,17 +22,73 @@ import re
 import sys
 import zipfile
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC
 from pathlib import Path
 
 import docx
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt
+from docx.text.paragraph import Paragraph
 
-from alletra_onboard.application.documents.asbuilt_docx import hpe_table
-from alletra_onboard.domain.provisioning import REMOVAL_ORDER
+from alletra_onboard.application.documents import handover
+from alletra_onboard.application.documents.asbuilt_docx import (
+    add_h1 as _h1,
+)
+from alletra_onboard.application.documents.asbuilt_docx import (
+    add_mono as _mono,
+)
+from alletra_onboard.application.documents.asbuilt_docx import (
+    add_para as _para,
+)
+from alletra_onboard.application.documents.asbuilt_docx import (
+    add_table as _table,
+)
+from alletra_onboard.application.documents.asbuilt_docx import (
+    content_widths as _content_widths,
+)
+from alletra_onboard.application.documents.asbuilt_docx import (
+    format_when as _when,
+)
+from alletra_onboard.application.documents.asbuilt_docx import (
+    hpe_table,
+)
+from alletra_onboard.application.documents.asbuilt_model import AsBuiltData
+from alletra_onboard.application.documents.asbuilt_parse import (
+    parse_checkhealth,
+    parse_inventory,
+    parse_showvlun_templates_cli,
+    parse_showvv,
+)
+from alletra_onboard.application.documents.asbuilt_snapshots import (
+    add_snapshots_section,
+    snapshot_removal_items,
+)
+from alletra_onboard.application.provisioning.discovery import (
+    UNCLAIMED_HOST,
+    parse_iscsi_vlans,
+    parse_showhost,
+)
+from alletra_onboard.application.provisioning.iscsi_network import (
+    GATEWAY_WINDOW,
+    gateway_window,
+    gw_line,
+    switch_handoff_for,
+)
+from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active
+from alletra_onboard.application.provisioning.peer_ports import (
+    parse_showport_par,
+    parse_showport_peer,
+    parse_showport_ports,
+)
+from alletra_onboard.application.replication.link_check import PING_COUNT
+from alletra_onboard.application.replication.plan import find_partnership
+from alletra_onboard.application.replication.verify import peer_group_name
+from alletra_onboard.domain.array_parse import parse_cli_sets, parse_showport_roles
+from alletra_onboard.domain.network import IscsiVlanAction, IscsiVlanRequest
+from alletra_onboard.domain.replication import RTT_LIMIT_MS, rtt_limit_ms, rtt_limit_text
+from alletra_onboard.domain.shared import REMOVAL_ORDER
+from alletra_onboard.domain.unified_file import NODE_RUNNING
 
 # Template Table-01 label (column 0, as it appears in the doc) -> AsBuiltData field. Match is
 # whitespace-normalised + case-insensitive (the template mixes "InServ"/"Inserv").
@@ -65,106 +121,6 @@ _LABEL_TO_FIELD: dict[str, str] = {
     "ntp": "ntp",
     "dns servers": "dns",
 }
-
-
-@dataclass
-class AsBuiltData:
-    """The per-deployment values that fill the as-built (from read-only array reads + operator input)."""
-
-    customer: str = ""       # operator-supplied — fills <Customer Name> / <Customer name>
-    site: str = ""           # operator-supplied — the array doesn't store a Location/Site
-    application_workload: str = ""   # operator-supplied — <Application/Workload> (Introduction)
-    purpose: str = ""                # operator-supplied — <Purpose of using Block storage>
-    name: str = ""
-    model: str = ""
-    serial_no: str = ""
-    controller_nodes: str = ""
-    os_version: str = ""
-    drive_cages: str = ""
-    cache_gb: str = ""
-    nvme_ssd_disks: str = ""
-    raw_capacity: str = ""
-    raid: str = ""
-    host_ports: str = ""
-    mgmt_ip: str = ""
-    netmask: str = ""
-    gateway: str = ""
-    ntp: str = ""
-    dns: str = ""
-    inventory: str = ""      # showinventory, verbatim
-    checkhealth: str = ""    # checkhealth -svc -detail, verbatim
-    # SPEC-002 array sections — raw `show*` text, parsed by the renderer like inventory/checkhealth.
-    showhost_d: str = ""
-    showhostset: str = ""
-    showvv: str = ""
-    showvv_cpg: str = ""     # showvv -showcols …UsrCPG… (R7); "" when that read failed
-    showvvset: str = ""
-    showvlun_t: str = ""
-    showvlun_a: str = ""
-    showport: str = ""               # read for Table 01; SPEC-024 R7 takes each port's state from it
-    showport_iscsivlans: str = ""    # SPEC-024 R7: the VLAN-tagged iSCSI addresses
-    showport_par: str = ""           # SPEC-025 R9: each port's connection mode and type
-    showport_peer: str = ""          # SPEC-025 R9: the array's own listing of its peer ports
-    read_errors: dict[str, str] = field(default_factory=dict)   # command -> error text (R6)
-    # SPEC-002 run sections — the run's event payloads (JSON-shaped); None when the step did not run.
-    zoning_plan: dict | None = None
-    zoning_report: dict | None = None
-    zoning_rendered: dict | None = None      # {commands: {fabric: [..]}, aliases, selected_pairs}
-    provisioning_plan: dict | None = None
-    provisioning_result: dict | None = None
-    provisioning_applied_at: str = ""
-    provisioning_removals: list[dict] = field(default_factory=list)   # RemovalItem dicts from EVERY apply in the run (SPEC-007)
-    path_verification: dict | None = None
-    # SPEC-018: replication. All None/empty when the workbook has no Replication tab (R4).
-    replication_tab: dict | None = None            # {peer_host, rows: [{vvset, mode, rpo_minutes, peer_cpg}], failover_test}
-    replication_report: dict | None = None         # replication.previewed -> report (JSON)
-    replication_plan: dict | None = None           # replication.previewed -> plan (JSON)
-    replication_result: dict | None = None         # replication.applied / .apply.failed -> result (JSON)
-    # SPEC-021: every apply's removal lines, newest apply first (its groups go before the partnership a
-    # first apply set up: removercopytarget refuses while a group still uses the target)
-    replication_removals_a: list[str] = field(default_factory=list)
-    replication_removals_b: list[str] = field(default_factory=list)
-    # SPEC-021: every apply in run order, each with the plan previewed before it: {"plan", "result"}
-    replication_applies: list[dict] = field(default_factory=list)
-    replication_applied_at: str = ""
-    replication_primary: object | None = None      # ReplicationArrayView read when the document is made (R3)
-    replication_peer: object | None = None         # ReplicationArrayView of the peer, same moment
-    # BL-64: `showrcopy -d groups <group>` on this array for each group this run configured, same moment:
-    # group -> RcGroupDetail, and group -> why it could not be read
-    replication_details: dict = field(default_factory=dict)
-    replication_details_errors: dict[str, str] = field(default_factory=dict)
-    link_check: dict | None = None                 # SPEC-020 R6: replication.link_checked -> link_check (JSON)
-    failover_record: dict | None = None            # SPEC-017 R6; None = the test did not run
-    # SPEC-028 R3: the file side, read when the document is made. No section when `file_report` is
-    # None (no File ports and the service off) and the read did not fail.
-    file_ports: list = field(default_factory=list)  # EthernetPort, from showport -file
-    file_report: object | None = None               # FileReport
-    file_read_error: str = ""                       # the read failed: named in the section and the warnings
-    # SPEC-023 R8: snapshots. snapshots_tab is None when the workbook has no Snapshots tab.
-    snapshots_tab: list[dict] | None = None        # SnapshotRequest dicts, one per row
-    snapshots_plan: dict | None = None             # snapshots.previewed -> plan (JSON)
-    snapshots_result: dict | None = None           # the latest snapshots.applied / .apply.failed -> result
-    snapshots_applies: list[dict] = field(default_factory=list)   # every apply in run order: {"plan", "result"}
-    snapshots_applied_at: str = ""
-    snapshots_view: object | None = None           # SnapshotArrayView read when the document is made
-    commands: list[dict] = field(default_factory=list)   # SPEC-019 R2: the run's command log, without output
-    # SPEC-026: the handover reads, raw (handover.READS names the command for each); a failed one is in
-    # read_errors. handover_read_at is None when the reads were not made: the section is then left out.
-    showdate: str = ""
-    showalert_d: str = ""
-    showsys_space: str = ""
-    handover_read_at: datetime | None = None
-    run_created_at: datetime | None = None         # R4: "Before this run" compares each alert with it
-    trusted_devices: list[dict] = field(default_factory=list)   # ADR 0026: DevicePinInfo dicts, fingerprints only
-    # SPEC-024 R7: the sheet's iSCSI network rows (IscsiVlanRequest dicts), and the (port, VLAN) pairs a
-    # plan of this run had to add, so an interface found now is marked "set up by this run".
-    iscsi_network_rows: list[dict] = field(default_factory=list)
-    iscsi_set_up_in_run: list[tuple[str, int]] = field(default_factory=list)
-    # SPEC-025 R9: the Peer ports tab's rows (PeerPortRequest dicts), the run's last plan that set ports
-    # (its commands, pasted by a consultant in the first slice) and the last read after the paste.
-    peer_ports_rows: list[dict] = field(default_factory=list)
-    peer_ports_plan: dict | None = None
-    peer_ports_result: dict | None = None
 
 
 def _resource_dir() -> Path:
@@ -374,7 +330,6 @@ def _set_cell_text(cell, text: str) -> None:
 def _insert_mono_after(heading, text: str):
     new_p = OxmlElement("w:p")
     heading._p.addnext(new_p)
-    from docx.text.paragraph import Paragraph
     para = Paragraph(new_p, heading._parent)
     lines = (text or "").splitlines() or ["(no output captured)"]
     for i, line in enumerate(lines):
@@ -393,14 +348,6 @@ def _place_after(anchor, element):
     return xml
 
 
-def _content_widths(headers: list[str], rows) -> list[float]:
-    """Column-width fractions proportional to the widest cell in each column (min 4% each)."""
-    n = len(headers)
-    widest = [max([len(headers[i])] + [len(r[i]) for r in rows if i < len(r)]) for i in range(n)]
-    total = sum(widest) or n
-    return [max(0.04, w / total) for w in widest]
-
-
 def _bold_para_after(anchor, caption: str, doc):
     para = doc.add_paragraph()
     para.add_run(caption).bold = True
@@ -410,10 +357,6 @@ def _bold_para_after(anchor, caption: str, doc):
 def _add_inventory_after(heading, text: str, doc) -> None:
     """Render each ``showinventory`` sub-section as its own HPE-styled table under the heading; falls
     back to a monospace dump if nothing parsed."""
-    from alletra_onboard.application.documents.asbuilt_parse import (
-        parse_inventory,  # local: avoid import cycle
-    )
-
     sections = parse_inventory(text)
     if not sections:
         _insert_mono_after(heading, text)
@@ -428,10 +371,6 @@ def _add_inventory_after(heading, text: str, doc) -> None:
 
 def _add_checkhealth_after(heading, text: str, doc) -> None:
     """Render checkhealth as two HPE-styled Word tables (Summary + Details); falls back to monospace."""
-    from alletra_onboard.application.documents.asbuilt_parse import (
-        parse_checkhealth,  # local: avoid import cycle
-    )
-
     summary, detail = parse_checkhealth(text)
     if not summary and not detail:
         _insert_mono_after(heading, text)
@@ -532,31 +471,6 @@ def generate_asbuilt(
 _SYSTEM_VOLUME = re.compile(r"^(\.|admin$)")
 
 
-def _h1(doc, title: str):
-    return doc.add_paragraph(title, style="Heading 1")
-
-
-def _para(doc, text: str, *, bold: bool = False):
-    p = doc.add_paragraph()
-    p.add_run(text).bold = bold
-    return p
-
-
-def _mono(doc, lines: list[str]):
-    p = doc.add_paragraph()
-    for i, line in enumerate(lines):
-        run = p.add_run(line or " ")
-        run.font.name = "Consolas"
-        run.font.size = Pt(7)
-        if i < len(lines) - 1:
-            run.add_break()
-    return p
-
-
-def _table(doc, headers: list[str], rows: list[list[str]], widths=None):
-    hpe_table(doc, headers, rows, widths=widths or _content_widths(headers, rows), font_size=7, header_size=7)
-
-
 def _read_failed(doc, data: AsBuiltData, command: str, warnings: list[str]) -> bool:
     """R6: a failed read is named in the section AND in the warnings; returns True when it failed."""
     err = data.read_errors.get(command)
@@ -596,8 +510,6 @@ _YES_NO = {True: "Yes", False: "No", None: "unknown"}
 def _add_handover_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
     """SPEC-026 R4, R5, R8 and R9: what the array said about itself when the document was made. Every read
     that failed or could not be parsed is named in its subsection and in the warnings (R8), never shown as 0."""
-    from alletra_onboard.application.documents import handover
-
     if data.handover_read_at is None:
         return                                      # the reads were not made: nothing to report
     reads = handover.read_from(data)
@@ -623,8 +535,6 @@ def _add_handover_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
 
 
 def _add_handover_alerts(doc, data: AsBuiltData, reads, warnings: list[str]) -> None:
-    from alletra_onboard.application.documents import handover
-
     _para(doc, "Alerts", bold=True)
     if _read_failed(doc, data, handover.ALERTS, warnings):
         return
@@ -657,8 +567,6 @@ def _add_handover_alerts(doc, data: AsBuiltData, reads, warnings: list[str]) -> 
 
 
 def _add_handover_capacity(doc, data: AsBuiltData, reads, warnings: list[str]) -> None:
-    from alletra_onboard.application.documents import handover
-
     _para(doc, "Capacity", bold=True)
     if _read_failed(doc, data, handover.SPACE, warnings):
         return
@@ -674,9 +582,6 @@ def _add_handover_capacity(doc, data: AsBuiltData, reads, warnings: list[str]) -
 
 
 def _add_hosts_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    from alletra_onboard.application.documents.asbuilt_parse import parse_cli_sets
-    from alletra_onboard.application.provisioning.discovery import UNCLAIMED_HOST, parse_showhost
-
     _h1(doc, "Hosts and host sets")
     sets = OrderedDict() if data.read_errors.get("showhostset") else parse_cli_sets(data.showhostset)
     in_sets = _members_of(sets)
@@ -734,8 +639,6 @@ def _compression(value: str) -> str:
 
 
 def _add_volumes_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    from alletra_onboard.application.documents.asbuilt_parse import parse_cli_sets, parse_showvv
-
     _h1(doc, "Volumes and volume sets")
     sets = OrderedDict() if data.read_errors.get("showvvset") else parse_cli_sets(data.showvvset)
     in_sets = _members_of(sets)
@@ -779,9 +682,6 @@ def _add_volumes_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
 
 
 def _add_presentations_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    from alletra_onboard.application.documents.asbuilt_parse import parse_showvlun_templates_cli
-    from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active
-
     _h1(doc, "Presentations")
     if _read_failed(doc, data, "showvlun -t", warnings):
         return
@@ -912,14 +812,6 @@ def _removal_lines(items: list[dict]) -> list[str]:
     return out
 
 
-def _when(iso: str) -> str:
-    """'2026-09-13T00:05:12.123+00:00' -> '2026-09-13 00:05 UTC' (anything else passes through)."""
-    m = re.match(r"^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]00:00)?", iso or "")
-    if not m:
-        return iso
-    return f"{m.group(1)} {m.group(2)}" + (" UTC" if m.group(3) else "")
-
-
 def _add_provisioning_section(doc, data: AsBuiltData) -> None:
     _h1(doc, "Provisioning performed in this run")
     result = data.provisioning_result
@@ -942,8 +834,6 @@ def _add_provisioning_section(doc, data: AsBuiltData) -> None:
     snapshot_items: list[dict] = []
     if data.snapshots_tab is not None:
         # SPEC-023 R6: the snapshot lines go first; removevv refuses a volume that still has snapshots
-        from alletra_onboard.application.documents.asbuilt_snapshots import snapshot_removal_items
-
         snapshot_items = snapshot_removal_items(data)
     removal_lines = _removal_lines(snapshot_items + (data.provisioning_removals or result.get("removals") or []))
     if removal_lines:
@@ -978,17 +868,6 @@ def _add_iscsi_network_section(doc, data: AsBuiltData, warnings: list[str]) -> N
     """SPEC-024 R7: when the array has a VLAN-tagged iSCSI address or the sheet asks for one: every
     interface on every iSCSI port with the port's state (showport -iscsivlans has no State column),
     whether this run set it up, then the sentences for the network team."""
-    # Imported here: replication.read imports this module (through asbuilt_parse) at load time.
-    from alletra_onboard.application.provisioning.discovery import parse_iscsi_vlans
-    from alletra_onboard.application.provisioning.iscsi_network import (
-        GATEWAY_WINDOW,
-        gateway_window,
-        gw_line,
-        switch_handoff_for,
-    )
-    from alletra_onboard.application.replication.read import parse_showport_roles
-    from alletra_onboard.domain.network import IscsiVlanAction, IscsiVlanRequest
-
     command = "showport -iscsivlans"
     rows = data.iscsi_network_rows
     unreadable = ""
@@ -1056,13 +935,6 @@ def _add_peer_ports_section(doc, data: AsBuiltData, warnings: list[str]) -> None
     peer-port zones designed in the run, and the removal set."""
     if not data.peer_ports_rows:
         return
-    # Imported here: replication.read imports this module (through asbuilt_parse) at load time.
-    from alletra_onboard.application.provisioning.peer_ports import (
-        parse_showport_par,
-        parse_showport_peer,
-        parse_showport_ports,
-    )
-
     _h1(doc, "Peer ports")
     name = data.name or data.serial_no or "the array"
     ports = parse_showport_ports(data.showport)
@@ -1145,8 +1017,6 @@ def _add_provisioned_sections(doc, data: AsBuiltData, warnings: list[str]) -> No
         _add_replication_section(doc, data, warnings)
         _add_failover_section(doc, data)
     if data.snapshots_tab is not None:
-        from alletra_onboard.application.documents.asbuilt_snapshots import add_snapshots_section
-
         add_snapshots_section(doc, data, warnings)
     if data.trusted_devices:
         _add_device_fingerprints(doc, data)
@@ -1196,8 +1066,6 @@ def _add_file_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
     """SPEC-028 R3: the file service, its File ports, file systems and shares with their clients, as
     the array reports them when the document is made. Absent on an array with no File ports and the
     file service off; nothing here was changed by the run."""
-    from alletra_onboard.domain.unified_file import NODE_RUNNING
-
     report = data.file_report
     if not data.file_read_error and report is None:
         return
@@ -1403,9 +1271,6 @@ def _add_rc_group_detail(doc, data: AsBuiltData, row: dict, tab: dict, a_name: s
 def _add_link_check(doc, data: AsBuiltData) -> None:
     """SPEC-020 R6: what `checkrclink` measured, the limit for each configured mode, and whether the
     operator accepted a latency over it (the apply's note says so)."""
-    from alletra_onboard.application.replication.link_check import PING_COUNT
-    from alletra_onboard.domain.replication import RTT_LIMIT_MS, rtt_limit_ms, rtt_limit_text
-
     check = data.link_check or {}
     _para(doc, "Link check", bold=True)
     results = check.get("results", [])
@@ -1446,8 +1311,6 @@ def _add_link_check(doc, data: AsBuiltData) -> None:
 def _add_typed_latency(doc, data: AsBuiltData) -> None:
     """SPEC-031 R6/R7: over Fibre Channel the latency is the round-trip time the engineer typed on the
     Replication tab, held to the FC limit; the document says it was typed, not measured."""
-    from alletra_onboard.domain.replication import rtt_limit_ms, rtt_limit_text
-
     tab = data.replication_tab or {}
     rtt = tab.get("rtt_ms")
     modes = sorted({r.get("mode") for r in tab.get("rows", []) if r.get("mode")}) or ["async"]
@@ -1466,9 +1329,6 @@ def _add_typed_latency(doc, data: AsBuiltData) -> None:
 
 
 def _add_replication_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    from alletra_onboard.application.replication.plan import find_partnership
-    from alletra_onboard.application.replication.verify import peer_group_name
-
     tab = data.replication_tab or {}
     _h1(doc, "Replication configured in this run")
     a, a_name, a_err = _rc_view(data.replication_primary, data.name or "this array")

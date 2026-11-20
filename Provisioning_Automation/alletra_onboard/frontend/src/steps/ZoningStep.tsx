@@ -11,7 +11,7 @@ import { NoValue, RESULT, StatusIndicator } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
 import { FooterAction, StepShell, StepStatus } from '../ui/StepShell';
 import { useStepState } from '../ui/useStepState';
-import { ZoningPlanView } from './ZoningPlanView';
+import { ZoningPlanView } from '../ui/ZoningPlanView';
 
 interface Props {
   runId: string;
@@ -160,8 +160,8 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
     setError(null);
     try {
       await action();
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     }
   };
 

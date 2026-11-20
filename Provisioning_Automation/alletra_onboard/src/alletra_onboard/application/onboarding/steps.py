@@ -10,8 +10,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAdapter
-from alletra_onboard.adapters.browser.dscc_setup import DsccSetupAdapter
+from alletra_onboard.application.onboarding.clients import (
+    default_cloudinit_factory,
+    default_dscc_factory,
+)
 from alletra_onboard.application.onboarding.greenlake_provision import (
     FAILED,
     WARNING,
@@ -43,20 +45,6 @@ def _next_hint(phase: WorkflowPhase) -> str:
 
 def default_provision_factory(settings: Settings, progress: Callable) -> Any:
     return build_provisioning_service(settings, progress=progress)
-
-
-def default_cloudinit_factory(settings: Settings, on_status: Callable[[str], None]) -> Any:
-    # Launch mode: the product flow opens its own browser at the pasted cloudinit URL.
-    return CloudinitWizardAdapter(
-        headless=settings.browser_headless,
-        cdp_url=None,
-        artifact_dir=settings.artifact_dir,
-        on_status=on_status,
-    )
-
-
-def default_dscc_factory(settings: Settings, cdp_url: str) -> Any:
-    return DsccSetupAdapter(cdp_url=cdp_url, artifact_dir=settings.artifact_dir)
 
 
 class OnboardingSteps:

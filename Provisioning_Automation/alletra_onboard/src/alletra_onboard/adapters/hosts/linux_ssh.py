@@ -234,7 +234,7 @@ class LinuxHostClient:
         self.connect()
         return self
 
-    def __exit__(self, *exc_info: object) -> None:
+    def __exit__(self, *_exc_info: object) -> None:
         self.close()
 
 

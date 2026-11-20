@@ -12,7 +12,7 @@ local web app on a Windows jump box next to the array.
 | [`Provisioning_Automation/alletra_onboard/`](Provisioning_Automation/alletra_onboard/) | **The app.** Its [README](Provisioning_Automation/alletra_onboard/README.md) covers setup, running it, the branch and pull request flow, lab runs and releases. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | **New to the team? Start here:** access, setup, how work flows from an issue to a merged pull request, lab runs. |
 | [`AGENTS.md`](AGENTS.md) | Rules, layout and commands for everyone working here, people and coding agents alike. Read it first. |
-| [`reference/greenlake_api_docs/`](reference/greenlake_api_docs/) | Offline mirror of the GreenLake developer portal (start at `greenlake/services.md`). |
+| [`reference/greenlake_api_docs/`](reference/greenlake_api_docs/) | Offline mirror of the GreenLake developer portal (start at `reference/greenlake_api_docs/greenlake/services.md`). |
 | [`archive/`](archive/) | Old plans and tools kept for history; not used by the app. |
 | `.github/` | Pull request template, code owners, area rules for coding agents, dormant workflows. |
 

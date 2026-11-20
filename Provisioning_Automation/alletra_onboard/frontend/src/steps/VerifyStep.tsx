@@ -163,8 +163,8 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
     setError(null);
     try {
       await startVerify(runId, override);
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setSubmitting(false);
     }

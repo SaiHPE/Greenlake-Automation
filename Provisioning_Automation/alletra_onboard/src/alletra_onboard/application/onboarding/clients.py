@@ -6,8 +6,13 @@ client) would plug in when it is built — deliberately not abstracted further u
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
+from alletra_onboard.adapters.browser.cloudinit_wizard import CloudinitWizardAdapter
+from alletra_onboard.adapters.browser.debug_browser import launch_debug_browser
+from alletra_onboard.adapters.browser.dscc_setup import DsccSetupAdapter
 from alletra_onboard.adapters.greenlake.auth import OAuthClientCredentials
 from alletra_onboard.adapters.greenlake.devices import DevicesClient
 from alletra_onboard.adapters.greenlake.http_client import GreenLakeHttpClient
@@ -51,3 +56,27 @@ def make_greenlake(settings: Settings) -> GreenLakeClients:
         subscriptions=SubscriptionsClient(http),
         service_catalog=ServiceCatalogClient(http),
     )
+
+
+def default_cloudinit_factory(settings: Settings, on_status: Callable[[str], None]) -> Any:
+    # Launch mode: the product flow opens its own browser at the pasted cloudinit URL.
+    return CloudinitWizardAdapter(
+        headless=settings.browser_headless,
+        cdp_url=None,
+        artifact_dir=settings.artifact_dir,
+        on_status=on_status,
+    )
+
+
+def default_dscc_factory(settings: Settings, cdp_url: str) -> Any:
+    return DsccSetupAdapter(cdp_url=cdp_url, artifact_dir=settings.artifact_dir)
+
+
+__all__ = [
+    "GreenLakeClients",
+    "default_cloudinit_factory",
+    "default_dscc_factory",
+    "launch_debug_browser",
+    "make_greenlake",
+    "missing_credentials",
+]

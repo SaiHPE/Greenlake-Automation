@@ -18,7 +18,7 @@ def _req(**kw):
 
 
 def _vol(name, copy_of=""):
-    from alletra_onboard.domain.provisioning import ArrayVolumeRecord
+    from alletra_onboard.domain.shared import ArrayVolumeRecord
 
     return ArrayVolumeRecord(
         name=name, size_mib=1024, cpg="SSD_r6",

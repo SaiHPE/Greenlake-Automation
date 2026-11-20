@@ -117,11 +117,6 @@ type = "protected"
 protected_modules = ["alletra_onboard.adapters.array.rc_cli_client"]
 allowed_importers = ["alletra_onboard.application.provisioning.clients"]
 unmatched_ignore_imports_alerting = "error"
-ignore_imports = [
-  "alletra_onboard.adapters.array.snap_cli_client -> alletra_onboard.adapters.array.rc_cli_client",
-  "alletra_onboard.application.replication.partnership -> alletra_onboard.adapters.array.rc_cli_client",
-  "alletra_onboard.application.snapshots.apply -> alletra_onboard.adapters.array.rc_cli_client",
-]
 broken_contract_guidance = "STANDARD S2 (least privilege): only the writer factory may import a writer module. Take a writer from the factory; put a shared error or plan type in domain. Do not add an ignore_imports line."
 
 [[tool.importlinter.contracts]]
@@ -131,9 +126,6 @@ type = "protected"
 protected_modules = ["alletra_onboard.adapters.array.snap_cli_client"]
 allowed_importers = ["alletra_onboard.application.provisioning.clients"]
 unmatched_ignore_imports_alerting = "error"
-ignore_imports = [
-  "alletra_onboard.application.snapshots.apply -> alletra_onboard.adapters.array.snap_cli_client",
-]
 broken_contract_guidance = "STANDARD S2 (least privilege): only the writer factory may import a writer module. Take a writer from the factory; put a shared error or plan type in domain. Do not add an ignore_imports line."
 
 [[tool.importlinter.contracts]]
@@ -143,10 +135,6 @@ type = "protected"
 protected_modules = ["alletra_onboard.adapters.array.wsapi_client"]
 allowed_importers = ["alletra_onboard.application.provisioning.clients"]
 unmatched_ignore_imports_alerting = "error"
-ignore_imports = [
-  "alletra_onboard.adapters.array.wsapi_v3_client -> alletra_onboard.adapters.array.wsapi_client",
-  "alletra_onboard.api.app -> alletra_onboard.adapters.array.wsapi_client",
-]
 broken_contract_guidance = "STANDARD S2 (least privilege): only the factory may import the client that can write. Take a client from the factory; put a shared error or plan type in domain. Do not add an ignore_imports line."
 
 # L1 and L2 in one contract, so a violation is listed once. `config` sits where it is used today:
@@ -159,11 +147,6 @@ containers = ["alletra_onboard"]
 exhaustive = true
 layers = ["__main__", "api | cli", "application", "config", "adapters", "domain"]
 unmatched_ignore_imports_alerting = "error"
-ignore_imports = [
-  "alletra_onboard.adapters.greenlake.auth -> alletra_onboard.application.platform.tls",
-  "alletra_onboard.adapters.greenlake.http_client -> alletra_onboard.application.platform.tls",
-  "alletra_onboard.adapters.system.clock -> alletra_onboard.application.platform.tls",
-]
 broken_contract_guidance = "STANDARD L1, L2 (layers): domain imports nothing outside domain; adapters never import application or api. Move what both sides need down (shared adapter plumbing lives in adapters/, shared types in domain/). Do not add an ignore_imports line."
 
 # External packages are known by their top name only, so `urllib` (urllib.parse is not I/O,
@@ -180,14 +163,6 @@ forbidden_modules = [
 ]
 allow_indirect_imports = true
 unmatched_ignore_imports_alerting = "error"
-ignore_imports = [
-  "alletra_onboard.application.onboarding.greenlake_preflight -> httpx",
-  "alletra_onboard.application.onboarding.greenlake_provision -> httpx",
-  "alletra_onboard.application.platform.prereqs -> socket",
-  "alletra_onboard.application.platform.tls -> ssl",
-  "alletra_onboard.application.runs.console -> subprocess",
-  "alletra_onboard.domain.trust -> ssl",
-]
 broken_contract_guidance = "STANDARD L4: network, SSH, browser and process I/O lives in an adapter. Put the call in an adapter and hand its result (or a domain error) to the application code. Do not add an ignore_imports line."
 
 # The first ignore_imports line is the rule's own allowance (the store the entrypoint opens), not
@@ -202,10 +177,6 @@ allow_indirect_imports = true
 unmatched_ignore_imports_alerting = "error"
 ignore_imports = [
   "alletra_onboard.api.app -> alletra_onboard.adapters.persistence.sqlite",
-  "alletra_onboard.api.app -> alletra_onboard.adapters.array.wsapi_client",
-  "alletra_onboard.api.app -> alletra_onboard.adapters.browser.debug_browser",
-  "alletra_onboard.api.app -> alletra_onboard.adapters.system.clock",
-  "alletra_onboard.api.app -> alletra_onboard.adapters.system.discovery_tool",
 ]
 broken_contract_guidance = "STANDARD L5 (composition root): api/app.py and the CLI reach devices through application services, wired in create_app and application/service.py. Add the call to a service. Do not add an ignore_imports line."
 
@@ -226,10 +197,6 @@ layers = [
   "platform",
 ]
 unmatched_ignore_imports_alerting = "error"
-ignore_imports = [
-  "alletra_onboard.application.replication.read -> alletra_onboard.application.documents.asbuilt_parse",
-  "alletra_onboard.application.runs.console -> alletra_onboard.application.provisioning.clients",
-]
 broken_contract_guidance = "STANDARD B1 (workflow order): documents -> step contexts -> runs -> platform, imports only go down. Move a shared read down, to an adapter or domain. Do not add an ignore_imports line."
 
 [[tool.importlinter.contracts]]

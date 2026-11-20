@@ -4,7 +4,7 @@ What the v0.13.0 cycle (bounded-context refactor + HPE Design System redesign + 
 validation) taught us, written as rules so the same mistake is not made twice. Each entry states
 the rule, then the incident that earned it. Append new lessons; do not rewrite history.
 
-Related: [ARCHITECTURE.md](ARCHITECTURE.md) · [UX-GUIDELINES.md](UX-GUIDELINES.md) ·
+Related: [design/HLD.md](design/HLD.md) · [STANDARD.md](STANDARD.md) · [UX-GUIDELINES.md](UX-GUIDELINES.md) ·
 [adr/](adr/) · [ux/CHECKLIST.md](ux/CHECKLIST.md)
 
 ---

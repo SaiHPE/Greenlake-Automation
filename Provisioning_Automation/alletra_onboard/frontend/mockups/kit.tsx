@@ -46,7 +46,7 @@ export function StateIcon({ state, size = 'small' }: { state: RunState; size?: s
 }
 
 /** Status indicator: icon (shape) + colour + words. The Design System asks for three of the four. */
-export function StateLabel({ state, label, size = 'small' }: { state: RunState; label: string; size?: 'small' | 'medium' }) {
+function StateLabel({ state, label, size = 'small' }: { state: RunState; label: string; size?: 'small' | 'medium' }) {
   return (
     <Box direction="row" gap="xsmall" align="center" flex={false}>
       <StateIcon state={state} size={size} />
@@ -82,7 +82,7 @@ export function Mark({ n }: { n: number }) {
 
 // ------------------------------------------------------------------ the frame
 
-export interface RailStep {
+interface RailStep {
   key: string;
   label: string;
   state: RunState;

@@ -16,18 +16,18 @@ import re
 from collections import OrderedDict
 from collections.abc import Callable
 
-from alletra_onboard.adapters.hosts.linux_ssh import read_linux_host
-from alletra_onboard.adapters.hosts.windows_winrm import read_windows_host
 from alletra_onboard.application.provisioning.clients import (
     make_array_cli,
     make_linux_host,
     make_vcenter,
     make_windows_host,
     make_wsapi_v3,
+    read_linux_host,
+    read_windows_host,
 )
 from alletra_onboard.application.provisioning.hosts import resolve_declared_hosts
-from alletra_onboard.application.replication.read import parse_showversion
 from alletra_onboard.application.unified_file.read import UNREADABLE, read_file_report
+from alletra_onboard.domain.array_parse import parse_file_ports, parse_showversion
 from alletra_onboard.domain.discovery import (
     ArrayHost,
     ArrayPort,
@@ -271,39 +271,6 @@ def parse_rcip_detail(showport_rcip: str) -> dict[str, dict[str, str]]:
             "netmask": clean(p[4]), "gateway": clean(p[5]), "mtu": clean(p[6]), "rate": clean(p[7]),
             "duplex": clean(p[8]) if len(p) > 8 else "", "autoneg": clean(p[9]) if len(p) > 9 else "",
         }
-    return out
-
-
-def parse_file_ports(showport_file: str) -> list[EthernetPort]:
-    """`showport -file` -> [EthernetPort]. A separate view with its own columns:
-
-        N:S:P  Mode  State  IPAddr/PrefixLen  IPDisable  Gateway  VLAN  MTU  Rate  Eth  Link  FailoverIPs
-
-    File ports occupy the SAME n:s:p as iSCSI ports (x:4:1 / x:4:2), so position cannot tell the two
-    apart — only the array's own Type and this view can. Real-output hazards, all present in the two
-    captures this was written against: Gateway is "-" when unset, Rate is "n/a" on a down link, VLAN
-    reads "untagged" rather than a number, and FailoverIPs is "-" or an address. On the second array
-    1:4:1 is loss_sync with IPDisable Y and Link down, and its address appears as the FailoverIPs
-    value of 1:4:2 — the pair must be read together or a covered port looks simply dead.
-    """
-    out: list[EthernetPort] = []
-    for line in (showport_file or "").splitlines():
-        p = line.split()
-        if len(p) < 12 or not p[0][:1].isdigit() or ":" not in p[0]:
-            continue
-        nsp = _nsp(p[0])
-        if nsp is None:
-            continue
-        node, slot, card_port = nsp
-        address, _, prefix = p[3].partition("/")
-        dash = lambda v: "" if v in ("-", "") else v
-        out.append(EthernetPort(
-            node=node, slot=slot, card_port=card_port, role="file",
-            mode=p[1], link_state=p[2], address=address, prefix_len=prefix,
-            ip_disabled=p[4].upper() == "Y", gateway=dash(p[5]), vlan=p[6], mtu=p[7],
-            rate=dash(p[8]) if p[8] != "n/a" else "", eth=p[9], link=p[10],
-            failover_ips=[ip for ip in p[11:] if dash(ip)],
-        ))
     return out
 
 

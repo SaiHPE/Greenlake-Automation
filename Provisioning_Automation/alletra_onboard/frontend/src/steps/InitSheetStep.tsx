@@ -53,8 +53,8 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
       const uploaded = await uploadInitSheet(await fileToBase64(file));
       setResult(uploaded);
       setForm(fromParsedWorkItem(uploaded.work_item));
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setBusy(null);
     }
@@ -65,8 +65,8 @@ export function InitSheetStep({ setForm, onUploaded, result, setResult, state }:
     setError(null);
     try {
       setReport((await checkConfig()).report);
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setBusy(null);
     }

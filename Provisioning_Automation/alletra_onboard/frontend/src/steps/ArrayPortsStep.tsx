@@ -297,13 +297,13 @@ export function ArrayPortsStep({ runId, run, events, onDone }: Props) {
   useEffect(() => {
     getArrayPorts(runId)
       .then(setPorts)
-      .catch((exc: any) => setError(String(exc.message ?? exc)));
+      .catch((exc: unknown) => setError(exc instanceof Error ? exc.message : String(exc)));
   }, [runId, latest?.event_id]);
 
   // R8: with nothing on either tab the step reads nothing and is complete; record that once.
   useEffect(() => {
     if (ports && ports.iscsi_network.length === 0 && !ports.peer_ports && !latest) {
-      portsPreview(runId).catch((exc: any) => setError(String(exc.message ?? exc)));
+      portsPreview(runId).catch((exc: unknown) => setError(exc instanceof Error ? exc.message : String(exc)));
     }
   }, [ports, latest, runId]);
 
@@ -311,8 +311,8 @@ export function ArrayPortsStep({ runId, run, events, onDone }: Props) {
     setError(null);
     try {
       await portsPreview(runId);
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     }
   };
   const plan = section?.plan;

@@ -45,7 +45,7 @@
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_rc_group_detail :: PLR0913" = 6
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_replication_section :: C901" = 33
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_replication_section :: PLR0912" = 33
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_replication_section :: PLR0915" = 116
+"src/alletra_onboard/application/documents/asbuilt.py :: _add_replication_section :: PLR0915" = 114
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_zoning_section :: C901" = 16
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_zoning_section :: PLR0912" = 17
 "src/alletra_onboard/application/documents/asbuilt.py :: _fill_placeholders :: C901" = 14
@@ -184,7 +184,6 @@
 "src/alletra_onboard/adapters/array/cli_client.py :: ArrayCliClient.close :: BLE001" = 1
 "src/alletra_onboard/adapters/array/cli_client.py :: ArrayCliClient.close :: S110" = 1
 "src/alletra_onboard/adapters/array/wsapi_client.py :: <module> :: BLE001" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient :: ERA001" = 1
 "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._array_code :: BLE001" = 1
 "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._array_reason :: BLE001" = 1
 "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient._certificate_changed :: BLE001" = 1
@@ -195,7 +194,6 @@
 "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.close :: S110" = 1
 "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.host_set_names :: BLE001" = 1
 "src/alletra_onboard/adapters/array/wsapi_client.py :: WsapiClient.volume_set_names :: BLE001" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: _install_pinned_transport :: PLC0415" = 1
 "src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client._close_http :: BLE001" = 1
 "src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client._close_http :: S110" = 1
 "src/alletra_onboard/adapters/array/wsapi_v3_client.py :: WsapiV3Client.logout :: BLE001" = 1
@@ -212,7 +210,6 @@
 "src/alletra_onboard/adapters/browser/dscc_setup.py :: DsccSetupAdapter.run :: BLE001" = 1
 "src/alletra_onboard/adapters/command_log.py :: record :: BLE001" = 1
 "src/alletra_onboard/adapters/command_log.py :: record :: S110" = 1
-"src/alletra_onboard/adapters/fabric/brocade_client.py :: BrocadeClient :: ERA001" = 1
 "src/alletra_onboard/adapters/fabric/brocade_client.py :: BrocadeClient.close :: BLE001" = 1
 "src/alletra_onboard/adapters/fabric/brocade_client.py :: BrocadeClient.close :: S110" = 1
 "src/alletra_onboard/adapters/hosts/linux_ssh.py :: LinuxHostClient.close :: BLE001" = 1
@@ -221,7 +218,6 @@
 "src/alletra_onboard/adapters/hosts/windows_winrm.py :: WindowsHostClient.connect :: BLE001" = 1
 "src/alletra_onboard/adapters/hosts/windows_winrm.py :: WindowsHostClient.read :: BLE001" = 1
 "src/alletra_onboard/adapters/system/clock.py :: _server_utc :: BLE001" = 1
-"src/alletra_onboard/adapters/system/clock.py :: _set_system_utc :: PLC0415" = 1
 "src/alletra_onboard/adapters/system/clock.py :: clock_status :: BLE001" = 1
 "src/alletra_onboard/adapters/system/clock.py :: is_elevated :: BLE001" = 1
 "src/alletra_onboard/adapters/vcenter/vcenter_client.py :: <module> :: BLE001" = 1
@@ -233,32 +229,12 @@
 "src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient._read_luns :: S110" = 1
 "src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient.close :: BLE001" = 1
 "src/alletra_onboard/adapters/vcenter/vcenter_client.py :: VCenterClient.close :: S110" = 1
-"src/alletra_onboard/api/app.py :: _wsapi_capability :: PLC0415" = 1
-"src/alletra_onboard/api/schemas.py :: <module> :: ERA001" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_checkhealth_after :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_file_section :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_handover_alerts :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_handover_capacity :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_handover_section :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_hosts_section :: PLC0415" = 2
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_inventory_after :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_iscsi_network_section :: PLC0415" = 4
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_link_check :: PLC0415" = 2
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_peer_ports_section :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_presentations_section :: PLC0415" = 2
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_provisioned_sections :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_provisioning_section :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_replication_section :: PLC0415" = 2
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_typed_latency :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _add_volumes_section :: PLC0415" = 1
-"src/alletra_onboard/application/documents/asbuilt.py :: _insert_mono_after :: PLC0415" = 1
 "src/alletra_onboard/application/documents/asbuilt.py :: _text_parts :: BLE001" = 1
 "src/alletra_onboard/application/documents/asbuilt.py :: _text_parts :: S112" = 1
 "src/alletra_onboard/application/documents/asbuilt_snapshots.py :: _requests :: BLE001" = 1
 "src/alletra_onboard/application/documents/asbuilt_snapshots.py :: _requests :: S112" = 1
 "src/alletra_onboard/application/documents/steps.py :: DocumentSteps._collect_asbuilt :: BLE001" = 2
 "src/alletra_onboard/application/documents/steps.py :: DocumentSteps._collect_file :: BLE001" = 1
-"src/alletra_onboard/application/documents/steps.py :: DocumentSteps._render_asbuilt :: PLC0415" = 2
 "src/alletra_onboard/application/documents/steps.py :: DocumentSteps._run_asbuilt :: BLE001" = 2
 "src/alletra_onboard/application/documents/steps.py :: DocumentSteps._run_asbuilt :: S110" = 1
 "src/alletra_onboard/application/documents/steps.py :: DocumentSteps._run_verify :: BLE001" = 2
@@ -271,20 +247,12 @@
 "src/alletra_onboard/application/onboarding/greenlake_provision.py :: GreenLakeProvisioningService._serial_in_inventory :: BLE001" = 1
 "src/alletra_onboard/application/onboarding/greenlake_provision.py :: GreenLakeProvisioningService._subscription_present :: BLE001" = 1
 "src/alletra_onboard/application/onboarding/greenlake_provision.py :: GreenLakeProvisioningService.provision :: BLE001" = 1
-"src/alletra_onboard/application/onboarding/greenlake_provision.py :: _exception_detail :: PLC0415" = 1
-"src/alletra_onboard/application/onboarding/greenlake_provision.py :: _greenlake_error_text :: BLE001" = 1
 "src/alletra_onboard/application/onboarding/health.py :: greenlake_check :: BLE001" = 1
-"src/alletra_onboard/application/platform/prereqs.py :: _check_one :: BLE001" = 1
-"src/alletra_onboard/application/platform/prereqs.py :: _check_one :: S110" = 1
-"src/alletra_onboard/application/platform/prereqs.py :: _check_via_proxy :: BLE001" = 2
 "src/alletra_onboard/application/platform/proxy.py :: _global_free :: BLE001" = 1
 "src/alletra_onboard/application/platform/proxy.py :: _global_free :: S110" = 1
 "src/alletra_onboard/application/platform/proxy.py :: _win_proxy_for_url :: BLE001" = 1
 "src/alletra_onboard/application/platform/proxy.py :: _win_system_proxy :: BLE001" = 2
 "src/alletra_onboard/application/platform/proxy.py :: _win_system_proxy :: S110" = 1
-"src/alletra_onboard/application/platform/tls.py :: _load_certifi :: PLC0415" = 1
-"src/alletra_onboard/application/platform/tls.py :: ssl_context :: BLE001" = 1
-"src/alletra_onboard/application/platform/tls.py :: ssl_context :: S110" = 1
 "src/alletra_onboard/application/provisioning/discovery.py :: _read_file_side :: BLE001" = 2
 "src/alletra_onboard/application/provisioning/discovery.py :: _read_sheet_hosts :: BLE001" = 1
 "src/alletra_onboard/application/provisioning/discovery.py :: _refine_fabrics_from_switches :: BLE001" = 1
@@ -311,7 +279,6 @@
 "src/alletra_onboard/application/provisioning/storage_provision.py :: apply_plan :: BLE001" = 3
 "src/alletra_onboard/application/provisioning/storage_provision.py :: build_plan :: BLE001" = 1
 "src/alletra_onboard/application/provisioning/storage_provision.py :: read_array_objects :: BLE001" = 1
-"src/alletra_onboard/application/provisioning/zoning.py :: _hosts_in_scope :: PLC0415" = 1
 "src/alletra_onboard/application/provisioning/zoning_plan.py :: build_zoning_plan :: BLE001" = 3
 "src/alletra_onboard/application/replication/apply.py :: apply_plan :: BLE001" = 1
 "src/alletra_onboard/application/replication/failover.py :: run_failover_test :: BLE001" = 6
@@ -343,10 +310,6 @@
 "src/alletra_onboard/application/snapshots/steps.py :: SnapshotSteps._run_apply :: BLE001" = 1
 "src/alletra_onboard/application/snapshots/steps.py :: SnapshotSteps._run_apply :: S110" = 1
 "src/alletra_onboard/application/unified_file/read.py :: _run_serial :: BLE001" = 1
-"src/alletra_onboard/application/unified_file/read.py :: parse_showport_file :: PLC0415" = 1
-"src/alletra_onboard/cli/main.py :: ui :: PLC0415" = 2
-"src/alletra_onboard/domain/replication.py :: <module> :: ERA001" = 1
-"tests/unit/test_replication_failover.py :: test_the_sync_sequence_passes_and_ends_in_the_starting_state :: ERA001" = 1
 
 [pyright]
 # STANDARD T2. `file` = its pyright errors today (`standard` on src, `strict` on src/alletra_onboard/domain;
@@ -391,84 +354,31 @@
 [vulture]
 # STANDARD M3. `file :: finding` = how often vulture reports it at 80% confidence in src. A finding is
 # a lead, not proof: delete code only after showing that nothing reaches it (LESSONS 18).
-"src/alletra_onboard/adapters/array/cli_client.py :: unused variable 'exc_info'" = 1
-"src/alletra_onboard/adapters/array/wsapi_client.py :: unused variable 'exc_info'" = 1
-"src/alletra_onboard/adapters/array/wsapi_v3_client.py :: unused variable 'exc_info'" = 1
-"src/alletra_onboard/adapters/fabric/brocade_client.py :: unused variable 'exc_info'" = 1
-"src/alletra_onboard/adapters/hosts/linux_ssh.py :: unused variable 'exc_info'" = 1
-"src/alletra_onboard/adapters/hosts/windows_winrm.py :: unused variable 'exc_info'" = 1
-"src/alletra_onboard/adapters/vcenter/vcenter_client.py :: unused variable 'exc_info'" = 1
 
 [knip]
 # STANDARD M3. `file :: kind :: name` = one knip finding in the frontend (unused file, export, type
 # or dependency). A finding is a lead, not proof, like vulture's.
-"frontend/mockups/data.ts :: exports :: stepNo" = 1
-"frontend/mockups/kit.tsx :: exports :: StateLabel" = 1
-"frontend/mockups/kit.tsx :: types :: RailStep" = 1
-"frontend/src/api.ts :: exports :: RTT_LIMIT_MS" = 1
-"frontend/src/api.ts :: exports :: getConfig" = 1
-"frontend/src/api.ts :: exports :: saveConfig" = 1
-"frontend/src/api.ts :: types :: ArrayHost" = 1
-"frontend/src/api.ts :: types :: ClientRule" = 1
-"frontend/src/api.ts :: types :: EsxiLunPaths" = 1
-"frontend/src/api.ts :: types :: EsxiViewState" = 1
-"frontend/src/api.ts :: types :: ExpectedZone" = 1
-"frontend/src/api.ts :: types :: FailoverResult" = 1
-"frontend/src/api.ts :: types :: FailoverSide" = 1
-"frontend/src/api.ts :: types :: FileCapacity" = 1
-"frontend/src/api.ts :: types :: FilePortStatus" = 1
-"frontend/src/api.ts :: types :: FileService" = 1
-"frontend/src/api.ts :: types :: HealthDetail" = 1
-"frontend/src/api.ts :: types :: HostHba" = 1
-"frontend/src/api.ts :: types :: HostSetRequest" = 1
-"frontend/src/api.ts :: types :: IscsiNetworkPlan" = 1
-"frontend/src/api.ts :: types :: IscsiPortAddress" = 1
-"frontend/src/api.ts :: types :: IscsiVlanInterface" = 1
-"frontend/src/api.ts :: types :: LinkPair" = 1
-"frontend/src/api.ts :: types :: PartnerTarget" = 1
-"frontend/src/api.ts :: types :: PeerPortCheck" = 1
-"frontend/src/api.ts :: types :: PeerPortPlan" = 1
-"frontend/src/api.ts :: types :: PeerPortResult" = 1
-"frontend/src/api.ts :: types :: PeerPortState" = 1
-"frontend/src/api.ts :: types :: PeerPortView" = 1
-"frontend/src/api.ts :: types :: PlannedCall" = 1
-"frontend/src/api.ts :: types :: PortNetworkView" = 1
-"frontend/src/api.ts :: types :: PortRole" = 1
-"frontend/src/api.ts :: types :: RcGroupVolume" = 1
-"frontend/src/api.ts :: types :: RcLink" = 1
-"frontend/src/api.ts :: types :: RcTarget" = 1
-"frontend/src/api.ts :: types :: RcipPort" = 1
-"frontend/src/api.ts :: types :: SnapshotRow" = 1
-"frontend/src/api.ts :: types :: VolumeRequest" = 1
-"frontend/src/api.ts :: types :: ZoneRemediation" = 1
-"frontend/src/steps/CloudinitStep.tsx :: exports :: isLinkLocalWizardUrl" = 1
-"frontend/src/steps/ProvisioningBuilderView.tsx :: exports :: memberLabel" = 1
-"frontend/src/ui/ConsolePane.tsx :: exports :: recordLines" = 1
-"frontend/src/ui/useStepState.ts :: exports :: owns" = 1
-"frontend/src/workItem.ts :: exports :: toWorkItemPayload" = 1
 
 [file-lines]
 # STANDARD M2. `file` = its lines today, for a source file over 500 lines (src and frontend/src, tests
 # left out). The file may not grow. Splitting it only to get under a number is not a fix: a split
 # hides a decision, removes duplication or makes behaviour testable on its own.
-"frontend/src/api.ts" = 748
+"frontend/src/api.ts" = 745
 "frontend/src/steps/DiscoveryStep.tsx" = 508
-"frontend/src/steps/ProvisionStep.tsx" = 587
-"frontend/src/steps/ReplicationStep.tsx" = 1064
+"frontend/src/steps/ProvisionStep.tsx" = 531
+"frontend/src/steps/ReplicationStep.tsx" = 998
 "frontend/src/steps/SnapshotsStep.tsx" = 503
-"frontend/src/steps/ZoningPlanView.tsx" = 801
-"src/alletra_onboard/adapters/array/wsapi_client.py" = 1057
-"src/alletra_onboard/api/app.py" = 886
-"src/alletra_onboard/application/documents/asbuilt.py" = 1714
+"src/alletra_onboard/adapters/array/wsapi_client.py" = 1039
+"src/alletra_onboard/api/app.py" = 876
+"src/alletra_onboard/application/documents/asbuilt.py" = 1574
 "src/alletra_onboard/application/documents/handover.py" = 510
 "src/alletra_onboard/application/platform/init_sheet.py" = 1656
-"src/alletra_onboard/application/provisioning/discovery.py" = 934
+"src/alletra_onboard/application/provisioning/discovery.py" = 901
 "src/alletra_onboard/application/provisioning/peer_ports.py" = 561
 "src/alletra_onboard/application/provisioning/steps.py" = 636
-"src/alletra_onboard/application/provisioning/storage_provision.py" = 892
+"src/alletra_onboard/application/provisioning/storage_provision.py" = 890
 "src/alletra_onboard/application/provisioning/zoning_plan.py" = 766
 "src/alletra_onboard/application/replication/plan.py" = 621
-"src/alletra_onboard/domain/provisioning.py" = 530
 "src/alletra_onboard/domain/replication.py" = 641
 
 [suppress-exception]
@@ -477,14 +387,6 @@
 [doc-paths]
 # STANDARD C2. `document :: path` = a code path the document names in backticks that is not in the
 # repository. The documents are AGENTS.md, README.md, the app's CONTEXT.md and README.md and docs/design.
-"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/adapters/" = 1
-"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/api/" = 1
-"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/application/" = 1
-"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/cli/main.py" = 1
-"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/config.py" = 1
-"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: src/domain/" = 1
-"Provisioning_Automation/alletra_onboard/docs/design/LLD.md :: storage/clients.py" = 1
-"README.md :: greenlake/services.md" = 1
 
 [markdown-folders]
 # STANDARD C3. The folders that hold Markdown today, from the repository root (`.` is the

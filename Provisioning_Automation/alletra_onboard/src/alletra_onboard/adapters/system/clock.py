@@ -18,9 +18,9 @@ from email.utils import parsedate_to_datetime
 from typing import NamedTuple
 
 import httpx
-from pydantic import BaseModel
 
-from alletra_onboard.application.platform.tls import ssl_context
+from alletra_onboard.adapters.tls import ssl_context
+from alletra_onboard.domain.models import ClockStatus, ClockSyncResult
 
 # Tried in order; the caller's preferred source (e.g. the DSCC console, known reachable in
 # context) is tried first, then these fall-backs, so the check works wherever the host has
@@ -28,25 +28,6 @@ from alletra_onboard.application.platform.tls import ssl_context
 TIME_SOURCES = ("https://www.hpe.com", "https://www.microsoft.com", "https://www.cloudflare.com")
 IN_SYNC_THRESHOLD_S = 5.0
 ERROR_PRIVILEGE_NOT_HELD = 1314
-
-
-class ClockStatus(BaseModel):
-    in_sync: bool
-    skew_seconds: float | None  # local - server (positive = clock ahead); None if unreachable
-    local_utc: str
-    server_utc: str | None
-    is_admin: bool
-    source: str
-    error: str | None = None
-
-
-class ClockSyncResult(BaseModel):
-    changed: bool
-    skew_seconds_before: float
-    local_utc_before: str
-    local_utc_after: str
-    server_utc: str
-    source: str
 
 
 def is_elevated() -> bool:
@@ -129,18 +110,17 @@ async def clock_status(url: str | None = None) -> ClockStatus:
 def _set_system_utc(when: datetime) -> None:
     if sys.platform != "win32":
         raise RuntimeError("System clock sync is only supported on Windows.")
-    import ctypes.wintypes as wt
 
     class SYSTEMTIME(ctypes.Structure):
         _fields_ = [
-            ("wYear", wt.WORD),
-            ("wMonth", wt.WORD),
-            ("wDayOfWeek", wt.WORD),
-            ("wDay", wt.WORD),
-            ("wHour", wt.WORD),
-            ("wMinute", wt.WORD),
-            ("wSecond", wt.WORD),
-            ("wMilliseconds", wt.WORD),
+            ("wYear", ctypes.c_ushort),
+            ("wMonth", ctypes.c_ushort),
+            ("wDayOfWeek", ctypes.c_ushort),
+            ("wDay", ctypes.c_ushort),
+            ("wHour", ctypes.c_ushort),
+            ("wMinute", ctypes.c_ushort),
+            ("wSecond", ctypes.c_ushort),
+            ("wMilliseconds", ctypes.c_ushort),
         ]
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)

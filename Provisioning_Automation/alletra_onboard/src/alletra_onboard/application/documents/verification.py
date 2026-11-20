@@ -22,11 +22,12 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from alletra_onboard.adapters.array.cli_client import ArrayCliClient, ArrayCliError
-from alletra_onboard.adapters.array.wsapi_v3_client import WsapiV3Client
-from alletra_onboard.application.replication.read import parse_showversion
+from alletra_onboard.application.documents.clients import make_verify_cli, make_verify_wsapi_v3
 from alletra_onboard.application.unified_file.read import read_file_side
+from alletra_onboard.domain.array_parse import parse_showversion
+from alletra_onboard.domain.errors import ArrayCliError
 from alletra_onboard.domain.models import (
     ArrayWorkItem,
     FieldCheck,
@@ -36,6 +37,10 @@ from alletra_onboard.domain.models import (
     VerificationReport,
 )
 from alletra_onboard.domain.unified_file import NODE_RUNNING, FileReport
+
+if TYPE_CHECKING:
+    from alletra_onboard.adapters.array.cli_client import ArrayCliClient
+    from alletra_onboard.adapters.array.wsapi_v3_client import WsapiV3Client
 
 _IPV4 = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
 # shownet's data row: the only line that starts with two IPv4s (mgmt IP then netmask).
@@ -226,8 +231,8 @@ def verify(
     username: str,
     password: str,
     *,
-    client_factory: Callable[..., ArrayCliClient] = ArrayCliClient,
-    wsapi_v3_factory: Callable[..., WsapiV3Client] = WsapiV3Client,
+    client_factory: Callable[..., ArrayCliClient] = make_verify_cli,
+    wsapi_v3_factory: Callable[..., WsapiV3Client] = make_verify_wsapi_v3,
 ) -> VerificationReport:
     """Connect over SSH, read the config, and compare it to the work item. Never writes. The file
     service is read over the array's WSAPI v3, GETs only, when the array has a file side."""

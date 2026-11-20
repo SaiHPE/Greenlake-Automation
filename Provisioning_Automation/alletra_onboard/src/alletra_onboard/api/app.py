@@ -32,15 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
 from alletra_onboard import __version__
-from alletra_onboard.adapters.browser.debug_browser import launch_debug_browser
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
-from alletra_onboard.adapters.system.clock import (
-    ClockStatus,
-    ClockSyncResult,
-    clock_status,
-    sync_clock,
-)
-from alletra_onboard.adapters.system.discovery_tool import launch_discovery_tool
 from alletra_onboard.api.schemas import (
     ArrayPortsResponse,
     AsBuiltStepRequest,
@@ -122,9 +114,14 @@ from alletra_onboard.application.service import (
     RunBusyError,
     RunNotFoundError,
     StepPreconditionError,
+    clock_status,
+    launch_debug_browser,
+    launch_discovery_tool,
+    sync_clock,
+    wsapi_capability,
 )
 from alletra_onboard.config import load_settings
-from alletra_onboard.domain.models import RunMode
+from alletra_onboard.domain.models import ClockStatus, ClockSyncResult, RunMode
 from alletra_onboard.domain.ports import StoredCredentialsUnreadableError
 from alletra_onboard.domain.provisioning import (
     PreflightReport,
@@ -136,13 +133,6 @@ from alletra_onboard.domain.workflow import NOT_BUILT_STEPS, STEP_REGISTRY, mode
 from alletra_onboard.domain.zoning import ZoningPlan
 
 SSE_HEARTBEAT_S = 15.0
-
-
-def _wsapi_capability() -> dict:
-    """Whether this build (frozen or not) actually imported the 3PAR SDK — and if not, WHY."""
-    from alletra_onboard.adapters.array.wsapi_client import SDK_IMPORT_ERROR, HPE3ParClient
-
-    return {"wsapi_sdk": HPE3ParClient is not None, "wsapi_sdk_error": SDK_IMPORT_ERROR}
 
 
 class CsvParseRequest(BaseModel):
@@ -252,7 +242,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
             # which is how every exe before v0.14.0-rc.2 shipped without anyone noticing (the
             # preflight was the first packaged feature to call WSAPI). Reporting it here makes a
             # packaging regression visible on ANY build with one request, no array needed.
-            "capabilities": _wsapi_capability(),
+            "capabilities": wsapi_capability(),
         }
 
     @app.get("/config", response_model=ConfigStatusResponse)

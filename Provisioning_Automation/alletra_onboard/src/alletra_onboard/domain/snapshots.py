@@ -15,6 +15,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from alletra_onboard.domain.shared import ArrayVolumeRecord, PlanState, RemovalItem
+
 SnapshotUnit = Literal["minutes", "hours", "days"]
 
 #: The periods a row may ask for: DSCC's schedule periods (reference mirror,
@@ -264,12 +266,6 @@ class ArraySchedule(BaseModel):
     @property
     def cron(self) -> str:
         return f"{self.minute} {self.hour} {self.dom} {self.month} {self.dow}"
-
-
-# ProvisioningIntent (domain/provisioning.py) holds a SnapshotIntent, and the models below hold that
-# module's ArrayVolumeRecord and PlanState: it is imported here, after SnapshotIntent exists, so the two
-# modules load in either order.
-from alletra_onboard.domain.provisioning import ArrayVolumeRecord, PlanState, RemovalItem
 
 
 class SnapshotArrayView(BaseModel):

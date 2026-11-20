@@ -34,29 +34,15 @@ from typing import Any
 import httpx
 
 from alletra_onboard.adapters import command_log, device_trust
-from alletra_onboard.adapters.array.wsapi_client import _bypass_proxy_for
+from alletra_onboard.domain.errors import (
+    WsapiV3Error,
+    WsapiV3LoginRefused,
+    WsapiV3TrustError,
+)
 
 API_ROOT = "/api/v3"
 _CREDENTIALS = f"{API_ROOT}/credentials"
 _JSON = "application/json"
-
-
-class WsapiV3Error(Exception):
-    """The request got no answer from the array: connection refused, TLS failure or timeout. The only
-    failure that means the file API is not there (lesson 27)."""
-
-
-class WsapiV3TrustError(WsapiV3Error):
-    """The array presented a certificate the run does not trust (or the device CA bundle refused it),
-    so nothing was sent. Its message is the sentence for the operator."""
-
-
-class WsapiV3LoginRefused(Exception):
-    """The array answered the login but gave no session (a 4xx or 5xx, or no `key`)."""
-
-    def __init__(self, answer: V3Answer) -> None:
-        super().__init__(f"the array answered the login with HTTP {answer.status}")
-        self.answer = answer
 
 
 @dataclass(frozen=True)
@@ -86,7 +72,7 @@ class WsapiV3Client:
         """Open the session. Raises `WsapiV3Error` when the array does not answer and
         `WsapiV3LoginRefused` when it answers without a session."""
         self.logout()
-        _bypass_proxy_for(self.host)
+        device_trust.bypass_proxy_for(self.host)
         self._http = httpx.Client(base_url=self.base_url, verify=self._tls_context(), timeout=self.timeout)
         try:
             answer, headers = self._send("POST", _CREDENTIALS,
@@ -133,7 +119,7 @@ class WsapiV3Client:
         self.login()
         return self
 
-    def __exit__(self, *exc_info: object) -> None:
+    def __exit__(self, *_exc_info: object) -> None:
         self.logout()
 
     # ------------------------------------------------------------------ reads

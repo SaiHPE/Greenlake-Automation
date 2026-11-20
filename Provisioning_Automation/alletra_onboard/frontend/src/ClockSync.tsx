@@ -38,8 +38,8 @@ export function useClock(consoleUrl?: string) {
           : 'Clock already in sync.',
       );
       setClock(await getClock(consoleUrl));
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     } finally {
       setBusy(false);
     }

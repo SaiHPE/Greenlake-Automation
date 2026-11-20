@@ -10,7 +10,6 @@ import {
   PlannedAction,
   ProvisioningPlan,
   ProvisioningResult,
-  RemovalItem,
   RunEvent,
   RunRecord,
   storageApply,
@@ -23,7 +22,8 @@ import { InlineNotification, NotesList } from '../ui/primitives';
 import { NoValue, RESULT, ResultWord, StatusIndicator, StepState } from '../ui/status';
 import { useStepContext } from '../ui/StepContext';
 import { FooterAction, StepShell, StepStatus } from '../ui/StepShell';
-import { ProvisioningBuilderView } from './ProvisioningBuilderView';
+import { ProvisioningBuilderView } from '../ui/ProvisioningBuilderView';
+import { removalLines, RemovalSet } from '../ui/RemovalSets';
 
 const VERDICT: Record<PathVerdict, ResultWord> = {
   live: RESULT.live,
@@ -46,62 +46,6 @@ const OUTCOME: Record<ActionOutcome['status'], ResultWord> = {
   exists: { ...RESULT.already_there, state: 'not_started' },
   failed: RESULT.failed,
 };
-
-// SPEC-007 R3 (and SPEC-023 R6): schedules, snapshots, exports, then sets, then their members — the order
-// that pastes top to bottom. The backend's REMOVAL_ORDER (domain/provisioning.py) is the same.
-const REMOVAL_ORDER: Record<string, number> = { schedule: 0, snapshot: 1, vlun: 2, vvset: 3, volume: 4, hostset: 5, host: 6 };
-export const removalLines = (items: RemovalItem[]): string[] => {
-  const out: string[] = [];
-  [...items].sort((a, b) => (REMOVAL_ORDER[a.kind] ?? 9) - (REMOVAL_ORDER[b.kind] ?? 9))
-    .forEach((i) => { if (!out.includes(i.command)) out.push(i.command); });
-  return out;
-};
-const mono = { fontFamily: 'Consolas, "Courier New", monospace' } as const;
-
-function download(filename: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-
-/** The undo for exactly what this run created, across every apply, failed ones included (SPEC-007 R4, R6).
- *  Text for the operator; the tool never runs it. */
-export function RemovalSet({ removals, notes, runId, serial }: { removals: RemovalItem[]; notes: string[]; runId: string; serial?: string }) {
-  const [copied, setCopied] = useState(false);
-  const lines = removalLines(removals);
-  const header = [
-    `# Removal of what run ${runId.slice(0, 8)} created on ${serial ?? 'the array'} — ${new Date().toISOString()}`,
-    '# Review before pasting. The tool never runs these. Order: exports, VV sets, volumes, host sets, hosts.',
-  ];
-  const text = [...header, ...lines, ''].join('\n');
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { setCopied(false); }
-  };
-  return (
-    <Box gap="xsmall" margin={{ top: 'small' }}>
-      <Text size="small" weight={500}>Removal command set</Text>
-      {lines.length === 0 ? (
-        <Text size="small" color="text-weak">Nothing to remove: this run has created nothing on the array.</Text>
-      ) : (
-        <>
-          <Text size="small" color="text-weak">
-            Undoes exactly what this run created, in dependency order, including anything made before a failed attempt. Objects that already
-            existed are not touched.
-          </Text>
-          <Box background="background-contrast" round="xsmall" pad="small" tabIndex={0} style={{ overflowX: 'auto' }}>
-            {[...header, ...lines].map((c, i) => <Text key={i} size="small" style={{ ...mono, whiteSpace: 'pre-wrap' }}>{c}</Text>)}
-          </Box>
-          <Box direction="row" gap="small">
-            <Button size="small" label={copied ? 'Copied' : 'Copy removal set'} onClick={copy} />
-            <Button size="small" label="Download .txt" onClick={() => download(`removal_${serial ?? 'array'}_${runId.slice(0, 8)}.txt`, text)} />
-          </Box>
-        </>
-      )}
-      {notes.length > 0 && <NotesList notes={notes} />}
-    </Box>
-  );
-}
 
 /** The plan, one row per object (SPEC-001 R10); `previous` says what moved since the plan before it. */
 function PlanTable({ plan, previous }: { plan: ProvisioningPlan; previous: Map<string, PlanState> }) {
@@ -341,8 +285,8 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
     setError(null);
     try {
       await action();
-    } catch (exc: any) {
-      setError(String(exc.message ?? exc));
+    } catch (exc: unknown) {
+      setError(exc instanceof Error ? exc.message : String(exc));
     }
   };
 

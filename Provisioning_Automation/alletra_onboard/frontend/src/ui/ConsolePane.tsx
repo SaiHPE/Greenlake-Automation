@@ -11,13 +11,13 @@ import { useEffect, useRef, useState } from 'react';
 import {
   CommandRecord,
   consoleLogTxtUrl,
-  consoleStreamUrl,
   getConsoleLog,
   getConsoleTargets,
   openConsoleTerminal,
   RunEvent,
   runConsoleCommand,
 } from '../api';
+import { subscribeConsoleStream } from '../useRunEvents';
 import { ActivityTimeline } from './primitives';
 import { LogTab } from './StepContext';
 
@@ -45,7 +45,7 @@ const RED = '\x1b[31m';
 const GREEN = '\x1b[32m';
 const RESET = '\x1b[0m';
 
-export function recordLines(e: CommandRecord): string[] {
+function recordLines(e: CommandRecord): string[] {
   const at = (e.at || '').slice(11, 19);
   const head = `${at}  ${e.target} (${e.transport})  ${e.command}  ${e.duration_s}s  ${e.result}`;
   const out = (e.output || '').replace(/\s+$/, '');
@@ -113,14 +113,7 @@ export function ConsolePane({
       if (term.current) paint(term.current, e);
     };
     getConsoleTargets(runId).then((t) => !closed && setTargets(t.targets)).catch(() => undefined);
-    const source = new EventSource(consoleStreamUrl(runId));
-    source.onmessage = (message) => {
-      try {
-        add(JSON.parse(message.data) as CommandRecord);
-      } catch {
-        /* heartbeat or partial frame */
-      }
-    };
+    const closeStream = subscribeConsoleStream(runId, add);
     getConsoleLog(runId)
       .then((log) => {
         if (closed) return;
@@ -129,7 +122,7 @@ export function ConsolePane({
       .catch(() => undefined);
     return () => {
       closed = true;
-      source.close();
+      closeStream();
     };
   }, [runId]);
 

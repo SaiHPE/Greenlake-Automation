@@ -62,7 +62,7 @@ def main() -> int:
     print(f"OS trust store: {len(os_ctx.get_ca_certs())} CA certificate(s) loaded")
 
     try:
-        from alletra_onboard.application.platform.tls import ssl_context
+        from alletra_onboard.adapters.tls import ssl_context
         tool_ctx = ssl_context()
         print(f"tool context  : {len(tool_ctx.get_ca_certs())} CA certificate(s) (OS + certifi)")
     except Exception as exc:  # noqa: BLE001 - runnable even outside the package
