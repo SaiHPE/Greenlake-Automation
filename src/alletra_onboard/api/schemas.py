@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from typing import Literal
+import functools
+import operator
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, create_model
 
 from alletra_onboard.application.onboarding.health import GreenLakeCheckReport
+from alletra_onboard.domain.events import EVENT_TYPES
 from alletra_onboard.domain.models import (
     ArrayCredentialInfo,
     ArrayWorkItem,
@@ -78,6 +81,28 @@ class RunListResponse(BaseModel):
 
 class EventListResponse(BaseModel):
     events: list[RunEvent]
+
+
+def run_event_list() -> type[BaseModel]:
+    """What /runs/{id}/events returns and each frame of /runs/{id}/stream carries: the stored event
+    with `data` typed by `event_type`. Documentation only; stored events are served as they are."""
+    by_data: dict[type[BaseModel], list[str]] = {}
+    for event in EVENT_TYPES.values():
+        by_data.setdefault(event.data, []).append(event.name)
+    lit: Any = Literal
+    ann: Any = Annotated
+    lst: Any = list
+    variants: list[Any] = []
+    for data, names in by_data.items():
+        fields: dict[str, Any] = {
+            "event_type": (lit[tuple(names)], ...),
+            "data": (data, ...),
+        }
+        variants.append(create_model(f"{data.__name__.removesuffix('Data')}Event", __base__=RunEvent, **fields))
+    event_union: Any = functools.reduce(operator.or_, variants)
+    item_type: Any = ann[event_union, Field(discriminator="event_type")]
+    list_fields: dict[str, Any] = {"events": (lst[item_type], ...)}
+    return create_model("RunEventList", **list_fields)
 
 
 # ------------------------------------------------------------------ steps

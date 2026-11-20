@@ -16,6 +16,7 @@ import {
   storagePreview,
   verifyPaths,
 } from '../api';
+import { isOf, latestOf } from '../events';
 import { DoneList, EmptyState, Guidance, Panel, PartsBar, Section, StatusLine } from '../ui/blocks';
 import { DiscoveryFreshness, discoveryReadAt, isDiscoveryStale } from '../ui/discoveryAge';
 import { InlineNotification, NotesList } from '../ui/primitives';
@@ -220,15 +221,10 @@ interface Props {
 }
 
 // SPEC-007 R6: a failed apply carries a result too: what it made before it stopped, and the undo.
-const APPLY_EVENTS = ['storage.applied', 'storage.apply.failed'];
-
-function latest<T>(events: RunEvent[], types: string[], key: string): T | null {
-  const event = [...events].reverse().find((item) => types.includes(item.event_type));
-  return (event?.data?.[key] as T) ?? null;
-}
+const APPLY_EVENTS = ['storage.applied', 'storage.apply.failed'] as const;
 
 /** Index of the newest event of these types, or -1. Used to compare which of two outcomes is current. */
-function latestIndex(events: RunEvent[], types: string[]): number {
+function latestIndex(events: RunEvent[], types: readonly string[]): number {
   for (let i = events.length - 1; i >= 0; i -= 1) if (types.includes(events[i].event_type)) return i;
   return -1;
 }
@@ -241,29 +237,29 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
   const [authorisedFor, setAuthorisedFor] = useState<string | null>(null);
   const running = run?.status === 'running';
 
-  const plan = latest<ProvisioningPlan>(events, ['storage.previewed'], 'plan');
+  const plan = latestOf(events, 'storage.previewed')?.data?.plan ?? null;
   const planId = plan?.plan_id ?? '';
   const authorised = !!plan && authorisedFor === planId;
-  const paths = latest<PathVerification>(events, ['storage.paths.verified'], 'verification');
+  const paths = latestOf(events, 'storage.paths.verified')?.data?.verification ?? null;
   // A result only reflects the plan on screen while it is newer than the newest preview. Rebuilding
   // the plan after a successful apply must offer Create again, not leave the operator with no action.
   const applied = latestIndex(events, APPLY_EVENTS);
   const previewed = latestIndex(events, ['storage.previewed']);
   const resultIsCurrent = applied > previewed;
-  const result = resultIsCurrent ? latest<ProvisioningResult>(events, APPLY_EVENTS, 'result') : null;
+  const result = resultIsCurrent ? (latestOf(events, ...APPLY_EVENTS)?.data?.result ?? null) : null;
   // An approval is for the plan on screen (LESSONS 6, 7). Derived, not reset after render, so a new
   // plan never shows a frame with the old tick; after an apply only a new plan offers the tick again.
   // Every apply's undo, kept past a rebuild: a retry calls a failed attempt's objects Exists, so its
   // own removal set never names them (SPEC-007 R6).
-  const applyResults = events
-    .filter((event) => APPLY_EVENTS.includes(event.event_type) && event.data?.result)
-    .map((event) => event.data!.result as ProvisioningResult);
+  const applyResults = events.flatMap((event) =>
+    isOf(event, ...APPLY_EVENTS) && event.data?.result ? [event.data.result] : [],
+  );
   const allRemovals = applyResults.flatMap((r) => r.removals ?? []);
   const allRemovalNotes = applyResults.flatMap((r) => r.removal_notes ?? []).filter((note, i, all) => all.indexOf(note) === i);
 
   // SPEC-012 R7 (X-7): the plan before this one, within the run, so a re-plan says what moved.
-  const previews = events.filter((event) => event.event_type === 'storage.previewed');
-  const previousPlan = previews.length >= 2 ? ((previews[previews.length - 2].data?.plan as ProvisioningPlan | undefined) ?? null) : null;
+  const previews = events.filter((event) => isOf(event, 'storage.previewed'));
+  const previousPlan = previews.length >= 2 ? (previews[previews.length - 2].data?.plan ?? null) : null;
   const previousState = new Map((previousPlan?.actions ?? []).map((a) => [`${a.kind}|${a.name}`, a.state]));
   // SPEC-012 R2 (P-10): has anything been created in this run at all?
   const everApplied = events.some((event) => event.event_type === 'storage.applied') || allRemovals.length > 0;
@@ -326,7 +322,7 @@ export function ProvisionStep({ runId, run, events, onDone }: Props) {
     buttons = [skip];
   }
 
-  const hhmm = (types: string[]) => {
+  const hhmm = (types: readonly string[]) => {
     const when = [...events].reverse().find((event) => types.includes(event.event_type))?.created_at;
     return when ? new Date(when).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   };

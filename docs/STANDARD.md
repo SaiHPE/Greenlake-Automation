@@ -107,7 +107,7 @@ api/, cli/  ──►  application/  ──►  adapters/  ──►  domain/
 | T1 | Device output, workbook cells, HTTP bodies, SSE events, environment variables and database rows are parsed into typed models where they enter; inner code trusts the types. A pure parser of device text that more than one context uses lives in `domain/array_parse.py`; one that a single context uses stays in that context's read module (ADR 0029). | judgement; T2 catches most slips |
 | T2 | The backend type-checks: pyright `standard` on `src`, `strict` on `domain`. Brought in one package at a time. | pyright, per-file error counts listed |
 | T3 | No `type: ignore` or `noqa` without its rule code; no `@ts-ignore`, and no `@ts-expect-error` without a reason. A file may not gain a suppression comment of any kind (`type: ignore`, `noqa`, `pyright:`, `eslint-disable`, `@ts-expect-error`). | ruff `PGH003`, `RUF100`; eslint `ban-ts-comment`, and its report of a disable comment that suppresses nothing; `scripts/fitness.py` (suppression comments counted per file) |
-| T4 | Run events carry typed data: `RunEvent.data` is a union of models in the OpenAPI schema. The TypeScript types of the API and of the events are generated from it, not written by hand. The frontend has no `any` and no `as unknown as`. | a check that the generated file is current; eslint `no-explicit-any`, `no-restricted-syntax` |
+| T4 | Run events carry typed data: `RunEvent.data` is a union of models in the OpenAPI schema. The TypeScript types of the API and of the events are generated from it, not written by hand. The frontend has no `any` and no `as unknown as`. | the `api-types` step of `scripts/check.py` (`scripts/api_types.py --check`); eslint `no-explicit-any`, `no-restricted-syntax` |
 
 ### 3.6 Errors (APOSD, Q2)
 

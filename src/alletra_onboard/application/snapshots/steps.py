@@ -21,6 +21,7 @@ from alletra_onboard.application.snapshots import apply as snapshots_apply
 from alletra_onboard.application.snapshots import read as snapshots_read
 from alletra_onboard.application.snapshots import verify as snapshots_verify
 from alletra_onboard.application.snapshots.plan import plan_snapshots
+from alletra_onboard.domain import events
 from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.provisioning import ProvisioningIntent
@@ -30,14 +31,13 @@ PHASE = WorkflowPhase.STORAGE_SNAPSHOT
 RESULT_ARTIFACT = "snapshot_result"
 
 
-def array_summary(view: SnapshotArrayView) -> dict:
+def _array_summary(view: SnapshotArrayView) -> events.SnapshotArraySummary:
     """What the page and the as-built show of the read: not every volume, only the array and its
     schedules."""
-    return {
-        "host": view.host, "name": view.name, "os_version": view.os_version, "time_zone": view.time_zone,
-        "retention_max_hours": view.retention_max_hours,
-        "schedules": [s.model_dump(mode="json") for s in view.schedules],
-    }
+    return events.SnapshotArraySummary(
+        host=view.host, name=view.name, os_version=view.os_version, time_zone=view.time_zone,
+        retention_max_hours=view.retention_max_hours, schedules=view.schedules,
+    )
 
 
 def _planned(intent: ProvisioningIntent) -> tuple[frozenset[str], frozenset[str]]:
@@ -72,7 +72,7 @@ class SnapshotSteps:
         loop = asyncio.get_running_loop()
 
         def progress(message: str) -> None:
-            loop.call_soon_threadsafe(self._coord.emit, run_id, PHASE, "phase.progress", message)
+            loop.call_soon_threadsafe(self._coord.emit, run_id, PHASE, events.PHASE_PROGRESS, message)
 
         return progress
 
@@ -106,13 +106,13 @@ class SnapshotSteps:
     async def _run_preview(self, run: RunRecord, intent: ProvisioningIntent) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, PHASE)
-        coord.emit(run.run_id, PHASE, "step.started", "Reading snapshots and snapshot schedules on the array…")
+        coord.emit(run.run_id, PHASE, events.STEP_STARTED, "Reading snapshots and snapshot schedules on the array…")
         view = await asyncio.to_thread(partial(self._read, intent.array, progress=self._progress(run.run_id)))
         if view.read_error:
             plan = SnapshotPlan(error=view.read_error)
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, PHASE)
-            coord.emit(run.run_id, PHASE, "snapshots.preview.failed", view.read_error,
-                       data={"array": array_summary(view), "plan": plan.model_dump(mode="json")})
+            coord.emit(run.run_id, PHASE, events.SNAPSHOTS_PREVIEW_FAILED, view.read_error,
+                       events.SnapshotPlanData(array=_array_summary(view), plan=plan))
             return
         volumes, vvsets = _planned(intent)
         plan = plan_snapshots(intent.snapshots, view, planned_volumes=volumes, planned_vvsets=vvsets)
@@ -127,8 +127,8 @@ class SnapshotSteps:
         else:
             summary = f"Read {name} — plan ready: {creates} to create, {exists} already there. Review the plan."
         coord.set_state(run, RunStatus.WAITING_FOR_OPERATOR, PHASE)
-        coord.emit(run.run_id, PHASE, "snapshots.previewed", summary,
-                   data={"array": array_summary(view), "plan": plan.model_dump(mode="json")})
+        coord.emit(run.run_id, PHASE, events.SNAPSHOTS_PREVIEWED, summary,
+                   events.SnapshotPlanData(array=_array_summary(view), plan=plan))
 
     # ------------------------------------------------------------------ R5, R6: apply the approved plan
 
@@ -157,16 +157,16 @@ class SnapshotSteps:
                          view: SnapshotArrayView, approval: Approval) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, PHASE)
-        coord.emit(run.run_id, PHASE, "snapshots.apply.started", "Creating the snapshots and schedules…")
+        coord.emit(run.run_id, PHASE, events.SNAPSHOTS_APPLY_STARTED, "Creating the snapshots and schedules…")
         result = await coord.run_approved(
             approval, partial(self._apply, plan, view, intent, approval, progress=self._progress(run.run_id)),
         )
         # the writes happened; failing to cache the record must not fail the step
         coord.save_artifact_best_effort(run.run_id, RESULT_ARTIFACT, result.model_dump_json().encode("utf-8"))
-        data = {"result": result.model_dump(mode="json")}
+        data = events.SnapshotResultData(result=result)
         if result.error:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, PHASE)
-            coord.emit(run.run_id, PHASE, "snapshots.apply.failed", result.error, data=data)
+            coord.emit(run.run_id, PHASE, events.SNAPSHOTS_APPLY_FAILED, result.error, data)
             return
         created = sum(1 for o in result.outcomes if o.status == "created")
         existed = sum(1 for o in result.outcomes if o.status == "exists")
@@ -175,7 +175,7 @@ class SnapshotSteps:
             message += (f" The array now runs {', '.join(result.schedules_created)} until someone removes "
                         f"{'it' if len(result.schedules_created) == 1 else 'them'}.")
         coord.set_state(run, RunStatus.READY, PHASE)
-        coord.emit(run.run_id, PHASE, "snapshots.applied", message, data=data)
+        coord.emit(run.run_id, PHASE, events.SNAPSHOTS_APPLIED, message, data)
         # R7: read back after apply, as the operator's Check snapshots does
         await self._run_verify(run, intent, plan, result.started_at if result.schedules_created else "")
 
@@ -216,16 +216,16 @@ class SnapshotSteps:
     async def _run_verify(self, run: RunRecord, intent: ProvisioningIntent, plan: SnapshotPlan, since: str) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, PHASE)
-        coord.emit(run.run_id, PHASE, "snapshots.verify.started", "Reading the snapshots and schedules back…")
+        coord.emit(run.run_id, PHASE, events.SNAPSHOTS_VERIFY_STARTED, "Reading the snapshots and schedules back…")
         verification: SnapshotVerification = await asyncio.to_thread(partial(
             snapshots_verify.verify, intent, plan, since=since, read_fn=self._read, progress=self._progress(run.run_id)))
-        data = {"verification": verification.model_dump(mode="json")}
+        data = events.SnapshotVerifyData(verification=verification)
         if verification.error:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE, PHASE)
-            coord.emit(run.run_id, PHASE, "snapshots.verify.failed", verification.error, data=data)
+            coord.emit(run.run_id, PHASE, events.SNAPSHOTS_VERIFY_FAILED, verification.error, data)
             return
         coord.set_state(run, RunStatus.READY, PHASE)
-        coord.emit(run.run_id, PHASE, "snapshots.verified", _verify_summary(verification), data=data)
+        coord.emit(run.run_id, PHASE, events.SNAPSHOTS_VERIFIED, _verify_summary(verification), data)
 
 
 def _verify_summary(verification: SnapshotVerification) -> str:

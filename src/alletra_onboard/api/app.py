@@ -76,6 +76,7 @@ from alletra_onboard.api.schemas import (
     StorageApplyRequest,
     TrustedDevicesResponse,
     VerifyStepRequest,
+    run_event_list,
 )
 from alletra_onboard.application.onboarding.clients import launch_debug_browser
 from alletra_onboard.application.onboarding.health import greenlake_check
@@ -744,7 +745,8 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
 
     # ------------------------------------------------------------------ events
 
-    @app.get("/runs/{run_id}/events", response_model=EventListResponse)
+    @app.get("/runs/{run_id}/events", response_model=EventListResponse,
+             responses={200: {"model": run_event_list()}})
     async def list_events(run_id: str) -> EventListResponse:
         _get_run_or_404(run_id)
         return EventListResponse(events=service.list_events(run_id))

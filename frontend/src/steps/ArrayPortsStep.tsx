@@ -17,6 +17,7 @@ import {
   RunEvent,
   RunRecord,
 } from '../api';
+import { latestOf } from '../events';
 import { CodeBlock, EmptyState, Guidance, Section, mono } from '../ui/blocks';
 import { InlineNotification, NotesList } from '../ui/primitives';
 import { NoValue, RESULT, ResultWord, StatusIndicator } from '../ui/status';
@@ -31,7 +32,7 @@ interface Props {
 }
 
 // SPEC-024 R8 and SPEC-025 R8, the first slices (read, plan, the printed lines; no apply). One section per tab.
-const PORTS_EVENTS = ['ports.previewed', 'ports.completed', 'ports.preview.failed'];
+const PORTS_EVENTS = ['ports.previewed', 'ports.completed', 'ports.preview.failed'] as const;
 // A plan row's words are the shared ones (SPEC-030 R9): an address to add is Create, one on the array Already there.
 const PLAN_STATE: Record<IscsiVlanActionState, ResultWord> = {
   create: RESULT.create,
@@ -282,10 +283,10 @@ export function ArrayPortsStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const running = run?.status === 'running' && run.current_phase === 'STORAGE_PORTS';
 
-  const latest = [...events].reverse().find((event) => PORTS_EVENTS.includes(event.event_type));
+  const latest = latestOf(events, ...PORTS_EVENTS);
   const failed = latest?.event_type === 'ports.preview.failed';
-  const section = (latest?.data?.iscsi as IscsiSection | null | undefined) ?? null;
-  const peer = (latest?.data?.peer as PeerSection | null | undefined) ?? null;
+  const section = latest?.data?.iscsi ?? null;
+  const peer = latest?.data?.peer ?? null;
   const rows = ports?.iscsi_network ?? [];
   const peerIntent = ports?.peer_ports ?? null;
   // An event from before the peer section kept no `error`: a failed read then had no plan.

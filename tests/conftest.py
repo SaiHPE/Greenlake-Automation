@@ -88,3 +88,27 @@ def _isolate_settings_from_dotenv(monkeypatch):
         "ALLETRA_DEVICE_CA_BUNDLE",
     ):
         monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _validate_emitted_events(monkeypatch):
+    """STANDARD T4: every event emitted during a test is registered in domain.events and its payload
+    validates against the model that entry declares."""
+    import inspect
+
+    from alletra_onboard.application.runs.coordinator import RunCoordinator
+    from alletra_onboard.domain.events import EVENT_TYPES
+
+    real = RunCoordinator._append
+    sig = inspect.signature(real)
+
+    def checked(self, *args, **kwargs):
+        bound = sig.bind(self, *args, **kwargs)
+        bound.apply_defaults()
+        event_type = bound.arguments["event_type"]
+        entry = EVENT_TYPES.get(event_type)
+        assert entry is not None, f"unregistered event_type: {event_type!r}"
+        entry.data.model_validate(bound.arguments.get("data") or {})
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(RunCoordinator, "_append", checked)

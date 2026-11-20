@@ -2,8 +2,9 @@ import { Box, DataTable, Text } from 'grommet';
 import { Connect } from 'grommet-icons';
 import { ComponentProps, ReactNode, useEffect, useRef, useState } from 'react';
 import {
-  RunEvent, RunRecord, zoningPlan, zoningPreview, ZoningPlan, ZoningReport,
+  RunEvent, RunRecord, zoningPlan, zoningPreview,
 } from '../api';
+import { latestOf } from '../events';
 import { DiscoveryFreshness, discoveryReadAt, isDiscoveryStale } from '../ui/discoveryAge';
 import { DoneList, EmptyState, Guidance, PartsBar } from '../ui/blocks';
 import { TableSummary } from '../ui/primitives';
@@ -119,14 +120,9 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const running = run?.status === 'running';
 
-  const report =
-    ([...events]
-      .reverse()
-      .find((event) => ['zoning.previewed', 'zoning.proper'].includes(event.event_type))?.data?.report as
-      | ZoningReport
-      | undefined) ?? null;
-  const planEvent = [...events].reverse().find((event) => event.event_type === 'zoning.plan');
-  const plan = (planEvent?.data?.plan as ZoningPlan | undefined) ?? null;
+  const report = latestOf(events, 'zoning.previewed', 'zoning.proper')?.data?.report ?? null;
+  const planEvent = latestOf(events, 'zoning.plan');
+  const plan = planEvent?.data?.plan ?? null;
 
   // The report carries one row per host and fabric; the operator thinks in hosts, so roll them up.
   const byHost: Record<string, HostRow> = {};

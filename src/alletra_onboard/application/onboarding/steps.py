@@ -21,6 +21,7 @@ from alletra_onboard.application.onboarding.greenlake_provision import (
 )
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
 from alletra_onboard.config import Settings
+from alletra_onboard.domain import events
 from alletra_onboard.domain.cloudinit_url import EXAMPLE as CLOUDINIT_EXAMPLE
 from alletra_onboard.domain.cloudinit_url import normalize_cloudinit_url
 from alletra_onboard.domain.models import (
@@ -73,12 +74,12 @@ class OnboardingSteps:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.GL_DISCOVER_SERVICE)
         label = "GreenLake provisioning (dry-run)" if dry_run else "GreenLake provisioning"
-        coord.emit(run.run_id, WorkflowPhase.GL_DISCOVER_SERVICE, "step.started", f"{label} started")
+        coord.emit(run.run_id, WorkflowPhase.GL_DISCOVER_SERVICE, events.STEP_STARTED, f"{label} started")
 
         def progress(phase: WorkflowPhase, message: str) -> None:
             run.current_phase = phase
             coord.store.upsert_run(run)
-            coord.emit(run.run_id, phase, "phase.progress", message)
+            coord.emit(run.run_id, phase, events.PHASE_PROGRESS, message)
 
         service = self._provision_factory(coord.current_settings(), progress)
         result = await service.provision(item, dry_run=dry_run)
@@ -94,17 +95,17 @@ class OnboardingSteps:
         failed = result.error is not None or any(p.status == FAILED for p in result.phases)
         if failed:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE)
-            coord.emit(run.run_id, run.current_phase, "step.failed", result.error or f"{label} failed")
+            coord.emit(run.run_id, run.current_phase, events.STEP_FAILED, result.error or f"{label} failed")
         elif dry_run:
             coord.set_state(run, RunStatus.READY, WorkflowPhase.PREFLIGHT)
-            coord.emit(run.run_id, WorkflowPhase.PREFLIGHT, "step.completed", f"{label} completed — no writes made")
+            coord.emit(run.run_id, WorkflowPhase.PREFLIGHT, events.STEP_COMPLETED, f"{label} completed — no writes made")
         else:
             after = next_enabled_phase(run.mode, run.selected_steps, "greenlake")
             coord.set_state(run, RunStatus.READY, after)
             coord.emit(
                 run.run_id,
                 WorkflowPhase.GL_VERIFY_DEVICE,
-                "step.completed",
+                events.STEP_COMPLETED,
                 f"{label} completed — {_next_hint(after)}",
             )
 
@@ -132,7 +133,7 @@ class OnboardingSteps:
         coord.emit(
             run.run_id,
             WorkflowPhase.CLOUDINIT_CONNECT,
-            "step.started",
+            events.STEP_STARTED,
             f"Cloud Connectivity Wizard started -> {item.cloudinit_url}",
         )
         review_ready = False
@@ -152,7 +153,7 @@ class OnboardingSteps:
                 coord.emit(
                     run.run_id,
                     WorkflowPhase.CLOUDINIT_CONNECT,
-                    "phase.progress",
+                    events.PHASE_PROGRESS,
                     f"The array is still initializing its system — the wizard is not ready yet{waited}.",
                 )
             elif message.startswith("wizard_pending"):
@@ -162,7 +163,7 @@ class OnboardingSteps:
                 coord.emit(
                     run.run_id,
                     WorkflowPhase.CLOUDINIT_CONNECT,
-                    "phase.progress",
+                    events.PHASE_PROGRESS,
                     f"Waiting for the wizard interface to load ({minutes} min so far)…",
                 )
             elif message == "review_ready":
@@ -171,21 +172,21 @@ class OnboardingSteps:
                 coord.emit(
                     run.run_id,
                     WorkflowPhase.CLOUDINIT_CONNECT,
-                    "operator.review_ready",
+                    events.OPERATOR_REVIEW_READY,
                     "Wizard filled — review the values in the browser and click Submit",
                 )
             elif message == "reasserted":
                 coord.emit(
                     run.run_id,
                     WorkflowPhase.CLOUDINIT_CONNECT,
-                    "phase.progress",
+                    events.PHASE_PROGRESS,
                     "Network values had decayed to the link-local default — re-filled and re-verifying before submit",
                 )
             elif message == "applying":
                 coord.emit(
                     run.run_id,
                     WorkflowPhase.CLOUDINIT_CONNECT,
-                    "phase.progress",
+                    events.PHASE_PROGRESS,
                     "Network values verified on the Review screen — applying configuration and connecting the array…",
                 )
             elif message == "refused":
@@ -197,13 +198,13 @@ class OnboardingSteps:
         if result in (BrowserResultStatus.SUCCEEDED, BrowserResultStatus.ALREADY_DONE):
             after = next_enabled_phase(run.mode, run.selected_steps, "cloudinit")
             coord.set_state(run, RunStatus.READY, after)
-            coord.emit(run.run_id, WorkflowPhase.CLOUDINIT_CONNECT, "step.completed", f"Array connected — {_next_hint(after)}")
+            coord.emit(run.run_id, WorkflowPhase.CLOUDINIT_CONNECT, events.STEP_COMPLETED, f"Array connected — {_next_hint(after)}")
         elif result == BrowserResultStatus.WAITING_FOR_OPERATOR and review_ready:
             coord.set_state(run, RunStatus.WAITING_FOR_OPERATOR)
             coord.emit(
                 run.run_id,
                 WorkflowPhase.CLOUDINIT_CONNECT,
-                "step.stalled",
+                events.STEP_STALLED,
                 "Submit was not detected (browser closed or review window expired) — re-run the step to retry",
             )
         elif refused:
@@ -213,14 +214,14 @@ class OnboardingSteps:
             coord.emit(
                 run.run_id,
                 WorkflowPhase.CLOUDINIT_CONNECT,
-                "step.failed",
+                events.STEP_FAILED,
                 "Refused to submit: the wizard kept reverting the Network IP to its link-local "
                 "default, so nothing was applied. Re-run to retry.",
             )
         elif result == BrowserResultStatus.FAILED_TERMINAL:
             coord.set_state(run, RunStatus.TERMINAL_FAILURE)
             coord.emit(
-                run.run_id, WorkflowPhase.CLOUDINIT_CONNECT, "step.failed",
+                run.run_id, WorkflowPhase.CLOUDINIT_CONNECT, events.STEP_FAILED,
                 "Invalid wizard address — it must be the array's link-local URL "
                 f"({CLOUDINIT_EXAMPLE})",
             )
@@ -229,7 +230,7 @@ class OnboardingSteps:
             coord.emit(
                 run.run_id,
                 WorkflowPhase.CLOUDINIT_CONNECT,
-                "step.failed",
+                events.STEP_FAILED,
                 last_error or "Browser automation did not complete — check the artifact screenshot and retry",
             )
 
@@ -244,7 +245,7 @@ class OnboardingSteps:
     async def _run_dscc(self, run: RunRecord, item: ArrayWorkItem, cdp_url: str) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, WorkflowPhase.DSCC_SETUP_SYSTEM)
-        coord.emit(run.run_id, WorkflowPhase.DSCC_SETUP_SYSTEM, "step.started", "DSCC Set Up System wizard started")
+        coord.emit(run.run_id, WorkflowPhase.DSCC_SETUP_SYSTEM, events.STEP_STARTED, "DSCC Set Up System wizard started")
 
         adapter = self._dscc_factory(coord.current_settings(), cdp_url)
         result = await adapter.run(item, run_id=run.run_id)
@@ -254,19 +255,19 @@ class OnboardingSteps:
             coord.emit(
                 run.run_id,
                 WorkflowPhase.DSCC_SETUP_SYSTEM,
-                "operator.credentials_ready",
+                events.OPERATOR_CREDENTIALS_READY,
                 "Filled through System — add the Credentials secret in the browser, Continue, "
                 "review, Submit, then mark the run complete",
             )
         elif result == BrowserResultStatus.FAILED_TERMINAL:
             coord.set_state(run, RunStatus.TERMINAL_FAILURE)
-            coord.emit(run.run_id, WorkflowPhase.DSCC_SETUP_SYSTEM, "step.failed", "Work item is missing required DSCC fields — fix it and re-run")
+            coord.emit(run.run_id, WorkflowPhase.DSCC_SETUP_SYSTEM, events.STEP_FAILED, "Work item is missing required DSCC fields — fix it and re-run")
         else:
             coord.set_state(run, RunStatus.RETRYABLE_FAILURE)
             coord.emit(
                 run.run_id,
                 WorkflowPhase.DSCC_SETUP_SYSTEM,
-                "step.failed",
+                events.STEP_FAILED,
                 "Could not drive the DSCC browser — make sure the debug Chrome is open on the "
                 "Set Up System wizard (Welcome), then retry",
             )

@@ -18,8 +18,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+
+from alletra_onboard.domain.events import HandoverStatus
 
 MIB_PER_TIB = 1024 * 1024
 
@@ -476,31 +478,15 @@ def read_from(data) -> HandoverReads:
                          read_at=data.handover_read_at, run_created_at=data.run_created_at)
 
 
-@dataclass(frozen=True)
-class HandoverSummary:
-    """SPEC-026 R10: the ``handover`` field of the ``asbuilt.generated`` event. None means not known
-    (the read failed), never zero."""
-
-    read_at: str | None
-    alerts_new: int | None
-    alerts_major: int | None
-    oldest_alert: str | None          # the oldest first occurrence, as the array printed it
-    cloud_alert: int | None           # the id of the New 0x060000a alert
-    read_errors: dict[str, str]
-
-    def as_event(self) -> dict:
-        return asdict(self)
-
-
 def _iso(moment: datetime | None) -> str | None:
     return _utc(moment).isoformat() if moment is not None else None
 
 
-def summarise(reads: HandoverReads) -> HandoverSummary:
+def summarise(reads: HandoverReads) -> HandoverStatus:
     alerts = reads.alerts
     first = oldest(alerts) if alerts else None
     cloud = cloud_alert(alerts) if alerts else None
-    return HandoverSummary(
+    return HandoverStatus(
         read_at=_iso(reads.read_at),
         alerts_new=None if alerts is None else len(alerts),
         alerts_major=None if alerts is None else sum(1 for a in alerts if is_full(a)),

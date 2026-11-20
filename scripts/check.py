@@ -19,6 +19,7 @@ reviewer relies on. It checks, against the branch point with origin/main:
   vulture    dead Python code at 80% confidence; today's findings are listed in quality/ceilings.toml
   pyright    backend type errors per file (pyright from frontend/node_modules, pyrightconfig.json):
              a file may not gain errors, and a file with none stays clean
+  api-types  frontend/generated/api.ts matches FastAPI's OpenAPI schema (scripts/api_types.py --check)
   types      the frontend TypeScript check (npm run typecheck)
   mockups    the design mockups' TypeScript check (tsc -p mockups --noEmit)
   ui-lint    eslint on frontend/src (npm run lint); today's violations are eslint's own list,
@@ -68,8 +69,8 @@ FIXTURES = f"{APP_REL}/tests/fixtures/"
 IMPORT_CONFIGS = ("pyproject.toml", "quality/imports-type-only.toml")
 # Files that decide, whole, what the gate measures. gate_settings() adds the parts of pyproject.toml,
 # frontend/package.json and the import contracts that do.
-GATE_FILES = ("scripts/check.py", "scripts/fitness.py", "pyrightconfig.json", "frontend/eslint.config.js",
-              "frontend/tsconfig.json")
+GATE_FILES = ("scripts/check.py", "scripts/fitness.py", "scripts/api_types.py", "pyrightconfig.json",
+              "frontend/eslint.config.js", "frontend/tsconfig.json")
 LINT_IMPORTS = "import sys; from importlinter.cli import lint_imports_command; sys.exit(lint_imports_command())"
 FITNESS_LINE = r"^fitness\["   # the last line scripts/fitness.py prints: listed, new, worse, stale
 LISTED = "each NEW, WORSE and STALE line above names the rule and says what to do"
@@ -96,6 +97,10 @@ FRONTEND_STEPS = (
     ("pyright", ["scripts/fitness.py", "pyright"], "pyright", FITNESS_LINE,
      ("STANDARD T2 (pyright): a file may not gain type errors; the lines above name the file and its "
       "first errors")),
+    ("api-types", ["scripts/api_types.py", "--check"], "openapi-typescript", r"^api-types:",
+     ("STANDARD T4: frontend/generated/api.ts is not what the backend's schema generates. Run "
+      "`.venv/bin/python scripts/api_types.py` and commit the file. Never edit it by hand. "
+      "If it still differs, your fastapi or pydantic is not the dev extra's version.")),
     ("types", ["run", "-s", "typecheck"], "typescript", "",
      "the frontend does not type-check (tsc): fix the errors above"),
     ("mockups", ["exec", "--no", "--", "tsc", "-p", "mockups", "--noEmit"], "typescript", "",
@@ -229,7 +234,7 @@ def run_tools(quick: bool) -> None:
             record(name, "FAIL", "run `npm ci` in frontend/ first")
         elif not (frontend / "node_modules" / needs).is_dir():
             record(name, "FAIL", f"{needs} is not installed: run `npm ci` in frontend/")
-        elif cmd[0] == "scripts/fitness.py":
+        elif cmd[0].startswith("scripts/"):
             run_step(name, [sys.executable, *cmd], APP, summary_line, rule)
         else:
             run_step(name, [npm, *cmd], frontend, summary_line, rule)

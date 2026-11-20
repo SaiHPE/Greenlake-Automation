@@ -1,69 +1,29 @@
 // Thin client for the FastAPI backend. In production the UI is served by the API itself
 // (same origin); in vite dev it talks to the local API on 8765 (CORS is enabled there).
+import type { components } from '../generated/api';
+
+type S = components['schemas'];
+/** What the server writes always carries every field; `?` in the schema only says a field has a default.
+ *  Old stored events may still omit fields added in later releases, so guards (`?.`, `??`) on event data stay. */
+type Wire<T> = T extends object ? { [K in keyof T]-?: Wire<T[K]> } : T;
+
 export const API = import.meta.env.DEV ? 'http://127.0.0.1:8765' : '';
 
-export interface RunRecord {
-  run_id: string;
-  serial_number: string;
-  status: string; // ready | running | waiting_for_operator | retryable_failure | ...
-  current_phase: string; // PREFLIGHT | GL_* | CLOUDINIT_CONNECT | DSCC_SETUP_SYSTEM | STORAGE_* | COMPLETE
-  mode: string; // FULL_ONBOARDING | PROVISION_ONLY | BOTH | VERIFY_ONLY | CUSTOM
-  selected_steps: string[];
-  warnings: string[];
-  updated_at: string;
-}
+export type RunRecord = Wire<S['RunRecord']>;
 
-export interface RunEvent {
-  event_id: string;
-  run_id: string;
-  phase: string;
-  event_type: string;
-  message: string;
-  created_at: string;
-  data?: Record<string, unknown>;
-}
+export type RunEvent = Wire<S['RunEventList']['events'][number]>;
+export type EventType = RunEvent['event_type'];
+export type EventOf<T extends EventType> =
+  T extends unknown
+    ? (RunEvent extends infer E ? (E extends { event_type: infer U } ? (T extends U ? E : never) : never) : never)
+    : never;
 
-export interface FieldCheck {
-  field: string;
-  expected: string;
-  actual: string | null;
-  status: 'pass' | 'mismatch' | 'not_readable';
-  critical: boolean;
-  match?: 'exact' | 'contains' | 'includes';   // SPEC-011 R3: how the comparison was made
-}
-interface HealthDetail { identifier: string; description: string; resolution: string; }
-export interface HealthIssue {
-  component: string;
-  summary: string;
-  qty: number;
-  details?: HealthDetail[];                     // SPEC-011 R1: the array's Detail rows for this component
-}
+export type FieldCheck = Wire<S['FieldCheck']>;
+export type HealthIssue = Wire<S['HealthIssue']>;
 /** SPEC-024 R6: one row of the sheet's iSCSI network tab against the array's VLAN interfaces. */
-export interface IscsiVlanCheck { nsp: string; vlan_id: number; status: 'present' | 'missing' | 'different'; differences: string[]; note?: string; }
-export interface VerificationReport {
-  reachable: boolean;
-  error: string | null;
-  checks: FieldCheck[];
-  health_issues: HealthIssue[];
-  raw: Record<string, string>;
-  iscsi_vlans?: IscsiVlanCheck[];
-  iscsi_vlans_error?: string | null;
-  peer_ports?: PeerPortCheck[];
-  peer_ports_error?: string | null;
-}
-/** SPEC-025 R6: one planned peer port as the array reads it. */
-interface PeerPortCheck { nsp: string; ok: boolean; sentence: string; }
+export type IscsiVlanCheck = Wire<S['IscsiVlanCheck']>;
 
-export interface CheckReport {
-  ok: boolean;
-  ready: boolean;
-  error: string | null;
-  missing_credentials: string[];
-  provisions: { region: string; status: string; service_manager_id: string; is_data_services: boolean }[];
-  // The TLS certificate could not be verified, so the credentials were never sent. Reported
-  // separately because "credentials rejected" sends the operator hunting the wrong problem.
-  tls_trust_failure: boolean;
-}
+export type CheckReport = Wire<S['GreenLakeCheckReport']>;
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API}${path}`, {
@@ -85,24 +45,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 // ------------------------------------------------------------------ prerequisites
-export interface FirewallRule {
-  fqdn: string;
-  port: string;
-  initiator: string;
-  purpose: string;
-}
+export type FirewallRule = Wire<S['FirewallRule']>;
 export const getFirewall = (region = 'jp1') =>
   request<{ region: string; rules: FirewallRule[] }>('GET', `/prereqs/firewall?region=${region}`);
 // The downloadable .txt the customer forwards to their network team.
 export const firewallTxtUrl = (region = 'jp1') => `${API}/prereqs/firewall.txt?region=${region}`;
 
-export interface ConnectivityResult {
-  host: string;
-  port: number;
-  reachable: boolean;
-  detail: string;
-  via: string; // the proxy the test tunnelled through ('' = direct)
-}
+export type ConnectivityResult = Wire<S['ConnectivityResultItem']>;
 // Reachability to the key HPE endpoints via the SAME path the tool uses (through the effective proxy
 // if there is one, else direct) — so a proxy-only network no longer shows everything as blocked.
 export const checkConnectivity = (region = 'jp1') =>
@@ -112,13 +61,7 @@ export const checkConnectivity = (region = 'jp1') =>
   );
 
 // Proxy: the tool auto-detects the system proxy (like the browser); a manual override can be saved.
-export interface ProxyStatus {
-  detected: string | null;   // the OS's own setting (never an echo of our override)
-  manual: string | null;     // the saved override: a host:port, or 'direct://' to force no proxy
-  effective: string | null;  // what the tool will use; null = direct
-  source: 'manual' | 'system' | 'direct' | string;
-  forced_direct: boolean;    // the operator chose to ignore any detected proxy
-}
+export type ProxyStatus = Wire<S['ProxyStatusResponse']>;
 // 'direct://' is the saved value that means "no proxy". It must be non-empty: an empty override
 // means "auto-detect", so blanking the field can never express a decision to bypass the proxy.
 export const PROXY_DIRECT = 'direct://';
@@ -166,33 +109,14 @@ export const uploadInitSheet = (contentB64: string) =>
 export const createRunFromSheet = (token: string, mode = 'FULL_ONBOARDING', selectedSteps: string[] = []) =>
   request<{ run: RunRecord }>('POST', '/runs/from-sheet', { token, mode, selected_steps: selectedSteps });
 // ADR 0013 / SPEC-008 R3: whether the run holds an array credential (from the sheet) and whose — never the password.
-export interface ArrayCredentialInfo {
-  available: boolean;
-  source: 'provisioning' | 'dscc_setup' | 'none';
-  username: string;
-  host: string;
-}
+export type ArrayCredentialInfo = Wire<S['ArrayCredentialInfo']>;
 export const getRun = (runId: string) =>
   request<{ run: RunRecord; work_item: import('./workItem').ParsedWorkItem; array_credential: ArrayCredentialInfo | null }>('GET', `/runs/${runId}`);
 export const listRuns = () => request<{ runs: RunRecord[] }>('GET', '/runs');
 
 // ------------------------------------------------------------------ device trust (trusted on first contact)
 /** One on-site device this run trusts: what it presented on first contact. Fingerprints only. */
-export interface TrustedDevice {
-  kind: 'ssh' | 'tls';
-  host: string;
-  port: number;
-  device: string;
-  key_type: string;
-  fingerprint: string;
-  trusted_at: string;
-  how: 'first_contact' | 'retrusted';
-  previous_fingerprint: string | null;
-  /** A different key the device presented since; the tool refused it and sent nothing. */
-  refused_key_type: string | null;
-  refused_fingerprint: string | null;
-  refused_at: string | null;
-}
+export type TrustedDevice = Wire<S['DevicePinInfo']>;
 export const getTrustedDevices = (runId: string) =>
   request<{ devices: TrustedDevice[]; device_ca_bundle: string | null }>('GET', `/runs/${runId}/trust`);
 export const retrustDevice = (runId: string, device: TrustedDevice, fingerprint: string) =>
@@ -221,25 +145,10 @@ export const markComplete = (runId: string) => request<{ run: RunRecord }>('POST
 
 // As-built document (the last step): read the array read-only and build the HPE .docx. The password is
 // used only for the SSH session. Download the generated file from the URL below.
-export interface AsBuiltResult {
-  serial: string; name: string; customer: string; size: number;
-  // Anything that did not fill: a section whose heading was not found, or a <placeholder> still
-  // visible in the finished document. The document is always produced (operator decision), so
-  // these must be shown prominently before it is sent.
-  warnings: string[];
-  // What the array said about itself when the document was made; absent on documents made before it.
-  handover?: HandoverStatus | null;
-}
+export type AsBuiltResult = Wire<S['AsBuiltData']>;
 // SPEC-026 R10: from the same reads as the document's status section. A null figure
 // is not known (its read failed, named in read_errors and in the warnings), never zero.
-export interface HandoverStatus {
-  read_at: string | null;
-  alerts_new: number | null;
-  alerts_major: number | null;      // Major, Critical or Fatal
-  oldest_alert: string | null;      // the oldest first occurrence, as the array printed it
-  cloud_alert: number | null;       // the alert saying the array is disconnected from Data Services Cloud Console
-  read_errors: Record<string, string>;
-}
+export type HandoverStatus = Wire<S['HandoverStatus']>;
 export const startAsbuilt = (
   runId: string, override: CredentialOverride, customer = '', site = '',
   applicationWorkload = '', purpose = '',
@@ -274,158 +183,31 @@ export const consoleStreamUrl = (runId: string) => `${API}/runs/${runId}/console
 export const consoleLogTxtUrl = (runId: string) => `${API}/runs/${runId}/console/log?format=txt`;
 
 // ------------------------------------------------------------------ storage provisioning (Phase 2)
-export interface ArrayPort {
-  node: number; slot: number; card_port: number;
-  protocol: 'fc' | 'iscsi';
-  wwpn: string; address: string; link_state: string;
-  fabric: 'odd' | 'even' | null;
-  fabric_switch: string; // switch the port attaches to (showportdev fcfabric); '' if by parity
-  port_type: string;     // showport Type — the array's own role: host | free | disk | cluster
-  usage: string;         // showport Label — FREE TEXT an operator typed. Display only; never classify on it.
-}
+export type ArrayPort = Wire<S['ArrayPort']>;
 // A non-host-facing ethernet data port: file services or RCIP replication. Kept out of ArrayPort so
 // these can never appear as zoning candidates.
-export interface EthernetPort {
-  node: number; slot: number; card_port: number;
-  role: string;          // file | rcip | free (capable, not yet configured)
-  mode: string; link_state: string;
-  address: string; prefix_len: string; netmask: string; ip_disabled: boolean;
-  gateway: string; vlan: string; mtu: string; rate: string;
-  eth: string; link: string; duplex: string; autoneg: string; failover_ips: string[];
-}
-interface HostHba {
-  host_name: string; wwpn: string; model: string | null; os: string | null;
-  fabric: 'odd' | 'even' | null;
-}
-// From `showhost -d` — the array's curated host view: each FC WWPN -> the n:s:p ports it's logged
-// into (empty = configured but not logged in / not zoned).
-interface ArrayHost {
-  name: string; persona: string; wwpns: Record<string, string[]>;
-  iqns: Record<string, string[]>; addresses: Record<string, string>;
-}
+export type EthernetPort = Wire<S['EthernetPort']>;
 // One physical server, joined across vCenter, the array and the fabric name server on INITIATOR ID
 // (never on name — those namespaces do not intersect). `os` is inferred from the IQN authority or
 // the name server's OS string, and 'unknown' is a real answer rather than a failure.
-export interface DiscoveredHost {
-  name: string;
-  os: 'esxi' | 'windows' | 'linux' | 'vme' | 'unknown';
-  address: string;
-  wwpns: string[];
-  iqns: string[];
-  fabrics: string[];
-  logged_in: boolean;
-  array_host_name: string;
-  sources: string[];
-  // SPEC-009: identity is not OS; whose host it is; what the per-source tables used to show.
-  identified?: boolean;
-  in_run?: boolean;
-  persona?: string;
-  os_text?: string;
-  ports?: Record<string, string[]>;
-  // SPEC-014 R1/R2.
-  serial_number?: string;
-  lookup?: string;
-  host_read?: string;
-  multipath?: string;
-  // Linux only: ok | uneven | degraded | none | not_set_up | not_permitted | timed_out.
-  multipath_state?: string;
-}
+export type DiscoveredHost = Wire<S['DiscoveredHost']>;
 // The array's file side (Unified File), read over its file API. The File ports themselves stay in
 // DiscoveryReport.file_ports (`showport -file`); nothing here repeats them.
-interface FilePortStatus { configured: boolean; online: boolean; mtu: number; }
-export interface FileNodeStatus { node: number; status: string; ports: FilePortStatus[]; }
-// MiB. OS 10.5.0 sends only total, used and available; the rest is null there.
-interface FileCapacity {
-  total: number; used: number; available: number;
-  limit_percentage: number | null; file_systems: number | null; file_shares: number | null;
-}
-interface FileService {
-  uid: string; enabled: boolean; name: string; system_wwn: string; domain: string;
-  ransomware_check: boolean | null; nodes: FileNodeStatus[]; capacity: FileCapacity | null;
-}
-interface ClientRule { address: string; access: string; options: string; }
-export interface FileSystemRecord {
-  uid: string; id: number | null; name: string; state: string; size_mib: number; vv_size_mib: number | null;
-  reduce: boolean; prov: string; share_count: number; owner_node: number; volumes: string[];
-}
+export type FileNodeStatus = Wire<S['FileNodeStatus']>;
+export type FileSystemRecord = Wire<S['FileSystemRecord']>;
 // The array calls it a file share setting; on screen it is a client group.
-export interface ClientGroup {
-  uid: string; id: number | null; name: string; state: string; clients: ClientRule[];
-  host_count: number | null; share_count: number | null;
-}
-export interface FileShareRecord {
-  uid: string; id: number | null; name: string; state: string; file_system: string; client_group: string;
-  mount_path: string; protocols: string[]; host_ip: string;
-}
+export type ClientGroup = Wire<S['ClientGroup']>;
+export type FileShareRecord = Wire<S['FileShareRecord']>;
 // `service` is null when the file API was not read or refused; `notes` says why, one sentence each.
-export interface FileReport {
-  os_version: string; array_serial: string; service: FileService | null;
-  file_systems: FileSystemRecord[]; client_groups: ClientGroup[]; shares: FileShareRecord[]; notes: string[];
-}
-export interface DiscoveryReport {
-  array_ports: ArrayPort[];
-  replication_ports: EthernetPort[];
-  file_ports: EthernetPort[];
-  // null on an array with no File ports and the file service off; absent in a report from an older build.
-  file?: FileReport | null;
-  host_hbas: HostHba[];
-  array_hosts: ArrayHost[];
-  hosts: DiscoveredHost[];
-  notes: string[];
-  error: string | null;
-}
-interface ExpectedZone {
-  fabric: 'odd' | 'even'; switch_host: string; name: string;
-  host_wwpn: string; array_wwpn: string; present: boolean;
-}
-interface ZoneRemediation {
-  fabric: 'odd' | 'even'; switch_host: string; cfg_name: string; commands: string[];
-}
-export interface ZoningReport {
-  expected: ExpectedZone[]; remediations: ZoneRemediation[];
-  proper: boolean;
-  zoned_hosts: string[];     // per-host provisioning gate; other hosts are skipped by name
-  unverified_hosts: string[]; // expected hosts seen on neither fabric — not zoned OR offline
-  iscsi_hosts?: Record<string, string[]>; // iSCSI-only host -> array ports its IQN is logged in on ([] = not)
-  source: string;             // 'array' — verified from showportdev ns, no switch
-  notes: string[]; error: string | null;
-}
+export type FileReport = Wire<S['FileReport']>;
 // The read-only assisted zoning plan (ADR 0004): per-fabric SIST candidates the operator SELECTS
 // from and names. already_zoned pairs render pre-selected + disabled; the preview only ever
 // creates the operator-selected delta. Rendering itself lives in the backend (POST /zoning/render)
 // so the command grammar has exactly one implementation.
-export interface AliasedWwpn {
-  wwpn: string; display: string; role: 'host' | 'array'; fabric: string; nsp: string;
-  node?: number | null;                // array controller node from n:s:p (null for a host)
-  host_name: string;
-  host_source: string;                 // vcenter | sheet | array | switch | '' (array port)
-  os?: string;                         // host OS where a source reports one
-  placed_on_switch?: string;           // host reached via nscamshow: the remote switch it sits on
-  existing_aliases: string[]; suggested_alias: string;
-  proposed_alias?: string;             // convention pre-fill when NO alias exists (UI only)
-  caution: string;  // non-empty = select knowingly (RCFC/Peer-labelled port)
-}
-export interface FabricZonePlan {
-  fabric: string; switch_host: string; active_cfg: string;
-  switch_name?: string; fabric_name?: string; switch_count?: number;
-  hosts: AliasedWwpn[]; array_ports: AliasedWwpn[];
-  pairs: [string, string][]; already_zoned: [string, string][];
-  zone_names?: Record<string, string[]>;   // "host|array" -> effective zone name(s) covering the pair
-  defined_names?: string[];                // every alias/zone/cfg name the switch already defines
-  // SPEC-025 R7: the peer-port block (this array's peer ports, the source array's ports, their pairs)
-  peer_ports?: AliasedWwpn[]; sources?: AliasedWwpn[];
-  peer_pairs?: [string, string][]; peer_already_zoned?: [string, string][];
-}
-export interface ZoningPlan {
-  fabrics: FabricZonePlan[]; offline_hosts: string[]; notes: string[]; error: string | null;
-}
-export interface ZoningRenderResult {
-  commands: Record<string, string[]>;
-  skipped: Record<string, string[]>;
-  warnings?: Record<string, string[]>;   // legal-but-non-portable alias names (FOS 8.1+)
-  peer_commands?: Record<string, string[]>;   // SPEC-025 R7: the peer-port block, per fabric
-  peer_skipped?: Record<string, string[]>;
-}
+export type AliasedWwpn = Wire<S['AliasedWwpn']>;
+export type FabricZonePlan = Wire<S['FabricZonePlan']>;
+export type ZoningPlan = Wire<S['ZoningPlan-Output']>;
+export type ZoningRenderResult = Wire<S['ZoningRenderResponse']>;
 export const renderZoningCommands = (
   plan: ZoningPlan, aliases: Record<string, string>, selectedPairs: [string, string][], runId?: string,
 ) => request<ZoningRenderResult>('POST', '/zoning/render', {
@@ -434,43 +216,26 @@ export const renderZoningCommands = (
 // stageZoning + the ZoningStageResult models were removed on 2026-09-02 (ADR 0012). They posted to
 // /runs/{id}/zoning/stage, which wrote zones to the switch. renderZoning above is the whole zoning
 // output now: the command set a consultant applies by hand.
-export type PlanState = 'create' | 'exists' | 'update' | 'conflict';
-export interface PlannedAction {
-  kind: string; name: string; description: string;
-  state: PlanState; reason: string;           // SPEC-001: what apply will do, and why
-  exists: boolean; detail: Record<string, unknown>;
-}
+export type PlannedAction = Wire<S['PlannedAction']>;
+export type PlanState = PlannedAction['state'];
 // plan_id: the apply quotes it back, and the server refuses any other (an older event may lack it).
-export interface ProvisioningPlan { actions: PlannedAction[]; notes: string[]; blockers: string[]; error: string | null; plan_id?: string; }
-export interface ActionOutcome { kind: string; name: string; status: 'created' | 'exists' | 'updated' | 'failed'; detail: string; }
-export interface RemovalItem { kind: string; name: string; command: string; }        // SPEC-007
-export interface ProvisioningResult {
-  outcomes: ActionOutcome[]; removals: RemovalItem[]; removal_notes: string[]; error: string | null;
-}
+export type ProvisioningPlan = Wire<S['ProvisioningPlan']>;
+export type ActionOutcome = Wire<S['ActionOutcome']>;
+export type RemovalItem = Wire<S['RemovalItem']>;        // SPEC-007
+export type ProvisioningResult = Wire<S['ProvisioningResult']>;
 
 // The plural provisioning intent pieces + the operator dropdown-builder (ADR 0010 Stage 2).
-interface VolumeRequest { name: string; size_gib: number; provisioning_type: 'tpvv' | 'reduce'; cpg: string; vvset: string | null; }
-interface HostSetRequest { name: string; members: string[]; }
-export interface ExportRequest { source_kind: 'volume' | 'vvset'; source_name: string; target_kind: 'host' | 'hostset'; target_name: string; lun: number | null; }
-export interface DiscoveredHostBrief {
-  name: string; status: string; wwpns: string[];
-  source: string; transport: string; persona: string; fc_capable: boolean;   // SPEC-003
-}
+export type ExportRequest = Wire<S['ExportRequest']>;
+export type DiscoveredHostBrief = Wire<S['DiscoveredHostBrief']>;
 // The dropdown "palette": existing array objects + to-be-created (from the sheet) + discovered hosts.
-export interface ProvisioningObjects {
-  existing_cpgs: string[]; existing_hosts: string[]; existing_host_sets: string[];
-  existing_volumes: string[]; existing_volume_sets: string[]; array_error: string | null;
-  new_volumes: string[]; new_host_sets: string[]; new_vvsets: string[];
-  discovered_hosts: DiscoveredHostBrief[];
-  host_sets: HostSetRequest[]; exports: ExportRequest[]; // currently composed (resume)
-}
-export interface ProvisioningBuilder { host_sets: HostSetRequest[]; exports: ExportRequest[]; vvsets: Record<string, string[]>; }
-export interface ProvisioningComposition { host_sets: HostSetRequest[]; exports: ExportRequest[]; volumes: VolumeRequest[]; }
+export type ProvisioningObjects = Wire<S['ProvisioningObjects']>;
+export type ProvisioningBuilder = Wire<S['ProvisioningBuilder']>;
+export type ProvisioningComposition = Wire<S['ProvisioningComposition']>;
 
 // Read-only readiness of the array + vCenter, checked BEFORE discovery so a missing prerequisite is
 // named rather than surfacing as a failed step. Never writes to the array.
-export interface PreflightCheck { key: string; label: string; status: 'pass' | 'warn' | 'fail'; detail: string; }
-export interface PreflightReport { checks: PreflightCheck[]; ready: boolean; }
+export type PreflightCheck = Wire<S['alletra_onboard__domain__provisioning__PreflightCheck']>;
+export type PreflightReport = Wire<S['alletra_onboard__domain__provisioning__PreflightReport']>;
 export const getStoragePreflight = (runId: string) => request<PreflightReport>('GET', `/runs/${runId}/storage/preflight`);
 
 export const startDiscover = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/discover`);
@@ -486,129 +251,50 @@ export const storageApply = (runId: string, approvedPlan: string | null) =>
 
 // Tier-2 path verification (ADR 0010): read `showvlun -a` back and report, per host, whether the
 // exported LUN is actually live and over how many fabrics. Read-only; report-only (never gates).
-export type PathVerdict = 'live' | 'partial' | 'no_path';
-// SPEC-013: the ESXi host's own view, read through vCenter. Never changes the verdict.
-type EsxiViewState = 'ok' | 'degraded' | 'absent' | 'not_in_vcenter' | 'not_read' | 'not_checked';
-interface EsxiLunPaths {
-  volume: string; naa: string; present: boolean;
-  paths_total: number; paths_active: number; paths_dead: number; adapters: string[];
-}
-export interface HostPathStatus {
-  host: string; verdict: PathVerdict;
-  hbas_with_paths: number; fabrics: string[];
-  live_volumes: string[]; dead_volumes: string[]; detail: string;
-  esxi_state?: EsxiViewState; esxi_luns?: EsxiLunPaths[]; esxi_note?: string;
-}
-export interface PathVerification { hosts: HostPathStatus[]; notes: string[]; error: string | null; }
+export type HostPathStatus = Wire<S['HostPathStatus']>;
+export type PathVerdict = HostPathStatus['verdict'];
+export type PathVerification = Wire<S['PathVerification']>;
 export const verifyPaths = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/storage/verify-paths`);
 
 // SPEC-024: the Array ports step. VLAN-tagged iSCSI addresses from the sheet's iSCSI network tab, planned
 // against what the array has. The first slice prints the array's own CLI lines; the tool sends none.
-export interface IscsiVlanRequest { nsp: string; vlan_id: number; ip: string; netmask: string; gateway: string; }
-interface PortRole { nsp: string; mode: string; state: string; type: string; protocol: string; node_wwn: string; }
-interface IscsiPortAddress { nsp: string; ip: string; netmask: string; gateway: string; peer_enabled: boolean; vlans: string; }
-interface IscsiVlanInterface { nsp: string; vlan_id: number; ip: string; netmask: string; gateway: string; mtu: string; }
-interface PortNetworkView {
-  name: string; mgmt_ip: string; mgmt_netmask: string;
-  roles: Record<string, PortRole>; iscsi_ports: IscsiPortAddress[]; vlans: IscsiVlanInterface[];
-  other_addresses: Record<string, string>;
-}
-export type IscsiVlanActionState = 'create' | 'exists' | 'conflict';
+export type IscsiVlanRequest = Wire<S['IscsiVlanRequest']>;
 // `cli` is the addr line only; a gateway goes in the separate change-window set (`gateway_window`), never sent.
-export interface IscsiVlanAction { nsp: string; vlan_id: number; state: IscsiVlanActionState; reason: string; cli: string; undo?: string; gateway_cli?: string; }
-interface IscsiNetworkPlan {
-  array: string; actions: IscsiVlanAction[]; blockers: string[]; notes: string[]; switch_handoff: string[];
-  removal_lines?: string[]; gateway_window?: string[]; gateway_notes?: string[];
-}
+export type IscsiVlanAction = Wire<S['IscsiVlanAction']>;
+export type IscsiVlanActionState = IscsiVlanAction['state'];
 /** The iSCSI section of a ports.* event: the rows read, and (after a read) the view and the plan. */
-export interface IscsiSection {
-  requests: IscsiVlanRequest[]; view?: PortNetworkView; plan?: IscsiNetworkPlan; error?: string;
-  commands_text?: string; removals_text?: string; gateway_text?: string;
-}
+export type IscsiSection = Wire<S['IscsiSection']>;
 // SPEC-025: peer ports for a migration, the second section of the Array ports step. The first slice prints
 // the commands and their undo for a consultant to paste; the tool sends none.
-export interface PeerPortRequest { nsp: string; source_wwpns: string[]; }
-export interface PeerPortIntent { ports: PeerPortRequest[]; }
-interface PeerPortState {
-  nsp: string; mode: string; state: string; type: string; protocol: string;
-  node_wwn: string; port_wwn: string; label: string; partner: string; failover_state: string;
-}
-interface PeerPortView { host: string; ports: Record<string, PeerPortState>; params: Record<string, { nsp: string; connmode: string; conntype: string }>; }
-export type PeerPortActionState = 'create' | 'exists' | 'conflict';
-export interface PeerPortAction { nsp: string; state: PeerPortActionState; reason: string; commands: string[]; undo: string[]; partner?: string; }
-interface PeerPortPlan { actions: PeerPortAction[]; blockers: string[]; notes: string[]; }
-interface PeerPortResult { changed: string[]; removals: string[]; error: string | null; sentences: string[]; }
+export type PeerPortRequest = Wire<S['PeerPortRequest']>;
+export type PeerPortIntent = Wire<S['PeerPortIntent']>;
+export type PeerPortAction = Wire<S['PeerPortAction']>;
+export type PeerPortActionState = PeerPortAction['state'];
 /** The peer section of a ports.* event: the rows, and after a read the view, the plan, the command set and
  *  its removal set, and the judgement of a read after the paste. */
-export interface PeerSection {
-  requests: PeerPortRequest[]; error?: string; view?: PeerPortView; plan?: PeerPortPlan;
-  result?: PeerPortResult | null; removals?: string[]; zones_checked?: boolean;
-  commands_text?: string; removals_text?: string; result_removals_text?: string;
-}
-export interface ArrayPorts {
-  iscsi_network: IscsiVlanRequest[]; iscsi_plan_held: boolean;
-  peer_ports: PeerPortIntent | null; peer_plan_held: boolean;
-}
+export type PeerSection = Wire<S['PeerSection']>;
+export type ArrayPorts = Wire<S['ArrayPortsResponse']>;
 export const getArrayPorts = (runId: string) => request<ArrayPorts>('GET', `/runs/${runId}/ports`);
 export const portsPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/ports/preview`);
 
 // SPEC-016: replication to a peer array. Release (a) is read-only: both arrays read, the
 // partnership found by link address, the findings, and the exists/create/conflict plan.
 // SPEC-031: a partnership is over RCIP ('IP', found by address) or Fibre Channel ('FC', found by port WWN).
-export type Transport = 'IP' | 'FC';
-interface RcipPort { nsp: string; state: string; ip: string; netmask: string; gateway: string; mtu: string; rate: string; }
-interface RcTarget { name: string; id: number | null; type: string; status: string; options: string; policy: string; }
-interface RcLink { target: string; nsp: string; address: string; status: string; }
-interface RcGroupVolume {
-  local_name: string; local_id: number | null; remote_name: string; remote_id: number | null; sync_status: string; last_sync: string;
-}
-export interface RcGroup {
-  name: string; target: string; status: string; role: string; mode: string; options: string[]; volumes: RcGroupVolume[];
-  period?: string; last_sync?: string;
-}
-export interface ReplicationArrayView {
-  host: string; name: string; serial: string; system_id: number | null; os_version: string;
-  rc_status: string; rc_health: string; rcip_ports: RcipPort[]; targets: RcTarget[]; links: RcLink[]; groups: RcGroup[];
-  cpg_free_mib: Record<string, number>; vvsets: Record<string, string[]>; read_error: string | null;
-}
-interface PartnerTarget {
-  name: string; peer_name: string; transport?: Transport; links_up: number; links_total: number; peer_links_up: number; peer_links_total: number;
-  mirror_config: boolean; modes: string[]; groups: number; own_modes: string[];
-}
-export interface Partnership {
-  target_on_primary: string; target_on_peer: string; transport?: Transport;
-  links_primary_up: number; links_peer_up: number; links_primary_total: number; links_peer_total: number; mirror_config: boolean;
-  targets?: PartnerTarget[]; target_by_mode?: Record<string, string>;
-}
-export interface ReplicationReport {
-  primary: ReplicationArrayView; peer: ReplicationArrayView; partnership: Partnership | null;
-  findings: string[]; notes: string[]; error: string | null;
-  // SPEC-031: IP and FC targets towards each other (nothing planned); the round-trip time typed on the
-  // Replication tab, which stands in for the link check over FC; the modes this run's groups replicate in.
-  mixed_transports?: boolean; rtt_ms?: number | null; modes?: string[];
-}
-interface PlannedCall { where: 'A' | 'B'; wsapi: string; cli: string; seq: number; }
-export type ReplicationActionState = 'create' | 'exists' | 'conflict';
-export interface ReplicationAction {
-  kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset' | 'rcip_port' | 'rc_service' | 'target'; name: string; where: 'A' | 'B';
-  state: ReplicationActionState; reason: string; calls: PlannedCall[]; detail: Record<string, unknown>;
-}
-export interface ReplicationPlan {
-  actions: ReplicationAction[]; blockers: string[]; notes: string[]; existing_groups: string[]; error: string | null; plan_id?: string;
-}
+export type RcGroup = Wire<S['RcGroup']>;
+export type ReplicationArrayView = Wire<S['ReplicationArrayView']>;
+export type Partnership = Wire<S['Partnership']>;
+export type Transport = Partnership['transport'];
+export type ReplicationReport = Wire<S['ReplicationReport']>;
+export type ReplicationAction = Wire<S['ReplicationAction']>;
+export type ReplicationActionState = ReplicationAction['state'];
+export type ReplicationPlan = Wire<S['ReplicationPlan']>;
 const runPost = (runId: string, tail: string, body?: unknown) =>
   request<{ run: RunRecord }>('POST', `/runs/${runId}/${tail}`, body);
 
 export const replicationPreview = (runId: string) => runPost(runId, 'replication/preview');
 // R4/R7: what the arrays said per write, and the removal lines per array (the operator pastes; the tool never runs them).
-export interface ReplicationOutcome {
-  kind: 'group' | 'peer_vvset' | 'test_volume' | 'test_vvset' | 'volume_admit' | 'start' | 'policy'
-    | 'rcip_port' | 'rc_service' | 'target' | 'ping' | 'links';
-  name: string; where: 'A' | 'B'; status: 'created' | 'exists' | 'failed' | 'skipped'; detail: string;
-}
-export interface ReplicationResult {
-  outcomes: ReplicationOutcome[]; removals_a: string[]; removals_b: string[]; notes: string[]; groups_created: string[]; error: string | null;
-}
+export type ReplicationOutcome = Wire<S['ReplicationOutcome']>;
+export type ReplicationResult = Wire<S['ReplicationResult']>;
 // SPEC-021: a plan that sets up the ports and the partnership holds only these kinds (its apply adds the pings
 // and the links). That apply is half the step: the groups are planned after it, from a fresh read.
 const PARTNERSHIP_KINDS: string[] = ['rcip_port', 'rc_service', 'target', 'ping', 'links'];
@@ -627,75 +313,32 @@ const RTT_LIMIT_MS: Record<Transport, Record<string, number>> = {
 };
 export const rttLimitMs = (transport: Transport, mode: string): number => RTT_LIMIT_MS[transport][mode] ?? 0;
 export const TRANSPORT_WORDS: Record<Transport, string> = { IP: 'over RCIP', FC: 'over Fibre Channel' };
-interface LinkPair { nsp_a: string; ip_a: string; nsp_b: string; ip_b: string; }
-export interface LinkCheckResult {
-  pair: LinkPair; status: 'measured' | 'failed'; latency_ms: number | null; pings_lost_pct: number | null; detail: string; output: string;
-}
-export interface LinkCheck {
-  at: string; duration_s: number; results: LinkCheckResult[]; unchecked: string[]; modes: string[]; notes: string[]; error: string | null;
-}
+export type LinkCheckResult = Wire<S['LinkCheckResult']>;
+export type LinkCheck = Wire<S['LinkCheck']>;
 export const replicationLinkCheck = (runId: string, durationS = 600) =>
   runPost(runId, 'replication/link-check', { duration_s: durationS });
 // R6: read-only verdict per planned group from `showrcopy` on both arrays.
-export type GroupVerdict = 'replicating' | 'syncing' | 'not_replicating';
 // `showrcopy -d groups <group>` on this array (BL-64): every column as the array printed it ("NA", "none", "").
-export interface RcVolumeDetail {
-  local_name: string; local_id: number | null; remote_name: string; remote_id: number | null; sync_status: string;
-  resync_snapshot: string; sync_snapshot: string; volume_iteration: string; resync_iteration: string; sync_iteration: string;
-  last_sync: string; local_set: string; remote_set: string;
-}
-export interface RcGroupDetail {
-  name: string; id: number | null; target: string; status: string; role: string; mode: string;
-  local_user_cpg: string; local_snap_cpg: string; remote_user_cpg: string; remote_snap_cpg: string;
-  options: string[]; period: string; last_sync: string; rpo_minutes: number | null; volumes: RcVolumeDetail[];
-}
-export interface GroupVerification {
-  group: string; peer_group: string; verdict: GroupVerdict; detail: string; next_step: string; volumes_total: number; volumes_synced: number;
-  config?: RcGroupDetail | null;
-}
-export interface ReplicationVerification { links_ok: boolean; links_detail: string; groups: GroupVerification[]; notes: string[]; error: string | null; }
+export type RcVolumeDetail = Wire<S['RcVolumeDetail']>;
+export type RcGroupDetail = Wire<S['RcGroupDetail']>;
+export type GroupVerification = Wire<S['GroupVerification']>;
+export type GroupVerdict = GroupVerification['verdict'];
+export type ReplicationVerification = Wire<S['ReplicationVerification']>;
 export const replicationVerify = (runId: string) => runPost(runId, 'replication/verify');
 
 // SPEC-017: the failover test record. P = this run's array, S = the peer.
-export type FailoverOutcome = 'pending' | 'ok' | 'failed' | 'skipped';
-type FailoverResult = 'passed' | 'failed' | 'aborted';
-interface FailoverSide {
-  array: string; group: string; present: boolean; role: string; status: string; mode: string; volumes: number; synced: number; last_sync: string;
-}
-export interface FailoverStepRecord {
-  seq: number; title: string; where: 'P' | 'S' | '-'; action: string; cli: string; expected: string;
-  started_at: string; ended_at: string; seconds: number | null; primary: FailoverSide | null; peer: FailoverSide | null;
-  outcome: FailoverOutcome; detail: string;
-}
-export interface FailoverRecord {
-  group: string; peer_group: string; mode: string; primary_array: string; peer_array: string; started_at: string; ended_at: string;
-  steps: FailoverStepRecord[]; result: FailoverResult; failed_step: number | null;
-  time_to_failover_s: number | null; time_to_synced_s: number | null; data_loss_bound: string;
-  observed_state: string; recovery_action: string; error: string | null;
-}
+export type FailoverStepRecord = Wire<S['FailoverStepRecord']>;
+export type FailoverOutcome = FailoverStepRecord['outcome'];
 export const failoverTest = (runId: string, group: string | null, confirm: string | null, authorised: boolean) =>
   runPost(runId, 'replication/failover-test', { group, confirm, authorised });
 
 export const launchBrowser = (url?: string) =>
   request<{ cdp_url: string; profile_dir: string; executable: string }>('POST', '/browser/launch', { port: 9222, url });
 
-export interface DiscoveryToolResult {
-  launched: boolean;
-  path: string | null;
-  searched: string[];
-  error: string | null;
-}
+export type DiscoveryToolResult = Wire<S['DiscoveryToolResponse']>;
 export const launchDiscoveryTool = () => request<DiscoveryToolResult>('POST', '/tools/discovery/launch');
 
-export interface ClockStatus {
-  in_sync: boolean;
-  skew_seconds: number | null;
-  local_utc: string;
-  server_utc: string | null;
-  is_admin: boolean;
-  source: string;
-  error: string | null;
-}
+export type ClockStatus = Wire<S['ClockStatus']>;
 
 const clockQuery = (url?: string) => (url ? `?url=${encodeURIComponent(url)}` : '');
 export const getClock = (url?: string) => request<ClockStatus>('GET', `/system/clock${clockQuery(url)}`);
@@ -703,33 +346,16 @@ export const syncClock = (url?: string) =>
   request<{ changed: boolean; skew_seconds_before: number; local_utc_after: string }>('POST', `/system/clock/sync${clockQuery(url)}`);
 
 // SPEC-023: a snapshot now of each volume set or volume on the Snapshots tab, and a schedule on the array.
-export type SnapshotActionState = 'create' | 'exists' | 'conflict';
-export interface SnapshotAction {
-  kind: 'snapshot' | 'schedule'; name: string; source: string; state: SnapshotActionState; reason: string;
-  members: string[]; cli: string; call: string;
-}
-export interface SnapshotPlan { actions: SnapshotAction[]; notes: string[]; blockers: string[]; error: string | null; plan_id: string; }
-export interface ArraySchedule {
-  name: string; command: string; interval: string; minute: string; hour: string; dom: string; month: string; dow: string;
-  created_by: string; status: string; alert: string; next_run: string;
-}
-// What the read found, as the previewed event carries it: the array and its schedules, not every volume.
-export interface SnapshotArraySummary {
-  host: string; name: string; os_version: string; time_zone: string; retention_max_hours: number; schedules: ArraySchedule[];
-}
-export interface SnapshotOutcome { kind: 'snapshot' | 'schedule'; name: string; source: string; status: 'created' | 'exists' | 'skipped' | 'failed'; detail: string; }
-export interface SnapshotResult {
-  outcomes: SnapshotOutcome[]; removals: RemovalItem[]; removal_notes: string[]; notes: string[];
-  schedules_created: string[]; started_at: string; error: string | null;
-}
-export interface SnapshotRowCheck {
-  source: string; schedule: string; verdict: 'scheduled' | 'taking' | 'not_scheduled' | 'none'; detail: string;
-  next_run: string; taken: number; now_ok: boolean | null; now_detail: string;
-}
-export interface SnapshotVerification { rows: SnapshotRowCheck[]; notes: string[]; error: string | null; }
-interface SnapshotRow { source: string; kind: string; schedule: string; summary: string; }
+export type SnapshotAction = Wire<S['SnapshotAction']>;
+export type SnapshotActionState = SnapshotAction['state'];
+export type SnapshotPlan = Wire<S['SnapshotPlan']>;
+export type ArraySchedule = Wire<S['ArraySchedule']>;
+export type SnapshotOutcome = Wire<S['SnapshotOutcome']>;
+export type SnapshotResult = Wire<S['SnapshotResult']>;
+export type SnapshotRowCheck = Wire<S['SnapshotRowCheck']>;
+export type SnapshotVerification = Wire<S['SnapshotVerification']>;
 // The tab's rows in words, and the id of the plan the server still holds ('' when none: it was used, or the app restarted).
-export interface SnapshotsTab { rows: SnapshotRow[]; held_plan_id: string; }
+export type SnapshotsTab = Wire<S['SnapshotsResponse']>;
 export const getSnapshots = (runId: string) => request<SnapshotsTab>('GET', `/runs/${runId}/snapshots`);
 export const snapshotsPreview = (runId: string) => request<{ run: RunRecord }>('POST', `/runs/${runId}/snapshots/preview`);
 // The server checks the tick too: it gets the plan's id only when this plan was ticked (BL-52).

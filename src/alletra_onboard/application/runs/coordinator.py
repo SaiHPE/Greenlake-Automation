@@ -15,6 +15,7 @@ import threading
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from typing import Any, overload
 from uuid import uuid4
 
 import structlog
@@ -31,8 +32,10 @@ from alletra_onboard.application.runs.apply_record import (
 from alletra_onboard.application.runs.event_bus import ConsoleBus, InMemoryEventBus
 from alletra_onboard.application.runs.trust import RunTrustBook
 from alletra_onboard.config import Settings, load_settings
+from alletra_onboard.domain import events
 from alletra_onboard.domain.approval import Approval, ApprovalError, Purpose, SaveRecord, Side
 from alletra_onboard.domain.errors import ApplyRecordError
+from alletra_onboard.domain.events import EventType, NoData
 from alletra_onboard.domain.models import (
     ArrayCredential,
     ArrayWorkItem,
@@ -169,7 +172,7 @@ class RunCoordinator:
         self.emit(
             run.run_id,
             run.current_phase,
-            "run.created",
+            events.RUN_CREATED,
             f"Run created for {item.serial_number} ({mode.value})",
         )
         return run
@@ -276,7 +279,7 @@ class RunCoordinator:
     def mark_complete(self, run_id: str) -> RunRecord:
         run = self.get_run(run_id)
         self.set_state(run, RunStatus.SUCCEEDED, WorkflowPhase.COMPLETE)
-        self.emit(run_id, WorkflowPhase.COMPLETE, "run.completed", "Operator confirmed DSCC finalize — onboarding complete")
+        self.emit(run_id, WorkflowPhase.COMPLETE, events.RUN_COMPLETED, "Operator confirmed DSCC finalize — onboarding complete")
         return run
 
     async def wait(self, run_id: str) -> None:
@@ -368,7 +371,7 @@ class RunCoordinator:
             message = f"{message} Way back: {payload['recovery_action']}"
         if (run := self.store.get_run(run_id)) is not None:
             self.set_state(run, RunStatus.RETRYABLE_FAILURE, phase)
-        self.emit(run_id, phase, event_type, message, data={key: payload})
+        self._append(run_id, phase, event_type, message, {key: payload})
         return True
 
     def recover_interrupted_applies(self) -> None:
@@ -463,9 +466,11 @@ class RunCoordinator:
         except ValueError as exc:
             raise StepPreconditionError(str(exc)) from exc
         self.store.save_device_pin(run_id, new)
-        self.emit(run_id, run.current_phase, "device.retrusted", retrusted_message(new),
-                  data={"kind": new.kind.value, "host": new.host, "port": new.port, "device": new.device,
-                        "was": pin.key.fingerprint, "now": new.key.fingerprint})
+        self.emit(
+            run_id, run.current_phase, events.DEVICE_RETRUSTED, retrusted_message(new),
+            events.RetrustData(kind=new.kind, host=new.host, port=new.port, device=new.device,
+                               was=pin.key.fingerprint, now=new.key.fingerprint),
+        )
         return new
 
     def list_commands(self, run_id: str, since: int = 0) -> list[dict]:
@@ -484,7 +489,7 @@ class RunCoordinator:
             self.emit(
                 run_id,
                 run.current_phase if run else WorkflowPhase.NOT_STARTED,
-                "step.crashed",
+                events.STEP_CRASHED,
                 str(exc) if isinstance(exc, StoredCredentialsUnreadableError) else f"{type(exc).__name__}: {str(exc)[:300]}",
             )
         finally:
@@ -503,10 +508,22 @@ class RunCoordinator:
         run.updated_at = datetime.now(UTC)
         self.store.upsert_run(run)
 
+    @overload
+    def emit(self, run_id: str, phase: WorkflowPhase, event: EventType[NoData], message: str) -> None: ...
+
+    @overload
+    def emit[D: BaseModel](self, run_id: str, phase: WorkflowPhase, event: EventType[D], message: str, data: D) -> None: ...
+
     def emit(
-        self, run_id: str, phase: WorkflowPhase, event_type: str, message: str, data: dict | None = None
+        self, run_id: str, phase: WorkflowPhase, event: EventType[Any], message: str,
+        data: BaseModel | None = None,
     ) -> None:
-        event = RunEvent(run_id=run_id, phase=phase, event_type=event_type, message=message, data=data or {})
+        self._append(run_id, phase, event.name, message, event.dump(data) if data is not None else {})
+
+    def _append(
+        self, run_id: str, phase: WorkflowPhase, event_type: str, message: str, data: dict[str, Any],
+    ) -> None:
+        event = RunEvent(run_id=run_id, phase=phase, event_type=event_type, message=message, data=data)
         self._last_phase[run_id] = phase
         self.store.append_event(event)
         if event_type in TERMINAL_APPLY_EVENTS:

@@ -9,7 +9,6 @@ import {
   RunRecord,
   SnapshotAction,
   SnapshotActionState,
-  SnapshotArraySummary,
   SnapshotOutcome,
   SnapshotPlan,
   SnapshotResult,
@@ -20,6 +19,7 @@ import {
   snapshotsPreview,
   snapshotsVerify,
 } from '../api';
+import { isOf, latestOf } from '../events';
 import { CodeBlock, Disclosure, DoneList, EmptyState, Guidance, Panel, PartsBar, Section, mono } from '../ui/blocks';
 import { NotesList } from '../ui/primitives';
 import { NoValue, RESULT, ResultWord, StatusIndicator } from '../ui/status';
@@ -37,9 +37,9 @@ interface Props {
 // SPEC-023 R10, built against mockup M21 (not reviewed before it was built). The page reads what the
 // step's events carry; every name, sentence and command comes from the server.
 const PARTS = ['Read the array', 'Review the plan', 'Create', 'Check snapshots'];
-const PREVIEW = ['snapshots.previewed', 'snapshots.preview.failed'];
-const APPLY = ['snapshots.applied', 'snapshots.apply.failed'];
-const VERIFY = ['snapshots.verified', 'snapshots.verify.failed'];
+const PREVIEW = ['snapshots.previewed', 'snapshots.preview.failed'] as const;
+const APPLY = ['snapshots.applied', 'snapshots.apply.failed'] as const;
+const VERIFY = ['snapshots.verified', 'snapshots.verify.failed'] as const;
 // What a running step is doing, by the event that started it.
 const STARTED: Record<string, string> = {
   'step.started': 'Reading the array',
@@ -51,6 +51,7 @@ const STARTED: Record<string, string> = {
 const PLAN_WORD: Record<SnapshotActionState, ResultWord> = {
   create: RESULT.create,
   exists: RESULT.already_there,
+  update: RESULT.update,
   conflict: RESULT.conflict,
 };
 const WRITE_WORD: Record<SnapshotOutcome['status'], ResultWord> = {
@@ -63,12 +64,7 @@ const WHAT: Record<SnapshotAction['kind'], string> = { snapshot: 'Snapshot now',
 // The removal set's order (SPEC-023 R6): the schedule first, so it takes no more snapshots.
 const REMOVAL_ORDER: Record<string, number> = { schedule: 0, snapshot: 1 };
 
-function latest<T>(events: RunEvent[], types: string[], key: string): T | null {
-  const event = [...events].reverse().find((item) => types.includes(item.event_type));
-  return (event?.data?.[key] as T) ?? null;
-}
-
-function latestIndex(events: RunEvent[], types: string[]): number {
+function latestIndex(events: RunEvent[], types: readonly string[]): number {
   for (let i = events.length - 1; i >= 0; i -= 1) if (types.includes(events[i].event_type)) return i;
   return -1;
 }
@@ -238,14 +234,15 @@ export function SnapshotsStep({ runId, run, events, onDone }: Props) {
   const previewed = latestIndex(mine, PREVIEW);
   const appliedAt = latestIndex(mine, APPLY);
   const verifiedAt = latestIndex(mine, VERIFY);
-  const plan = previewed >= 0 ? latest<SnapshotPlan>(mine, PREVIEW, 'plan') : null;
-  const array = previewed >= 0 ? latest<SnapshotArraySummary>(mine, PREVIEW, 'array') : null;
+  const preview = previewed >= 0 ? latestOf(mine, ...PREVIEW) : undefined;
+  const plan = preview?.data?.plan ?? null;
+  const array = preview?.data?.array ?? null;
   const planId = plan?.plan_id ?? '';
   const authorised = !!plan && authorisedFor === planId;
   // A result belongs to the plan on screen only while it is newer than the newest read.
-  const result = appliedAt > previewed ? latest<SnapshotResult>(mine, APPLY, 'result') : null;
-  const verification = verifiedAt > previewed ? latest<SnapshotVerification>(mine, VERIFY, 'verification') : null;
-  const results = mine.filter((e) => APPLY.includes(e.event_type) && e.data?.result).map((e) => e.data!.result as SnapshotResult);
+  const result = appliedAt > previewed ? (latestOf(mine, ...APPLY)?.data?.result ?? null) : null;
+  const verification = verifiedAt > previewed ? (latestOf(mine, ...VERIFY)?.data?.verification ?? null) : null;
+  const results = mine.flatMap((e) => (isOf(e, ...APPLY) && e.data?.result ? [e.data.result] : []));
   const lines = removalLines(results);
   const removalNotes = [...new Set(results.flatMap((r) => r.removal_notes))];
   const madeHere = [...new Set(results.flatMap((r) => r.schedules_created))];
@@ -323,7 +320,7 @@ export function SnapshotsStep({ runId, run, events, onDone }: Props) {
     readAgainInList = true;
   }
 
-  const time = (types: string[]) => hhmm(mine[latestIndex(mine, types)]?.created_at);
+  const time = (types: readonly string[]) => hhmm(mine[latestIndex(mine, types)]?.created_at);
   let status: StepStatus | undefined;
   if (doing) {
     status = { state: 'running', title: doing, message: progress };

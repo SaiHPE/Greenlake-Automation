@@ -2,14 +2,12 @@ import { Box, DataTable, FormField, ResponsiveContext, Select, Text, TextInput }
 import { useContext, useState } from 'react';
 import {
   FailoverOutcome,
-  FailoverRecord,
   FailoverStepRecord,
-  ReplicationReport,
-  ReplicationResult,
   RunEvent,
   RunRecord,
   failoverTest,
 } from '../api';
+import { latestOf } from '../events';
 import { CodeBlock, Guidance, Panel, Section } from '../ui/blocks';
 import { InlineNotification } from '../ui/primitives';
 import { NoValue, RESULT, ResultWord, StatusIndicator } from '../ui/status';
@@ -45,11 +43,6 @@ const SEQUENCE: Array<Pick<FailoverStepRecord, 'seq' | 'title' | 'where' | 'expe
   { seq: 6, title: 'Restore the natural direction', where: 'S', expected: 'Primary/Started on P; Secondary/Started on S; Synced' },
 ];
 
-function latest<T>(events: RunEvent[], types: string[], key: string): T | null {
-  const event = [...events].reverse().find((item) => types.includes(item.event_type));
-  return (event?.data?.[key] as T) ?? null;
-}
-
 function sideText(side: FailoverSideLike | null): string | null {
   if (!side) return null;
   if (!side.present) return 'not on the array';
@@ -77,11 +70,14 @@ export function FailoverTestStep({ runId, run, events, onDone }: Props) {
   const [typed, setTyped] = useState('');
   const running = run?.status === 'running';
 
-  const report = latest<ReplicationReport>(events, ['replication.previewed'], 'report');
-  const result = latest<ReplicationResult>(events, ['replication.applied', 'replication.apply.failed'], 'result');
-  const record = latest<FailoverRecord>(events, ['failover.completed', 'failover.failed'], 'record');
+  const report = latestOf(events, 'replication.previewed')?.data?.report ?? null;
+  const result = latestOf(events, 'replication.applied', 'replication.apply.failed')?.data?.result ?? null;
+  const record = latestOf(events, 'failover.completed', 'failover.failed')?.data?.record ?? null;
   const lastStart = events.map((e) => e.event_type).lastIndexOf('failover.started');
-  const lastEnd = Math.max(...['failover.completed', 'failover.failed'].map((t) => events.map((e) => e.event_type).lastIndexOf(t)));
+  const lastEnd = Math.max(
+    events.map((e) => e.event_type).lastIndexOf('failover.completed'),
+    events.map((e) => e.event_type).lastIndexOf('failover.failed'),
+  );
   const testing = running && lastStart > lastEnd;
   const aName = report?.primary.name || 'this array';
   const bName = report?.peer.name || 'the peer';

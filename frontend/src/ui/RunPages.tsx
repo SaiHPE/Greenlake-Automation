@@ -2,6 +2,7 @@ import { Anchor, Box, Button, Grid, Heading, PageHeader, ResponsiveContext, Text
 import { Document, Download, LinkPrevious, Storage, Terminal } from 'grommet-icons';
 import { ReactNode, useContext, useEffect, useState } from 'react';
 import { asbuiltDownloadUrl, consoleLogTxtUrl, listRuns, RunEvent, RunRecord } from '../api';
+import { latestOf } from '../events';
 import { DocList, DocItem, EmptyState, Section, StatusLine } from './blocks';
 import { NotesList } from './primitives';
 import { StatusIcon, StepState } from './status';
@@ -215,10 +216,10 @@ export function Home({
 
 /** The files a run produces, for Run overview and the Done page. */
 export function runDocuments(runId: string, run: RunRecord | null, events: RunEvent[]): DocItem[] {
-  const zoning = [...events].reverse().find((e) => e.event_type === 'zoning.rendered');
-  const zoningCommands = (zoning?.data?.commands ?? {}) as Record<string, string[]>;
+  const zoning = latestOf(events, 'zoning.rendered');
+  const zoningCommands = zoning?.data?.commands ?? {};
   const zoningLines = Object.values(zoningCommands).reduce((n, c) => n + c.length, 0);
-  const asbuilt = [...events].reverse().find((e) => e.event_type === 'asbuilt.generated');
+  const asbuilt = latestOf(events, 'asbuilt.generated');
   return [
     asbuilt
       ? {

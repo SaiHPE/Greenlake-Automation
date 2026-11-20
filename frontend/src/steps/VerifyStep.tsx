@@ -1,7 +1,8 @@
 import { Box, Button, DataTable, Table, TableBody, TableCell, TableHeader, TableRow, Text } from 'grommet';
 import { Validate } from 'grommet-icons';
 import { useState } from 'react';
-import { CredentialOverride, FieldCheck, HealthIssue, IscsiVlanCheck, RunEvent, RunRecord, VerificationReport, startVerify } from '../api';
+import { CredentialOverride, FieldCheck, HealthIssue, IscsiVlanCheck, RunEvent, RunRecord, startVerify } from '../api';
+import { isOf, latestOf } from '../events';
 import { ArrayCredentialCard, credentialReady, useArrayCredential } from '../ui/ArrayCredentialCard';
 import { Disclosure, EmptyState, Guidance, Section, mono } from '../ui/blocks';
 import { NoValue, RESULT, ResultWord, StatusIndicator } from '../ui/status';
@@ -123,11 +124,8 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
   const [submitting, setSubmitting] = useState(false);
 
   const mine = events.filter((event) => event.phase === 'CONFIG_VERIFY');
-  const terminal = [...mine]
-    .reverse()
-    .find((event) => event.event_type === 'verify.completed' || event.event_type === 'verify.failed');
-  const report =
-    terminal?.event_type === 'verify.completed' ? ((terminal.data?.report as VerificationReport | undefined) ?? null) : null;
+  const terminal = latestOf(mine, 'verify.completed', 'verify.failed');
+  const report = terminal?.event_type === 'verify.completed' ? (terminal.data?.report ?? null) : null;
   const unreachable = terminal?.event_type === 'verify.failed' ? terminal.message : null;
   const running = submitting || mine[mine.length - 1]?.event_type === 'step.started';
 
@@ -147,9 +145,9 @@ export function VerifyStep({ runId, run, events, onDone }: Props) {
   // what differs from the workbook, in every part the report reads
   const differing = differ.length + vlansOff.length + peersOff.length;
   // SPEC-011 R5 (X-7): the check before this one, within the run, for "new since" / "cleared".
-  const completed = mine.filter((event) => event.event_type === 'verify.completed');
+  const completed = mine.filter((event) => isOf(event, 'verify.completed'));
   const previousEvent = completed.length >= 2 ? completed[completed.length - 2] : null;
-  const previous = (previousEvent?.data?.report as VerificationReport | undefined) ?? null;
+  const previous = previousEvent?.data?.report ?? null;
   const previousKeys = new Set((previous?.health_issues ?? []).map(issueKey));
   const currentKeys = new Set((report?.health_issues ?? []).map(issueKey));
   const cleared = (previous?.health_issues ?? []).filter((i) => !currentKeys.has(issueKey(i)));

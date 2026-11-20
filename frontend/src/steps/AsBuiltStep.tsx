@@ -52,7 +52,7 @@ function HandoverBlock({ status }: { status: HandoverStatus }) {
   );
 }
 
-function asBuiltFromEvent(data: Record<string, unknown> | undefined): AsBuiltResult | null {
+function asBuiltFromEvent(data: Partial<AsBuiltResult> | undefined): AsBuiltResult | null {
   if (!data || typeof data.size !== 'number' || !Array.isArray(data.warnings)) return null;
   return {
     serial: typeof data.serial === 'string' ? data.serial : '',
@@ -60,7 +60,7 @@ function asBuiltFromEvent(data: Record<string, unknown> | undefined): AsBuiltRes
     customer: typeof data.customer === 'string' ? data.customer : '',
     size: data.size,
     warnings: data.warnings.map(String),
-    handover: (data.handover as HandoverStatus | null | undefined) ?? null,
+    handover: data.handover ?? null,
   };
 }
 
