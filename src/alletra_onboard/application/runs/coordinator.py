@@ -1,8 +1,8 @@
 """RunCoordinator — the genuinely shared core of every step: run lifecycle, the guarded
 background-task spawner, status/phase persistence and event emission (store + SSE fan-out).
 
-Step logic itself lives in the per-context step services (application/onboarding/steps.py,
-application/storage/steps.py, application/documents/steps.py); they all compose this coordinator.
+Step logic lives in the per-context step services (onboarding, provisioning, replication,
+snapshots and documents `steps.py`); they all compose this coordinator.
 """
 
 from __future__ import annotations
