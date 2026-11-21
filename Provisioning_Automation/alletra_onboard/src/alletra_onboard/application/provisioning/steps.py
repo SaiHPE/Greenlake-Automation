@@ -19,10 +19,15 @@ from functools import partial
 
 import structlog
 
-from alletra_onboard.application.provisioning import apply, iscsi_network, storage_provision
+from alletra_onboard.application.provisioning import (
+    apply,
+    iscsi_network,
+    peer_ports,
+    peer_ports_read,
+    storage_provision,
+)
 from alletra_onboard.application.provisioning import discovery as storage_discovery
 from alletra_onboard.application.provisioning import path_verify as storage_path_verify
-from alletra_onboard.application.provisioning import peer_ports as storage_peer_ports
 from alletra_onboard.application.provisioning import preflight as storage_preflight
 from alletra_onboard.application.provisioning import zoning as storage_zoning
 from alletra_onboard.application.provisioning import zoning_plan as storage_zoning_plan
@@ -232,7 +237,7 @@ class DiscoveryZoningSteps:
         view = latest_peer_view(self._coord, run_id)
         if view is None:
             return [], {}
-        pairs = storage_peer_ports.peer_zone_pairs(intent.peer_ports, view)
+        pairs = peer_ports.peer_zone_pairs(intent.peer_ports, view)
         nsps = {p.port_wwn: nsp for nsp, p in view.ports.items() if p.port_wwn}
         return pairs, {wwpn: nsps[wwpn] for wwpn, _source in pairs if wwpn in nsps}
 
@@ -349,26 +354,26 @@ class ArrayPortsSteps:
 
         if intent.peer_ports is not None:
             peer = intent.peer_ports
-            view = await asyncio.to_thread(storage_peer_ports.read_view, intent.array)
+            view = await asyncio.to_thread(peer_ports_read.read_view, intent.array)
             if view.read_error:
                 err = f"{view.read_error}. Nothing was planned for the peer ports. Read the array again."
                 data.peer = events.PeerSection(requests=list(peer.ports), error=err)
                 failures.append(err)
             else:
                 zones = self._active_zones(run.run_id)
-                plan = storage_peer_ports.plan_peer_ports(peer, view, zones)
+                plan = peer_ports.plan_peer_ports(peer, view, zones)
                 result = None
                 before = self._before_the_paste(run.run_id, peer)
-                if before is not None and storage_peer_ports.changed_since(before[0], before[1], view):
-                    result = storage_peer_ports.read_back_peer_ports(before[0], before=before[1], after=view)
+                if before is not None and peer_ports.changed_since(before[0], before[1], view):
+                    result = peer_ports.read_back_peer_ports(before[0], before=before[1], after=view)
                 self._peer[run.run_id] = (plan, view, peer)
-                removals = storage_peer_ports.planned_removals(plan)
+                removals = peer_ports.planned_removals(plan)
                 data.peer = events.PeerSection(
                     requests=list(peer.ports), view=view, plan=plan, result=result, removals=removals,
                     zones_checked=zones is not None,
-                    commands_text=storage_peer_ports.command_set_text(plan, name),
-                    removals_text=storage_peer_ports.removal_set_text(removals, name),
-                    result_removals_text=storage_peer_ports.removal_set_text(result.removals, name) if result else "",
+                    commands_text=peer_ports.command_set_text(plan, name),
+                    removals_text=peer_ports.removal_set_text(removals, name),
+                    result_removals_text=peer_ports.removal_set_text(result.removals, name) if result else "",
                 )
                 sets = sum(1 for a in plan.actions if a.state == "create")
                 peers = sum(1 for a in plan.actions if a.state == "exists")

@@ -9,6 +9,7 @@ table at the end of the document and returns it, so the caller can reposition it
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -186,3 +187,13 @@ def format_when(iso: str) -> str:
     if not m:
         return iso
     return f"{m.group(1)} {m.group(2)}" + (" UTC" if m.group(3) else "")
+
+
+def read_failed(doc, read_errors: Mapping[str, str], command: str, warnings: list[str]) -> bool:
+    """R6: a failed read is named in the section AND in the warnings; returns True when it failed."""
+    err = read_errors.get(command)
+    if err is None:
+        return False
+    add_para(doc, f"`{command}` could not be read: {err}")
+    warnings.append(f"`{command}` could not be read ({err}); its section of the as-built is empty.")
+    return True

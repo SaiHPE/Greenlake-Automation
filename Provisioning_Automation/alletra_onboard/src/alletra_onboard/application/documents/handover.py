@@ -119,6 +119,19 @@ def _local(text: str) -> datetime | None:
     return datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S") if m else None
 
 
+def _append_alert_field(current: dict[str, str], line: str, last_key: str) -> str:
+    """Parse one `Key : Value` or wrapped continuation line into the current alert record."""
+    key, sep, value = line.partition(":")
+    if sep and key.strip() and not key.startswith(" "):
+        field_name = key.strip()
+        current[field_name] = value.strip()
+        return field_name
+    if last_key:  # a wrapped message line
+        current[last_key] = f"{current[last_key]} {line.strip()}"
+        return last_key
+    raise UnreadableReport(f"showalert: unexpected line {line.strip()!r}")
+
+
 def parse_alerts(text: str) -> list[Alert]:
     """``showalert`` or ``showalert -d`` into alerts, in the order the array printed them.
 
@@ -145,14 +158,7 @@ def parse_alerts(text: str) -> list[Alert]:
         if m and not current:
             footer = int(m.group(1))
             continue
-        key, sep, value = line.partition(":")
-        if sep and key.strip() and not key.startswith(" "):
-            last_key = key.strip()
-            current[last_key] = value.strip()
-        elif last_key:  # a wrapped message line
-            current[last_key] = f"{current[last_key]} {line.strip()}"
-        else:
-            raise UnreadableReport(f"showalert: unexpected line {line.strip()!r}")
+        last_key = _append_alert_field(current, line, last_key)
     if current:
         blocks.append(current)
 
