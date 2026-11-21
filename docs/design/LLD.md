@@ -30,6 +30,7 @@ flowchart TB
   CLI["cli/main.py (Typer)"] --> API
   subgraph API["api/"]
     APP["app.py: create_app(service)"]
+    RTS["routes/: one APIRouter per area"]
     SCH["schemas.py: request and response models"]
   end
   API --> SVC["application/service.py: OnboardingService"]
@@ -314,7 +315,8 @@ The as-built step reads the latest payload of several of these back from the sto
 
 ### 5.5 SSE streams
 
-Two streams, both in `api/app.py`, both `text/event-stream` with a `: heartbeat` comment every
+Two streams, in `api/routes/events.py` and `api/routes/console.py` (sharing `sse_stream` in
+`api/routes/common.py`), both `text/event-stream` with a `: heartbeat` comment every
 `SSE_HEARTBEAT_S = 15` seconds:
 
 | Stream | Source | Payload |
@@ -331,10 +333,14 @@ so a step's activity list never fills with commands.
 
 ## 6. HTTP routes
 
-All routes are closures inside `create_app(service)` in
-[`api/app.py`](../../src/alletra_onboard/api/app.py). Request and response models are in
+`create_app(service)` in [`api/app.py`](../../src/alletra_onboard/api/app.py) keeps `/health`,
+`/app/profile`, CORS, static UI serving and the top-level error handler, and mounts one `APIRouter`
+per area from [`api/routes/`](../../src/alletra_onboard/api/routes/) (`prereqs`, `sheets`, `runs`,
+`onboarding`, `documents`, `discovery`, `provisioning`, `replication`, `snapshots`, `trust`,
+`events`, `console`, `system`). Request and response models are in
 [`api/schemas.py`](../../src/alletra_onboard/api/schemas.py). Step routes go through
-`_start_step`, which maps errors to status codes (section 14).
+`start_step` in [`api/routes/common.py`](../../src/alletra_onboard/api/routes/common.py), which
+maps errors to status codes (section 14).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -1011,7 +1017,7 @@ Two things are process-wide on purpose:
   - `apply_proxy_env` (`application/platform/proxy.py`), at startup (`create_app`) and when the
     operator saves a proxy: sets or clears `HTTPS_PROXY`, `https_proxy`, `HTTP_PROXY`, `http_proxy`,
     and sets `NO_PROXY` / `no_proxy` (colon-free entries only).
-  - `POST /prereqs/proxy` (`api/app.py`): sets `ALLETRA_PROXY` (and saves it to `.env`), then calls
+  - `POST /prereqs/proxy` (`api/routes/prereqs.py`): sets `ALLETRA_PROXY` (and saves it to `.env`), then calls
     `apply_proxy_env`.
   - `bypass_proxy_for` (`adapters/device_trust.py`), called by the WSAPI client and the
     WSAPI v3 client (`wsapi_v3_client.py`) before they connect: adds the array's address to

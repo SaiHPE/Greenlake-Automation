@@ -35,8 +35,6 @@
 "src/alletra_onboard/adapters/greenlake/http_client.py :: GreenLakeHttpClient._record :: PLR0913" = 8
 "src/alletra_onboard/adapters/greenlake/http_client.py :: GreenLakeHttpClient.poll_async :: PLR0913" = 6
 "src/alletra_onboard/adapters/hosts/linux_ssh.py :: LinuxHostClient.__init__ :: PLR0913" = 6
-"src/alletra_onboard/api/app.py :: create_app :: C901" = 114
-"src/alletra_onboard/api/app.py :: create_app :: PLR0915" = 279
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_failover_section :: C901" = 13
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_failover_section :: PLR0912" = 13
 "src/alletra_onboard/application/documents/asbuilt.py :: _add_file_section :: C901" = 11
@@ -220,7 +218,6 @@
 "frontend/src/steps/ReplicationStep.tsx" = 38244
 "frontend/src/steps/SnapshotsStep.tsx" = 18421
 "src/alletra_onboard/adapters/array/wsapi_client.py" = 19289
-"src/alletra_onboard/api/app.py" = 34942
 "src/alletra_onboard/application/documents/asbuilt.py" = 62034
 "src/alletra_onboard/application/documents/steps.py" = 18545
 "src/alletra_onboard/application/platform/init_sheet.py" = 65775
