@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """END-TO-END VALIDATION of the provisioning + zoning code against the VZ reference environment.
 
 This drives the **shipped product functions** — not mirrors of them. Every mirror we have ever
@@ -12,7 +11,7 @@ is unreachable from anywhere else, and discovery cannot complete without it.
     pip install pydantic paramiko pyvmomi "python-3parclient>=4.2.14"
     cd Greenlake-Automation/Provisioning_Automation/alletra_onboard
     set PYTHONPATH=src
-    python -u scripts/validation/vz_validate.py
+    python -u lab/vz_validate.py
 
 Phases 1-5 and 7 are READ-ONLY. Phase 6 writes to the array. The switches are only ever read.
 Opt in explicitly:
@@ -20,7 +19,8 @@ Opt in explicitly:
     WRITE=1        phase 6 - create zz_val_* objects on the array (nothing existing is touched)
 
 NOTHING IS EVER DELETED. The zz_val_* objects are left in place for inspection; remove them with
-scripts/provisioning/ui_prov_teardown.py when you are done (it is prefix-guarded).
+archive/2026-06-standalone-scripts/provisioning/ui_prov_teardown.py when you are done
+(it is prefix-guarded).
 """
 
 from __future__ import annotations
@@ -29,7 +29,25 @@ import os
 import sys
 import traceback
 
-# --------------------------------------------------------------------------- config (env-overridable)
+from alletra_onboard.application.provisioning import apply as prov_apply
+from alletra_onboard.application.provisioning import discovery as disc
+from alletra_onboard.application.provisioning import (
+    path_verify,
+    preflight,
+    zoning,
+    zoning_plan,
+)
+from alletra_onboard.application.provisioning import storage_provision as prov
+from alletra_onboard.domain.approval import Approval
+from alletra_onboard.domain.provisioning import (
+    ExportRequest,
+    HostSetRequest,
+    ProvisioningIntent,
+    VolumeRequest,
+)
+from alletra_onboard.domain.shared import EndpointCreds
+
+# Configuration (env-overridable).
 # This repository is PUBLIC. Passwords are REQUIRED from the environment and have no defaults here
 # — never add one, not even a vendor default (docs/LESSONS.md 21).
 
@@ -58,18 +76,6 @@ DO_WRITE = os.environ.get("WRITE") == "1"
 
 PREFIX = "zz_val"          # every object this script may create starts here
 TEST_LUN = int(os.environ.get("TEST_LUN", "250"))
-
-from alletra_onboard.domain.shared import EndpointCreds                      # noqa: E402
-from alletra_onboard.domain.provisioning import (                            # noqa: E402
-    ExportRequest, HostSetRequest, ProvisioningIntent, VolumeRequest,
-)
-from alletra_onboard.application.provisioning import apply as prov_apply      # noqa: E402
-from alletra_onboard.application.provisioning import discovery as disc       # noqa: E402
-from alletra_onboard.application.provisioning import path_verify             # noqa: E402
-from alletra_onboard.application.provisioning import preflight               # noqa: E402
-from alletra_onboard.application.provisioning import storage_provision as prov  # noqa: E402
-from alletra_onboard.application.provisioning import zoning                  # noqa: E402
-from alletra_onboard.application.provisioning import zoning_plan             # noqa: E402
 
 results: list[tuple[str, str, str]] = []      # (phase, PASS/FAIL/SKIP, detail)
 
@@ -188,7 +194,7 @@ def phase_preview(intent, discovery, reachable_hosts):
     head("PHASE 5 - tier-1 PREVIEW (READ-ONLY)  [storage_provision.build_plan]")
     plan = prov.build_plan(intent, discovery, reachable_hosts=reachable_hosts)
     for a in plan.actions:
-        print(f"   {a.kind:8} {a.name:24} exists={str(a.exists):5} {a.description}")
+        print(f"   {a.kind:8} {a.name:24} exists={a.exists!s:5} {a.description}")
     for n in plan.notes:
         print(f"   NOTE: {n}")
     record("5 tier-1 preview", plan.error is None,
@@ -199,8 +205,6 @@ def phase_preview(intent, discovery, reachable_hosts):
 def phase_apply(intent, discovery, reachable_hosts, plan):
     head("PHASE 6 - tier-1 APPLY *** WRITES TO THE ARRAY ***  [provisioning.apply.apply_plan]")
     guard(intent)
-    from alletra_onboard.domain.approval import Approval
-
     approval = Approval("validation", "storage", {"A": intent.array}, save_record=lambda _m: None)
     res = prov_apply.apply_plan(prov_apply.StorageInputs(intent, discovery, reachable_hosts, plan), approval)
     for o in res.outcomes:
@@ -225,6 +229,34 @@ def phase_paths(intent, discovery, reachable_hosts):
     return rep
 
 
+def _run_phase(label: str, fn):
+    try:
+        return fn()
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc()
+        record(label, False, f"EXCEPTION {type(exc).__name__}: {exc}")
+        return None
+
+
+def _run_post_discovery(intent, discovery) -> None:
+    reachable = set() if DO_WRITE else {h.host_name for h in discovery.host_hbas}
+    zoning_rep = _run_phase("3 zoning verify", lambda: phase_zoning_verify(intent, discovery))
+    if zoning_rep and zoning_rep.zoned_hosts:
+        reachable = set(zoning_rep.zoned_hosts)
+
+    _run_phase("4 zoning plan", lambda: phase_zoning_plan(intent, discovery))
+    preview_plan = _run_phase("5 preview", lambda: phase_preview(intent, discovery, reachable))
+
+    if not DO_WRITE:
+        record("6 tier-1 apply", None, "set WRITE=1 to run")
+        record("7 tier-2 paths", None, "set WRITE=1 to run (needs the applied export)")
+    elif preview_plan is None:
+        record("6 tier-1 apply", False, "skipped — preview did not produce a plan")
+    else:
+        _run_phase("6 apply", lambda: phase_apply(intent, discovery, reachable, preview_plan))
+        _run_phase("7 paths", lambda: phase_paths(intent, discovery, reachable))
+
+
 # =========================================================================== main
 def main() -> int:
     # Print every resolved target INCLUDING usernames. These come from the environment, and a shell
@@ -235,60 +267,16 @@ def main() -> int:
     print(f"   vcenter  {VC_USER}@{VC_IP}")
     print(f"   switches {SW_USER}@{SW1_IP} (F1) / {SW_USER}@{SW2_IP} (F2)")
     print(f"   WRITE={DO_WRITE}  prefix={PREFIX}  test LUN={TEST_LUN}")
-    if VC_IP.startswith("10.99.") :
+    if VC_IP.startswith("10.99."):
         print("   NOTE: vCenter is on the isolated vault VLAN — this must run on the VZ jump box.")
     intent = make_intent()
 
-    discovery = None
-    for name, fn in (("preflight", lambda: phase_preflight(intent)),
-                     ("discovery", lambda: phase_discovery(intent))):
-        try:
-            out = fn()
-            if name == "discovery":
-                discovery = out
-        except Exception as exc:  # noqa: BLE001
-            traceback.print_exc()
-            record(f"{name}", False, f"EXCEPTION {type(exc).__name__}: {exc}")
-
+    _run_phase("preflight", lambda: phase_preflight(intent))
+    discovery = _run_phase("discovery", lambda: phase_discovery(intent))
     if discovery is None:
         print("\nDiscovery failed — the remaining phases need it. Stopping.")
     else:
-        zoning_rep = None
-        reachable = set() if DO_WRITE else {h.host_name for h in discovery.host_hbas}
-        try:
-            zoning_rep = phase_zoning_verify(intent, discovery)
-            if zoning_rep.zoned_hosts:
-                reachable = set(zoning_rep.zoned_hosts)
-        except Exception as exc:  # noqa: BLE001
-            traceback.print_exc()
-            record("3 zoning verify", False, f"EXCEPTION {type(exc).__name__}: {exc}")
-
-        preview_plan = None
-        try:
-            phase_zoning_plan(intent, discovery)
-        except Exception as exc:  # noqa: BLE001
-            traceback.print_exc()
-            record("4 zoning plan", False, f"EXCEPTION {type(exc).__name__}: {exc}")
-        try:
-            preview_plan = phase_preview(intent, discovery, reachable)
-        except Exception as exc:  # noqa: BLE001
-            traceback.print_exc()
-            record("5 preview", False, f"EXCEPTION {type(exc).__name__}: {exc}")
-
-        if DO_WRITE:
-            if preview_plan is None:
-                record("6 tier-1 apply", False, "skipped — preview did not produce a plan")
-            else:
-                for name, fn in (("6 apply", lambda: phase_apply(intent, discovery, reachable, preview_plan)),
-                                 ("7 paths", lambda: phase_paths(intent, discovery, reachable))):
-                    try:
-                        fn()
-                    except Exception as exc:  # noqa: BLE001
-                        traceback.print_exc()
-                        record(name, False, f"EXCEPTION {type(exc).__name__}: {exc}")
-        else:
-            record("6 tier-1 apply", None, "set WRITE=1 to run")
-            record("7 tier-2 paths", None, "set WRITE=1 to run (needs the applied export)")
+        _run_post_discovery(intent, discovery)
 
     head("SUMMARY")
     for phase, status, detail in results:
