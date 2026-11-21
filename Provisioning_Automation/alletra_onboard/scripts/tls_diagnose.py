@@ -6,7 +6,7 @@ Read-only. Sends no credentials. Shows, for the HPE endpoints the tool uses:
   - whether certifi alone trusts it (what httpx did BEFORE the fix),
   - whether the OS trust store trusts it (what the fix uses, and what your browser uses).
 
-Run:  python scripts\\validation\\tls_diagnose.py
+Run:  python scripts\\tls_diagnose.py
 """
 
 from __future__ import annotations
@@ -15,6 +15,20 @@ import os
 import socket
 import ssl
 import sys
+
+try:
+    import certifi as _certifi
+    _certifi_err: Exception | None = None
+except ImportError as _exc:
+    _certifi = None
+    _certifi_err = _exc
+
+try:
+    from alletra_onboard.adapters.tls import ssl_context as _ssl_context
+    _tool_err: Exception | None = None
+except ImportError as _exc:
+    _ssl_context = None
+    _tool_err = _exc
 
 HOSTS = [
     ("global.api.greenlake.hpe.com", 443),
@@ -35,13 +49,40 @@ def _name(pairs) -> str:
 def _try(ctx: ssl.SSLContext, host: str, port: int):
     """Returns (ok, detail, peer_cert_dict_or_None)."""
     try:
-        with socket.create_connection((host, port), timeout=12) as raw:
-            with ctx.wrap_socket(raw, server_hostname=host) as tls:
-                return True, f"{tls.version()}", tls.getpeercert()
+        with socket.create_connection((host, port), timeout=12) as raw, ctx.wrap_socket(
+            raw, server_hostname=host
+        ) as tls:
+            return True, f"{tls.version()}", tls.getpeercert()
     except ssl.SSLCertVerificationError as exc:
         return False, f"verify failed: {exc.verify_message or exc}", None
     except Exception as exc:  # noqa: BLE001
         return False, f"{type(exc).__name__}: {exc}", None
+
+
+def _load_certifi_ctx() -> ssl.SSLContext | None:
+    if _certifi is None:
+        print(f"\ncertifi unavailable: {_certifi_err}")
+        return None
+    try:
+        ctx = ssl.create_default_context(cafile=_certifi.where())
+        print(f"\ncertifi bundle: {_certifi.where()}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"\ncertifi unavailable: {exc}")
+        return None
+    return ctx
+
+
+def _load_tool_ctx() -> ssl.SSLContext | None:
+    if _ssl_context is None:
+        print(f"tool context unavailable (run with PYTHONPATH=src): {_tool_err}")
+        return None
+    try:
+        ctx = _ssl_context()
+        print(f"tool context  : {len(ctx.get_ca_certs())} CA certificate(s) (OS + certifi)")
+    except Exception as exc:  # noqa: BLE001 - runnable even outside the package
+        print(f"tool context unavailable (run with PYTHONPATH=src): {exc}")
+        return None
+    return ctx
 
 
 def main() -> int:
@@ -50,24 +91,12 @@ def main() -> int:
                 "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"):
         print(f"  {var}={os.environ.get(var)!r}")
 
-    try:
-        import certifi
-        certifi_ctx = ssl.create_default_context(cafile=certifi.where())
-        print(f"\ncertifi bundle: {certifi.where()}")
-    except Exception as exc:  # noqa: BLE001
-        certifi_ctx = None
-        print(f"\ncertifi unavailable: {exc}")
+    certifi_ctx = _load_certifi_ctx()
 
     os_ctx = ssl.create_default_context()          # loads the Windows ROOT store
     print(f"OS trust store: {len(os_ctx.get_ca_certs())} CA certificate(s) loaded")
 
-    try:
-        from alletra_onboard.adapters.tls import ssl_context
-        tool_ctx = ssl_context()
-        print(f"tool context  : {len(tool_ctx.get_ca_certs())} CA certificate(s) (OS + certifi)")
-    except Exception as exc:  # noqa: BLE001 - runnable even outside the package
-        tool_ctx = None
-        print(f"tool context unavailable (run with PYTHONPATH=src): {exc}")
+    tool_ctx = _load_tool_ctx()
 
     for host, port in HOSTS:
         print(f"\n=== {host}:{port} ===")
@@ -77,9 +106,10 @@ def main() -> int:
         if not ok:
             print(f"  cannot even connect: {detail}")
             continue
-        with socket.create_connection((host, port), timeout=12) as raw:
-            with peek.wrap_socket(raw, server_hostname=host) as tls:
-                der = tls.getpeercert(binary_form=True)
+        with socket.create_connection((host, port), timeout=12) as raw, peek.wrap_socket(
+            raw, server_hostname=host
+        ) as tls:
+            der = tls.getpeercert(binary_form=True)
         # The issuer shown by a SUCCESSFUL verified attempt is the informative part: on an
         # intercepted network the OS-store attempt succeeds and names the corporate CA.
         for label, ctx in (("certifi only (httpx default)", certifi_ctx),

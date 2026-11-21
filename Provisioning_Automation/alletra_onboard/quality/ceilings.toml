@@ -170,7 +170,6 @@ folders = [
   "Provisioning_Automation/alletra_onboard/docs/validation",
   "Provisioning_Automation/alletra_onboard/docs/workpackets",
   "Provisioning_Automation/alletra_onboard/lab",
-  "Provisioning_Automation/alletra_onboard/scripts/discovery",
   "Provisioning_Automation/alletra_onboard/tests/fixtures/**",
   "archive/**",
   "reference/**",

@@ -45,5 +45,6 @@ prefix, and remove all of it at the end.
 | `rc_async_failover_lab.py` | The failover test in periodic mode | Yes, see its header |
 | `rc_option1.py`, `rc_rebuild.py`, `rc_sheet.py` | Helpers the failover scripts call: pause and restore the lab's Sync groups, compose the test sheet | Yes, run by the scripts above |
 | `spec014.ps1` / `spec014.cmd` | Agentless host discovery (SPEC-014) from one workbook | No |
+| `vz_validate.py` | End-to-end validation of provisioning, zoning and path verification against the VZ reference environment | Only with `WRITE=1` (`zz_val_*` objects) |
 
 `archive/` keeps one-off explorations from the replication work (BL-20). They are not maintained.
