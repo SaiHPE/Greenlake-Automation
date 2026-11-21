@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import functools
 import operator
 from typing import Annotated, Any, Literal
@@ -7,24 +8,62 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, create_model
 
 from alletra_onboard.application.onboarding.health import GreenLakeCheckReport
-from alletra_onboard.domain.events import EVENT_TYPES
+from alletra_onboard.domain.events import EVENT_TYPES, NoData
 from alletra_onboard.domain.models import (
     ArrayCredentialInfo,
     ArrayWorkItem,
+    CommandRecord,
+    DsccSetupConfig,
     PreflightReport,
     RunEvent,
     RunMode,
     RunRecord,
+    WorkflowPhase,
 )
 from alletra_onboard.domain.network import IscsiVlanRequest
 from alletra_onboard.domain.peer_ports import PeerPortIntent
 from alletra_onboard.domain.trust import DevicePinInfo, TrustKind
+from alletra_onboard.domain.workflow import STEP_REGISTRY
 from alletra_onboard.domain.zoning import ZoningPlan
 
 
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = ""   # SPEC-006 R1: the session report names the build it tested
+
+
+class AppCapabilities(BaseModel):
+    """Optional-dependency capabilities reported by GET /app/profile."""
+
+    wsapi_sdk: bool
+    wsapi_sdk_error: str | None = None
+
+
+def app_profile_model() -> type[BaseModel]:
+    """What GET /app/profile returns: build profile, served step registry, mode presets and SDK capability.
+    Documentation only; the route returns the same dict untouched."""
+    lit: Any = Literal
+    lst: Any = list
+    dct: Any = dict
+    step_key = lit[tuple(s.key for s in STEP_REGISTRY)]
+    step_kind = lit[tuple(dict.fromkeys(s.kind for s in STEP_REGISTRY))]
+    step_fields: dict[str, Any] = {
+        "key": (step_key, ...),
+        "label": (str, ...),
+        "kind": (step_kind, ...),
+        "phase": (WorkflowPhase, ...),
+        "unavailable": (str, ""),
+    }
+    served_step = create_model("ServedStep", **step_fields)
+    profile_fields: dict[str, Any] = {
+        "profile": (str, ...),
+        "init_only": (bool, ...),
+        "title": (str, ...),
+        "steps": (lst[served_step], ...),
+        "modes": (dct[str, lst[step_key]], ...),
+        "capabilities": (AppCapabilities, ...),
+    }
+    return create_model("AppProfile", **profile_fields)
 
 
 # ------------------------------------------------------------------ config
@@ -99,7 +138,8 @@ def run_event_list() -> type[BaseModel]:
             "event_type": (lit[tuple(names)], ...),
             "data": (data, ...),
         }
-        variants.append(create_model(f"{data.__name__.removesuffix('Data')}Event", __base__=RunEvent, **fields))
+        stem = "Plain" if data is NoData else data.__name__.removesuffix("Data")
+        variants.append(create_model(f"{stem}Event", __base__=RunEvent, **fields))
     event_union: Any = functools.reduce(operator.or_, variants)
     item_type: Any = ann[event_union, Field(discriminator="event_type")]
     list_fields: dict[str, Any] = {"events": (lst[item_type], ...)}
@@ -207,7 +247,30 @@ class InitSheetComposeResponse(BaseModel):
     filename: str = "Initialisation_sheet.xlsx"
 
 
+def _derive_model(
+    name: str,
+    source: type[BaseModel],
+    *,
+    drop: tuple[str, ...] = (),
+    replace: dict[str, Any] | None = None,
+    doc: str = "",
+) -> type[BaseModel]:
+    """Derive a documentation-only model from `source.model_fields` without duplicating field definitions."""
+    unknown = (set(drop) | set(replace or ())) - set(source.model_fields)
+    if unknown:
+        raise KeyError(f"{name}: unknown field(s) not on {source.__name__}: {sorted(unknown)}")
+    fields: dict[str, Any] = {}
+    for key, info in source.model_fields.items():
+        if key in drop:
+            continue
+        fields[key] = replace[key] if replace and key in replace else (info.annotation, copy.copy(info))
+    return create_model(name, __doc__=doc or None, **fields)
+
+
 class InitSheetUploadResponse(BaseModel):
+    """Runtime response model of POST /init-sheet/upload (`work_item` stays a plain dict so its body
+    never changes). `InitSheetUploadResult` below is its documentation-only typed twin for OpenAPI."""
+
     # A single-use token for the held sheet; the run is minted later from this token + the chosen mode.
     token: str
     # The parsed work item for review (subscription_key shown; admin password / device passwords never echoed).
@@ -225,6 +288,29 @@ class InitSheetUploadResponse(BaseModel):
     # Problems in tabs that initialising the array does not use, one sentence each (the sentence that
     # refuses a run whose steps use that tab). Empty for a sheet with none.
     problems: list[str] = Field(default_factory=list)
+
+
+UploadedDsccSetup = _derive_model(
+    "UploadedDsccSetup",
+    DsccSetupConfig,
+    drop=("password",),
+    doc="DsccSetupConfig as returned by /init-sheet/upload: the admin password is never echoed.",
+)
+UploadedWorkItem = _derive_model(
+    "UploadedWorkItem",
+    ArrayWorkItem,
+    replace={"subscription_key": (str, ...), "dscc_setup": (UploadedDsccSetup, ...)},
+    doc="ArrayWorkItem as returned by /init-sheet/upload: subscription_key unmasked, dscc_setup.password omitted.",
+)
+InitSheetUploadResult = _derive_model(
+    "InitSheetUploadResult",
+    InitSheetUploadResponse,
+    replace={"work_item": (UploadedWorkItem, ...)},
+    doc=(
+        "Documentation-only typed twin of InitSheetUploadResponse with `work_item` typed; "
+        "POST /init-sheet/upload keeps response_model=InitSheetUploadResponse so its body cannot change."
+    ),
+)
 
 
 class RunFromSheetRequest(BaseModel):
@@ -301,6 +387,27 @@ class ConsoleRequest(BaseModel):
 
 class ConsoleTerminalRequest(BaseModel):
     target: Literal["array", "peer"] = "array"
+
+
+class ConsoleLogResponse(BaseModel):
+    commands: list[CommandRecord]
+
+
+class ConsoleTargetsResponse(BaseModel):
+    targets: dict[str, str]
+
+
+class ConsoleCommandResponse(BaseModel):
+    ok: bool
+    refused: bool
+    output: str
+    target: str
+
+
+class ConsoleTerminalResponse(BaseModel):
+    launched: bool
+    command: str
+    error: str | None = None
 
 
 class FailoverTestRequest(BaseModel):

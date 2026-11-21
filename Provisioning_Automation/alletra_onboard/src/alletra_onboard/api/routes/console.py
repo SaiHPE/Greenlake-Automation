@@ -8,7 +8,14 @@ from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from alletra_onboard.api.routes.common import get_run_or_404, sse_stream
-from alletra_onboard.api.schemas import ConsoleRequest, ConsoleTerminalRequest
+from alletra_onboard.api.schemas import (
+    ConsoleCommandResponse,
+    ConsoleLogResponse,
+    ConsoleRequest,
+    ConsoleTargetsResponse,
+    ConsoleTerminalRequest,
+    ConsoleTerminalResponse,
+)
 from alletra_onboard.application.runs.console import console_text
 from alletra_onboard.application.service import OnboardingService, StepPreconditionError
 
@@ -16,7 +23,10 @@ from alletra_onboard.application.service import OnboardingService, StepPrecondit
 def build_console_router(service: OnboardingService) -> APIRouter:
     router = APIRouter()
 
-    @router.get("/runs/{run_id}/console/log")
+    @router.get(
+        "/runs/{run_id}/console/log",
+        responses={200: {"model": ConsoleLogResponse, "content": {"text/plain": {}}}},
+    )
     async def console_log(run_id: str, since: int = 0, format: str = "json") -> Response:
         get_run_or_404(service, run_id)
         entries = service.coordinator.list_commands(run_id, since)
@@ -25,12 +35,12 @@ def build_console_router(service: OnboardingService) -> APIRouter:
                             headers={"Content-Disposition": f'attachment; filename="commands-{run_id[:8]}.txt"'})
         return JSONResponse({"commands": entries})
 
-    @router.get("/runs/{run_id}/console/targets")
+    @router.get("/runs/{run_id}/console/targets", responses={200: {"model": ConsoleTargetsResponse}})
     async def console_targets(run_id: str) -> dict:
         get_run_or_404(service, run_id)
         return {"targets": service.console.targets(run_id)}
 
-    @router.post("/runs/{run_id}/console")
+    @router.post("/runs/{run_id}/console", responses={200: {"model": ConsoleCommandResponse}})
     async def console_run(run_id: str, request: ConsoleRequest) -> dict:
         # SPEC-019 R3: read-only allowlist only, with the run's own credential; refusals are answered, not raised
         get_run_or_404(service, run_id)
@@ -39,7 +49,7 @@ def build_console_router(service: OnboardingService) -> APIRouter:
         except StepPreconditionError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    @router.post("/runs/{run_id}/console/terminal")
+    @router.post("/runs/{run_id}/console/terminal", responses={200: {"model": ConsoleTerminalResponse}})
     async def console_terminal(run_id: str, request: ConsoleTerminalRequest) -> dict:
         get_run_or_404(service, run_id)
         try:

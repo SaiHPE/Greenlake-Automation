@@ -1,4 +1,5 @@
 // Flat form model for the per-array work item, mirrored to/from the API's nested shape.
+import type { InitSheetUploadResult } from './api';
 
 export interface WorkItemForm {
   serial_number: string;
@@ -54,38 +55,9 @@ export const EMPTY_FORM: WorkItemForm = {
   secret_username: '3paradm',
 };
 
-export interface ParsedWorkItem {
-  serial_number?: string;
-  part_number?: string;
-  subscription_key?: string;
-  service_catalog_region_id?: string;
-  dscc_region_code?: string;
-  cloudinit_url?: string;
-  network?: {
-    mgmt_ipv4?: string;
-    mask?: string;
-    gateway?: string;
-    dns?: string[];
-    ntp?: string;
-    timezone?: string;
-    proxy_host?: string | null;
-    proxy_port?: number | string | null;
-  };
-  dscc_setup?: {
-    system_name?: string;
-    country?: string;
-    credential_name?: string;
-    username?: string;
-    contact_first_name?: string | null;
-    contact_last_name?: string | null;
-    contact_language?: string;
-    contact_company?: string | null;
-    contact_phone?: string | null;
-    contact_email?: string | null;
-  };
-}
+type ParsedWorkItem = InitSheetUploadResult['work_item'];
 
-/** Fill the form from one parsed work item returned by POST /work-items/parse. */
+/** Fill the form from one parsed work item returned by /init-sheet/upload or GET /runs/{id}. */
 export function fromParsedWorkItem(item: ParsedWorkItem): WorkItemForm {
   const network = item.network ?? {};
   const dscc = item.dscc_setup ?? {};

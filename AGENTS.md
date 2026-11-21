@@ -135,6 +135,9 @@ cd frontend && npm run mockups           # design mockups on :5175
 - Run event evolution (ADR 0032): a field added to an event payload in `domain/events.py` gets a
   default; a payload field or event type is never renamed or given a new meaning (a new meaning gets
   a new event type).
+- Initialisation routes (`/app/profile`, `/init-sheet/upload`, `/runs/from-sheet`) keep their
+  existing runtime serialisation (ADR 0032): document OpenAPI changes with
+  `responses={200: {"model": ...}}` only, never add or change `response_model=`.
 
 ## Writing style (UI text, docs, commit and pull request messages)
 

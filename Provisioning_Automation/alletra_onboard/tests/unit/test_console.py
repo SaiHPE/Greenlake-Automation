@@ -355,6 +355,16 @@ def test_the_redaction_policy_runs_over_every_record(recorded):
     assert "abc.def-ghi" not in e["result"] and GL_SECRET not in e["output"] and SUB_KEY not in e["output"]
 
 
+def test_command_log_record_never_validates_or_raises_on_unusual_values(recorded):
+    """A completed device call must never turn into an exception because of a logging field value."""
+    record_fn = command_log.record
+    record_fn(target=None, transport="ssh", command="showsys", started=0.0, ok=None, result="ok", write=None)
+    record_fn(target="10.0.0.1", transport="ssh", command="showsys", started=0.0, ok=1, result="ok", write=False)
+    assert len(recorded) == 2
+    assert recorded[0]["ok"] is None and recorded[0]["target"] is None and recorded[0]["write"] is None
+    assert recorded[1]["ok"] == 1 and type(recorded[1]["ok"]) is int
+
+
 def _vcenter(monkeypatch, *, connect=None):
     from types import SimpleNamespace as NS
 

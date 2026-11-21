@@ -71,13 +71,7 @@ export const saveProxy = (proxy: string | null) => request<ProxyStatus>('POST', 
 // Build profile — the UI brands itself + restricts the mode chooser from this. 'full' = the whole
 // platform; init_only = the "Alletra MP Initialization" accelerator (Initialization only).
 // It also carries the SERVED step registry + mode presets the wizard renders from (ADR 0011 Phase 2).
-export interface AppProfile {
-  profile: string;
-  init_only: boolean;
-  title: string;
-  steps: import('./modes').ServedStep[];
-  modes: Record<string, import('./modes').ActionKey[]>;
-}
+export type AppProfile = Wire<S['AppProfile']>;
 export const getAppProfile = () => request<AppProfile>('GET', '/app/profile');
 
 export const checkConfig = () => request<{ report: CheckReport }>('POST', '/config/check');
@@ -85,19 +79,10 @@ export const checkConfig = () => request<{ report: CheckReport }>('POST', '/conf
 // Note: the CSV intake and direct run creation endpoints still exist for the CLI, but the UI mints
 // every run from an uploaded workbook (createRunFromSheet), so it carries no client for them.
 
-export interface InitSheetUploadResult {
-  token: string; // single-use hold for the parsed sheet; the run is minted from it + the chosen mode
-  work_item: import('./workItem').ParsedWorkItem; // parsed values for review (admin/device passwords never included)
-  credentials_saved: boolean;
-  // The sheet's device endpoints without passwords (array/vcenter/switch/peer _host and _user); SPEC-006 R1.
-  targets?: Record<string, string>;
-  // SPEC-021: the Replication network tab, one line per port ("this array 0:4:4 10.93.18.11"); empty without the tab.
-  replication_ports?: string[];
-  // SPEC-023 R9: the Snapshots tab, one line per row ("zz_sn_vvs: Snapshot now · schedule zz_sn_vvs_snap, every 4 hours …"); empty without it.
-  snapshot_rows?: string[];
-  // Problems in tabs that initialising the array does not use, one sentence each. They stop only a run whose steps use that tab.
-  problems?: string[];
-}
+// Single-use hold token, parsed values for review (admin/device passwords never included),
+// device endpoints without passwords (SPEC-006 R1), Replication network lines (SPEC-021),
+// Snapshots tab lines (SPEC-023 R9), and problems in tabs onboarding does not use.
+export type InitSheetUploadResult = Wire<S['InitSheetUploadResult']>;
 // Upload the filled Initialisation_sheet.xlsx (base64). The server validates it is COMPLETE, writes
 // the GreenLake API creds to .env, and HOLDS the parsed sheet server-side — returning a token. No run
 // yet: the run is created later from this token + the chosen mode (createRunFromSheet), so device
@@ -110,8 +95,7 @@ export const createRunFromSheet = (token: string, mode = 'FULL_ONBOARDING', sele
   request<{ run: RunRecord }>('POST', '/runs/from-sheet', { token, mode, selected_steps: selectedSteps });
 // ADR 0013 / SPEC-008 R3: whether the run holds an array credential (from the sheet) and whose — never the password.
 export type ArrayCredentialInfo = Wire<S['ArrayCredentialInfo']>;
-export const getRun = (runId: string) =>
-  request<{ run: RunRecord; work_item: import('./workItem').ParsedWorkItem; array_credential: ArrayCredentialInfo | null }>('GET', `/runs/${runId}`);
+export const getRun = (runId: string) => request<Wire<S['RunDetailResponse']>>('GET', `/runs/${runId}`);
 export const listRuns = () => request<{ runs: RunRecord[] }>('GET', '/runs');
 
 // ------------------------------------------------------------------ device trust (trusted on first contact)
@@ -145,7 +129,7 @@ export const markComplete = (runId: string) => request<{ run: RunRecord }>('POST
 
 // As-built document (the last step): read the array read-only and build the HPE .docx. The password is
 // used only for the SSH session. Download the generated file from the URL below.
-export type AsBuiltResult = Wire<S['AsBuiltData']>;
+export type AsBuiltResult = Wire<S['AsBuiltResultData']>;
 // SPEC-026 R10: from the same reads as the document's status section. A null figure
 // is not known (its read failed, named in read_errors and in the warnings), never zero.
 export type HandoverStatus = Wire<S['HandoverStatus']>;
@@ -159,26 +143,15 @@ export const startAsbuilt = (
 export const asbuiltDownloadUrl = (runId: string) => `${API}/runs/${runId}/asbuilt/download`;
 
 // ------------------------------------------------------------------ console (SPEC-019)
-export interface CommandRecord {
-  seq: number;
-  at: string;
-  target: string;
-  transport: 'ssh' | 'wsapi' | 'fos' | 'vcenter' | string;
-  command: string;
-  duration_s: number;
-  ok: boolean;
-  result: string;
-  write: boolean;
-  output: string;
-}
+export type CommandRecord = Wire<S['CommandRecord']>;
 export const getConsoleLog = (runId: string, since = 0) =>
-  request<{ commands: CommandRecord[] }>('GET', `/runs/${runId}/console/log?since=${since}`);
+  request<Wire<S['ConsoleLogResponse']>>('GET', `/runs/${runId}/console/log?since=${since}`);
 export const getConsoleTargets = (runId: string) =>
-  request<{ targets: Record<string, string> }>('GET', `/runs/${runId}/console/targets`);
+  request<Wire<S['ConsoleTargetsResponse']>>('GET', `/runs/${runId}/console/targets`);
 export const runConsoleCommand = (runId: string, command: string, target: string) =>
-  request<{ ok: boolean; refused: boolean; output: string; target: string }>('POST', `/runs/${runId}/console`, { command, target });
+  request<Wire<S['ConsoleCommandResponse']>>('POST', `/runs/${runId}/console`, { command, target });
 export const openConsoleTerminal = (runId: string, target: string) =>
-  request<{ launched: boolean; command: string; error: string | null }>('POST', `/runs/${runId}/console/terminal`, { target });
+  request<Wire<S['ConsoleTerminalResponse']>>('POST', `/runs/${runId}/console/terminal`, { target });
 export const consoleStreamUrl = (runId: string) => `${API}/runs/${runId}/console/stream`;
 export const consoleLogTxtUrl = (runId: string) => `${API}/runs/${runId}/console/log?format=txt`;
 

@@ -1091,6 +1091,32 @@ export interface components {
             wwpn: string;
         };
         /**
+         * AppCapabilities
+         * @description Optional-dependency capabilities reported by GET /app/profile.
+         */
+        AppCapabilities: {
+            /** Wsapi Sdk */
+            wsapi_sdk: boolean;
+            /** Wsapi Sdk Error */
+            wsapi_sdk_error?: string | null;
+        };
+        /** AppProfile */
+        AppProfile: {
+            capabilities: components["schemas"]["AppCapabilities"];
+            /** Init Only */
+            init_only: boolean;
+            /** Modes */
+            modes: {
+                [key: string]: ("greenlake" | "cloudinit" | "dscc" | "discover" | "ports" | "zoning" | "migrate" | "provision" | "replicate" | "failover_test" | "snapshots" | "verify" | "asbuilt")[];
+            };
+            /** Profile */
+            profile: string;
+            /** Steps */
+            steps: components["schemas"]["ServedStep"][];
+            /** Title */
+            title: string;
+        };
+        /**
          * ArrayCredentialInfo
          * @description What a client may know about the run's array credential (ADR 0013 / SPEC-008 R3): whether the
          *     run holds one, where the sheet supplied it, the account and the array. Never the password.
@@ -1290,8 +1316,8 @@ export interface components {
                 [key: string]: string;
             };
         };
-        /** AsBuiltData */
-        AsBuiltData: {
+        /** AsBuiltResultData */
+        AsBuiltResultData: {
             /** Customer */
             customer: string;
             handover?: components["schemas"]["HandoverStatus"] | null;
@@ -1304,14 +1330,14 @@ export interface components {
             /** Warnings */
             warnings: string[];
         };
-        /** AsBuiltEvent */
-        AsBuiltEvent: {
+        /** AsBuiltResultEvent */
+        AsBuiltResultEvent: {
             /**
              * Created At
              * Format: date-time
              */
             created_at?: string;
-            data: components["schemas"]["AsBuiltData"];
+            data: components["schemas"]["AsBuiltResultData"];
             /** Event Id */
             event_id?: string;
             /**
@@ -1484,6 +1510,32 @@ export interface components {
              */
             cloudinit_url?: string | null;
         };
+        /**
+         * CommandRecord
+         * @description SPEC-019 R1: one stored command record in /runs/{id}/console/log and /console/stream.
+         */
+        CommandRecord: {
+            /** At */
+            at: string;
+            /** Command */
+            command: string;
+            /** Duration S */
+            duration_s: number;
+            /** Ok */
+            ok: boolean;
+            /** Output */
+            output: string;
+            /** Result */
+            result: string;
+            /** Seq */
+            seq: number;
+            /** Target */
+            target: string;
+            /** Transport */
+            transport: string;
+            /** Write */
+            write: boolean;
+        };
         /** ConfigStatusResponse */
         ConfigStatusResponse: {
             /** Configured */
@@ -1533,6 +1585,22 @@ export interface components {
              */
             via: string;
         };
+        /** ConsoleCommandResponse */
+        ConsoleCommandResponse: {
+            /** Ok */
+            ok: boolean;
+            /** Output */
+            output: string;
+            /** Refused */
+            refused: boolean;
+            /** Target */
+            target: string;
+        };
+        /** ConsoleLogResponse */
+        ConsoleLogResponse: {
+            /** Commands */
+            commands: components["schemas"]["CommandRecord"][];
+        };
         /**
          * ConsoleRequest
          * @description SPEC-019 R3: one read-only command on the run's array (`array`) or its Replication peer (`peer`).
@@ -1547,6 +1615,13 @@ export interface components {
              */
             target: "array" | "peer";
         };
+        /** ConsoleTargetsResponse */
+        ConsoleTargetsResponse: {
+            /** Targets */
+            targets: {
+                [key: string]: string;
+            };
+        };
         /** ConsoleTerminalRequest */
         ConsoleTerminalRequest: {
             /**
@@ -1555,6 +1630,15 @@ export interface components {
              * @enum {string}
              */
             target: "array" | "peer";
+        };
+        /** ConsoleTerminalResponse */
+        ConsoleTerminalResponse: {
+            /** Command */
+            command: string;
+            /** Error */
+            error?: string | null;
+            /** Launched */
+            launched: boolean;
         };
         /** CreateRunRequest */
         CreateRunRequest: {
@@ -2929,7 +3013,11 @@ export interface components {
              */
             content_b64: string;
         };
-        /** InitSheetUploadResponse */
+        /**
+         * InitSheetUploadResponse
+         * @description Runtime response model of POST /init-sheet/upload (`work_item` stays a plain dict so its body
+         *     never changes). `InitSheetUploadResult` below is its documentation-only typed twin for OpenAPI.
+         */
         InitSheetUploadResponse: {
             /**
              * Credentials Saved
@@ -2952,6 +3040,30 @@ export interface components {
             work_item: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * InitSheetUploadResult
+         * @description Documentation-only typed twin of InitSheetUploadResponse with `work_item` typed; POST /init-sheet/upload keeps response_model=InitSheetUploadResponse so its body cannot change.
+         */
+        InitSheetUploadResult: {
+            /**
+             * Credentials Saved
+             * @default true
+             */
+            credentials_saved: boolean;
+            /** Problems */
+            problems?: string[];
+            /** Replication Ports */
+            replication_ports?: string[];
+            /** Snapshot Rows */
+            snapshot_rows?: string[];
+            /** Targets */
+            targets?: {
+                [key: string]: string;
+            };
+            /** Token */
+            token: string;
+            work_item: components["schemas"]["UploadedWorkItem"];
         };
         /** IscsiNetworkPlan */
         IscsiNetworkPlan: {
@@ -3263,27 +3375,6 @@ export interface components {
         };
         /** NoData */
         NoData: Record<string, never>;
-        /** NoEvent */
-        NoEvent: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at?: string;
-            data: components["schemas"]["NoData"];
-            /** Event Id */
-            event_id?: string;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            event_type: "asbuilt.failed" | "asbuilt.started" | "operator.credentials_ready" | "operator.review_ready" | "phase.progress" | "replication.apply.started" | "replication.link_check.started" | "replication.verify.started" | "run.completed" | "run.created" | "snapshots.apply.started" | "snapshots.verify.started" | "step.completed" | "step.crashed" | "step.failed" | "step.stalled" | "step.started" | "storage.apply.started" | "storage.paths.checking" | "verify.failed";
-            /** Message */
-            message: string;
-            phase: components["schemas"]["WorkflowPhase"];
-            /** Run Id */
-            run_id: string;
-        };
         /**
          * PartnerTarget
          * @description One target on the primary whose outbound links point at the peer, with the peer's target that
@@ -3629,6 +3720,27 @@ export interface components {
              * @default false
              */
             zones_checked: boolean;
+        };
+        /** PlainEvent */
+        PlainEvent: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at?: string;
+            data: components["schemas"]["NoData"];
+            /** Event Id */
+            event_id?: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "asbuilt.failed" | "asbuilt.started" | "operator.credentials_ready" | "operator.review_ready" | "phase.progress" | "replication.apply.started" | "replication.link_check.started" | "replication.verify.started" | "run.completed" | "run.created" | "snapshots.apply.started" | "snapshots.verify.started" | "step.completed" | "step.crashed" | "step.failed" | "step.stalled" | "step.started" | "storage.apply.started" | "storage.paths.checking" | "verify.failed";
+            /** Message */
+            message: string;
+            phase: components["schemas"]["WorkflowPhase"];
+            /** Run Id */
+            run_id: string;
         };
         /** PlannedAction */
         PlannedAction: {
@@ -4675,7 +4787,7 @@ export interface components {
         /** RunEventList */
         RunEventList: {
             /** Events */
-            events: (components["schemas"]["NoEvent"] | components["schemas"]["VerifyEvent"] | components["schemas"]["AsBuiltEvent"] | components["schemas"]["DiscoveryEvent"] | components["schemas"]["ZoningCheckEvent"] | components["schemas"]["ZoningPlanEvent"] | components["schemas"]["ZoningRenderedEvent"] | components["schemas"]["PortsEvent"] | components["schemas"]["StoragePlanEvent"] | components["schemas"]["StorageResultEvent"] | components["schemas"]["PathsEvent"] | components["schemas"]["ReplicationPlanEvent"] | components["schemas"]["LinkCheckEvent"] | components["schemas"]["ReplicationResultEvent"] | components["schemas"]["ReplicationVerifyEvent"] | components["schemas"]["FailoverStartEvent"] | components["schemas"]["FailoverEvent"] | components["schemas"]["SnapshotPlanEvent"] | components["schemas"]["SnapshotResultEvent"] | components["schemas"]["SnapshotVerifyEvent"] | components["schemas"]["DeviceEvent"] | components["schemas"]["RetrustEvent"])[];
+            events: (components["schemas"]["PlainEvent"] | components["schemas"]["VerifyEvent"] | components["schemas"]["AsBuiltResultEvent"] | components["schemas"]["DiscoveryEvent"] | components["schemas"]["ZoningCheckEvent"] | components["schemas"]["ZoningPlanEvent"] | components["schemas"]["ZoningRenderedEvent"] | components["schemas"]["PortsEvent"] | components["schemas"]["StoragePlanEvent"] | components["schemas"]["StorageResultEvent"] | components["schemas"]["PathsEvent"] | components["schemas"]["ReplicationPlanEvent"] | components["schemas"]["LinkCheckEvent"] | components["schemas"]["ReplicationResultEvent"] | components["schemas"]["ReplicationVerifyEvent"] | components["schemas"]["FailoverStartEvent"] | components["schemas"]["FailoverEvent"] | components["schemas"]["SnapshotPlanEvent"] | components["schemas"]["SnapshotResultEvent"] | components["schemas"]["SnapshotVerifyEvent"] | components["schemas"]["DeviceEvent"] | components["schemas"]["RetrustEvent"])[];
         };
         /** RunFromSheetRequest */
         RunFromSheetRequest: {
@@ -4747,6 +4859,27 @@ export interface components {
          * @enum {string}
          */
         RunStatus: "not_started" | "ready" | "running" | "waiting_for_operator" | "retryable_failure" | "terminal_failure" | "succeeded";
+        /** ServedStep */
+        ServedStep: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "greenlake" | "cloudinit" | "dscc" | "discover" | "ports" | "zoning" | "migrate" | "provision" | "replicate" | "failover_test" | "snapshots" | "verify" | "asbuilt";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "init" | "provision" | "migrate" | "replicate" | "snapshot" | "verify";
+            /** Label */
+            label: string;
+            phase: components["schemas"]["WorkflowPhase"];
+            /**
+             * Unavailable
+             * @default
+             */
+            unavailable: string;
+        };
         /**
          * SnapshotAction
          * @description One planned write: the snapshot now of one row (every member at once), or its schedule.
@@ -4782,7 +4915,7 @@ export interface components {
              * State
              * @enum {string}
              */
-            state: "create" | "exists" | "update" | "conflict";
+            state: "create" | "exists" | "conflict";
         };
         /**
          * SnapshotApplyRequest
@@ -5097,6 +5230,96 @@ export interface components {
             device_ca_bundle?: string | null;
             /** Devices */
             devices: components["schemas"]["DevicePinInfo"][];
+        };
+        /**
+         * UploadedDsccSetup
+         * @description DsccSetupConfig as returned by /init-sheet/upload: the admin password is never echoed.
+         */
+        UploadedDsccSetup: {
+            /**
+             * Apply Blueprint
+             * @default false
+             */
+            apply_blueprint: boolean;
+            /** Blueprint Name */
+            blueprint_name?: string | null;
+            /** Contact Company */
+            contact_company?: string | null;
+            /** Contact Email */
+            contact_email?: string | null;
+            /** Contact First Name */
+            contact_first_name?: string | null;
+            /**
+             * Contact Language
+             * @default English
+             */
+            contact_language: string;
+            /** Contact Last Name */
+            contact_last_name?: string | null;
+            /** Contact Phone */
+            contact_phone?: string | null;
+            /** Country */
+            country: string;
+            /**
+             * Credential Name
+             * @default b10000-admin
+             */
+            credential_name: string;
+            /** System Name */
+            system_name: string;
+            /**
+             * Username
+             * @default 3paradm
+             */
+            username: string;
+        };
+        /**
+         * UploadedWorkItem
+         * @description ArrayWorkItem as returned by /init-sheet/upload: subscription_key unmasked, dscc_setup.password omitted.
+         */
+        UploadedWorkItem: {
+            /**
+             * Application Workload
+             * @default
+             */
+            application_workload: string;
+            /** Cloudinit Url */
+            cloudinit_url: string;
+            /**
+             * Customer Name
+             * @default
+             */
+            customer_name: string;
+            /** Dscc Region Code */
+            dscc_region_code: string;
+            dscc_setup: components["schemas"]["UploadedDsccSetup"];
+            network: components["schemas"]["NetworkConfig"];
+            /** Part Number */
+            part_number: string;
+            /** Serial Number */
+            serial_number: string;
+            /** Service Catalog Region Id */
+            service_catalog_region_id: string;
+            /**
+             * Site
+             * @default
+             */
+            site: string;
+            /**
+             * Storage Purpose
+             * @default
+             */
+            storage_purpose: string;
+            /** Subscription Key */
+            subscription_key: string;
+            /** Support Contact */
+            support_contact?: {
+                [key: string]: unknown;
+            };
+            /** Tags */
+            tags?: {
+                [key: string]: string;
+            };
         };
         /** ValidationError */
         ValidationError: {
@@ -5520,9 +5743,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AppProfile"];
                 };
             };
         };
@@ -5725,7 +5946,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InitSheetUploadResponse"];
+                    "application/json": components["schemas"]["InitSheetUploadResult"];
                 };
             };
             /** @description Validation Error */
@@ -6188,9 +6409,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ConsoleCommandResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6224,7 +6443,8 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConsoleLogResponse"];
+                    "text/plain": unknown;
                 };
             };
             /** @description Validation Error */
@@ -6286,9 +6506,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ConsoleTargetsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6323,9 +6541,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ConsoleTerminalResponse"];
                 };
             };
             /** @description Validation Error */

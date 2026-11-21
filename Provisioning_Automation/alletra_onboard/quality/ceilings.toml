@@ -170,12 +170,12 @@
 # 500 lines (src and frontend/src, tests left out). The file may not grow. Characters are counted, not
 # lines, so joining lines changes nothing. Splitting it only to get under a number is not a fix: a
 # split hides a decision, removes duplication or makes behaviour testable on its own.
-"frontend/src/api.ts" = 20800
+"frontend/src/api.ts" = 19955
 "frontend/src/steps/ReplicationStep.tsx" = 38244
-"frontend/src/steps/SnapshotsStep.tsx" = 18421
+"frontend/src/steps/SnapshotsStep.tsx" = 18400
 "src/alletra_onboard/adapters/array/wsapi_client.py" = 19289
 "src/alletra_onboard/application/documents/asbuilt.py" = 45944
-"src/alletra_onboard/application/documents/steps.py" = 18950
+"src/alletra_onboard/application/documents/steps.py" = 18563
 "src/alletra_onboard/application/platform/init_sheet.py" = 65775
 "src/alletra_onboard/application/provisioning/discovery.py" = 33516
 "src/alletra_onboard/application/provisioning/peer_ports.py" = 22760

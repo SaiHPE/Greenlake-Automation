@@ -93,7 +93,7 @@ class HandoverStatus(BaseModel):
     read_errors: dict[str, str]
 
 
-class AsBuiltData(BaseModel):
+class AsBuiltResultData(BaseModel):
     serial: str
     name: str
     customer: str
@@ -235,7 +235,7 @@ OPERATOR_REVIEW_READY = _plain("operator.review_ready")
 VERIFY_COMPLETED = _event("verify.completed", VerifyData)
 VERIFY_FAILED = _plain("verify.failed")
 ASBUILT_STARTED = _plain("asbuilt.started")
-ASBUILT_GENERATED = _event("asbuilt.generated", AsBuiltData)
+ASBUILT_GENERATED = _event("asbuilt.generated", AsBuiltResultData)
 ASBUILT_FAILED = _plain("asbuilt.failed")
 DISCOVER_COMPLETED = _event("discover.completed", DiscoveryData)
 ZONING_PREVIEWED = _event("zoning.previewed", ZoningCheckData)

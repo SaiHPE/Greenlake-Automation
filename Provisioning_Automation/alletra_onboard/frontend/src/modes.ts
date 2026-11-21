@@ -3,32 +3,12 @@
 // are SERVED by the backend (GET /app/profile — single source of truth: domain/workflow.py). This
 // module keeps only presentation extras (subtitles, mode labels/blurbs) and helpers over served data.
 
-export type RunMode = 'FULL_ONBOARDING' | 'PROVISION_ONLY' | 'BOTH' | 'REPLICATE' | 'MIGRATE' | 'VERIFY_ONLY' | 'CUSTOM';
+import type { AppProfile, RunRecord } from './api';
 
-export type ActionKey =
-  | 'greenlake'
-  | 'cloudinit'
-  | 'dscc'
-  | 'discover'
-  | 'ports'
-  | 'zoning'
-  | 'migrate'
-  | 'provision'
-  | 'replicate'
-  | 'failover_test'
-  | 'snapshots'
-  | 'verify'
-  | 'asbuilt';
-
-// One step as served by GET /app/profile.
-export interface ServedStep {
-  key: ActionKey;
-  label: string;
-  kind: 'init' | 'provision' | 'replicate' | 'migrate' | 'snapshot' | 'verify';
-  phase: string;
-  /** Why the step cannot be part of a run yet (its work is not built); '' when it can. */
-  unavailable?: string;
-}
+export type RunMode = RunRecord['mode'];
+// One step as served by GET /app/profile (unavailable is '' when the step can run).
+export type ServedStep = AppProfile['steps'][number];
+export type ActionKey = ServedStep['key'];
 
 /** Registry step kinds, mapped to the deployment stages the rail groups the steps by. */
 export const STAGE: Record<ServedStep['kind'], string> = {
@@ -94,7 +74,7 @@ export const MODE_PRESETS: ModePreset[] = [
 // The served reasons a set of steps cannot run yet: one per step whose work is not built.
 export function unavailableReasons(catalog: ServedStep[], keys: ActionKey[]): string[] {
   const chosen = new Set(keys);
-  return catalog.filter((s) => chosen.has(s.key) && s.unavailable).map((s) => s.unavailable as string);
+  return catalog.filter((s) => chosen.has(s.key) && s.unavailable).map((s) => s.unavailable);
 }
 
 // Map a persisted run phase back to the action step key, so a refresh resumes on the right step.

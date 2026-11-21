@@ -55,6 +55,17 @@ API and event types to be generated from that schema rather than maintained by h
 6. **Event evolution rule.** A field added to an event payload in `domain/events.py` gets a default.
    A payload field or event type is never renamed or given a new meaning; a new meaning gets a new
    event type.
+7. **Remaining untyped routes documented without changing runtime serialisation.** `GET /app/profile`,
+   `POST /init-sheet/upload` and the console routes carry Pydantic documentation models in
+   `api/schemas.py` attached via `responses={200: {"model": ...}}` only — never adding or changing
+   `response_model=` on `/app/profile`, `/init-sheet/upload` or `/runs/from-sheet` (the
+   initialisation track), so their response bytes cannot change. Upload models (`UploadedDsccSetup`,
+   `UploadedWorkItem`, `InitSheetUploadResult`) are derived with `create_model` from `domain/models.py`
+   and `InitSheetUploadResponse` rather than copied by hand, and `CommandRecord` is shared with
+   `adapters/command_log.py`. Strict contract tests (`model_validate_json(..., strict=True)` plus
+   round-trip JSON equality) pin each documented model against real responses in both `full` and
+   `init-only` profiles. In `frontend/src/api.ts`, every wire type is an alias of
+   `frontend/generated/api.ts`; only `CredentialOverride` (a form value) stays hand-written.
 
 ## Consequences
 

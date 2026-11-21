@@ -15,7 +15,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from alletra_onboard.domain.shared import ArrayVolumeRecord, PlanState, RemovalItem
+from alletra_onboard.domain.shared import ArrayVolumeRecord, RemovalItem
 
 SnapshotUnit = Literal["minutes", "hours", "days"]
 
@@ -295,7 +295,7 @@ class SnapshotAction(BaseModel):
     kind: Literal["snapshot", "schedule"]
     name: str
     source: str
-    state: PlanState
+    state: Literal["create", "exists", "conflict"]
     reason: str = ""
     members: list[str] = Field(default_factory=list)
     cli: str = ""                # the CLI line the write equals

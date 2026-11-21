@@ -15,6 +15,7 @@ from alletra_onboard.api.schemas import (
     InitSheetComposeResponse,
     InitSheetUploadRequest,
     InitSheetUploadResponse,
+    InitSheetUploadResult,
 )
 from alletra_onboard.application.platform.configuring import update_gl_credentials
 from alletra_onboard.application.platform.init_sheet import (
@@ -88,7 +89,11 @@ def build_sheets_router(service: OnboardingService, env_path: Path) -> APIRouter
     router.get("/init-sheet/template")(init_sheet_template)
     router.post("/init-sheet/compose", response_model=InitSheetComposeResponse)(init_sheet_compose)
 
-    @router.post("/init-sheet/upload", response_model=InitSheetUploadResponse)
+    @router.post(
+        "/init-sheet/upload",
+        response_model=InitSheetUploadResponse,
+        responses={200: {"model": InitSheetUploadResult}},
+    )
     async def init_sheet_upload(request: InitSheetUploadRequest) -> InitSheetUploadResponse:
         # The sheet is COMPLETE intake, uploaded before a mode is chosen (ADR 0005 revision): save
         # GreenLake creds and HOLD the parsed sheet server-side. No run yet — picking a mode (POST

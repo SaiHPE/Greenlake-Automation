@@ -37,7 +37,6 @@ from alletra_onboard.domain.network import IscsiVlanRequest
 from alletra_onboard.domain.peer_ports import PeerPortIntent
 from alletra_onboard.domain.replication import ReplicationIntent
 from alletra_onboard.domain.shared import EndpointCreds
-from alletra_onboard.domain.snapshots import SnapshotIntent
 from alletra_onboard.domain.trust import DevicePinInfo
 from alletra_onboard.domain.unified_file import FileReport
 
@@ -273,27 +272,27 @@ class DocumentSteps:
             data = await asyncio.to_thread(self._collect_asbuilt, host, username, password)
             data.run_created_at = run.created_at
             self._run_records(run.run_id, data)
-            data.iscsi_network_rows = [r.model_dump(mode="json") for r in self._iscsi_rows(run.run_id)]
-            peer = self._peer_intent(run.run_id)
-            data.peer_ports_rows = [r.model_dump(mode="json") for r in peer.ports] if peer is not None else []
             creds = EndpointCreds(host=host, username=username, password=SecretStr(password))
-            replication = self._replication_intent(run.run_id)
-            if replication is not None:
-                # SPEC-018 R3: the replication states are read from BOTH arrays now, not copied from the plan
-                data.replication_tab = self._replication_tab(replication)
-                data.replication_primary, data.replication_peer = await asyncio.to_thread(
-                    self._collect_replication, creds, replication.peer,
-                )
-                # BL-64: every volume and the settings of each group this run configured (showrcopy -d)
-                names = rc_group_names(data)
-                if names:
-                    data.replication_details, data.replication_details_errors = await asyncio.to_thread(
-                        self._read_replication_details, creds, names)
-            snapshots = self._snapshots_intent(run.run_id)
-            if snapshots is not None:
-                # SPEC-023 R8: schedules and snapshots are read now, not copied from the plan
-                data.snapshots_tab = [r.model_dump(mode="json") for r in snapshots.requests]
-                data.snapshots_view = await asyncio.to_thread(self._read_snapshots, creds)
+            intent = coord.store.get_provisioning_intent(run.run_id)
+            if intent is not None:
+                data.iscsi_network_rows = [r.model_dump(mode="json") for r in intent.iscsi_network]
+                if intent.peer_ports is not None:
+                    data.peer_ports_rows = [r.model_dump(mode="json") for r in intent.peer_ports.ports]
+                if intent.replication is not None:
+                    # SPEC-018 R3: the replication states are read from BOTH arrays now, not copied from the plan
+                    data.replication_tab = self._replication_tab(intent.replication)
+                    data.replication_primary, data.replication_peer = await asyncio.to_thread(
+                        self._collect_replication, creds, intent.replication.peer,
+                    )
+                    # BL-64: every volume and the settings of each group this run configured (showrcopy -d)
+                    names = rc_group_names(data)
+                    if names:
+                        data.replication_details, data.replication_details_errors = await asyncio.to_thread(
+                            self._read_replication_details, creds, names)
+                if intent.snapshots is not None:
+                    # SPEC-023 R8: schedules and snapshots are read now, not copied from the plan
+                    data.snapshots_tab = [r.model_dump(mode="json") for r in intent.snapshots.requests]
+                    data.snapshots_view = await asyncio.to_thread(self._read_snapshots, creds)
             # The step's own fields win over the workbook's — the operator is looking at the
             # document about to be produced, and the sheet may have been filled weeks earlier.
             data.customer = customer or item.customer_name or ""
@@ -321,8 +320,8 @@ class DocumentSteps:
             summary += f" {len(warnings)} item(s) need attention before sending."
         coord.emit(
             run.run_id, WorkflowPhase.ASBUILT_DOCUMENT, events.ASBUILT_GENERATED, summary,
-            events.AsBuiltData(serial=data.serial_no, name=data.name, customer=data.customer,
-                               size=len(docx_bytes), warnings=warnings, handover=status),
+            events.AsBuiltResultData(serial=data.serial_no, name=data.name, customer=data.customer,
+                                     size=len(docx_bytes), warnings=warnings, handover=status),
         )
 
     @staticmethod
@@ -385,14 +384,6 @@ class DocumentSteps:
             seen[attr] = event.created_at
         _finalize_run_records(data, peer_sets, seen)
         data.commands = [{k: v for k, v in c.items() if k != "output"} for c in self._coord.list_commands(run_id)]
-
-    def _snapshots_intent(self, run_id: str) -> SnapshotIntent | None:
-        intent = self._coord.store.get_provisioning_intent(run_id)
-        return intent.snapshots if intent is not None else None
-
-    def _replication_intent(self, run_id: str) -> ReplicationIntent | None:
-        intent = self._coord.store.get_provisioning_intent(run_id)
-        return intent.replication if intent is not None else None
 
     @staticmethod
     def _replication_tab(replication: ReplicationIntent) -> dict:
