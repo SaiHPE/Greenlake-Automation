@@ -154,8 +154,6 @@
 [pyright]
 # STANDARD T2. `file` = its pyright errors today (`standard` on src, `strict` on src/alletra_onboard/domain;
 # pyrightconfig.json). The count depends on the packages installed: use the dev extra's versions.
-"src/alletra_onboard/application/replication/steps.py" = 1
-"src/alletra_onboard/application/snapshots/steps.py" = 1
 
 [vulture]
 # STANDARD M3. `file :: finding` = how often vulture reports it at 80% confidence in src. A finding is
@@ -183,7 +181,7 @@
 "src/alletra_onboard/application/provisioning/storage_provision.py" = 25505
 "src/alletra_onboard/application/provisioning/zoning_plan.py" = 30565
 "src/alletra_onboard/application/replication/failover.py" = 22887
-"src/alletra_onboard/application/runs/coordinator.py" = 18394
+"src/alletra_onboard/application/runs/coordinator.py" = 18364
 "src/alletra_onboard/domain/provisioning.py" = 18310
 "src/alletra_onboard/domain/replication.py" = 20339
 
@@ -193,17 +191,7 @@
 [suppressions]
 # STANDARD T3. `file` = its lines today with a suppression comment (`type: ignore`, `noqa`, `pyright:`,
 # `eslint-disable`, `@ts-expect-error`), in src, tests and frontend/src. Each hides a finding from the gate.
-"frontend/src/steps/ZoningStep.tsx" = 1
-"frontend/src/ui/ProvisioningBuilderView.tsx" = 1
-"src/alletra_onboard/adapters/system/discovery_tool.py" = 1
-"src/alletra_onboard/adapters/tls.py" = 1
-"src/alletra_onboard/application/onboarding/greenlake_provision.py" = 1
 "src/alletra_onboard/application/platform/init_sheet.py" = 6
-"src/alletra_onboard/application/replication/partnership.py" = 7
-"src/alletra_onboard/application/snapshots/apply.py" = 1
-"src/alletra_onboard/domain/snapshots.py" = 4
-"tests/unit/test_cloudinit_wizard.py" = 2
-"tests/unit/test_state_location.py" = 1
 
 [doc-paths]
 # STANDARD C2. `document :: path` = a code path the document names in backticks that is not in the

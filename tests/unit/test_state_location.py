@@ -15,8 +15,9 @@ _APP_MAIN = Path(__file__).resolve().parents[2] / "packaging" / "app_main.py"
 @pytest.fixture
 def app_main(monkeypatch):
     spec = importlib.util.spec_from_file_location("app_main_under_test", _APP_MAIN)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    spec.loader.exec_module(mod)
     monkeypatch.delenv("STATE_DATABASE_PATH", raising=False)
     monkeypatch.delenv("ARTIFACT_DIR", raising=False)
     return mod

@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from alletra_onboard.application.onboarding.clients import make_greenlake, missing_credentials  # noqa: F401 - missing_credentials re-exported
+from alletra_onboard.application.onboarding.clients import make_greenlake
 from alletra_onboard.config import Settings
 from alletra_onboard.domain.errors import (
     DeviceError,

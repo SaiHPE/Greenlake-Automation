@@ -108,8 +108,13 @@ def cron_values(cron: str) -> tuple[frozenset[int], ...] | None:
     fields = cron.split()
     if len(fields) != 5:
         return None
-    out = tuple(cron_field_values(f, lo, hi) for f, (lo, hi) in zip(fields, _CRON_RANGES, strict=True))
-    return None if any(v is None for v in out) else out  # type: ignore[return-value]
+    out: list[frozenset[int]] = []
+    for f, (lo, hi) in zip(fields, _CRON_RANGES, strict=True):
+        parsed = cron_field_values(f, lo, hi)
+        if parsed is None:
+            return None
+        out.append(parsed)
+    return tuple(out)
 
 
 def same_cron(a: str, b: str) -> bool:
@@ -181,23 +186,23 @@ class SnapshotRequest(BaseModel):
     @property
     def cron(self) -> str:
         """The schedule's cron, or "" when the row asks for no schedule."""
-        if not self.has_schedule:
+        if self.every is None or self.unit is None:
             return ""
-        return schedule_cron(self.every, self.unit, self.at_hour, self.days)  # type: ignore[arg-type]
+        return schedule_cron(self.every, self.unit, self.at_hour, self.days)
 
     @property
     def kept_alive(self) -> int:
         """The most snapshots the schedule keeps alive at once: Keep for over the period, rounded up.
         Days of the week are not subtracted, so the count is never low (SPEC-023 R4)."""
-        if not self.has_schedule:
+        if self.every is None or self.unit is None:
             return 0
-        return math.ceil(self.expire_hours * 60 / period_minutes(self.every, self.unit))  # type: ignore[arg-type]
+        return math.ceil(self.expire_hours * 60 / period_minutes(self.every, self.unit))
 
     def schedule_words(self) -> str:
         """The schedule in words: "every 4 hours from 00:00, every day, kept 24 hours, read-only"."""
-        if not self.has_schedule:
+        if self.every is None or self.unit is None:
             return ""
-        unit = self.unit.removesuffix("s") if self.every == 1 else self.unit  # type: ignore[union-attr]
+        unit = self.unit.removesuffix("s") if self.every == 1 else self.unit
         when = f"every {self.every} {unit}" if self.every != 1 else f"every {unit}"
         if self.unit == "hours" and self.every != 1:
             when += f" from {self.at_hour:02d}:00"

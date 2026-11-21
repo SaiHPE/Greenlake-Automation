@@ -12,6 +12,7 @@ from itertools import count
 from typing import Literal
 
 from alletra_onboard.application.replication.partnership import plan_partnership
+from alletra_onboard.application.replication.plan_check import array_name
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     TEST_PEER_VVSET,
@@ -32,10 +33,6 @@ from alletra_onboard.domain.replication import (
 
 #: WSAPI remote-copy-group mode values (hpe3parclient `createRemoteCopyGroup` docs; 1 = sync, 2 = periodic).
 WSAPI_MODE = {"sync": 1, "async": 2}
-
-
-def _name(view: ReplicationArrayView) -> str:
-    return view.name or view.host
 
 
 # ------------------------------------------------------------------ R3: plan
@@ -118,7 +115,7 @@ def _target_for(partnership: Partnership | None, mode: str) -> tuple[str, bool]:
 def _resolve_protection_rows(
     primary: ReplicationArrayView, intent: ReplicationIntent, provisioning: ProvisioningIntent,
 ) -> tuple[list[tuple[ProtectionRequest, list[str], str]], list[str]]:
-    a = _name(primary)
+    a = array_name(primary)
     rows: list[tuple[ProtectionRequest, list[str], str]] = []
     blockers: list[str] = []
     for row in intent.protections:
@@ -137,7 +134,7 @@ def _resolve_protection_rows(
 def _plan_failover_test_objects(
     primary: ReplicationArrayView, intent: ReplicationIntent, provisioning: ProvisioningIntent, seq: count[int],
 ) -> tuple[list[ReplicationAction], list[str], tuple[ProtectionRequest, list[str], str]]:
-    a = _name(primary)
+    a = array_name(primary)
     # The test group rides the same target, so it takes the rows' mode (one mode per target).
     lead = intent.protections[0] if intent.protections else ProtectionRequest(vvset=TEST_VVSET, peer_cpg="")
     test_row = ProtectionRequest(
@@ -182,7 +179,7 @@ def _plan_group_actions(
     report: ReplicationReport, row: ProtectionRequest, members: list[str], local_cpg: str, seq: count[int],
 ) -> tuple[list[ReplicationAction], list[str]]:
     primary, peer = report.primary, report.peer
-    a, b = _name(primary), _name(peer)
+    a, b = array_name(primary), array_name(peer)
     g = row.group_name
     target, mirror_config = _target_for(report.partnership, row.mode)
     existing = primary.group(g)
@@ -235,7 +232,7 @@ def _plan_group_actions(
 
 def _plan_notes(report: ReplicationReport, existing_groups: list[str]) -> list[str]:
     primary, peer = report.primary, report.peer
-    a, b = _name(primary), _name(peer)
+    a, b = array_name(primary), array_name(peer)
     notes: list[str] = []
     if existing_groups:
         notes.append(
@@ -266,7 +263,7 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
     if report.mixed_transports:
         return plan     # SPEC-031 R3: a pair with IP and FC targets towards each other plans nothing
     primary, peer = report.primary, report.peer
-    a, b = _name(primary), _name(peer)
+    a, b = array_name(primary), array_name(peer)
     # SPEC-021 R3: the partnership rows come first; when any is to create, the groups wait for a second
     # preview (the link check needs the partnership, and the groups need the link check).
     p_actions, p_blockers, p_notes = plan_partnership(report, intent)

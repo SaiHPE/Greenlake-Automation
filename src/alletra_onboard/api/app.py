@@ -41,6 +41,7 @@ from alletra_onboard.api.routes.sheets import build_sheets_router
 from alletra_onboard.api.routes.snapshots import build_snapshots_router
 from alletra_onboard.api.routes.system import build_system_router
 from alletra_onboard.api.routes.trust import build_trust_router
+from alletra_onboard.api.routes.zoning import build_zoning_router
 from alletra_onboard.api.schemas import HealthResponse, app_profile_model
 from alletra_onboard.application.platform.proxy import apply_proxy_env
 from alletra_onboard.application.provisioning.clients import wsapi_capability
@@ -147,6 +148,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         build_onboarding_router(service),
         build_documents_router(service),
         build_discovery_router(service),
+        build_zoning_router(service),
         build_provisioning_router(service),
         build_replication_router(service),
         build_snapshots_router(service),

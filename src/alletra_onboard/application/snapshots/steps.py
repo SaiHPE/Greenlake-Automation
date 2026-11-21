@@ -25,7 +25,12 @@ from alletra_onboard.domain import events
 from alletra_onboard.domain.approval import Approval
 from alletra_onboard.domain.models import RunRecord, RunStatus, WorkflowPhase
 from alletra_onboard.domain.provisioning import ProvisioningIntent
-from alletra_onboard.domain.snapshots import SnapshotArrayView, SnapshotPlan, SnapshotVerification
+from alletra_onboard.domain.snapshots import (
+    SnapshotArrayView,
+    SnapshotIntent,
+    SnapshotPlan,
+    SnapshotVerification,
+)
 
 PHASE = WorkflowPhase.STORAGE_SNAPSHOT
 RESULT_ARTIFACT = "snapshot_result"
@@ -59,14 +64,14 @@ class SnapshotSteps:
         self._apply = apply_fn
         self._plan: dict[str, tuple[SnapshotPlan, SnapshotArrayView]] = {}
 
-    def _require_snapshots(self, run_id: str) -> ProvisioningIntent:
+    def _require_snapshots(self, run_id: str) -> tuple[ProvisioningIntent, SnapshotIntent]:
         intent = self._coord.get_provisioning_intent(run_id)
         if intent.snapshots is None:
             raise StepPreconditionError(
                 "this run's workbook has no Snapshots tab — add the volume sets or volumes to snapshot, then start "
                 "a new run"
             )
-        return intent
+        return intent, intent.snapshots
 
     def _progress(self, run_id: str) -> Callable[[str], None]:
         loop = asyncio.get_running_loop()
@@ -97,13 +102,13 @@ class SnapshotSteps:
     def start_snapshots_preview(self, run_id: str) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
-        intent = self._require_snapshots(run_id)
+        intent, snapshots = self._require_snapshots(run_id)
         # A new read is a new plan to approve: the old approval goes now, not when the read finishes.
         self._plan.pop(run_id, None)
-        coord.spawn(run_id, self._run_preview(run, intent))
+        coord.spawn(run_id, self._run_preview(run, intent, snapshots))
         return run
 
-    async def _run_preview(self, run: RunRecord, intent: ProvisioningIntent) -> None:
+    async def _run_preview(self, run: RunRecord, intent: ProvisioningIntent, snapshots: SnapshotIntent) -> None:
         coord = self._coord
         coord.set_state(run, RunStatus.RUNNING, PHASE)
         coord.emit(run.run_id, PHASE, events.STEP_STARTED, "Reading snapshots and snapshot schedules on the array…")
@@ -115,7 +120,7 @@ class SnapshotSteps:
                        events.SnapshotPlanData(array=_array_summary(view), plan=plan))
             return
         volumes, vvsets = _planned(intent)
-        plan = plan_snapshots(intent.snapshots, view, planned_volumes=volumes, planned_vvsets=vvsets)
+        plan = plan_snapshots(snapshots, view, planned_volumes=volumes, planned_vvsets=vvsets)
         plan = plan.model_copy(update={"plan_id": new_plan_id()})
         self._plan[run.run_id] = (plan, view)
         creates = sum(1 for a in plan.actions if a.state == "create")
@@ -135,7 +140,7 @@ class SnapshotSteps:
     def start_snapshots_apply(self, run_id: str, *, approved_plan: str | None) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
-        intent = self._require_snapshots(run_id)
+        intent, _snapshots = self._require_snapshots(run_id)
         entry = self._plan.get(run_id)
         if entry is None:
             raise StepPreconditionError("no snapshot plan to apply — read the array first")
@@ -206,7 +211,7 @@ class SnapshotSteps:
     def start_snapshots_verify(self, run_id: str) -> RunRecord:
         coord = self._coord
         run = coord.get_run(run_id)
-        intent = self._require_snapshots(run_id)
+        intent, _snapshots = self._require_snapshots(run_id)
         plan = self._plan_for_verify(run_id)
         if plan is None:
             raise StepPreconditionError("nothing to check yet — read the array first so the tool knows what to look for")

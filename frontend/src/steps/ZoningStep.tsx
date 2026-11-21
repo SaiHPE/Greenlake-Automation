@@ -2,7 +2,7 @@ import { Box, DataTable, Text } from 'grommet';
 import { Connect } from 'grommet-icons';
 import { ComponentProps, ReactNode, useEffect, useRef, useState } from 'react';
 import {
-  RunEvent, RunRecord, zoningPlan, zoningPreview,
+  EventOf, RunEvent, RunRecord, zoningPlan, zoningPreview,
 } from '../api';
 import { latestOf } from '../events';
 import { DiscoveryFreshness, discoveryReadAt, isDiscoveryStale } from '../ui/discoveryAge';
@@ -26,6 +26,22 @@ interface HostRow {
   odd: boolean;
   even: boolean;
   iscsi?: string[];   // iSCSI-only: the array ports its IQN is logged in on; no zone needed
+}
+
+type ZoningReport = EventOf<'zoning.previewed'>['data']['report'];
+
+/** The report carries one row per host and fabric; the operator thinks in hosts, so roll them up. */
+function reportRows(report: ZoningReport | null): HostRow[] {
+  const byHost: Record<string, HostRow> = {};
+  report?.expected.forEach((zone) => {
+    const host = zone.name.replace(/_(odd|even)$/, '');
+    byHost[host] = byHost[host] ?? { host, odd: false, even: false };
+    byHost[host][zone.fabric] = zone.present;
+  });
+  Object.entries(report?.iscsi_hosts ?? {}).forEach(([host, ports]) => {
+    byHost[host] = { host, odd: ports.length > 0, even: ports.length > 0, iscsi: ports };
+  });
+  return Object.values(byHost);
 }
 
 /** What a re-check changed, in the operator's words: the loop is design → SAN team applies →
@@ -120,37 +136,30 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const running = run?.status === 'running';
 
-  const report = latestOf(events, 'zoning.previewed', 'zoning.proper')?.data?.report ?? null;
+  const reportEvent = latestOf(events, 'zoning.previewed', 'zoning.proper');
+  const report = reportEvent?.data?.report ?? null;
   const planEvent = latestOf(events, 'zoning.plan');
   const plan = planEvent?.data?.plan ?? null;
 
-  // The report carries one row per host and fabric; the operator thinks in hosts, so roll them up.
-  const byHost: Record<string, HostRow> = {};
-  report?.expected.forEach((zone) => {
-    const host = zone.name.replace(/_(odd|even)$/, '');
-    byHost[host] = byHost[host] ?? { host, odd: false, even: false };
-    byHost[host][zone.fabric] = zone.present;
-  });
-  Object.entries(report?.iscsi_hosts ?? {}).forEach(([host, ports]) => {
-    byHost[host] = { host, odd: ports.length > 0, even: ports.length > 0, iscsi: ports };
-  });
-  const rows = Object.values(byHost);
+  const rows = reportRows(report);
   const outstanding = rows.filter((row) => !row.odd || !row.even).length;
   const provisionable = report?.zoned_hosts?.length ?? 0;
 
   // Re-check diff: remember the rows of the previous report (keyed by its event) and say what moved.
-  const reportEvent = [...events].reverse().find((event) => ['zoning.previewed', 'zoning.proper'].includes(event.event_type));
   const lastSeen = useRef<{ id: string | undefined; rows: HostRow[] } | null>(null);
   const [change, setChange] = useState<string | null>(null);
   useEffect(() => {
-    if (!report) return;
-    const id = reportEvent?.event_id;
+    const current = reportEvent?.data?.report;
+    if (!current) return;
+    const id = reportEvent.event_id;
     if (lastSeen.current && lastSeen.current.id !== id) {
-      setChange(describeChange(lastSeen.current.rows, rows));
+      const nextRows = reportRows(current);
+      setChange(describeChange(lastSeen.current.rows, nextRows));
+      lastSeen.current = { id, rows: nextRows };
+    } else if (!lastSeen.current) {
+      lastSeen.current = { id, rows: reportRows(current) };
     }
-    if (!lastSeen.current || lastSeen.current.id !== id) lastSeen.current = { id, rows };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportEvent?.event_id]);
+  }, [reportEvent]);
 
   const call = (action: () => Promise<unknown>) => async () => {
     setError(null);

@@ -1,5 +1,5 @@
 import { Box, Button, Notification, Select, Text, TextInput } from 'grommet';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
 import {
   DiscoveredHostBrief,
   ExportRequest,
@@ -168,7 +168,7 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
       </Surface>
     );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError(null); setSaved(null); setBusy('load');
     try {
       const o = await getStorageObjects(runId);
@@ -182,10 +182,10 @@ export function ProvisioningBuilderView({ runId, disabled = false, readOnly = fa
     } finally {
       setBusy('');
     }
-  };
+  }, [runId]);
 
   // Load on mount: the saved composition is what the operator expects to see, not a button.
-  useEffect(() => { void load(); }, [runId]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [load]);
 
   const save = async () => {
     if (!objects) return;
