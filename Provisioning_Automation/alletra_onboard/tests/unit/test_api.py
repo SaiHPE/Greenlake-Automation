@@ -720,6 +720,239 @@ def test_a_valid_sheet_lists_no_problem_and_an_initialisation_problem_still_refu
     assert resp.json()["detail"] == "Initialisation sheet did not parse: Missing required fields: Storage system serial number"
 
 
+# ------------------------------------------------------------------ characterisation (create_app split)
+
+_EXPECTED_OPENAPI_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("get", "/health", "health_health_get"),
+    ("get", "/app/profile", "app_profile_app_profile_get"),
+    ("get", "/config", "get_config_config_get"),
+    ("post", "/config", "set_config_config_post"),
+    ("post", "/config/check", "config_check_config_check_post"),
+    ("get", "/prereqs/firewall", "prereq_firewall_prereqs_firewall_get"),
+    ("get", "/prereqs/firewall.txt", "prereq_firewall_txt_prereqs_firewall_txt_get"),
+    ("get", "/prereqs/connectivity", "prereq_connectivity_prereqs_connectivity_get"),
+    ("get", "/prereqs/proxy", "prereq_proxy_status_prereqs_proxy_get"),
+    ("post", "/prereqs/proxy", "prereq_proxy_save_prereqs_proxy_post"),
+    ("get", "/work-items/template", "work_item_template_work_items_template_get"),
+    ("post", "/work-items/parse", "parse_work_items_work_items_parse_post"),
+    ("get", "/init-sheet/template", "init_sheet_template_init_sheet_template_get"),
+    ("post", "/init-sheet/compose", "init_sheet_compose_init_sheet_compose_post"),
+    ("post", "/init-sheet/upload", "init_sheet_upload_init_sheet_upload_post"),
+    ("get", "/runs", "list_runs_runs_get"),
+    ("post", "/runs", "create_run_runs_post"),
+    ("post", "/runs/from-sheet", "create_run_from_sheet_runs_from_sheet_post"),
+    ("get", "/runs/{run_id}", "get_run_runs__run_id__get"),
+    ("post", "/runs/{run_id}/provision", "run_provision_runs__run_id__provision_post"),
+    ("post", "/runs/{run_id}/cloudinit", "run_cloudinit_runs__run_id__cloudinit_post"),
+    ("post", "/runs/{run_id}/dscc", "run_dscc_runs__run_id__dscc_post"),
+    ("post", "/runs/{run_id}/verify", "run_verify_runs__run_id__verify_post"),
+    ("post", "/runs/{run_id}/asbuilt", "run_asbuilt_runs__run_id__asbuilt_post"),
+    ("get", "/runs/{run_id}/asbuilt/download", "download_asbuilt_runs__run_id__asbuilt_download_get"),
+    ("post", "/runs/{run_id}/complete", "complete_run_runs__run_id__complete_post"),
+    ("post", "/runs/{run_id}/discover", "run_discover_runs__run_id__discover_post"),
+    ("get", "/runs/{run_id}/ports", "array_ports_runs__run_id__ports_get"),
+    ("post", "/runs/{run_id}/ports/preview", "run_ports_preview_runs__run_id__ports_preview_post"),
+    ("post", "/runs/{run_id}/zoning/preview", "run_zoning_preview_runs__run_id__zoning_preview_post"),
+    ("post", "/runs/{run_id}/zoning/plan", "run_zoning_plan_runs__run_id__zoning_plan_post"),
+    ("post", "/zoning/render", "zoning_render_zoning_render_post"),
+    ("get", "/runs/{run_id}/storage/preflight", "storage_preflight_runs__run_id__storage_preflight_get"),
+    ("get", "/runs/{run_id}/storage/objects", "storage_objects_runs__run_id__storage_objects_get"),
+    ("post", "/runs/{run_id}/storage/builder", "storage_builder_runs__run_id__storage_builder_post"),
+    ("post", "/runs/{run_id}/storage/preview", "run_storage_preview_runs__run_id__storage_preview_post"),
+    ("post", "/runs/{run_id}/storage/apply", "run_storage_apply_runs__run_id__storage_apply_post"),
+    ("post", "/runs/{run_id}/storage/verify-paths", "run_storage_verify_paths_runs__run_id__storage_verify_paths_post"),
+    ("post", "/runs/{run_id}/replication/preview", "run_replication_preview_runs__run_id__replication_preview_post"),
+    ("post", "/runs/{run_id}/replication/link-check", "run_replication_link_check_runs__run_id__replication_link_check_post"),
+    ("post", "/runs/{run_id}/replication/apply", "run_replication_apply_runs__run_id__replication_apply_post"),
+    ("post", "/runs/{run_id}/replication/verify", "run_replication_verify_runs__run_id__replication_verify_post"),
+    ("post", "/runs/{run_id}/replication/failover-test", "run_failover_test_runs__run_id__replication_failover_test_post"),
+    ("get", "/runs/{run_id}/snapshots", "snapshots_tab_runs__run_id__snapshots_get"),
+    ("post", "/runs/{run_id}/snapshots/preview", "run_snapshots_preview_runs__run_id__snapshots_preview_post"),
+    ("post", "/runs/{run_id}/snapshots/apply", "run_snapshots_apply_runs__run_id__snapshots_apply_post"),
+    ("post", "/runs/{run_id}/snapshots/verify", "run_snapshots_verify_runs__run_id__snapshots_verify_post"),
+    ("get", "/runs/{run_id}/trust", "trusted_devices_runs__run_id__trust_get"),
+    ("post", "/runs/{run_id}/trust/retrust", "retrust_device_runs__run_id__trust_retrust_post"),
+    ("get", "/runs/{run_id}/events", "list_events_runs__run_id__events_get"),
+    ("get", "/runs/{run_id}/stream", "stream_events_runs__run_id__stream_get"),
+    ("get", "/runs/{run_id}/console/log", "console_log_runs__run_id__console_log_get"),
+    ("get", "/runs/{run_id}/console/targets", "console_targets_runs__run_id__console_targets_get"),
+    ("post", "/runs/{run_id}/console", "console_run_runs__run_id__console_post"),
+    ("post", "/runs/{run_id}/console/terminal", "console_terminal_runs__run_id__console_terminal_post"),
+    ("get", "/runs/{run_id}/console/stream", "console_stream_runs__run_id__console_stream_get"),
+    ("post", "/browser/launch", "browser_launch_browser_launch_post"),
+    ("post", "/tools/discovery/launch", "discovery_launch_tools_discovery_launch_post"),
+    ("get", "/system/clock", "get_clock_system_clock_get"),
+    ("post", "/system/clock/sync", "post_clock_sync_system_clock_sync_post"),
+    ("post", "/preflight", "preflight_preflight_post"),
+)
+
+def test_both_build_profiles_serve_the_same_routes(monkeypatch):
+    """Every path, method and operationId, in order, in both builds. The schemas themselves are pinned by
+    the api-types gate step as a readable diff of frontend/generated/api.ts (ADR 0032)."""
+    from typing import Any, cast
+
+    specs: dict[str, dict] = {}
+    for profile in ("full", "init-only"):
+        monkeypatch.setenv("ALLETRA_PROFILE", profile)
+        spec = create_app(cast(Any, object())).openapi()
+        assert spec["info"] == {"title": "Alletra Onboard", "version": __version__}
+        routes = tuple(
+            (method, path, op["operationId"])
+            for path, methods in spec["paths"].items()
+            for method, op in methods.items()
+        )
+        assert routes == _EXPECTED_OPENAPI_ROUTES
+        specs[profile] = spec
+    assert specs["full"] == specs["init-only"]
+
+
+def _response_body(resp) -> object:
+    if resp.headers.get("content-type", "").startswith("application/json"):
+        return resp.json()
+    return resp.text
+
+
+def _mock_service_failing(target: str, exc: BaseException):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    svc = MagicMock()
+    svc.get_run.return_value = SimpleNamespace(run_id="r1", serial_number="SN1")
+    if target == "get_run":
+        svc.get_run.side_effect = exc
+    elif target == "console.run":
+        async def _fail(*_args, **_kwargs):
+            raise exc
+        svc.console.run = _fail
+    else:
+        getattr(svc, target).side_effect = exc
+    return svc
+
+
+def _step_router_cases() -> tuple[tuple[str, str, dict | None, str], ...]:
+    return (
+        ("POST", "/runs/r1/provision", {}, "start_provision"),
+        ("POST", "/runs/r1/verify", {}, "start_verify"),
+        ("POST", "/runs/r1/discover", None, "start_discover"),
+        ("POST", "/runs/r1/storage/apply", {}, "start_storage_apply"),
+        ("POST", "/runs/r1/replication/apply", {}, "start_replication_apply"),
+        ("POST", "/runs/r1/snapshots/apply", {}, "start_snapshots_apply"),
+    )
+
+
+def test_step_router_error_mappings_are_pinned():
+    """Characterisation: pin exact status code and body for every error type across the six step routers."""
+    from alletra_onboard.application.service import (
+        RunBusyError,
+        RunNotFoundError,
+        StepPreconditionError,
+    )
+    from alletra_onboard.domain.approval import ApprovalError
+    from alletra_onboard.domain.errors import DeviceError
+    from alletra_onboard.domain.ports import StoredCredentialsUnreadableError
+
+    expected = (
+        (StepPreconditionError("missing prerequisite"), 409, {"detail": "missing prerequisite"}),
+        (RunBusyError("r1"), 409, {"detail": "a step is already running for this run"}),
+        (ApprovalError("approval spent"), 500, "Internal Server Error"),
+        (DeviceError("array unreachable"), 500, "Internal Server Error"),
+        (RunNotFoundError("no such intent"), 404, {"detail": "no such intent"}),
+        (RunNotFoundError(""), 404, {"detail": "not found"}),
+        (StoredCredentialsUnreadableError("key missing"), 409, {"detail": "key missing"}),
+    )
+    for method, path, payload, fn_name in _step_router_cases():
+        for exc, status, body in expected:
+            client = TestClient(create_app(_mock_service_failing(fn_name, exc)), raise_server_exceptions=False)
+            resp = client.request(method, path, json=payload) if payload is not None else client.request(method, path)
+            assert (resp.status_code, _response_body(resp)) == (status, body), (path, type(exc).__name__)
+        # Missing run before step lookup is always 404 "run not found"
+        missing = TestClient(create_app(_mock_service_failing("get_run", RunNotFoundError("r1"))),
+                             raise_server_exceptions=False)
+        resp = missing.request(method, path, json=payload) if payload is not None else missing.request(method, path)
+        assert (resp.status_code, _response_body(resp)) == (404, {"detail": "run not found"})
+
+
+def test_non_step_router_error_mappings_are_pinned(monkeypatch):
+    """Characterisation: pin exact status code and body for representative routes in every non-step router."""
+    from alletra_onboard.application.platform import clients as platform_clients
+    from alletra_onboard.application.platform import prereqs as prereqs_mod
+    from alletra_onboard.application.service import (
+        DevicePinNotFoundError,
+        PendingSheetNotFoundError,
+        RunBusyError,
+        RunNotFoundError,
+        StepPreconditionError,
+    )
+    from alletra_onboard.domain.approval import ApprovalError
+    from alletra_onboard.domain.errors import DeviceError
+    from alletra_onboard.domain.ports import StoredCredentialsUnreadableError
+
+    service_cases = (
+        ("GET", "/runs/r1", None, "get_run", RunNotFoundError("r1"), 404, {"detail": "run not found"}),
+        ("GET", "/runs/r1", None, "get_run", StoredCredentialsUnreadableError("key missing"), 409, {"detail": "key missing"}),
+        ("GET", "/runs/r1", None, "get_run", DeviceError("array unreachable"), 500, "Internal Server Error"),
+        ("POST", "/runs/from-sheet", {"token": "t", "mode": "FULL_ONBOARDING"}, "create_run_from_pending",
+         PendingSheetNotFoundError("t"), 410,
+         {"detail": "This uploaded sheet is no longer held — re-upload the Initialisation sheet."}),
+        ("POST", "/runs/from-sheet", {"token": "t", "mode": "FULL_ONBOARDING"}, "create_run_from_pending",
+         ValueError("bad mode"), 422, {"detail": "bad mode"}),
+        ("POST", "/runs/from-sheet", {"token": "t", "mode": "FULL_ONBOARDING"}, "create_run_from_pending",
+         ApprovalError("approval spent"), 500, "Internal Server Error"),
+        ("GET", "/runs/r1/ports", None, "get_ports", RunNotFoundError("r1"), 404,
+         {"detail": "this run has no provisioning sheet"}),
+        ("GET", "/runs/r1/snapshots", None, "get_snapshots", RunNotFoundError("r1"), 404,
+         {"detail": "this run has no provisioning sheet"}),
+        ("POST", "/runs/r1/trust/retrust", {"kind": "ssh", "host": "10.0.0.1", "port": 22, "fingerprint": "SHA256:a"},
+         "retrust_device", DevicePinNotFoundError("no pin"), 404, {"detail": "no pin"}),
+        ("POST", "/runs/r1/trust/retrust", {"kind": "ssh", "host": "10.0.0.1", "port": 22, "fingerprint": "SHA256:a"},
+         "retrust_device", StepPreconditionError("mismatch"), 409, {"detail": "mismatch"}),
+        ("POST", "/runs/r1/trust/retrust", {"kind": "ssh", "host": "10.0.0.1", "port": 22, "fingerprint": "SHA256:a"},
+         "retrust_device", DeviceError("array unreachable"), 500, "Internal Server Error"),
+        ("GET", "/runs/r1/events", None, "get_run", RunNotFoundError("r1"), 404, {"detail": "run not found"}),
+        ("GET", "/runs/r1/events", None, "list_events", StoredCredentialsUnreadableError("key missing"), 409,
+         {"detail": "key missing"}),
+        ("GET", "/runs/r1/events", None, "list_events", DeviceError("array unreachable"), 500, "Internal Server Error"),
+        ("POST", "/runs/r1/console", {"command": "showsys", "target": "array"}, "console.run",
+         StepPreconditionError("no credential"), 409, {"detail": "no credential"}),
+        ("POST", "/runs/r1/console", {"command": "showsys", "target": "array"}, "console.run",
+         RunBusyError("r1"), 500, "Internal Server Error"),
+        ("POST", "/runs/r1/console", {"command": "showsys", "target": "array"}, "console.run",
+         ApprovalError("approval spent"), 500, "Internal Server Error"),
+        ("POST", "/runs/r1/console", {"command": "showsys", "target": "array"}, "console.run",
+         DeviceError("array unreachable"), 500, "Internal Server Error"),
+        ("POST", "/runs/r1/console", {"command": "showsys", "target": "array"}, "get_run",
+         RunNotFoundError("r1"), 404, {"detail": "run not found"}),
+    )
+    for method, path, payload, target, exc, status, body in service_cases:
+        client = TestClient(create_app(_mock_service_failing(target, exc)), raise_server_exceptions=False)
+        resp = client.request(method, path, json=payload) if payload is not None else client.request(method, path)
+        assert (resp.status_code, _response_body(resp)) == (status, body), (path, type(exc).__name__)
+
+    # Sheets router: bad base64 -> 422
+    sheets_client = TestClient(create_app(_mock_service_failing("get_run", RunNotFoundError("r1"))),
+                               raise_server_exceptions=False)
+    bad_b64 = sheets_client.post("/init-sheet/upload", json={"content_b64": "!!!not-base64!!!"})
+    assert (bad_b64.status_code, _response_body(bad_b64)) == (422, {"detail": "Upload was not valid base64"})
+
+    # Prereqs router: unhandled DeviceError -> 500
+    monkeypatch.setattr(prereqs_mod, "rules_for", lambda _region: (_ for _ in ()).throw(DeviceError("offline")))
+    prereq_resp = sheets_client.get("/prereqs/firewall")
+    assert (prereq_resp.status_code, _response_body(prereq_resp)) == (500, "Internal Server Error")
+
+    # System router: PermissionError -> 403; RuntimeError / DeviceError / ApprovalError -> 500 JSON detail
+    for exc, status, body in (
+        (PermissionError("admin required"), 403, {"detail": "admin required"}),
+        (DeviceError("clock unreachable"), 500, {"detail": "clock unreachable"}),
+        (ApprovalError("approval spent"), 500, {"detail": "approval spent"}),
+    ):
+        async def _sync_fail(_url=None, _exc=exc):
+            raise _exc
+        monkeypatch.setattr(platform_clients, "sync_clock", _sync_fail)
+        sys_resp = sheets_client.post("/system/clock/sync")
+        assert (sys_resp.status_code, _response_body(sys_resp)) == (status, body)
+
+
+
 def test_the_init_only_profile_reads_only_the_initialisation_tab_as_before(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ALLETRA_PROFILE", "init-only")

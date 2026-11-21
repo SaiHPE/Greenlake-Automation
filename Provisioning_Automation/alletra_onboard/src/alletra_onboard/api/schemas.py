@@ -19,6 +19,7 @@ from alletra_onboard.domain.models import (
 from alletra_onboard.domain.network import IscsiVlanRequest
 from alletra_onboard.domain.peer_ports import PeerPortIntent
 from alletra_onboard.domain.trust import DevicePinInfo, TrustKind
+from alletra_onboard.domain.zoning import ZoningPlan
 
 
 class HealthResponse(BaseModel):
@@ -375,3 +376,35 @@ class SnapshotsResponse(BaseModel):
 
     rows: list[SnapshotRow] = Field(default_factory=list)
     held_plan_id: str = ""
+
+
+class CsvParseRequest(BaseModel):
+    csv_text: str
+
+
+class ZoningRenderRequest(BaseModel):
+    """Render the read-only zoning command preview: the plan the UI already holds (from the
+    zoning.plan event), the operator's alias names, and the operator's SELECTED pairs. Rendering
+    lives in the backend so the frontend never mirrors the command grammar (a hand-synced mirror of
+    render_commands drifted once already). With `run_id` the result is also recorded on the run as
+    a `zoning.rendered` event — the command set handed to the SAN team is a deliverable, and the
+    as-built (SPEC-002) reproduces it from that record."""
+
+    plan: ZoningPlan
+    aliases: dict[str, str] = {}
+    selected_pairs: list[tuple[str, str]] = []
+    run_id: str | None = None
+
+
+class ZoningRenderResponse(BaseModel):
+    commands: dict[str, list[str]]
+    # Selected pairs that could NOT be rendered (a member has no alias name, or a name FOS would
+    # reject), per fabric — surfaced so a tick that produces no command explains itself instead of
+    # silently disappearing.
+    skipped: dict[str, list[str]]
+    # Legal-but-non-portable alias names (need FOS 8.1.0+ fabric-wide), per fabric. Advisory only.
+    warnings: dict[str, list[str]] = {}
+    # SPEC-025 R7: the peer-port block, its own command set per fabric (every pair the sheet asks for).
+    peer_commands: dict[str, list[str]] = {}
+    peer_skipped: dict[str, list[str]] = {}
+

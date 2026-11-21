@@ -18,151 +18,102 @@ When frontend/dist exists it is served at / (the packaged single-host product).
 
 from __future__ import annotations
 
-import asyncio
-import base64
-import json
-import os
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ValidationError
 
 from alletra_onboard import __version__
 from alletra_onboard.adapters.persistence.sqlite import SqliteRunStore
-from alletra_onboard.api.schemas import (
-    ArrayPortsResponse,
-    AsBuiltStepRequest,
-    BrowserLaunchRequest,
-    BrowserLaunchResponse,
-    CheckResponse,
-    CloudinitStepRequest,
-    ConfigStatusResponse,
-    ConfigureRequest,
-    ConnectivityResponse,
-    ConnectivityResultItem,
-    ConsoleRequest,
-    ConsoleTerminalRequest,
-    CreateRunRequest,
-    DiscoveryToolResponse,
-    DsccStepRequest,
-    EventListResponse,
-    FailoverTestRequest,
-    FirewallRule,
-    FirewallRulesResponse,
-    HealthResponse,
-    InitSheetComposeRequest,
-    InitSheetComposeResponse,
-    InitSheetUploadRequest,
-    InitSheetUploadResponse,
-    LinkCheckRequest,
-    PreflightRequest,
-    PreflightResponse,
-    ProvisionStepRequest,
-    ProxySaveRequest,
-    ProxyStatusResponse,
-    ReplicationApplyRequest,
-    RetrustRequest,
-    RetrustResponse,
-    RunDetailResponse,
-    RunFromSheetRequest,
-    RunListResponse,
-    RunResponse,
-    SnapshotApplyRequest,
-    SnapshotsResponse,
-    StorageApplyRequest,
-    TrustedDevicesResponse,
-    VerifyStepRequest,
-    run_event_list,
-)
-from alletra_onboard.application.onboarding.clients import launch_debug_browser
-from alletra_onboard.application.onboarding.health import greenlake_check
-from alletra_onboard.application.onboarding.preflight_service import PreflightService
-from alletra_onboard.application.platform import clients as platform_clients
-from alletra_onboard.application.platform import prereqs
-from alletra_onboard.application.platform.configuring import (
-    masked_gl_credentials,
-    set_env_values,
-    update_gl_credentials,
-)
-from alletra_onboard.application.platform.init_sheet import (
-    build_template_bytes,
-    compose_workbook_bytes,
-    parse_upload,
-    parse_workbook_bytes,
-)
-from alletra_onboard.application.platform.intake import csv_template, load_work_items_csv_text
-from alletra_onboard.application.platform.proxy import (
-    DIRECT,
-    ProxyResolver,
-    apply_proxy_env,
-    is_direct,
-    normalize_proxy,
-    os_system_proxy,
-)
+from alletra_onboard.api.routes.console import build_console_router
+from alletra_onboard.api.routes.discovery import build_discovery_router
+from alletra_onboard.api.routes.documents import build_documents_router
+from alletra_onboard.api.routes.events import build_events_router
+from alletra_onboard.api.routes.onboarding import build_onboarding_router
+from alletra_onboard.api.routes.prereqs import build_prereqs_router
+from alletra_onboard.api.routes.provisioning import build_provisioning_router
+from alletra_onboard.api.routes.replication import build_replication_router
+from alletra_onboard.api.routes.runs import build_runs_router
+from alletra_onboard.api.routes.sheets import build_sheets_router
+from alletra_onboard.api.routes.snapshots import build_snapshots_router
+from alletra_onboard.api.routes.system import build_system_router
+from alletra_onboard.api.routes.trust import build_trust_router
+from alletra_onboard.api.schemas import HealthResponse
+from alletra_onboard.application.platform.proxy import apply_proxy_env
 from alletra_onboard.application.provisioning.clients import wsapi_capability
-from alletra_onboard.application.provisioning.zoning_plan import (
-    alias_name_warnings,
-    render_commands,
-    render_peer_commands,
-)
-from alletra_onboard.application.runs.console import console_text
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
-from alletra_onboard.application.service import (
-    DevicePinNotFoundError,
-    OnboardingService,
-    PendingSheetNotFoundError,
-    RunBusyError,
-    RunNotFoundError,
-    StepPreconditionError,
-)
+from alletra_onboard.application.service import OnboardingService
 from alletra_onboard.config import load_settings
-from alletra_onboard.domain.models import ClockStatus, ClockSyncResult, RunMode
 from alletra_onboard.domain.ports import StoredCredentialsUnreadableError
-from alletra_onboard.domain.provisioning import (
-    PreflightReport,
-    ProvisioningBuilder,
-    ProvisioningComposition,
-    ProvisioningObjects,
-)
 from alletra_onboard.domain.workflow import NOT_BUILT_STEPS, STEP_REGISTRY, mode_steps
-from alletra_onboard.domain.zoning import ZoningPlan
-
-SSE_HEARTBEAT_S = 15.0
 
 
-class CsvParseRequest(BaseModel):
-    csv_text: str
+async def _ui_cache_policy(request: Request, call_next):
+    # Every release serves from the same origin (127.0.0.1:8765), and without a policy the
+    # browser caches index.html AND the old hashed bundle it references — so after an upgrade
+    # the operator keeps seeing the previous interface until a hard refresh (seen live on the
+    # v0.13.0 candidates). index.html must always be revalidated; the hashed assets it names
+    # are immutable and can be cached forever.
+    response = await call_next(request)
+    path = request.url.path
+    if path in ("/", "/index.html"):
+        response.headers["Cache-Control"] = "no-cache"
+    elif path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
 
 
-class ZoningRenderRequest(BaseModel):
-    """Render the read-only zoning command preview: the plan the UI already holds (from the
-    zoning.plan event), the operator's alias names, and the operator's SELECTED pairs. Rendering
-    lives in the backend so the frontend never mirrors the command grammar (a hand-synced mirror of
-    render_commands drifted once already). With `run_id` the result is also recorded on the run as
-    a `zoning.rendered` event — the command set handed to the SAN team is a deliverable, and the
-    as-built (SPEC-002) reproduces it from that record."""
-
-    plan: ZoningPlan
-    aliases: dict[str, str] = {}
-    selected_pairs: list[tuple[str, str]] = []
-    run_id: str | None = None
+async def _credentials_unreadable(_request: Request, exc: Exception) -> JSONResponse:
+    # ADR 0027: the run's secrets were encrypted with a key this installation does not hold.
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
-class ZoningRenderResponse(BaseModel):
-    commands: dict[str, list[str]]
-    # Selected pairs that could NOT be rendered (a member has no alias name, or a name FOS would
-    # reject), per fabric — surfaced so a tick that produces no command explains itself instead of
-    # silently disappearing.
-    skipped: dict[str, list[str]]
-    # Legal-but-non-portable alias names (need FOS 8.1.0+ fabric-wide), per fabric. Advisory only.
-    warnings: dict[str, list[str]] = {}
-    # SPEC-025 R7: the peer-port block, its own command set per fabric (every pair the sheet asks for).
-    peer_commands: dict[str, list[str]] = {}
-    peer_skipped: dict[str, list[str]] = {}
+async def health() -> HealthResponse:
+    return HealthResponse(version=__version__)
+
+
+async def app_profile() -> dict:
+    # The UI reads this to brand itself + restrict the mode chooser: "full" shows all modes;
+    # "init-only" (the Alletra MP Initialization accelerator) shows Initialization only.
+    # It ALSO serves the step registry + mode presets — the single source of truth the wizard
+    # renders from (ADR 0011 Phase 2; kills the hand-synced frontend mirror).
+    settings = load_settings()
+    return {
+        "profile": settings.alletra_profile,
+        "init_only": settings.init_only,
+        "title": settings.app_title,
+        # `unavailable` is the sentence for a step whose work is not built yet ("" otherwise): the
+        # mode chooser greys out every mode that includes it, and minting such a run is refused.
+        "steps": [
+            {"key": s.key, "label": s.label, "kind": s.kind, "phase": s.phase.value,
+             "unavailable": NOT_BUILT_STEPS.get(s.key, "")}
+            for s in STEP_REGISTRY
+        ],
+        "modes": {mode.value: list(keys) for mode, keys in mode_steps().items()},
+        # Optional-dependency capabilities of THIS build. wsapi_client imports the 3PAR SDK in
+        # a guarded try/except, so a frozen build that failed to bundle it degrades silently to
+        # "python-3parclient is not available in this build" the first time WSAPI is touched —
+        # which is how every exe before v0.14.0-rc.2 shipped without anyone noticing (the
+        # preflight was the first packaged feature to call WSAPI). Reporting it here makes a
+        # packaging regression visible on ANY build with one request, no array needed.
+        "capabilities": wsapi_capability(),
+    }
+
+
+def _mount_frontend(app: FastAPI) -> None:
+    # Serve the built frontend when present (single-host product mode). Frozen .exe first
+    # (PyInstaller extracts data under sys._MEIPASS), then the working directory, then the
+    # package root (editable install layout).
+    dist_candidates = [Path("frontend/dist"), Path(__file__).resolve().parents[3] / "frontend" / "dist"]
+    if getattr(sys, "frozen", False):
+        dist_candidates.insert(0, Path(getattr(sys, "_MEIPASS", ".")) / "frontend" / "dist")
+    for dist in dist_candidates:
+        if dist.is_dir():
+            app.mount("/", StaticFiles(directory=str(dist), html=True), name="ui")
+            break
 
 
 def create_app(service: OnboardingService | None = None) -> FastAPI:
@@ -183,696 +134,30 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    @app.middleware("http")
-    async def _ui_cache_policy(request, call_next):
-        # Every release serves from the same origin (127.0.0.1:8765), and without a policy the
-        # browser caches index.html AND the old hashed bundle it references — so after an upgrade
-        # the operator keeps seeing the previous interface until a hard refresh (seen live on the
-        # v0.13.0 candidates). index.html must always be revalidated; the hashed assets it names
-        # are immutable and can be cached forever.
-        response = await call_next(request)
-        path = request.url.path
-        if path in ("/", "/index.html"):
-            response.headers["Cache-Control"] = "no-cache"
-        elif path.startswith("/assets/"):
-            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-        return response
-
-    @app.exception_handler(StoredCredentialsUnreadableError)
-    async def _credentials_unreadable(_request, exc: StoredCredentialsUnreadableError) -> JSONResponse:
-        # ADR 0027: the run's secrets were encrypted with a key this installation does not hold.
-        return JSONResponse(status_code=409, content={"detail": str(exc)})
-
-    def _get_run_or_404(run_id: str):
-        try:
-            return service.get_run(run_id)
-        except RunNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="run not found") from exc
-
-    # ------------------------------------------------------------------ health + config
-
-    @app.get("/health", response_model=HealthResponse)
-    async def health() -> HealthResponse:
-        return HealthResponse(version=__version__)
-
-    @app.get("/app/profile")
-    async def app_profile() -> dict:
-        # The UI reads this to brand itself + restrict the mode chooser: "full" shows all modes;
-        # "init-only" (the Alletra MP Initialization accelerator) shows Initialization only.
-        # It ALSO serves the step registry + mode presets — the single source of truth the wizard
-        # renders from (ADR 0011 Phase 2; kills the hand-synced frontend mirror).
-        settings = load_settings()
-        return {
-            "profile": settings.alletra_profile,
-            "init_only": settings.init_only,
-            "title": settings.app_title,
-            # `unavailable` is the sentence for a step whose work is not built yet ("" otherwise): the
-            # mode chooser greys out every mode that includes it, and minting such a run is refused.
-            "steps": [
-                {"key": s.key, "label": s.label, "kind": s.kind, "phase": s.phase.value,
-                 "unavailable": NOT_BUILT_STEPS.get(s.key, "")}
-                for s in STEP_REGISTRY
-            ],
-            "modes": {mode.value: list(keys) for mode, keys in mode_steps().items()},
-            # Optional-dependency capabilities of THIS build. wsapi_client imports the 3PAR SDK in
-            # a guarded try/except, so a frozen build that failed to bundle it degrades silently to
-            # "python-3parclient is not available in this build" the first time WSAPI is touched —
-            # which is how every exe before v0.14.0-rc.2 shipped without anyone noticing (the
-            # preflight was the first packaged feature to call WSAPI). Reporting it here makes a
-            # packaging regression visible on ANY build with one request, no array needed.
-            "capabilities": wsapi_capability(),
-        }
-
-    @app.get("/config", response_model=ConfigStatusResponse)
-    async def get_config() -> ConfigStatusResponse:
-        values = masked_gl_credentials(env_path)
-        configured = bool(values.get("GL_CLIENT_ID")) and bool(values.get("GL_CLIENT_SECRET"))
-        return ConfigStatusResponse(configured=configured, values=values)
-
-    @app.post("/config", response_model=ConfigStatusResponse)
-    async def set_config(request: ConfigureRequest) -> ConfigStatusResponse:
-        update_gl_credentials(
-            env_path,
-            {
-                "GL_CLIENT_ID": request.gl_client_id,
-                "GL_CLIENT_SECRET": request.gl_client_secret,
-                "GL_TOKEN_URL": request.gl_token_url,
-                "GL_BASE_URL": request.gl_base_url,
-                "GL_MEMBER_WORKSPACE_ID": request.gl_member_workspace_id,
-            },
-        )
-        return await get_config()
-
-    @app.post("/config/check", response_model=CheckResponse)
-    async def config_check() -> CheckResponse:
-        # Re-load settings so credentials saved a moment ago are picked up.
-        return CheckResponse(report=await greenlake_check(load_settings()))
-
-    # ------------------------------------------------------------------ prerequisites
-
-    @app.get("/prereqs/firewall", response_model=FirewallRulesResponse)
-    async def prereq_firewall(region: str = "jp1") -> FirewallRulesResponse:
-        rules = [
-            FirewallRule(fqdn=fqdn, port=port, initiator=initiator, purpose=purpose)
-            for fqdn, port, initiator, purpose in prereqs.rules_for(region)
-        ]
-        return FirewallRulesResponse(region=region, rules=rules)
-
-    @app.get("/prereqs/firewall.txt", response_class=PlainTextResponse)
-    async def prereq_firewall_txt(region: str = "jp1") -> PlainTextResponse:
-        return PlainTextResponse(
-            prereqs.firewall_text(region),
-            media_type="text/plain",
-            headers={"Content-Disposition": 'attachment; filename="alletra-firewall-requirements.txt"'},
-        )
-
-    @app.get("/prereqs/connectivity", response_model=ConnectivityResponse)
-    async def prereq_connectivity(region: str = "jp1") -> ConnectivityResponse:
-        # Reachability to the HPE endpoints via the SAME path the tool uses: through the effective
-        # proxy (auto-detected system proxy or the manual override) if any, else direct.
-        manual = load_settings().alletra_proxy
-        results = await prereqs.check_connectivity(region, manual_proxy=manual)
-        items = [
-            ConnectivityResultItem(host=r.host, port=r.port, reachable=r.reachable, detail=r.detail, via=r.via)
-            for r in results
-        ]
-        effective = ProxyResolver(manual).for_url("https://common.cloud.hpe.com")
-        return ConnectivityResponse(
-            region=region, results=items, all_reachable=all(i.reachable for i in items), proxy=effective
-        )
-
-    @app.get("/prereqs/proxy", response_model=ProxyStatusResponse)
-    async def prereq_proxy_status() -> ProxyStatusResponse:
-        manual = load_settings().alletra_proxy or None
-        # os_system_proxy, NOT detect_system_proxy: the latter reads the HTTPS_PROXY env that
-        # apply_proxy_env publishes, so it would report our own override back as "detected".
-        detected = os_system_proxy("https://common.cloud.hpe.com")
-        effective = ProxyResolver(manual).for_url("https://common.cloud.hpe.com")
-        forced = is_direct(manual)
-        source = "direct" if forced or not effective else ("manual" if normalize_proxy(manual) else "system")
-        return ProxyStatusResponse(
-            detected=detected, manual=manual, effective=effective, source=source, forced_direct=forced,
-        )
-
-    @app.post("/prereqs/proxy", response_model=ProxyStatusResponse)
-    async def prereq_proxy_save(request: ProxySaveRequest) -> ProxyStatusResponse:
-        # os.environ is the source of truth for the running process (pydantic reads it); .env persists
-        # a set across restarts. Then re-publish the effective proxy for httpx + browser.
-        value = (request.proxy or "").strip()
-        # Normalize a direct request to the canonical sentinel so what persists is unambiguous, and
-        # so it is NON-EMPTY: set_env_values ignores empty values (it must never wipe a saved
-        # secret), which is precisely why blanking the field could not persist "go direct".
-        if is_direct(value):
-            value = DIRECT
-        os.environ["ALLETRA_PROXY"] = value
-        if value:
-            set_env_values(env_path, {"ALLETRA_PROXY": value})
-        apply_proxy_env(value or None)
-        return await prereq_proxy_status()
-
-    # ------------------------------------------------------------------ work items
-
-    @app.get("/work-items/template", response_class=PlainTextResponse)
-    async def work_item_template() -> PlainTextResponse:
-        return PlainTextResponse(
-            csv_template(),
-            media_type="text/csv",
-            headers={"Content-Disposition": 'attachment; filename="arrays.csv"'},
-        )
-
-    @app.post("/work-items/parse")
-    async def parse_work_items(request: CsvParseRequest) -> dict:
-        try:
-            items = load_work_items_csv_text(request.csv_text)
-        except (ValidationError, KeyError, ValueError) as exc:
-            raise HTTPException(status_code=422, detail=f"CSV did not parse: {exc}") from exc
-
-        def unmasked(item) -> dict:
-            # The values came from the client's own uploaded file; masking them here would
-            # break the upload -> editable form -> POST /runs round-trip. Localhost-only API.
-            data = item.model_dump(mode="json")
-            data["subscription_key"] = item.subscription_key.get_secret_value()
-            data["dscc_setup"].pop("password", None)  # never echo a password to the UI
-            return data
-
-        return {"work_items": [unmasked(item) for item in items]}
-
-    # ------------------------------------------------------------------ initialisation sheet
-
-    XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-    @app.get("/init-sheet/template")
-    async def init_sheet_template() -> Response:
-        # The Initialization accelerator ships an onboarding-only sheet (no Provisioning tab).
-        return Response(
-            content=build_template_bytes(init_only=load_settings().init_only),
-            media_type=XLSX_MEDIA,
-            headers={"Content-Disposition": 'attachment; filename="Initialisation_sheet.xlsx"'},
-        )
-
-    @app.post("/init-sheet/compose", response_model=InitSheetComposeResponse)
-    async def init_sheet_compose(request: InitSheetComposeRequest) -> InitSheetComposeResponse:
-        # SPEC-006 R3: the session runner's sheets. Nothing is held server-side; the caller uploads
-        # the result through /init-sheet/upload like any operator sheet.
-        try:
-            base = base64.b64decode(request.base_b64) if request.base_b64 else None
-            content = compose_workbook_bytes(
-                base=base, init=request.init, targets=request.targets,
-                volumes=request.volumes, hostsets=request.hostsets, hosts=request.hosts,
-                replication=request.replication, migration=request.migration, snapshots=request.snapshots,
-                iscsi_network=request.iscsi_network, peer_ports=request.peer_ports,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return InitSheetComposeResponse(content_b64=base64.b64encode(content).decode("ascii"))
-
-    @app.post("/init-sheet/upload", response_model=InitSheetUploadResponse)
-    async def init_sheet_upload(request: InitSheetUploadRequest) -> InitSheetUploadResponse:
-        # The sheet is COMPLETE intake, uploaded before a mode is chosen (ADR 0005 revision): save
-        # GreenLake creds and HOLD the parsed sheet server-side. No run yet — picking a mode (POST
-        # /runs/from-sheet) mints it. Device passwords never leave the server. Only a problem in what
-        # initialising the array needs refuses the upload; a problem in another tab is listed and stops
-        # only a run whose steps use that tab (owner, 2026-11-19).
-        # The init-only accelerator validates ONBOARDING fields only (no Provisioning tab).
-        try:
-            raw = base64.b64decode(request.content_b64, validate=True)
-        except (ValueError, TypeError) as exc:
-            raise HTTPException(status_code=422, detail="Upload was not valid base64") from exc
-        problems: list[str] = []
-        try:
-            if load_settings().init_only:
-                parsed = parse_workbook_bytes(raw, mode=RunMode.FULL_ONBOARDING)
-            else:
-                parsed, problems = parse_upload(raw)
-        except Exception as exc:
-            raise HTTPException(status_code=422, detail=f"Initialisation sheet did not parse: {exc}") from exc
-
-        # Workspace API credentials from the sheet land in the gitignored .env (no manual typing).
-        credentials_saved = bool(parsed.gl_client_id and parsed.gl_client_secret)
-        if credentials_saved:
-            update_gl_credentials(
-                env_path,
-                {
-                    "GL_CLIENT_ID": parsed.gl_client_id,
-                    "GL_CLIENT_SECRET": parsed.gl_client_secret,
-                    "GL_TOKEN_URL": parsed.gl_token_url,
-                },
-            )
-        token = service.stash_pending_sheet(parsed.work_item, parsed.provisioning_intent, raw if problems else None)
-        data = parsed.work_item.model_dump(mode="json")
-        data["subscription_key"] = parsed.work_item.subscription_key.get_secret_value()
-        data["dscc_setup"].pop("password", None)  # never echo the admin password to the UI
-        targets: dict[str, str] = {}
-        ports: list[str] = []
-        snapshot_rows: list[str] = []
-        if parsed.provisioning_intent is not None:
-            intent = parsed.provisioning_intent
-            for key, ep in (("array", intent.array), ("vcenter", intent.vcenter),
-                            ("switch_f1", intent.switch_f1), ("switch_f2", intent.switch_f2)):
-                targets[f"{key}_host"], targets[f"{key}_user"] = ep.host, ep.username
-            if intent.replication is not None:
-                targets["peer_host"], targets["peer_user"] = intent.replication.peer.host, intent.replication.peer.username
-                ports = [f"{'this array' if r.side == 'A' else 'peer'} {r.nsp} {r.ip}" for r in intent.replication.network]
-            if intent.snapshots is not None:
-                snapshot_rows = [f"{r.source}: {r.summary(named=True)}" for r in intent.snapshots.requests]
-        return InitSheetUploadResponse(
-            token=token, work_item=data, credentials_saved=credentials_saved, targets=targets, replication_ports=ports,
-            snapshot_rows=snapshot_rows, problems=problems,
-        )
-
-    # ------------------------------------------------------------------ runs + steps
-
-    @app.post("/runs", response_model=RunResponse)
-    async def create_run(request: CreateRunRequest) -> RunResponse:
-        return RunResponse(
-            run=service.create_run(
-                request.work_item, mode=request.mode, selected_steps=request.selected_steps
-            )
-        )
-
-    @app.post("/runs/from-sheet", response_model=RunResponse)
-    async def create_run_from_sheet(request: RunFromSheetRequest) -> RunResponse:
-        # The operator picked a mode for a previously-uploaded complete sheet -> mint the run now.
-        try:
-            run = service.create_run_from_pending(
-                request.token, mode=request.mode, selected_steps=request.selected_steps
-            )
-        except PendingSheetNotFoundError as exc:
-            raise HTTPException(
-                status_code=410,
-                detail="This uploaded sheet is no longer held — re-upload the Initialisation sheet.",
-            ) from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return RunResponse(run=run)
-
-    @app.get("/runs", response_model=RunListResponse)
-    async def list_runs() -> RunListResponse:
-        return RunListResponse(runs=service.list_runs())
-
-    @app.get("/runs/{run_id}", response_model=RunDetailResponse)
-    async def get_run(run_id: str) -> RunDetailResponse:
-        run = _get_run_or_404(run_id)
-        # A run whose stored credentials cannot be read still opens; its steps say why they refuse.
-        try:
-            item = service.get_work_item(run_id)
-        except (RunNotFoundError, StoredCredentialsUnreadableError):
-            item = None
-        try:
-            credential = service.array_credential_info(run_id)
-        except (RunNotFoundError, StoredCredentialsUnreadableError):
-            credential = None
-        return RunDetailResponse(run=run, work_item=item, array_credential=credential)
-
-    def _start_step(run_id: str, start) -> RunResponse:
-        _get_run_or_404(run_id)
-        try:
-            return RunResponse(run=start())
-        except (RunBusyError, StepPreconditionError) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        except RunNotFoundError as exc:
-            # e.g. a provisioning step on a run that has no provisioning intent
-            raise HTTPException(status_code=404, detail=str(exc) or "not found") from exc
-
-    @app.post("/runs/{run_id}/provision", response_model=RunResponse)
-    async def run_provision(run_id: str, request: ProvisionStepRequest) -> RunResponse:
-        """GreenLake device registration (the `greenlake` step): register, assign, subscribe.
-
-        Not storage provisioning; that is `/runs/{id}/storage/preview` and `/storage/apply`. The
-        path predates the storage steps. It is documented rather than renamed so the UI, and any
-        script written against it, keep working.
-        """
-        return _start_step(run_id, lambda: service.start_provision(run_id, dry_run=request.dry_run))
-
-    @app.post("/runs/{run_id}/cloudinit", response_model=RunResponse)
-    async def run_cloudinit(run_id: str, request: CloudinitStepRequest) -> RunResponse:
-        return _start_step(
-            run_id,
-            lambda: service.start_cloudinit(
-                run_id, cloudinit_url=request.cloudinit_url, auto_submit=request.auto_submit
-            ),
-        )
-
-    @app.post("/runs/{run_id}/dscc", response_model=RunResponse)
-    async def run_dscc(run_id: str, request: DsccStepRequest) -> RunResponse:
-        return _start_step(run_id, lambda: service.start_dscc(run_id, cdp_url=request.cdp_url))
-
-    @app.post("/runs/{run_id}/verify", response_model=RunResponse)
-    async def run_verify(run_id: str, request: VerifyStepRequest) -> RunResponse:
-        # Post-init read-only SSH verification of the array config. Password is used for the SSH
-        # session only — never stored. Never changes the run's COMPLETE/SUCCEEDED status.
-        return _start_step(
-            run_id,
-            lambda: service.start_verify(run_id, username=request.username, password=request.password),
-        )
-
-    @app.post("/runs/{run_id}/asbuilt", response_model=RunResponse)
-    async def run_asbuilt(run_id: str, request: AsBuiltStepRequest) -> RunResponse:
-        # Read-only: SSH the array (show*/checkhealth/showinventory -csvtable) and build the as-built
-        # .docx. Password is used for the SSH session only. Download it from /asbuilt/download.
-        return _start_step(
-            run_id,
-            lambda: service.start_asbuilt(
-                run_id, username=request.username, password=request.password,
-                customer=request.customer, site=request.site,
-                application_workload=request.application_workload, purpose=request.purpose,
-            ),
-        )
-
-    @app.get("/runs/{run_id}/asbuilt/download")
-    async def download_asbuilt(run_id: str) -> Response:
-        run = _get_run_or_404(run_id)
-        data = service.get_asbuilt(run_id)
-        if data is None:
-            raise HTTPException(status_code=404, detail="No as-built generated yet — run the as-built step first.")
-        serial = run.serial_number  # from the run, so a run whose credentials cannot be read still downloads
-        return Response(
-            content=data,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f'attachment; filename="as-built-{serial}.docx"'},
-        )
-
-    @app.post("/runs/{run_id}/complete", response_model=RunResponse)
-    async def complete_run(run_id: str) -> RunResponse:
-        _get_run_or_404(run_id)
-        return RunResponse(run=service.mark_complete(run_id))
-
-    # ------------------------------------------------------------------ storage provisioning (Phase 2)
-
-    @app.post("/runs/{run_id}/discover", response_model=RunResponse)
-    async def run_discover(run_id: str) -> RunResponse:
-        return _start_step(run_id, lambda: service.start_discover(run_id))
-
-    @app.get("/runs/{run_id}/ports", response_model=ArrayPortsResponse)
-    async def array_ports(run_id: str) -> ArrayPortsResponse:
-        _get_run_or_404(run_id)
-        try:
-            return ArrayPortsResponse(**service.get_ports(run_id))
-        except RunNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="this run has no provisioning sheet") from exc
-
-    @app.post("/runs/{run_id}/ports/preview", response_model=RunResponse)
-    async def run_ports_preview(run_id: str) -> RunResponse:
-        # SPEC-024 R2/R3, read-only: the array's ports, iSCSI addresses and VLANs, and the plan for the
-        # sheet's iSCSI network tab. Its CLI lines are printed for the engineer; nothing is sent.
-        return _start_step(run_id, lambda: service.start_ports_preview(run_id))
-
-    @app.post("/runs/{run_id}/zoning/preview", response_model=RunResponse)
-    async def run_zoning_preview(run_id: str) -> RunResponse:
-        return _start_step(run_id, lambda: service.start_zoning_preview(run_id))
-
-    @app.post("/runs/{run_id}/zoning/plan", response_model=RunResponse)
-    async def run_zoning_plan(run_id: str) -> RunResponse:
-        # Read-only: reads both fabric switches to build the zoning plan; makes NO switch writes.
-        return _start_step(run_id, lambda: service.start_zoning_plan(run_id))
-
-    # POST /runs/{run_id}/zoning/stage was removed on 2026-09-02 (ADR 0012). It wrote zones to the
-    # switch; the tool no longer has that capability at any layer. /zoning/render is the whole
-    # zoning output now.
-
-    @app.post("/zoning/render", response_model=ZoningRenderResponse)
-    async def zoning_render(request: ZoningRenderRequest) -> ZoningRenderResponse:
-        # Assemble the command set from the plan + the operator's aliases and selected pairs. The
-        # tool never RUNS these commands (ADR 0004, ADR 0012) — this is the script the SAN team
-        # applies by hand, and it is the deliverable, not a rehearsal.
-        commands, skipped = render_commands(request.plan, request.aliases, request.selected_pairs)
-        peer_commands, peer_skipped = render_peer_commands(request.plan, request.aliases)
-        if request.run_id:
-            try:
-                service.record_zoning_render(
-                    request.run_id, commands=commands, skipped=skipped,
-                    aliases=request.aliases, selected_pairs=request.selected_pairs,
-                    peer_commands=peer_commands,
-                )
-            except RunNotFoundError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
-        return ZoningRenderResponse(
-            commands=commands, skipped=skipped,
-            warnings=alias_name_warnings(request.plan, request.aliases),
-            peer_commands=peer_commands, peer_skipped=peer_skipped,
-        )
-
-    @app.get("/runs/{run_id}/storage/preflight", response_model=PreflightReport)
-    async def storage_preflight(run_id: str) -> PreflightReport:
-        # Read-only readiness of the array + vCenter the sheet points at, so a missing prerequisite is
-        # named BEFORE discovery runs instead of surfacing as a failed step. Makes no writes.
-        _get_run_or_404(run_id)
-        try:
-            with service.coordinator.recording(run_id):
-                return await asyncio.to_thread(service.get_storage_preflight, run_id)
-        except StepPreconditionError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    @app.get("/runs/{run_id}/storage/objects", response_model=ProvisioningObjects)
-    async def storage_objects(run_id: str) -> ProvisioningObjects:
-        # The dropdown palette (existing array objects + to-be-created + discovered hosts). Reads the
-        # array over WSAPI, so run it off the event loop.
-        _get_run_or_404(run_id)
-        try:
-            with service.coordinator.recording(run_id):
-                return await asyncio.to_thread(service.get_storage_objects, run_id)
-        except StepPreconditionError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    @app.post("/runs/{run_id}/storage/builder", response_model=ProvisioningComposition)
-    async def storage_builder(run_id: str, request: ProvisioningBuilder) -> ProvisioningComposition:
-        # Save the operator-composed host-set membership + VV-set membership + exports onto the intent.
-        _get_run_or_404(run_id)
-        try:
-            return service.set_provisioning_builder(run_id, request)
-        except (RunBusyError, StepPreconditionError) as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    @app.post("/runs/{run_id}/storage/preview", response_model=RunResponse)
-    async def run_storage_preview(run_id: str) -> RunResponse:
-        return _start_step(run_id, lambda: service.start_storage_preview(run_id))
-
-    @app.post("/runs/{run_id}/storage/apply", response_model=RunResponse)
-    async def run_storage_apply(run_id: str, request: StorageApplyRequest | None = None) -> RunResponse:
-        # Creates host/volumes/exports on the array: only the held plan, named by the id the operator ticked.
-        req = request or StorageApplyRequest()
-        return _start_step(run_id, lambda: service.start_storage_apply(run_id, approved_plan=req.approved_plan))
-
-    @app.post("/runs/{run_id}/storage/verify-paths", response_model=RunResponse)
-    async def run_storage_verify_paths(run_id: str) -> RunResponse:
-        # Tier-2, read-only: reads showvlun -a and reports per-host path liveness. Never gates.
-        return _start_step(run_id, lambda: service.start_path_verify(run_id))
-
-    @app.post("/runs/{run_id}/replication/preview", response_model=RunResponse)
-    async def run_replication_preview(run_id: str) -> RunResponse:
-        # SPEC-016 R1-R3, read-only: both arrays over SSH, the partnership, the exists/create/conflict plan.
-        return _start_step(run_id, lambda: service.start_replication_preview(run_id))
-
-    @app.post("/runs/{run_id}/replication/link-check", response_model=RunResponse)
-    async def run_replication_link_check(run_id: str, request: LinkCheckRequest | None = None) -> RunResponse:
-        # SPEC-020 R2: checkrclink server on B, client on A, read until the latency, stop both. No config change.
-        req = request or LinkCheckRequest()
-        return _start_step(run_id, lambda: service.start_link_check(run_id, duration_s=req.duration_s))
-
-    @app.post("/runs/{run_id}/replication/apply", response_model=RunResponse)
-    async def run_replication_apply(run_id: str, request: ReplicationApplyRequest | None = None) -> RunResponse:
-        # SPEC-016 R4/R7: creates Remote Copy groups over WSAPI: only the held plan, named by the id the operator ticked.
-        # SPEC-020 R4: on RCIP the link must have been checked; over the limit needs accept_latency.
-        req = request or ReplicationApplyRequest()
-        return _start_step(run_id, lambda: service.start_replication_apply(
-            run_id, approved_plan=req.approved_plan, accept_latency=req.accept_latency))
-
-    @app.post("/runs/{run_id}/replication/verify", response_model=RunResponse)
-    async def run_replication_verify(run_id: str) -> RunResponse:
-        # SPEC-016 R6, read-only: showrcopy on both arrays, one verdict per planned group.
-        return _start_step(run_id, lambda: service.start_replication_verify(run_id))
-
-    @app.post("/runs/{run_id}/replication/failover-test", response_model=RunResponse)
-    async def run_failover_test(run_id: str, request: FailoverTestRequest | None = None) -> RunResponse:
-        # SPEC-017: stop -> failover -> recover -> wait -> restore on one group over WSAPI's DR action;
-        # requires authorised=True (R4). Role changes on two arrays: never implicit.
-        req = request or FailoverTestRequest()
-        return _start_step(
-            run_id,
-            lambda: service.start_failover_test(
-                run_id, group=req.group, confirm=req.confirm, authorised=req.authorised,
-            ),
-        )
-
-    @app.get("/runs/{run_id}/snapshots", response_model=SnapshotsResponse)
-    async def snapshots_tab(run_id: str) -> SnapshotsResponse:
-        # SPEC-023 R10: what the workbook asks for, in words, and whether the plan last shown is still held.
-        _get_run_or_404(run_id)
-        try:
-            return SnapshotsResponse(**service.get_snapshots(run_id))
-        except RunNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="this run has no provisioning sheet") from exc
-
-    @app.post("/runs/{run_id}/snapshots/preview", response_model=RunResponse)
-    async def run_snapshots_preview(run_id: str) -> RunResponse:
-        # SPEC-023 R3/R4, read-only: showsched, showdate, showcpg over SSH; volumes, sets, /system over WSAPI.
-        return _start_step(run_id, lambda: service.start_snapshots_preview(run_id))
-
-    @app.post("/runs/{run_id}/snapshots/apply", response_model=RunResponse)
-    async def run_snapshots_apply(run_id: str, request: SnapshotApplyRequest | None = None) -> RunResponse:
-        # SPEC-023 R5/R6: the snapshots now over WSAPI, then the schedules: only the held plan, named by
-        # the id the operator ticked.
-        req = request or SnapshotApplyRequest()
-        return _start_step(run_id, lambda: service.start_snapshots_apply(run_id, approved_plan=req.approved_plan))
-
-    @app.post("/runs/{run_id}/snapshots/verify", response_model=RunResponse)
-    async def run_snapshots_verify(run_id: str) -> RunResponse:
-        # SPEC-023 R7, read-only: the snapshots now and each schedule, read back.
-        return _start_step(run_id, lambda: service.start_snapshots_verify(run_id))
-
-    # ------------------------------------------------------------------ device trust (ADR 0026)
-
-    @app.get("/runs/{run_id}/trust", response_model=TrustedDevicesResponse)
-    async def trusted_devices(run_id: str) -> TrustedDevicesResponse:
-        # The key or certificate each on-site device presented on this run's first contact: fingerprints only.
-        _get_run_or_404(run_id)
-        return TrustedDevicesResponse(devices=service.trusted_devices(run_id), device_ca_bundle=service.device_ca_bundle())
-
-    @app.post("/runs/{run_id}/trust/retrust", response_model=RetrustResponse)
-    async def retrust_device(run_id: str, request: RetrustRequest) -> RetrustResponse:
-        # A separate, logged action on the run (never a button on the error): trust the key the device
-        # presented when it was refused, named by the fingerprint the operator compared.
-        _get_run_or_404(run_id)
-        try:
-            device = service.retrust_device(run_id, kind=request.kind, host=request.host, port=request.port,
-                                            fingerprint=request.fingerprint)
-        except DevicePinNotFoundError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except StepPreconditionError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-        return RetrustResponse(device=device)
-
-    # ------------------------------------------------------------------ events
-
-    @app.get("/runs/{run_id}/events", response_model=EventListResponse,
-             responses={200: {"model": run_event_list()}})
-    async def list_events(run_id: str) -> EventListResponse:
-        _get_run_or_404(run_id)
-        return EventListResponse(events=service.list_events(run_id))
-
-    @app.get("/runs/{run_id}/stream")
-    async def stream_events(run_id: str) -> StreamingResponse:
-        _get_run_or_404(run_id)
-        queue = service.events.subscribe(run_id)
-
-        async def generate():
-            try:
-                while True:
-                    try:
-                        event = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_S)
-                    except TimeoutError:
-                        yield ": heartbeat\n\n"  # keeps proxies/browsers from closing the stream
-                        continue
-                    yield f"data: {event.model_dump_json()}\n\n"
-            finally:
-                service.events.unsubscribe(run_id, queue)
-
-        return StreamingResponse(generate(), media_type="text/event-stream")
-
-    # ------------------------------------------------------------------ console (SPEC-019)
-
-    @app.get("/runs/{run_id}/console/log")
-    async def console_log(run_id: str, since: int = 0, format: str = "json") -> Response:
-        _get_run_or_404(run_id)
-        entries = service.coordinator.list_commands(run_id, since)
-        if format == "txt":
-            return Response(content=console_text(entries), media_type="text/plain; charset=utf-8",
-                            headers={"Content-Disposition": f'attachment; filename="commands-{run_id[:8]}.txt"'})
-        return JSONResponse({"commands": entries})
-
-    @app.get("/runs/{run_id}/console/targets")
-    async def console_targets(run_id: str) -> dict:
-        _get_run_or_404(run_id)
-        return {"targets": service.console.targets(run_id)}
-
-    @app.post("/runs/{run_id}/console")
-    async def console_run(run_id: str, request: ConsoleRequest) -> dict:
-        # SPEC-019 R3: read-only allowlist only, with the run's own credential; refusals are answered, not raised
-        _get_run_or_404(run_id)
-        try:
-            return await service.console.run(run_id, request.command, request.target)
-        except StepPreconditionError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    @app.post("/runs/{run_id}/console/terminal")
-    async def console_terminal(run_id: str, request: ConsoleTerminalRequest) -> dict:
-        _get_run_or_404(run_id)
-        try:
-            return service.console.open_terminal(run_id, request.target)
-        except StepPreconditionError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    @app.get("/runs/{run_id}/console/stream")
-    async def console_stream(run_id: str) -> StreamingResponse:
-        _get_run_or_404(run_id)
-        queue = service.coordinator.console.subscribe(run_id)
-
-        async def generate():
-            try:
-                while True:
-                    try:
-                        entry = await asyncio.wait_for(queue.get(), timeout=SSE_HEARTBEAT_S)
-                    except TimeoutError:
-                        yield ": heartbeat\n\n"
-                        continue
-                    yield f"data: {json.dumps(entry)}\n\n"
-            finally:
-                service.coordinator.console.unsubscribe(run_id, queue)
-
-        return StreamingResponse(generate(), media_type="text/event-stream")
-
-    # ------------------------------------------------------------------ browser + preflight
-
-    @app.post("/browser/launch", response_model=BrowserLaunchResponse)
-    async def browser_launch(request: BrowserLaunchRequest) -> BrowserLaunchResponse:
-        try:
-            info = launch_debug_browser(
-                port=request.port,
-                url=request.url,
-                proxy=request.proxy or settings.browser_proxy,
-                proxy_bypass=settings.browser_proxy_bypass,
-                auto_proxy=not request.no_proxy,
-            )
-        except RuntimeError as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
-        return BrowserLaunchResponse(**info)
-
-    @app.post("/tools/discovery/launch", response_model=DiscoveryToolResponse)
-    async def discovery_launch() -> DiscoveryToolResponse:
-        # Runs on the jump box; opens the on-Desktop HPE Discovery Tool .exe for the operator.
-        return DiscoveryToolResponse(**platform_clients.launch_discovery_tool())
-
-    @app.get("/system/clock", response_model=ClockStatus)
-    async def get_clock(url: str | None = None) -> ClockStatus:
-        return await platform_clients.clock_status(url)
-
-    @app.post("/system/clock/sync", response_model=ClockSyncResult)
-    async def post_clock_sync(url: str | None = None) -> ClockSyncResult:
-        try:
-            return await platform_clients.sync_clock(url)
-        except PermissionError as exc:
-            raise HTTPException(status_code=403, detail=str(exc)) from exc
-        except (RuntimeError, OSError) as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-    @app.post("/preflight", response_model=PreflightResponse)
-    async def preflight(request: PreflightRequest) -> PreflightResponse:
-        # Fresh settings so credentials entered in Configure after startup are honored.
-        report = await PreflightService(load_settings()).run(request.work_item, live_greenlake=request.live_greenlake)
-        return PreflightResponse(report=report)
-
-    # Serve the built frontend when present (single-host product mode). Frozen .exe first
-    # (PyInstaller extracts data under sys._MEIPASS), then the working directory, then the
-    # package root (editable install layout).
-    dist_candidates = [Path("frontend/dist"), Path(__file__).resolve().parents[3] / "frontend" / "dist"]
-    if getattr(sys, "frozen", False):
-        dist_candidates.insert(0, Path(getattr(sys, "_MEIPASS", ".")) / "frontend" / "dist")
-    for dist in dist_candidates:
-        if dist.is_dir():
-            app.mount("/", StaticFiles(directory=str(dist), html=True), name="ui")
-            break
-
+    app.middleware("http")(_ui_cache_policy)
+    app.add_exception_handler(StoredCredentialsUnreadableError, _credentials_unreadable)
+
+    app.get("/health", response_model=HealthResponse)(health)
+    app.get("/app/profile")(app_profile)
+
+    for router in (
+        build_prereqs_router(env_path),
+        build_sheets_router(service, env_path),
+        build_runs_router(service),
+        build_onboarding_router(service),
+        build_documents_router(service),
+        build_discovery_router(service),
+        build_provisioning_router(service),
+        build_replication_router(service),
+        build_snapshots_router(service),
+        build_trust_router(service),
+        build_events_router(service),
+        build_console_router(service),
+        build_system_router(settings),
+    ):
+        app.include_router(router)
+
+    _mount_frontend(app)
     return app
 
 

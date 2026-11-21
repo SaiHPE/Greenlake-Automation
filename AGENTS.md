@@ -68,7 +68,7 @@ src/alletra_onboard/
   adapters/      one package per outside system: greenlake/, browser/ (Playwright), array/
                  (SSH + WSAPI), vcenter/, fabric/ (Brocade), hosts/ (Linux SSH, Windows WinRM),
                  persistence/ (SQLite). command_log.py records every device command for the console.
-  api/app.py     FastAPI routes; cli/main.py the CLI.
+  api/           app.py (create_app), routes/ (one APIRouter per area), schemas.py; cli/main.py the CLI.
 frontend/src/    React + Grommet. steps/ one file per step; ui/ the shared shell and blocks.
 tests/unit, tests/contract, tests/fixtures (captured device output)
 lab/             scripts that drive the app against the lab arrays (see lab/README.md)

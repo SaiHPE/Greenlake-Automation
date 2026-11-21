@@ -196,7 +196,7 @@ The backend uses ports and adapters. Dependencies point inward
 ```mermaid
 flowchart TB
     UI["frontend/src<br/>React + Grommet (HPE Design System)"]
-    API["api/app.py<br/>HTTP routes, SSE streams"]
+    API["api/app.py + api/routes/<br/>HTTP routes, SSE streams"]
     SVC["application/service.py<br/>composition root"]
     subgraph CTX["application/ (one package per context)"]
         RUNS["runs/<br/>coordinator, events, console"]
@@ -220,7 +220,7 @@ flowchart TB
 | `domain/` | Models, the step registry, rate-limit and redaction policies, the persistence port | [workflow.py](../../src/alletra_onboard/domain/workflow.py), [models.py](../../src/alletra_onboard/domain/models.py), [policies.py](../../src/alletra_onboard/domain/policies.py), [ports.py](../../src/alletra_onboard/domain/ports.py) |
 | `application/` | One package per context; `service.py` wires them | [service.py](../../src/alletra_onboard/application/service.py), [runs/coordinator.py](../../src/alletra_onboard/application/runs/coordinator.py) |
 | `adapters/` | Device, cloud, browser and storage I/O; the command log | [adapters/](../../src/alletra_onboard/adapters/), [command_log.py](../../src/alletra_onboard/adapters/command_log.py) |
-| `api/`, `cli/` | Routes and schemas; the `onboard ui`, `api` and `check` commands | [app.py](../../src/alletra_onboard/api/app.py), [schemas.py](../../src/alletra_onboard/api/schemas.py), [cli/main.py](../../src/alletra_onboard/cli/main.py) |
+| `api/`, `cli/` | Routes and schemas; the `onboard ui`, `api` and `check` commands | [app.py](../../src/alletra_onboard/api/app.py), [routes/](../../src/alletra_onboard/api/routes/), [schemas.py](../../src/alletra_onboard/api/schemas.py), [cli/main.py](../../src/alletra_onboard/cli/main.py) |
 | `frontend/src/` | One component per step in `steps/`; the shared shell and console pane in `ui/` | [frontend/src/](../../frontend/src/) |
 
 Main libraries ([pyproject.toml](../../pyproject.toml)): FastAPI, httpx, Playwright, openpyxl,
@@ -650,7 +650,7 @@ restart resumes from its stored phase and artifacts; the operator previews again
 | Situation | What the tool does | Source |
 |---|---|---|
 | A step's task crashes | The run moves to `retryable_failure` with a `step.crashed` event; it is never left `running` | [coordinator.py](../../src/alletra_onboard/application/runs/coordinator.py) `_guarded` |
-| A step's precondition is missing | HTTP 409 with a sentence; nothing starts | [app.py](../../src/alletra_onboard/api/app.py) `_start_step` |
+| A step's precondition is missing | HTTP 409 with a sentence; nothing starts | [routes/common.py](../../src/alletra_onboard/api/routes/common.py) `start_step` |
 | Array WSAPI not ready (503) | Stop before any write, with the next thing to check | [ADR 0003](../adr/0003-transport-wsapi-with-readiness-gate.md) |
 | Array not yet subscribed | Volume creation is refused by the array; this is a GreenLake state, not a network fault | [CONTEXT.md](../../CONTEXT.md) *Array subscription* |
 | GreenLake 202 operation | Polled to a final state; a failed or timed-out operation is reported, not assumed | [http_client.py](../../src/alletra_onboard/adapters/greenlake/http_client.py) |
