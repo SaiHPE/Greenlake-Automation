@@ -43,6 +43,7 @@ from alletra_onboard.domain.network import (
     IscsiVlanRequest,
     PortNetworkView,
 )
+from alletra_onboard.domain.replication import PortRole
 from alletra_onboard.domain.shared import EndpointCreds
 
 # shownet's data row: the only line that starts with two IPv4s (the management address, then its mask).
@@ -130,48 +131,70 @@ def _in_use(req: IscsiVlanRequest, view: PortNetworkView) -> str:
     return view.other_addresses.get(req.ip, "")
 
 
-def _action(req: IscsiVlanRequest, view: PortNetworkView) -> IscsiVlanAction:
-    array = view.name
-    action = IscsiVlanAction(nsp=req.nsp, vlan_id=req.vlan_id, state="conflict")
-    role = view.roles.get(req.nsp)
-    if role is None:
-        action.reason = f"{array} has no port {req.nsp} (showport)."
-        return action
+def _port_conflict(
+    req: IscsiVlanRequest, role: PortRole, base: IscsiPortAddress | None, array: str,
+) -> str:
     if not (role.protocol == "iSCSI" and role.type in ("host", "free")):
-        action.reason = (f"{array} {req.nsp} is not an iSCSI port: showport lists it as {role.mode} {role.state} "
-                         f"{role.type} {role.protocol}. The tool never changes a port's role.")
-        return action
-    base = next((p for p in view.iscsi_ports if p.nsp == req.nsp), None)
+        return (f"{array} {req.nsp} is not an iSCSI port: showport lists it as {role.mode} {role.state} "
+                f"{role.type} {role.protocol}. The tool never changes a port's role.")
     if base is not None and base.peer_enabled:
-        action.reason = (f"{array} {req.nsp} is a peer-enabled iSCSI port (showport -iscsi: Peer_Enabled Y). "
-                         "The tool does not add VLANs to it.")
+        return (f"{array} {req.nsp} is a peer-enabled iSCSI port (showport -iscsi: Peer_Enabled Y). "
+                "The tool does not add VLANs to it.")
+    return ""
+
+
+def _existing_vlan_action(
+    req: IscsiVlanRequest, have: IscsiVlanInterface, array: str,
+) -> IscsiVlanAction:
+    action = IscsiVlanAction(nsp=req.nsp, vlan_id=req.vlan_id, state="conflict")
+    if not differences(have, req):
+        action.state, action.reason = "exists", f"{req.ip} {have.netmask} already set"
+        if req.gateway and not have.gateway:
+            action.gateway_cli = gw_line(req)
+            action.reason += f"; gateway {req.gateway} not set yet (a change window's job)"
         return action
-    have = next((v for v in view.vlans if v.nsp == req.nsp and v.vlan_id == req.vlan_id), None)
-    if have is not None:
-        if not differences(have, req):
-            action.state, action.reason = "exists", f"{req.ip} {have.netmask} already set"
-            if req.gateway and not have.gateway:
-                action.gateway_cli = gw_line(req)
-                action.reason += f"; gateway {req.gateway} not set yet (a change window's job)"
-            return action
-        action.reason = (f"{array} {req.nsp} already has VLAN {req.vlan_id} with {have.ip} {have.netmask} "
-                         f"(gateway {have.gateway or 'none'}); the sheet says {req.ip} {req.netmask} "
-                         f"(gateway {req.gateway or 'none'}). The tool never changes an address it did not set.")
-        return action
-    where = _in_use(req, view)
-    if where:
-        action.reason = f"{req.ip} is already in use on {array}: {where}."
-        return action
+    action.reason = (f"{array} {req.nsp} already has VLAN {req.vlan_id} with {have.ip} {have.netmask} "
+                     f"(gateway {have.gateway or 'none'}); the sheet says {req.ip} {req.netmask} "
+                     f"(gateway {req.gateway or 'none'}). The tool never changes an address it did not set.")
+    return action
+
+
+def _subnet_conflict(
+    req: IscsiVlanRequest, base: IscsiPortAddress | None, view: PortNetworkView,
+) -> str:
     net = _network(req.ip, req.netmask)
+    if net is None:
+        return ""
     taken = [(f"iSCSI port {req.nsp}", base.ip, base.netmask)] if base is not None and base.ip else []
     if view.mgmt_ip:
         taken.append(("management", view.mgmt_ip, view.mgmt_netmask))
     for label, ip, mask in taken:
-        if net is not None and net == _network(ip, mask):
-            action.reason = f"{net} is already the network of {label} on {array}; a VLAN needs a network of its own."
-            return action
-    action.state, action.cli, action.undo = "create", addr_line(req), delete_line(req.nsp, req.vlan_id)
-    action.reason = f"{req.ip} {req.netmask} on VLAN {req.vlan_id} ({role.state})"
+        if net == _network(ip, mask):
+            return f"{net} is already the network of {label} on {view.name}; a VLAN needs a network of its own."
+    return ""
+
+
+def _action(req: IscsiVlanRequest, view: PortNetworkView) -> IscsiVlanAction:
+    role = view.roles.get(req.nsp)
+    if role is None:
+        return IscsiVlanAction(nsp=req.nsp, vlan_id=req.vlan_id, state="conflict",
+                               reason=f"{view.name} has no port {req.nsp} (showport).")
+    base = next((p for p in view.iscsi_ports if p.nsp == req.nsp), None)
+    if reason := _port_conflict(req, role, base, view.name):
+        return IscsiVlanAction(nsp=req.nsp, vlan_id=req.vlan_id, state="conflict", reason=reason)
+    have = next((v for v in view.vlans if v.nsp == req.nsp and v.vlan_id == req.vlan_id), None)
+    if have is not None:
+        return _existing_vlan_action(req, have, view.name)
+    if where := _in_use(req, view):
+        return IscsiVlanAction(nsp=req.nsp, vlan_id=req.vlan_id, state="conflict",
+                               reason=f"{req.ip} is already in use on {view.name}: {where}.")
+    if reason := _subnet_conflict(req, base, view):
+        return IscsiVlanAction(nsp=req.nsp, vlan_id=req.vlan_id, state="conflict", reason=reason)
+    action = IscsiVlanAction(
+        nsp=req.nsp, vlan_id=req.vlan_id, state="create",
+        cli=addr_line(req), undo=delete_line(req.nsp, req.vlan_id),
+        reason=f"{req.ip} {req.netmask} on VLAN {req.vlan_id} ({role.state})",
+    )
     if req.gateway:
         action.gateway_cli = gw_line(req)
         action.reason += f"; gateway {req.gateway} not set by the tool (a change window's job)"
@@ -216,37 +239,33 @@ def switch_sentence(array: str, nsp: str, vlan_ids: list[int]) -> str:
             "keep the untagged (native) VLAN as it is.")
 
 
-def plan_iscsi_vlans(requests: list[IscsiVlanRequest], view: PortNetworkView) -> IscsiNetworkPlan:
-    """R3: one action per sheet row, in sheet order; the first rule that applies decides. Pure."""
-    actions = [_action(req, view) for req in requests]
-    plan = IscsiNetworkPlan(array=view.name, actions=actions)
-    plan.blockers = [a.reason for a in actions if a.state == "conflict"]
-
+def _plan_notes(
+    requests: list[IscsiVlanRequest], actions: list[IscsiVlanAction], view: PortNetworkView,
+) -> list[str]:
+    notes: list[str] = []
     nodes: dict[int, set[str]] = {}
     for req in requests:
         nodes.setdefault(req.vlan_id, set()).add(req.nsp.split(":", 1)[0])
     for vlan_id, on in nodes.items():
         if len(on) == 1:
             (node,) = on
-            plan.notes.append(f"VLAN {vlan_id} is only on node {node}. If that node stops, hosts on VLAN {vlan_id} "
-                              "lose every path.")
+            notes.append(f"VLAN {vlan_id} is only on node {node}. If that node stops, hosts on VLAN {vlan_id} "
+                         "lose every path.")
     for action in actions:
         role = view.roles.get(action.nsp)
         if action.state == "create" and role is not None and role.state != "ready":
             note = f"{action.nsp} is {role.state}: the address is set, but no host reaches it until the link is up."
-            if note not in plan.notes:
-                plan.notes.append(note)
+            if note not in notes:
+                notes.append(note)
     for action, req in zip(actions, requests, strict=True):
         if action.gateway_cli:
-            plan.notes.append(f"{action.nsp} VLAN {action.vlan_id}: the tool adds the address without the gateway "
-                              f"{req.gateway}. The gateway needs the port offline, so it is in a separate set for a "
-                              "change window.")
-    plan.removal_lines = [a.undo for a in reversed(actions) if a.state == "create"]
-    plan.gateway_window = gateway_window(actions)
-    if plan.gateway_window:
-        ports = sorted({a.nsp for a in actions if a.gateway_cli}, key=_nsp_key)
-        plan.gateway_notes = [GATEWAY_WINDOW] + [sessions_sentence(nsp, view.sessions.get(nsp)) for nsp in ports]
+            notes.append(f"{action.nsp} VLAN {action.vlan_id}: the tool adds the address without the gateway "
+                         f"{req.gateway}. The gateway needs the port offline, so it is in a separate set for a "
+                         "change window.")
+    return notes
 
+
+def _plan_switch_handoff(actions: list[IscsiVlanAction], view: PortNetworkView) -> list[str]:
     # R3: a line per sheet port with a planned or existing VLAN. A conflict row keeps its port's line when
     # the array already has a VLAN there (live 2026-11-17: VLAN 2999 on 0:4:2 with another gateway).
     wanted: dict[str, list[int]] = {}
@@ -254,10 +273,26 @@ def plan_iscsi_vlans(requests: list[IscsiVlanRequest], view: PortNetworkView) ->
         tags = wanted.setdefault(action.nsp, [])
         if action.state in ("create", "exists"):
             tags.append(action.vlan_id)
+    handoff: list[str] = []
     for nsp in sorted(wanted, key=_nsp_key):
         tags = wanted[nsp] + [v.vlan_id for v in view.vlans if v.nsp == nsp]
         if tags:
-            plan.switch_handoff.append(switch_sentence(view.name, nsp, tags))
+            handoff.append(switch_sentence(view.name, nsp, tags))
+    return handoff
+
+
+def plan_iscsi_vlans(requests: list[IscsiVlanRequest], view: PortNetworkView) -> IscsiNetworkPlan:
+    """R3: one action per sheet row, in sheet order; the first rule that applies decides. Pure."""
+    actions = [_action(req, view) for req in requests]
+    plan = IscsiNetworkPlan(array=view.name, actions=actions)
+    plan.blockers = [a.reason for a in actions if a.state == "conflict"]
+    plan.notes = _plan_notes(requests, actions, view)
+    plan.removal_lines = [a.undo for a in reversed(actions) if a.state == "create"]
+    plan.gateway_window = gateway_window(actions)
+    if plan.gateway_window:
+        ports = sorted({a.nsp for a in actions if a.gateway_cli}, key=_nsp_key)
+        plan.gateway_notes = [GATEWAY_WINDOW] + [sessions_sentence(nsp, view.sessions.get(nsp)) for nsp in ports]
+    plan.switch_handoff = _plan_switch_handoff(actions, view)
     return plan
 
 

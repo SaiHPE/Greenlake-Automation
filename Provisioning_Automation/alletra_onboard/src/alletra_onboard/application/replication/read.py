@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -59,6 +60,84 @@ def parse_showrctransport_rcip(text: str) -> list[RcTransport]:
     return out
 
 
+_RCOPY_SECTIONS: tuple[tuple[str, str], ...] = (
+    ("Remote Copy System Information", "system"),
+    ("Target Information", "targets"),
+    ("Link Information", "links"),
+    ("Group Information", "groups"),
+)
+
+
+def _match_rcopy_section(stripped: str) -> str | None:
+    for prefix, section in _RCOPY_SECTIONS:
+        if stripped.startswith(prefix):
+            return section
+    return None
+
+
+def _parse_rcopy_volume(tokens: list[str]) -> RcGroupVolume:
+    rest = tokens[5:]
+    progress = ""
+    if rest and re.fullmatch(r"\(\d+%\)", rest[0]):
+        # live 2026-10-10: a volume syncing shows "Syncing (100%)" in the SyncStatus column
+        progress, rest = rest[0].strip("()"), rest[1:]
+    return RcGroupVolume(
+        local_name=tokens[0], local_id=_int(tokens[1]), remote_name=tokens[2],
+        remote_id=_int(tokens[3]), sync_status=tokens[4], sync_progress=progress,
+        last_sync=" ".join(rest),
+    )
+
+
+@dataclass
+class _ShowRcopyParser:
+    status: str = ""
+    health: str = ""
+    targets: list[RcTarget] = field(default_factory=list)
+    links: list[RcLink] = field(default_factory=list)
+    groups: list[RcGroup] = field(default_factory=list)
+    expect_group_row: bool = False
+    in_volumes: bool = False
+    current: RcGroup | None = None
+
+    def feed_system(self, stripped: str) -> None:
+        if stripped.startswith("Status:"):
+            parts = [s.strip() for s in stripped[len("Status:"):].split(",")]
+            self.status, self.health = parts[0], (parts[1] if len(parts) > 1 else "")
+
+    def feed_target(self, stripped: str) -> None:
+        tokens = stripped.split()
+        if tokens[0] == "Name" or len(tokens) < 4:
+            return
+        self.targets.append(RcTarget(
+            name=tokens[0], id=_int(tokens[1]), type=tokens[2], status=tokens[3],
+            options=blank_unset(tokens[4]) if len(tokens) > 4 else "",
+            policy=tokens[5] if len(tokens) > 5 else "",
+        ))
+
+    def feed_link(self, stripped: str) -> None:
+        tokens = stripped.split()
+        if tokens[0] == "Target" or len(tokens) < 4:
+            return
+        self.links.append(RcLink(target=tokens[0], nsp=tokens[1], address=tokens[2], status=tokens[3]))
+
+    def feed_group(self, stripped: str) -> None:
+        tokens = stripped.split()
+        if tokens[:5] == ["Name", "Target", "Status", "Role", "Mode"]:
+            self.expect_group_row, self.in_volumes, self.current = True, False, None
+        elif tokens[0] == "LocalVV":
+            self.expect_group_row, self.in_volumes = False, True
+        elif self.expect_group_row and len(tokens) >= 5:
+            options, period, last_sync = _group_options(" ".join(tokens[5:]))
+            self.current = RcGroup(
+                name=tokens[0], target=tokens[1], status=tokens[2], role=tokens[3], mode=tokens[4],
+                options=options, period=period, last_sync=last_sync,
+            )
+            self.groups.append(self.current)
+            self.expect_group_row = False
+        elif self.in_volumes and self.current is not None and len(tokens) >= 5:
+            self.current.volumes.append(_parse_rcopy_volume(tokens))
+
+
 def parse_showrcopy(text: str) -> dict:
     """`showrcopy` (or any of its `targets` / `links` / `groups` subsets) -> {status, health, targets,
     links, groups}.
@@ -70,81 +149,30 @@ def parse_showrcopy(text: str) -> dict:
     line between a wrapped header and its group row, so blank lines never end a block — only the
     next header or section does. A missing group prints an "Error: group matching … does not exist"
     line on stderr (kept in the fixture) and an empty Group Information section."""
-    status = health = ""
-    targets: list[RcTarget] = []
-    links: list[RcLink] = []
-    groups: list[RcGroup] = []
+    parser = _ShowRcopyParser()
+    handlers: dict[str, Callable[[str], None]] = {
+        "system": parser.feed_system,
+        "targets": parser.feed_target,
+        "links": parser.feed_link,
+        "groups": parser.feed_group,
+    }
     section = ""
-    expect_group_row = in_volumes = False
-    current: RcGroup | None = None
-
     for raw in (text or "").splitlines():
-        line = raw.rstrip()
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        stripped = raw.strip()
+        if not stripped or stripped.startswith(("#", "Error:")):
             continue
-        if stripped.startswith("Remote Copy System Information"):
-            section = "system"
+        new_section = _match_rcopy_section(stripped)
+        if new_section is not None:
+            section = new_section
+            parser.current = None
             continue
-        if stripped.startswith("Target Information"):
-            section, current = "targets", None
-            continue
-        if stripped.startswith("Link Information"):
-            section, current = "links", None
-            continue
-        if stripped.startswith("Group Information"):
-            section, current = "groups", None
-            continue
-        if stripped.startswith("Error:"):
-            continue
-        tokens = stripped.split()
-        if section == "system":
-            if stripped.startswith("Status:"):
-                parts = [s.strip() for s in stripped[len("Status:"):].split(",")]
-                status, health = parts[0], (parts[1] if len(parts) > 1 else "")
-            continue
-        if section == "targets":
-            if tokens[0] == "Name" or len(tokens) < 4:
-                continue
-            targets.append(RcTarget(
-                name=tokens[0], id=_int(tokens[1]), type=tokens[2], status=tokens[3],
-                options=blank_unset(tokens[4]) if len(tokens) > 4 else "",
-                policy=tokens[5] if len(tokens) > 5 else "",
-            ))
-            continue
-        if section == "links":
-            if tokens[0] == "Target" or len(tokens) < 4:
-                continue
-            links.append(RcLink(target=tokens[0], nsp=tokens[1], address=tokens[2], status=tokens[3]))
-            continue
-        if section == "groups":
-            if tokens[:5] == ["Name", "Target", "Status", "Role", "Mode"]:
-                expect_group_row, in_volumes, current = True, False, None
-                continue
-            if tokens[0] == "LocalVV":
-                expect_group_row, in_volumes = False, True
-                continue
-            if expect_group_row and len(tokens) >= 5:
-                options, period, last_sync = _group_options(" ".join(tokens[5:]))
-                current = RcGroup(
-                    name=tokens[0], target=tokens[1], status=tokens[2], role=tokens[3], mode=tokens[4],
-                    options=options, period=period, last_sync=last_sync,
-                )
-                groups.append(current)
-                expect_group_row = False
-                continue
-            if in_volumes and current is not None and len(tokens) >= 5:
-                rest = tokens[5:]
-                progress = ""
-                if rest and re.fullmatch(r"\(\d+%\)", rest[0]):
-                    # live 2026-10-10: a volume syncing shows "Syncing (100%)" in the SyncStatus column
-                    progress, rest = rest[0].strip("()"), rest[1:]
-                current.volumes.append(RcGroupVolume(
-                    local_name=tokens[0], local_id=_int(tokens[1]), remote_name=tokens[2],
-                    remote_id=_int(tokens[3]), sync_status=tokens[4], sync_progress=progress,
-                    last_sync=" ".join(rest),
-                ))
-    return {"status": status, "health": health, "targets": targets, "links": links, "groups": groups}
+        handler = handlers.get(section)
+        if handler is not None:
+            handler(stripped)
+    return {
+        "status": parser.status, "health": parser.health,
+        "targets": parser.targets, "links": parser.links, "groups": parser.groups,
+    }
 
 
 def _group_options(text: str) -> tuple[list[str], str, str]:
