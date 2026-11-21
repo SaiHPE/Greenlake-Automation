@@ -21,14 +21,20 @@ generating remediation, but the verify path no longer requires the switch.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 
 from alletra_onboard.application.provisioning.hosts import union_hosts
-from alletra_onboard.domain.discovery import DiscoveryReport
+from alletra_onboard.domain.discovery import ArrayHost, ArrayPort, DiscoveryReport
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.shared import Fabric, normalize_wwpn, wwpn_colons
 from alletra_onboard.domain.zoning import ExpectedZone, ZoneRemediation, ZoningReport
 
 _WWPN_RE = re.compile(r"^(?:[0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}$")
+_CFGSHOW_SECTIONS: tuple[tuple[str, str], ...] = (
+    ("defined configuration", "defined"),
+    ("effective configuration", "effective"),
+)
+_CFGSHOW_ENTITIES: tuple[str, ...] = ("cfg", "zone", "alias")
 
 
 def _is_wwpn(token: str) -> bool:
@@ -40,66 +46,50 @@ def _tokens(text: str) -> list[str]:
     return [t for chunk in text.split(";") for t in chunk.split() if t]
 
 
-def parse_active_zones(cfgshow: str) -> tuple[dict[str, set[str]], str | None]:
-    """Parse `cfgshow` into {zone_name: {normalized WWPNs}} for the ACTIVE (effective) config, plus
-    the active config name. Aliases are resolved to WWPNs. Falls back to the defined config if no
-    effective section is present."""
-    aliases: dict[str, set[str]] = {}
-    defined_zones: dict[str, list[str]] = {}
-    effective_zones: dict[str, list[str]] = {}
+@dataclass
+class _CfgShowState:
+    aliases: dict[str, set[str]] = field(default_factory=dict)
+    defined_zones: dict[str, list[str]] = field(default_factory=dict)
+    effective_zones: dict[str, list[str]] = field(default_factory=dict)
     effective_cfg: str | None = None
     defined_cfg: str | None = None
 
-    section: str | None = None
-    kind: str | None = None
-    name: str | None = None
+    def record_cfg(self, section: str | None, name: str) -> None:
+        if section == "effective":
+            self.effective_cfg = name
+        elif self.defined_cfg is None:
+            self.defined_cfg = name
 
-    for raw in (cfgshow or "").splitlines():
-        stripped = raw.strip()
-        low = stripped.lower()
-        if low.startswith("defined configuration"):
-            section, kind, name = "defined", None, None
-            continue
-        if low.startswith("effective configuration"):
-            section, kind, name = "effective", None, None
-            continue
-        if not stripped:
-            continue
-
-        matched = False
-        for entity in ("cfg", "zone", "alias"):
-            if stripped.startswith(entity + ":"):
-                rest = stripped[len(entity) + 1 :].strip()
-                parts = rest.split(None, 1)
-                kind, name = entity, (parts[0] if parts else "")
-                members = parts[1] if len(parts) > 1 else ""
-                if entity == "cfg":
-                    if section == "effective":
-                        effective_cfg = name
-                    elif defined_cfg is None:
-                        defined_cfg = name
-                elif entity == "alias":
-                    aliases.setdefault(name, set()).update(
-                        normalize_wwpn(t) for t in _tokens(members) if _is_wwpn(t)
-                    )
-                elif entity == "zone":
-                    store = effective_zones if section == "effective" else defined_zones
-                    store.setdefault(name, []).extend(_tokens(members))
-                matched = True
-                break
-        if matched:
-            continue
-
-        # continuation line: more members for the current entity
-        if kind == "alias" and name is not None:
-            aliases.setdefault(name, set()).update(
-                normalize_wwpn(t) for t in _tokens(stripped) if _is_wwpn(t)
+    def record_members(self, section: str | None, kind: str, name: str, text: str) -> None:
+        if kind == "alias":
+            self.aliases.setdefault(name, set()).update(
+                normalize_wwpn(t) for t in _tokens(text) if _is_wwpn(t)
             )
-        elif kind == "zone" and name is not None:
-            store = effective_zones if section == "effective" else defined_zones
-            store.setdefault(name, []).extend(_tokens(stripped))
+        elif kind == "zone":
+            store = self.effective_zones if section == "effective" else self.defined_zones
+            store.setdefault(name, []).extend(_tokens(text))
 
-    raw_zones = effective_zones or defined_zones
+
+def _match_cfgshow_section(stripped: str) -> str | None:
+    low = stripped.lower()
+    for prefix, section in _CFGSHOW_SECTIONS:
+        if low.startswith(prefix):
+            return section
+    return None
+
+
+def _parse_cfgshow_entity(stripped: str) -> tuple[str, str, str] | None:
+    for entity in _CFGSHOW_ENTITIES:
+        if stripped.startswith(entity + ":"):
+            rest = stripped[len(entity) + 1 :].strip()
+            parts = rest.split(None, 1)
+            return entity, (parts[0] if parts else ""), (parts[1] if len(parts) > 1 else "")
+    return None
+
+
+def _resolve_zone_members(
+    raw_zones: dict[str, list[str]], aliases: dict[str, set[str]],
+) -> dict[str, set[str]]:
     resolved: dict[str, set[str]] = {}
     for zone_name, tokens in raw_zones.items():
         wwpns: set[str] = set()
@@ -109,7 +99,116 @@ def parse_active_zones(cfgshow: str) -> tuple[dict[str, set[str]], str | None]:
             elif token in aliases:
                 wwpns |= aliases[token]
         resolved[zone_name] = wwpns
-    return resolved, (effective_cfg or defined_cfg)
+    return resolved
+
+
+def parse_active_zones(cfgshow: str) -> tuple[dict[str, set[str]], str | None]:
+    """Parse `cfgshow` into {zone_name: {normalized WWPNs}} for the ACTIVE (effective) config, plus
+    the active config name. Aliases are resolved to WWPNs. Falls back to the defined config if no
+    effective section is present."""
+    state = _CfgShowState()
+    section: str | None = None
+    kind: str | None = None
+    name: str | None = None
+
+    for raw in (cfgshow or "").splitlines():
+        stripped = raw.strip()
+        if not stripped:
+            continue
+        new_section = _match_cfgshow_section(stripped)
+        if new_section is not None:
+            section, kind, name = new_section, None, None
+            continue
+
+        header = _parse_cfgshow_entity(stripped)
+        if header is not None:
+            kind, name, members = header
+            if kind == "cfg":
+                state.record_cfg(section, name)
+            else:
+                state.record_members(section, kind, name, members)
+            continue
+
+        # continuation line: more members for the current entity
+        if kind in ("alias", "zone") and name is not None:
+            state.record_members(section, kind, name, stripped)
+
+    raw_zones = state.effective_zones or state.defined_zones
+    return _resolve_zone_members(raw_zones, state.aliases), (state.effective_cfg or state.defined_cfg)
+
+
+def _index_fc_logins(
+    fc_ports: list[ArrayPort], array_hosts: list[ArrayHost],
+) -> tuple[dict[Fabric, set[str]], dict[Fabric, list[str]], dict[str, Fabric]]:
+    # Which host WWPNs the ARRAY sees LOGGED IN, by fabric — from showhost. This INCLUDES the
+    # array's unclaimed logins (host object not created yet): a WWPN that is logged in is zoned,
+    # whether or not anyone has named it. Excluding them reported a cabled, zoned, logged-in host
+    # as "not zoned on either fabric" — measured on rack13arcus, host 10.132.30.136.
+    port_fabric: dict[str, Fabric] = {p.label: p.fabric for p in fc_ports if p.fabric}
+    union: dict[Fabric, set[str]] = {"odd": set(), "even": set()}
+    for host in array_hosts:
+        for wwpn, ports in host.wwpns.items():
+            for nsp in ports:
+                fabric = port_fabric.get(nsp)
+                if fabric:
+                    union[fabric].add(wwpn)
+    arr_by_fabric: dict[Fabric, list[str]] = {"odd": [], "even": []}
+    for port in fc_ports:
+        arr_by_fabric[port_fabric[port.label]].append(port.wwpn)
+    return union, arr_by_fabric, port_fabric
+
+
+def _fallback_logged_in_hosts(
+    array_hosts: list[ArrayHost], port_fabric: dict[str, Fabric],
+) -> dict[str, set[str]]:
+    # The array-only fallback below survives for a run with no vCenter, no sheet hosts and no plan —
+    # it verifies whatever is logged in.
+    host_wwpns: dict[str, set[str]] = {}
+    for host in array_hosts:
+        if not host.name:      # the array's UNCLAIMED logins — real WWPNs, but not a named host
+            continue
+        logged_in = {w for w, ports in host.wwpns.items() if any(port_fabric.get(nsp) for nsp in ports)}
+        if logged_in:
+            host_wwpns.setdefault(host.name, set()).update(logged_in)
+    return host_wwpns
+
+
+def _record_fc_host_verdict(report: ZoningReport, host: str, on: dict[Fabric, list[str]]) -> None:
+    if on["odd"] and on["even"]:
+        report.zoned_hosts.append(host)
+    elif not on["odd"] and not on["even"]:
+        report.unverified_hosts.append(host)
+        report.notes.append(
+            f"{host}: not seen zoned to the array on EITHER fabric — it is NOT ZONED or the host "
+            "is offline / not logged in (the array cannot tell which). Confirm the host is powered "
+            "on; if it is, this is a real zoning gap — use the switch to create the zone."
+        )
+    else:
+        report.notes.append(f"{host}: zoned on one fabric only — missing {'even/F2' if on['odd'] else 'odd/F1'}.")
+
+
+def _evaluate_fc_hosts(
+    report: ZoningReport,
+    host_wwpns: dict[str, set[str]],
+    union: dict[Fabric, set[str]],
+    arr_by_fabric: dict[Fabric, list[str]],
+    switch_by_fabric: dict[str, str],
+) -> None:
+    array_ports_str = {f: ", ".join(sorted(set(arr_by_fabric[f]))) or "(none)" for f in ("odd", "even")}
+    for host in sorted(host_wwpns):
+        wwns = host_wwpns[host]
+        on: dict[Fabric, list[str]] = {f: sorted(wwns & union[f]) for f in ("odd", "even")}
+        safe = re.sub(r"[^0-9A-Za-z]+", "_", host).strip("_")
+        for fabric in ("odd", "even"):
+            report.expected.append(ExpectedZone(
+                fabric=fabric,
+                switch_host=switch_by_fabric[fabric],
+                name=f"{safe}_{fabric}",
+                host_wwpn=on[fabric][0] if on[fabric] else "(not logged in on this fabric)",
+                array_wwpn=array_ports_str[fabric],
+                present=bool(on[fabric]),
+            ))
+        _record_fc_host_verdict(report, host, on)
 
 
 def build_report(
@@ -141,61 +240,13 @@ def build_report(
         report.proper = not report.error and all(report.iscsi_hosts.values())
         return report
 
-    # Which host WWPNs the ARRAY sees LOGGED IN, by fabric — from showhost. This INCLUDES the
-    # array's unclaimed logins (host object not created yet): a WWPN that is logged in is zoned,
-    # whether or not anyone has named it. Excluding them reported a cabled, zoned, logged-in host
-    # as "not zoned on either fabric" — measured on rack13arcus, host 10.132.30.136.
-    port_fabric: dict[str, Fabric] = {p.label: p.fabric for p in fc_ports if p.fabric}
-    union: dict[Fabric, set[str]] = {"odd": set(), "even": set()}
-    name_by_wwpn: dict[str, str] = {}
-    for host in discovery.array_hosts:
-        for wwpn, ports in host.wwpns.items():
-            for nsp in ports:
-                fabric = port_fabric.get(nsp)
-                if fabric:
-                    union[fabric].add(wwpn)
-                    name_by_wwpn[wwpn] = host.name
-    arr_by_fabric: dict[Fabric, list[str]] = {"odd": [], "even": []}
-    for port in fc_ports:
-        arr_by_fabric[port_fabric[port.label]].append(port.wwpn)
-
-    # The array-only fallback below survives for a run with no vCenter, no sheet hosts and no plan —
-    # it verifies whatever is logged in.
+    union, arr_by_fabric, port_fabric = _index_fc_logins(fc_ports, discovery.array_hosts)
     if not host_wwpns and not iscsi_only:
-        for host in discovery.array_hosts:
-            if not host.name:      # the array's UNCLAIMED logins — real WWPNs, but not a named host
-                continue
-            logged_in = {w for w, ports in host.wwpns.items() if any(port_fabric.get(nsp) for nsp in ports)}
-            if logged_in:
-                host_wwpns.setdefault(host.name, set()).update(logged_in)
+        host_wwpns = _fallback_logged_in_hosts(discovery.array_hosts, port_fabric)
         report.notes.append("No vCenter host list — verifying the hosts the array reports as logged in (showhost).")
 
     switch_by_fabric = {"odd": intent.switch_f1.host, "even": intent.switch_f2.host}
-    array_ports_str = {f: ", ".join(sorted(set(arr_by_fabric[f]))) or "(none)" for f in ("odd", "even")}
-    for host in sorted(host_wwpns):
-        wwns = host_wwpns[host]
-        on: dict[Fabric, list[str]] = {f: sorted(wwns & union[f]) for f in ("odd", "even")}
-        for fabric in ("odd", "even"):
-            report.expected.append(ExpectedZone(
-                fabric=fabric,
-                switch_host=switch_by_fabric[fabric],
-                name=f"{re.sub(r'[^0-9A-Za-z]+', '_', host).strip('_')}_{fabric}",
-                host_wwpn=on[fabric][0] if on[fabric] else "(not logged in on this fabric)",
-                array_wwpn=array_ports_str[fabric],
-                present=bool(on[fabric]),
-            ))
-        if on["odd"] and on["even"]:
-            report.zoned_hosts.append(host)
-        if not on["odd"] and not on["even"]:
-            report.unverified_hosts.append(host)
-            report.notes.append(
-                f"{host}: not seen zoned to the array on EITHER fabric — it is NOT ZONED or the host "
-                "is offline / not logged in (the array cannot tell which). Confirm the host is powered "
-                "on; if it is, this is a real zoning gap — use the switch to create the zone."
-            )
-        elif not on["odd"] or not on["even"]:
-            report.notes.append(f"{host}: zoned on one fabric only — missing {'even/F2' if on['odd'] else 'odd/F1'}.")
-
+    _evaluate_fc_hosts(report, host_wwpns, union, arr_by_fabric, switch_by_fabric)
     _judge_iscsi(report, iscsi_only, discovery)
     report.proper = (
         bool(report.expected or report.iscsi_hosts)
