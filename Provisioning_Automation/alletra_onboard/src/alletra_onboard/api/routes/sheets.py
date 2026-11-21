@@ -28,6 +28,7 @@ from alletra_onboard.application.platform.intake import csv_template, load_work_
 from alletra_onboard.application.service import OnboardingService
 from alletra_onboard.config import load_settings
 from alletra_onboard.domain.models import RunMode
+from alletra_onboard.domain.provisioning import ProvisioningIntent
 
 XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -82,6 +83,25 @@ async def init_sheet_compose(request: InitSheetComposeRequest) -> InitSheetCompo
     return InitSheetComposeResponse(content_b64=base64.b64encode(content).decode("ascii"))
 
 
+def _summarize_provisioning_intent(
+    intent: ProvisioningIntent | None,
+) -> tuple[dict[str, str], list[str], list[str]]:
+    targets: dict[str, str] = {}
+    ports: list[str] = []
+    snapshot_rows: list[str] = []
+    if intent is None:
+        return targets, ports, snapshot_rows
+    for key, ep in (("array", intent.array), ("vcenter", intent.vcenter),
+                    ("switch_f1", intent.switch_f1), ("switch_f2", intent.switch_f2)):
+        targets[f"{key}_host"], targets[f"{key}_user"] = ep.host, ep.username
+    if intent.replication is not None:
+        targets["peer_host"], targets["peer_user"] = intent.replication.peer.host, intent.replication.peer.username
+        ports = [f"{'this array' if r.side == 'A' else 'peer'} {r.nsp} {r.ip}" for r in intent.replication.network]
+    if intent.snapshots is not None:
+        snapshot_rows = [f"{r.source}: {r.summary(named=True)}" for r in intent.snapshots.requests]
+    return targets, ports, snapshot_rows
+
+
 def build_sheets_router(service: OnboardingService, env_path: Path) -> APIRouter:
     router = APIRouter()
     router.get("/work-items/template", response_class=PlainTextResponse)(work_item_template)
@@ -129,19 +149,7 @@ def build_sheets_router(service: OnboardingService, env_path: Path) -> APIRouter
         data = parsed.work_item.model_dump(mode="json")
         data["subscription_key"] = parsed.work_item.subscription_key.get_secret_value()
         data["dscc_setup"].pop("password", None)  # never echo the admin password to the UI
-        targets: dict[str, str] = {}
-        ports: list[str] = []
-        snapshot_rows: list[str] = []
-        if parsed.provisioning_intent is not None:
-            intent = parsed.provisioning_intent
-            for key, ep in (("array", intent.array), ("vcenter", intent.vcenter),
-                            ("switch_f1", intent.switch_f1), ("switch_f2", intent.switch_f2)):
-                targets[f"{key}_host"], targets[f"{key}_user"] = ep.host, ep.username
-            if intent.replication is not None:
-                targets["peer_host"], targets["peer_user"] = intent.replication.peer.host, intent.replication.peer.username
-                ports = [f"{'this array' if r.side == 'A' else 'peer'} {r.nsp} {r.ip}" for r in intent.replication.network]
-            if intent.snapshots is not None:
-                snapshot_rows = [f"{r.source}: {r.summary(named=True)}" for r in intent.snapshots.requests]
+        targets, ports, snapshot_rows = _summarize_provisioning_intent(parsed.provisioning_intent)
         return InitSheetUploadResponse(
             token=token, work_item=data, credentials_saved=credentials_saved, targets=targets, replication_ports=ports,
             snapshot_rows=snapshot_rows, problems=problems,

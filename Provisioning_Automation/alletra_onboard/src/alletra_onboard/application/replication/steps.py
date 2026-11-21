@@ -97,7 +97,11 @@ class ReplicationSteps:
 
     def _progress(self, run_id: str, phase: WorkflowPhase) -> Callable[[str], None]:
         loop = asyncio.get_running_loop()
-        return lambda message: loop.call_soon_threadsafe(self._coord.emit, run_id, phase, events.PHASE_PROGRESS, message)
+
+        def emit(message: str) -> None:
+            loop.call_soon_threadsafe(self._coord.emit, run_id, phase, events.PHASE_PROGRESS, message)
+
+        return emit
 
     def _require_replication(self, run_id: str) -> tuple[ProvisioningIntent, ReplicationIntent]:
         intent = self._coord.get_provisioning_intent(run_id)

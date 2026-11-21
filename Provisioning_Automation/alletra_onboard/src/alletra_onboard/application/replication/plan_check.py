@@ -140,7 +140,7 @@ def find_partnership(primary: ReplicationArrayView, peer: ReplicationArrayView, 
     )
 
 
-def _name(view: ReplicationArrayView) -> str:
+def array_name(view: ReplicationArrayView) -> str:
     return view.name or view.host
 
 
@@ -165,13 +165,13 @@ def _mixed_transports(primary: ReplicationArrayView, peer: ReplicationArrayView)
     fc = [(v, t) for v, o in sides for t in _fc_targets_naming(v, o)]
     if not ip or not fc:
         return ""
-    named = "; ".join(f"{_name(v)} target '{t.name}' ({_state(v, t)[0]})" for v, t in ip + fc)
-    text = (f"{_name(primary)} and {_name(peer)} show Remote Copy targets towards each other over IP and over Fibre "
+    named = "; ".join(f"{array_name(v)} target '{t.name}' ({_state(v, t)[0]})" for v, t in ip + fc)
+    text = (f"{array_name(primary)} and {array_name(peer)} show Remote Copy targets towards each other over IP and over Fibre "
             f"Channel: {named}. The arrays keep one partnership per pair, and a target in one transport stops one in "
             "the other from working, so the tool will not use either and plans nothing.")
     dead = [(v, t) for v, t in ip + fc if _state(v, t)[1]]
     if dead:
-        text += (" Remove the failed one first: " + "; ".join(f"on {_name(v)}, `removercopytarget -cleargroups -f {t.name}`"
+        text += (" Remove the failed one first: " + "; ".join(f"on {array_name(v)}, `removercopytarget -cleargroups -f {t.name}`"
                                                              for v, t in dead)
                  + " (this also removes the groups on that target; their volumes stay). Save `showrcopy -d groups` before.")
     else:
@@ -189,16 +189,16 @@ def _fc_unresolved(view: ReplicationArrayView, other: ReplicationArrayView) -> l
             continue
         misses = []
         if t.options.upper() not in other.fc_node_wwns:
-            misses.append(f"its node WWN {t.options or '(none)'} is not one of {_name(other)}'s "
+            misses.append(f"its node WWN {t.options or '(none)'} is not one of {array_name(other)}'s "
                           f"({', '.join(sorted(other.fc_node_wwns))})")
         links = _outbound(view, t)
         stray = [f"{link.nsp} → {link.address}" for link in links if link.address.upper() not in other.fc_port_wwns]
         if stray:
             misses.append(f"link{'s' if len(stray) != 1 else ''} {', '.join(stray)} address{'' if len(stray) != 1 else 'es'} "
-                          f"no port of {_name(other)}")
+                          f"no port of {array_name(other)}")
         if not links:
             misses.append("it has no outbound link")
-        out.append(f"{_name(view)} has Fibre Channel target '{t.name}' that does not resolve to {_name(other)}: "
+        out.append(f"{array_name(view)} has Fibre Channel target '{t.name}' that does not resolve to {array_name(other)}: "
                    + "; ".join(misses) + ".")
     return out
 
@@ -207,8 +207,8 @@ def _fc_one_way(view: ReplicationArrayView, other: ReplicationArrayView) -> list
     """An FC target that resolves to `other` while `other` has none that resolves back."""
     if any(t.is_fc for t, _ in _targets_towards(other, view)):
         return []
-    return [f"{_name(view)} has target '{t.name}' for {_name(other)} over Fibre Channel, found by node WWN and port "
-            f"WWN ({_state(view, t)[0]}); {_name(other)} has no Fibre Channel target that points back at {_name(view)}."
+    return [f"{array_name(view)} has target '{t.name}' for {array_name(other)} over Fibre Channel, found by node WWN and port "
+            f"WWN ({_state(view, t)[0]}); {array_name(other)} has no Fibre Channel target that points back at {array_name(view)}."
             for t, _ in _targets_towards(view, other) if t.is_fc]
 
 
@@ -240,14 +240,14 @@ def _sync_refused(primary: ReplicationArrayView, peer: ReplicationArrayView, int
         what = "the failover test group, which takes the first row's mode, cannot be sync: set that row's Mode to async (periodic)"
     else:
         return ""
-    a, b = primary.name or primary.host, peer.name or peer.host
+    a, b = array_name(primary), array_name(peer)
     return (f"{a} (OS {primary.os_version}) refuses sync replication to {b} (OS {peer.os_version}), as it does to any "
             f"{family} array, so {what} on the Replication tab for this pair.")
 
 
 def _check_partnership(report: ReplicationReport, row_modes: set[str], sets_up: bool) -> None:
     primary, peer = report.primary, report.peer
-    a, b = _name(primary), _name(peer)
+    a, b = array_name(primary), array_name(peer)
     f = report.findings
     p = report.partnership
     if p is None:
@@ -321,7 +321,7 @@ def _check_target_modes(report: ReplicationReport, row_modes: set[str], planned:
     p = report.partnership
     if p is None:
         return
-    a, b = _name(report.primary), _name(report.peer)
+    a, b = array_name(report.primary), array_name(report.peer)
     f = report.findings
     spare = (
         "spare RCIP ports (a link belongs to one target; set it up on the arrays, the tool makes only the "
@@ -354,7 +354,7 @@ def _check_protection_row(
     report: ReplicationReport, row: ProtectionRequest, transport: str, rtt: float | None,
 ) -> None:
     primary, peer = report.primary, report.peer
-    a, b = _name(primary), _name(peer)
+    a, b = array_name(primary), array_name(peer)
     f = report.findings
     if transport == "IP" and rtt is not None and rtt > rtt_limit_ms("IP", row.mode):
         f.append(f"Volume set '{row.vvset}': the measured round-trip time is {rtt:g} ms; "
@@ -395,7 +395,7 @@ def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: Rep
         report.error = peer.read_error
         return report
 
-    a, b = _name(primary), _name(peer)
+    a, b = array_name(primary), array_name(peer)
     row_modes = {row.mode for row in intent.protections}
     planned = {row.group_name for row in intent.protections} | {TEST_GROUP}
     report.rtt_ms, report.modes = intent.rtt_ms, run_modes(intent)

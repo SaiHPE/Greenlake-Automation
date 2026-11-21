@@ -103,38 +103,38 @@ def _net() -> NetworkConfig:
     )
 
 
-async def _review_ok_for(body: str) -> bool:
+async def _review_ok_for(monkeypatch, body: str) -> bool:
     adapter = CloudinitWizardAdapter(headless=True)
 
     async def fake_body_text(_page):
         return body
 
-    adapter._body_text = fake_body_text  # type: ignore[method-assign]
+    monkeypatch.setattr(adapter, "_body_text", fake_body_text)
     return await adapter._review_network_ok(None, _net())
 
 
-async def test_review_guard_accepts_matching_values():
+async def test_review_guard_accepts_matching_values(monkeypatch):
     # Real Review layout: label line then value line. "DNS server IP address 1" must NOT be
     # mistaken for "IP address".
     body = (
         "Review\nNetwork\nIP address:\n10.64.154.225\nNetmask:\n255.255.248.0\n"
         "Gateway:\n10.64.159.254\nDNS server IP address 1:\n10.203.96.10\n"
     )
-    assert await _review_ok_for(body) is True
+    assert await _review_ok_for(monkeypatch, body) is True
 
 
-async def test_review_guard_rejects_decayed_link_local_values():
+async def test_review_guard_rejects_decayed_link_local_values(monkeypatch):
     # The wizard reverted the boxes to the array's link-local default — must NOT pass the guard.
     body = (
         "Review\nNetwork\nIP address:\n169.254.184.89\nNetmask:\n255.255.0.0\n"
         "Gateway:\n169.254.0.0\n"
     )
-    assert await _review_ok_for(body) is False
+    assert await _review_ok_for(monkeypatch, body) is False
 
 
-async def test_review_guard_handles_label_value_on_one_line():
+async def test_review_guard_handles_label_value_on_one_line(monkeypatch):
     body = "IP address: 10.64.154.225\nNetmask: 255.255.248.0\nGateway: 10.64.159.254\n"
-    assert await _review_ok_for(body) is True
+    assert await _review_ok_for(monkeypatch, body) is True
 
 
 class _FakePage:
@@ -153,7 +153,7 @@ class _FakePage:
         return None
 
 
-def _adapter_with_page(bodies: list[str]) -> tuple[CloudinitWizardAdapter, _FakePage, list[str]]:
+def _adapter_with_page(monkeypatch, bodies: list[str]) -> tuple[CloudinitWizardAdapter, _FakePage, list[str]]:
     statuses: list[str] = []
     adapter = CloudinitWizardAdapter(headless=True, on_status=statuses.append)
     page = _FakePage(bodies)
@@ -161,21 +161,21 @@ def _adapter_with_page(bodies: list[str]) -> tuple[CloudinitWizardAdapter, _Fake
     async def fake_body_text(_page):
         return page.next_body()
 
-    adapter._body_text = fake_body_text  # type: ignore[method-assign]
+    monkeypatch.setattr(adapter, "_body_text", fake_body_text)
     return adapter, page, statuses
 
 
-async def test_wizard_ready_immediately_when_not_initializing():
-    adapter, page, statuses = _adapter_with_page(["Welcome\nGet Started"])
+async def test_wizard_ready_immediately_when_not_initializing(monkeypatch):
+    adapter, page, statuses = _adapter_with_page(monkeypatch, ["Welcome\nGet Started"])
     assert await adapter._await_wizard_ready(page, "r1") is True
     assert statuses == []  # no noise when the wizard is already up
 
 
-async def test_wizard_waits_out_the_initializing_state():
+async def test_wizard_waits_out_the_initializing_state(monkeypatch):
     # Seen live 2026-07: the array shows "Initializing your system..." for minutes on first boot.
     # The adapter previously fell through to the EULA locator and failed generically in ~40s.
     bodies = ["Initializing your system..."] * 3 + ["Welcome\nGet Started"]
-    adapter, page, statuses = _adapter_with_page(bodies)
+    adapter, page, statuses = _adapter_with_page(monkeypatch, bodies)
     assert await adapter._await_wizard_ready(page, "r1") is True
     assert any(status.startswith("initializing") for status in statuses)  # liveness was reported
 
@@ -184,31 +184,31 @@ async def test_wizard_initializing_timeout_reports_a_specific_error(monkeypatch)
     from alletra_onboard.adapters.browser import cloudinit_wizard as module
 
     monkeypatch.setattr(module, "INIT_WAIT_S", 0.0)  # expire immediately
-    adapter, page, statuses = _adapter_with_page(["Initializing your system..."])
+    adapter, page, statuses = _adapter_with_page(monkeypatch, ["Initializing your system..."])
     assert await adapter._await_wizard_ready(page, "r1") is False
     assert any(status.startswith("error:") and "initializing" in status.lower() for status in statuses)
 
 
-async def test_wizard_waits_through_the_blank_page_before_the_spinner():
+async def test_wizard_waits_through_the_blank_page_before_the_spinner(monkeypatch):
     # The live rc.2 failure: at goto time the SPA has rendered NOTHING, so "no spinner text" is
     # also true of a blank page — waiting for the spinner's absence concluded ready instantly and
     # the run timed out on the EULA locator 41 seconds later. The wait must demand positive proof
     # of a wizard screen: blank -> blank -> spinner -> Welcome must succeed.
     bodies = ["", "", "Initializing your system...", "Initializing your system...", "Welcome\nGet Started"]
-    adapter, page, _statuses = _adapter_with_page(bodies)
+    adapter, page, _statuses = _adapter_with_page(monkeypatch, bodies)
     assert await adapter._await_wizard_ready(page, "r1") is True
     assert page._index >= len(bodies)  # it genuinely polled through every state
 
 
-async def test_wizard_ready_when_the_eula_screen_renders_directly():
+async def test_wizard_ready_when_the_eula_screen_renders_directly(monkeypatch):
     # The Modify path opens on the EULA screen with no Welcome — that is proof enough.
-    adapter, page, _statuses = _adapter_with_page(["I have read and accept the agreement"])
+    adapter, page, _statuses = _adapter_with_page(monkeypatch, ["I have read and accept the agreement"])
     assert await adapter._await_wizard_ready(page, "r1") is True
 
 
-async def test_wizard_ready_passes_terminal_screens_to_the_normal_flow():
+async def test_wizard_ready_passes_terminal_screens_to_the_normal_flow(monkeypatch):
     # An already-connected array renders its success page; the wait must hand it back, not stall.
-    adapter, page, _statuses = _adapter_with_page(["Your system is now connected"])
+    adapter, page, _statuses = _adapter_with_page(monkeypatch, ["Your system is now connected"])
     assert await adapter._await_wizard_ready(page, "r1") is True
 
 
@@ -216,7 +216,7 @@ async def test_wizard_unknown_page_timeout_reports_what_it_shows(monkeypatch):
     from alletra_onboard.adapters.browser import cloudinit_wizard as module
 
     monkeypatch.setattr(module, "INIT_WAIT_S", 0.0)
-    adapter, page, statuses = _adapter_with_page(["Some entirely different HPE page"])
+    adapter, page, statuses = _adapter_with_page(monkeypatch, ["Some entirely different HPE page"])
     assert await adapter._await_wizard_ready(page, "r1") is False
     # The error names what the page actually says, so an unfamiliar state identifies itself.
     assert any("some entirely different hpe page" in status.lower() for status in statuses)

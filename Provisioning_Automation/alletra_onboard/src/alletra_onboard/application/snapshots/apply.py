@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Literal
 
 from alletra_onboard.application.runs.apply_record import maybe_made, recorded_write
 from alletra_onboard.application.runs.writer_clients import make_wsapi_writer
@@ -104,9 +105,10 @@ class _SnapState:
     pending_notes: list[str] = field(default_factory=list)
     written: int = 0
 
-    def record(self, action: SnapshotAction, status: str, detail: str = "") -> None:
+    def record(self, action: SnapshotAction, status: Literal["created", "exists", "skipped", "failed"],
+               detail: str = "") -> None:
         self.result.outcomes.append(SnapshotOutcome(kind=action.kind, name=action.name, source=action.source,
-                                                    status=status, detail=detail))  # type: ignore[arg-type]
+                                                    status=status, detail=detail))
 
     def remove(self, names: list[str]) -> None:
         seen = {r.name for r in self.result.removals}

@@ -238,7 +238,7 @@ assignment, region code mapping, 202 polling). Code-level mechanics:
 
 | Exception | HTTP | Where mapped |
 |---|---|---|
-| `RunNotFoundError`, `DevicePinNotFoundError`, missing artifact/intent | `404` | `api/routes/common.py`, `discovery.py`, `documents.py`, `snapshots.py`, `trust.py` |
+| `RunNotFoundError`, `DevicePinNotFoundError`, missing artifact/intent | `404` | `api/routes/common.py`, `discovery.py`, `documents.py`, `snapshots.py`, `trust.py`, `zoning.py` |
 | `RunBusyError`, `StepPreconditionError`, `StoredCredentialsUnreadableError` | `409` | `api/routes/common.py`, `api/app.py` (`_credentials_unreadable`), `console.py`, `provisioning.py`, `trust.py` |
 | `PendingSheetNotFoundError` | `410` | `api/routes/runs.py` (`/runs/from-sheet`) |
 | `ValueError`, `ValidationError`, workbook/CSV parse errors | `422` | `api/routes/runs.py`, `api/routes/sheets.py` |

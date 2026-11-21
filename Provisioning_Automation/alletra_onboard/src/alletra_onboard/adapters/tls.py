@@ -22,11 +22,13 @@ from __future__ import annotations
 
 import os
 import ssl
+from typing import Any
 
+certifi: Any
 try:
     import certifi
 except ImportError:  # pragma: no cover - installed with httpx; optional if absent
-    certifi = None  # type: ignore[assignment]
+    certifi = None
 
 _CA_BUNDLE_VARS = ("ALLETRA_CA_BUNDLE", "SSL_CERT_FILE", "REQUESTS_CA_BUNDLE")
 

@@ -103,7 +103,8 @@ def find_discovery_tool() -> Path | None:
 def launch_discovery_tool() -> dict:
     """Find and launch the Discovery Tool. Returns a structured result (never raises)."""
     searched = [str(_bundled_dir())] + [str(directory) for directory in _search_dirs()]
-    if os.name != "nt":
+    startfile = getattr(os, "startfile", None)
+    if os.name != "nt" or startfile is None:
         return {
             "launched": False,
             "path": None,
@@ -120,7 +121,7 @@ def launch_discovery_tool() -> dict:
             "if missing, put it on the Desktop or set DISCOVERY_TOOL_PATH in .env.",
         }
     try:
-        os.startfile(str(exe))  # type: ignore[attr-defined]
+        startfile(str(exe))
     except OSError as exc:
         return {"launched": False, "path": str(exe), "searched": searched, "error": f"Found it but could not launch: {exc}"}
     return {"launched": True, "path": str(exe), "searched": searched, "error": None}
