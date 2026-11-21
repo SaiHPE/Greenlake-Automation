@@ -57,22 +57,6 @@
 "src/alletra_onboard/application/documents/verification.py :: _health_issues :: C901" = 11
 "src/alletra_onboard/application/onboarding/greenlake_provision.py :: GreenLakeProvisioningService.__init__ :: PLR0913" = 6
 "src/alletra_onboard/application/onboarding/steps.py :: OnboardingSteps._run_cloudinit :: C901" = 13
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_iscsi_network_tab :: C901" = 17
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_iscsi_network_tab :: PLR0912" = 16
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_migration_tab :: C901" = 13
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_network_tab :: C901" = 14
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_network_tab :: PLR0912" = 13
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_peer_ports_tab :: C901" = 11
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_provisioning_tab :: C901" = 12
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_replication_tab :: C901" = 19
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_replication_tab :: PLR0912" = 19
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_replication_tab :: PLR0915" = 54
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_snapshots_tab :: C901" = 26
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_snapshots_tab :: PLR0912" = 25
-"src/alletra_onboard/application/platform/init_sheet.py :: _parse_snapshots_tab :: PLR0915" = 70
-"src/alletra_onboard/application/platform/init_sheet.py :: _replace_row_table :: C901" = 11
-"src/alletra_onboard/application/platform/init_sheet.py :: compose_workbook_bytes :: C901" = 21
-"src/alletra_onboard/application/platform/init_sheet.py :: compose_workbook_bytes :: PLR0912" = 20
 "src/alletra_onboard/application/platform/init_sheet.py :: compose_workbook_bytes :: PLR0913" = 11
 "src/alletra_onboard/application/provisioning/discovery.py :: discover :: PLR0913" = 7
 "src/alletra_onboard/application/provisioning/path_verify.py :: attach_esxi_view :: C901" = 11
@@ -161,7 +145,7 @@
 "src/alletra_onboard/adapters/array/wsapi_client.py" = 19289
 "src/alletra_onboard/application/documents/asbuilt.py" = 45944
 "src/alletra_onboard/application/documents/steps.py" = 18563
-"src/alletra_onboard/application/platform/init_sheet.py" = 65775
+"src/alletra_onboard/application/platform/init_sheet.py" = 58251
 "src/alletra_onboard/application/provisioning/discovery.py" = 33516
 "src/alletra_onboard/application/provisioning/peer_ports.py" = 22760
 "src/alletra_onboard/application/provisioning/steps.py" = 26752
@@ -178,7 +162,6 @@
 [suppressions]
 # STANDARD T3. `file` = its lines today with a suppression comment (`type: ignore`, `noqa`, `pyright:`,
 # `eslint-disable`, `@ts-expect-error`), in src, tests and frontend/src. Each hides a finding from the gate.
-"src/alletra_onboard/application/platform/init_sheet.py" = 6
 
 [doc-paths]
 # STANDARD C2. `document :: path` = a code path the document names in backticks that is not in the
