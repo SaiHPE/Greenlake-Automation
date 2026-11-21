@@ -13,13 +13,15 @@ folder* below.
 ## 1. Read these first (an hour, in this order)
 
 1. [`AGENTS.md`](AGENTS.md): the rules, the folder layout and the commands. Short; read all of it.
-2. [`docs/SCOPE.md`](Provisioning_Automation/alletra_onboard/docs/SCOPE.md): the nine areas of the
+2. [`docs/README.md`](Provisioning_Automation/alletra_onboard/docs/README.md): the map of `docs/`,
+   separating living documents from decisions, specs and historical records.
+3. [`docs/SCOPE.md`](Provisioning_Automation/alletra_onboard/docs/SCOPE.md): the nine areas of the
    product, what is built and what is proven on hardware.
-3. [`CONTEXT.md`](Provisioning_Automation/alletra_onboard/CONTEXT.md): the words we use (array,
+4. [`CONTEXT.md`](Provisioning_Automation/alletra_onboard/CONTEXT.md): the words we use (array,
    run, fabric, VV set, export, ...).
-4. [`docs/LESSONS.md`](Provisioning_Automation/alletra_onboard/docs/LESSONS.md): the mistakes we
+5. [`docs/LESSONS.md`](Provisioning_Automation/alletra_onboard/docs/LESSONS.md): the mistakes we
    already made and the rule each one left. Most of the rules on this page come from it.
-5. The [issues](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues): the open work.
+6. The [issues](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues): the open work.
 
 ## 2. Access you need
 
@@ -52,8 +54,8 @@ On Windows run `scripts/install_hooks.sh` from Git Bash. The push hook runs the 
 `.venv` above, so create it before your first push.
 
 The two install lines bring every tool the check runs, at pinned versions: ruff, import-linter and
-vulture with `pip install -e ".[dev]"`; pyright, eslint and knip with `npm ci`. In a checkout you
-already have, run both again after pulling. If `npm ci` stops with
+vulture with `pip install -e ".[dev]"`; pyright, openapi-typescript, eslint and knip with `npm ci`.
+In a checkout you already have, run both again after pulling. If `npm ci` stops with
 `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` on the HPE network, run it as `NODE_USE_SYSTEM_CA=1 npm ci`.
 
 On a Windows laptop use `.venv\Scripts\python` wherever this page says `.venv/bin/python`.
@@ -100,7 +102,7 @@ You cannot push to `main`; github.hpe.com refuses it. Everything arrives through
 | Rule | Why |
 |---|---|
 | Never write to a SAN switch. Zoning is a command set the SAN team pastes. | A wrong zone takes a customer's production hosts off their storage. The tool proposes; people with change control apply. (ADR 0012) |
-| Array SSH is read-only, through an allowlist. Writes go through WSAPI after the operator approves a plan on screen. Remote Copy groups and the failover test use WSAPI too. (ADR 0001; ADR 0015's one write-scoped SSH client sets up Remote Copy ports, targets and links, behind the same approval) | Everything the tool does to an array must be something the operator saw and agreed to. |
+| Array SSH is read-only, through an allowlist. Writes go through WSAPI after the operator approves a plan on screen. SSH writes follow ADR 0025 (exact tested forms, built only inside an approved apply, plan-scoped objects, undo written first, read-back after): today `ArrayRcCliClient` (ADR 0015, Remote Copy ports and targets) and `ArraySnapCliClient` (ADR 0016, snapshot schedules). | Everything the tool does to an array must be something the operator saw and agreed to, with its undo on record before the write runs. |
 | Discovery, verification and the as-built never change anything. | They are run on live customer systems to report, not to fix. |
 | One array per run. | Credentials, plans and documents belong to one array; mixing them is how the wrong array gets changed. |
 | Steps and modes come only from `domain/workflow.py`. | The UI renders the registry; a second list drifts from it (it happened). |
@@ -110,8 +112,11 @@ You cannot push to `main`; github.hpe.com refuses it. Everything arrives through
 | Never commit `frontend/dist`. | It is built from `frontend/src` after each merge; committed by hand, it conflicts in every pull request. |
 
 **Also update** the docs that describe what you changed: `docs/SCOPE.md` if an area's status
-moves, `README.md` (app folder) for operator steps, an ADR in `docs/adr/` for a decision, a spec in
-`docs/specs/` for a new feature's requirements.
+moves, `README.md` (app folder) for operator steps, `docs/design/HLD.md` or `docs/design/LLD.md`
+if architecture or invariants change, an ADR in `docs/adr/` for a decision, a spec in
+`docs/specs/` for a new feature's requirements. If you change a FastAPI route, schema or
+`domain/events.py`, regenerate `frontend/generated/api.ts` with
+`.venv/bin/python scripts/api_types.py` (never edit it by hand).
 
 **UI changes** follow [`docs/UX-GUIDELINES.md`](Provisioning_Automation/alletra_onboard/docs/UX-GUIDELINES.md):
 plain operator language, no ADR, SPEC or version numbers on screen, one heading per page, and a
@@ -134,18 +139,21 @@ gate. From the app folder:
 |---|---|---|
 | tests | the whole pytest suite; a test that reaches the network fails | fix the code, or the test if behaviour changed on purpose (say so in the pull request) |
 | deps | the import rules of `docs/STANDARD.md` (import-linter) | the contract it prints says which rule and what to do |
-| lint, complexity | ruff with the pinned version, compared per function with `quality/ceilings.toml` | fix the function the NEW or WORSE line names; delete the line a STALE one names |
-| fitness | long files may not grow, a file may not gain a `type: ignore`, `noqa` or `eslint-disable`, documents name only code that exists, Markdown stays in today's folders, a new lesson names its test | each line says what to do |
-| vulture, knip | dead code in `src` and in `frontend/` | delete it or use it |
+| lint | ruff with the pinned version (every rule outside `complexity`), compared per function with `quality/ceilings.toml` | fix the function the NEW or WORSE line names; delete the line a STALE one names |
+| complexity | ruff `C901`, `PLR0913`, `PLR0912`, `PLR0915` per function, compared with `quality/ceilings.toml` | fix the function the NEW or WORSE line names; delete the line a STALE one names |
+| fitness | long files may not grow, no `suppress(Exception)`, a file may not gain a `type: ignore`, `noqa`, `pyright:`, `eslint-disable` or `@ts-expect-error`, documents name only code that exists, Markdown stays in today's folders, a new lesson names its test or lint rule | each line says what to do |
+| vulture | dead Python code in `src/` | delete it or use it |
 | pyright | backend type errors per file | fix the types in the file it names |
+| api-types | `frontend/generated/api.ts` matches FastAPI's OpenAPI schema (`scripts/api_types.py --check`) | regenerate with `.venv/bin/python scripts/api_types.py` and commit the file; never edit it by hand |
 | types | `npm run typecheck` in `frontend/` | fix the TypeScript error |
 | mockups | the design mockups' TypeScript (`tsc -p mockups --noEmit` in `frontend/`) | fix the error in `frontend/mockups` |
-| ui-lint | `npm run lint` in `frontend/` (eslint) | fix the error; never add to `eslint-suppressions.json` |
+| ui-lint | `npm run lint` in `frontend/` (eslint) | fix the error; never add to `frontend/eslint-suppressions.json` |
+| knip | dead frontend code in `frontend/` (unused files, exports, types and dependencies) | delete it or use it |
 | ui-tests | the frontend unit tests (`npm test` in `frontend/`) | fix the code, or the test if behaviour changed on purpose |
-| dist | nothing under `frontend/dist` changed on your branch | it prints the command that drops those changes |
-| secrets | no token, private key or lab password in the lines you added | remove it, and tell the owner if it was ever pushed |
 | lists | no known violation is added to a list or raised on your branch | fix the code and take the line back out; the owner alone lets one through (`ALLOW_LISTS=1`) |
-| config | the gate's scripts and the tools' settings (ruff, pyright, eslint, tsc, knip, the import contracts) are unchanged on your branch | take the change back out; a rule change is its own pull request with an ADR, and the owner lets it through (`ALLOW_CONFIG=1`) |
+| config | the gate's scripts (`check.py`, `fitness.py`, `api_types.py`) and the tools' settings (ruff, pyright, eslint, tsc, knip, the import contracts) are unchanged on your branch | take the change back out; a rule change is its own pull request with an ADR, and the owner lets it through (`ALLOW_CONFIG=1`) |
+| dist | nothing under `frontend/dist` changed on your branch | it prints the command that drops those changes |
+| secrets | no token, private key, lab password or real fixture email in the lines you added | remove it, and tell the owner if it was ever pushed |
 | ignored | (warning) files under `src/`, `tests/` or `frontend/src/` that `.gitignore` hides | see section 9 |
 
 The rules behind these lines are in `docs/STANDARD.md` (app folder). Violations that existed when a
@@ -247,10 +255,12 @@ described in the app folder's [README](Provisioning_Automation/alletra_onboard/R
 |---|---|
 | Rules, layout, commands | [`AGENTS.md`](AGENTS.md) |
 | Running, releasing, the jump boxes | [app README](Provisioning_Automation/alletra_onboard/README.md) |
-| What is built and proven | `docs/SCOPE.md` |
-| Why a decision was made | `docs/adr/`, `docs/specs/` |
-| How the code fits together | `docs/DEVELOPER-HANDBOOK.html` (open in a browser; the one-stop guide), then `docs/design/HLD.md` and `docs/STANDARD.md` |
-| Evidence from past lab runs | `docs/validation/` |
+| Map of `docs/` (living vs historical) | [`docs/README.md`](Provisioning_Automation/alletra_onboard/docs/README.md) |
+| What is built and proven | [`docs/SCOPE.md`](Provisioning_Automation/alletra_onboard/docs/SCOPE.md) |
+| Why a decision was made | `docs/adr/`, `docs/specs/` (in the app folder) |
+| How the code fits together | [`docs/DEVELOPER-HANDBOOK.html`](Provisioning_Automation/alletra_onboard/docs/DEVELOPER-HANDBOOK.html) (open in a browser; the one-stop guide), then [`docs/design/HLD.md`](Provisioning_Automation/alletra_onboard/docs/design/HLD.md), [`docs/design/LLD.md`](Provisioning_Automation/alletra_onboard/docs/design/LLD.md) and [`docs/STANDARD.md`](Provisioning_Automation/alletra_onboard/docs/STANDARD.md) |
+| Known violation ceilings | [`quality/ceilings.toml`](Provisioning_Automation/alletra_onboard/quality/ceilings.toml) |
+| Evidence from past lab runs | `docs/validation/` (in the app folder) |
 | GreenLake API reference, offline | `reference/greenlake_api_docs/greenlake/` (repo root) |
 | Old plans and tools | `archive/` (read only) |
 

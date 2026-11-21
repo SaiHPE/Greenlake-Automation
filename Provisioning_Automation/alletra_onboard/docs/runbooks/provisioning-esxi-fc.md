@@ -1,3 +1,7 @@
+> **Historical reference (June 2026).** This pre-app manual runbook is kept for reference only.
+> It is superseded by the app's Discovery, SAN Zoning and Provision storage workflow; see
+> [`README.md`](../../README.md) for current operator instructions.
+
 # Runbook — Provision Alletra MP B10000 storage to VMware ESXi (Fibre Channel)
 
 Present storage from an HPE Alletra MP B10000 to ESXi hosts over FC: **host → volume → export**,
