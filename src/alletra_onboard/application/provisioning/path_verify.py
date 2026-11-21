@@ -16,6 +16,8 @@ as a live path. `Type` is one or two words (`host` / `host set`), so we anchor p
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 from alletra_onboard.application.provisioning import storage_provision
 from alletra_onboard.application.provisioning.clients import (
     make_array_cli,
@@ -29,6 +31,7 @@ from alletra_onboard.domain.provisioning import (
     EsxiLun,
     EsxiLunPaths,
     HostPathStatus,
+    PathVerdict,
     PathVerification,
     ProvisioningIntent,
     VolumePath,
@@ -82,6 +85,57 @@ def parse_showvlun_active(text: str) -> list[VolumePath]:
     return out
 
 
+class _PathCounts(NamedTuple):
+    hbas: int
+    lun_count: int
+    paths_per_lun: int
+    summary: str
+
+
+def _path_counts(paths: list[VolumePath], fc_paths: list[VolumePath]) -> _PathCounts:
+    hbas = len({vp.host_wwpn for vp in paths})
+    per_lun: dict[int, int] = {}
+    for vp in paths:
+        per_lun[vp.lun] = per_lun.get(vp.lun, 0) + 1
+    lun_count = len(per_lun)
+    ppl_min, ppl_max = (min(per_lun.values()), max(per_lun.values())) if per_lun else (0, 0)
+    ppl_txt = f"{ppl_min}" if ppl_min == ppl_max else f"{ppl_min}–{ppl_max}"
+    initiators = "HBA(s)" if fc_paths else "initiator(s)"
+    return _PathCounts(hbas, lun_count, ppl_min, f"{lun_count} LUN(s) · {hbas} {initiators} · {ppl_txt} path(s) per LUN")
+
+
+def _classify_live_paths(
+    counts: str,
+    iscsi_ports: list[str],
+    fabrics: list[str],
+    names: dict[str, str],
+    *,
+    has_fc: bool,
+) -> tuple[PathVerdict, str]:
+    verdict: PathVerdict
+    if not has_fc:
+        # iSCSI has no fabrics; redundancy is paths through both controller nodes.
+        nodes = sorted({port.split(":")[0] for port in iscsi_ports})
+        verdict = "live" if len(nodes) >= 2 else "partial"
+        detail = f"{counts} · iSCSI on {', '.join(iscsi_ports)}" + (
+            " · both nodes" if len(nodes) >= 2 else f" · node {nodes[0]} only — no path through the other node"
+        )
+        return verdict, detail
+    if len(fabrics) >= 2:
+        verdict = "live"
+        fabric_labels = ", ".join(names.get(f) or f for f in fabrics)
+        detail = f"{counts} · both fabrics ({fabric_labels})"
+    else:
+        verdict = "partial"
+        missing = "even" if fabrics == ["odd"] else "odd"
+        only = names.get(fabrics[0]) or f"{fabrics[0]} fabric"
+        lacks = names.get(missing) or f"the {missing} fabric"
+        detail = f"{counts} · {only} only — missing {lacks} (single fabric)"
+    if iscsi_ports:
+        detail += f"; also iSCSI on {', '.join(iscsi_ports)}"
+    return verdict, detail
+
+
 def verify_paths(
     expected_by_host: dict[str, set[str]],
     vlun_paths: list[VolumePath],
@@ -119,9 +173,6 @@ def verify_paths(
         return report
     names = switch_by_fabric or {}
 
-    def label(fabric: str) -> str:
-        return names.get(fabric) or fabric
-
     for host in sorted(expected_by_host):
         expected = expected_by_host[host]
         hba_wwpns = (wwpns_by_host or {}).get(host, set())
@@ -141,16 +192,9 @@ def verify_paths(
         iscsi_ports = sorted({vp.port for vp in paths if vp.protocol == "iscsi"})
         fabrics = sorted({_fabric(vp.port, fabric_by_port) for vp in fc_paths} - {"?"})
         fabric_names = [names[f] for f in fabrics if f in names] if all(f in names for f in fabrics) else []
-        hbas = len({vp.host_wwpn for vp in paths})
-        per_lun: dict[int, int] = {}
-        for vp in paths:
-            per_lun[vp.lun] = per_lun.get(vp.lun, 0) + 1
-        lun_count = len(per_lun)
-        ppl_min, ppl_max = (min(per_lun.values()), max(per_lun.values())) if per_lun else (0, 0)
-        ppl_txt = f"{ppl_min}" if ppl_min == ppl_max else f"{ppl_min}–{ppl_max}"
-        initiators = "HBA(s)" if fc_paths else "initiator(s)"
-        counts = f"{lun_count} LUN(s) · {hbas} {initiators} · {ppl_txt} path(s) per LUN"
+        counts = _path_counts(paths, fc_paths)
 
+        verdict: PathVerdict
         if not paths:
             verdict = "no_path"
             # Only claim an export exists when one does. The old wording asserted it unconditionally
@@ -161,24 +205,8 @@ def verify_paths(
                 if expected else
                 "0 live paths, and nothing is exported to this host"
             )
-        elif not fc_paths:
-            # iSCSI has no fabrics; redundancy is paths through both controller nodes.
-            nodes = sorted({port.split(":")[0] for port in iscsi_ports})
-            verdict = "live" if len(nodes) >= 2 else "partial"
-            detail = f"{counts} · iSCSI on {', '.join(iscsi_ports)}" + (
-                " · both nodes" if len(nodes) >= 2 else f" · node {nodes[0]} only — no path through the other node"
-            )
-        elif len(fabrics) >= 2:
-            verdict = "live"
-            detail = f"{counts} · both fabrics ({', '.join(label(f) for f in fabrics)})"
         else:
-            verdict = "partial"
-            missing = "even" if fabrics == ["odd"] else "odd"
-            only = names.get(fabrics[0]) or f"{fabrics[0]} fabric"
-            lacks = names.get(missing) or f"the {missing} fabric"
-            detail = f"{counts} · {only} only — missing {lacks} (single fabric)"
-        if fc_paths and iscsi_ports:
-            detail += f"; also iSCSI on {', '.join(iscsi_ports)}"
+            verdict, detail = _classify_live_paths(counts.summary, iscsi_ports, fabrics, names, has_fc=bool(fc_paths))
 
         if dead_vols and paths:
             detail += f"; exported but no path yet: {', '.join(dead_vols)}"
@@ -188,11 +216,66 @@ def verify_paths(
         if object_names:
             detail += f" [array host object: {', '.join(object_names)}]"
         report.hosts.append(HostPathStatus(
-            host=host, verdict=verdict, hbas_with_paths=hbas, fabrics=fabrics, fabric_names=fabric_names,
-            lun_count=lun_count, paths_per_lun=ppl_min,
+            host=host, verdict=verdict, hbas_with_paths=counts.hbas, fabrics=fabrics, fabric_names=fabric_names,
+            lun_count=counts.lun_count, paths_per_lun=counts.paths_per_lun,
             live_volumes=live_vols, dead_volumes=dead_vols, detail=detail,
         ))
     return report
+
+
+def _esxi_lun_paths(vol: str, wwns: dict[str, str], devices: dict[str, EsxiLun]) -> EsxiLunPaths:
+    wwn = wwns.get(vol, "")
+    naa = f"naa.{wwn}" if wwn else ""
+    dev = devices.get(naa) if naa else None
+    if dev is None:
+        return EsxiLunPaths(
+            volume=vol, naa=naa, present=False,
+            paths_total=0, paths_active=0, paths_dead=0, adapters=[],
+        )
+    return EsxiLunPaths(
+        volume=vol, naa=naa, present=True,
+        paths_total=dev.paths_total, paths_active=dev.paths_active,
+        paths_dead=dev.paths_dead, adapters=list(dev.adapters),
+    )
+
+
+def _attach_host_esxi_view(
+    row: HostPathStatus,
+    expected: list[str],
+    devices: dict[str, EsxiLun],
+    wwns: dict[str, str],
+) -> None:
+    luns = [_esxi_lun_paths(vol, wwns, devices) for vol in expected]
+    row.esxi_luns = luns
+    absent = [lp.volume for lp in luns if not lp.present]
+    no_wwn = [lp.volume for lp in luns if not lp.naa]
+    if absent:
+        row.esxi_state = "absent"
+        seen = len(luns) - len(absent)
+        row.esxi_note = (
+            f"ESXi sees {seen} of {len(luns)} exported volume(s); no device yet for {', '.join(absent)} — "
+            "rescan the host's storage adapters in vCenter, then Verify paths again"
+        )
+        if no_wwn:
+            row.esxi_note += f" (no WWN read for {', '.join(no_wwn)})"
+        return
+    active_min = min(lp.paths_active for lp in luns)
+    active_max = max(lp.paths_active for lp in luns)
+    total_min = min(lp.paths_total for lp in luns)
+    dead = sum(lp.paths_dead for lp in luns)
+    adapters = sorted({a for lp in luns for a in lp.adapters})
+    active_txt = f"{active_min}" if active_min == active_max else f"{active_min}–{active_max}"
+    summary = (
+        f"ESXi sees {len(luns)} volume(s) · {active_txt} active of {total_min} path(s) per LUN"
+        + (f" · {', '.join(adapters)}" if adapters else "")
+    )
+    if active_min >= 2 and dead == 0:
+        row.esxi_state = "ok"
+        row.esxi_note = summary
+    else:
+        row.esxi_state = "degraded"
+        why = f"{dead} dead path(s)" if dead else "one active path"
+        row.esxi_note = f"{summary} — {why}"
 
 
 def attach_esxi_view(
@@ -227,47 +310,7 @@ def attach_esxi_view(
             row.esxi_state = "not_checked"
             row.esxi_note = "ESXi view: nothing exported to this host"
             continue
-        devices = by_host_naa.get(row.host, {})
-        luns: list[EsxiLunPaths] = []
-        for vol in expected:
-            wwn = wwns.get(vol, "")
-            naa = f"naa.{wwn}" if wwn else ""
-            dev = devices.get(naa) if naa else None
-            luns.append(EsxiLunPaths(
-                volume=vol, naa=naa, present=dev is not None,
-                paths_total=dev.paths_total if dev else 0, paths_active=dev.paths_active if dev else 0,
-                paths_dead=dev.paths_dead if dev else 0, adapters=list(dev.adapters) if dev else [],
-            ))
-        row.esxi_luns = luns
-        absent = [lp.volume for lp in luns if not lp.present]
-        no_wwn = [lp.volume for lp in luns if not lp.naa]
-        if absent:
-            row.esxi_state = "absent"
-            seen = len(luns) - len(absent)
-            row.esxi_note = (
-                f"ESXi sees {seen} of {len(luns)} exported volume(s); no device yet for {', '.join(absent)} — "
-                "rescan the host's storage adapters in vCenter, then Verify paths again"
-            )
-            if no_wwn:
-                row.esxi_note += f" (no WWN read for {', '.join(no_wwn)})"
-            continue
-        active_min = min(lp.paths_active for lp in luns)
-        total_min = min(lp.paths_total for lp in luns)
-        dead = sum(lp.paths_dead for lp in luns)
-        adapters = sorted({a for lp in luns for a in lp.adapters})
-        summary = (
-            f"ESXi sees {len(luns)} volume(s) · {active_min}"
-            + (f"–{max(lp.paths_active for lp in luns)}" if any(lp.paths_active != active_min for lp in luns) else "")
-            + f" active of {total_min} path(s) per LUN"
-            + (f" · {', '.join(adapters)}" if adapters else "")
-        )
-        if active_min >= 2 and dead == 0:
-            row.esxi_state = "ok"
-            row.esxi_note = summary
-        else:
-            row.esxi_state = "degraded"
-            why = f"{dead} dead path(s)" if dead else "one active path"
-            row.esxi_note = f"{summary} — {why}"
+        _attach_host_esxi_view(row, expected, by_host_naa.get(row.host, {}), wwns)
     return report
 
 

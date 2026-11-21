@@ -16,13 +16,13 @@ Parsing the raw ``show*`` text into ``AsBuiltData`` lives in ``asbuilt_parse.py`
 from __future__ import annotations
 
 import io
-import ipaddress
 import os
 import re
 import sys
 import zipfile
 from collections import OrderedDict
 from datetime import UTC
+from functools import partial
 from pathlib import Path
 from types import EllipsisType
 
@@ -42,8 +42,14 @@ from alletra_onboard.application.documents.asbuilt_docx import (
     content_widths,
     format_when,
     hpe_table,
+    read_failed,
 )
 from alletra_onboard.application.documents.asbuilt_model import AsBuiltData
+from alletra_onboard.application.documents.asbuilt_network import (
+    add_iscsi_network_section,
+    add_peer_ports_section,
+    add_zoning_section,
+)
 from alletra_onboard.application.documents.asbuilt_parse import (
     parse_checkhealth,
     parse_inventory,
@@ -57,23 +63,10 @@ from alletra_onboard.application.documents.asbuilt_snapshots import (
 )
 from alletra_onboard.application.provisioning.discovery import (
     UNCLAIMED_HOST,
-    parse_iscsi_vlans,
     parse_showhost,
 )
-from alletra_onboard.application.provisioning.iscsi_network import (
-    GATEWAY_WINDOW,
-    gateway_window,
-    gw_line,
-    switch_handoff_for,
-)
 from alletra_onboard.application.provisioning.path_verify import parse_showvlun_active
-from alletra_onboard.application.provisioning.peer_ports import (
-    parse_showport_par,
-    parse_showport_peer,
-    parse_showport_ports,
-)
-from alletra_onboard.domain.array_parse import parse_cli_sets, parse_showport_roles
-from alletra_onboard.domain.network import IscsiVlanAction, IscsiVlanRequest
+from alletra_onboard.domain.array_parse import parse_cli_sets
 from alletra_onboard.domain.shared import REMOVAL_ORDER
 from alletra_onboard.domain.unified_file import NODE_RUNNING
 
@@ -199,6 +192,33 @@ _FIELD_BY_KEY: dict[str, str] = {
 }
 
 
+def _placeholder_value(data, match) -> str:
+    field = _FIELD_BY_KEY.get(_placeholder_key(match.group(0)))
+    if field:
+        value = getattr(data, field, "")
+        if value:
+            return value
+    return match.group(0)
+
+
+def _replace_in_paragraph(para, value_for) -> bool:
+    nodes = list(para.iter(qn("w:t")))
+    if len(nodes) < 2:
+        return False
+    joined = "".join(n.text or "" for n in nodes)
+    if "<" not in joined:
+        return False
+    if not any(_placeholder_key(m) in _FIELD_BY_KEY for m in _PLACEHOLDER.findall(joined)):
+        return False
+    replaced = _PLACEHOLDER.sub(value_for, joined)
+    if replaced == joined:
+        return False
+    nodes[0].text = replaced
+    for extra in nodes[1:]:
+        extra.text = ""
+    return True
+
+
 def _fill_placeholders(doc, data) -> int:
     """Replace every known ``<placeholder>`` with its value, across the body and headers/footers.
 
@@ -209,39 +229,19 @@ def _fill_placeholders(doc, data) -> int:
     paragraph's text into its first run, which is the price of repairing a split placeholder.
     """
     filled = 0
-
-    def _value_for(match) -> str:
-        field = _FIELD_BY_KEY.get(_placeholder_key(match.group(0)))
-        if field:
-            value = getattr(data, field, "")
-            if value:
-                return value
-        return match.group(0)
+    replace = partial(_placeholder_value, data)
 
     for part in _text_parts(doc):
         for node in part.iter(qn("w:t")):                      # pass 1: within a run
             if node.text and "<" in node.text:
-                replaced = _PLACEHOLDER.sub(_value_for, node.text)
+                replaced = _PLACEHOLDER.sub(replace, node.text)
                 if replaced != node.text:
                     node.text = replaced
                     filled += 1
 
         for para in part.iter(qn("w:p")):                      # pass 2: split across runs
-            nodes = list(para.iter(qn("w:t")))
-            if len(nodes) < 2:
-                continue
-            joined = "".join(n.text or "" for n in nodes)
-            if "<" not in joined:
-                continue
-            if not any(_placeholder_key(m) in _FIELD_BY_KEY for m in _PLACEHOLDER.findall(joined)):
-                continue
-            replaced = _PLACEHOLDER.sub(_value_for, joined)
-            if replaced == joined:
-                continue
-            nodes[0].text = replaced
-            for extra in nodes[1:]:
-                extra.text = ""
-            filled += 1
+            if _replace_in_paragraph(para, replace):
+                filled += 1
     return filled
 
 
@@ -375,6 +375,31 @@ def _add_checkhealth_after(heading, text: str, doc) -> None:
         anchor = _place_after(anchor, tbl)
 
 
+def _fill_config_table(doc, data: AsBuiltData) -> None:
+    values = {label: getattr(data, field) for label, field in _LABEL_TO_FIELD.items()}
+    for table in doc.tables:
+        for row in table.rows:
+            key = _norm(row.cells[0].text).lower()
+            if key in values and len(row.cells) > 1:
+                _set_cell_text(row.cells[1], values[key])
+                if key.startswith("nvme ssd disks ("):
+                    # the template's label carries a sample drive size; the value states the real one
+                    _set_cell_text(row.cells[0], "NVMe SSD Disks")
+
+
+def _find_template_headings(doc) -> tuple[Paragraph | None, Paragraph | None]:
+    inv_heading = ch_heading = None
+    for para in doc.paragraphs:
+        if not (para.style and para.style.name and para.style.name.lower().startswith("heading")):
+            continue
+        heading = _norm(para.text).lower()
+        if "inventory" in heading:
+            inv_heading = para
+        elif "checkhealth" in heading:
+            ch_heading = para
+    return inv_heading, ch_heading
+
+
 def generate_asbuilt(
     data: AsBuiltData, out_path: str | Path, *, template: str | Path | EllipsisType | None = ...,
 ) -> tuple[Path, list[str]]:
@@ -397,26 +422,8 @@ def generate_asbuilt(
     warnings: list[str] = []
 
     _fill_placeholders(doc, data)
-
-    values = {label: getattr(data, field) for label, field in _LABEL_TO_FIELD.items()}
-    for table in doc.tables:
-        for row in table.rows:
-            key = _norm(row.cells[0].text).lower()
-            if key in values and len(row.cells) > 1:
-                _set_cell_text(row.cells[1], values[key])
-                if key.startswith("nvme ssd disks ("):
-                    # the template's label carries a sample drive size; the value states the real one
-                    _set_cell_text(row.cells[0], "NVMe SSD Disks")
-
-    inv_heading = ch_heading = None
-    for para in doc.paragraphs:
-        if not (para.style and para.style.name and para.style.name.lower().startswith("heading")):
-            continue
-        heading = _norm(para.text).lower()
-        if "inventory" in heading:
-            inv_heading = para
-        elif "checkhealth" in heading:
-            ch_heading = para
+    _fill_config_table(doc, data)
+    inv_heading, ch_heading = _find_template_headings(doc)
 
     if inv_heading is not None:
         _drop_blank_paragraphs_after(inv_heading)
@@ -456,16 +463,6 @@ def generate_asbuilt(
 # ------------------------------------------------------------------ SPEC-002: the provisioned array
 
 _SYSTEM_VOLUME = re.compile(r"^(\.|admin$)")
-
-
-def _read_failed(doc, data: AsBuiltData, command: str, warnings: list[str]) -> bool:
-    """R6: a failed read is named in the section AND in the warnings; returns True when it failed."""
-    err = data.read_errors.get(command)
-    if err is None:
-        return False
-    add_para(doc, f"`{command}` could not be read: {err}")
-    warnings.append(f"`{command}` could not be read ({err}); its section of the as-built is empty.")
-    return True
 
 
 def _members_of(sets: OrderedDict[str, list[str]]) -> dict[str, list[str]]:
@@ -523,7 +520,7 @@ def _add_handover_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
 
 def _add_handover_alerts(doc, data: AsBuiltData, reads, warnings: list[str]) -> None:
     add_para(doc, "Alerts", bold=True)
-    if _read_failed(doc, data, handover.ALERTS, warnings):
+    if read_failed(doc, data.read_errors, handover.ALERTS, warnings):
         return
     alerts = reads.alerts
     add_para(doc, handover.alerts_verdict(alerts))
@@ -555,7 +552,7 @@ def _add_handover_alerts(doc, data: AsBuiltData, reads, warnings: list[str]) -> 
 
 def _add_handover_capacity(doc, data: AsBuiltData, reads, warnings: list[str]) -> None:
     add_para(doc, "Capacity", bold=True)
-    if _read_failed(doc, data, handover.SPACE, warnings):
+    if read_failed(doc, data.read_errors, handover.SPACE, warnings):
         return
     rows = []
     for label, (section, *path) in _SPACE_LINES:
@@ -572,7 +569,7 @@ def _add_hosts_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
     add_h1(doc, "Hosts and host sets")
     sets = OrderedDict() if data.read_errors.get("showhostset") else parse_cli_sets(data.showhostset)
     in_sets = _members_of(sets)
-    if not _read_failed(doc, data, "showhost -d", warnings):
+    if not read_failed(doc, data.read_errors, "showhost -d", warnings):
         hosts = parse_showhost(data.showhost_d)
         named = [h for h in hosts if h.name != UNCLAIMED_HOST]
         unclaimed = [h for h in hosts if h.name == UNCLAIMED_HOST]
@@ -607,7 +604,7 @@ def _add_hosts_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
 def _add_sets_table(doc, data: AsBuiltData, warnings: list[str], kind: str, sets: OrderedDict[str, list[str]]) -> None:
     add_para(doc, f"{kind} sets", bold=True)
     cmd = "showhostset" if kind == "Host" else "showvvset"
-    if not _read_failed(doc, data, cmd, warnings):
+    if not read_failed(doc, data.read_errors, cmd, warnings):
         if sets:
             add_table(doc, [f"{kind} set", "Members"], [[n, ", ".join(m) or "—"] for n, m in sets.items()],
                       widths=[0.35, 0.65])
@@ -634,7 +631,7 @@ def _add_volumes_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
     add_h1(doc, "Volumes and volume sets")
     sets = OrderedDict() if data.read_errors.get("showvvset") else parse_cli_sets(data.showvvset)
     in_sets = _members_of(sets)
-    if not _read_failed(doc, data, "showvv", warnings):
+    if not read_failed(doc, data.read_errors, "showvv", warnings):
         rows_all = parse_showvv(data.showvv)
         size_key = next((k for k in rows_all[0] if k.startswith("VSize")), "VSize(MiB)") if rows_all else "VSize(MiB)"
         cpg_by_name: dict[str, str] = {}
@@ -669,10 +666,10 @@ def _add_volumes_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
 
 def _add_presentations_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
     add_h1(doc, "Presentations")
-    if _read_failed(doc, data, "showvlun -t", warnings):
+    if read_failed(doc, data.read_errors, "showvlun -t", warnings):
         return
     templates = parse_showvlun_templates_cli(data.showvlun_t)
-    active_ok = not _read_failed(doc, data, "showvlun -a", warnings)
+    active_ok = not read_failed(doc, data.read_errors, "showvlun -a", warnings)
     active = parse_showvlun_active(data.showvlun_a) if active_ok else []
     add_para(doc, "What is presented to whom (the array's VLUN templates), and whether anyone can see it "
                   "right now (active paths).")
@@ -691,97 +688,6 @@ def _add_presentations_section(doc, data: AsBuiltData, warnings: list[str]) -> N
             live = "none — nobody can see this presentation"
         rows.append([str(t.lun), t.volume, target, live])
     add_table(doc, ["LUN", "Volume", "Presented to", "Active paths"], rows, widths=[0.08, 0.30, 0.30, 0.32])
-
-
-def _zoning_check_text(report: dict, *, check_only: bool) -> str:
-    """What the zoning check found, host by host. The check's gate list (`zoned_hosts`) also holds iSCSI
-    hosts logged in on the array, which need no zone and are on no fabric: they are named apart, so the
-    document never calls one zoned (live 2026-11-17: *Zoned on both fabrics: zz_is_eljr*, an iSCSI host)."""
-    iscsi: dict[str, list[str]] = report.get("iscsi_hosts") or {}
-    fc_zoned = [h for h in report.get("zoned_hosts", []) if h not in iscsi]
-    unverified = report.get("unverified_hosts", [])
-    logged_in = [f"{h} (logged in on {', '.join(ports)})" for h, ports in sorted(iscsi.items()) if ports]
-    waiting = sorted(h for h, ports in iscsi.items() if not ports)
-    parts = []
-    if fc_zoned or unverified or report.get("expected") or not iscsi:
-        if check_only:
-            parts.append("Zoned on both fabrics: " + (", ".join(fc_zoned) or "none") + ".")
-        else:
-            parts.append(f"zoned on both fabrics — {', '.join(fc_zoned)}." if fc_zoned else "no host zoned on both fabrics.")
-    if logged_in:
-        parts.append("iSCSI, no zoning needed: " + ", ".join(logged_in) + ".")
-    if waiting:
-        parts.append("iSCSI, not logged in on the array yet, so nothing is exported to it: " + ", ".join(waiting) + ".")
-    if unverified:
-        parts.append(f"Not seen by the array on either fabric: {', '.join(unverified)}." if check_only
-                     else f"Not verified — {', '.join(unverified)}.")
-    return " ".join(parts)
-
-
-def _add_zoning_section(doc, data: AsBuiltData) -> None:
-    add_h1(doc, "SAN zoning designed in this run")
-    plan = data.zoning_plan
-    report = data.zoning_report
-    if not plan and not report:
-        add_para(doc, "This run did not include the SAN zoning step.")
-        return
-    if not plan:
-        # The check ran (array-side) but no plan was built: say what the check found, plainly.
-        add_para(doc, "The zoning check ran against the array's logins; no zoning plan was built and no "
-                      "command set was generated in this run.")
-        add_para(doc, _zoning_check_text(report or {}, check_only=True))
-        return
-    rendered = data.zoning_rendered or {}
-    aliases: dict[str, str] = rendered.get("aliases") or {}
-    delivered = {tuple(p) for p in rendered.get("selected_pairs") or []}
-    commands: dict[str, list[str]] = rendered.get("commands") or {}
-    add_para(doc, "The tool designs zones and hands the SAN team a command set; it never writes to a switch. "
-                  "Rows marked 'already zoned' were found in the fabric's effective configuration.")
-    for fab in plan.get("fabrics", []):
-        name = fab.get("fabric", "")
-        bits = [f"{name} — switch {fab.get('switch_host', '')} {fab.get('switch_name', '')}".rstrip()]
-        if fab.get("fabric_name"):
-            bits.append(f"fabric {fab['fabric_name']}")
-        if fab.get("active_cfg"):
-            bits.append(f"active cfg {fab['active_cfg']}")
-        if fab.get("switch_count"):
-            bits.append(f"{fab['switch_count']} switch(es) in fabric")
-        add_para(doc, " · ".join(bits), bold=True)
-        by_wwpn = {w["wwpn"]: w for w in fab.get("hosts", []) + fab.get("array_ports", [])}
-        zoned = {tuple(p) for p in fab.get("already_zoned", [])}
-        zone_names = fab.get("zone_names", {})
-
-        def alias(wwpn: str, _by=by_wwpn) -> str:
-            return aliases.get(wwpn) or _by.get(wwpn, {}).get("suggested_alias") or "—"
-
-        rows = []
-        for h, a in (tuple(p) for p in fab.get("pairs", [])):
-            host, port = by_wwpn.get(h, {}), by_wwpn.get(a, {})
-            if (h, a) in zoned:
-                status = "already zoned"
-            elif (h, a) in delivered:
-                status = "command set delivered"
-            else:
-                status = "not selected"
-            rows.append([host.get("host_name") or "—", host.get("display", h), alias(h),
-                         port.get("nsp", "—"), port.get("display", a), alias(a),
-                         ", ".join(zone_names.get(f"{h}|{a}", [])) or "—", status])
-        if rows:
-            add_table(doc, ["Host", "HBA WWPN", "Alias", "Array port", "Array WWPN", "Alias", "Zone(s)", "Status"], rows,
-                      widths=[0.14, 0.16, 0.12, 0.08, 0.16, 0.12, 0.12, 0.10])
-        else:
-            add_para(doc, "No host HBA on this fabric needed a zone to this array.")
-        if commands.get(name):
-            add_para(doc, "Delivered to the SAN team for application; confirm against the fabric before relying on it.")
-            add_mono(doc, commands[name])
-    if plan.get("offline_hosts"):
-        add_para(doc, "On no fabric (cable and power first): " + ", ".join(plan["offline_hosts"]))
-    if not rendered:
-        add_para(doc, "No command set was generated in this run.")
-    if report:
-        add_para(doc, "Zoning check on the array: " + _zoning_check_text(report, check_only=False))
-    else:
-        add_para(doc, "The zoning check was not run.")
 
 
 _OUTCOME_LABEL = {"created": "Created", "updated": "Updated", "exists": "Already existed", "failed": "Failed"}
@@ -851,142 +757,6 @@ def _add_provisioning_section(doc, data: AsBuiltData) -> None:
         add_para(doc, "No target hosts to verify.")
 
 
-def _add_iscsi_network_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    """SPEC-024 R7: when the array has a VLAN-tagged iSCSI address or the sheet asks for one: every
-    interface on every iSCSI port with the port's state (showport -iscsivlans has no State column),
-    whether this run set it up, then the sentences for the network team."""
-    command = "showport -iscsivlans"
-    rows = data.iscsi_network_rows
-    unreadable = ""
-    answer = data.showport_iscsivlans.strip()
-    if answer.lower().startswith("error"):
-        vlans, unreadable = [], answer.splitlines()[0]
-    else:
-        try:
-            vlans = parse_iscsi_vlans(answer)
-        except ValueError as exc:
-            vlans, unreadable = [], str(exc)
-    # A read that failed cannot say the array has no interface, so the section names the failure.
-    if not vlans and not rows and not unreadable and command not in data.read_errors:
-        return
-    add_h1(doc, "iSCSI network")
-    if _read_failed(doc, data, command, warnings):
-        return
-    if unreadable:
-        add_para(doc, f"`{command}` could not be read: {unreadable}")
-        warnings.append(f"`{command}` could not be read ({unreadable}); the iSCSI network section is empty.")
-        return
-    roles, _wwn = parse_showport_roles(data.showport)
-    name = data.name or data.serial_no or "the array"
-    if vlans:
-        add_para(doc, f"The VLAN-tagged iSCSI addresses on {name}'s iSCSI ports when this document was made. Each port's "
-                      "untagged address is not listed here; it stays as it was.")
-        set_up = {(nsp, vlan) for nsp, vlan in data.iscsi_set_up_in_run}
-        add_table(doc, ["Port", "VLAN", "Address", "Gateway", "MTU", "Port state", "Set up"],
-                  [[v.nsp, str(v.vlan_id), f"{v.ip}/{_prefix(v.netmask)}", v.gateway or "—", v.mtu or "—",
-                    roles[v.nsp].state if v.nsp in roles else "—",
-                    "By this run" if (v.nsp, v.vlan_id) in set_up else "Already there"] for v in vlans])
-    else:
-        add_para(doc, f"{name} has no VLAN-tagged iSCSI address.")
-    there = {(v.nsp, v.vlan_id) for v in vlans}
-    absent = [r for r in rows if (r.get("nsp"), r.get("vlan_id")) not in there]
-    if absent:
-        add_para(doc, "Asked for on the sheet but not on the array: "
-                      + ", ".join(f"{r.get('nsp')} VLAN {r.get('vlan_id')} ({r.get('ip')})" for r in absent) + ".")
-    # ADR 0017, amended 2026-11-17: the tool adds the address without its gateway; a gateway the sheet gives
-    # and the array does not have yet is the change window's, printed here with its lines.
-    gateways: dict[tuple[object, object], str] = {(v.nsp, v.vlan_id): v.gateway for v in vlans}
-    pending = []
-    for row in rows:
-        key = (row.get("nsp"), row.get("vlan_id"))
-        if row.get("gateway") and key in gateways and not gateways[key]:
-            req = IscsiVlanRequest.model_validate(row)
-            pending.append(IscsiVlanAction(nsp=req.nsp, vlan_id=req.vlan_id, state="exists", gateway_cli=gw_line(req)))
-    if pending:
-        add_para(doc, "Gateways for a change window", bold=True)
-        add_para(doc, "The sheet gives a gateway for "
-                      + ", ".join(f"{a.nsp} VLAN {a.vlan_id}" for a in pending)
-                      + f", and the array has none. {GATEWAY_WINDOW} The lines, kept for that window:")
-        add_mono(doc, gateway_window(pending))
-    sentences = switch_handoff_for(name, vlans)
-    if sentences:
-        add_para(doc, "For the network team", bold=True)
-        add_para(doc, "The tool does not change any switch. Each switch port cabled to these array ports carries the "
-                      "VLANs tagged and keeps its native VLAN for the untagged address:")
-        add_mono(doc, sentences)
-
-
-def _add_peer_ports_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    """SPEC-025 R9, when the sheet has the Peer ports tab: each port as the array reads it now (mode,
-    connection, state, WWNs), the array's own peer-port listing, the commands and who ran them, the
-    peer-port zones designed in the run, and the removal set."""
-    if not data.peer_ports_rows:
-        return
-    add_h1(doc, "Peer ports")
-    name = data.name or data.serial_no or "the array"
-    ports = parse_showport_ports(data.showport)
-    params = parse_showport_par(data.showport_par)
-    add_para(doc, f"The Fibre Channel ports of {name} named on the sheet's Peer ports tab, as the array reads them when "
-                  "this document was made. A peer port logs in to the fabric as an initiator so a data migration can "
-                  "read the source array through it.")
-    rows = []
-    for req in data.peer_ports_rows:
-        nsp = req.get("nsp", "")
-        p, par = ports.get(nsp), params.get(nsp)
-        rows.append([nsp, p.type if p else "not on the array", f"{par.connmode}, {par.conntype}" if par else "—",
-                     p.state if p else "—", p.node_wwn if p and p.node_wwn else "—", p.port_wwn if p and p.port_wwn else "—",
-                     ", ".join(req.get("source_wwpns") or []) or "—"])
-    add_table(doc, ["Port", "Type", "Connection", "State", "Node WWN", "Port WWN", "Source ports to zone"], rows)
-    listed = parse_showport_peer(data.showport_peer)
-    if listed:
-        add_para(doc, "The array's own list of its peer ports (showport -peer)", bold=True)
-        add_table(doc, ["Port", "Mode", "State", "Node WWN", "Port WWN"],
-                  [[r.nsp, r.mode, r.state, r.node_wwn or "—", r.port_wwn or "—"] for r in listed])
-    add_para(doc, "How they were set", bold=True)
-    plan = data.peer_ports_plan or {}
-    creates = [a for a in plan.get("actions") or [] if a.get("state") == "create"]
-    result = data.peer_ports_result or {}
-    if creates and result.get("changed"):
-        add_para(doc, "The tool printed these commands and a consultant pasted them on the array's CLI; the tool does "
-                      "not run them. The read after the paste checked each port and every other port.")
-        add_mono(doc, [line for a in creates for line in [f"# {a.get('nsp', '')}", *(a.get("commands") or [])]])
-    elif creates:
-        add_para(doc, "The tool printed these commands for a consultant to paste; no port change was seen on the array "
-                      "in this run.")
-        add_mono(doc, [line for a in creates for line in [f"# {a.get('nsp', '')}", *(a.get("commands") or [])]])
-    else:
-        add_para(doc, "No port was set in this run: every port the sheet names was already in peer mode, or no plan "
-                      "had a port to set.")
-    if result.get("sentences"):
-        add_mono(doc, list(result["sentences"]))
-    if result.get("error"):
-        warnings.append(f"Peer ports: the read after the paste did not match the plan: {result['error']}")
-    add_para(doc, "Peer-port zones designed in this run", bold=True)
-    zones = (data.zoning_rendered or {}).get("peer_commands") or {}
-    if any(zones.values()):
-        add_para(doc, "The command set given to the SAN team; the tool never writes to a switch.")
-        for fabric, commands in sorted(zones.items()):
-            if commands:
-                add_mono(doc, [f"# {fabric}", *commands])
-    else:
-        add_para(doc, "No peer-port zone command set was generated in this run.")
-    add_para(doc, "To remove the peer ports", bold=True)
-    removals = result.get("removals") or []
-    if removals:
-        add_para(doc, "Puts each port this run set back in the mode it had, last port first. Remove the SAN team's "
-                      "peer-port zones and any migration that uses these ports first. The tool never runs these.")
-        add_mono(doc, removals)
-    else:
-        add_para(doc, "Nothing: the tool saw no port change in this run.")
-
-
-def _prefix(mask: str) -> str:
-    try:
-        return str(ipaddress.ip_network(f"0.0.0.0/{mask}").prefixlen)
-    except ValueError:
-        return mask
-
-
 def _add_provisioned_sections(doc, data: AsBuiltData, warnings: list[str]) -> None:
     """SPEC-002: the five sections appended after the template's last section; SPEC-024 and SPEC-025
     add the iSCSI network and Peer ports sections when the sheet or the array has them; SPEC-028 adds
@@ -995,9 +765,9 @@ def _add_provisioned_sections(doc, data: AsBuiltData, warnings: list[str]) -> No
     _add_hosts_section(doc, data, warnings)
     _add_volumes_section(doc, data, warnings)
     _add_presentations_section(doc, data, warnings)
-    _add_iscsi_network_section(doc, data, warnings)
-    _add_peer_ports_section(doc, data, warnings)
-    _add_zoning_section(doc, data)
+    add_iscsi_network_section(doc, data, warnings)
+    add_peer_ports_section(doc, data, warnings)
+    add_zoning_section(doc, data)
     _add_provisioning_section(doc, data)
     _add_file_section(doc, data, warnings)
     if data.replication_tab is not None:
@@ -1049,49 +819,25 @@ def _state(state: str) -> str:
     return state.removeprefix("STATE_").replace("_", " ").lower()
 
 
-def _add_file_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
-    """SPEC-028 R3: the file service, its File ports, file systems and shares with their clients, as
-    the array reports them when the document is made. Absent on an array with no File ports and the
-    file service off; nothing here was changed by the run."""
-    if data.file_read_error:
-        add_h1(doc, "File service")
-        add_para(doc, f"The file side could not be read: {data.file_read_error}")
-        warnings.append(f"The file side could not be read ({data.file_read_error}); the File service "
-                        "section is empty.")
-        return
-    report = data.file_report
-    if report is None:
-        return
-    add_h1(doc, "File service")
-    service = report.service
-    add_para(doc, "The array's NFS file service, its File ports, file systems and shares, as read from the "
-                  "array when this document was made. This run changed nothing on the file side.")
+def _add_file_service_summary(doc, report, warnings: list[str]) -> None:
     for note in report.notes:
         add_para(doc, note)
+    service = report.service
     if service is None:
         reason = report.notes[0] if report.notes else "the file service was not read"
         warnings.append(f"The File service section lists only the File ports: {reason}")
-    else:
-        running = sum(1 for n in service.nodes if n.status == NODE_RUNNING)
-        line = (f"File service: on, running on {running} of {len(service.nodes)} nodes."
-                if service.enabled else "File service: off.")
-        cap = service.capacity
-        if cap is not None:
-            line += (f" Capacity for file: {_size(cap.total)}, {_size(cap.used)} used, "
-                     f"{_size(cap.available)} available.")
-        add_para(doc, line)
-
-    add_para(doc, "File ports", bold=True)
-    if data.file_ports:
-        add_table(doc, ["Port", "Address", "Gateway", "VLAN", "MTU", "Link"],
-                  [[p.label, f"{p.address}/{p.prefix_len}" if p.address else "—", p.gateway or "—",
-                    p.vlan or "—", p.mtu or "—", f"{p.link} ({p.link_state})" if p.link else p.link_state or "—"]
-                   for p in data.file_ports])
-    else:
-        add_para(doc, "The array has no File ports.")
-    if service is None:
         return
+    running = sum(1 for n in service.nodes if n.status == NODE_RUNNING)
+    line = (f"File service: on, running on {running} of {len(service.nodes)} nodes."
+            if service.enabled else "File service: off.")
+    cap = service.capacity
+    if cap is not None:
+        line += (f" Capacity for file: {_size(cap.total)}, {_size(cap.used)} used, "
+                 f"{_size(cap.available)} available.")
+    add_para(doc, line)
 
+
+def _add_file_systems(doc, report) -> None:
     add_para(doc, "File systems", bold=True)
     if report.file_systems:
         add_table(doc, ["File system", "Size", "Data reduction", "Shares", "Owner node", "State"],
@@ -1100,6 +846,8 @@ def _add_file_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
     else:
         add_para(doc, "The array has no file systems.")
 
+
+def _add_file_shares(doc, report) -> None:
     add_para(doc, "Shares", bold=True)
     if report.shares:
         rows = []
@@ -1116,6 +864,38 @@ def _add_file_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
                       "the File ports.")
     else:
         add_para(doc, "The array has no shares.")
+
+
+def _add_file_section(doc, data: AsBuiltData, warnings: list[str]) -> None:
+    """SPEC-028 R3: the file service, its File ports, file systems and shares with their clients, as
+    the array reports them when the document is made. Absent on an array with no File ports and the
+    file service off; nothing here was changed by the run."""
+    if data.file_read_error:
+        add_h1(doc, "File service")
+        add_para(doc, f"The file side could not be read: {data.file_read_error}")
+        warnings.append(f"The file side could not be read ({data.file_read_error}); the File service "
+                        "section is empty.")
+        return
+    report = data.file_report
+    if report is None:
+        return
+    add_h1(doc, "File service")
+    add_para(doc, "The array's NFS file service, its File ports, file systems and shares, as read from the "
+                  "array when this document was made. This run changed nothing on the file side.")
+    _add_file_service_summary(doc, report, warnings)
+
+    add_para(doc, "File ports", bold=True)
+    if data.file_ports:
+        add_table(doc, ["Port", "Address", "Gateway", "VLAN", "MTU", "Link"],
+                  [[p.label, f"{p.address}/{p.prefix_len}" if p.address else "—", p.gateway or "—",
+                    p.vlan or "—", p.mtu or "—", f"{p.link} ({p.link_state})" if p.link else p.link_state or "—"]
+                   for p in data.file_ports])
+    else:
+        add_para(doc, "The array has no File ports.")
+    if report.service is None:
+        return
+    _add_file_systems(doc, report)
+    _add_file_shares(doc, report)
 
 
 _TRANSPORT_LABEL = {
@@ -1168,6 +948,43 @@ def _side_text(side: dict | None) -> str:
     return " · ".join(bits)
 
 
+def _add_failover_timing(doc, rec: dict) -> None:
+    bits = []
+    if rec.get("time_to_failover_s") is not None:
+        bits.append(f"the peer took over (Primary-Rev) {rec['time_to_failover_s']:g} s after the failover was issued")
+    if rec.get("time_to_synced_s") is not None:
+        bits.append(f"every volume was Synced again {rec['time_to_synced_s']:g} s after the recover")
+    if bits:
+        add_para(doc, "Measured: " + "; ".join(bits) + ".")
+
+
+def _failover_step_rows(rec: dict) -> list[list[str]]:
+    rows = []
+    for s in rec.get("steps", []):
+        when = format_when(s.get("started_at", "")) if s.get("started_at") else "—"
+        secs = f"{s['seconds']:g} s" if s.get("seconds") is not None else "—"
+        rows.append([
+            str(s.get("seq", "")), s.get("title", ""), s.get("where", "-"), s.get("cli") or s.get("action") or "—",
+            when, secs, _side_text(s.get("primary")), _side_text(s.get("peer")),
+            _FAILOVER_OUTCOME.get(s.get("outcome", ""), s.get("outcome", "")),
+        ])
+    return rows
+
+
+def _add_failover_outcome(doc, result: str, rec: dict) -> None:
+    if result == "passed":
+        add_para(doc, "The group ended the test in its starting state: Primary and Started on this array, Secondary and Started "
+                      "on the peer, every volume Synced.")
+        return
+    if rec.get("error"):
+        add_para(doc, f"Stopped: {rec['error']}")
+    if rec.get("observed_state"):
+        add_para(doc, f"Observed when it stopped: {rec['observed_state']}")
+    if rec.get("recovery_action"):
+        add_para(doc, "The documented way back to the normal state (not run by the tool):", bold=True)
+        add_mono(doc, [rec["recovery_action"]])
+
+
 def _add_failover_section(doc, data: AsBuiltData) -> None:
     add_h1(doc, "Failover test")
     rec = data.failover_record
@@ -1184,36 +1001,15 @@ def _add_failover_section(doc, data: AsBuiltData) -> None:
                   f"{rec.get('peer_group') or '—'} on {rec.get('peer_array', 'the peer')} (S). Started {format_when(rec.get('started_at', ''))}, "
                   f"ended {format_when(rec.get('ended_at', ''))}. Each role change is the array's own disaster-recovery action over WSAPI; "
                   "both arrays were read after every step.")
-    if rec.get("time_to_failover_s") is not None or rec.get("time_to_synced_s") is not None:
-        bits = []
-        if rec.get("time_to_failover_s") is not None:
-            bits.append(f"the peer took over (Primary-Rev) {rec['time_to_failover_s']:g} s after the failover was issued")
-        if rec.get("time_to_synced_s") is not None:
-            bits.append(f"every volume was Synced again {rec['time_to_synced_s']:g} s after the recover")
-        add_para(doc, "Measured: " + "; ".join(bits) + ".")
+    _add_failover_timing(doc, rec)
     if mode == "async":
         add_para(doc, "Data-loss bound (async): " + (rec.get("data_loss_bound") or "not recorded") + ". Writes after that sync and "
                       "before the failover would not have reached the peer.")
-    rows = []
-    for s in rec.get("steps", []):
-        when = format_when(s.get("started_at", "")) if s.get("started_at") else "—"
-        secs = f"{s['seconds']:g} s" if s.get("seconds") is not None else "—"
-        rows.append([str(s.get("seq", "")), s.get("title", ""), s.get("where", "-"), s.get("cli") or s.get("action") or "—",
-                     when, secs, _side_text(s.get("primary")), _side_text(s.get("peer")), _FAILOVER_OUTCOME.get(s.get("outcome", ""), s.get("outcome", ""))])
+    rows = _failover_step_rows(rec)
     if rows:
         add_table(doc, ["#", "Step", "On", "Command (CLI equivalent)", "Started", "Took", "P after", "S after", "Outcome"], rows,
                   widths=[0.03, 0.14, 0.04, 0.22, 0.11, 0.06, 0.16, 0.16, 0.08])
-    if result != "passed":
-        if rec.get("error"):
-            add_para(doc, f"Stopped: {rec['error']}")
-        if rec.get("observed_state"):
-            add_para(doc, f"Observed when it stopped: {rec['observed_state']}")
-        if rec.get("recovery_action"):
-            add_para(doc, "The documented way back to the normal state (not run by the tool):", bold=True)
-            add_mono(doc, [rec["recovery_action"]])
-    else:
-        add_para(doc, "The group ended the test in its starting state: Primary and Started on this array, Secondary and Started "
-                      "on the peer, every volume Synced.")
+    _add_failover_outcome(doc, result, rec)
 
 
 # SPEC-012 R3 (A-4): the two run sections share a page — a one-sentence zoning record owned a whole

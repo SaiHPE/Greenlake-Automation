@@ -152,6 +152,22 @@ def _build_checks(item: ArrayWorkItem, outputs: dict[str, str]) -> list[FieldChe
     return checks
 
 
+def _consume_health_row(
+    mode: str,
+    tokens: list[str],
+    issues: list[HealthIssue],
+    details: dict[str, list[HealthDetail]],
+) -> None:
+    if tokens[0].isdigit():     # the 'N total M' footer
+        return
+    if mode == "summary" and len(tokens) >= 3 and tokens[0].isalpha() and tokens[0] != "Checking" and tokens[-1].isdigit():
+        issues.append(HealthIssue(component=tokens[0], summary=" ".join(tokens[1:-1]), qty=int(tokens[-1])))
+    elif mode == "detail" and len(tokens) >= 4:
+        details.setdefault(tokens[0], []).append(
+            HealthDetail(identifier=tokens[1], description=" ".join(tokens[2:-1]), resolution=tokens[-1])
+        )
+
+
 def _health_issues(checkhealth: str) -> list[HealthIssue]:
     """Parse `checkhealth -svc -detail` into per-component issue rows.
 
@@ -172,23 +188,13 @@ def _health_issues(checkhealth: str) -> list[HealthIssue]:
         if "Identifier" in line and "Resolution" in line:
             mode = "detail"
             continue
-        if mode is None:
-            continue
         stripped = line.strip()
-        if not stripped:
+        if mode is None or not stripped:
             continue
         if set(stripped) <= {"-"}:  # dashed separator ends a table
             mode = None if mode == "detail" else "between"
             continue
-        tokens = line.split()
-        if tokens[0].isdigit():     # the 'N total M' footer
-            continue
-        if mode == "summary" and len(tokens) >= 3 and tokens[0].isalpha() and tokens[0] != "Checking" and tokens[-1].isdigit():
-            issues.append(HealthIssue(component=tokens[0], summary=" ".join(tokens[1:-1]), qty=int(tokens[-1])))
-        elif mode == "detail" and len(tokens) >= 4:
-            details.setdefault(tokens[0], []).append(
-                HealthDetail(identifier=tokens[1], description=" ".join(tokens[2:-1]), resolution=tokens[-1])
-            )
+        _consume_health_row(mode, line.split(), issues, details)
     for issue in issues:
         issue.details = details.get(issue.component, [])
     return issues

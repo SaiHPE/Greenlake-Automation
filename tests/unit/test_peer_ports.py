@@ -179,7 +179,7 @@ def test_the_template_has_the_peer_ports_tab_and_an_upload_with_only_peer_ports_
 # ------------------------------------------------------------------ R2: the read
 
 def test_e18u31_peer_ports_read_with_their_own_node_wwn():
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_ports
 
     ports = parse_showport_ports(_text(E18U31_SHOWPORT))
     p = ports["0:3:2"]
@@ -189,7 +189,7 @@ def test_e18u31_peer_ports_read_with_their_own_node_wwn():
 
 
 def test_the_primeras_partner_and_failover_state_are_read():
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_ports
 
     p = parse_showport_ports(_text(PRIMERA_SHOWPORT))["0:3:1"]
     assert (p.partner, p.failover_state) == ("1:3:1", "failed_over")
@@ -199,7 +199,7 @@ def test_showport_par_gives_the_connection_mode_to_restore():
     """rack13's `showport -par` before any change: what the removal set puts back on a free FC port.
     Layout (OS 10.6.0, the same as the CLI help's example): N:S:P Connmode ConnType CfgRate MaxRate
     Class2 UniqNodeWwn VCN IntCoal TMWO, one row per FC, NVMe and iSCSI port, none for IP ports."""
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_par
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_par
 
     params = parse_showport_par(_text(RACK13 / "showport_par.txt"))
     assert (params["0:3:2"].connmode, params["0:3:2"].conntype) == ("host", "point")
@@ -213,7 +213,7 @@ def test_showport_par_gives_the_connection_mode_to_restore():
 
 def test_output_that_is_not_showport_par_reads_as_nothing():
     """A wrong answer must not be read as a mode to restore: the plan then blocks on a missing read."""
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_par
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_par
 
     assert parse_showport_par(_text(RACK13 / "showport.txt")) == {}
     assert parse_showport_par(_text(RACK13 / "showport_c.txt")) == {}
@@ -222,7 +222,7 @@ def test_output_that_is_not_showport_par_reads_as_nothing():
 def test_showport_par_reads_a_peer_port_as_peer_point():
     """E18U31 (OS 10.5.60, 2026-11-17): the peer ports read `peer point`, the value a removal set
     restores FROM; every other FC port reads `host point`, the value it restores TO."""
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_par
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_par
 
     params = parse_showport_par(_text(E18U31_SHOWPORT_PAR))
     assert (params["0:3:2"].connmode, params["0:3:2"].conntype) == ("peer", "point")
@@ -238,7 +238,7 @@ def test_showport_par_reads_a_peer_port_as_peer_point():
 def test_showport_par_has_one_layout_on_10_5_and_10_6(folder, rows):
     """The same header on OS 10.5.0 (D22U27), 10.5.51 (VZ), 10.5.60 (E18U31) and 10.6.0 (rack13); a row
     per FC, NVMe and iSCSI port, none for an IP port. D22U27 has no iSCSI port, VZ no NVMe drive port."""
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_par
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_par
 
     text = _text(folder / "showport_par.txt")
     assert text.splitlines()[1].split() == [
@@ -251,7 +251,7 @@ def test_showport_par_has_one_layout_on_10_5_and_10_6(folder, rows):
 def test_showport_c_says_where_a_mode_change_is_allowed():
     """rack13: every FC port on the slot-3 cards is `allowed`; the NVMe drive ports and the iSCSI and IP
     ports are `prohibited`. 0:4:1 lists two hosts, the second on a line with no N:S:P."""
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_c
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_c
 
     change = parse_showport_c(_text(RACK13 / "showport_c.txt"))
     assert len(change) == 24
@@ -261,7 +261,7 @@ def test_showport_c_says_where_a_mode_change_is_allowed():
 
 @pytest.mark.parametrize("folder", [RACK13, D22U27, VZ], ids=["rack13", "D22U27", "VZ"])
 def test_showport_peer_on_an_array_without_peer_ports_is_empty(folder):
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_peer
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_peer
 
     text = _text(folder / "showport_peer.txt")
     assert "There is no specified port information." in text
@@ -271,7 +271,7 @@ def test_showport_peer_on_an_array_without_peer_ports_is_empty(folder):
 def test_showport_peer_reads_the_layout_the_cli_help_shows():
     """The only listing of a peer port the array has printed for us is the example in its own help
     (`help showport`, rack13, OS 10.6.0). A peer port's WWNs carry 0202 where host ports carry 0002."""
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_peer
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_peer
 
     help_text = _text(RACK13 / "help_showport.txt")
     example = help_text.split("cli% showport -peer", 1)[1].split("cli%", 1)[0]
@@ -283,7 +283,7 @@ def test_showport_peer_reads_the_layout_the_cli_help_shows():
 def test_showport_peer_lists_e18u31_peer_ports():
     """The array's own listing (OS 10.5.60) adds a VPI column the help's example lacks. It names this
     array's peer ports with their own WWNs, the same as `showport`, never the source array they reach."""
-    from alletra_onboard.application.provisioning.peer_ports import (
+    from alletra_onboard.application.provisioning.peer_ports_read import (
         parse_showport_peer,
         parse_showport_ports,
     )
@@ -305,7 +305,7 @@ def test_e18u31_peer_ports_show_the_source_array_only_as_a_device():
     `showportdev ns` names it (an HPE 3PAR 20850, its 0:3:2 and 1:3:2 in host mode, WWNs 0002)."""
     import json
 
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_c
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_c
 
     view = _now(E18U31)
     assert not view.logins.get("0:3:2") and not view.logins.get("1:3:2")
@@ -326,7 +326,7 @@ def test_a_peer_port_carries_0202_wwns_where_a_host_mode_port_carries_0002():
     0102 WWNs). No capture has the same port before and after a change: that stays for the live run."""
     import json
 
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_ports
 
     for folder in (RACK13, E18U31, D22U27, VZ):
         for nsp, p in parse_showport_ports(_text(folder / "showport.txt")).items():
@@ -345,7 +345,7 @@ def test_a_peer_port_carries_0202_wwns_where_a_host_mode_port_carries_0002():
 
 def _now(folder: Path):
     """An array as one lab/peer_port_capture.py run saw it: every read the section makes."""
-    from alletra_onboard.application.provisioning.peer_ports import build_view
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     return build_view(
         _text(folder / "showport.txt"), showhost_d=_text(folder / "showhost_d.txt"),
@@ -376,11 +376,8 @@ def test_the_free_port_rule_never_offers_a_peer_port():
     """E18U31 (2026-11-17), read through `read_view` as the step reads it. The peer ports have no login
     and no export, yet they are Type `peer`, not `free`: no candidate. Nor are the IP ports in mode
     `peer` (Type free, protocol IP). Only 0:3:3 and 1:3:3, free with no link, are offered."""
-    from alletra_onboard.application.provisioning.peer_ports import (
-        free_fc_ports,
-        is_free_fc_port,
-        read_view,
-    )
+    from alletra_onboard.application.provisioning.peer_ports import free_fc_ports, is_free_fc_port
+    from alletra_onboard.application.provisioning.peer_ports_read import read_view
 
     view = read_view(_creds(), array_cli_factory=lambda c: _ReadCli(folder=E18U31))
     assert not view.read_error
@@ -428,7 +425,8 @@ def test_a_peer_label_on_a_host_port_reads_as_a_host_port():
 def test_a_free_type_alone_never_makes_a_candidate(reads):
     """Type says what is attached NOW: rack13 0:3:3 is `free` on 2026-11-16 though it served
     10.132.30.136 on 2026-09-13. Read with that day's logins, or its exports, it is busy either way."""
-    from alletra_onboard.application.provisioning.peer_ports import build_view, is_free_fc_port
+    from alletra_onboard.application.provisioning.peer_ports import is_free_fc_port
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     other = {"showhost": {"showhost_d": _text(RACK13_SHOWHOST)},
              "showvlun": {"showvlun_a": _text(RACK13_SHOWVLUN)}}[reads]
@@ -445,11 +443,8 @@ def test_a_free_type_alone_never_makes_a_candidate(reads):
 def test_a_failed_over_partner_or_a_prohibited_mode_change_is_no_candidate():
     """The Primera's free 0:3:1 and 0:3:3 have partners that took over their paths. No FC port on rack13
     is `prohibited`, so that case is a model input on top of the capture."""
-    from alletra_onboard.application.provisioning.peer_ports import (
-        build_view,
-        free_fc_ports,
-        is_free_fc_port,
-    )
+    from alletra_onboard.application.provisioning.peer_ports import free_fc_ports, is_free_fc_port
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     assert free_fc_ports(build_view(_text(PRIMERA_SHOWPORT))) == ["0:3:2", "0:3:4", "1:3:2", "1:3:4"]
     view = _rack13_now()
@@ -464,7 +459,7 @@ def test_wsapi_and_the_cli_read_every_rack13_port_alike():
     import json
 
     from alletra_onboard.adapters.array.wsapi_parse import parse_port_states
-    from alletra_onboard.application.provisioning.peer_ports import (
+    from alletra_onboard.application.provisioning.peer_ports_read import (
         parse_showport_par,
         parse_showport_ports,
     )
@@ -484,7 +479,7 @@ def test_wsapi_reads_an_fc_peer_port_like_showport():
     import json
 
     from alletra_onboard.adapters.array.wsapi_parse import parse_port_states
-    from alletra_onboard.application.provisioning.peer_ports import parse_showport_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_ports
 
     body = json.loads(_text(E18U31_WSAPI_PORTS))
     states, params = parse_port_states(body)
@@ -509,7 +504,7 @@ def test_wsapi_and_the_cli_read_the_10_5_arrays_alike(folder, left_out):
     import json
 
     from alletra_onboard.adapters.array.wsapi_parse import parse_port_states
-    from alletra_onboard.application.provisioning.peer_ports import (
+    from alletra_onboard.application.provisioning.peer_ports_read import (
         parse_showport_par,
         parse_showport_ports,
     )
@@ -558,7 +553,7 @@ def _creds():
 
 
 def test_read_view_reads_rack13_with_show_commands_only():
-    from alletra_onboard.application.provisioning.peer_ports import READS, read_view
+    from alletra_onboard.application.provisioning.peer_ports_read import READS, read_view
 
     cli = _ReadCli()
     view = read_view(_creds(), array_cli_factory=lambda c: cli)
@@ -573,14 +568,14 @@ def test_read_view_reads_rack13_with_show_commands_only():
 ])
 def test_a_failed_required_read_leaves_no_half_view(fail, answer, why):
     """Without the logins or the exports a busy port would look free."""
-    from alletra_onboard.application.provisioning.peer_ports import read_view
+    from alletra_onboard.application.provisioning.peer_ports_read import read_view
 
     view = read_view(_creds(), array_cli_factory=lambda c: _ReadCli(fail, answer))
     assert why in view.read_error and not view.ports
 
 
 def test_an_optional_read_that_fails_is_left_out():
-    from alletra_onboard.application.provisioning.peer_ports import read_view
+    from alletra_onboard.application.provisioning.peer_ports_read import read_view
 
     view = read_view(_creds(), array_cli_factory=lambda c: _ReadCli("showport -peer", {"showport -c": "Error: x"}))
     assert not view.read_error and view.mode_change == {} and len(view.params) == 20
@@ -589,7 +584,7 @@ def test_an_optional_read_that_fails_is_left_out():
 # ------------------------------------------------------------------ R3: the plan
 
 def _rack13_view():
-    from alletra_onboard.application.provisioning.peer_ports import build_view
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     # The plan tests keep the 2026-11-03 showport and the 2026-09-13 logins, the days 0:3:3 served a host.
     # `showport -par` is from 2026-11-16 (rack13's first): host/point on every slot-3 FC port.
@@ -722,7 +717,8 @@ def test_a_port_not_on_the_array_is_a_conflict():
 def test_a_peer_label_on_a_host_port_never_makes_it_a_peer_port():
     """D22U27 1:3:2 is labelled `Peer_port`, Type host, with a login (LESSONS 42): a conflict, and with
     0:3:2 the only candidate the plan has one node and blocks."""
-    from alletra_onboard.application.provisioning.peer_ports import build_view, plan_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     view = build_view(_text(D22U27_SHOWPORT), showhost_d=_text(D22U27_SHOWHOST))
     plan = plan_peer_ports(_intent("0:3:2", "1:3:2"), view)
@@ -732,7 +728,8 @@ def test_a_peer_label_on_a_host_port_never_makes_it_a_peer_port():
 
 
 def test_ports_already_in_peer_mode_exist_and_need_nothing():
-    from alletra_onboard.application.provisioning.peer_ports import build_view, plan_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     plan = plan_peer_ports(_intent("0:3:2", "1:3:2"), build_view(_text(E18U31_SHOWPORT)))
     assert [a.state for a in plan.actions] == ["exists", "exists"]
@@ -740,7 +737,8 @@ def test_ports_already_in_peer_mode_exist_and_need_nothing():
 
 
 def test_a_persistent_port_partner_that_failed_over_is_a_conflict():
-    from alletra_onboard.application.provisioning.peer_ports import build_view, plan_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     act = _by_port(plan_peer_ports(_intent("0:3:1", "1:3:4"), build_view(_text(PRIMERA_SHOWPORT))))["0:3:1"]
     assert act.state == "conflict" and "failover partner of 1:3:1" in act.reason
@@ -748,7 +746,8 @@ def test_a_persistent_port_partner_that_failed_over_is_a_conflict():
 
 def test_a_create_without_the_previous_connection_mode_is_blocked():
     """No `showport -par` read means no removal set; the plan must not offer a change it cannot undo."""
-    from alletra_onboard.application.provisioning.peer_ports import build_view, plan_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     plan = plan_peer_ports(_intent("0:3:2", "1:3:2"), build_view(_text(RACK13_SHOWPORT)))
     assert any("showport -par" in b for b in plan.blockers)
@@ -851,13 +850,13 @@ def test_a_peer_port_with_no_link_reads_type_free_and_connmode_peer_and_is_judge
     after the paste judged it by Type and said *0:3:1 did not come back as a peer port (Type free, state
     loss_sync)*; Connmode decides now. Nothing else moved, its pair partner 0:3:2 included."""
     from alletra_onboard.application.provisioning.peer_ports import (
-        build_view,
         free_fc_ports,
         is_peer_port,
         plan_peer_ports,
         read_back_peer_ports,
         verify_peer_ports,
     )
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     before = _now(LIVE / "before")
     after = build_view(_text(LIVE / "after_config_peer_0_3_1" / "showport.txt"),
@@ -915,10 +914,8 @@ def test_the_restore_puts_back_interrupt_coalescing_which_the_config_back_to_hos
     """Live rerun: after the removal set, 1:3:1 read Connmode `host point` as before but IntCoal `disabled`
     where it read `enabled`; `controlport intcoal enable -f 1:3:1`, pasted by hand, put it back with no
     prompt. So each restore carries the IntCoal `showport -par` read before, in the help's own form."""
-    from alletra_onboard.application.provisioning.peer_ports import (
-        parse_showport_par,
-        plan_peer_ports,
-    )
+    from alletra_onboard.application.provisioning.peer_ports import plan_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_par
 
     before = parse_showport_par(_text(LIVE / "before" / "showport_par.txt"))
     dropped = parse_showport_par(_text(LIVE / "after_removal_both_intcoal_1_3_1" / "showport_par.txt"))
@@ -946,11 +943,11 @@ def test_the_intcoal_lines_come_after_every_reset_and_the_set_says_to_paste_one_
     array takes it. This order has not been pasted live yet."""
     from alletra_onboard.application.provisioning.peer_ports import (
         INTCOAL_LAST,
-        parse_showport_par,
         plan_peer_ports,
         planned_removals,
         removal_set_text,
     )
+    from alletra_onboard.application.provisioning.peer_ports_read import parse_showport_par
 
     rerun = LIVE / "rerun2"
     paste = _text(rerun / "paste_removal.txt").splitlines()
@@ -1162,7 +1159,8 @@ def test_the_port_client_runs_only_the_approved_mode_on_approved_ports(command, 
 # ------------------------------------------------------------------ R6: verify
 
 def test_verify_reads_e18u31_peer_ports_as_ready():
-    from alletra_onboard.application.provisioning.peer_ports import build_view, verify_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports import verify_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     checks = verify_peer_ports(_intent("0:3:2", "1:3:2"), build_view(_text(E18U31_SHOWPORT)))
     assert all(c.ok for c in checks)
@@ -1170,7 +1168,8 @@ def test_verify_reads_e18u31_peer_ports_as_ready():
 
 
 def test_verify_says_a_free_port_is_not_a_peer_port():
-    from alletra_onboard.application.provisioning.peer_ports import build_view, verify_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports import verify_peer_ports
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
 
     checks = verify_peer_ports(_intent("0:3:2", "1:3:2"), build_view(_text(RACK13_SHOWPORT)))
     assert not checks[0].ok and checks[0].sentence == "0:3:2 is not a peer port (Type free)."
@@ -1199,7 +1198,7 @@ def _service_run(tmp_path, rows, steps=("ports", "verify")):
 
 
 async def test_the_verify_step_reads_the_planned_peer_ports_read_only(tmp_path):
-    from alletra_onboard.application.provisioning.peer_ports import read_view
+    from alletra_onboard.application.provisioning.peer_ports_read import read_view
     from alletra_onboard.domain.models import VerificationReport
 
     service, run = _service_run(tmp_path, ROWS)
@@ -1226,13 +1225,13 @@ async def test_the_array_ports_step_plans_the_peer_ports_then_judges_the_read_af
     plan then takes the peer WWPNs from it."""
     import json
 
-    from alletra_onboard.application.provisioning import peer_ports
+    from alletra_onboard.application.provisioning import peer_ports_read
     from alletra_onboard.application.provisioning.steps import ACTIVE_ZONES_ARTIFACT
     from alletra_onboard.domain.models import RunStatus
 
     before = _rack13_now()
     reads = iter([before, _after(before, "0:3:2", "1:3:2")])
-    monkeypatch.setattr(peer_ports, "read_view", lambda creds: next(reads))
+    monkeypatch.setattr(peer_ports_read, "read_view", lambda creds: next(reads))
     service, run = _service_run(tmp_path, ROWS)
     service.store.save_artifact(run.run_id, ACTIVE_ZONES_ARTIFACT,
                                 json.dumps({"the F2 switch sw-f2": {"old_zone": ["20320002AC02D495"]}}).encode())
@@ -1263,11 +1262,11 @@ async def test_the_array_ports_step_plans_the_peer_ports_then_judges_the_read_af
 async def test_after_a_partial_paste_each_port_keeps_its_undo_from_the_read_that_first_planned_it(tmp_path, monkeypatch):
     """The first paste sets 0:3:2 only; the second sets 1:3:2. Every later read is judged against the
     first read that planned each port, so 0:3:2's restore never drops out of the removal set."""
-    from alletra_onboard.application.provisioning import peer_ports
+    from alletra_onboard.application.provisioning import peer_ports_read
 
     before = _rack13_now()
     reads = iter([before, _after(before, "0:3:2"), _after(before, "0:3:2", "1:3:2"), _after(before, "0:3:2", "1:3:2")])
-    monkeypatch.setattr(peer_ports, "read_view", lambda creds: next(reads))
+    monkeypatch.setattr(peer_ports_read, "read_view", lambda creds: next(reads))
     service, run = _service_run(tmp_path, ROWS)
     results = []
     for _ in range(4):
@@ -1326,10 +1325,10 @@ def test_a_switch_the_zoning_plan_could_not_read_leaves_its_zones_unchecked(tmp_
 
 
 async def test_a_failed_peer_port_read_plans_nothing(tmp_path, monkeypatch):
-    from alletra_onboard.application.provisioning import peer_ports
+    from alletra_onboard.application.provisioning import peer_ports_read
     from alletra_onboard.domain.peer_ports import PeerPortView
 
-    monkeypatch.setattr(peer_ports, "read_view",
+    monkeypatch.setattr(peer_ports_read, "read_view",
                         lambda creds: PeerPortView(host=creds.host, read_error=f"Could not read {creds.host}: timed out"))
     service, run = _service_run(tmp_path, ROWS)
     service.start_ports_preview(run.run_id)
@@ -1346,7 +1345,8 @@ async def test_a_failed_peer_port_read_plans_nothing(tmp_path, monkeypatch):
 def test_peer_zones_use_the_wwpn_read_after_the_change():
     """E18U31's peer ports carry 2032 0202… where its host ports carry 2031 0002…; the zone takes the
     port WWN from the view it is given (the read-back), never from the read before the apply."""
-    from alletra_onboard.application.provisioning.peer_ports import build_view, peer_zone_pairs
+    from alletra_onboard.application.provisioning.peer_ports import peer_zone_pairs
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
     from alletra_onboard.domain.peer_ports import PeerPortIntent, PeerPortRequest
 
     intent = PeerPortIntent(ports=[PeerPortRequest(nsp="0:3:2", source_wwpns=["20310002AC02AC38"]),
@@ -1400,7 +1400,8 @@ class _Switch:
 
 def _peer_zoning_plan():
     from alletra_onboard.application.provisioning import zoning_plan as zp
-    from alletra_onboard.application.provisioning.peer_ports import build_view, peer_zone_pairs
+    from alletra_onboard.application.provisioning.peer_ports import peer_zone_pairs
+    from alletra_onboard.application.provisioning.peer_ports_read import build_view
     from alletra_onboard.domain.discovery import ArrayPort, DiscoveryReport
     from alletra_onboard.domain.peer_ports import PeerPortIntent, PeerPortRequest
     from alletra_onboard.domain.provisioning import ProvisioningIntent

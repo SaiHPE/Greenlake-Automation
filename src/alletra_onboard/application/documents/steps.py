@@ -22,8 +22,7 @@ from alletra_onboard.application.documents.asbuilt import generate_asbuilt
 from alletra_onboard.application.documents.asbuilt_parse import parse_asbuilt
 from alletra_onboard.application.documents.asbuilt_replication import rc_group_names
 from alletra_onboard.application.documents.verification import verify
-from alletra_onboard.application.provisioning import iscsi_network
-from alletra_onboard.application.provisioning import peer_ports as peer_ports_read
+from alletra_onboard.application.provisioning import iscsi_network, peer_ports, peer_ports_read
 from alletra_onboard.application.provisioning.clients import make_array_cli, make_wsapi_v3
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.runs.coordinator import RunCoordinator, StepPreconditionError
@@ -224,7 +223,7 @@ class DocumentSteps:
                 report.peer_ports_error = view.read_error
                 iscsi += " The peer ports could not be read."
             else:
-                report.peer_ports = peer_ports_read.verify_peer_ports(peer, view)
+                report.peer_ports = peer_ports.verify_peer_ports(peer, view)
                 ready = sum(1 for c in report.peer_ports if c.ok)
                 iscsi += f" Peer ports: {ready} of {len(report.peer_ports)} ready."
         coord.emit(
