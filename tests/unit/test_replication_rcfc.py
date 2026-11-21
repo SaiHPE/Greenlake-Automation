@@ -13,7 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from alletra_onboard.application.replication.plan import build_plan, check, find_partnership
+from alletra_onboard.application.replication.plan import build_plan
+from alletra_onboard.application.replication.plan_check import check, find_partnership
 from alletra_onboard.application.replication.read import parse_showport_roles
 from alletra_onboard.domain.replication import (
     PortRole,

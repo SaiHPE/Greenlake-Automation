@@ -757,7 +757,8 @@ the Replication tab.
 | Module | Role |
 |---|---|
 | [`read.py`](../../src/alletra_onboard/application/replication/read.py) | `read_array(creds)`: one read-only SSH session per array into a `ReplicationArrayView`. Parsers pinned to `tests/fixtures/rc_pair/`. |
-| [`plan.py`](../../src/alletra_onboard/application/replication/plan.py) | `check()` (findings, partnership found by link addresses, not target names), `build_plan()` (exists, create or conflict per group, test objects, peer VV set). `GROUP_LIMIT` sync 800, async 2400. |
+| [`plan_check.py`](../../src/alletra_onboard/application/replication/plan_check.py) | `find_partnership()` (matched by link addresses or FC WWNs, not target names), `check()` (blocking findings). `GROUP_LIMIT` sync 800, async 2400. |
+| [`plan.py`](../../src/alletra_onboard/application/replication/plan.py) | `build_plan()` (exists, create or conflict per group, test objects, peer VV set). |
 | [`partnership.py`](../../src/alletra_onboard/application/replication/partnership.py) | `plan_partnership()`, `plan_objects()` from the Replication network tab (read-only). |
 | [`partnership_apply.py`](../../src/alletra_onboard/application/replication/partnership_apply.py) | `apply_partnership()` over `ArrayRcCliClient` on both arrays: RCIP addresses and gateways, ping, `startrcopy`, `creatercopytarget`, then waits for links Up (180 s). |
 | [`link_check.py`](../../src/alletra_onboard/application/replication/link_check.py) | `plan_pairs()`, `run_link_check()`: server on B, client on A, read until the latency, stop both; a ping fallback when no number is printed; re-reads links afterwards. |
@@ -781,7 +782,8 @@ Gates in `ReplicationSteps`:
 | [`verification.py`](../../src/alletra_onboard/application/documents/verification.py) | `verify(item, user, pw)`: config reads compared with the work item (`FieldCheck` with match kind) and `checkhealth -svc -detail` parsed into `HealthIssue`s. |
 | [`steps.py`](../../src/alletra_onboard/application/documents/steps.py) | `DocumentSteps`: `resolve_credential` (explicit pair, else the run's credential, else refuse), `start_verify`, `start_asbuilt`, `get_asbuilt`. Neither step changes run status; both catch every exception and emit a `*.failed` event. |
 | [`asbuilt_parse.py`](../../src/alletra_onboard/application/documents/asbuilt_parse.py) | Splits the `===== $ <cmd> =====` dump into sections; parses key-value output, `checkhealth`, `showinventory -csvtable`, `showvv`, sets and `showvlun -t`. |
-| [`asbuilt.py`](../../src/alletra_onboard/application/documents/asbuilt.py) | `AsBuiltData`; `generate_asbuilt()` fills `resources/asbuilt_template.docx`: placeholder fill, inventory and health tables, then the provisioned sections (hosts, volumes, presentations, zoning, provisioning record with the removal set), replication sections when the Replication tab exists, and a commands appendix. Returns bytes and warnings. |
+| [`asbuilt.py`](../../src/alletra_onboard/application/documents/asbuilt.py) | `AsBuiltData`; `generate_asbuilt()` fills `resources/asbuilt_template.docx`: placeholder fill, inventory and health tables, then the provisioned sections (hosts, volumes, presentations, zoning, provisioning record with the removal set), failover section and a commands appendix. Returns bytes and warnings. |
+| [`asbuilt_replication.py`](../../src/alletra_onboard/application/documents/asbuilt_replication.py) | `add_replication_section()` and `rc_group_names()`: the as-built's Replication section (partnership, link check or FC latency, configured and pre-existing groups, apply record and removal blocks). |
 | [`asbuilt_docx.py`](../../src/alletra_onboard/application/documents/asbuilt_docx.py) | `hpe_table()` and cell and border helpers in HPE house style. |
 
 ### 12.4 Onboarding and platform

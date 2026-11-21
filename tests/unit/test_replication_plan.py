@@ -6,7 +6,8 @@ from pathlib import Path
 
 from pydantic import SecretStr
 
-from alletra_onboard.application.replication.plan import build_plan, check, find_partnership
+from alletra_onboard.application.replication.plan import build_plan
+from alletra_onboard.application.replication.plan_check import check, find_partnership
 from alletra_onboard.application.replication.read import read_array
 from alletra_onboard.domain.provisioning import ProvisioningIntent, VolumeRequest
 from alletra_onboard.domain.replication import (

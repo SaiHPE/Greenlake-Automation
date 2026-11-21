@@ -1068,11 +1068,12 @@ def test_partnership_removal_line_is_on_record_before_error_or_timeout(
     """Blocking #2 (ADR 0025 condition 4): whether addr returns Error or addr/startrcopy/creatercopytarget
     times out, the removal line is already on record with an inspect-first note next to it."""
     from alletra_onboard.application.replication import plan as rc_plan
+    from alletra_onboard.application.replication import plan_check as rc_plan_check
 
     _patch_tls_noop(monkeypatch)
     intent = _intent(replication=True, partnership=True)
     a_view, b_view = _rc_views(with_partnership=False)
-    plan = rc_plan.build_plan(rc_plan.check(a_view, b_view, intent.replication), intent.replication, intent)
+    plan = rc_plan.build_plan(rc_plan_check.check(a_view, b_view, intent.replication), intent.replication, intent)
     ssh_state = {
         "A": {"rcip": {}, "rc": "", "targets": {}},
         "B": {"rcip": {"0:1:1": ("10.93.18.19", "255.255.254.0"), "1:1:1": ("10.93.18.20", "255.255.254.0")},

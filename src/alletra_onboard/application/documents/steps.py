@@ -13,12 +13,14 @@ import tempfile
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from types import MappingProxyType
+from typing import Any
 
 from pydantic import SecretStr
 
 from alletra_onboard.application.documents import handover
-from alletra_onboard.application.documents.asbuilt import generate_asbuilt, rc_group_names
+from alletra_onboard.application.documents.asbuilt import generate_asbuilt
 from alletra_onboard.application.documents.asbuilt_parse import parse_asbuilt
+from alletra_onboard.application.documents.asbuilt_replication import rc_group_names
 from alletra_onboard.application.documents.verification import verify
 from alletra_onboard.application.provisioning import iscsi_network
 from alletra_onboard.application.provisioning import peer_ports as peer_ports_read
@@ -38,6 +40,59 @@ from alletra_onboard.domain.shared import EndpointCreds
 from alletra_onboard.domain.snapshots import SnapshotIntent
 from alletra_onboard.domain.trust import DevicePinInfo
 from alletra_onboard.domain.unified_file import FileReport
+
+
+def _format_ts(ts: Any) -> str:
+    return ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+
+
+def _record_ports_event(ev: dict, data, peer_sets: dict[str, dict]) -> None:
+    # SPEC-025 R9: the last plan that set ports (its commands) and the last read after the paste.
+    peer = ev.get("peer") or {}
+    for action in (peer.get("plan") or {}).get("actions") or []:
+        if action.get("state") == "create" and action.get("nsp") not in peer_sets:
+            peer_sets[action.get("nsp")] = action
+    if peer.get("result"):
+        data.peer_ports_result = peer["result"]
+    # SPEC-024 R7: an interface this run's plan had to add, found on the array now, was set up in this run.
+    plan = (ev.get("iscsi") or {}).get("plan") or {}
+    for action in plan.get("actions") or []:
+        key = (action.get("nsp", ""), action.get("vlan_id"))
+        if action.get("state") == "create" and key not in data.iscsi_set_up_in_run:
+            data.iscsi_set_up_in_run.append(key)
+
+
+def _record_apply_event(
+    etype: str, ev: dict, data, last_rc_plan: dict | None, last_snap_plan: dict | None,
+) -> tuple[dict | None, dict | None]:
+    # SPEC-007 R6: a failed apply's objects are undone too; a retry calls them Exists.
+    if etype in ("storage.applied", "storage.apply.failed"):
+        data.provisioning_removals.extend((ev.get("result") or {}).get("removals") or [])
+    elif etype == "replication.previewed":
+        last_rc_plan = ev.get("plan")
+        if ev.get("report") is not None:
+            data.replication_report = ev["report"]
+    elif etype in ("replication.applied", "replication.apply.failed"):
+        data.replication_applies.append({"plan": last_rc_plan, "result": ev.get("result") or {}})
+    elif etype == "snapshots.previewed":
+        last_snap_plan = ev.get("plan")
+    elif etype in ("snapshots.applied", "snapshots.apply.failed"):
+        data.snapshots_applies.append({"plan": last_snap_plan, "result": ev.get("result") or {}})
+    return last_rc_plan, last_snap_plan
+
+
+def _finalize_run_records(data, peer_sets: dict[str, dict], seen: dict[str, datetime]) -> None:
+    if peer_sets:
+        data.peer_ports_plan = {"actions": list(peer_sets.values())}
+    for entry in reversed(data.replication_applies):          # SPEC-021: newest apply first, each line once
+        for key, merged in (("removals_a", data.replication_removals_a), ("removals_b", data.replication_removals_b)):
+            merged.extend(line for line in entry["result"].get(key) or [] if line not in merged)
+    if "provisioning_result" in seen:
+        data.provisioning_applied_at = _format_ts(seen["provisioning_result"])
+    if "replication_result" in seen:
+        data.replication_applied_at = _format_ts(seen["replication_result"])
+    if "snapshots_result" in seen:
+        data.snapshots_applied_at = _format_ts(seen["snapshots_result"])
 
 
 class DocumentSteps:
@@ -310,38 +365,15 @@ class DocumentSteps:
         the union of every apply's removal items (SPEC-007 — a run may apply more than once)."""
         seen: dict[str, datetime] = {}
         peer_sets: dict[str, dict] = {}     # each port's first planned set (SPEC-025 R9)
-        rc_applies: list[dict] = []
         last_rc_plan: dict | None = None
         last_snap_plan: dict | None = None
         for event in self._coord.list_events(run_id):
-            # SPEC-007 R6: a failed apply's objects are undone too; a retry calls them Exists.
-            if event.event_type in ("storage.applied", "storage.apply.failed"):
-                data.provisioning_removals.extend((event.data.get("result") or {}).get("removals") or [])
-            if event.event_type in ("replication.applied", "replication.apply.failed"):
-                rc_applies.append(event.data.get("result") or {})
-                data.replication_applies.append({"plan": last_rc_plan, "result": rc_applies[-1]})
-            if event.event_type == "snapshots.previewed":
-                last_snap_plan = event.data.get("plan")
-            if event.event_type in ("snapshots.applied", "snapshots.apply.failed"):
-                data.snapshots_applies.append({"plan": last_snap_plan, "result": event.data.get("result") or {}})
             if event.event_type in ("ports.previewed", "ports.completed"):
-                # SPEC-025 R9: the last plan that set ports (its commands) and the last read after the paste.
-                peer = event.data.get("peer") or {}
-                for action in (peer.get("plan") or {}).get("actions") or []:
-                    if action.get("state") == "create" and action.get("nsp") not in peer_sets:
-                        peer_sets[action.get("nsp")] = action
-                if peer.get("result"):
-                    data.peer_ports_result = peer["result"]
-                # SPEC-024 R7: an interface this run's plan had to add, found on the array now, was set up in this run.
-                plan = (event.data.get("iscsi") or {}).get("plan") or {}
-                for action in plan.get("actions") or []:
-                    key = (action.get("nsp", ""), action.get("vlan_id"))
-                    if action.get("state") == "create" and key not in data.iscsi_set_up_in_run:
-                        data.iscsi_set_up_in_run.append(key)
-            if event.event_type == "replication.previewed":
-                last_rc_plan = event.data.get("plan")
-                if event.data.get("report") is not None:
-                    data.replication_report = event.data["report"]
+                _record_ports_event(event.data, data, peer_sets)
+            else:
+                last_rc_plan, last_snap_plan = _record_apply_event(
+                    event.event_type, event.data, data, last_rc_plan, last_snap_plan,
+                )
             target = self._ASBUILT_RECORDS.get(event.event_type)
             if target is None:
                 continue
@@ -351,20 +383,7 @@ class DocumentSteps:
                 continue
             setattr(data, attr, payload)
             seen[attr] = event.created_at
-        if peer_sets:
-            data.peer_ports_plan = {"actions": list(peer_sets.values())}
-        for result in reversed(rc_applies):          # SPEC-021: newest apply first, each line once
-            for key, merged in (("removals_a", data.replication_removals_a), ("removals_b", data.replication_removals_b)):
-                merged.extend(line for line in result.get(key) or [] if line not in merged)
-        if "provisioning_result" in seen:
-            ts = seen["provisioning_result"]
-            data.provisioning_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
-        if "replication_result" in seen:
-            ts = seen["replication_result"]
-            data.replication_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
-        if "snapshots_result" in seen:
-            ts = seen["snapshots_result"]
-            data.snapshots_applied_at = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        _finalize_run_records(data, peer_sets, seen)
         data.commands = [{k: v for k, v in c.items() if k != "output"} for c in self._coord.list_commands(run_id)]
 
     def _snapshots_intent(self, run_id: str) -> SnapshotIntent | None:

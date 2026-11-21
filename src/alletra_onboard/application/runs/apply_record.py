@@ -44,11 +44,11 @@ TERMINAL_APPLY_EVENTS = frozenset({*APPLY_RECORDS, *(ok for _ph, ok, _k in APPLY
 
 
 def try_save_record(save: SaveRecord, model: BaseModel) -> str | None:
-    """Save an in-progress record without raising on store failures; returns error text on failure."""
+    """Save an in-progress record without raising on store failures; returns non-empty error text on failure."""
     try:
         save(model)
     except (sqlite3.Error, OSError, RuntimeError, ValueError) as exc:
-        return str(exc)
+        return str(exc) or type(exc).__name__
     return None
 
 

@@ -1102,7 +1102,8 @@ def test_replication_apply_needs_the_plan_id_the_operator_ticked(tmp_path, monke
     )
 
     monkeypatch.setattr(replication_read, "read_array", lambda creds, progress=None: ReplicationArrayView(host=creds.host, name=creds.host))
-    monkeypatch.setattr(replication_plan, "check", lambda a, b, r: ReplicationReport(primary=a, peer=b))   # no RCIP partnership: no link gate
+    from alletra_onboard.application.replication import plan_check as replication_plan_check
+    monkeypatch.setattr(replication_plan_check, "check", lambda a, b, r: ReplicationReport(primary=a, peer=b))   # no RCIP partnership: no link gate
     monkeypatch.setattr(replication_plan, "build_plan", lambda report, r, i: ReplicationPlan(actions=[ReplicationAction(kind="group", name="HS_rcg")]))
     applied: list = []
     def fake_rep_apply(plan, prov, approval, **kw):
