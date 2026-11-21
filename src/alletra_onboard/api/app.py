@@ -41,7 +41,7 @@ from alletra_onboard.api.routes.sheets import build_sheets_router
 from alletra_onboard.api.routes.snapshots import build_snapshots_router
 from alletra_onboard.api.routes.system import build_system_router
 from alletra_onboard.api.routes.trust import build_trust_router
-from alletra_onboard.api.schemas import HealthResponse
+from alletra_onboard.api.schemas import HealthResponse, app_profile_model
 from alletra_onboard.application.platform.proxy import apply_proxy_env
 from alletra_onboard.application.provisioning.clients import wsapi_capability
 from alletra_onboard.application.runs.event_bus import InMemoryEventBus
@@ -138,7 +138,7 @@ def create_app(service: OnboardingService | None = None) -> FastAPI:
     app.add_exception_handler(StoredCredentialsUnreadableError, _credentials_unreadable)
 
     app.get("/health", response_model=HealthResponse)(health)
-    app.get("/app/profile")(app_profile)
+    app.get("/app/profile", responses={200: {"model": app_profile_model()}})(app_profile)
 
     for router in (
         build_prereqs_router(env_path),

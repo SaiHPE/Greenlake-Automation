@@ -51,7 +51,6 @@ const STARTED: Record<string, string> = {
 const PLAN_WORD: Record<SnapshotActionState, ResultWord> = {
   create: RESULT.create,
   exists: RESULT.already_there,
-  update: RESULT.update,
   conflict: RESULT.conflict,
 };
 const WRITE_WORD: Record<SnapshotOutcome['status'], ResultWord> = {

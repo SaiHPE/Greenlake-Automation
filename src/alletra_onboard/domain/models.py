@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypedDict
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
@@ -327,3 +327,23 @@ class ClockSyncResult(BaseModel):
     local_utc_after: str
     server_utc: str
     source: str
+
+
+class CommandEntry(TypedDict):
+    """SPEC-019 R1: one recorded device command before the store assigns its `seq`."""
+
+    at: str
+    target: str
+    transport: str
+    command: str
+    duration_s: float
+    ok: bool
+    result: str
+    write: bool
+    output: str
+
+
+class CommandRecord(CommandEntry):
+    """SPEC-019 R1: one stored command record in /runs/{id}/console/log and /console/stream."""
+
+    seq: int

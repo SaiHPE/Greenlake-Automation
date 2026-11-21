@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 
 import structlog
 
+from alletra_onboard.domain.models import CommandEntry
 from alletra_onboard.domain.policies import redact as redact_policy
 
 _log = structlog.get_logger(__name__)
@@ -75,7 +76,7 @@ def record(
     if sink is None:
         return
     secrets = [s for s in secrets if s]
-    entry = {
+    entry: CommandEntry = {
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
         "target": target,
         "transport": transport,
@@ -87,6 +88,6 @@ def record(
         "output": cap(redact(as_text(output), secrets)),
     }
     try:
-        sink(entry)
+        sink(dict(entry))
     except (RuntimeError, OSError, sqlite3.Error) as exc:  # the log must never break the command it describes
         _log.debug("command_log_sink_failed", target=target, command=entry["command"], error=str(exc))
