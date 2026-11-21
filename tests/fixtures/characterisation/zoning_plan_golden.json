@@ -1,0 +1,1521 @@
+{
+  "r13:f1_alishow_fails": {
+    "alias_warnings": {
+      "F1": [],
+      "F2": []
+    },
+    "already_zoned": {
+      "F1": [],
+      "F2": [
+        [
+          "10005CED8C5312A8",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A8",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "21340002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "20330002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "21340002AC02D495"
+        ]
+      ]
+    },
+    "commands": {
+      "F1": [],
+      "F2": [
+        "cfgtransshow",
+        "alicreate \"esx86_hba1\",\"51:40:2e:c0:20:89:cc:38\"",
+        "alicreate \"r13_033\",\"20:33:00:02:ac:02:d4:95\"",
+        "zonecreate \"esx86_hba1_r13_033\",\"esx86_hba1;r13_033\"",
+        "cfgadd \"jul2prabhu\",\"esx86_hba1_r13_033\"",
+        "cfgsave",
+        "cfgenable jul2prabhu"
+      ]
+    },
+    "notes": [
+      "Could not read the F1 switch sw-f1: read failed: alishow",
+      "7 host port(s) not known to vCenter were added (2 from the sheet, 2 from array logins, 3 from the fabric name servers). Unnamed ones are shown by WWPN \u2014 name them on the sheet's Hosts tab if you intend to zone them.",
+      "Flagged, not excluded \u2014 the array reports these as something other than host-serving, but such a port can still serve hosts; select them only knowingly: 0:3:4 (Type peer)",
+      "Array port(s) ONLINE but present in neither declared fabric's name server: 0:3:4, 1:3:3 \u2014 likely a transient switch read (or the declared switches front the wrong fabrics). Rebuild the plan before acting on it.",
+      "Port 0:3:4 attaches to switch SAN6700R13U38 (odd fabric) but its card-port parity is even."
+    ],
+    "offline_hosts": [
+      "10.132.30.136 (10:00:5c:ed:8c:53:12:a9)",
+      "offline-host (10:00:00:00:00:00:00:ff)",
+      "arcus-win137 (51:40:2e:c0:20:89:cc:1e)"
+    ],
+    "pairs": {
+      "F1": [],
+      "F2": [
+        [
+          "10005CED8C5312A8",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A8",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC38",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC38",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "21340002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "20330002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A2",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A2",
+          "21340002AC02D495"
+        ]
+      ]
+    },
+    "peer_already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_commands": {},
+    "peer_pairs": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_skipped": {},
+    "skipped": {
+      "F1": [],
+      "F2": [
+        "host 10.132.30.86 \u00d7 array port 1:3:4 \u2014 enter an alias name for array port 1:3:4",
+        "host 10:00:5c:ed:8c:53:12:a2 \u00d7 array port 0:3:3 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a2",
+        "host 10:00:5c:ed:8c:53:12:a2 \u00d7 array port 1:3:4 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a2 and array port 1:3:4"
+      ]
+    }
+  },
+  "r13:f1_cfgshow_fails": {
+    "alias_warnings": {
+      "F1": [],
+      "F2": []
+    },
+    "already_zoned": {
+      "F1": [],
+      "F2": [
+        [
+          "10005CED8C5312A8",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A8",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "21340002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "20330002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "21340002AC02D495"
+        ]
+      ]
+    },
+    "commands": {
+      "F1": [],
+      "F2": [
+        "cfgtransshow",
+        "alicreate \"esx86_hba1\",\"51:40:2e:c0:20:89:cc:38\"",
+        "alicreate \"r13_033\",\"20:33:00:02:ac:02:d4:95\"",
+        "zonecreate \"esx86_hba1_r13_033\",\"esx86_hba1;r13_033\"",
+        "cfgadd \"jul2prabhu\",\"esx86_hba1_r13_033\"",
+        "cfgsave",
+        "cfgenable jul2prabhu"
+      ]
+    },
+    "notes": [
+      "Could not read the F1 switch sw-f1: read failed: cfgshow",
+      "7 host port(s) not known to vCenter were added (2 from the sheet, 2 from array logins, 3 from the fabric name servers). Unnamed ones are shown by WWPN \u2014 name them on the sheet's Hosts tab if you intend to zone them.",
+      "Flagged, not excluded \u2014 the array reports these as something other than host-serving, but such a port can still serve hosts; select them only knowingly: 0:3:4 (Type peer)",
+      "Array port(s) ONLINE but present in neither declared fabric's name server: 0:3:4, 1:3:3 \u2014 likely a transient switch read (or the declared switches front the wrong fabrics). Rebuild the plan before acting on it.",
+      "Port 0:3:4 attaches to switch SAN6700R13U38 (odd fabric) but its card-port parity is even."
+    ],
+    "offline_hosts": [
+      "10.132.30.136 (10:00:5c:ed:8c:53:12:a9)",
+      "offline-host (10:00:00:00:00:00:00:ff)",
+      "arcus-win137 (51:40:2e:c0:20:89:cc:1e)"
+    ],
+    "pairs": {
+      "F1": [],
+      "F2": [
+        [
+          "10005CED8C5312A8",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A8",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC38",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC38",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "21340002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "20330002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A2",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A2",
+          "21340002AC02D495"
+        ]
+      ]
+    },
+    "peer_already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_commands": {},
+    "peer_pairs": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_skipped": {},
+    "skipped": {
+      "F1": [],
+      "F2": [
+        "host 10.132.30.86 \u00d7 array port 1:3:4 \u2014 enter an alias name for array port 1:3:4",
+        "host 10:00:5c:ed:8c:53:12:a2 \u00d7 array port 0:3:3 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a2",
+        "host 10:00:5c:ed:8c:53:12:a2 \u00d7 array port 1:3:4 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a2 and array port 1:3:4"
+      ]
+    }
+  },
+  "r13:f2_unreachable": {
+    "alias_warnings": {
+      "F1": [],
+      "F2": []
+    },
+    "already_zoned": {
+      "F1": [
+        [
+          "10005CED8C5312A9",
+          "20340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A9",
+          "21330002AC02D495"
+        ]
+      ],
+      "F2": []
+    },
+    "commands": {
+      "F1": [
+        "cfgtransshow",
+        "alicreate \"win137_hba2\",\"51:40:2e:c0:20:89:cc:1e\"",
+        "alicreate \"r13_034\",\"20:34:00:02:ac:02:d4:95\"",
+        "alicreate \"r13_133\",\"21:33:00:02:ac:02:d4:95\"",
+        "zonecreate \"win137_hba2_r13_034\",\"win137_hba2;r13_034\"",
+        "zonecreate \"win137_hba2_r13_133\",\"win137_hba2;r13_133\"",
+        "cfgadd \"mycfg\",\"win137_hba2_r13_034;win137_hba2_r13_133\"",
+        "cfgsave",
+        "cfgenable mycfg"
+      ],
+      "F2": []
+    },
+    "notes": [
+      "Could not read the F2 switch sw-f2: switch ssh failed",
+      "7 host port(s) not known to vCenter were added (2 from the sheet, 4 from array logins, 1 from the fabric name servers). Unnamed ones are shown by WWPN \u2014 name them on the sheet's Hosts tab if you intend to zone them.",
+      "Flagged, not excluded \u2014 the array reports these as something other than host-serving, but such a port can still serve hosts; select them only knowingly: 0:3:4 (Type peer)",
+      "Array port(s) ONLINE but present in neither declared fabric's name server: 0:3:3, 1:3:4 \u2014 likely a transient switch read (or the declared switches front the wrong fabrics). Rebuild the plan before acting on it.",
+      "Port 0:3:4 attaches to switch SAN6700R13U38 (odd fabric) but its card-port parity is even."
+    ],
+    "offline_hosts": [
+      "10.132.30.136 (10:00:5c:ed:8c:53:12:a8)",
+      "10.132.30.86 (51:40:2e:c0:20:89:cc:38)",
+      "offline-host (10:00:00:00:00:00:00:ff)",
+      "arcus-win137 (51:40:2e:c0:20:89:cc:1c)",
+      "vmenode (10:00:5c:ed:8c:53:12:94)",
+      " (10:00:5c:ba:2c:ff:6b:d0)",
+      " (51:40:2e:c0:20:89:cb:da)",
+      " (10:00:00:10:9b:50:7e:49)"
+    ],
+    "pairs": {
+      "F1": [
+        [
+          "10005CED8C5312A9",
+          "20340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A9",
+          "21330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1E",
+          "20340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1E",
+          "21330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A3",
+          "20340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A3",
+          "21330002AC02D495"
+        ]
+      ],
+      "F2": []
+    },
+    "peer_already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_commands": {},
+    "peer_pairs": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_skipped": {},
+    "skipped": {
+      "F1": [
+        "host 10:00:5c:ed:8c:53:12:a3 \u00d7 array port 0:3:4 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a3",
+        "host 10:00:5c:ed:8c:53:12:a3 \u00d7 array port 1:3:3 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a3"
+      ],
+      "F2": []
+    }
+  },
+  "r13:full_and_peers": {
+    "alias_warnings": {
+      "F1": [],
+      "F2": []
+    },
+    "already_zoned": {
+      "F1": [
+        [
+          "10005CED8C5312A9",
+          "20340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A9",
+          "21330002AC02D495"
+        ]
+      ],
+      "F2": [
+        [
+          "10005CED8C5312A8",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A8",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "21340002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "20330002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "21340002AC02D495"
+        ]
+      ]
+    },
+    "commands": {
+      "F1": [
+        "cfgtransshow",
+        "alicreate \"win137_hba2\",\"51:40:2e:c0:20:89:cc:1e\"",
+        "alicreate \"r13_034\",\"20:34:00:02:ac:02:d4:95\"",
+        "alicreate \"r13_133\",\"21:33:00:02:ac:02:d4:95\"",
+        "zonecreate \"win137_hba2_r13_034\",\"win137_hba2;r13_034\"",
+        "zonecreate \"win137_hba2_r13_133\",\"win137_hba2;r13_133\"",
+        "cfgadd \"mycfg\",\"win137_hba2_r13_034;win137_hba2_r13_133\"",
+        "cfgsave",
+        "cfgenable mycfg"
+      ],
+      "F2": [
+        "cfgtransshow",
+        "alicreate \"esx86_hba1\",\"51:40:2e:c0:20:89:cc:38\"",
+        "alicreate \"r13_033\",\"20:33:00:02:ac:02:d4:95\"",
+        "zonecreate \"esx86_hba1_r13_033\",\"esx86_hba1;r13_033\"",
+        "cfgadd \"jul2prabhu\",\"esx86_hba1_r13_033\"",
+        "cfgsave",
+        "cfgenable jul2prabhu"
+      ]
+    },
+    "notes": [
+      "8 host port(s) not known to vCenter were added (2 from the sheet, 2 from array logins, 4 from the fabric name servers). Unnamed ones are shown by WWPN \u2014 name them on the sheet's Hosts tab if you intend to zone them.",
+      "Flagged, not excluded \u2014 the array reports these as something other than host-serving, but such a port can still serve hosts; select them only knowingly: 0:3:4 (Type peer)",
+      "Peer port 0:3:3 (20:33:00:02:ac:02:d4:95) and the source port 99:99:00:00:00:00:00:01 are not both in one fabric's name server, so no zone is drafted for them. Check the cabling and the WWPN on the Peer ports tab.",
+      "Port 0:3:4 attaches to switch SAN6700R13U38 (odd fabric) but its card-port parity is even."
+    ],
+    "offline_hosts": [
+      "offline-host (10:00:00:00:00:00:00:ff)"
+    ],
+    "pairs": {
+      "F1": [
+        [
+          "10005CED8C5312A9",
+          "20340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A9",
+          "21330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1E",
+          "20340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1E",
+          "21330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A3",
+          "20340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A3",
+          "21330002AC02D495"
+        ]
+      ],
+      "F2": [
+        [
+          "10005CED8C5312A8",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A8",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC38",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC38",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "21340002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "20330002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A2",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A2",
+          "21340002AC02D495"
+        ]
+      ]
+    },
+    "peer_already_zoned": {
+      "F1": [
+        [
+          "20340002AC02D495",
+          "21330002AC02D495"
+        ]
+      ],
+      "F2": []
+    },
+    "peer_commands": {
+      "F1": [
+        "cfgtransshow",
+        "alicreate \"r13_034\",\"20:34:00:02:ac:02:d4:95\"",
+        "alicreate \"src_002\",\"20:02:00:02:ac:01:be:40\"",
+        "zonecreate \"r13_034_src_002\",\"r13_034;src_002\"",
+        "cfgadd \"mycfg\",\"r13_034_src_002\"",
+        "cfgsave",
+        "cfgenable mycfg"
+      ]
+    },
+    "peer_pairs": {
+      "F1": [
+        [
+          "20340002AC02D495",
+          "21330002AC02D495"
+        ],
+        [
+          "20340002AC02D495",
+          "20020002AC01BE40"
+        ]
+      ],
+      "F2": []
+    },
+    "peer_skipped": {
+      "F1": []
+    },
+    "skipped": {
+      "F1": [
+        "host 10:00:5c:ed:8c:53:12:a3 \u00d7 array port 0:3:4 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a3",
+        "host 10:00:5c:ed:8c:53:12:a3 \u00d7 array port 1:3:3 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a3"
+      ],
+      "F2": [
+        "host 10.132.30.86 \u00d7 array port 1:3:4 \u2014 enter an alias name for array port 1:3:4",
+        "host 10:00:5c:ed:8c:53:12:a2 \u00d7 array port 0:3:3 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a2",
+        "host 10:00:5c:ed:8c:53:12:a2 \u00d7 array port 1:3:4 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a2 and array port 1:3:4"
+      ]
+    }
+  },
+  "r13:no_effective_cfg": {
+    "alias_warnings": {
+      "F1": [],
+      "F2": []
+    },
+    "already_zoned": {
+      "F1": [],
+      "F2": [
+        [
+          "10005CED8C5312A8",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A8",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "21340002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "20330002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "21340002AC02D495"
+        ]
+      ]
+    },
+    "commands": {
+      "F1": [
+        "cfgtransshow",
+        "alicreate \"win137_hba2\",\"51:40:2e:c0:20:89:cc:1e\"",
+        "alicreate \"r13_034\",\"20:34:00:02:ac:02:d4:95\"",
+        "alicreate \"r13_133\",\"21:33:00:02:ac:02:d4:95\"",
+        "zonecreate \"win137_hba2_r13_034\",\"win137_hba2;r13_034\"",
+        "zonecreate \"win137_hba2_r13_133\",\"win137_hba2;r13_133\""
+      ],
+      "F2": [
+        "cfgtransshow",
+        "alicreate \"esx86_hba1\",\"51:40:2e:c0:20:89:cc:38\"",
+        "alicreate \"r13_033\",\"20:33:00:02:ac:02:d4:95\"",
+        "zonecreate \"esx86_hba1_r13_033\",\"esx86_hba1;r13_033\"",
+        "cfgadd \"jul2prabhu\",\"esx86_hba1_r13_033\"",
+        "cfgsave",
+        "cfgenable jul2prabhu"
+      ]
+    },
+    "notes": [
+      "No effective zoning configuration was read on the F1 switch sw-f1 (cfgshow), so its command set has no cfgadd / cfgenable: zones created there take no effect until they are in an enabled configuration. Check cfgactvshow on the switch and ask the SAN owner before pasting.",
+      "8 host port(s) not known to vCenter were added (2 from the sheet, 2 from array logins, 4 from the fabric name servers). Unnamed ones are shown by WWPN \u2014 name them on the sheet's Hosts tab if you intend to zone them.",
+      "Flagged, not excluded \u2014 the array reports these as something other than host-serving, but such a port can still serve hosts; select them only knowingly: 0:3:4 (Type peer)",
+      "Port 0:3:4 attaches to switch SAN6700R13U38 (odd fabric) but its card-port parity is even."
+    ],
+    "offline_hosts": [
+      "offline-host (10:00:00:00:00:00:00:ff)"
+    ],
+    "pairs": {
+      "F1": [
+        [
+          "10005CED8C5312A9",
+          "20340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A9",
+          "21330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1E",
+          "20340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1E",
+          "21330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A3",
+          "20340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A3",
+          "21330002AC02D495"
+        ]
+      ],
+      "F2": [
+        [
+          "10005CED8C5312A8",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A8",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC38",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC38",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CC1C",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C531294",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CBA2CFF6BD0",
+          "21340002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "20330002AC02D495"
+        ],
+        [
+          "51402EC02089CBDA",
+          "21340002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "20330002AC02D495"
+        ],
+        [
+          "100000109B507E49",
+          "21340002AC02D495"
+        ],
+        [
+          "10005CED8C5312A2",
+          "20330002AC02D495"
+        ],
+        [
+          "10005CED8C5312A2",
+          "21340002AC02D495"
+        ]
+      ]
+    },
+    "peer_already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_commands": {},
+    "peer_pairs": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_skipped": {},
+    "skipped": {
+      "F1": [
+        "host 10.132.30.136 \u00d7 array port 0:3:4 \u2014 enter an alias name for host 10.132.30.136",
+        "host 10.132.30.136 \u00d7 array port 1:3:3 \u2014 enter an alias name for host 10.132.30.136",
+        "host 10:00:5c:ed:8c:53:12:a3 \u00d7 array port 0:3:4 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a3",
+        "host 10:00:5c:ed:8c:53:12:a3 \u00d7 array port 1:3:3 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a3"
+      ],
+      "F2": [
+        "host 10.132.30.86 \u00d7 array port 1:3:4 \u2014 enter an alias name for array port 1:3:4",
+        "host 10:00:5c:ed:8c:53:12:a2 \u00d7 array port 0:3:3 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a2",
+        "host 10:00:5c:ed:8c:53:12:a2 \u00d7 array port 1:3:4 \u2014 enter an alias name for host 10:00:5c:ed:8c:53:12:a2 and array port 1:3:4"
+      ]
+    }
+  },
+  "vz:bgl_all": {
+    "alias_warnings": {
+      "F1": [
+        "alias '1bad-port' uses - $ ^ or starts with a digit: every switch in the fabric must run FOS 8.1.0 or later"
+      ],
+      "F2": []
+    },
+    "already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "commands": {
+      "F1": [
+        "cfgtransshow",
+        "alicreate \"H_120_1\",\"10:00:70:10:6f:58:3f:d1\"",
+        "alicreate \"1bad-port\",\"10:00:70:10:6f:58:2f:91\"",
+        "alicreate \"A_031\",\"20:31:00:02:ac:07:ef:dc\"",
+        "zonecreate \"H_120_1_A_031\",\"H_120_1;A_031\"",
+        "zonecreate \"H_120_1_T_AlletraMPF22U13_1_3_1\",\"H_120_1;T_AlletraMPF22U13_1_3_1\"",
+        "zonecreate \"1bad-port_A_031\",\"1bad-port;A_031\"",
+        "zonecreate \"1bad-port_T_AlletraMPF22U13_1_3_1\",\"1bad-port;T_AlletraMPF22U13_1_3_1\"",
+        "zonecreate \"CRV_VZ_DL360G11D24U25_Port1_A_031\",\"CRV_VZ_DL360G11D24U25_Port1;A_031\"",
+        "zonecreate \"CRV_VZ_DL360G11D24U25_Port1_T_AlletraMPF22U13_1_3_1\",\"CRV_VZ_DL360G11D24U25_Port1;T_AlletraMPF22U13_1_3_1\"",
+        "zonecreate \"CRV_VZ_DL360G11D24U26_Port1_A_031\",\"CRV_VZ_DL360G11D24U26_Port1;A_031\"",
+        "zonecreate \"CRV_VZ_DL360G11D24U26_Port1_T_AlletraMPF22U13_1_3_1\",\"CRV_VZ_DL360G11D24U26_Port1;T_AlletraMPF22U13_1_3_1\"",
+        "zonecreate \"CRV_VZ_DL360G11D24U27_Port1_A_031\",\"CRV_VZ_DL360G11D24U27_Port1;A_031\"",
+        "zonecreate \"CRV_VZ_DL360G11D24U27_Port1_T_AlletraMPF22U13_1_3_1\",\"CRV_VZ_DL360G11D24U27_Port1;T_AlletraMPF22U13_1_3_1\"",
+        "cfgadd \"F1_CFG\",\"H_120_1_A_031;H_120_1_T_AlletraMPF22U13_1_3_1;1bad-port_A_031;1bad-port_T_AlletraMPF22U13_1_3_1;CRV_VZ_DL360G11D24U25_Port1_A_031;CRV_VZ_DL360G11D24U25_Port1_T_AlletraMPF22U13_1_3_1;CRV_VZ_DL360G11D24U26_Port1_A_031;CRV_VZ_DL360G11D24U26_Port1_T_AlletraMPF22U13_1_3_1;CRV_VZ_DL360G11D24U27_Port1_A_031;CRV_VZ_DL360G11D24U27_Port1_T_AlletraMPF22U13_1_3_1\"",
+        "cfgsave",
+        "cfgenable F1_CFG"
+      ],
+      "F2": [
+        "cfgtransshow",
+        "alicreate \"H_120_2\",\"10:00:70:10:6f:58:3f:d9\"",
+        "zonecreate \"H_120_2_T_AlletraMPF22U13_0_3_2\",\"H_120_2;T_AlletraMPF22U13_0_3_2\"",
+        "zonecreate \"CRV_VZ_DL360G11D24U25_Port2_T_AlletraMPF22U13_0_3_2\",\"CRV_VZ_DL360G11D24U25_Port2;T_AlletraMPF22U13_0_3_2\"",
+        "zonecreate \"CRV_VZ_DL360G11D24U26_Port2_T_AlletraMPF22U13_0_3_2\",\"CRV_VZ_DL360G11D24U26_Port2;T_AlletraMPF22U13_0_3_2\"",
+        "zonecreate \"CRV_VZ_DL360G11D24U27_Port2_T_AlletraMPF22U13_0_3_2\",\"CRV_VZ_DL360G11D24U27_Port2;T_AlletraMPF22U13_0_3_2\"",
+        "cfgadd \"F2_CFG\",\"H_120_2_T_AlletraMPF22U13_0_3_2;CRV_VZ_DL360G11D24U25_Port2_T_AlletraMPF22U13_0_3_2;CRV_VZ_DL360G11D24U26_Port2_T_AlletraMPF22U13_0_3_2;CRV_VZ_DL360G11D24U27_Port2_T_AlletraMPF22U13_0_3_2\"",
+        "cfgsave",
+        "cfgenable F2_CFG"
+      ]
+    },
+    "notes": [
+      "6 host port(s) not known to vCenter were added (6 from the fabric name servers). Unnamed ones are shown by WWPN \u2014 name them on the sheet's Hosts tab if you intend to zone them."
+    ],
+    "offline_hosts": [],
+    "pairs": {
+      "F1": [
+        [
+          "100070106F583FD1",
+          "20310002AC07EFDC"
+        ],
+        [
+          "100070106F583FD1",
+          "20340002AC07EFDC"
+        ],
+        [
+          "100070106F583FD1",
+          "21310002AC07EFDC"
+        ],
+        [
+          "100070106F582F91",
+          "20310002AC07EFDC"
+        ],
+        [
+          "100070106F582F91",
+          "20340002AC07EFDC"
+        ],
+        [
+          "100070106F582F91",
+          "21310002AC07EFDC"
+        ],
+        [
+          "10009440C9D01212",
+          "20310002AC07EFDC"
+        ],
+        [
+          "10009440C9D01212",
+          "20340002AC07EFDC"
+        ],
+        [
+          "10009440C9D01212",
+          "21310002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "20310002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "20340002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "21310002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "20310002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "20340002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "21310002AC07EFDC"
+        ]
+      ],
+      "F2": [
+        [
+          "100070106F583FD9",
+          "20320002AC07EFDC"
+        ],
+        [
+          "10009440C9D01213",
+          "20320002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC835B",
+          "20320002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC8367",
+          "20320002AC07EFDC"
+        ]
+      ]
+    },
+    "peer_already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_commands": {},
+    "peer_pairs": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_skipped": {},
+    "skipped": {
+      "F1": [
+        "host 10.55.235.120 \u00d7 array port 0:3:4 \u2014 alias 'bad alias' for array port 0:3:4 contains ' ' \u2014 FOS names allow letters, digits and _ (- $ ^ on FOS 8.1+) \u2014 try 'bad_alias'",
+        "host 10.55.235.121 \u00d7 array port 0:3:4 \u2014 alias 'bad alias' for array port 0:3:4 contains ' ' \u2014 FOS names allow letters, digits and _ (- $ ^ on FOS 8.1+) \u2014 try 'bad_alias'",
+        "host DL360G11D24U25 \u00d7 array port 0:3:4 \u2014 alias 'bad alias' for array port 0:3:4 contains ' ' \u2014 FOS names allow letters, digits and _ (- $ ^ on FOS 8.1+) \u2014 try 'bad_alias'",
+        "host DL360G11D24U26 \u00d7 array port 0:3:4 \u2014 alias 'bad alias' for array port 0:3:4 contains ' ' \u2014 FOS names allow letters, digits and _ (- $ ^ on FOS 8.1+) \u2014 try 'bad_alias'",
+        "host DL360G11D24U27 \u00d7 array port 0:3:4 \u2014 alias 'bad alias' for array port 0:3:4 contains ' ' \u2014 FOS names allow letters, digits and _ (- $ ^ on FOS 8.1+) \u2014 try 'bad_alias'"
+      ],
+      "F2": []
+    }
+  },
+  "vz:bgl_subset": {
+    "alias_warnings": {
+      "F1": [
+        "alias '1bad-port' uses - $ ^ or starts with a digit: every switch in the fabric must run FOS 8.1.0 or later"
+      ],
+      "F2": []
+    },
+    "already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "commands": {
+      "F1": [
+        "cfgtransshow",
+        "alicreate \"H_120_1\",\"10:00:70:10:6f:58:3f:d1\"",
+        "alicreate \"A_031\",\"20:31:00:02:ac:07:ef:dc\"",
+        "zonecreate \"H_120_1_A_031\",\"H_120_1;A_031\"",
+        "cfgadd \"F1_CFG\",\"H_120_1_A_031\"",
+        "cfgsave",
+        "cfgenable F1_CFG"
+      ],
+      "F2": []
+    },
+    "notes": [
+      "6 host port(s) not known to vCenter were added (6 from the fabric name servers). Unnamed ones are shown by WWPN \u2014 name them on the sheet's Hosts tab if you intend to zone them."
+    ],
+    "offline_hosts": [],
+    "pairs": {
+      "F1": [
+        [
+          "100070106F583FD1",
+          "20310002AC07EFDC"
+        ],
+        [
+          "100070106F583FD1",
+          "20340002AC07EFDC"
+        ],
+        [
+          "100070106F583FD1",
+          "21310002AC07EFDC"
+        ],
+        [
+          "100070106F582F91",
+          "20310002AC07EFDC"
+        ],
+        [
+          "100070106F582F91",
+          "20340002AC07EFDC"
+        ],
+        [
+          "100070106F582F91",
+          "21310002AC07EFDC"
+        ],
+        [
+          "10009440C9D01212",
+          "20310002AC07EFDC"
+        ],
+        [
+          "10009440C9D01212",
+          "20340002AC07EFDC"
+        ],
+        [
+          "10009440C9D01212",
+          "21310002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "20310002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "20340002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "21310002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "20310002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "20340002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "21310002AC07EFDC"
+        ]
+      ],
+      "F2": [
+        [
+          "100070106F583FD9",
+          "20320002AC07EFDC"
+        ],
+        [
+          "10009440C9D01213",
+          "20320002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC835B",
+          "20320002AC07EFDC"
+        ],
+        [
+          "10005CBA2CFC8367",
+          "20320002AC07EFDC"
+        ]
+      ]
+    },
+    "peer_already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_commands": {},
+    "peer_pairs": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_skipped": {},
+    "skipped": {
+      "F1": [
+        "host 10.55.235.120 \u00d7 array port 0:3:4 \u2014 alias 'bad alias' for array port 0:3:4 contains ' ' \u2014 FOS names allow letters, digits and _ (- $ ^ on FOS 8.1+) \u2014 try 'bad_alias'"
+      ],
+      "F2": []
+    }
+  },
+  "vz:fully_zoned": {
+    "alias_warnings": {
+      "F1": [],
+      "F2": []
+    },
+    "already_zoned": {
+      "F1": [
+        [
+          "10009440C9D01212",
+          "20310002AC02F584"
+        ],
+        [
+          "10009440C9D01212",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "21310002AC02F584"
+        ]
+      ],
+      "F2": [
+        [
+          "10009440C9D01213",
+          "20320002AC02F584"
+        ],
+        [
+          "10009440C9D01213",
+          "21320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835B",
+          "20320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835B",
+          "21320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8367",
+          "20320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8367",
+          "21320002AC02F584"
+        ]
+      ]
+    },
+    "commands": {
+      "F1": [],
+      "F2": []
+    },
+    "notes": [
+      "2 host port(s) not known to vCenter were added (2 from the fabric name servers). Unnamed ones are shown by WWPN \u2014 name them on the sheet's Hosts tab if you intend to zone them."
+    ],
+    "offline_hosts": [],
+    "pairs": {
+      "F1": [
+        [
+          "10009440C9D01212",
+          "20310002AC02F584"
+        ],
+        [
+          "10009440C9D01212",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "21310002AC02F584"
+        ]
+      ],
+      "F2": [
+        [
+          "10009440C9D01213",
+          "20320002AC02F584"
+        ],
+        [
+          "10009440C9D01213",
+          "21320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835B",
+          "20320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835B",
+          "21320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8367",
+          "20320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8367",
+          "21320002AC02F584"
+        ]
+      ]
+    },
+    "peer_already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_commands": {},
+    "peer_pairs": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_skipped": {},
+    "skipped": {
+      "F1": [],
+      "F2": []
+    }
+  },
+  "vz:merged_fabric": {
+    "alias_warnings": {
+      "F1": [],
+      "F2": []
+    },
+    "already_zoned": {
+      "F1": [
+        [
+          "10009440C9D01212",
+          "20310002AC02F584"
+        ],
+        [
+          "10009440C9D01212",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "21310002AC02F584"
+        ]
+      ],
+      "F2": []
+    },
+    "commands": {
+      "F1": [],
+      "F2": []
+    },
+    "notes": [
+      "The declared F1 and F2 switches see 431 of the same device WWPNs (100% of the smaller fabric) \u2014 they appear to be ONE merged fabric, not a dual fabric. Fabric placement below is unreliable (dual-seen devices land on F1). Fix the fabric split (or declare switches from two separate fabrics) before acting on this plan.",
+      "1 host port(s) not known to vCenter were added (1 from the fabric name servers). Unnamed ones are shown by WWPN \u2014 name them on the sheet's Hosts tab if you intend to zone them.",
+      "Array port(s) ONLINE but present in neither declared fabric's name server: 0:3:2, 1:3:2 \u2014 likely a transient switch read (or the declared switches front the wrong fabrics). Rebuild the plan before acting on it."
+    ],
+    "offline_hosts": [
+      "CRV_VZ_DL360G11D24U25 (10:00:94:40:c9:d0:12:13)",
+      "CRV_VZ_DL360G11D24U26 (10:00:5c:ba:2c:fc:83:5b)"
+    ],
+    "pairs": {
+      "F1": [
+        [
+          "10009440C9D01212",
+          "20310002AC02F584"
+        ],
+        [
+          "10009440C9D01212",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "21310002AC02F584"
+        ]
+      ],
+      "F2": []
+    },
+    "peer_already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_commands": {},
+    "peer_pairs": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_skipped": {},
+    "skipped": {
+      "F1": [],
+      "F2": []
+    }
+  },
+  "vz:no_vcenter": {
+    "alias_warnings": {
+      "F1": [],
+      "F2": []
+    },
+    "already_zoned": {
+      "F1": [
+        [
+          "10009440C9D01212",
+          "20310002AC02F584"
+        ],
+        [
+          "10009440C9D01212",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "21310002AC02F584"
+        ]
+      ],
+      "F2": [
+        [
+          "10009440C9D01213",
+          "20320002AC02F584"
+        ],
+        [
+          "10009440C9D01213",
+          "21320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835B",
+          "20320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835B",
+          "21320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8367",
+          "20320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8367",
+          "21320002AC02F584"
+        ]
+      ]
+    },
+    "commands": {
+      "F1": [],
+      "F2": []
+    },
+    "notes": [
+      "vCenter reported no hosts \u2014 6 host port(s) were identified from the sheet, the array's logins and the declared switches' own name servers instead (names from the fabric where the HBA advertises one)."
+    ],
+    "offline_hosts": [],
+    "pairs": {
+      "F1": [
+        [
+          "10009440C9D01212",
+          "20310002AC02F584"
+        ],
+        [
+          "10009440C9D01212",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835A",
+          "21310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "20310002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8366",
+          "21310002AC02F584"
+        ]
+      ],
+      "F2": [
+        [
+          "10009440C9D01213",
+          "20320002AC02F584"
+        ],
+        [
+          "10009440C9D01213",
+          "21320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835B",
+          "20320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC835B",
+          "21320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8367",
+          "20320002AC02F584"
+        ],
+        [
+          "10005CBA2CFC8367",
+          "21320002AC02F584"
+        ]
+      ]
+    },
+    "peer_already_zoned": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_commands": {},
+    "peer_pairs": {
+      "F1": [],
+      "F2": []
+    },
+    "peer_skipped": {},
+    "skipped": {
+      "F1": [],
+      "F2": []
+    }
+  }
+}

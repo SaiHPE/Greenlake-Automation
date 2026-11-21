@@ -7,6 +7,7 @@ prefixes, comparing the refactored implementation against the pre-refactor row f
 
 from __future__ import annotations
 
+import json
 import random
 from pathlib import Path
 
@@ -14,11 +15,23 @@ from pydantic import SecretStr
 
 from alletra_onboard.application.provisioning import discovery as disc
 from alletra_onboard.domain.array_parse import nsp_parts
-from alletra_onboard.domain.discovery import ArrayPort, EthernetPort
-from alletra_onboard.domain.provisioning import ProvisioningIntent
+from alletra_onboard.domain.discovery import (
+    ArrayPort,
+    DiscoveryReport,
+    EthernetPort,
+    HostHba,
+    HostIdentity,
+)
+from alletra_onboard.domain.errors import DeviceError
+from alletra_onboard.domain.provisioning import (
+    DeclaredHost,
+    HostSetRequest,
+    ProvisioningIntent,
+)
 from alletra_onboard.domain.shared import EndpointCreds, Fabric, normalize_wwpn
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+GOLDEN = FIXTURES / "characterisation" / "discovery_golden.json"
 
 _COMMAND_FILES: dict[str, str] = {
     "showport": "showport.txt",
@@ -296,3 +309,270 @@ def test_discover_nsp_rows_matches_pre_refactor_on_captures_and_fuzz(monkeypatch
     for name, resp in all_cases:
         expected = _run_discover(resp)
         assert actual[name] == expected, f"discover() output differed for case {name}"
+
+
+# ---------------- golden characterisation for discover / assemble_hosts / resolve_port_fabrics ----------------
+
+
+class _RichCli(_FakeCli):
+    def __init__(self, responses: dict[str, str], errors: set[str] | None = None, *, fail_enter: bool = False) -> None:
+        super().__init__(responses)
+        self._errors = errors or set()
+        self._fail_enter = fail_enter
+
+    def __enter__(self) -> _RichCli:
+        if self._fail_enter:
+            raise DeviceError("array ssh down")
+        return self
+
+    def run(self, command: str, **_kwargs: object) -> str:
+        if command in self._errors:
+            raise DeviceError(f"failed: {command}")
+        return self._responses.get(command, "")
+
+
+class _RichVCenter:
+    def __init__(self, hbas: list[HostHba], idents: list[HostIdentity], *, fail_enter: bool = False, fail_ident: bool = False) -> None:
+        self._hbas = hbas
+        self._idents = idents
+        self._fail_enter = fail_enter
+        self._fail_ident = fail_ident
+
+    def __enter__(self) -> _RichVCenter:
+        if self._fail_enter:
+            raise DeviceError("vcenter timeout")
+        return self
+
+    def __exit__(self, *args: object) -> bool:
+        return False
+
+    def host_fc_hbas(self) -> list[HostHba]:
+        return list(self._hbas)
+
+    def host_identities(self) -> list[HostIdentity]:
+        if self._fail_ident:
+            raise DeviceError("ident read failed")
+        return list(self._idents)
+
+
+class _FakeLinuxClient:
+    def __init__(self, replies: dict[str, str], *, fail: bool = False) -> None:
+        self._replies = replies
+        self._fail = fail
+
+    def __enter__(self) -> _FakeLinuxClient:
+        if self._fail:
+            raise DeviceError("ssh refused")
+        return self
+
+    def __exit__(self, *args: object) -> bool:
+        return False
+
+    def run(self, key: str) -> tuple[int, str]:
+        return (0, self._replies[key]) if key in self._replies else (1, "")
+
+    def read(self, key: str) -> str:
+        return self._replies.get(key, "")
+
+
+class _FakeWindowsClient:
+    def __init__(self, replies: dict[str, str], *, fail: bool = False) -> None:
+        self._replies = replies
+        self._fail = fail
+
+    def __enter__(self) -> _FakeWindowsClient:
+        if self._fail:
+            raise DeviceError("winrm refused")
+        return self
+
+    def __exit__(self, *args: object) -> bool:
+        return False
+
+    def read(self, key: str) -> str:
+        return self._replies.get(key, "")
+
+
+def _rich_intent(declared: list[DeclaredHost] | None = None, members: list[str] | None = None) -> ProvisioningIntent:
+    base = _intent()
+    host_sets = [HostSetRequest(name="Char_HS", members=members if members is not None else ["esx1"])]
+    return base.model_copy(update={"declared_hosts": declared or [], "host_sets": host_sets})
+
+
+def _fcfabric_reply(switch_name: str, wwpns: list[str]) -> str:
+    lines = [f"Logical Name: {switch_name}"]
+    for w in wwpns:
+        lines.append(f"  F-Port attached {w}")
+    return "\n".join(lines) + "\n"
+
+
+def _host_pin(h) -> dict[str, object]:
+    return {
+        "name": h.name,
+        "os": h.os,
+        "sources": list(h.sources),
+        "wwpns": list(h.wwpns),
+        "iqns": list(h.iqns),
+        "fabrics": list(h.fabrics),
+        "logged_in": h.logged_in,
+        "identified": h.identified,
+        "in_run": h.in_run,
+        "lookup": h.lookup,
+        "host_read": h.host_read,
+    }
+
+
+def _discover_pin(report: DiscoveryReport, progress: list[str]) -> dict[str, object]:
+    return {
+        "hosts": [_host_pin(h) for h in report.hosts],
+        "notes": list(report.notes),
+        "error": report.error,
+        "progress": progress,
+    }
+
+
+def _discover_scenarios() -> dict[str, dict[str, object]]:
+    """Run discover() over all captured showport sets plus multi-source/error scenarios."""
+    results: dict[str, dict[str, object]] = {}
+    fixtures = _fixture_cases()
+    for name, resp in fixtures:
+        progress_lines: list[str] = []
+        report = disc.discover(
+            _intent(),
+            array_cli_factory=lambda _c, r=resp: _RichCli(r),
+            vcenter_factory=lambda _c: _RichVCenter([], []),
+            wsapi_v3_factory=lambda _c: _FakeWsapiV3(),
+            progress=progress_lines.append,
+        )
+        results[f"fixture:{name}"] = _discover_pin(report, progress_lines)
+
+    # Rich scenario using rack13 iscsi_vlan capture + vCenter + declared hosts + host reads + fcfabric
+    r13 = dict(next(r for n, r in fixtures if n.endswith("iscsi_vlan/rack13")))
+    r13["showhost -d"] = (FIXTURES / "rack13_array" / "showhost_d.txt").read_text(encoding="utf-8")
+    r13["showportdev fcfabric 0:3:3"] = _fcfabric_reply("SW_B", ["20330002AC02D495", "21340002AC02D495"])
+    r13["showportdev fcfabric 0:3:4"] = _fcfabric_reply("SW_A", ["20340002AC02D495", "21330002AC02D495"])
+    declared = [
+        DeclaredHost(name="win-box", os="windows", address="10.10.0.20", username="admin", password=SecretStr("pw")),
+        DeclaredHost(name="lnx-box", os="linux", address="10.10.0.21", username="root", password=SecretStr("pw"),
+                     wwpns=["51402EC02089CC1C"]),
+        DeclaredHost(name="esx-sheet", os="esxi", address="10.10.0.22", username="root", password=SecretStr("pw")),
+        DeclaredHost(name="ghost-host", os="linux", address="10.10.0.99"),
+    ]
+    hbas = [
+        HostHba(host_name="10.132.30.136", wwpn="10005CED8C5312A8", os="VMware ESXi 8.0.2"),
+        HostHba(host_name="10.132.30.136", wwpn="10005CED8C5312A9", os="VMware ESXi 8.0.2"),
+        HostHba(host_name="10.132.30.47", wwpn="100008F1EAC03DE7", os="VMware ESXi 8.0.2"),
+    ]
+    idents = [
+        HostIdentity(host_name="10.132.30.136", serial_number="SN136", iqns=["iqn.1998-01.com.vmware:esx136"]),
+        HostIdentity(host_name="iscsi-only-esx", serial_number="SNISCSI", iqns=["iqn.1998-01.com.vmware:esxiscsi"], os="ESXi 8"),
+        HostIdentity(host_name="empty-esx", serial_number="SNEMPTY", iqns=[]),
+    ]
+    lin_replies = {
+        "hostname": "lnx-box.lab",
+        "os": 'PRETTY_NAME="RHEL 8.9"\n',
+        "serial": "LNXSN1",
+        "fc": "0x51402ec02089cc1c\n",
+        "iqn": "InitiatorName=iqn.1994-05.com.redhat:lnxbox\n",
+        "multipath": "",
+    }
+    win_replies = {
+        "hostname": '"WIN-BOX"',
+        "os": '{"Caption":"Windows Server 2022"}',
+        "serial": '{"SerialNumber":"WINSN1"}',
+        "initiators": '[{"NodeAddress":"iqn.1991-05.com.microsoft:win-box"}]',
+        "mpio": '{"installed":true,"claimed":true,"disks":[]}',
+    }
+    prog_rich: list[str] = []
+    rep_rich = disc.discover(
+        _rich_intent(declared, members=["10.132.30.136", "vmenode"]),
+        array_cli_factory=lambda _c: _RichCli(r13),
+        vcenter_factory=lambda _c: _RichVCenter(hbas, idents),
+        linux_host_factory=lambda _c: _FakeLinuxClient(lin_replies),
+        windows_host_factory=lambda _c: _FakeWindowsClient(win_replies),
+        wsapi_v3_factory=lambda _c: _FakeWsapiV3(),
+        progress=prog_rich.append,
+    )
+    results["rich:rack13_multi_source"] = _discover_pin(rep_rich, prog_rich)
+
+    # Error-branch scenarios: array SSH down; rcip/file/vcenter-ident/linux/windows errors; vcenter down
+    err_cases = [
+        ("err:array_down", _RichCli({}, fail_enter=True), _RichVCenter(hbas[:1], []), _rich_intent()),
+        ("err:sub_reads_fail", _RichCli(r13, errors={"showport -rcip", "showport -file"}),
+         _RichVCenter(hbas, [], fail_ident=True), _rich_intent(declared[:2])),
+        ("err:vcenter_down", _RichCli(r13), _RichVCenter([], [], fail_enter=True), _rich_intent(declared)),
+    ]
+    for label, cli, vc, intent in err_cases:
+        p_lines: list[str] = []
+        rep = disc.discover(
+            intent,
+            array_cli_factory=lambda _c, c=cli: c,
+            vcenter_factory=lambda _c, v=vc: v,
+            linux_host_factory=lambda _c: _FakeLinuxClient({}, fail=True),
+            windows_host_factory=lambda _c: _FakeWindowsClient({}, fail=True),
+            wsapi_v3_factory=lambda _c: _FakeWsapiV3(),
+            progress=p_lines.append,
+        )
+        results[label] = _discover_pin(rep, p_lines)
+    return results
+
+
+def _assemble_capture_cases() -> dict[str, list[dict[str, object]]]:
+    """Captured showhost_d.txt files assembled into DiscoveredHost pins."""
+    out: dict[str, list[dict[str, object]]] = {}
+    for path in sorted(FIXTURES.rglob("showhost_d.txt")):
+        key = "capture:" + str(path.relative_to(FIXTURES))
+        array_hosts = disc.parse_showhost(path.read_text(encoding="utf-8"))
+        rep = DiscoveryReport(
+            array_ports=[
+                ArrayPort(node=0, slot=3, card_port=1, protocol="fc", wwpn="20310002AC02F584", link_state="ready", fabric="odd"),
+                ArrayPort(node=0, slot=3, card_port=3, protocol="fc", wwpn="20330002AC02D495", link_state="ready", fabric="even"),
+                ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="20340002AC02D495", link_state="ready", fabric="odd"),
+                ArrayPort(node=1, slot=3, card_port=3, protocol="fc", wwpn="21330002AC02D495", link_state="ready", fabric="odd"),
+                ArrayPort(node=1, slot=3, card_port=4, protocol="fc", wwpn="21340002AC02D495", link_state="ready", fabric="even"),
+            ],
+            array_hosts=array_hosts,
+        )
+        out[key] = [_host_pin(h) for h in disc.assemble_hosts(rep)]
+    return out
+
+
+def _resolve_fabrics_cases() -> dict[str, dict[str, object]]:
+    topologies = {
+        "zero_switches": {},
+        "one_switch_same_parity": {"0:3:1": "SW1", "1:3:1": "SW1"},
+        "one_switch_mixed_parity": {"0:3:1": "SW1", "0:3:2": "SW1"},
+        "two_standard": {"0:3:1": "SW1", "1:3:1": "SW1", "0:3:2": "SW2", "1:3:2": "SW2"},
+        "two_cross_cabled": {"0:3:1": "SW1", "0:3:4": "SW1", "1:3:1": "SW1", "0:3:2": "SW2", "1:3:2": "SW2"},
+        "two_same_parity": {"0:3:1": "SW_A", "1:3:1": "SW_B"},
+        "two_with_loss_sync": {"0:3:1": "SW1", "0:3:2": "SW2"},
+        "three_switches": {"0:3:1": "SW1", "0:3:2": "SW2", "1:3:1": "SW3"},
+    }
+    out: dict[str, dict[str, object]] = {}
+    for name, sw_map in topologies.items():
+        fc_ports = [
+            ArrayPort(node=0, slot=3, card_port=1, protocol="fc", wwpn="2031", link_state="ready"),
+            ArrayPort(node=0, slot=3, card_port=2, protocol="fc", wwpn="2032", link_state="ready"),
+            ArrayPort(node=0, slot=3, card_port=4, protocol="fc", wwpn="2034", link_state="ready"),
+            ArrayPort(node=1, slot=3, card_port=1, protocol="fc", wwpn="2131", link_state="ready"),
+            ArrayPort(node=1, slot=3, card_port=2, protocol="fc", wwpn="2132", link_state="loss_sync"),
+        ]
+        notes = disc.resolve_port_fabrics(fc_ports, sw_map)
+        out[name] = {
+            "ports": [[p.label, p.fabric, p.fabric_switch] for p in fc_ports],
+            "notes": notes,
+        }
+    return out
+
+
+def compute_discovery_captures() -> dict[str, object]:
+    return {
+        "discover": _discover_scenarios(),
+        "assemble_hosts": _assemble_capture_cases(),
+        "resolve_port_fabrics": _resolve_fabrics_cases(),
+    }
+
+
+def test_discovery_matches_golden_characterisation() -> None:
+    expected = json.loads(GOLDEN.read_text(encoding="utf-8"))
+    actual = compute_discovery_captures()
+    assert actual == expected

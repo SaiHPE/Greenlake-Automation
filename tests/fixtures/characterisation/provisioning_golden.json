@@ -1,0 +1,571 @@
+{
+  "build_plan": {
+    "d22:no_hosts_selected": {
+      "actions": [
+        [
+          "volume",
+          "vol01",
+          "create",
+          ""
+        ]
+      ],
+      "blockers": [],
+      "error": null,
+      "notes": [
+        "No host is selected for any host set \u2014 nothing to provision until members are chosen.",
+        "6 initiator(s) logged in with no host name \u2014 name them on the sheet's Hosts tab to provision them.",
+        "1 volume is not presented by this plan: vol01"
+      ]
+    },
+    "err:missing_cpg": {
+      "actions": [],
+      "blockers": [],
+      "error": "CPG(s) not found on the array: NO_SUCH_CPG. Volume creation is hard-gated on the CPG existing \u2014 fix the sheet's CPG name or have the CPG created on the array first.",
+      "notes": [
+        "No host is selected for any host set \u2014 nothing to provision until members are chosen.",
+        "6 initiator(s) logged in with no host name \u2014 name them on the sheet's Hosts tab to provision them.",
+        "Host set hs: member 'esx1' is not a host this run can name \u2014 left out of the set."
+      ]
+    },
+    "err:multi_hs_no_exports": {
+      "actions": [
+        [
+          "host",
+          "10.132.30.136",
+          "exists",
+          "carries all 2 WWN(s)"
+        ],
+        [
+          "host",
+          "vmenode",
+          "exists",
+          "carries all 1 WWN(s)"
+        ],
+        [
+          "hostset",
+          "hs1",
+          "create",
+          ""
+        ],
+        [
+          "hostset",
+          "hs2",
+          "create",
+          ""
+        ],
+        [
+          "volume",
+          "vol01",
+          "create",
+          ""
+        ]
+      ],
+      "blockers": [],
+      "error": "No exports were composed and more than one host set is defined \u2014 refusing the every-volume-to-every-host-set default (it would present the same volume to unrelated clusters). Compose the exports explicitly in the builder.",
+      "notes": [
+        "Not yet reachable (no login on both fabrics): vmenode \u2014 host objects are made or kept now; their exports wait until zoning is applied and re-checked.",
+        "6 initiator(s) logged in with no host name \u2014 name them on the sheet's Hosts tab to provision them."
+      ]
+    },
+    "err:wsapi_down": {
+      "actions": [],
+      "blockers": [],
+      "error": "Could not read the array over WSAPI: wsapi unreachable",
+      "notes": [
+        "6 initiator(s) logged in with no host name \u2014 name them on the sheet's Hosts tab to provision them."
+      ]
+    },
+    "r13:all_exists": {
+      "actions": [
+        [
+          "host",
+          "10.132.30.136",
+          "exists",
+          "carries all 2 WWN(s)"
+        ],
+        [
+          "hostset",
+          "zz_t2_hs",
+          "exists",
+          "has all 1 host(s)"
+        ],
+        [
+          "volume",
+          "zz_t2_vol01",
+          "exists",
+          "1 GiB tpvv on SSD_r6 \u2014 matches"
+        ],
+        [
+          "volume",
+          "zz_t2_vol02",
+          "exists",
+          "1 GiB reduce on SSD_r6 \u2014 matches"
+        ],
+        [
+          "volume",
+          "zz_t2_vol03",
+          "exists",
+          "2 GiB tpvv on SSD_r6 \u2014 matches"
+        ],
+        [
+          "vvset",
+          "zz_t2_vvs",
+          "exists",
+          "has all 2 volume(s)"
+        ],
+        [
+          "vlun",
+          "zz_t2_vvs",
+          "exists",
+          "already exported at LUN 0, LUN 1"
+        ],
+        [
+          "vlun",
+          "zz_t2_vol03",
+          "exists",
+          "already exported at LUN 2"
+        ]
+      ],
+      "blockers": [],
+      "error": null,
+      "notes": [
+        "6 initiator(s) logged in with no host name \u2014 name them on the sheet's Hosts tab to provision them."
+      ]
+    },
+    "r13:mixed_verdicts": {
+      "actions": [
+        [
+          "host",
+          "10.132.30.136",
+          "exists",
+          "carries all 2 WWN(s)"
+        ],
+        [
+          "host",
+          "bad host name with spaces",
+          "create",
+          ""
+        ],
+        [
+          "host",
+          "new-iscsi",
+          "create",
+          ""
+        ],
+        [
+          "host",
+          "nvme-box",
+          "exists",
+          "exists on the array (NVMe initiator; not changed by this tool)"
+        ],
+        [
+          "hostset",
+          "zz_t2_hs",
+          "update",
+          "adds 3 host(s): new-iscsi, nvme-box, bad host name with spaces"
+        ],
+        [
+          "hostset",
+          "empty_hs",
+          "conflict",
+          "no members \u2014 choose them in Compose or on the Host sets tab"
+        ],
+        [
+          "volume",
+          "zz_t2_vol01",
+          "conflict",
+          "on the array: 1 GiB tpvv on SSD_r6 \u00b7 intent: 5 GiB tpvv on SSD_r6"
+        ],
+        [
+          "volume",
+          "new_vol",
+          "create",
+          ""
+        ],
+        [
+          "volume",
+          "unpresented_vol",
+          "create",
+          ""
+        ],
+        [
+          "vvset",
+          "zz_t2_vvs",
+          "update",
+          "adds 1 volume(s): new_vol"
+        ],
+        [
+          "vlun",
+          "zz_t2_vvs",
+          "update",
+          "1 of 2 member volumes already exported (LUN 0); apply completes the set"
+        ]
+      ],
+      "blockers": [
+        "Host set empty_hs has no members \u2014 choose them in the Compose card (or fill Members on the Host sets tab). Blank no longer means every host.",
+        "hostset empty_hs: no members \u2014 choose them in Compose or on the Host sets tab",
+        "volume zz_t2_vol01: on the array: 1 GiB tpvv on SSD_r6 \u00b7 intent: 5 GiB tpvv on SSD_r6"
+      ],
+      "error": null,
+      "notes": [
+        "Not yet reachable (no login on both fabrics): bad host name with spaces, nvme-box \u2014 host objects are made or kept now; their exports wait until zoning is applied and re-checked.",
+        "Not yet reachable over iSCSI (IQN not logged in on the array): new-iscsi \u2014 host objects are made or kept now; their exports wait until the server logs in to the array's iSCSI ports and the zoning check is run again.",
+        "Host 'alias-136' has only initiators that belong to '10.132.30.136' \u2014 treated as another name for it.",
+        "5 initiator(s) logged in with no host name \u2014 name them on the sheet's Hosts tab to provision them.",
+        "iSCSI-only member(s) in a host set: new-iscsi, nvme-box. iSCSI needs no SAN zoning; Verify paths reads their iSCSI paths per controller node.",
+        "Host set zz_t2_hs: sheet host 'alias-136' is the same server as '10.132.30.136' and is planned under that name.",
+        "Host set zz_t2_hs: member 'unknown-m' is not a host this run can name \u2014 left out of the set.",
+        "1 volume is not presented by this plan: unpresented_vol",
+        "Exports held back until the array can reach the target: new_vol \u2192 new-iscsi: the array cannot reach this host yet; new_vol \u2192 empty_hs: no member of the host set can reach the array yet (no members)"
+      ]
+    }
+  },
+  "hosts_captures": {
+    "capture:d22u27_vcenter_down": {
+      "hosts": {
+        "DL380G10C12U29_58EX": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "VMware",
+          "source": "array",
+          "transport": "fc",
+          "wwpns": [
+            "100028924AAF58EE",
+            "100028924AAF58EF"
+          ]
+        },
+        "DL380G10PQ8U17_655E": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "WindowsServer",
+          "source": "array",
+          "transport": "fc",
+          "wwpns": [
+            "10009440C9CF655E"
+          ]
+        },
+        "DL380G11D21U6_3D1X": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "WindowsServer",
+          "source": "array",
+          "transport": "fc",
+          "wwpns": [
+            "10005CBA2CFC3D15",
+            "10005CBA2CFC3D16"
+          ]
+        },
+        "ESX1": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "VMware",
+          "source": "array",
+          "transport": "fc",
+          "wwpns": [
+            "1000D0BF9CB7A3C9",
+            "1000D0BF9CB7A3D1"
+          ]
+        },
+        "ESX2": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "VMware",
+          "source": "array",
+          "transport": "fc",
+          "wwpns": [
+            "100070106FE9A979",
+            "100070106FE9A981"
+          ]
+        },
+        "Host1-zerto": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "VMware",
+          "source": "array",
+          "transport": "fc",
+          "wwpns": [
+            "5001438037C6B290"
+          ]
+        },
+        "winhost_CDS": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "WindowsServer",
+          "source": "array",
+          "transport": "fc",
+          "wwpns": [
+            "50060B0000C2EE2C",
+            "50060B0000C2EE2E"
+          ]
+        }
+      },
+      "hosts_order": [
+        "DL380G10C12U29_58EX",
+        "DL380G10PQ8U17_655E",
+        "DL380G11D21U6_3D1X",
+        "ESX1",
+        "ESX2",
+        "Host1-zerto",
+        "winhost_CDS"
+      ],
+      "how_canon": {
+        "missing-box": "not found \u2014 vCenter was not reached, so it could not be checked, no array host of that name, no iSCSI login from 10.0.0.9; add its WWPN/IQN on the Hosts tab"
+      },
+      "how_plain": {
+        "missing-box": "not found \u2014 vCenter was not reached, so it could not be checked, no array host of that name, no iSCSI login from 10.0.0.9; add its WWPN/IQN on the Hosts tab"
+      },
+      "notes": [
+        "Host 'missing-box' is on the sheet with no WWPN/IQN and was not found \u2014 vCenter was not reached, so it could not be checked, no array host of that name, no iSCSI login from 10.0.0.9; add its WWPN/IQN on the Hosts tab \u2014 not planned.",
+        "Host 'test2-alletra' is on the sheet with no WWPN/IQN and was not found \u2014 not planned.",
+        "2 initiator(s) logged in with no host name \u2014 name them on the sheet's Hosts tab to provision them."
+      ]
+    },
+    "capture:rack13": {
+      "hosts": {
+        "10.132.30.136": {
+          "aliases": [
+            "esx-alias"
+          ],
+          "iqns": [],
+          "persona": "VMware",
+          "source": "vcenter",
+          "transport": "fc",
+          "wwpns": [
+            "10005CED8C5312A8",
+            "10005CED8C5312A9"
+          ]
+        },
+        "HPE_VM_0c139393fdd14147932b8cad": {
+          "aliases": [],
+          "iqns": [
+            "iqn.2024-12.com.hpe:vmenode3:56029"
+          ],
+          "persona": "Generic-ALUA",
+          "source": "array",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "HPE_VM_0fd2ed8d0428b96e33d9953d": {
+          "aliases": [],
+          "iqns": [
+            "iqn.2024-12.com.hpe:vmenode1:28740"
+          ],
+          "persona": "Generic-ALUA",
+          "source": "array",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "HPE_VM_11a3dd17a0db11092372b0cb": {
+          "aliases": [],
+          "iqns": [
+            "iqn.2024-12.com.hpe:vmenode3:8206"
+          ],
+          "persona": "Generic-ALUA",
+          "source": "array",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "HPE_VM_7487eaf91ff20e3c6fc79b19": {
+          "aliases": [],
+          "iqns": [
+            "iqn.2024-12.com.hpe:vmenode2:40242"
+          ],
+          "persona": "Generic-ALUA",
+          "source": "array",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "HPE_VM_9a0d3749cfdef5178ac99c54": {
+          "aliases": [],
+          "iqns": [
+            "iqn.2024-12.com.hpe:vmenode2:4396"
+          ],
+          "persona": "Generic-ALUA",
+          "source": "array",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "HPE_VM_cdc7734181bb8edf0ddf469c": {
+          "aliases": [],
+          "iqns": [
+            "iqn.2024-12.com.hpe:vmenode3:31686"
+          ],
+          "persona": "Generic-ALUA",
+          "source": "array",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "HPE_VM_e75dda57158590905a573743": {
+          "aliases": [],
+          "iqns": [
+            "iqn.2024-12.com.hpe:vmenode1:28682"
+          ],
+          "persona": "Generic-ALUA",
+          "source": "array",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "by-ip": {
+          "aliases": [],
+          "iqns": [
+            "iqn.1991-05.com.microsoft:win-tn3n7rujk3v"
+          ],
+          "persona": "VMware",
+          "source": "sheet",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "esx-iqn.lab": {
+          "aliases": [
+            "esx-iqn"
+          ],
+          "iqns": [
+            "iqn.1998-01.com.vmware:esxiqn"
+          ],
+          "persona": "VMware",
+          "source": "sheet",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "esx01.lab.local": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "VMware",
+          "source": "vcenter",
+          "transport": "fc",
+          "wwpns": [
+            "1000000000000001"
+          ]
+        },
+        "esx01.other.local": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "VMware",
+          "source": "vcenter",
+          "transport": "fc",
+          "wwpns": [
+            "1000000000000002"
+          ]
+        },
+        "grp3_vmenode1": {
+          "aliases": [],
+          "iqns": [
+            "iqn.2024-12.com.hpe:vmenode1:62150"
+          ],
+          "persona": "Generic-ALUA",
+          "source": "array",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "grp3_vmenode2": {
+          "aliases": [],
+          "iqns": [
+            "iqn.2024-12.com.hpe:vmenode2:14517"
+          ],
+          "persona": "Generic-ALUA",
+          "source": "array",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "grp3_vmenode3": {
+          "aliases": [],
+          "iqns": [
+            "iqn.2024-12.com.hpe:vmenode3:22739"
+          ],
+          "persona": "Generic-ALUA",
+          "source": "array",
+          "transport": "iscsi",
+          "wwpns": []
+        },
+        "read-win": {
+          "aliases": [],
+          "iqns": [
+            "iqn.1991-05.com.microsoft:read-win"
+          ],
+          "persona": "WindowsServer",
+          "source": "sheet",
+          "transport": "both",
+          "wwpns": [
+            "51402EC02089CC1C"
+          ]
+        },
+        "sw-linux": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "Generic-ALUA",
+          "source": "switch",
+          "transport": "fc",
+          "wwpns": [
+            "100000109B5012A3"
+          ]
+        },
+        "vmenode": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "VMware",
+          "source": "sheet",
+          "transport": "fc",
+          "wwpns": [
+            "10005CED8C531294"
+          ]
+        },
+        "win-explicit": {
+          "aliases": [],
+          "iqns": [],
+          "persona": "WindowsServer",
+          "source": "sheet",
+          "transport": "fc",
+          "wwpns": [
+            "51402EC02089CC1E"
+          ]
+        }
+      },
+      "hosts_order": [
+        "10.132.30.136",
+        "esx01.lab.local",
+        "esx01.other.local",
+        "read-win",
+        "esx-iqn.lab",
+        "vmenode",
+        "by-ip",
+        "win-explicit",
+        "grp3_vmenode1",
+        "grp3_vmenode2",
+        "grp3_vmenode3",
+        "HPE_VM_0c139393fdd14147932b8cad",
+        "HPE_VM_0fd2ed8d0428b96e33d9953d",
+        "HPE_VM_9a0d3749cfdef5178ac99c54",
+        "HPE_VM_11a3dd17a0db11092372b0cb",
+        "HPE_VM_7487eaf91ff20e3c6fc79b19",
+        "HPE_VM_cdc7734181bb8edf0ddf469c",
+        "HPE_VM_e75dda57158590905a573743",
+        "sw-linux"
+      ],
+      "how_canon": {
+        "10.132.30.99": "not found \u2014 not in vCenter, no array host of that name, no iSCSI login from 10.132.30.99; add its WWPN/IQN on the Hosts tab",
+        "by-ip": "found on the array: iSCSI login from 10.132.30.87",
+        "esx-iqn": "found in vCenter as esx-iqn.lab (short-name match)",
+        "esx01": "not found uniquely \u2014 short name 'esx01' fits 2 vCenter hosts (esx01.lab.local, esx01.other.local); type the full name or its WWPN/IQN on the Hosts tab",
+        "read-win": "read from the server over WINRM (10.10.0.5)",
+        "vmenode": "found on the array as host vmenode",
+        "vmenode2": "not found uniquely \u2014 short name 'vmenode2' fits 3 array IQNs (iqn.2024-12.com.hpe:vmenode2:14517, iqn.2024-12.com.hpe:vmenode2:40242, iqn.2024-12.com.hpe:vmenode2:4396); type the full name or its WWPN/IQN on the Hosts tab"
+      },
+      "how_plain": {
+        "10.132.30.99": "not found \u2014 not in vCenter, no array host of that name, no iSCSI login from 10.132.30.99; add its WWPN/IQN on the Hosts tab",
+        "by-ip": "found on the array: iSCSI login from 10.132.30.87",
+        "esx-iqn": "found in vCenter as esx-iqn.lab (short-name match)",
+        "esx01": "not found uniquely \u2014 short name 'esx01' fits 2 vCenter hosts (esx01.lab.local, esx01.other.local); type the full name or its WWPN/IQN on the Hosts tab",
+        "read-win": "read from the server over WINRM (10.10.0.5)",
+        "vmenode": "found on the array as host vmenode",
+        "vmenode2": "not found uniquely \u2014 short name 'vmenode2' fits 3 array IQNs (iqn.2024-12.com.hpe:vmenode2:14517, iqn.2024-12.com.hpe:vmenode2:40242, iqn.2024-12.com.hpe:vmenode2:4396); type the full name or its WWPN/IQN on the Hosts tab"
+      },
+      "notes": [
+        "Host 'esx-alias' has only initiators that belong to '10.132.30.136' \u2014 treated as another name for it.",
+        "Host 'esx01' is on the sheet with no WWPN/IQN and was not found uniquely \u2014 short name 'esx01' fits 2 vCenter hosts (esx01.lab.local, esx01.other.local); type the full name or its WWPN/IQN on the Hosts tab \u2014 not planned.",
+        "Host 'vmenode2' is on the sheet with no WWPN/IQN and was not found uniquely \u2014 short name 'vmenode2' fits 3 array IQNs (iqn.2024-12.com.hpe:vmenode2:14517, iqn.2024-12.com.hpe:vmenode2:40242, iqn.2024-12.com.hpe:vmenode2:4396); type the full name or its WWPN/IQN on the Hosts tab \u2014 not planned.",
+        "Host '10.132.30.99' is on the sheet with no WWPN/IQN and was not found \u2014 not in vCenter, no array host of that name, no iSCSI login from 10.132.30.99; add its WWPN/IQN on the Hosts tab \u2014 not planned.",
+        "5 initiator(s) logged in with no host name \u2014 name them on the sheet's Hosts tab to provision them."
+      ]
+    }
+  }
+}

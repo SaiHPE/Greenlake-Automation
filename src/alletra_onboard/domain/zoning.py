@@ -4,6 +4,7 @@ PLAN (ADR 0004 — the tool never writes to the switch).
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -166,3 +167,90 @@ class ZoningPlan(BaseModel):
 # FabricStageResult / ZoningStageResult lived here until 2026-09-02. They modelled the outcome of
 # the tool writing zones to a switch, which it no longer does — the command set is handed to a
 # consultant instead, so there is no tool-side outcome to model. See ADR 0012.
+
+
+# Brocade FOS zone-object names (FOS Command Reference, aliCreate/zoneCreate): first character a
+# letter or digit; then letters, digits, `_`, `-`, `$`, `^`; case-sensitive; zone names ≤ 64.
+# `-`, `$`, `^` and a leading digit are "enhanced" names that need EVERY switch in the fabric on
+# FOS 8.1.0+ — an older switch joining segments the fabric — so they are legal-but-warned.
+_FOS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-$^]*$")
+_FOS_ENHANCED = re.compile(r"^[0-9]|[-$^]")
+FOS_NAME_MAX = 64
+
+
+def fos_name_problem(name: str) -> str:
+    """Why FOS would REJECT this alias/zone name ("" = acceptable). Rejection is the only thing that
+    stops a render; portability concerns are `fos_name_warning`."""
+    if not name:
+        return "is empty"
+    if len(name) > FOS_NAME_MAX:
+        return f"is {len(name)} characters; FOS allows {FOS_NAME_MAX}"
+    if not _FOS_NAME.match(name):
+        bad = sorted({c for c in name if not re.match(r"[A-Za-z0-9_\-$^]", c)})
+        return "contains " + ", ".join(repr(c) for c in bad) + " — FOS names allow letters, digits and _ (- $ ^ on FOS 8.1+)"
+    return ""
+
+
+def fos_name_warning(name: str) -> str:
+    """A legal name that is not portable to every fabric ("" = plain)."""
+    if name and not fos_name_problem(name) and _FOS_ENHANCED.search(name):
+        return "uses - $ ^ or starts with a digit: every switch in the fabric must run FOS 8.1.0 or later"
+    return ""
+
+
+def fos_name_suggestion(name: str) -> str:
+    """SPEC-010 R3: the closest name FOS accepts — every run of rejected characters folded to `_`, edges
+    trimmed, a leading `a` when nothing legal starts it, cut to FOS_NAME_MAX. Idempotent on a valid name."""
+    if name and not fos_name_problem(name):
+        return name
+    folded = re.sub(r"[^A-Za-z0-9_\-$^]+", "_", name or "").strip("_-$^")
+    if not folded or not re.match(r"[A-Za-z0-9]", folded):
+        folded = "a" + folded
+    return folded[:FOS_NAME_MAX]
+
+
+def _fos_safe(text: str) -> str:
+    """Fold arbitrary text (an IP, a DNS name, a serial) into a plain FOS name fragment."""
+    return re.sub(r"[^A-Za-z0-9]+", "_", text or "").strip("_")
+
+
+def proposed_array_alias(nsp: str, wwpn: str, serial: str) -> str:
+    """A UI pre-fill for an array port that has NO alias on the switch, from the HPE field convention
+    (ADR 0004): ``<serial>_N<n>S<s>P<p>``. Always FOS-plain (letters, digits, underscore; starts with
+    a letter) and ≤ 64 characters."""
+    parts = nsp.split(":")
+    code = "N{}S{}P{}".format(*parts) if len(parts) == 3 else _fos_safe(wwpn)[-6:]
+    name = f"{_fos_safe(serial) or 'array'}_{code}"
+    if not name[0].isalpha():
+        name = "array_" + name
+    return name[:FOS_NAME_MAX]
+
+
+def proposed_host_alias(host_name: str, wwpn: str, hba_index: int) -> str:
+    """A UI pre-fill for a host HBA port that has NO alias on the switch, from the HPE field convention
+    (ADR 0004): ``<host>_hba<n>``. Always FOS-plain (letters, digits, underscore; starts with a letter)
+    and ≤ 64 characters."""
+    base = _fos_safe(host_name) or f"host_{wwpn[-4:].lower()}"
+    name = f"{base}_hba{hba_index}"
+    if not name[0].isalpha():
+        name = "host_" + name
+    return name[:FOS_NAME_MAX]
+
+
+def suggest_alias(existing: list[str], role: str, nsp: str, alias_freq: dict[str, int]) -> str:
+    """Pre-fill: prefer an alias UNIQUELY bound to this WWPN — the real per-device name. A *shared* alias
+    (bound to many WWPNs on a busy fabric, e.g. `winhost_fc_port_2`, `sy480g108wlrb_0012`) is junk and
+    must NOT be suggested: if two hosts share one, their single-init-single-target zone names collide.
+    Among the unique candidates, prefer the convention match (the array port's n:s:p code). Else "" so
+    the operator types it."""
+    if not existing:
+        return ""
+    pool = [alias for alias in existing if alias_freq.get(alias, 1) <= 1] or existing
+    if role == "array" and nsp:
+        parts = nsp.split(":")
+        code = "N{}S{}P{}".format(*parts) if len(parts) == 3 else ""   # 0:3:1 -> N0S3P1
+        digits = "".join(parts)                                        # 031
+        for alias in pool:
+            if (code and code.lower() in alias.lower()) or (digits and digits in alias):
+                return alias
+    return pool[0]

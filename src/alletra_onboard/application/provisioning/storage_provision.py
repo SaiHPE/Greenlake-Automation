@@ -13,9 +13,14 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from alletra_onboard.application.provisioning.clients import make_wsapi
-from alletra_onboard.application.provisioning.hosts import declared_mismatches, union_hosts
+from alletra_onboard.application.provisioning.hosts import (
+    declared_mismatches,
+    host_fabric_logins,
+    union_hosts,
+)
 from alletra_onboard.domain.discovery import DiscoveryReport
 from alletra_onboard.domain.errors import DeviceError
 from alletra_onboard.domain.provisioning import (
@@ -35,6 +40,9 @@ from alletra_onboard.domain.provisioning import (
 )
 from alletra_onboard.domain.shared import ActionKind, ArrayVolumeRecord, normalize_wwpn
 
+HostWwns = OrderedDict[str, list[str]]
+VolumeSetMembers = OrderedDict[str, list[str]]
+
 
 def _union(intent: ProvisioningIntent | None, discovery: DiscoveryReport, zoning_plan: dict | None):
     """SPEC-003 R4: the one host union plan, apply, verification and the dropdown all derive from."""
@@ -43,7 +51,7 @@ def _union(intent: ProvisioningIntent | None, discovery: DiscoveryReport, zoning
 
 def hosts_by_name(
     discovery: DiscoveryReport, intent: ProvisioningIntent | None = None, zoning_plan: dict | None = None,
-) -> OrderedDict[str, list[str]]:
+) -> HostWwns:
     """host name -> FC WWPNs, for every host the run can name (vCenter, sheet, array, fabric). An
     iSCSI-only host maps to an empty list: it is made from its iSCSI names (`_iqns_by_host`). A host
     with neither (an NVMe/TCP host, its NQN filed with the IQNs) is kept only when the array has it."""
@@ -66,7 +74,7 @@ def _iqns_by_host(
 
 
 def _host_notes(intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None,
-                selected: OrderedDict[str, list[str]]) -> list[str]:
+                selected: HostWwns) -> list[str]:
     """SPEC-003 R3/R5/R6 notes: nameless initiators, iSCSI-only members, hosts with both transports."""
     hosts, notes = _union(intent, discovery, zoning_plan)
     iscsi_members = [n for n in selected if not selected[n] and hosts[n].iqns]
@@ -128,7 +136,7 @@ def planned_host_names(
     return intent.model_copy(update={"host_sets": host_sets, "exports": exports}), notes
 
 
-def _members_for(host_set, all_hosts: OrderedDict[str, list[str]]) -> list[str]:
+def _members_for(host_set, all_hosts: HostWwns) -> list[str]:
     """A host set's members: the operator's selection, intersected with the hosts the run can name, so
     a member that is not known — or that the zoning gate excluded — cannot reach the array as a set
     member with no host object behind it. An EMPTY selection selects nothing (SPEC-005): until
@@ -150,7 +158,7 @@ def _empty_set_blocker(name: str) -> str:
 
 def _selected_hosts(
     intent: ProvisioningIntent, discovery: DiscoveryReport, zoning_plan: dict | None = None,
-) -> OrderedDict[str, list[str]]:
+) -> HostWwns:
     """The hosts tier-1 will CREATE: only those the operator composed into a host set (ADR 0010's
     ideal subset) — never the whole inventory. On a shared vCenter, creating an array host object for
     every ESXi server in the inventory is pollution, not provisioning. No host sets, or host sets with
@@ -160,9 +168,9 @@ def _selected_hosts(
     return OrderedDict((n, w) for n, w in all_hosts.items() if n in wanted)
 
 
-def _vvsets(intent: ProvisioningIntent) -> OrderedDict[str, list[str]]:
+def _vvsets(intent: ProvisioningIntent) -> VolumeSetMembers:
     """Group volume names by the VV-set each volume asked to join (order preserved)."""
-    sets: OrderedDict[str, list[str]] = OrderedDict()
+    sets: VolumeSetMembers = OrderedDict()
     for v in intent.volumes:
         if v.vvset:
             sets.setdefault(v.vvset, []).append(v.name)
@@ -187,28 +195,6 @@ def read_array_objects(intent: ProvisioningIntent, *, wsapi_factory: Callable = 
         return {"cpgs": [], "hosts": [], "host_sets": [], "volumes": [], "volume_sets": [], "error": str(exc)}
 
 
-def _fabric_logins(discovery: DiscoveryReport, zoning_plan: dict | None) -> dict[str, list[set[str]]]:
-    """host name -> [fabric labels seen by the array side, fabric labels seen by the switch side].
-    Kept as two sets because the two sides label fabrics differently (odd/even vs F1/F2); the count
-    that matters is the larger of the two, never their union."""
-    array_side: dict[str, set[str]] = {}
-    for hba in discovery.host_hbas:
-        if hba.fabric:
-            array_side.setdefault(hba.host_name, set()).add(hba.fabric)
-    port_fabric: dict[str, str] = {p.label: p.fabric for p in discovery.array_ports if p.fabric}
-    for ah in discovery.array_hosts:
-        for ports in list(ah.wwpns.values()) + list(ah.iqns.values()):
-            for port in ports:
-                if port in port_fabric:
-                    array_side.setdefault(ah.name, set()).add(port_fabric[port])
-    switch_side: dict[str, set[str]] = {}
-    for fab in (zoning_plan or {}).get("fabrics", []):
-        for h in fab.get("hosts", []):
-            if h.get("host_name") and h.get("fabric"):
-                switch_side.setdefault(h["host_name"], set()).add(h["fabric"])
-    return {n: [array_side.get(n, set()), switch_side.get(n, set())] for n in set(array_side) | set(switch_side)}
-
-
 def host_briefs(
     discovery: DiscoveryReport, declared_hosts: list | None = None, zoning_plan: dict | None = None,
 ) -> list[DiscoveredHostBrief]:
@@ -216,29 +202,26 @@ def host_briefs(
     half-zoned host isn't picked blind' of ADR 0010, plus source and transport (SPEC-003 R5).
     FC-capable hosts first; iSCSI-only hosts last, saying they need no zone."""
     hosts, _ = union_hosts(discovery, declared_hosts or [], zoning_plan)
-    logins = _fabric_logins(discovery, zoning_plan)
+    logins = host_fabric_logins(discovery, zoning_plan)
     fc: list[DiscoveredHostBrief] = []
     iscsi: list[DiscoveredHostBrief] = []
     for name, h in hosts.items():
         if h.transport == "none":
             continue
         if not h.wwpns:
-            iscsi.append(DiscoveredHostBrief(
-                name=name, status="iSCSI only · no zoning needed", wwpns=[],
-                source=h.source, transport=h.transport, persona=h.persona, fc_capable=False,
-            ))
-            continue
-        n_fabrics = max((len(s) for s in logins.get(name, [])), default=0)
-        one = next((next(iter(s)) for s in logins.get(name, []) if len(s) == 1), "")
-        if n_fabrics >= 2:
-            status = f"{len(h.wwpns)} HBAs - both fabrics"
-        elif n_fabrics == 1:
-            status = f"{len(h.wwpns)} HBAs - one fabric ({one})"
+            status, wwpns, target = "iSCSI only · no zoning needed", [], iscsi
         else:
-            status = f"{len(h.wwpns)} HBAs - not logged in (off or unzoned)"
-        fc.append(DiscoveredHostBrief(
-            name=name, status=status, wwpns=list(h.wwpns),
-            source=h.source, transport=h.transport, persona=h.persona, fc_capable=True,
+            n_fabrics = max((len(s) for s in logins.get(name, [])), default=0)
+            one = next((next(iter(s)) for s in logins.get(name, []) if len(s) == 1), "")
+            status = (
+                f"{len(h.wwpns)} HBAs - both fabrics" if n_fabrics >= 2
+                else f"{len(h.wwpns)} HBAs - one fabric ({one})" if n_fabrics == 1
+                else f"{len(h.wwpns)} HBAs - not logged in (off or unzoned)"
+            )
+            wwpns, target = list(h.wwpns), fc
+        target.append(DiscoveredHostBrief(
+            name=name, status=status, wwpns=wwpns,
+            source=h.source, transport=h.transport, persona=h.persona, fc_capable=bool(h.wwpns),
         ))
     return fc + iscsi
 
@@ -273,7 +256,7 @@ def _resolve_exports(intent: ProvisioningIntent) -> list[ExportRequest]:
 def _reachable_targets(
     exports: list[ExportRequest],
     intent: ProvisioningIntent,
-    all_hosts: OrderedDict[str, list[str]],
+    all_hosts: HostWwns,
     reachable_hosts: set[str],
 ) -> tuple[list[ExportRequest], list[str]]:
     """Split the exports into (do now, skip) on whether the array can REACH the target.
@@ -342,6 +325,101 @@ def exported_volumes_by_host(
     return out
 
 
+def _action(
+    kind: ActionKind, name: str, description: str, verdict: tuple[PlanState, str], detail: dict,
+) -> PlannedAction:
+    st, reason = verdict
+    return PlannedAction(
+        kind=kind, name=name, description=description, state=st, reason=reason, exists=st != "create", detail=detail,
+    )
+
+
+def _unreachable_notes(hosts: HostWwns, reachable_hosts: set[str], union_map: OrderedDict) -> list[str]:
+    unreachable = sorted(n for n in hosts if n not in reachable_hosts)
+    if not unreachable:
+        return []
+    fc_wait = [n for n in unreachable if hosts[n] or not _iscsi(union_map[n].iqns)]
+    iscsi_wait = [n for n in unreachable if n not in fc_wait]
+    notes: list[str] = []
+    if fc_wait:
+        notes.append(
+            "Not yet reachable (no login on both fabrics): " + ", ".join(fc_wait)
+            + " — host objects are made or kept now; their exports wait until zoning is applied and "
+            "re-checked."
+        )
+    if iscsi_wait:
+        notes.append(
+            "Not yet reachable over iSCSI (IQN not logged in on the array): " + ", ".join(iscsi_wait)
+            + " — host objects are made or kept now; their exports wait until the server logs in to the "
+            "array's iSCSI ports and the zoning check is run again."
+        )
+    return notes
+
+
+def _plan_host_actions(
+    hosts: HostWwns, union_map: OrderedDict, on_array: list[ArrayHostRecord],
+) -> list[PlannedAction]:
+    out: list[PlannedAction] = []
+    for name, wwns in hosts.items():
+        u = union_map.get(name)
+        persona, src = (u.persona if u else "VMware"), (u.source if u else "")
+        iqns: list[str] = []
+        if wwns:
+            desc = f"Host {name} — {len(wwns)} FC WWN(s), persona {persona}"
+            verdict = _new_host_name(_judge_host(name, wwns, persona, on_array), name, src)
+        elif iqns := (_iscsi(u.iqns) if u else []):
+            desc = f"Host {name} — iSCSI {', '.join(iqns)}, persona {persona}"
+            verdict = _new_host_name(_judge_iscsi_host(name, iqns, persona, on_array), name, src)
+        else:
+            # An array host with only an NVMe NQN: it joins sets as it is, never changed.
+            desc = f"Host {name} — on the array, persona {persona}"
+            verdict = ("exists", "exists on the array (NVMe initiator; not changed by this tool)")
+        detail: dict = {"wwns": wwns, **({"iqns": iqns} if iqns else {}), "persona": persona, "source": src}
+        out.append(_action("host", name, desc, verdict, detail))
+    return out
+
+
+def _plan_export_actions(
+    intent: ProvisioningIntent, hosts: HostWwns, vvsets: VolumeSetMembers,
+    vluns: list[VlunTemplate], reachable_hosts: set[str],
+) -> tuple[list[PlannedAction], list[str], str | None]:
+    # Presentation: the operator-composed exports (source volume|vvset x target host|hostset x LUN),
+    # or the single-host-set default (each volume -> the set, auto LUN). Multiple host sets with no
+    # composed exports REFUSE — see _resolve_exports.
+    try:
+        exports = _resolve_exports(intent)
+    except ExportDefaultError as exc:
+        return [], [], str(exc)
+    notes: list[str] = []
+    # SPEC-008 R5 (P-19): a sheet volume no export presents is a fact about the composition, said here
+    # (S-1, 2026-09-14: zz_t2_vol03 was simply absent from an approved plan). Judged before the
+    # reachability filter — a held-back export still presents its volume.
+    presented = {
+        n for ex in exports
+        for n in ([ex.source_name] if ex.source_kind == "volume" else vvsets.get(ex.source_name, []))
+    }
+    if unpresented := [v.name for v in intent.volumes if v.name not in presented]:
+        n = len(unpresented)
+        notes.append(f"{n} volume{'s are' if n > 1 else ' is'} not presented by this plan: " + ", ".join(unpresented))
+    exports, skipped = _reachable_targets(exports, intent, hosts, reachable_hosts)
+    empty_sets = set(_empty_host_sets(intent))
+    members_of = {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}
+    out: list[PlannedAction] = []
+    for ex in exports:
+        if ex.target_kind == "hostset" and ex.target_name in empty_sets:
+            continue                                 # the set itself is the blocker; nothing to export to
+        lun_txt = "auto LUN" if ex.lun is None else f"LUN {ex.lun}"
+        out.append(_action(
+            "vlun", ex.source_name,
+            f"Export {ex.source_kind} {ex.source_name} → {ex.target_kind} {ex.target_name} ({lun_txt})",
+            _judge_export(ex, vvsets, vluns, members_of.get(ex.target_name, [])),
+            {"source": ex.source_ref, "target": ex.target_ref, "lun": ex.lun},
+        ))
+    if skipped:
+        notes.append("Exports held back until the array can reach the target: " + "; ".join(skipped))
+    return out, notes, None
+
+
 def build_plan(
     intent: ProvisioningIntent,
     discovery: DiscoveryReport,
@@ -367,41 +445,22 @@ def build_plan(
     plan = ProvisioningPlan()
     intent, name_notes = planned_host_names(intent, discovery, zoning_plan)
     hosts = _selected_hosts(intent, discovery, zoning_plan)
-    unreachable = sorted(n for n in hosts if n not in reachable_hosts)
     empty_sets = _empty_host_sets(intent)
     if empty_sets:
         plan.blockers.extend(_empty_set_blocker(n) for n in empty_sets)
     elif not hosts:
         plan.notes.append("No host is selected for any host set — nothing to provision until members are chosen.")
     plan.blockers.extend(declared_mismatches(intent.declared_hosts, discovery))
-    if unreachable:
-        iscsi_of = _iqns_by_host(discovery, intent, zoning_plan)
-        fc_wait = [n for n in unreachable if hosts[n] or not iscsi_of.get(n)]
-        iscsi_wait = [n for n in unreachable if n not in fc_wait]
-        if fc_wait:
-            plan.notes.append(
-                "Not yet reachable (no login on both fabrics): " + ", ".join(fc_wait)
-                + " — host objects are made or kept now; their exports wait until zoning is applied and "
-                "re-checked."
-            )
-        if iscsi_wait:
-            plan.notes.append(
-                "Not yet reachable over iSCSI (IQN not logged in on the array): " + ", ".join(iscsi_wait)
-                + " — host objects are made or kept now; their exports wait until the server logs in to the "
-                "array's iSCSI ports and the zoning check is run again."
-            )
+    union_map, _ = _union(intent, discovery, zoning_plan)
+    plan.notes.extend(_unreachable_notes(hosts, reachable_hosts, union_map))
     plan.notes.extend(_host_notes(intent, discovery, zoning_plan, hosts))
     plan.notes.extend(name_notes)
 
     try:
         with wsapi_factory(intent.array) as array:
             state = _ArrayState(
-                hosts=array.hosts(),
-                host_sets=array.host_sets(),
-                volumes=array.volumes(),
-                volume_sets=array.volume_sets(),
-                vluns=array.vlun_templates(),
-                cpgs=set(array.cpg_names()),
+                list(array.hosts()), dict(array.host_sets()), list(array.volumes()),
+                dict(array.volume_sets()), list(array.vlun_templates()), set(array.cpg_names()),
             )
     except DeviceError as exc:
         plan.error = f"Could not read the array over WSAPI: {exc}"
@@ -410,8 +469,7 @@ def build_plan(
     # HARD gate, not a note (sd00003946: volume create fails with NON_EXISTENT_CPG; SSD_r6 is
     # auto-created at array init, so a missing CPG means the sheet or the array is wrong — verify,
     # never auto-create).
-    missing_cpgs = sorted({v.cpg for v in intent.volumes} - state.cpgs)
-    if missing_cpgs:
+    if missing_cpgs := sorted({v.cpg for v in intent.volumes} - state.cpgs):
         plan.error = (
             "CPG(s) not found on the array: " + ", ".join(missing_cpgs)
             + ". Volume creation is hard-gated on the CPG existing — fix the sheet's CPG name or "
@@ -419,103 +477,51 @@ def build_plan(
         )
         return plan
 
-    def add(kind: ActionKind, name: str, description: str, verdict: tuple[PlanState, str], detail: dict) -> None:
-        st, reason = verdict
-        plan.actions.append(PlannedAction(
-            kind=kind, name=name, description=description, state=st, reason=reason,
-            exists=st != "create", detail=detail,
-        ))
-        if st == "conflict":
-            plan.blockers.append(f"{kind} {name}: {reason}")
-
-    personas = _persona_by_host(discovery, intent, zoning_plan)
-    iqns_of = _iqns_by_host(discovery, intent, zoning_plan)
-    sources = {n: h.source for n, h in _union(intent, discovery, zoning_plan)[0].items()}
-    for host_name, wwns in hosts.items():
-        persona, src = personas.get(host_name, "VMware"), sources.get(host_name, "")
-        if wwns:
-            add("host", host_name, f"Host {host_name} — {len(wwns)} FC WWN(s), persona {persona}",
-                _new_host_name(_judge_host(host_name, wwns, persona, state.hosts), host_name, src),
-                {"wwns": wwns, "persona": persona, "source": src})
-            continue
-        iqns = iqns_of.get(host_name, [])
-        if not iqns:
-            # An array host with only an NVMe NQN: it joins sets as it is, never changed.
-            add("host", host_name, f"Host {host_name} — on the array, persona {persona}",
-                ("exists", "exists on the array (NVMe initiator; not changed by this tool)"),
-                {"wwns": [], "persona": persona, "source": src})
-            continue
-        add("host", host_name, f"Host {host_name} — iSCSI {', '.join(iqns)}, persona {persona}",
-            _new_host_name(_judge_iscsi_host(host_name, iqns, persona, state.hosts), host_name, src),
-            {"wwns": [], "iqns": iqns, "persona": persona, "source": src})
-
+    add = plan.actions.append
+    plan.actions.extend(_plan_host_actions(hosts, union_map, state.hosts))
     for hs in intent.host_sets:
-        members = _members_for(hs, hosts)
-        if not hs.members:
-            add("hostset", hs.name, f"Host set {hs.name} — no members chosen",
-                ("conflict", "no members — choose them in Compose or on the Host sets tab"), {"members": []})
-            continue
-        add("hostset", hs.name, f"Host set {hs.name} — {len(members)} host(s)",
-            _judge_set(hs.name, members, state.host_sets, "host"), {"members": members})
-
+        members = _members_for(hs, hosts) if hs.members else []
+        desc = f"Host set {hs.name} — {len(members)} host(s)" if hs.members else f"Host set {hs.name} — no members chosen"
+        verdict = (
+            _judge_set(hs.name, members, state.host_sets, "host") if hs.members
+            else ("conflict", "no members — choose them in Compose or on the Host sets tab")
+        )
+        add(_action("hostset", hs.name, desc, verdict, {"members": members}))
     for v in intent.volumes:
-        add("volume", v.name, f"Volume {v.name} — {v.size_gib} GiB, {v.provisioning_type}, CPG {v.cpg}",
+        add(_action(
+            "volume", v.name, f"Volume {v.name} — {v.size_gib} GiB, {v.provisioning_type}, CPG {v.cpg}",
             _judge_volume(v, state.volumes),
-            {"size_mib": v.size_mib, "cpg": v.cpg, "type": v.provisioning_type, "vvset": v.vvset})
-
+            {"size_mib": v.size_mib, "cpg": v.cpg, "type": v.provisioning_type, "vvset": v.vvset},
+        ))
     vvsets = _vvsets(intent)
     for vvset, vols in vvsets.items():
-        add("vvset", vvset, f"Volume set {vvset} — {len(vols)} volume(s)",
-            _judge_volume_set(vvset, vols, state.volume_sets), {"members": vols})
+        add(_action(
+            "vvset", vvset, f"Volume set {vvset} — {len(vols)} volume(s)",
+            _judge_volume_set(vvset, vols, state.volume_sets), {"members": vols},
+        ))
 
-    # Presentation: the operator-composed exports (source volume|vvset x target host|hostset x LUN),
-    # or the single-host-set default (each volume -> the set, auto LUN). Multiple host sets with no
-    # composed exports REFUSE — see _resolve_exports.
-    try:
-        exports = _resolve_exports(intent)
-    except ExportDefaultError as exc:
-        plan.error = str(exc)
-        return plan
-    # SPEC-008 R5 (P-19): a sheet volume no export presents is a fact about the composition, said here
-    # (S-1, 2026-09-14: zz_t2_vol03 was simply absent from an approved plan). Judged before the
-    # reachability filter — a held-back export still presents its volume.
-    presented: set[str] = set()
-    for ex in exports:
-        if ex.source_kind == "volume":
-            presented.add(ex.source_name)
-        else:
-            presented.update(vvsets.get(ex.source_name, []))
-    unpresented = [v.name for v in intent.volumes if v.name not in presented]
-    if unpresented:
-        n = len(unpresented)
-        plan.notes.append(
-            f"{n} volume{'s are' if n > 1 else ' is'} not presented by this plan: " + ", ".join(unpresented)
-        )
-    exports, skipped = _reachable_targets(exports, intent, hosts, reachable_hosts)
-    members_of = {hs.name: _members_for(hs, hosts) for hs in intent.host_sets}
-    for ex in exports:
-        if ex.target_kind == "hostset" and ex.target_name in empty_sets:
-            continue                                 # the set itself is the blocker; nothing to export to
-        lun_txt = "auto LUN" if ex.lun is None else f"LUN {ex.lun}"
-        add("vlun", ex.source_name,
-            f"Export {ex.source_kind} {ex.source_name} → {ex.target_kind} {ex.target_name} ({lun_txt})",
-            _judge_export(ex, vvsets, state.vluns, members_of.get(ex.target_name, [])),
-            {"source": ex.source_ref, "target": ex.target_ref, "lun": ex.lun})
-    if skipped:
-        plan.notes.append("Exports held back until the array can reach the target: " + "; ".join(skipped))
+    export_actions, export_notes, export_error = _plan_export_actions(
+        intent, hosts, vvsets, state.vluns, reachable_hosts,
+    )
+    if export_error:
+        plan.error = export_error
+    else:
+        plan.notes.extend(export_notes)
+        plan.actions.extend(export_actions)
+    plan.blockers.extend(f"{a.kind} {a.name}: {a.reason}" for a in plan.actions if a.state == "conflict")
     return plan
 
 
+@dataclass
 class _ArrayState:
     """What the array holds, read once per object type (SPEC-001 R9)."""
 
-    def __init__(self, *, hosts, host_sets, volumes, volume_sets, vluns, cpgs) -> None:
-        self.hosts: list[ArrayHostRecord] = list(hosts)
-        self.host_sets: dict[str, list[str]] = dict(host_sets)
-        self.volumes: list[ArrayVolumeRecord] = list(volumes)
-        self.volume_sets: dict[str, list[str]] = dict(volume_sets)
-        self.vluns: list[VlunTemplate] = list(vluns)
-        self.cpgs: set[str] = set(cpgs)
+    hosts: list[ArrayHostRecord]
+    host_sets: dict[str, list[str]]
+    volumes: list[ArrayVolumeRecord]
+    volume_sets: dict[str, list[str]]
+    vluns: list[VlunTemplate]
+    cpgs: set[str]
 
 
 def _gib(mib: int) -> str:
@@ -525,16 +531,16 @@ def _gib(mib: int) -> str:
 def _judge_host(name: str, wwns: list[str], persona: str, on_array: list[ArrayHostRecord]) -> tuple[PlanState, str]:
     """R3: exists (carries every WWN) / update (adds the missing ones) / conflict (a WWN is someone
     else's — apply would raise). A persona difference is reported, never acted on."""
-    wanted = {normalize_wwpn(w): w for w in wwns}
+    wanted = list({normalize_wwpn(w): w for w in wwns}.items())
     owners = {normalize_wwpn(w): h.name for h in on_array for w in h.wwns}
-    others = sorted({f"{wanted[w]} belongs to host {owners[w]}" for w in wanted if w in owners and owners[w] != name})
+    others = sorted({f"{label} belongs to host {owners[k]}" for k, label in wanted if k in owners and owners[k] != name})
     if others:
         return "conflict", "; ".join(others) + " — resolve on the array before provisioning"
     mine = next((h for h in on_array if h.name == name), None)
     if mine is None:
         return "create", ""
     carried = {normalize_wwpn(w) for w in mine.wwns}
-    missing = [wanted[w] for w in wanted if w not in carried]
+    missing = [label for k, label in wanted if k not in carried]
     persona_note = _persona_note(mine, persona)
     if missing:
         return "update", f"adds {len(missing)} WWN: {', '.join(missing)}" + persona_note
@@ -551,8 +557,9 @@ def _judge_iscsi_host(name: str, iqns: list[str], persona: str, on_array: list[A
     """R3 for an iSCSI-only host, by iSCSI name (case-insensitive): create / exists / update (adds the
     missing names) / conflict (a name is another host's, or the host of that name carries FC WWNs —
     `ensure_iscsi_host` refuses both)."""
+    wanted = [(i.lower(), i) for i in iqns]
     owners = {i.lower(): h.name for h in on_array for i in h.iqns}
-    others = sorted({f"{i} belongs to host {owners[i.lower()]}" for i in iqns if owners.get(i.lower(), name) != name})
+    others = sorted({f"{label} belongs to host {owners[k]}" for k, label in wanted if owners.get(k, name) != name})
     if others:
         return "conflict", "; ".join(others) + " — resolve on the array before provisioning"
     mine = next((h for h in on_array if h.name == name), None)
@@ -562,10 +569,11 @@ def _judge_iscsi_host(name: str, iqns: list[str], persona: str, on_array: list[A
         return "conflict", (f"exists on the array with {len(mine.wwns)} FC WWN(s); this tool does not add an "
                             "iSCSI name to an FC host — use another host name, or add the IQN on the array")
     carried = {i.lower() for i in mine.iqns}
-    missing = [i for i in iqns if i.lower() not in carried]
+    missing = [label for k, label in wanted if k not in carried]
+    persona_note = _persona_note(mine, persona)
     if missing:
-        return "update", f"adds {len(missing)} iSCSI name: {', '.join(missing)}" + _persona_note(mine, persona)
-    return "exists", f"carries its iSCSI name{'s' if len(iqns) > 1 else ''} ({', '.join(iqns)})" + _persona_note(mine, persona)
+        return "update", f"adds {len(missing)} iSCSI name: {', '.join(missing)}" + persona_note
+    return "exists", f"carries its iSCSI name{'s' if len(iqns) > 1 else ''} ({', '.join(iqns)})" + persona_note
 
 
 def _judge_set(name: str, members: list[str], on_array: dict[str, list[str]], noun: str) -> tuple[PlanState, str]:
@@ -615,7 +623,7 @@ def _judge_volume(v: VolumeRequest, on_array: list[ArrayVolumeRecord]) -> tuple[
 
 
 def _judge_export(
-    ex: ExportRequest, vvsets: OrderedDict[str, list[str]], templates: list[VlunTemplate],
+    ex: ExportRequest, vvsets: VolumeSetMembers, templates: list[VlunTemplate],
     set_members: list[str] | None = None,
 ) -> tuple[PlanState, str]:
     """R5: judged against the array's VLUN templates, one per member volume for a set export.

@@ -5,7 +5,7 @@ zoning and provisioning (ADR 0002).
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 
@@ -209,6 +209,46 @@ class DiscoveredHost(BaseModel):
     def transports(self) -> list[str]:
         return [t for t, present in (("fc", bool(self.wwpns)), ("iscsi", bool(self.iqns))) if present]
 
+    def add_source(self, source: str) -> None:
+        if source not in self.sources:
+            self.sources.append(source)
+
+    def add_wwpn(self, wwpn: str) -> None:
+        if wwpn not in self.wwpns:
+            self.wwpns.append(wwpn)
+
+    def add_iqn(self, iqn: str) -> None:
+        if iqn not in self.iqns:
+            self.iqns.append(iqn)
+
+    def add_fabric(self, fabric: str | None) -> None:
+        if fabric and fabric not in self.fabrics:
+            self.fabrics.append(fabric)
+
+    def apply_read(self, read: HostRead | None) -> None:
+        """What the server reported about itself (SPEC-014 R4). Its initiators are shown even when they
+        differ from the sheet's — the plan blocks on the difference (R6), the screen shows the truth."""
+        if read is None:
+            return
+        if read.error:
+            self.host_read = read.failure_text()
+            return
+        same_name = read.hostname.lower().split(".")[0] == self.name.lower().split(".")[0]
+        self.host_read = f"read over {read.method.upper()} from {read.address}" + (
+            f" ({read.hostname})" if read.hostname and not same_name else ""
+        )
+        self.add_source("host")
+        if read.os and self.os == "unknown":
+            self.os = cast(HostOs, read.os)
+        self.os_text = read.os_text or self.os_text
+        self.serial_number = read.serial_number or self.serial_number
+        self.multipath = read.multipath
+        self.multipath_state = read.multipath_state
+        for w in read.wwpns:
+            self.add_wwpn(w)
+        for i in read.iqns:
+            self.add_iqn(i)
+
 
 class HostHba(BaseModel):
     host_name: str
@@ -244,6 +284,9 @@ class HostRead(BaseModel):
     notes: list[str] = Field(default_factory=list)
     error: str = ""
 
+    def failure_text(self) -> str:
+        return self.error if self.method == "login" else f"{self.method.upper()} read failed — {self.error}"
+
 
 class ArrayHost(BaseModel):
     """A host the ARRAY knows (from `showhost -d`) — the authoritative, curated host view (real hosts
@@ -262,6 +305,26 @@ class ArrayHost(BaseModel):
     # under one nameless row, so a single ArrayHost can carry initiators belonging to several
     # different machines. A single `address` field gave the first one's IP to all of them.
     addresses: dict[str, str] = Field(default_factory=dict)
+
+    def expand_unclaimed(self) -> list[ArrayHost]:
+        """Split an unclaimed login bucket into one nameless ArrayHost per initiator.
+
+        UNCLAIMED logins are not one host. They are the array's bucket for every initiator no host
+        object claims, and on rack13arcus that single bucket holds a Windows IQN at 10.132.30.87 AND
+        an unrelated FC WWPN — two different machines. Nothing tells us which initiators belong
+        together, so each becomes its own unidentified server until a real source joins them."""
+        if self.name:
+            return [self]
+        return [
+            *(ArrayHost(name="", persona=self.persona, wwpns={w: p}) for w, p in self.wwpns.items()),
+            *(
+                ArrayHost(
+                    name="", persona=self.persona, iqns={i: p},
+                    addresses={i: self.addresses[i]} if i in self.addresses else {},
+                )
+                for i, p in self.iqns.items()
+            ),
+        ]
 
 
 class DiscoveryReport(BaseModel):
