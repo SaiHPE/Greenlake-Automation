@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from collections import OrderedDict
 from collections.abc import Callable
+from typing import cast
 
 import structlog
 from pydantic import SecretStr
@@ -43,6 +44,7 @@ from alletra_onboard.domain.discovery import (
     DiscoveredHost,
     DiscoveryReport,
     EthernetPort,
+    HostOs,
     HostRead,
     node_name_from_iqn,
     os_from_iqn,
@@ -320,6 +322,195 @@ def parse_showhost(showhost_d: str) -> list[ArrayHost]:
     return list(hosts.values())
 
 
+def _host_for(
+    hosts: list[DiscoveredHost], by_initiator: dict[str, DiscoveredHost],
+    ids: list[str], name: str, source: str,
+) -> DiscoveredHost:
+    """The existing host owning any of these initiator ids, else a new one."""
+    for i in ids:
+        if (existing := by_initiator.get(i)) is not None:
+            existing.add_source(source)
+            return existing
+    fresh = DiscoveredHost(name=name, sources=[source])
+    hosts.append(fresh)
+    return fresh
+
+
+def _merge_vcenter_hosts(
+    hosts: list[DiscoveredHost], by_initiator: dict[str, DiscoveredHost], report: DiscoveryReport,
+) -> None:
+    # 1) vCenter first: it gives the best names, so it should win the naming race. Within vCenter the
+    #    host NAME is the identity (an inventory holds each host once), so a second HBA of the same host
+    #    joins the first row - without this, a host with no array object yet appeared once per HBA
+    #    (D-7, Discovery screenshot 2026-09-16: `.136`, `.47`, `.86` each listed twice).
+    by_vcenter_name: dict[str, DiscoveredHost] = {}
+    for hba in report.host_hbas:
+        wwpn = normalize_wwpn(hba.wwpn)
+        host = by_initiator.get(wwpn) or by_vcenter_name.get(hba.host_name)
+        if host is None:
+            host = _host_for(hosts, by_initiator, [wwpn], hba.host_name, "vcenter")
+        else:
+            host.add_source("vcenter")
+        by_vcenter_name[hba.host_name] = host
+        host.name = hba.host_name
+        host.os = "esxi"                      # only ESXi hosts are in a vCenter inventory
+        host.os_text = host.os_text or (hba.os or "")
+        host.add_wwpn(wwpn)
+        by_initiator[wwpn] = host
+        host.add_fabric(hba.fabric)
+
+    # 1b) vCenter host-level facts: serial number, and iSCSI IQNs (joined like any other initiator).
+    for ident in report.host_identities:
+        host = by_vcenter_name.get(ident.host_name)
+        if host is None:
+            if not ident.iqns:
+                continue          # no FC and no iSCSI adapter: nothing to provision to
+            host = _host_for(hosts, by_initiator, ident.iqns, ident.host_name, "vcenter")
+            host.name, host.os = ident.host_name, "esxi"
+            by_vcenter_name[ident.host_name] = host
+        host.os_text = host.os_text or (ident.os or "")
+        host.serial_number = host.serial_number or ident.serial_number
+        for iqn in ident.iqns:
+            host.add_iqn(iqn)
+            by_initiator[iqn] = host
+
+
+def _attach_array_initiators(
+    host: DiscoveredHost, by_initiator: dict[str, DiscoveredHost], ah: ArrayHost, port_fabric: dict[str, Fabric],
+) -> None:
+    for wwpn, ports in ah.wwpns.items():
+        host.add_wwpn(wwpn)
+        by_initiator[wwpn] = host
+        if ports:
+            host.ports[wwpn] = list(ports)
+            host.logged_in = True
+            for nsp in ports:
+                host.add_fabric(port_fabric.get(nsp))
+    for iqn, ports in ah.iqns.items():
+        host.add_iqn(iqn)
+        by_initiator[iqn] = host
+        if ports:
+            host.logged_in = True
+            host.ports[iqn] = list(ports)
+        if host.os == "unknown":
+            host.os = os_from_iqn(iqn)
+
+
+def _merge_array_hosts(
+    hosts: list[DiscoveredHost], by_initiator: dict[str, DiscoveredHost], report: DiscoveryReport,
+) -> None:
+    # 2) The array: what is actually logged in, plus every iSCSI initiator.
+    port_fabric: dict[str, Fabric] = {p.label: p.fabric for p in report.array_ports if p.protocol == "fc" and p.fabric}
+    for ah in (entry for raw in report.array_hosts for entry in raw.expand_unclaimed()):
+        ids = [*ah.wwpns, *ah.iqns]
+        if not ids:
+            # A host OBJECT with no initiators configured — `test2-alletra` on AlletraMP_D22U27
+            # prints as `-- -- --`. It cannot be joined, zoned or provisioned, but it exists on the
+            # array and an operator looking for it should see it rather than wonder where it went.
+            hosts.append(DiscoveredHost(
+                name=ah.name, os=os_from_persona(ah.persona), array_host_name=ah.name, sources=["array"],
+            ))
+            continue
+        # The array's own name is preferred, EXCEPT when it is an auto-generated opaque one. HPE VME
+        # registers as `HPE_VM_07dc508b8e41df1fcf6ab266` while its IQN says
+        # `iqn.2024-12.com.hpe:hvm3:50796` — `hvm3` is the node an operator would recognise, and the
+        # hash is not a name anyone should be shown. The array's version is kept in array_host_name.
+        from_iqn = next((n for i in ah.iqns if (n := node_name_from_iqn(i))), "")
+        name = (from_iqn if (ah.name.startswith("HPE_VM_") and from_iqn) else ah.name) or from_iqn or ids[0]
+        host = _host_for(hosts, by_initiator, ids, name, "array")
+        if ah.name and not host.array_host_name:
+            host.array_host_name = ah.name
+        # A persona belongs to a host OBJECT. The nameless bucket prints `--` in that column (D-8).
+        if ah.name and ah.persona and ah.persona != "--" and not host.persona:
+            host.persona = ah.persona
+        host.address = host.address or next((a for a in ah.addresses.values() if a), "")
+        _attach_array_initiators(host, by_initiator, ah, port_fabric)
+        # The array's own persona, after the IQN authority: an IQN is more specific (a VME host is
+        # Generic-ALUA on the array but com.hpe in its IQN), and vCenter above is more specific
+        # still. Without either, this is the only thing that identifies a Windows or ESXi FC host.
+        if host.os == "unknown":
+            host.os = os_from_persona(ah.persona)
+
+
+def _merge_declared_hosts(
+    hosts: list[DiscoveredHost], by_initiator: dict[str, DiscoveredHost],
+    report: DiscoveryReport, declared: list | None,
+) -> None:
+    # 3) Hosts the operator DECLARED in the sheet. Merged on the initiator id like every other
+    #    source, so a declared host that later comes online joins its own discovered record instead
+    #    of appearing twice. A row typed without ids is looked up first (SPEC-014 R1) and, if nothing
+    #    finds it, still listed so the operator sees it was not found rather than silently dropped.
+    resolved, lookup = resolve_declared_hosts(declared, report)
+    reads = {r.host_name: r for r in report.host_reads}
+    for dh in resolved:
+        wwpns = [normalize_wwpn(w) for w in dh.wwpns]
+        ids = wwpns + ([dh.iqn] if dh.iqn else [])
+        if not ids:
+            host = DiscoveredHost(
+                name=dh.name, os=cast(HostOs, dh.os or "unknown"), address=dh.address, sources=["sheet"],
+                lookup=lookup.get(dh.name, ""),
+            )
+            hosts.append(host)
+            host.apply_read(reads.get(dh.name))
+            continue
+        host = _host_for(hosts, by_initiator, ids, dh.name, "sheet")
+        host.lookup = lookup.get(dh.name, host.lookup)
+        host.name = dh.name
+        if dh.os:
+            host.os = cast(HostOs, dh.os)
+        host.address = host.address or dh.address
+        for wwpn in wwpns:
+            host.add_wwpn(wwpn)
+            by_initiator[wwpn] = host
+        if dh.iqn:
+            host.add_iqn(dh.iqn)
+            by_initiator[dh.iqn] = host
+            if host.os == "unknown":
+                host.os = os_from_iqn(dh.iqn)
+        host.apply_read(reads.get(dh.name))
+        for i in host.wwpns + host.iqns:
+            by_initiator.setdefault(i, host)
+
+
+def _disambiguate_and_tag_hosts(
+    hosts: list[DiscoveredHost], by_initiator: dict[str, DiscoveredHost],
+    ns_os: dict[str, str], host_sets: list | None,
+) -> list[DiscoveredHost]:
+    # 4) The fabric name server: the only OS signal for an FC host nothing else identified.
+    for wwpn, os_text in ns_os.items():
+        host = by_initiator.get(normalize_wwpn(wwpn))
+        if host is not None and host.os == "unknown":
+            host.os = os_from_switch_string(os_text)
+            host.add_source("switch")
+
+    # Names derived from an IQN can collide: rack13arcus has three separate array host objects whose
+    # IQNs all say `vmenode2` (…:38298, …:45566, …:62276) on different IPs. Three identical rows read
+    # as one host listed thrice, so a collision falls back to the IQN's trailing id, which is what
+    # distinguishes them. Names that came from vCenter or an array host object are left alone.
+    seen: dict[str, int] = {}
+    for host in hosts:
+        seen[host.name] = seen.get(host.name, 0) + 1
+    for host in hosts:
+        if (
+            seen.get(host.name, 0) > 1
+            and host.iqns
+            and not host.array_host_name.startswith(host.name)
+            and (suffix := (host.iqns[0].rsplit(":", 1) + [""])[1])
+        ):
+            host.name = f"{host.name}:{suffix}"
+
+    # SPEC-009 R1/R2. Identified = some source gave it a name (the fallback name is the initiator id
+    # itself). In this run = vCenter or the sheet knows it, or a sheet host set names it.
+    members = {m for hs in (host_sets or []) for m in getattr(hs, "members", [])}
+    for host in hosts:
+        host.identified = host.name not in (set(host.wwpns) | set(host.iqns))
+        host.in_run = (
+            "vcenter" in host.sources or "sheet" in host.sources
+            or host.name in members or (bool(host.array_host_name) and host.array_host_name in members)
+        )
+    return sorted(hosts, key=lambda h: (h.os, h.name.lower()))
+
+
 def assemble_hosts(
     report: DiscoveryReport,
     ns_os: dict[str, str] | None = None,
@@ -343,240 +534,12 @@ def assemble_hosts(
     Unclaimed logins (no array host object) still become hosts here — they are a real server someone
     has cabled — named from their IQN where it carries one, else from the initiator id.
     """
-    ns_os = ns_os or {}
-    by_initiator: dict[str, DiscoveredHost] = {}
     hosts: list[DiscoveredHost] = []
-
-    def host_for(ids: list[str], name: str, source: str) -> DiscoveredHost:
-        """The existing host owning any of these initiator ids, else a new one."""
-        for i in ids:
-            existing = by_initiator.get(i)
-            if existing is not None:
-                if source not in existing.sources:
-                    existing.sources.append(source)
-                return existing
-        fresh = DiscoveredHost(name=name, sources=[source])
-        hosts.append(fresh)
-        return fresh
-
-    # 1) vCenter first: it gives the best names, so it should win the naming race. Within vCenter the
-    #    host NAME is the identity (an inventory holds each host once), so a second HBA of the same host
-    #    joins the first row - without this, a host with no array object yet appeared once per HBA
-    #    (D-7, Discovery screenshot 2026-09-16: `.136`, `.47`, `.86` each listed twice).
-    by_vcenter_name: dict[str, DiscoveredHost] = {}
-    for hba in report.host_hbas:
-        wwpn = normalize_wwpn(hba.wwpn)
-        host = by_initiator.get(wwpn) or by_vcenter_name.get(hba.host_name)
-        if host is None:
-            host = host_for([wwpn], hba.host_name, "vcenter")
-        elif "vcenter" not in host.sources:
-            host.sources.append("vcenter")
-        by_vcenter_name[hba.host_name] = host
-        host.name = hba.host_name
-        host.os = "esxi"                      # only ESXi hosts are in a vCenter inventory
-        if hba.os and not host.os_text:
-            host.os_text = hba.os
-        wwpn = normalize_wwpn(hba.wwpn)
-        if wwpn not in host.wwpns:
-            host.wwpns.append(wwpn)
-        by_initiator[wwpn] = host
-        if hba.fabric and hba.fabric not in host.fabrics:
-            host.fabrics.append(hba.fabric)
-
-    # 1b) vCenter host-level facts: serial number, and iSCSI IQNs (joined like any other initiator).
-    for ident in report.host_identities:
-        host = by_vcenter_name.get(ident.host_name)
-        if host is None:
-            if not ident.iqns:
-                continue          # no FC and no iSCSI adapter: nothing to provision to
-            host = host_for(ident.iqns, ident.host_name, "vcenter")
-            host.name = ident.host_name
-            host.os = "esxi"
-            by_vcenter_name[ident.host_name] = host
-        if ident.os and not host.os_text:
-            host.os_text = ident.os
-        if ident.serial_number and not host.serial_number:
-            host.serial_number = ident.serial_number
-        for iqn in ident.iqns:
-            if iqn not in host.iqns:
-                host.iqns.append(iqn)
-            by_initiator[iqn] = host
-
-    # 2) The array: what is actually logged in, plus every iSCSI initiator.
-    port_fabric = {p.label: p.fabric for p in report.array_ports if p.protocol == "fc" and p.fabric}
-    # UNCLAIMED logins are not one host. They are the array's bucket for every initiator no host
-    # object claims, and on rack13arcus that single bucket holds a Windows IQN at 10.132.30.87 AND
-    # an unrelated FC WWPN — two different machines. Nothing tells us which initiators belong
-    # together, so each becomes its own unidentified server until a real source joins them.
-    expanded: list[ArrayHost] = []
-    for ah in report.array_hosts:
-        if ah.name:
-            expanded.append(ah)
-            continue
-        for wwpn, ports in ah.wwpns.items():
-            expanded.append(ArrayHost(name="", persona=ah.persona, wwpns={wwpn: ports}))
-        for iqn, ports in ah.iqns.items():
-            expanded.append(ArrayHost(
-                name="", persona=ah.persona, iqns={iqn: ports},
-                addresses={iqn: ah.addresses[iqn]} if iqn in ah.addresses else {},
-            ))
-
-    for ah in expanded:
-        ids = [*ah.wwpns, *ah.iqns]
-        if not ids:
-            # A host OBJECT with no initiators configured — `test2-alletra` on AlletraMP_D22U27
-            # prints as `-- -- --`. It cannot be joined, zoned or provisioned, but it exists on the
-            # array and an operator looking for it should see it rather than wonder where it went.
-            hosts.append(DiscoveredHost(
-                name=ah.name, os=os_from_persona(ah.persona), array_host_name=ah.name,
-                sources=["array"],
-            ))
-            continue
-        # The array's own name is preferred, EXCEPT when it is an auto-generated opaque one. HPE VME
-        # registers as `HPE_VM_07dc508b8e41df1fcf6ab266` while its IQN says
-        # `iqn.2024-12.com.hpe:hvm3:50796` — `hvm3` is the node an operator would recognise, and the
-        # hash is not a name anyone should be shown. The array's version is kept in array_host_name.
-        from_iqn = next((node_name_from_iqn(i) for i in ah.iqns if node_name_from_iqn(i)), "")
-        opaque = ah.name.startswith("HPE_VM_")
-        name = (from_iqn if (opaque and from_iqn) else ah.name) or from_iqn or ids[0]
-        host = host_for(ids, name, "array")
-        if ah.name and not host.array_host_name:
-            host.array_host_name = ah.name
-        # A persona belongs to a host OBJECT. The nameless bucket prints `--` in that column (D-8).
-        if ah.name and ah.persona and ah.persona != "--" and not host.persona:
-            host.persona = ah.persona
-        for iqn, addr in ah.addresses.items():
-            if addr and not host.address:
-                host.address = addr
-        for wwpn, ports in ah.wwpns.items():
-            if wwpn not in host.wwpns:
-                host.wwpns.append(wwpn)
-            by_initiator[wwpn] = host
-            if ports:
-                host.ports[wwpn] = list(ports)
-            for nsp in ports:
-                host.logged_in = True
-                fabric = port_fabric.get(nsp)
-                if fabric and fabric not in host.fabrics:
-                    host.fabrics.append(fabric)
-        for iqn, ports in ah.iqns.items():
-            if iqn not in host.iqns:
-                host.iqns.append(iqn)
-            by_initiator[iqn] = host
-            if ports:
-                host.logged_in = True
-                host.ports[iqn] = list(ports)
-            if host.os == "unknown":
-                host.os = os_from_iqn(iqn)
-        # The array's own persona, after the IQN authority: an IQN is more specific (a VME host is
-        # Generic-ALUA on the array but com.hpe in its IQN), and vCenter above is more specific
-        # still. Without either, this is the only thing that identifies a Windows or ESXi FC host.
-        if host.os == "unknown":
-            host.os = os_from_persona(ah.persona)
-
-    # 3) Hosts the operator DECLARED in the sheet. Merged on the initiator id like every other
-    #    source, so a declared host that later comes online joins its own discovered record instead
-    #    of appearing twice. A row typed without ids is looked up first (SPEC-014 R1) and, if nothing
-    #    finds it, still listed so the operator sees it was not found rather than silently dropped.
-    declared, lookup = resolve_declared_hosts(declared, report)
-    reads = {r.host_name: r for r in report.host_reads}
-    for dh in declared:
-        ids = [normalize_wwpn(w) for w in dh.wwpns] + ([dh.iqn] if dh.iqn else [])
-        if not ids:
-            host = DiscoveredHost(
-                name=dh.name, os=dh.os or "unknown", address=dh.address, sources=["sheet"],
-                lookup=lookup.get(dh.name, ""),
-            )
-            hosts.append(host)
-            _apply_read(host, reads.get(dh.name))
-            continue
-        host = host_for(ids, dh.name, "sheet")
-        if dh.name in lookup:
-            host.lookup = lookup[dh.name]
-        host.name = dh.name
-        if dh.os:
-            host.os = dh.os
-        if dh.address and not host.address:
-            host.address = dh.address
-        for wwpn in (normalize_wwpn(w) for w in dh.wwpns):
-            if wwpn not in host.wwpns:
-                host.wwpns.append(wwpn)
-            by_initiator[wwpn] = host
-        if dh.iqn:
-            if dh.iqn not in host.iqns:
-                host.iqns.append(dh.iqn)
-            by_initiator[dh.iqn] = host
-            if host.os == "unknown":
-                host.os = os_from_iqn(dh.iqn)
-        _apply_read(host, reads.get(dh.name))
-        for i in host.wwpns + host.iqns:
-            by_initiator.setdefault(i, host)
-
-    # 4) The fabric name server: the only OS signal for an FC host nothing else identified.
-    for wwpn, os_text in ns_os.items():
-        host = by_initiator.get(normalize_wwpn(wwpn))
-        if host is not None and host.os == "unknown":
-            host.os = os_from_switch_string(os_text)
-            if "switch" not in host.sources:
-                host.sources.append("switch")
-
-    # Names derived from an IQN can collide: rack13arcus has three separate array host objects whose
-    # IQNs all say `vmenode2` (…:38298, …:45566, …:62276) on different IPs. Three identical rows read
-    # as one host listed thrice, so a collision falls back to the IQN's trailing id, which is what
-    # distinguishes them. Names that came from vCenter or an array host object are left alone.
-    seen: dict[str, int] = {}
-    for host in hosts:
-        seen[host.name] = seen.get(host.name, 0) + 1
-    for host in hosts:
-        if seen.get(host.name, 0) > 1 and host.iqns and not host.array_host_name.startswith(host.name):
-            suffix = (host.iqns[0].rsplit(":", 1) + [""])[1]
-            if suffix:
-                host.name = f"{host.name}:{suffix}"
-
-    # SPEC-009 R1/R2. Identified = some source gave it a name (the fallback name is the initiator id
-    # itself). In this run = vCenter or the sheet knows it, or a sheet host set names it.
-    members = {m for hs in (host_sets or []) for m in getattr(hs, "members", [])}
-    for host in hosts:
-        initiator_ids = set(host.wwpns) | set(host.iqns)
-        host.identified = host.name not in initiator_ids
-        host.in_run = (
-            "vcenter" in host.sources or "sheet" in host.sources
-            or host.name in members or (bool(host.array_host_name) and host.array_host_name in members)
-        )
-
-    return sorted(hosts, key=lambda h: (h.os, h.name.lower()))
-
-
-def _read_failure(read: HostRead) -> str:
-    return read.error if read.method == "login" else f"{read.method.upper()} read failed — {read.error}"
-
-
-def _apply_read(host: DiscoveredHost, read: HostRead | None) -> None:
-    """What the server reported about itself (SPEC-014 R4). Its initiators are shown even when they
-    differ from the sheet's — the plan blocks on the difference (R6), the screen shows the truth."""
-    if read is None:
-        return
-    if read.error:
-        host.host_read = _read_failure(read)
-        return
-    same_name = read.hostname.lower().split(".")[0] == host.name.lower().split(".")[0]
-    host.host_read = f"read over {read.method.upper()} from {read.address}" + (
-        f" ({read.hostname})" if read.hostname and not same_name else ""
-    )
-    if "host" not in host.sources:
-        host.sources.append("host")
-    if read.os and host.os == "unknown":
-        host.os = read.os  # type: ignore[assignment]
-    host.os_text = read.os_text or host.os_text
-    host.serial_number = read.serial_number or host.serial_number
-    host.multipath = read.multipath
-    host.multipath_state = read.multipath_state
-    for w in read.wwpns:
-        if w not in host.wwpns:
-            host.wwpns.append(w)
-    for i in read.iqns:
-        if i not in host.iqns:
-            host.iqns.append(i)
+    by_initiator: dict[str, DiscoveredHost] = {}
+    _merge_vcenter_hosts(hosts, by_initiator, report)
+    _merge_array_hosts(hosts, by_initiator, report)
+    _merge_declared_hosts(hosts, by_initiator, report, declared)
+    return _disambiguate_and_tag_hosts(hosts, by_initiator, ns_os or {}, host_sets)
 
 
 def fabric_by_wwpn(array_hosts: list[ArrayHost], array_ports: list[ArrayPort]) -> dict[str, set[Fabric]]:
@@ -606,6 +569,27 @@ def switch_for_wwpn(fcfabric: str, wwpn: str) -> str | None:
     return None
 
 
+def _port_parity(port: ArrayPort) -> Fabric:
+    return "odd" if port.card_port % 2 == 1 else "even"
+
+
+def _two_switch_labels(
+    fc_ports: list[ArrayPort], switch_by_label: dict[str, str], switches: list[str],
+) -> tuple[dict[str, Fabric], list[str]]:
+    # Exactly two fabrics. Map each switch to a slot, preferring the parity its own ports imply.
+    majority: dict[str, Fabric] = {}
+    for sw in switches:
+        on_sw = [p for p in fc_ports if switch_by_label.get(p.label) == sw]
+        odd = sum(1 for p in on_sw if p.card_port % 2)
+        majority[sw] = "odd" if odd * 2 >= len(on_sw) else "even"
+    if len(set(majority.values())) == 2:
+        return majority, []
+    # both switches sit at the same port-parity -> parity can't name them; use a stable order
+    return {switches[0]: "odd", switches[1]: "even"}, [
+        f"Both array fabrics attach at the same card-port parity; labelled by switch: {switches[0]}=odd, {switches[1]}=even."
+    ]
+
+
 def resolve_port_fabrics(fc_ports: list[ArrayPort], switch_by_label: dict[str, str]) -> list[str]:
     """Assign each FC port's fabric, preferring the SWITCH it attaches to (from showportdev fcfabric)
     over card-port parity. Mutates `fabric` + `fabric_switch`; returns explanatory notes.
@@ -621,18 +605,13 @@ def resolve_port_fabrics(fc_ports: list[ArrayPort], switch_by_label: dict[str, s
     """
     notes: list[str] = []
     for port in fc_ports:
-        sw = switch_by_label.get(port.label)
-        if sw:
+        if sw := switch_by_label.get(port.label):
             port.fabric_switch = sw
 
-    def parity(port: ArrayPort) -> Fabric:
-        return "odd" if port.card_port % 2 == 1 else "even"
-
     switches = sorted({sw for sw in switch_by_label.values() if sw})
-
     if len(switches) != 2:
         for port in fc_ports:
-            port.fabric = parity(port)
+            port.fabric = _port_parity(port)
         if len(switches) > 2:
             notes.append(f"Array FC ports resolved to {len(switches)} fabric switches ({', '.join(switches)}); "
                          "used card-port parity for fabric (could not map them to exactly two fabrics).")
@@ -645,32 +624,17 @@ def resolve_port_fabrics(fc_ports: list[ArrayPort], switch_by_label: dict[str, s
                 )
         return notes
 
-    # Exactly two fabrics. Map each switch to a slot, preferring the parity its own ports imply.
-    majority: dict[str, Fabric] = {}
-    for sw in switches:
-        on_sw = [p for p in fc_ports if switch_by_label.get(p.label) == sw]
-        odd = sum(1 for p in on_sw if p.card_port % 2)
-        majority[sw] = "odd" if odd * 2 >= len(on_sw) else "even"
-    if len(set(majority.values())) == 2:
-        label_of: dict[str, Fabric] = majority
-    else:  # both switches sit at the same port-parity -> parity can't name them; use a stable order
-        label_of = {switches[0]: "odd", switches[1]: "even"}
-        notes.append(
-            f"Both array fabrics attach at the same card-port parity; labelled by switch: "
-            f"{switches[0]}=odd, {switches[1]}=even."
-        )
+    label_of, extra = _two_switch_labels(fc_ports, switch_by_label, switches)
+    notes.extend(extra)
     for port in fc_ports:
         sw = switch_by_label.get(port.label, "")
-        if sw in label_of:
-            resolved = label_of[sw]
-            if resolved != parity(port):
-                notes.append(
-                    f"Port {port.label} attaches to switch {sw} ({resolved} fabric) but its card-port "
-                    f"parity is {parity(port)} — using the switch (non-standard cabling)."
-                )
-            port.fabric = resolved
-        else:
-            port.fabric = parity(port)  # not attached (e.g. loss_sync) -> parity fallback
+        resolved = label_of.get(sw) or _port_parity(port)  # not attached (e.g. loss_sync) -> parity fallback
+        if sw in label_of and resolved != _port_parity(port):
+            notes.append(
+                f"Port {port.label} attaches to switch {sw} ({resolved} fabric) but its card-port "
+                f"parity is {_port_parity(port)} — using the switch (non-standard cabling)."
+            )
+        port.fabric = resolved
     return notes
 
 
@@ -757,6 +721,100 @@ def _read_file_side(cli, intent: ProvisioningIntent, file_ports: list[EthernetPo
         return FileReport(os_version=os_version, notes=[UNREADABLE]) if file_ports else None
 
 
+def _array_summary_message(report: DiscoveryReport) -> str:
+    fc = sum(1 for p in report.array_ports if p.protocol == "fc")
+    isc = sum(1 for p in report.array_ports if p.protocol == "iscsi")
+    # Count NAMED hosts and unclaimed logins separately: the unclaimed entry is one bucket
+    # holding many WWPNs, so folding it into "N host(s)" would both inflate and understate.
+    named = sum(1 for h in report.array_hosts if h.name)
+    unclaimed = sum(len(h.wwpns) for h in report.array_hosts if not h.name)
+    extra = f", {unclaimed} unclaimed login(s)" if unclaimed else ""
+    roles: list[str] = []
+    if report.file_ports:
+        roles.append(f"{len(report.file_ports)} file")
+    if report.replication_ports:
+        configured = sum(1 for p in report.replication_ports if p.role == "rcip")
+        roles.append(f"{configured}/{len(report.replication_ports)} replication configured")
+    role_text = f", {', '.join(roles)}" if roles else ""
+    return f"Array: {fc} FC + {isc} iSCSI target port(s){role_text}, {named} host(s){extra}. Resolving fabrics…"
+
+
+def _discover_array(
+    report: DiscoveryReport,
+    intent: ProvisioningIntent,
+    array_cli_factory: Callable,
+    wsapi_v3_factory: Callable,
+    emit: Callable[[str], None],
+) -> None:
+    # 1) Array (one SSH session): all FC + iSCSI target ports + the curated host view, then refine each
+    #    FC port's fabric from the switch it attaches to (showportdev fcfabric; parity is the fallback).
+    try:
+        emit("Connecting to the array over SSH…")
+        with array_cli_factory(intent.array) as cli:
+            emit("Reading FC + iSCSI target ports (showport)…")
+            iscsi_ips = parse_iscsi_ips(cli.run("showport -iscsi"))
+            showport = cli.run("showport")
+            report.array_ports = parse_ports(showport, iscsi_ips)
+            # RCIP comes out of the SAME showport (Type rcip / free on a peer IP port). `showport
+            # -rcip` only reports CONFIGURED links and answers "There is no specified port
+            # information" when none exist, so it cannot enumerate the capable-but-idle ports.
+            report.replication_ports = parse_replication_ports(showport)
+            # `showport -rcip` adds the netmask + gateway a replication link actually needs. It
+            # covers only CONFIGURED ports, so it enriches the list above rather than replacing it.
+            try:
+                detail = parse_rcip_detail(cli.run("showport -rcip"))
+            except DeviceError:  # enrichment only; the ports are already listed
+                detail = {}
+            for port in report.replication_ports:
+                for field_name, value in detail.get(port.label, {}).items():
+                    setattr(port, field_name, value)
+            # File services are a separate view with different columns, and are absent on arrays
+            # without file configured — an empty result is normal, not a failure.
+            try:
+                report.file_ports = parse_file_ports(cli.run("showport -file"))
+            except DeviceError:  # `showport -file` is unsupported on some releases
+                report.notes.append("Could not read 'showport -file' — file ports not reported.")
+            report.file = _read_file_side(cli, intent, report.file_ports, wsapi_v3_factory, emit)
+            emit("Reading the array's host view (showhost)…")
+            report.array_hosts = parse_showhost(cli.run("showhost -d"))
+            emit(_array_summary_message(report))
+            report.notes.extend(_refine_fabrics_from_switches(cli, report.array_ports, progress=emit))
+    except DeviceError as exc:
+        # D-10 (S-3, 2026-09-17): the array is THE subject of discovery. Without it the zoning check has
+        # no ports and the plan cannot read WSAPI, so this is the step's error, not note 1 of 7.
+        report.error = f"Array discovery (SSH) failed: {exc}"
+
+
+def _discover_vcenter(
+    report: DiscoveryReport, intent: ProvisioningIntent, vcenter_factory: Callable, emit: Callable[[str], None],
+) -> None:
+    # 2) vCenter: each ESXi host's FC HBA WWPNs + OS.
+    try:
+        emit(f"Connecting to vCenter {intent.vcenter.host} (read-only)…")
+        with vcenter_factory(intent.vcenter) as vcenter:
+            report.host_hbas = vcenter.host_fc_hbas()
+            try:
+                report.host_identities = vcenter.host_identities()
+            except DeviceError as exc:  # serial/IQN are enrichment; the HBAs stand alone
+                report.notes.append(f"vCenter host serial/IQN read failed: {exc}")
+        emit(f"vCenter: {len(report.host_hbas)} ESXi host HBA(s).")
+    except DeviceError as exc:
+        report.notes.append(f"vCenter discovery failed: {exc}")
+
+
+def _assign_hba_fabrics(report: DiscoveryReport) -> None:
+    # 3) Assign each vCenter HBA to the fabric its WWPN logs into ON THE ARRAY (from showhost).
+    wwpn_fabric = fabric_by_wwpn(report.array_hosts, report.array_ports)
+    for hba in report.host_hbas:
+        fabrics = wwpn_fabric.get(normalize_wwpn(hba.wwpn))
+        hba.fabric = min(fabrics) if fabrics else None
+        if not fabrics:
+            report.notes.append(
+                f"Host {hba.host_name} HBA {hba.wwpn} is not logged in on either fabric per the array "
+                "(showhost) — check zoning/cabling, or that the host is powered on."
+            )
+
+
 def discover(
     intent: ProvisioningIntent,
     *,
@@ -779,91 +837,14 @@ def discover(
             except (RuntimeError, OSError) as exc:  # progress reporting must never break discovery
                 _log.debug("discovery_progress_failed", error=str(exc))
 
-    # 1) Array (one SSH session): all FC + iSCSI target ports + the curated host view, then refine each
-    #    FC port's fabric from the switch it attaches to (showportdev fcfabric; parity is the fallback).
-    try:
-        _p("Connecting to the array over SSH…")
-        with array_cli_factory(intent.array) as cli:
-            _p("Reading FC + iSCSI target ports (showport)…")
-            iscsi_ips = parse_iscsi_ips(cli.run("showport -iscsi"))
-            showport = cli.run("showport")
-            report.array_ports = parse_ports(showport, iscsi_ips)
-            # RCIP comes out of the SAME showport (Type rcip / free on a peer IP port). `showport
-            # -rcip` only reports CONFIGURED links and answers "There is no specified port
-            # information" when none exist, so it cannot enumerate the capable-but-idle ports.
-            report.replication_ports = parse_replication_ports(showport)
-            # `showport -rcip` adds the netmask + gateway a replication link actually needs. It
-            # covers only CONFIGURED ports, so it enriches the list above rather than replacing it.
-            try:
-                detail = parse_rcip_detail(cli.run("showport -rcip"))
-            except DeviceError:  # enrichment only; the ports are already listed
-                detail = {}
-            for port in report.replication_ports:
-                extra = detail.get(port.label)
-                if extra:
-                    for field, value in extra.items():
-                        setattr(port, field, value)
-            # File services are a separate view with different columns, and are absent on arrays
-            # without file configured — an empty result is normal, not a failure.
-            try:
-                report.file_ports = parse_file_ports(cli.run("showport -file"))
-            except DeviceError:  # `showport -file` is unsupported on some releases
-                report.notes.append("Could not read 'showport -file' — file ports not reported.")
-            report.file = _read_file_side(cli, intent, report.file_ports, wsapi_v3_factory, _p)
-            _p("Reading the array's host view (showhost)…")
-            report.array_hosts = parse_showhost(cli.run("showhost -d"))
-            fc = sum(1 for p in report.array_ports if p.protocol == "fc")
-            isc = sum(1 for p in report.array_ports if p.protocol == "iscsi")
-            # Count NAMED hosts and unclaimed logins separately: the unclaimed entry is one bucket
-            # holding many WWPNs, so folding it into "N host(s)" would both inflate and understate.
-            named = sum(1 for h in report.array_hosts if h.name)
-            unclaimed = sum(len(h.wwpns) for h in report.array_hosts if not h.name)
-            extra = f", {unclaimed} unclaimed login(s)" if unclaimed else ""
-            roles = []
-            if report.file_ports:
-                roles.append(f"{len(report.file_ports)} file")
-            if report.replication_ports:
-                configured = sum(1 for p in report.replication_ports if p.role == "rcip")
-                roles.append(f"{configured}/{len(report.replication_ports)} replication configured")
-            role_text = f", {', '.join(roles)}" if roles else ""
-            _p(f"Array: {fc} FC + {isc} iSCSI target port(s){role_text}, {named} host(s){extra}. "
-               "Resolving fabrics…")
-            report.notes.extend(_refine_fabrics_from_switches(cli, report.array_ports, progress=_p))
-    except DeviceError as exc:
-        # D-10 (S-3, 2026-09-17): the array is THE subject of discovery. Without it the zoning check has
-        # no ports and the plan cannot read WSAPI, so this is the step's error, not note 1 of 7.
-        report.error = f"Array discovery (SSH) failed: {exc}"
-
-    # 2) vCenter: each ESXi host's FC HBA WWPNs + OS.
-    try:
-        _p(f"Connecting to vCenter {intent.vcenter.host} (read-only)…")
-        with vcenter_factory(intent.vcenter) as vcenter:
-            report.host_hbas = vcenter.host_fc_hbas()
-            try:
-                report.host_identities = vcenter.host_identities()
-            except DeviceError as exc:  # serial/IQN are enrichment; the HBAs stand alone
-                report.notes.append(f"vCenter host serial/IQN read failed: {exc}")
-        _p(f"vCenter: {len(report.host_hbas)} ESXi host HBA(s).")
-    except DeviceError as exc:
-        report.notes.append(f"vCenter discovery failed: {exc}")
-
+    _discover_array(report, intent, array_cli_factory, wsapi_v3_factory, _p)
+    _discover_vcenter(report, intent, vcenter_factory, _p)
     # 2b) SPEC-014 R4: sheet hosts that carry a login report their own serial, WWPNs, IQN, multipath.
     report.host_reads = _read_sheet_hosts(intent.declared_hosts, linux_host_factory, windows_host_factory, _p)
-    for read in report.host_reads:
-        if read.error:
-            report.notes.append(f"Host {read.host_name}: {_read_failure(read)}.")
+    report.notes.extend(f"Host {r.host_name}: {r.failure_text()}." for r in report.host_reads if r.error)
 
-    # 3) Assign each vCenter HBA to the fabric its WWPN logs into ON THE ARRAY (from showhost).
     _p("Matching host HBAs to the array fabrics…")
-    wwpn_fabric = fabric_by_wwpn(report.array_hosts, report.array_ports)
-    for hba in report.host_hbas:
-        fabrics = wwpn_fabric.get(normalize_wwpn(hba.wwpn))
-        hba.fabric = min(fabrics) if fabrics else None
-        if not fabrics:
-            report.notes.append(
-                f"Host {hba.host_name} HBA {hba.wwpn} is not logged in on either fabric per the array "
-                "(showhost) — check zoning/cabling, or that the host is powered on."
-            )
+    _assign_hba_fabrics(report)
 
     # 4) Join every source into one record per server, grouped by OS. Done last so it sees the
     #    fabric assignment above.
@@ -874,15 +855,13 @@ def discover(
     #    unknown OS rather than guessed at. Wiring nsshow in here would make switch credentials a
     #    discovery prerequisite, which is a bigger change than this one.
     report.hosts = assemble_hosts(report, declared=intent.declared_hosts, host_sets=intent.host_sets)
-    for host in report.hosts:
-        if host.lookup.startswith("not found"):
-            report.notes.append(f"Sheet host {host.name}: {host.lookup}.")
+    report.notes.extend(f"Sheet host {h.name}: {h.lookup}." for h in report.hosts if h.lookup.startswith("not found"))
     by_os: dict[str, int] = {}
     for host in report.hosts:
         by_os[host.os] = by_os.get(host.os, 0) + 1
     if by_os:
         _p("Hosts: " + ", ".join(f"{n} {os_}" for os_, n in sorted(by_os.items())))
-    in_run = sum(1 for h in report.hosts if h.in_run)
     if report.hosts:
+        in_run = sum(1 for h in report.hosts if h.in_run)
         _p(f"{in_run} host(s) this run is about; {len(report.hosts) - in_run} other host(s) on this array.")
     return report
