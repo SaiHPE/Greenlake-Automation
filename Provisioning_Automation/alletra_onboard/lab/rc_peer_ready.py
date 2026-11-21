@@ -121,7 +121,7 @@ def main():
     if os.path.isdir(OUT):
         shutil.rmtree(OUT)
     os.makedirs(OUT)
-    from alletra_onboard.application.replication.plan import check as rc_check, find_partnership
+    from alletra_onboard.application.replication.plan_check import check as rc_check, find_partnership
     from alletra_onboard.application.replication.read import read_array
     from alletra_onboard.domain.replication import ProtectionRequest, ReplicationIntent
     from alletra_onboard.domain.shared import EndpointCreds

@@ -13,7 +13,7 @@ from alletra_onboard.adapters.array.cli_client import (
     refusal,
 )
 from alletra_onboard.application.replication import link_check
-from alletra_onboard.application.replication.plan import check
+from alletra_onboard.application.replication.plan_check import check
 from alletra_onboard.domain.replication import (
     LinkCheck,
     LinkCheckResult,

@@ -19,7 +19,8 @@ import time
 from alletra_onboard.application.platform.init_sheet import parse_workbook_bytes
 from alletra_onboard.application.provisioning.clients import make_array_cli
 from alletra_onboard.application.replication.apply import apply_plan
-from alletra_onboard.application.replication.plan import build_plan, check
+from alletra_onboard.application.replication.plan import build_plan
+from alletra_onboard.application.replication.plan_check import check
 from alletra_onboard.application.replication.read import read_array
 from alletra_onboard.application.replication.verify import verify
 from alletra_onboard.domain.approval import Approval

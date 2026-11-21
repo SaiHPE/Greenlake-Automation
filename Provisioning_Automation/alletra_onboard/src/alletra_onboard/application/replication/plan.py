@@ -1,415 +1,41 @@
-"""SPEC-016 R2 (check) and R3 (plan): from two array views and the Replication tab, the blocking
-findings and the exists / create / conflict plan — nothing written, nothing guessed.
+"""SPEC-016 R3 (plan): from the checked array views and the Replication tab, the exists / create /
+conflict plan — nothing written, nothing guessed.
 
 Every sentence here is for the operator. Every WSAPI body shape and CLI line comes from the
-`hpe3parclient` docstrings and the array's own `-h` (fixtures README).
+`hpe3parclient` docstrings and the array's own `-h` (fixtures README). Partnership discovery and
+blocking findings live in `plan_check.py`.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from itertools import count
+from typing import Literal
 
 from alletra_onboard.application.replication.partnership import plan_partnership
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
-    TEST_GROUP,
     TEST_PEER_VVSET,
     TEST_VOLUME,
     TEST_VOLUME_GIB,
     TEST_VVSET,
     TRANSPORT_WORDS,
     Partnership,
-    PartnerTarget,
     PlannedCall,
     ProtectionRequest,
     RcGroup,
-    RcLink,
-    RcTarget,
     ReplicationAction,
     ReplicationArrayView,
     ReplicationIntent,
     ReplicationPlan,
     ReplicationReport,
-    Transport,
-    rtt_limit_ms,
-    rtt_limit_text,
-    sync_refused_target,
 )
 
-#: Support Matrix, 2-node system (research 2026-10-07 §3). Checked per mode; practically never hit.
-GROUP_LIMIT = {"sync": 800, "async": 2400}
 #: WSAPI remote-copy-group mode values (hpe3parclient `createRemoteCopyGroup` docs; 1 = sync, 2 = periodic).
 WSAPI_MODE = {"sync": 1, "async": 2}
 
 
-# ------------------------------------------------------------------ the partnership (by address or WWN)
-
-def _outbound(view: ReplicationArrayView, target: RcTarget) -> list[RcLink]:
-    return [link for link in view.links if link.target == target.name and not link.inbound]
-
-
-def _addresses(links: list[RcLink]) -> set[str]:
-    """What the links address: RCIP addresses, or port WWNs (upper case, as `showport` prints them)."""
-    return {link.address.upper() for link in links}
-
-
-def _transport(target: RcTarget) -> Transport:
-    return "FC" if target.is_fc else "IP"
-
-
-def _targets_towards(view: ReplicationArrayView, other: ReplicationArrayView) -> list[tuple[RcTarget, list[RcLink]]]:
-    """Every target on `view` that points at `other`: an IP target whose outbound links all point at
-    `other`'s RCIP addresses (SPEC-016 R2); an FC target whose Options carry one of `other`'s FC node WWNs
-    and whose outbound links all address `other`'s FC port WWNs (SPEC-031 R3)."""
-    out = []
-    for target in view.targets:
-        links = _outbound(view, target)
-        if not links:
-            continue
-        if target.is_fc:
-            resolves = target.options.upper() in other.fc_node_wwns and _addresses(links) <= other.fc_port_wwns
-        else:
-            resolves = _addresses(links) <= other.rcip_addresses
-        if resolves:
-            out.append((target, links))
-    return out
-
-
-def _fc_targets_naming(view: ReplicationArrayView, other: ReplicationArrayView) -> list[RcTarget]:
-    """Every FC target on `view` that names `other`, resolved or not: its Options carry one of `other`'s FC
-    node WWNs, or one of its links addresses one of `other`'s FC port WWNs."""
-    return [t for t in view.targets if t.is_fc and (
-        t.options.upper() in other.fc_node_wwns or _addresses(_outbound(view, t)) & other.fc_port_wwns)]
-
-
-def _local_addresses(view: ReplicationArrayView, links: list[RcLink], transport: Transport) -> set[str]:
-    """What the other array's links address when they point back over the same ports: the RCIP address of
-    each port the links use, or its port WWN over Fibre Channel."""
-    if transport == "FC":
-        return {view.ports[link.nsp].port_wwn for link in links if link.nsp in view.ports} - {""}
-    port_ip = {p.nsp: p.ip for p in view.rcip_ports}
-    return {port_ip.get(link.nsp, "").upper() for link in links} - {""}
-
-
-def _assign(targets: list[PartnerTarget], modes: Iterable[str]) -> dict[str, str]:
-    """One target per sheet mode: the one already holding this run's groups of that mode (rerun), else
-    one carrying only that mode, else an empty one not taken by the other mode. Fixed order, so the
-    choice is the same on every preview."""
-    chosen: dict[str, str] = {}
-    taken: set[str] = set()
-    for mode in ("sync", "async"):
-        if mode not in modes:
-            continue
-        pick = (next((t for t in targets if mode in t.own_modes and t.name not in taken), None)
-                or next((t for t in targets if t.modes == [mode] and t.name not in taken), None)
-                or next((t for t in targets if not t.modes and t.name not in taken), None))
-        if pick is not None:
-            chosen[mode] = pick.name
-            taken.add(pick.name)
-    return chosen
-
-
-def find_partnership(primary: ReplicationArrayView, peer: ReplicationArrayView, *,
-                     modes: Iterable[str] = (), own_groups: Iterable[str] = ()) -> Partnership | None:
-    """The target(s) on each array that point at the OTHER array: by RCIP address over IP, by node WWN and
-    port WWNs over Fibre Channel (SPEC-031 R3). Names are never compared: on the lab pair E18U31's target
-    for D22U27 is named AlletraMP_E18U31. Each primary target is paired with the peer target that answers
-    over the same ports (its links point back at the addresses or WWNs of the ports the primary target
-    uses). A pair has one transport: when the targets found are IP and FC both, there is no partnership to
-    use (SPEC-031 R3; `check` says why)."""
-    forward, backward = _targets_towards(primary, peer), _targets_towards(peer, primary)
-    if not forward or not backward:
-        return None
-    transports: set[Transport] = {_transport(t) for t, _ in forward + backward}
-    if len(transports) != 1:
-        return None
-    transport = transports.pop()
-    own = set(own_groups)
-    targets: list[PartnerTarget] = []
-    for t, links in forward:
-        local = _local_addresses(primary, links, transport)
-        pair = (next((bt for bt in backward if _addresses(bt[1]) == local), None)
-                or next((bt for bt in backward if _addresses(bt[1]) & local), None)
-                or backward[0])
-        on_target = [g for g in primary.groups if g.target == t.name]
-        targets.append(PartnerTarget(
-            name=t.name, peer_name=pair[0].name, transport=transport,
-            links_up=sum(1 for link in links if link.up), links_total=len(links),
-            peer_links_up=sum(1 for link in pair[1] if link.up), peer_links_total=len(pair[1]),
-            mirror_config=t.mirror_config,
-            modes=sorted({g.mode_key for g in on_target if g.name not in own}),
-            groups=sum(1 for g in on_target if g.name not in own),
-            own_modes=sorted({g.mode_key for g in on_target if g.name in own}),
-        ))
-    chosen = _assign(targets, set(modes))
-    first = next((t for t in targets if t.name in chosen.values()), targets[0])
-    return Partnership(
-        target_on_primary=first.name, target_on_peer=first.peer_name, transport=transport,
-        links_primary_up=first.links_up, links_primary_total=first.links_total,
-        links_peer_up=first.peer_links_up, links_peer_total=first.peer_links_total,
-        mirror_config=first.mirror_config, targets=targets, target_by_mode=chosen,
-    )
-
-
 def _name(view: ReplicationArrayView) -> str:
     return view.name or view.host
-
-
-def _state(view: ReplicationArrayView, target: RcTarget) -> tuple[str, bool]:
-    """(what shows the target's state, whether it is dead). Dead on SPEC-031 R5's terms, which BL-57 set
-    for an FC target: status failed, no link Up, no started group. Only a dead target is offered for removal."""
-    links = _outbound(view, target)
-    up = sum(1 for link in links if link.up)
-    started = [g.name for g in view.groups if g.target == target.name and g.status.lower() == "started"]
-    text = f"{'Fibre Channel' if target.is_fc else 'IP'}, status {target.status or 'unknown'}, {up} of {len(links)} links Up"
-    if started:
-        text += f", started group{'s' if len(started) != 1 else ''} {', '.join(started)}"
-    return text, target.status.lower() == "failed" and not up and not started
-
-
-def _mixed_transports(primary: ReplicationArrayView, peer: ReplicationArrayView) -> str:
-    """SPEC-031 R3, one pair one transport: the sentence when the two arrays show IP and FC targets towards
-    each other, else ''. An older target in one transport stops a newer one in the other from working,
-    without an error (LESSONS 44), so the step does not pick one. A target in use is never offered for removal."""
-    sides = ((primary, peer), (peer, primary))
-    ip = [(v, t) for v, o in sides for t, _ in _targets_towards(v, o) if not t.is_fc]
-    fc = [(v, t) for v, o in sides for t in _fc_targets_naming(v, o)]
-    if not ip or not fc:
-        return ""
-    named = "; ".join(f"{_name(v)} target '{t.name}' ({_state(v, t)[0]})" for v, t in ip + fc)
-    text = (f"{_name(primary)} and {_name(peer)} show Remote Copy targets towards each other over IP and over Fibre "
-            f"Channel: {named}. The arrays keep one partnership per pair, and a target in one transport stops one in "
-            "the other from working, so the tool will not use either and plans nothing.")
-    dead = [(v, t) for v, t in ip + fc if _state(v, t)[1]]
-    if dead:
-        text += (" Remove the failed one first: " + "; ".join(f"on {_name(v)}, `removercopytarget -cleargroups -f {t.name}`"
-                                                             for v, t in dead)
-                 + " (this also removes the groups on that target; their volumes stay). Save `showrcopy -d groups` before.")
-    else:
-        text += " None of them is failed, so the tool offers no removal: agree with the array owners which transport stays."
-    return text
-
-
-def _fc_unresolved(view: ReplicationArrayView, other: ReplicationArrayView) -> list[str]:
-    """SPEC-031 R4: an FC target that names `other` but does not resolve to it, one sentence each with the
-    WWN that did not match."""
-    resolved = {t.name for t, _ in _targets_towards(view, other)}
-    out = []
-    for t in _fc_targets_naming(view, other):
-        if t.name in resolved:
-            continue
-        misses = []
-        if t.options.upper() not in other.fc_node_wwns:
-            misses.append(f"its node WWN {t.options or '(none)'} is not one of {_name(other)}'s "
-                          f"({', '.join(sorted(other.fc_node_wwns))})")
-        links = _outbound(view, t)
-        stray = [f"{link.nsp} → {link.address}" for link in links if link.address.upper() not in other.fc_port_wwns]
-        if stray:
-            misses.append(f"link{'s' if len(stray) != 1 else ''} {', '.join(stray)} address{'' if len(stray) != 1 else 'es'} "
-                          f"no port of {_name(other)}")
-        if not links:
-            misses.append("it has no outbound link")
-        out.append(f"{_name(view)} has Fibre Channel target '{t.name}' that does not resolve to {_name(other)}: "
-                   + "; ".join(misses) + ".")
-    return out
-
-
-def _fc_one_way(view: ReplicationArrayView, other: ReplicationArrayView) -> list[str]:
-    """An FC target that resolves to `other` while `other` has none that resolves back."""
-    if any(t.is_fc for t, _ in _targets_towards(other, view)):
-        return []
-    return [f"{_name(view)} has target '{t.name}' for {_name(other)} over Fibre Channel, found by node WWN and port "
-            f"WWN ({_state(view, t)[0]}); {_name(other)} has no Fibre Channel target that points back at {_name(view)}."
-            for t, _ in _targets_towards(view, other) if t.is_fc]
-
-
-# ------------------------------------------------------------------ R2: findings
-
-def run_modes(intent: ReplicationIntent) -> list[str]:
-    """The modes this run's groups replicate in: the rows', or the failover test group's alone (it takes the
-    first row's mode, and a default row's without one)."""
-    modes = {row.mode for row in intent.protections}
-    if not modes and intent.failover_test and not intent.failover_group:
-        modes = {ProtectionRequest(vvset=TEST_VVSET, peer_cpg="").mode}
-    return sorted(modes)
-
-
-def _sync_refused(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: ReplicationIntent) -> str:
-    """BL-62: the sentence when this run would create a sync group that this array refuses for the peer's OS
-    (`sync_refused_target`), else ''. Said at the first read, before the partnership is set up; a sync group
-    already on the array is not a write, so it is not refused."""
-    family = sync_refused_target(primary.os_version, peer.os_version)
-    if not family:
-        return ""
-    sets = [row.vvset for row in intent.protections if row.mode == "sync" and primary.group(row.group_name) is None]
-    lead = intent.protections[0].mode if intent.protections else ProtectionRequest(vvset=TEST_VVSET, peer_cpg="").mode
-    test = intent.failover_test and not intent.failover_group and lead == "sync" and primary.group(TEST_GROUP) is None
-    if sets:
-        what = (f"the sync row{'s' if len(sets) != 1 else ''} for volume set{'s' if len(sets) != 1 else ''} "
-                + ", ".join(f"'{s}'" for s in sets) + " cannot be configured: set Mode to async (periodic)")
-    elif test:
-        what = "the failover test group, which takes the first row's mode, cannot be sync: set that row's Mode to async (periodic)"
-    else:
-        return ""
-    a, b = primary.name or primary.host, peer.name or peer.host
-    return (f"{a} (OS {primary.os_version}) refuses sync replication to {b} (OS {peer.os_version}), as it does to any "
-            f"{family} array, so {what} on the Replication tab for this pair.")
-
-
-def check(primary: ReplicationArrayView, peer: ReplicationArrayView, intent: ReplicationIntent) -> ReplicationReport:
-    report = ReplicationReport(primary=primary, peer=peer)
-    f = report.findings
-    if primary.read_error:
-        report.error = primary.read_error
-        return report
-    if peer.read_error:
-        report.error = peer.read_error
-        return report
-
-    a, b = primary.name or primary.host, peer.name or peer.host
-    row_modes = {row.mode for row in intent.protections}
-    planned = {row.group_name for row in intent.protections} | {TEST_GROUP}
-    report.rtt_ms, report.modes = intent.rtt_ms, run_modes(intent)
-    mixed = _mixed_transports(primary, peer)
-    if mixed:
-        # SPEC-031 R3: one pair, one transport. The step does not pick one, and plans nothing.
-        report.mixed_transports = True
-        f.append(mixed)
-        return report
-    report.partnership = find_partnership(primary, peer, modes=row_modes, own_groups=planned)
-    sets_up = bool(intent.network) and report.partnership is None   # SPEC-021: the tool makes it
-    if report.partnership is None and not sets_up:
-        fc = [*_fc_one_way(primary, peer), *_fc_one_way(peer, primary),
-              *_fc_unresolved(primary, peer), *_fc_unresolved(peer, primary)]
-        if fc:
-            # SPEC-031 R4: the Replication network tab sets up RCIP only; an FC pair is never sent there.
-            f.append(
-                f"No Remote Copy partnership between {a} and {b}: no two targets point at each other, by RCIP address "
-                "or by Fibre Channel WWN. Fix the Fibre Channel partnership on the arrays (what each target shows is "
-                "below), then read both arrays again."
-            )
-            f.extend(fc)
-        else:
-            f.append(
-                f"No Remote Copy partnership between {a} and {b}: neither array has a target whose links point at "
-                f"the other's RCIP addresses. Name the replication ports on the Replication network tab and the tool "
-                "sets it up, or set it up on the arrays first."
-            )
-    elif report.partnership is not None:
-        p = report.partnership
-        used = [p.target_for(m) for m in sorted(row_modes)]
-        for t in [t for t in used if t is not None] or p.targets[:1]:
-            if t.links_up < 2 or t.peer_links_up < 2:
-                f.append(
-                    f"The partnership needs at least 2 links Up each way: {a} → {b} via target '{t.name}' has "
-                    f"{t.links_up} of {t.links_total} Up, {b} → {a} via '{t.peer_name}' has {t.peer_links_up} of "
-                    f"{t.peer_links_total} Up."
-                )
-        if p.transport == "FC":
-            # An extra FC target that half-matches does not stop the pair the step found; say so, do not block.
-            report.notes.extend([*_fc_unresolved(primary, peer), *_fc_unresolved(peer, primary)])
-    if sets_up and len(row_modes) > 1:
-        # SPEC-021 makes one target per pair, and every group on a target must replicate in one mode: say
-        # so before the partnership is set up, not after.
-        f.append(
-            f"The Replication tab mixes sync and async rows, and the partnership the tool sets up between {a} and "
-            f"{b} has one target; every group on one target must replicate in the same mode (HPE Support Matrix). "
-            "Make all rows one mode, or set up a second target over spare RCIP ports on the arrays first."
-        )
-    refused = _sync_refused(primary, peer, intent)
-    if refused:
-        f.append(refused)
-    for view, label in ((primary, a), (peer, b)):
-        if not view.rc_started and not sets_up:
-            f.append(f"Remote Copy is not started on {label} (showrcopy says '{view.rc_status or 'unknown'}'); "
-                     "it has to be started before groups can be created.")
-
-    rtt = intent.rtt_ms
-    # One mode per target (Support Matrix: "RC Groups using the same RC-Target must replicate in the
-    # same mode"; proven live 2026-10-09 — the array refuses the START, HTTP 400 code 236, after
-    # every other write has succeeded). HPE's answer is a target per mode over links of their own
-    # (a link belongs to one target, live 2026-10-09), so a pair with such targets serves mixed rows.
-    if report.partnership is not None:
-        p = report.partnership
-        spare = ("spare RCIP ports (a link belongs to one target; set it up on the arrays, the tool makes only the "
-                 "first target of a pair)" if p.transport == "IP" else
-                 "spare Fibre Channel ports (a link belongs to one target; set it up on the arrays)")
-        for mode in sorted(row_modes):
-            if mode in p.target_by_mode:
-                continue
-            tail = "Use {have} on the Replication tab, or a second target over " + spare + "."
-            if len(p.targets) == 1 and p.targets[0].modes:
-                t = p.targets[0]
-                have = t.modes[0]
-                on_target = [g for g in primary.groups if g.target == t.name and g.name not in planned]
-                names = ", ".join(g.name for g in on_target[:4]) + ("…" if len(on_target) > 4 else "")
-                if any(g.status.lower() == "started" for g in on_target):
-                    f.append(
-                        f"Target '{t.name}' already carries {len(on_target)} {have} group(s) ({names}); every group on one "
-                        f"target must replicate in the same mode (HPE Support Matrix), so {mode} groups cannot be started "
-                        f"there. " + tail.format(have=have)
-                    )
-                else:
-                    # Live 2026-10-09: the array starts a periodic group beside STOPPED sync groups. The
-                    # rule still binds the stopped ones when they restart, so the tool does not go there.
-                    f.append(
-                        f"Target '{t.name}' already carries {len(on_target)} {have} group(s) ({names}), all stopped. The array "
-                        f"would start {mode} groups beside them, but every group on one target must replicate in the same "
-                        f"mode (HPE Support Matrix), so the tool will not put their restart at risk. " + tail.format(have=have)
-                    )
-            elif len(p.targets) == 1:
-                f.append(
-                    f"The Replication tab mixes sync and async rows and {a} → {b} has one target ('{p.targets[0].name}'); "
-                    "every group on one target must replicate in the same mode (HPE Support Matrix). Make all rows one "
-                    f"mode, or add a second target over {spare}."
-                )
-            else:
-                other = next((m for m, n in p.target_by_mode.items() if m != mode), None)
-                parts = []
-                for t in p.targets:
-                    if t.modes:
-                        parts.append(f"'{t.name}' carries {t.groups} {'/'.join(t.modes)} group(s)")
-                    elif other and p.target_by_mode.get(other) == t.name:
-                        parts.append(f"'{t.name}' takes this run's {other} rows")
-                    else:
-                        parts.append(f"'{t.name}' is free")
-                f.append(
-                    f"None of the {len(p.targets)} targets from {a} to {b} can carry a {mode} group ({'; '.join(parts)}); "
-                    "every group on one target must replicate in the same mode (HPE Support Matrix). Use that mode on "
-                    f"the Replication tab, or a target of its own over {spare}."
-                )
-    # Over RCIP a typed RTT over the limit is a finding. Over Fibre Channel the typed RTT stands in for the
-    # measurement, so the apply holds it to the limit with the 'Continue anyway' tick instead (SPEC-031 R6).
-    transport = report.partnership.transport if report.partnership is not None else "IP"
-    for row in intent.protections:
-        if transport == "IP" and rtt is not None and rtt > rtt_limit_ms("IP", row.mode):
-            f.append(f"Volume set '{row.vvset}': the measured round-trip time is {rtt:g} ms; "
-                     f"{rtt_limit_text('IP', row.mode)}.")
-        members = primary.vvsets.get(row.vvset)
-        if members is None:
-            f.append(f"Volume set '{row.vvset}' does not exist on {a}. Create it first (Volumes tab and "
-                     "Provision storage, or on the array), or correct the name.")
-            continue
-        if not members:
-            f.append(f"Volume set '{row.vvset}' on {a} is empty; a Remote Copy group needs at least one volume.")
-            continue
-        for volume in members:
-            existing = primary.volume_group(volume)
-            if existing is not None and existing != row.group_name:
-                f.append(f"Volume '{volume}' (in set '{row.vvset}') is already in Remote Copy group '{existing}'; "
-                         "a volume can be in one group only.")
-        if row.peer_cpg not in peer.cpg_free_mib:
-            f.append(f"Peer CPG '{row.peer_cpg}' does not exist on {b} (it has: {', '.join(sorted(peer.cpg_free_mib)) or 'none'}).")
-        else:
-            need = sum(primary.volume_size_mib.get(v, 0) for v in members)
-            free = peer.cpg_free_mib[row.peer_cpg]
-            if need and free < need:
-                f.append(f"Peer CPG '{row.peer_cpg}' on {b} has {free // 1024} GiB free; the volumes in '{row.vvset}' "
-                         f"need {need // 1024} GiB.")
-        count = sum(1 for g in primary.groups if g.mode_key == row.mode)
-        if count >= GROUP_LIMIT[row.mode]:
-            f.append(f"{a} already has {count} {row.mode} groups, the limit for a 2-node system.")
-    return report
 
 
 # ------------------------------------------------------------------ R3: plan
@@ -467,6 +93,171 @@ def _group_calls(row: ProtectionRequest, members: list[str], target: str, local_
     return calls, start
 
 
+def _vvset_call(where: Literal["A", "B"], name: str, members: list[str]) -> PlannedCall:
+    return PlannedCall(
+        where=where,
+        wsapi=f"POST /volumesets {{name: {name}, setmembers: [{', '.join(members)}]}}",
+        cli=f"createvvset {name} {' '.join(members)}",
+    )
+
+
+def _number(seq: count[int], *calls: PlannedCall | None) -> None:
+    for call in calls:
+        if call is not None:
+            call.seq = next(seq)
+
+
+def _target_for(partnership: Partnership | None, mode: str) -> tuple[str, bool]:
+    """(target name, mirror_config) for a row's mode — the per-mode choice, else the first target."""
+    if partnership is None:
+        return "<peer>", True
+    t = partnership.target_for(mode)
+    return (t.name, t.mirror_config) if t else (partnership.target_on_primary, partnership.mirror_config)
+
+
+def _resolve_protection_rows(
+    primary: ReplicationArrayView, intent: ReplicationIntent, provisioning: ProvisioningIntent,
+) -> tuple[list[tuple[ProtectionRequest, list[str], str]], list[str]]:
+    a = _name(primary)
+    rows: list[tuple[ProtectionRequest, list[str], str]] = []
+    blockers: list[str] = []
+    for row in intent.protections:
+        members = primary.vvsets.get(row.vvset) or [v.name for v in provisioning.volumes if v.vvset == row.vvset]
+        # WSAPI refuses a group with a target userCPG and no localUserCPG (live 2026-11-03, HTTP 400 code 40).
+        local_cpg = next((v.cpg for v in provisioning.volumes if v.vvset == row.vvset), "") or provisioning.default_cpg
+        if primary.cpg_free_mib and local_cpg not in primary.cpg_free_mib:
+            blockers.append(
+                f"Remote Copy group for '{row.vvset}' needs a local CPG on {a}; '{local_cpg}' is not one of its CPGs "
+                f"({', '.join(sorted(primary.cpg_free_mib))}). Set 'Default CPG' on the Provisioning tab."
+            )
+        rows.append((row, members, local_cpg))
+    return rows, blockers
+
+
+def _plan_failover_test_objects(
+    primary: ReplicationArrayView, intent: ReplicationIntent, provisioning: ProvisioningIntent, seq: count[int],
+) -> tuple[list[ReplicationAction], list[str], tuple[ProtectionRequest, list[str], str]]:
+    a = _name(primary)
+    # The test group rides the same target, so it takes the rows' mode (one mode per target).
+    lead = intent.protections[0] if intent.protections else ProtectionRequest(vvset=TEST_VVSET, peer_cpg="")
+    test_row = ProtectionRequest(
+        vvset=TEST_VVSET, mode=lead.mode, rpo_minutes=lead.rpo_minutes,
+        peer_cpg=lead.peer_cpg, peer_vvset=TEST_PEER_VVSET,
+    )
+    test_cpg = next((v.cpg for v in provisioning.volumes), "") or provisioning.default_cpg
+    actions: list[ReplicationAction] = []
+    blockers: list[str] = []
+    if TEST_VOLUME not in primary.volume_size_mib:
+        if primary.cpg_free_mib and test_cpg not in primary.cpg_free_mib:
+            blockers.append(
+                f"The failover test volume {TEST_VOLUME} goes in CPG '{test_cpg}' on {a}, which has no CPG of that name "
+                f"(it has: {', '.join(sorted(primary.cpg_free_mib))}). Set 'Default CPG' on the Provisioning tab."
+            )
+        create_vv = PlannedCall(
+            where="A",
+            wsapi=f"POST /volumes {{name: {TEST_VOLUME}, cpg: {test_cpg}, sizeMiB: {TEST_VOLUME_GIB * 1024}, tpvv: true}}",
+            cli=f"createvv -tpvv {test_cpg} {TEST_VOLUME} {TEST_VOLUME_GIB}g",
+        )
+        _number(seq, create_vv)
+        actions.append(ReplicationAction(
+            kind="test_volume", name=TEST_VOLUME, where="A", state="create",
+            reason=f"{TEST_VOLUME_GIB} GiB tpvv for the failover test", calls=[create_vv],
+            detail={"cpg": test_cpg, "size_gib": TEST_VOLUME_GIB},
+        ))
+    else:
+        actions.append(ReplicationAction(kind="test_volume", name=TEST_VOLUME, state="exists", reason="already on the array"))
+    if TEST_VVSET not in primary.vvsets:
+        create_set = _vvset_call("A", TEST_VVSET, [TEST_VOLUME])
+        _number(seq, create_set)
+        actions.append(ReplicationAction(
+            kind="test_vvset", name=TEST_VVSET, where="A", state="create",
+            reason=f"holds {TEST_VOLUME}", calls=[create_set], detail={"members": [TEST_VOLUME]},
+        ))
+    else:
+        actions.append(ReplicationAction(kind="test_vvset", name=TEST_VVSET, state="exists", reason="already on the array"))
+    return actions, blockers, (test_row, primary.vvsets.get(TEST_VVSET) or [TEST_VOLUME], test_cpg)
+
+
+def _plan_group_actions(
+    report: ReplicationReport, row: ProtectionRequest, members: list[str], local_cpg: str, seq: count[int],
+) -> tuple[list[ReplicationAction], list[str]]:
+    primary, peer = report.primary, report.peer
+    a, b = _name(primary), _name(peer)
+    g = row.group_name
+    target, mirror_config = _target_for(report.partnership, row.mode)
+    existing = primary.group(g)
+    peer_set = row.peer_vvset_name
+    peer_set_call = None if peer_set in peer.vvsets else _vvset_call("B", peer_set, members)
+    actions: list[ReplicationAction] = []
+    blockers: list[str] = []
+    if existing is None:
+        setup, start = _group_calls(row, members, target, local_cpg, mirror_config)
+        _number(seq, *setup, peer_set_call, start)
+        actions.append(ReplicationAction(
+            kind="group", name=g, where="A", state="create",
+            reason=f"{row.mode}" + (f", RPO {row.rpo_minutes} min (period {row.period_seconds // 60} min)" if row.period_seconds else "")
+                   + f" → {target}, {len(members)} volume(s) from set '{row.vvset}', secondaries on {row.peer_cpg}",
+            calls=[*setup, start],
+            detail={
+                "vvset": row.vvset, "mode": row.mode, "volumes": members, "target": target,
+                "peer_cpg": row.peer_cpg, "local_cpg": local_cpg, "period_seconds": row.period_seconds,
+                "auto_recover": row.auto_recover, "auto_synchronize": row.auto_synchronize,
+                "peer_vvset": peer_set, "start_where": start.where, "is_test": row.vvset == TEST_VVSET,
+            },
+        ))
+    else:
+        diff = _group_matches(existing, row, members, target)
+        if diff:
+            actions.append(ReplicationAction(kind="group", name=g, state="conflict", reason=f"exists but {diff}"))
+            blockers.append(
+                f"Remote Copy group '{g}' exists on {a} but {diff}. The tool never changes an existing group; "
+                "remove it on the array or rename the volume set."
+            )
+        else:
+            actions.append(ReplicationAction(
+                kind="group", name=g, state="exists",
+                reason=f"{existing.status}, {existing.role}, {existing.mode}, {len(existing.volumes)} volume(s)",
+            ))
+        _number(seq, peer_set_call)
+    if peer_set_call is None:
+        actions.append(ReplicationAction(
+            kind="peer_vvset", name=peer_set, where="B", state="exists",
+            reason=f"{len(peer.vvsets[peer_set])} member(s) on {b}",
+        ))
+    else:
+        actions.append(ReplicationAction(
+            kind="peer_vvset", name=peer_set, where="B", state="create",
+            reason=f"the secondary volumes on {b}, for the DR site's exports",
+            calls=[peer_set_call], detail={"members": members, "group": g},
+        ))
+    return actions, blockers
+
+
+def _plan_notes(report: ReplicationReport, existing_groups: list[str]) -> list[str]:
+    primary, peer = report.primary, report.peer
+    a, b = _name(primary), _name(peer)
+    notes: list[str] = []
+    if existing_groups:
+        notes.append(
+            f"{len(existing_groups)} Remote Copy group(s) already on {a} are not part of this plan and will not be touched: "
+            + ", ".join(existing_groups) + "."
+        )
+    if report.partnership:
+        p = report.partnership
+        legs = "; ".join(
+            f"{a} → {b} via target '{t.name}' ({t.links_up}/{t.links_total} links Up), {b} → {a} via '{t.peer_name}' "
+            f"({t.peer_links_up}/{t.peer_links_total} Up), policy " + ("mirror_config" if t.mirror_config else "no_mirror_config")
+            + ("" if not t.modes else f", carries {t.groups} {'/'.join(t.modes)} group(s)")
+            for t in p.targets
+        )
+        notes.append(f"Partnership {TRANSPORT_WORDS[p.transport]}: {legs}.")
+        if len(p.targets) > 1 and p.target_by_mode:
+            notes.append("Target per mode this run: " + ", ".join(f"{m} → '{n}'" for m, n in sorted(p.target_by_mode.items())) + ".")
+    if primary.system_id is not None:
+        notes.append(f"On {b} each new group will be named '<group>.r{primary.system_id}'.")
+    return notes
+
+
 def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisioning: ProvisioningIntent) -> ReplicationPlan:
     plan = ReplicationPlan(blockers=list(report.findings), notes=list(report.notes))
     if report.error:
@@ -475,147 +266,37 @@ def build_plan(report: ReplicationReport, intent: ReplicationIntent, provisionin
     if report.mixed_transports:
         return plan     # SPEC-031 R3: a pair with IP and FC targets towards each other plans nothing
     primary, peer = report.primary, report.peer
-    partnership = report.partnership
-    a, b = primary.name or primary.host, peer.name or peer.host
+    a, b = _name(primary), _name(peer)
     # SPEC-021 R3: the partnership rows come first; when any is to create, the groups wait for a second
     # preview (the link check needs the partnership, and the groups need the link check).
     p_actions, p_blockers, p_notes = plan_partnership(report, intent)
     plan.actions += p_actions
     plan.blockers += p_blockers
     plan.notes += p_notes
-    if plan.sets_up_partnership or (intent.network and partnership is None):
-        for seq, call in enumerate((c for x in p_actions for c in x.calls), start=1):
-            call.seq = seq
-        plan.notes.append(f"This configures the replication ports and the partnership between {a} and {b} first. "
-                          "The Remote Copy groups are planned after it: read both arrays again, press Check RC link, "
-                          "then configure the groups.")
+    if plan.sets_up_partnership or (intent.network and report.partnership is None):
+        for seq_num, call in enumerate((c for x in p_actions for c in x.calls), start=1):
+            call.seq = seq_num
+        plan.notes.append(
+            f"This configures the replication ports and the partnership between {a} and {b} first. "
+            "The Remote Copy groups are planned after it: read both arrays again, press Check RC link, "
+            "then configure the groups."
+        )
         return plan
 
-    def target_for(mode: str) -> tuple[str, bool]:
-        """(target name, mirror_config) for a row's mode — the per-mode choice, else the first target."""
-        if partnership is None:
-            return "<peer>", True
-        t = partnership.target_for(mode)
-        return (t.name, t.mirror_config) if t else (partnership.target_on_primary, partnership.mirror_config)
-
-    rows: list[tuple[ProtectionRequest, list[str], str]] = []
-    for row in intent.protections:
-        members = primary.vvsets.get(row.vvset) or [v.name for v in provisioning.volumes if v.vvset == row.vvset]
-        # WSAPI refuses a group with a target userCPG and no localUserCPG (live 2026-11-03, HTTP 400 code 40).
-        local_cpg = next((v.cpg for v in provisioning.volumes if v.vvset == row.vvset), "") or provisioning.default_cpg
-        if primary.cpg_free_mib and local_cpg not in primary.cpg_free_mib:
-            plan.blockers.append(
-                f"Remote Copy group for '{row.vvset}' needs a local CPG on {a}; '{local_cpg}' is not one of its CPGs "
-                f"({', '.join(sorted(primary.cpg_free_mib))}). Set 'Default CPG' on the Provisioning tab."
-            )
-        rows.append((row, members, local_cpg))
-    seq = 0
-
-    def number(*calls: PlannedCall) -> None:
-        nonlocal seq
-        for c in calls:
-            seq += 1
-            c.seq = seq
-
+    rows, row_blockers = _resolve_protection_rows(primary, intent, provisioning)
+    plan.blockers.extend(row_blockers)
+    seq = count(1)
     if intent.failover_test and not intent.failover_group:
-        # The test group rides the same target, so it takes the rows' mode (one mode per target).
-        lead = intent.protections[0] if intent.protections else ProtectionRequest(vvset=TEST_VVSET, peer_cpg="")
-        test_row = ProtectionRequest(vvset=TEST_VVSET, mode=lead.mode, rpo_minutes=lead.rpo_minutes, peer_cpg=lead.peer_cpg,
-                                     peer_vvset=TEST_PEER_VVSET)
-        test_cpg = next((v.cpg for v in provisioning.volumes), "") or provisioning.default_cpg
-        if TEST_VOLUME not in primary.volume_size_mib and primary.cpg_free_mib and test_cpg not in primary.cpg_free_mib:
-            plan.blockers.append(
-                f"The failover test volume {TEST_VOLUME} goes in CPG '{test_cpg}' on {a}, which has no CPG of that name "
-                f"(it has: {', '.join(sorted(primary.cpg_free_mib))}). Set 'Default CPG' on the Provisioning tab."
-            )
-        if TEST_VOLUME not in primary.volume_size_mib:
-            create_vv = PlannedCall(where="A", wsapi=f"POST /volumes {{name: {TEST_VOLUME}, cpg: {test_cpg}, sizeMiB: {TEST_VOLUME_GIB * 1024}, tpvv: true}}",
-                                    cli=f"createvv -tpvv {test_cpg} {TEST_VOLUME} {TEST_VOLUME_GIB}g")
-            number(create_vv)
-            plan.actions.append(ReplicationAction(
-                kind="test_volume", name=TEST_VOLUME, where="A", state="create",
-                reason=f"{TEST_VOLUME_GIB} GiB tpvv for the failover test", calls=[create_vv],
-                detail={"cpg": test_cpg, "size_gib": TEST_VOLUME_GIB},
-            ))
-        else:
-            plan.actions.append(ReplicationAction(kind="test_volume", name=TEST_VOLUME, state="exists", reason="already on the array"))
-        if TEST_VVSET not in primary.vvsets:
-            create_set = PlannedCall(where="A", wsapi=f"POST /volumesets {{name: {TEST_VVSET}, setmembers: [{TEST_VOLUME}]}}",
-                                     cli=f"createvvset {TEST_VVSET} {TEST_VOLUME}")
-            number(create_set)
-            plan.actions.append(ReplicationAction(
-                kind="test_vvset", name=TEST_VVSET, where="A", state="create", reason=f"holds {TEST_VOLUME}", calls=[create_set],
-                detail={"members": [TEST_VOLUME]},
-            ))
-        else:
-            plan.actions.append(ReplicationAction(kind="test_vvset", name=TEST_VVSET, state="exists", reason="already on the array"))
-        rows.append((test_row, primary.vvsets.get(TEST_VVSET) or [TEST_VOLUME], test_cpg))
-
+        t_actions, t_blockers, test_entry = _plan_failover_test_objects(primary, intent, provisioning, seq)
+        plan.actions.extend(t_actions)
+        plan.blockers.extend(t_blockers)
+        rows.append(test_entry)
     for row, members, local_cpg in rows:
-        g = row.group_name
-        target, mirror_config = target_for(row.mode)
-        existing = primary.group(g)
-        peer_set = row.peer_vvset_name
-        peer_set_call: PlannedCall | None = None
-        if peer_set not in peer.vvsets:
-            peer_set_call = PlannedCall(where="B", wsapi=f"POST /volumesets {{name: {peer_set}, setmembers: [{', '.join(members)}]}}",
-                                        cli=f"createvvset {peer_set} {' '.join(members)}")
-        if existing is None:
-            setup, start = _group_calls(row, members, target, local_cpg, mirror_config)
-            number(*setup)
-            if peer_set_call is not None:
-                number(peer_set_call)
-            number(start)
-            plan.actions.append(ReplicationAction(
-                kind="group", name=g, where="A", state="create",
-                reason=f"{row.mode}" + (f", RPO {row.rpo_minutes} min (period {row.period_seconds // 60} min)" if row.period_seconds else "")
-                       + f" → {target}, {len(members)} volume(s) from set '{row.vvset}', secondaries on {row.peer_cpg}",
-                calls=[*setup, start],
-                detail={
-                    "vvset": row.vvset, "mode": row.mode, "volumes": members, "target": target,
-                    "peer_cpg": row.peer_cpg, "local_cpg": local_cpg, "period_seconds": row.period_seconds,
-                    "auto_recover": row.auto_recover, "auto_synchronize": row.auto_synchronize,
-                    "peer_vvset": peer_set, "start_where": start.where, "is_test": row.vvset == TEST_VVSET,
-                },
-            ))
-        else:
-            diff = _group_matches(existing, row, members, target)
-            if diff:
-                plan.actions.append(ReplicationAction(kind="group", name=g, state="conflict", reason=f"exists but {diff}"))
-                plan.blockers.append(f"Remote Copy group '{g}' exists on {a} but {diff}. The tool never changes an existing group; "
-                                     "remove it on the array or rename the volume set.")
-            else:
-                plan.actions.append(ReplicationAction(
-                    kind="group", name=g, state="exists",
-                    reason=f"{existing.status}, {existing.role}, {existing.mode}, {len(existing.volumes)} volume(s)",
-                ))
-            if peer_set_call is not None:
-                number(peer_set_call)
-        if peer_set_call is None:
-            plan.actions.append(ReplicationAction(kind="peer_vvset", name=peer_set, where="B", state="exists",
-                                                  reason=f"{len(peer.vvsets[peer_set])} member(s) on {b}"))
-        else:
-            plan.actions.append(ReplicationAction(
-                kind="peer_vvset", name=peer_set, where="B", state="create",
-                reason=f"the secondary volumes on {b}, for the DR site's exports", calls=[peer_set_call],
-                detail={"members": members, "group": g},
-            ))
+        g_actions, g_blockers = _plan_group_actions(report, row, members, local_cpg, seq)
+        plan.actions.extend(g_actions)
+        plan.blockers.extend(g_blockers)
 
     planned = {row.group_name for row, _, _ in rows}
     plan.existing_groups = [g.name for g in primary.groups if g.name not in planned]
-    if plan.existing_groups:
-        plan.notes.append(f"{len(plan.existing_groups)} Remote Copy group(s) already on {a} are not part of this plan and will not be touched: "
-                          + ", ".join(plan.existing_groups) + ".")
-    if report.partnership:
-        p = report.partnership
-        legs = "; ".join(
-            f"{a} → {b} via target '{t.name}' ({t.links_up}/{t.links_total} links Up), {b} → {a} via '{t.peer_name}' "
-            f"({t.peer_links_up}/{t.peer_links_total} Up), policy " + ("mirror_config" if t.mirror_config else "no_mirror_config")
-            + ("" if not t.modes else f", carries {t.groups} {'/'.join(t.modes)} group(s)")
-            for t in p.targets)
-        plan.notes.append(f"Partnership {TRANSPORT_WORDS[p.transport]}: {legs}.")
-        if len(p.targets) > 1 and p.target_by_mode:
-            plan.notes.append("Target per mode this run: " + ", ".join(f"{m} → '{n}'" for m, n in sorted(p.target_by_mode.items())) + ".")
-    if primary.system_id is not None:
-        plan.notes.append(f"On {b} each new group will be named '<group>.r{primary.system_id}'.")
+    plan.notes.extend(_plan_notes(report, plan.existing_groups))
     return plan

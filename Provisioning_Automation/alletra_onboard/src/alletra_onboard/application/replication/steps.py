@@ -18,6 +18,7 @@ from alletra_onboard.application.replication import (
     partnership_apply as replication_partnership_apply,
 )
 from alletra_onboard.application.replication import plan as replication_plan
+from alletra_onboard.application.replication import plan_check as replication_plan_check
 from alletra_onboard.application.replication import read as replication_read
 from alletra_onboard.application.replication import verify as replication_verify
 from alletra_onboard.application.runs.coordinator import (
@@ -136,7 +137,7 @@ class ReplicationSteps:
         progress = self._progress(run.run_id, phase)
         primary = await asyncio.to_thread(partial(replication_read.read_array, intent.array, progress=progress))
         peer = await asyncio.to_thread(partial(replication_read.read_array, intent.replication.peer, progress=progress))
-        report = replication_plan.check(primary, peer, intent.replication)
+        report = replication_plan_check.check(primary, peer, intent.replication)
         # The identity the apply must quote back: a new read is a new plan to approve.
         plan = replication_plan.build_plan(report, intent.replication, intent).model_copy(update={"plan_id": new_plan_id()})
         coord.save_artifact_best_effort(run.run_id, REPORT_ARTIFACT, report.model_dump_json().encode("utf-8"))

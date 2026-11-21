@@ -485,7 +485,7 @@ def test_a_group_whose_showrcopy_d_failed_keeps_the_short_list_and_says_why(tmp_
 
 
 def test_the_document_reads_showrcopy_d_for_the_groups_this_run_configured():
-    from alletra_onboard.application.documents.asbuilt import rc_group_names
+    from alletra_onboard.application.documents.asbuilt_replication import rc_group_names
 
     assert rc_group_names(_data(replication_tab=_tab(), replication_plan=_periodic_json("plan.json"),
                                 replication_result=_periodic_json("result.json"))) == ["zz_rc_vvs_rcg", "zz_rc_test_rcg"]

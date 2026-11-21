@@ -255,6 +255,7 @@ source_modules = [
 ]
 forbidden_modules = [
   "alletra_onboard.application.replication.plan",
+  "alletra_onboard.application.replication.plan_check",
   "alletra_onboard.application.replication.apply",
 ]
 allow_indirect_imports = true

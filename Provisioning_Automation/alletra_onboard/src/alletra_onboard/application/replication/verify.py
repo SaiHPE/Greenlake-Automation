@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from alletra_onboard.application.replication import read as replication_read
-from alletra_onboard.application.replication.plan import find_partnership
+from alletra_onboard.application.replication.plan_check import find_partnership
 from alletra_onboard.domain.provisioning import ProvisioningIntent
 from alletra_onboard.domain.replication import (
     GroupVerification,

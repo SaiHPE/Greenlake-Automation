@@ -8,7 +8,8 @@ import pytest
 from pydantic import SecretStr
 
 from alletra_onboard.application.replication.apply import apply_plan
-from alletra_onboard.application.replication.plan import build_plan, check
+from alletra_onboard.application.replication.plan import build_plan
+from alletra_onboard.application.replication.plan_check import check
 from alletra_onboard.application.replication.read import read_array
 from alletra_onboard.application.replication.verify import peer_group_name, verify
 from alletra_onboard.domain.provisioning import ProvisioningIntent, VolumeRequest

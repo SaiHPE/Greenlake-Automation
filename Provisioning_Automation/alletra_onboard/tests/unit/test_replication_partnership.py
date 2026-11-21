@@ -19,7 +19,8 @@ from alletra_onboard.adapters.array.rc_cli_client import (
 from alletra_onboard.application.platform import init_sheet
 from alletra_onboard.application.replication import partnership, partnership_apply
 from alletra_onboard.application.replication.clients import make_rc_writer
-from alletra_onboard.application.replication.plan import build_plan, check
+from alletra_onboard.application.replication.plan import build_plan
+from alletra_onboard.application.replication.plan_check import check
 from alletra_onboard.application.replication.read import (
     parse_showport_roles,
     parse_showversion,
