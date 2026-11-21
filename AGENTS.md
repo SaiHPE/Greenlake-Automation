@@ -21,7 +21,7 @@ Everything lives under `Provisioning_Automation/alletra_onboard/` (called "the a
 |---|---|
 | What is in scope, what is built, what is live-verified | `docs/SCOPE.md` |
 | Open work | github.hpe.com issues (one per item, `BL-NN` titles); history in `docs/TRACKER.md` |
-| How the code is laid out | `docs/design/HLD.md`, `docs/STANDARD.md`; the full guide for new developers is `docs/DEVELOPER-HANDBOOK.html` (open it in a browser) |
+| How the code is laid out | `docs/design/HLD.md`, `docs/design/LLD.md`, `docs/STANDARD.md`; the full guide for new developers is `docs/DEVELOPER-HANDBOOK.html` (open it in a browser) |
 | Domain words (array, run, fabric, VV set, ...) | `CONTEXT.md` |
 | Why things are the way they are | `docs/adr/` and `docs/specs/` |
 | Mistakes we already made, and the rule each one left | `docs/LESSONS.md` (read before touching wizards, state or a refactor) |
@@ -61,19 +61,16 @@ Everything lives under `Provisioning_Automation/alletra_onboard/` (called "the a
 ## Layout (app folder)
 
 ```
-src/alletra_onboard/
-  domain/        models, workflow (step registry), policies (rate limits, redact), ports. No I/O.
-  application/   one package per context: onboarding/, provisioning/, replication/, documents/,
-                 platform/ (sheet, proxy, prerequisites), runs/ (coordinator, events). service.py wires them.
-  adapters/      one package per outside system: greenlake/, browser/ (Playwright), array/
-                 (SSH + WSAPI), vcenter/, fabric/ (Brocade), hosts/ (Linux SSH, Windows WinRM),
-                 persistence/ (SQLite). command_log.py records every device command for the console.
-  api/           app.py (create_app), routes/ (one APIRouter per area), schemas.py; cli/main.py the CLI.
-frontend/src/    React + Grommet. steps/ one file per step; ui/ the shared shell and blocks.
-tests/unit, tests/contract, tests/fixtures (captured device output)
-lab/             scripts that drive the app against the lab arrays (see lab/README.md)
-scripts/         check.py, push_jumpbox_test.sh, after_merge.sh, release and packaging scripts
+src/alletra_onboard/   domain/ (no I/O), application/ (per-context services + service.py),
+                       adapters/ (one package per outside system), api/ (FastAPI), cli/ (Typer)
+frontend/src/          React + Grommet UI (steps/, ui/, api.ts, useRunEvents.ts)
+tests/                 unit/, contract/, fixtures/ (captured device output)
+lab/                   scripts that drive the app against lab arrays (see lab/README.md)
+scripts/               check.py, push_jumpbox_test.sh, after_merge.sh, release/packaging scripts
 ```
+
+See `docs/design/HLD.md` (section 5) for the component diagram and `[tool.importlinter]` in
+`pyproject.toml` for the enforced import boundaries.
 
 ## Commands (from the app folder)
 
@@ -127,7 +124,8 @@ cd frontend && npm run mockups           # design mockups on :5175
 - Rate limits: one token bucket per endpoint family; sleep **outside** the lock.
 - DSCC region codes differ from GreenLake region ids (`ap-northeast` is `jp1`, `us-west` is `us1`,
   `eu-central` is `eu1`, `eu-west` is `uk1`).
-- The array's setup wizard URL must start with `https://169.254.`. A `fail-prov-*` error there is a
+- The array's setup wizard URL must be link-local: `https://169.254.x.x` or a bracketed `fe80::`
+  address (`domain/cloudinit_url.py`). A `fail-prov-*` error there is a
   GreenLake state problem (device or subscription), not a network one: fix GreenLake, do not retry.
 - The DSCC browser attaches over CDP to `localhost:9222` only; the operator signs in by hand. The
   tool never handles DSCC passwords or MFA.

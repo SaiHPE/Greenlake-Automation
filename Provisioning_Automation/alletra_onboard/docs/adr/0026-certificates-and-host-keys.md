@@ -164,7 +164,7 @@ test, paramiko's own host-key check over an offline transport), and no device ha
    (the setup wizard, WSAPI's `secure=False` behind the pin, the probe, the pinned context, WinRM);
    `tests/unit/test_trust_checks_off.py` finds the sites from the code's syntax and fails on a new one
    until it has a reason and a line in its list.
-8. **Docs.** HLD sections 7.5 and 8, the LLD and the README updated 2026-11-17. SCOPE is left to the
+8. **Docs.** HLD section 8, the LLD and the README updated 2026-11-17. SCOPE is left to the
    integrator of the parallel branches.
 9. **Live run.** Not done. Until it is, whether the array's certificate or SSH key changes after
    initial setup (the setup wizard, DSCC setup, a restart) is unknown, and a run that trusts the array

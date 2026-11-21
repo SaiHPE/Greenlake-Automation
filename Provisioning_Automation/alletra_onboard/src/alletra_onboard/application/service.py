@@ -1,11 +1,15 @@
 """OnboardingService — the composition root the API drives.
 
-A thin façade that wires the RunCoordinator (run lifecycle + step infrastructure) and the four
-per-context step services, then delegates one-to-one. Step logic does NOT live here:
+A thin façade that wires `RunCoordinator` (run lifecycle + step infrastructure), the
+per-context step services and `ConsoleService`, then delegates one-to-one. Step logic does NOT
+live here:
 
     application/runs/coordinator.py    run lifecycle, guarded spawn, set_state/emit (store + SSE)
+    application/runs/console.py        read-only console prompt and terminal launch
     application/onboarding/steps.py    A GreenLake -> B Cloud Connectivity -> C DSCC
-    application/storage/steps.py       discovery + zoning verify/plan; provisioning tiers + builder
+    application/provisioning/steps.py  discovery, array ports, zoning, provisioning tiers + builder
+    application/replication/steps.py   Remote Copy preview, link check, apply, verify, failover test
+    application/snapshots/steps.py     snapshot and schedule preview, apply, verify
     application/documents/steps.py     post-init verification + the as-built document
 
 The flow is operator-gated, so the service exposes one start_* per step instead of a
