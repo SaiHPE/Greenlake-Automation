@@ -203,7 +203,7 @@ flowchart TB
         REP["replication/"]
         UFILE["unified_file/"]
         RUNS["runs/<br/>coordinator, console, writer_clients,<br/>event_bus, apply_record, trust"]
-        PLAT["platform/<br/>init_sheet, intake, proxy,<br/>prereqs, configuring, clients"]
+        PLAT["platform/<br/>init_sheet, init_sheet_tabs, intake,<br/>proxy, prereqs, configuring, clients"]
     end
 
     CFG["config.py"]
