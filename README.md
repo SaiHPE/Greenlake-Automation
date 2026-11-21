@@ -8,15 +8,17 @@ local web app (`onboard ui`, or the packaged `.exe`). The onboarding slice drive
 | Step | Component | What it does | How it runs |
 |---|---|---|---|
 | **A** | GreenLake REST | register device → assign to Data Services → add/apply subscription → verify | headless HTTP (anywhere with internet) |
-| **B** | Cloud Connectivity Wizard ("cloudinit") | fill the on-array wizard, stop at Review for the operator to Submit | Playwright, **launches** its own browser at the array's `169.254.x` URL |
+| **B** | Cloud Connectivity Wizard ("cloudinit") | fill the on-array wizard, check the Review page and submit (or stop at Review if auto-submit is off) | Playwright, **launches** its own browser at the array's link-local URL (`169.254.x.x` or `fe80::`) |
 | **C** | DSCC "Set Up System" wizard | fill Welcome→Network→Time→Attributes→System, stop at the credential | Playwright, **attaches** to a logged-in Chrome (DSCC SSO) |
 | **D** | Post-init verification *(optional)* | SSH into the initialised array: per-field config check vs. what was onboarded, **plus** the `checkhealth` issue summary + inventory | **read-only** SSH (paramiko); never writes |
 
 The web app is a guided step flow built with **React + the HPE Design System** (`grommet-theme-hpe`)
 and served by the FastAPI backend. The operator picks a **mode** (Full onboarding / Provision only /
-Both / Verify only / Custom), which selects the steps: GreenLake → Cloud Connectivity → DSCC →
-Discovery → SAN Zoning → Provision storage → Verify → As-built. The `init-only` build profile ships
-only the onboarding steps as the "Alletra MP Initialization" accelerator.
+Both / Provision, then replicate / Verify only / Custom; Migrate is listed as not built yet), which
+selects from the step registry (`domain/workflow.py`): GreenLake → Cloud Connectivity → DSCC →
+Discovery → Array ports → SAN Zoning → Provision storage → Replication → Failover test → Snapshots →
+Verify configuration → As-built document. The `init-only` build profile ships only the onboarding
+steps as the "Alletra MP Initialization" accelerator.
 
 ---
 
@@ -95,18 +97,21 @@ Add-Content .env "LAB_DEFAULT_PW=<the lab vCenter and switch password>"
 
 1. `git switch main && git pull`, then `git switch -c feat/bl-NN-short-name`.
 2. Change the code. Before pushing, from the app folder: `.venv/bin/python scripts/check.py`
-   (Windows: `.venv\Scripts\python scripts\check.py`). It runs the tests, ruff, the TypeScript
-   checks (app and mockups), the frontend unit tests and the branch rules below, and ends with a
-   block to paste into the pull request. There is
-   no CI on github.hpe.com, so this is the check the reviewer relies on.
+   (Windows: `.venv\Scripts\python scripts\check.py`). It runs the tests, import contracts, ruff
+   (lint and complexity), fitness, vulture, pyright, generated API types (`api-types`), TypeScript
+   checks (app and mockups), eslint, knip, frontend unit tests and the branch rules below, and ends
+   with a block to paste into the pull request. There is no CI on github.hpe.com, so this is the
+   check the reviewer relies on.
 3. UI changes: edit `frontend/src` only. **Never commit `frontend/dist`**: the owner rebuilds it
    after each merge, and `scripts/push_jumpbox_test.sh` builds it for lab runs. The hook and
-   `check.py` both refuse a branch that changes it.
+   `check.py` both refuse a branch that changes it. If you change a backend route, schema or
+   `domain/events.py`, regenerate `frontend/generated/api.ts` with
+   `.venv/bin/python scripts/api_types.py`.
 4. `git push -u origin feat/bl-NN-short-name` and open a pull request into `main` on github.hpe.com.
    Write `Closes #N` in the description; squash-merging closes the issue.
 
 A feature verified only against captured output is *built, pending live run*, not done. Say so in
-the pull request and the tracker.
+the pull request and keep the issue's `needs live run` label.
 
 ### A live run on a jump box
 
@@ -324,7 +329,9 @@ the app's step registry, so it is always current).
    *warning* is non-fatal (register + assign are the success criteria).
 4. **Cloud Connectivity** —
    - Click **Open Discovery Tool** (launches the HPE Discovery Tool from the Desktop).
-   - Find the array's serial in it and copy its **`https://169.254.x.x/cloudinit`** link (changes every boot).
+   - Find the array's serial in it and copy its link-local setup URL
+     (**`https://169.254.x.x/cloudinit`** or bracketed IPv6 **`https://[fe80::...]/cloudinit`**;
+     changes every boot).
    - **Paste** the link, **review the Network values** shown in the app, then **Fill & connect**.
      The automation fills the on-array wizard and submits in one motion; a guard refuses to submit
      if the management IP doesn't match (so a wrong/link-local IP is never applied). Wait for
@@ -388,7 +395,8 @@ the app's step registry, so it is always current).
    shows the plan (with the array's own time zone, and any other schedule that starts in the same
    minute), creates after you tick *I have reviewed this plan and authorise creating these snapshots
    and schedules on <array>. The schedules keep running after this run ends.*, then checks them
-   back; *Check snapshots* reads them again at any time. Built, not yet run on a lab array.
+   back; *Check snapshots* reads them again at any time. Live-verified on rack13-ARCUS (OS 10.6.0);
+   checks on a DSCC-managed array are still pending.
 7. **Verify configuration** and **As-built document** — read-only: the array's settings against
    what was onboarded, its status check, and the Word document for the hand-over. The document also
    records the array's status at handover: its new alerts (each Major or worse is listed under
@@ -407,26 +415,33 @@ the app's step registry, so it is always current).
 
 ### Device keys and certificates
 
-Arrays, vCenter, SAN switches and Linux hosts come with keys and certificates nobody has recorded, so
-the tool trusts each one **the first time a run connects to it** and records what it presented.
+GreenLake and the HTTPS time check always verify TLS against the OS trust store, `certifi` and any
+`ALLETRA_CA_BUNDLE` file; no setting turns that off. DSCC runs in the operator's Chrome over CDP,
+where Chrome verifies the certificate. On-site devices (arrays, vCenter, Brocade switches and Linux
+hosts) come with keys and certificates nobody has recorded, so the tool trusts each one **the first
+time a run connects to it** and pins its SSH host key or TLS certificate to that run (ADR 0026).
 
 - **Where to see them.** *Run overview, Trusted devices* lists every device the run has reached, with
   its fingerprint and when it was trusted. The step's activity shows the same line, and the as-built
   has a *Device fingerprints* table. The customer can compare them with each device's own console.
-- **When a device presents a different key**, the step stops before the password is sent. Its
-  message names the device and both fingerprints. If the device was replaced or reset on purpose,
-  check the new fingerprint on the device's own console, then on *Run overview, Trusted devices*
-  tick the box and press **Trust the new key** (or certificate), and run the step again. The re-trust
-  is recorded on the run. If nobody changed the device, stop and ask the customer's network team.
+- **When a device presents a different key or certificate**, the step stops before the password is
+  sent. Its message names the device and both fingerprints. If the device was replaced or reset on
+  purpose, check the new fingerprint on the device's own console, then on *Run overview, Trusted
+  devices* tick the box and press **Trust the new key** (or certificate), and run the step again.
+  The re-trust is recorded on the run. If nobody changed the device, stop and ask the customer's
+  network team.
 - **A new run** starts with nothing trusted and trusts again on its own first contact.
 - **A customer CA bundle.** Where the customer has signed their devices' certificates, set
   `ALLETRA_DEVICE_CA_BUNDLE=C:\path\to\customer-ca.pem` in the app's `.env` and restart. The array's
-  WSAPI, vCenter and WinRM over HTTPS are then checked against it (chain and name); a failure stops
-  the step and never falls back. SSH keys are still trusted on first contact. This is separate from
-  `ALLETRA_CA_BUNDLE`, which is for GreenLake and other cloud endpoints.
+  WSAPI (v1 and v3), vCenter and WinRM over HTTPS (5986) are then checked against it (chain and
+  name); a failure stops the step and never falls back to first-contact trust. SSH keys are still
+  trusted on first contact. This is separate from `ALLETRA_CA_BUNDLE`, which is for GreenLake and
+  other cloud endpoints.
 - Two links stay unchecked on purpose: the array's setup wizard (a link-local address on the same
-  cable, and no password is typed there) and WinRM to Windows hosts (NTLM never sends the password,
-  and the tool only reads).
+  cable, and no password is typed there) and WinRM over HTTP 5985 (tried before 5986; NTLM never
+  sends the password, messages are encrypted with the NTLM session, and the tool only runs fixed
+  reads). With a device CA bundle set, WinRM over HTTPS 5986 is validated; without one, 5986 stays
+  unchecked.
 
 ### CLI
 
@@ -478,7 +493,10 @@ The initialisation sheet replaced the older `arrays.csv` (its template is still 
   (`R7C75-…`); the FRU returns `HPE_GL_ERROR_NOT_FOUND`.
 - **The subscription key** is the GreenLake activation key (from the activation email's
   attachment), **not** the EON order number and **not** the AutoPass on-array `.dat` license keys.
-- **The cloudinit URL** changes on every boot: paste the fresh `169.254.x` URL in the app.
+- **The cloudinit URL** changes on every boot: paste the fresh link-local URL from the Discovery
+  Tool — IPv4 `https://169.254.x.x/cloudinit` (not the `169.254.0.0` workbook placeholder) or
+  bracketed IPv6 `https://[fe80::...]/cloudinit` (with optional `%zone`). The array's management IP
+  is refused.
 - **The iSCSI network tab's Port column is text.** Excel turns `0:4:1` typed in a General cell into a
   time; the template formats the column as text and the parser reads a time back as N:S:P anyway. One
   VLAN is one network: a VLAN on two networks, or two VLANs on one network, is refused (listed at upload,
@@ -502,10 +520,12 @@ The *Snapshots* tab (optional, one row per volume set or volume):
 
 ## Status and open items
 
-What is built and what is proven on hardware, area by area: **[docs/SCOPE.md](docs/SCOPE.md)**.
-Open work: the [issues on github.hpe.com](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues).
-The incident→rule register: [docs/LESSONS.md](docs/LESSONS.md). Evidence from lab runs:
-[docs/validation/](docs/validation/).
+Area-by-area build and live-run status lives in **[docs/SCOPE.md](docs/SCOPE.md)**, the map of all
+docs in **[docs/README.md](docs/README.md)**, and open work in
+[issues on github.hpe.com](https://github.hpe.com/g-sai-roopesh/greenlake-automation/issues). Past
+incidents and rules live in [docs/LESSONS.md](docs/LESSONS.md), and lab evidence in
+[docs/validation/](docs/validation/) (including the merged BL-65 engineering-standard refactor, PRs
+#49–#68: [validation record](docs/validation/2026-11-21-bl65-refactor-live.md)).
 
 Two things that are scope, not gaps: **the tool never writes to a SAN switch** (ADR 0012; zoning
 is a command set for the SAN team), and **the DSCC system credential is entered by the operator**
@@ -515,10 +535,17 @@ in the wizard (the tool never handles it).
 
 ## Development (workstation only)
 
+Read [docs/README.md](docs/README.md) first, then open
+[docs/DEVELOPER-HANDBOOK.html](docs/DEVELOPER-HANDBOOK.html) in a browser (architecture and
+invariants are in [docs/design/HLD.md](docs/design/HLD.md), [docs/design/LLD.md](docs/design/LLD.md)
+and [docs/STANDARD.md](docs/STANDARD.md)).
+
 ```powershell
-.\.venv\Scripts\python.exe scripts\check.py      # tests, ruff, TypeScript, UI tests and branch rules in one go
-.\.venv\Scripts\python.exe -m pytest -q          # backend tests only
-cd frontend; npm ci; npm run build               # build the UI locally (never commit frontend/dist)
+.\.venv\Scripts\python.exe scripts\check.py             # full pre-PR gate (macOS/Linux: .venv/bin/python scripts/check.py)
+.\.venv\Scripts\python.exe scripts\api_types.py         # regenerate frontend/generated/api.ts after API/schema changes
+.\.venv\Scripts\python.exe scripts\fitness.py --tighten # tighten quality/ceilings.toml after fixing a listed violation
+.\.venv\Scripts\python.exe -m pytest -q                 # backend tests only
+cd frontend; npm ci; npm run build                      # build the UI locally (never commit frontend/dist)
 ```
 `onboard api` binds `127.0.0.1:8765`; the Vite dev server (`npm run dev`) runs on `:5173` and
 the API allows it via CORS.
