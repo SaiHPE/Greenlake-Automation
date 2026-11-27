@@ -55,7 +55,7 @@ const SIGNALS: Record<string, Signals> = {
   // The plan and the rendered command set are artifacts of a step whose outcome the check decided;
   // Z-6 (2026-09-16): after "Generate command set" the header read Running because the newest event
   // matched nothing and the run was mid-phase.
-  zoning: { complete: ['zoning.proper'], gate: ['zoning.previewed'], ignore: ['zoning.plan', 'zoning.rendered'] },
+  zoning: { complete: ['zoning.proper'], gate: ['zoning.previewed', 'zoning.applied'], ignore: ['zoning.plan', 'zoning.rendered'] },
   provision: {
     complete: ['storage.applied'],
     gate: ['storage.previewed'],
@@ -214,6 +214,10 @@ export function deriveStepHint(step: ServedStep, run: RunRecord | null, events: 
       return 'array could not be read';
     case 'zoning.proper':
       return 'verified on both fabrics';
+    case 'zoning.applied':
+      return 'applied on switches · re-check';
+    case 'zoning.apply.failed':
+      return 'stopped during switch apply';
     case 'zoning.previewed': {
       const report = rec(deciding.data?.report);
       if (report?.error) return 'not checked';

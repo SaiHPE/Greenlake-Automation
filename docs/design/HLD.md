@@ -90,7 +90,7 @@ flowchart LR
     SYS -- "WSAPI v1/v3, SSH allowlist,<br/>Playwright link-local wizard" --> ARR
     SYS -- "WSAPI v1, SSH read,<br/>RC write-scoped SSH" --> PEER
     SYS -- "Read-only pyVmomi" --> VC
-    SYS -- "Read-only SSH allowlist" --> SW
+    SYS -- "Read-only SSH allowlist;<br/>opt-in FOS zone writer (ADR 0033)" --> SW
     SYS -- "Fixed read-only queries" --> HST
     SYS -. "Brocade command set<br/>(copy-paste text)" .-> SAN
     SAN -. "Applies zoning" .-> SW
@@ -107,7 +107,7 @@ flowchart LR
 | Array WSAPI v3 (Unified File) | HTTPS `/api/v3` (`httpx`) | Read-only (`GET` + credential login/logout) | `adapters/array/wsapi_v3_client.py` |
 | Primary and peer array SSH | SSH :22 (`paramiko`) | Read allowlist, link diagnostics, RC and snapshot SSH writers | `adapters/array/cli_client.py`, `adapters/array/rc_cli_client.py`, `adapters/array/snap_cli_client.py` |
 | VMware vCenter | HTTPS :443 (`pyVmomi`) | Read-only HBA/WWPN/IQN and ESXi LUN paths | `adapters/vcenter/vcenter_client.py` |
-| Brocade FOS switches | SSH :22 (`paramiko`) | Read-only allowlist | `adapters/fabric/brocade_client.py` |
+| Brocade FOS switches | SSH :22 (`paramiko`) | Read-only allowlist (`BrocadeClient`); opt-in write-scoped FOS apply (`BrocadeZoneWriter`, ADR 0033) | `adapters/fabric/brocade_client.py`, `adapters/fabric/brocade_writer.py` |
 | Linux and Windows hosts | SSH :22 / WinRM 5985, 5986 | Fixed read-only identity, initiator and multipath/MPIO reads | `adapters/hosts/linux_ssh.py`, `adapters/hosts/windows_winrm.py` |
 | Jump-box OS and tools | Local process / HTTPS GET | Clock skew check/sync, TCP/proxy probes, Discovery Tool, terminal | `adapters/system/` |
 
@@ -115,7 +115,7 @@ flowchart LR
 
 | Excluded item | Status / reference |
 |---|---|
-| Writing to SAN switches; Cisco MDS fabrics | Never ([ADR 0012](../adr/0012-no-switch-writes-the-tool-emits-a-command-set.md), [ADR 0004](../adr/0004-auto-remediate-san-zoning.md)) |
+| Cisco MDS fabrics; unapproved switch writes | Out of scope ([ADR 0004](../adr/0004-auto-remediate-san-zoning.md), [ADR 0033](../adr/0033-opt-in-brocade-zoning-apply.md)); Brocade copy-paste stays default |
 | Two arrays provisioned from one workbook (paired runs) | Deferred ([ADR 0014](../adr/0014-paired-runs-from-one-workbook.md)); peer lives on the Replication tab |
 | Peer Persistence, Active Sync, 3DC, RCIP VLANs; RCFC port setup | Refused at intake or deferred ([ADR 0024](../adr/0024-rcfc-ports-and-targets.md) part B) |
 | Array iSCSI VLAN and migration peer-port writes | Emitted as command sets only; write clients deferred ([ADR 0017](../adr/0017-iscsi-vlan-write-plane.md), [ADR 0018](../adr/0018-peer-ports-over-a-port-scoped-ssh-client.md)) |
@@ -482,7 +482,7 @@ change appendix.
 | [0009](../adr/0009-fabric-from-switch-with-parity-fallback.md) | Accepted | Derive FC fabric from attached switch; report port-number parity when used as fallback. |
 | [0010](../adr/0010-provisioning-builder-consumes-zoning.md) | Accepted | Interactive provisioning builder over discovered objects; consumes zoning, verifies paths. |
 | [0011](../adr/0011-bounded-context-refactor-decoupled-ux.md) | Accepted | Organize backend by workflow context behind frozen API; serve step registry to UI. |
-| [0012](../adr/0012-no-switch-writes-the-tool-emits-a-command-set.md) | Accepted | Never write to a SAN switch; emit copy-paste Brocade commands; zoning gates exports per host. |
+| [0012](../adr/0012-no-switch-writes-the-tool-emits-a-command-set.md) | Accepted (amended by 0033) | Copy-paste Brocade commands as default deliverable; zoning gates exports per host. |
 | [0013](../adr/0013-one-array-credential-per-run.md) | Accepted | Hold one array admin credential per run from the workbook for all steps. |
 | [0014](../adr/0014-paired-runs-from-one-workbook.md) | Deferred | Paired two-array runs from one workbook deferred; peer lives on the Replication tab. |
 | [0015](../adr/0015-tool-configures-remote-copy-write-scoped-ssh.md) | Accepted | Configure Remote Copy: groups/DR over WSAPI, RCIP ports/targets over `ArrayRcCliClient`. |
@@ -503,6 +503,7 @@ change appendix.
 | [0030](../adr/0030-the-gate-fails-where-it-only-warned.md) | Accepted | Gate fails on list growth, gate config edits, new suppressions, dead doc paths and unchecked lessons. |
 | [0031](../adr/0031-least-privilege-in-three-stages.md) | Implemented | Split `WsapiReader`/`WsapiWriter`, gate writes behind `Approval`, persist `apply_in_progress`. |
 | [0032](../adr/0032-typed-run-events-and-generated-frontend-types.md) | Accepted | Register run events in `domain/events.py`; generate `frontend/generated/api.ts` from OpenAPI. |
+| [0033](../adr/0033-opt-in-brocade-zoning-apply.md) | Accepted | Opt-in, approval-gated Brocade FOS zoning apply (`BrocadeZoneWriter`, `cfgenable -f`); copy-paste remains default. |
 
 ---
 

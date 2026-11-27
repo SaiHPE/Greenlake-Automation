@@ -25,6 +25,7 @@ from alletra_onboard.application.provisioning import (
     peer_ports,
     peer_ports_read,
     storage_provision,
+    zoning_apply,
 )
 from alletra_onboard.application.provisioning import discovery as storage_discovery
 from alletra_onboard.application.provisioning import path_verify as storage_path_verify
@@ -56,18 +57,20 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningComposition,
     ProvisioningObjects,
 )
+from alletra_onboard.domain.zoning import ZoningApplyPlan
 
 _log = structlog.get_logger(__name__)
 
 
 class DiscoveryZoningSteps:
-    """Discovery + SAN-zoning verify/plan — read-only reads of array, vCenter and both switches."""
+    """Discovery + SAN-zoning verify/plan (read-only) and opt-in Brocade switch apply (ADR 0033)."""
 
     def __init__(self, coord: RunCoordinator) -> None:
         self._coord = coord
         # Per-run discovery cache over the durable run_artifacts store (C7): the store is the truth
         # (a server restart mid-engagement must not force re-discovery), the dict avoids re-parsing.
         self.discovery: dict[str, DiscoveryReport] = {}
+        self._zoning_apply: dict[str, ZoningApplyPlan] = {}
 
     def current_discovery(self, run_id: str) -> DiscoveryReport | None:
         """The discovery in effect, or None. Unlike require_discovery this never raises — callers use
@@ -98,6 +101,7 @@ class DiscoveryZoningSteps:
         coord = self._coord
         run = coord.get_run(run_id)
         intent = coord.get_provisioning_intent(run_id)
+        self._zoning_apply.pop(run_id, None)
         coord.spawn(run_id, self._run_discover(run, intent))
         return run
 
@@ -162,6 +166,20 @@ class DiscoveryZoningSteps:
             return set()
         return {h for h in raw.decode("utf-8", "replace").split("\n") if h}
 
+    def hold_zoning_apply_plan(self, run_id: str, apply_plan: ZoningApplyPlan) -> None:
+        self._coord.get_run(run_id)
+        if apply_plan.fabrics and apply_plan.plan_id:
+            zoning_apply.verify_plan_for_run(self._coord, run_id, apply_plan)
+            self._zoning_apply[run_id] = apply_plan
+        else:
+            self._zoning_apply.pop(run_id, None)
+
+    def held_zoning_apply_plan(self, run_id: str) -> ZoningApplyPlan | None:
+        return self._zoning_apply.get(run_id)
+
+    def start_zoning_apply(self, run_id: str, *, approved_plan: str | None) -> RunRecord:
+        return zoning_apply.start_approved_apply(self._coord, run_id, self._zoning_apply, approved_plan)
+
     def _save_zoned_hosts(self, run_id: str, hosts: list[str]) -> None:
         # the step succeeded; persisting the gate must not fail it
         self._coord.save_artifact_best_effort(run_id, "zoned_hosts", "\n".join(hosts).encode("utf-8"))
@@ -204,6 +222,7 @@ class DiscoveryZoningSteps:
         run = coord.get_run(run_id)
         intent = coord.get_provisioning_intent(run_id)
         discovery = self.require_discovery(run_id)
+        self._zoning_apply.pop(run_id, None)
         coord.spawn(run_id, self._run_zoning_plan(run, intent, discovery))
         return run
 

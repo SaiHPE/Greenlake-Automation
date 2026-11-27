@@ -1,6 +1,9 @@
 # The tool never writes to a SAN switch — it emits the command set and a consultant applies it
 
-**Status:** accepted, 2026-09-02. Reaffirms [ADR 0004](0004-auto-remediate-san-zoning.md); removes
+**Status:** accepted, 2026-09-02; **amended by [ADR 0033](0033-opt-in-brocade-zoning-apply.md)
+(2026-11-27)** to allow an opt-in, approval-gated Brocade Fabric OS apply path using prompt-free
+`cfgenable "<cfg>" -f` while keeping copy-paste as the default deliverable, `BrocadeClient` strictly
+read-only, and the per-host array-verified export gate unchanged. Reaffirms [ADR 0004](0004-auto-remediate-san-zoning.md); removes
 the write path that shipped against it in v0.14.0 and v0.15.0.
 
 > **REVISED the same day: the gate moved from the RUN to the EXPORT.** As first written this ADR

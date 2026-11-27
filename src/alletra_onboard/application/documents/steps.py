@@ -64,7 +64,9 @@ def _record_apply_event(
     etype: str, ev: dict, data, last_rc_plan: dict | None, last_snap_plan: dict | None,
 ) -> tuple[dict | None, dict | None]:
     # SPEC-007 R6: a failed apply's objects are undone too; a retry calls them Exists.
-    if etype in ("storage.applied", "storage.apply.failed"):
+    if etype in ("zoning.applied", "zoning.apply.failed"):
+        data.zoning_applies.append(ev.get("result") or {})
+    elif etype in ("storage.applied", "storage.apply.failed"):
         data.provisioning_removals.extend((ev.get("result") or {}).get("removals") or [])
     elif etype == "replication.previewed":
         last_rc_plan = ev.get("plan")
@@ -124,6 +126,8 @@ class DocumentSteps:
         "zoning.previewed": ("zoning_report", "report"),
         "zoning.proper": ("zoning_report", "report"),
         "zoning.rendered": ("zoning_rendered", None),
+        "zoning.applied": ("zoning_apply", "result"),
+        "zoning.apply.failed": ("zoning_apply", "result"),
         "storage.previewed": ("provisioning_plan", "plan"),
         "storage.applied": ("provisioning_result", "result"),
         "storage.apply.failed": ("provisioning_result", "result"),     # SPEC-007 R6: a failed apply made objects too

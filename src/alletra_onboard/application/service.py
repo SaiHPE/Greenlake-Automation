@@ -68,6 +68,7 @@ from alletra_onboard.domain.provisioning import (
     ProvisioningObjects,
 )
 from alletra_onboard.domain.trust import DevicePinInfo, TrustKind
+from alletra_onboard.domain.zoning import ZoningApplyPlan
 
 __all__ = [
     "DevicePinNotFoundError",
@@ -162,6 +163,9 @@ class OnboardingService:
     def list_events(self, run_id: str) -> list[RunEvent]:
         return self.coordinator.list_events(run_id)
 
+    def hold_zoning_apply_plan(self, run_id: str, apply_plan: ZoningApplyPlan) -> None:
+        self.discovery_zoning.hold_zoning_apply_plan(run_id, apply_plan)
+
     def record_zoning_render(
         self, run_id: str, *, commands: dict[str, list[str]], skipped: dict[str, list[str]],
         aliases: dict[str, str], selected_pairs: list[tuple[str, str]],
@@ -172,13 +176,18 @@ class OnboardingService:
         touches the run's status."""
         self.coordinator.get_run(run_id)
         peer_commands = peer_commands or {}
+        held = self.discovery_zoning.held_zoning_apply_plan(run_id)
         total = sum(len(c) for c in commands.values()) + sum(len(c) for c in peer_commands.values())
         fabrics = sorted({f for f, c in [*commands.items(), *peer_commands.items()] if c})
         self.coordinator.emit(
             run_id, WorkflowPhase.STORAGE_ZONING, events.ZONING_RENDERED,
             f"Zoning command set generated — {total} command(s) for {', '.join(fabrics) or 'no fabric'}.",
-            events.ZoningRenderedData(commands=commands, skipped=skipped, aliases=aliases,
-                                      selected_pairs=selected_pairs, peer_commands=peer_commands),
+            events.ZoningRenderedData(
+                commands=commands, skipped=skipped, aliases=aliases, selected_pairs=selected_pairs,
+                peer_commands=peer_commands,
+                apply_plan_id=held.plan_id if held and held.plan_id else None,
+                apply_fabrics=held.fabrics if held else [],
+            ),
         )
 
     def mark_complete(self, run_id: str) -> RunRecord:
@@ -208,6 +217,9 @@ class OnboardingService:
 
     def start_zoning_plan(self, run_id: str) -> RunRecord:
         return self.discovery_zoning.start_zoning_plan(run_id)
+
+    def start_zoning_apply(self, run_id: str, *, approved_plan: str | None) -> RunRecord:
+        return self.discovery_zoning.start_zoning_apply(run_id, approved_plan=approved_plan)
 
     # ------------------------------------------------------------------ provisioning tiers + builder
 

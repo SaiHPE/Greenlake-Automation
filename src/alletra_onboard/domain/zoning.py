@@ -152,7 +152,7 @@ class FabricZonePlan(BaseModel):
 
 class ZoningPlan(BaseModel):
     """The read-only assisted zoning plan (ADR 0004): per-fabric host↔array SIST pairs + aliases, for
-    the operator to name and the SAN team to apply. The tool never writes to the switch."""
+    the operator to name and either copy-paste or apply via the opt-in Brocade apply path (ADR 0033)."""
 
     fabrics: list[FabricZonePlan] = Field(default_factory=list[FabricZonePlan])
     offline_hosts: list[str] = Field(default_factory=list)  # host "name (wwpn)" on no fabric -> cable+power
@@ -164,9 +164,54 @@ class ZoningPlan(BaseModel):
     active_zones: dict[str, dict[str, list[str]] | None] = Field(default_factory=dict, exclude=True)
 
 
-# FabricStageResult / ZoningStageResult lived here until 2026-09-02. They modelled the outcome of
-# the tool writing zones to a switch, which it no longer does — the command set is handed to a
-# consultant instead, so there is no tool-side outcome to model. See ADR 0012.
+class FabricZoningApplyPlan(BaseModel):
+    """Opt-in Brocade FOS switch apply plan for one fabric (ADR 0033)."""
+
+    fabric: Fabric
+    switch_host: str
+    active_cfg: str
+    aliases: dict[str, str] = Field(default_factory=dict)
+    zones: dict[str, tuple[str, str]] = Field(default_factory=dict)
+    commands: list[str] = Field(default_factory=list)
+    removals: list[str] = Field(default_factory=list)
+
+
+class ZoningApplyPlan(BaseModel):
+    """Approved Brocade FOS switch apply plan across fabrics (ADR 0033)."""
+
+    plan_id: str = ""
+    fabrics: list[FabricZoningApplyPlan] = Field(default_factory=list[FabricZoningApplyPlan])
+
+
+class ZoningCommandOutcome(BaseModel):
+    """Outcome of one Brocade FOS write command sent during opt-in switch apply."""
+
+    command: str
+    status: Literal["created", "failed", "aborted"]
+    detail: str = ""
+
+
+class FabricZoningApplyResult(BaseModel):
+    """Outcome of opt-in zoning apply on one Brocade fabric switch."""
+
+    fabric: Fabric
+    switch_host: str
+    active_cfg: str
+    status: Literal["applied", "failed", "skipped"]
+    error: str | None = None
+    outcomes: list[ZoningCommandOutcome] = Field(default_factory=list[ZoningCommandOutcome])
+    verified_zones: list[str] = Field(default_factory=list)
+    missing_zones: list[str] = Field(default_factory=list)
+    transaction_aborted: bool = False
+    removals: list[str] = Field(default_factory=list)
+
+
+class ZoningApplyResult(BaseModel):
+    """Outcome of opt-in Brocade FOS zoning apply across fabrics."""
+
+    plan_id: str = ""
+    fabrics: list[FabricZoningApplyResult] = Field(default_factory=list[FabricZoningApplyResult])
+    error: str | None = None
 
 
 # Brocade FOS zone-object names (FOS Command Reference, aliCreate/zoneCreate): first character a

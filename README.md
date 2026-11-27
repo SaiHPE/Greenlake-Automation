@@ -369,7 +369,8 @@ the app's step registry, so it is always current).
    port and that no other port changed, and gives the removal set for what changed. *SAN Zoning* then
    drafts the peer-port zones, with the WWPN read after the change, as a command set of their own.
    With both tabs empty the step has nothing to do. *SAN Zoning* checks zoning and writes the Brocade command set
-   for the SAN team (the tool never writes to a switch); *Provision storage* shows the plan and
+   for the SAN team (copy-paste stays the default; you can also opt in and approve applying those exact Brocade
+   commands directly to the switches with `cfgenable -f`, ADR 0033); *Provision storage* shows the plan and
    creates hosts, sets, volumes and exports only after you tick the confirmation; *Replication* and
    *Failover test* set up Remote Copy to the peer named on the sheet and prove a failover and back.
    When the sheet's *Replication network* tab names the replication ports (one row per port: this
@@ -527,8 +528,9 @@ incidents and rules live in [docs/LESSONS.md](docs/LESSONS.md), and lab evidence
 [docs/validation/](docs/validation/) (including the merged BL-65 engineering-standard refactor, PRs
 #49–#68: [validation record](docs/validation/2026-11-21-bl65-refactor-live.md)).
 
-Two things that are scope, not gaps: **the tool never writes to a SAN switch** (ADR 0012; zoning
-is a command set for the SAN team), and **the DSCC system credential is entered by the operator**
+Two things that are scope, not gaps: **SAN zoning defaults to a copy-paste Brocade command set**
+(ADR 0012, amended by ADR 0033: opt-in direct apply is Brocade FOS only, approval-gated, with Cisco
+MDS out of scope), and **the DSCC system credential is entered by the operator**
 in the wizard (the tool never handles it).
 
 ---

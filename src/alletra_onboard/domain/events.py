@@ -45,7 +45,12 @@ from alletra_onboard.domain.snapshots import (
     SnapshotVerification,
 )
 from alletra_onboard.domain.trust import DevicePinInfo, TrustKind
-from alletra_onboard.domain.zoning import ZoningPlan, ZoningReport
+from alletra_onboard.domain.zoning import (
+    FabricZoningApplyPlan,
+    ZoningApplyResult,
+    ZoningPlan,
+    ZoningReport,
+)
 
 
 # `dump(payload: D)` puts `D` in a contravariant position alongside `data: type[D]` (covariant),
@@ -120,6 +125,12 @@ class ZoningRenderedData(BaseModel):
     aliases: dict[str, str]
     selected_pairs: list[tuple[str, str]]
     peer_commands: dict[str, list[str]] = Field(default_factory=dict)
+    apply_plan_id: str | None = None
+    apply_fabrics: list[FabricZoningApplyPlan] = Field(default_factory=list[FabricZoningApplyPlan])
+
+
+class ZoningApplyData(BaseModel):
+    result: ZoningApplyResult
 
 
 class IscsiSection(BaseModel):
@@ -242,6 +253,9 @@ ZONING_PREVIEWED = _event("zoning.previewed", ZoningCheckData)
 ZONING_PROPER = _event("zoning.proper", ZoningCheckData)
 ZONING_PLAN = _event("zoning.plan", ZoningPlanData)
 ZONING_RENDERED = _event("zoning.rendered", ZoningRenderedData)
+ZONING_APPLY_STARTED = _plain("zoning.apply.started")
+ZONING_APPLIED = _event("zoning.applied", ZoningApplyData)
+ZONING_APPLY_FAILED = _event("zoning.apply.failed", ZoningApplyData)
 PORTS_PREVIEWED = _event("ports.previewed", PortsData)
 PORTS_PREVIEW_FAILED = _event("ports.preview.failed", PortsData)
 PORTS_COMPLETED = _event("ports.completed", PortsData)

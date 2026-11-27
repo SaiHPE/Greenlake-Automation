@@ -20,6 +20,7 @@ type = "protected"
 protected_modules = ["alletra_onboard.adapters"]
 allowed_importers = [
   "alletra_onboard.application.*.clients",
+  "alletra_onboard.application.provisioning.brocade_writer_factory",
   "alletra_onboard.application.runs.coordinator",
   "alletra_onboard.application.runs.console",
   "alletra_onboard.application.runs.writer_clients",

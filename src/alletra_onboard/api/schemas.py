@@ -24,7 +24,7 @@ from alletra_onboard.domain.network import IscsiVlanRequest
 from alletra_onboard.domain.peer_ports import PeerPortIntent
 from alletra_onboard.domain.trust import DevicePinInfo, TrustKind
 from alletra_onboard.domain.workflow import STEP_REGISTRY
-from alletra_onboard.domain.zoning import ZoningPlan
+from alletra_onboard.domain.zoning import FabricZoningApplyPlan, ZoningPlan
 
 
 class HealthResponse(BaseModel):
@@ -514,4 +514,14 @@ class ZoningRenderResponse(BaseModel):
     # SPEC-025 R7: the peer-port block, its own command set per fabric (every pair the sheet asks for).
     peer_commands: dict[str, list[str]] = {}
     peer_skipped: dict[str, list[str]] = {}
+    # ADR 0033: opt-in Brocade switch apply plan held for this run (None when no run_id or nothing to apply).
+    apply_plan_id: str | None = None
+    apply_fabrics: list[FabricZoningApplyPlan] = Field(default_factory=list)
+
+
+class ZoningApplyRequest(BaseModel):
+    """`approved_plan` is the `apply_plan_id` from `/zoning/render` that the operator ticked (ADR 0033).
+    The server refuses the apply without it, or when it does not match the held plan."""
+
+    approved_plan: str | None = None
 

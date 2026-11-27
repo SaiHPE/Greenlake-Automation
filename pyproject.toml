@@ -138,6 +138,15 @@ unmatched_ignore_imports_alerting = "error"
 broken_contract_guidance = "STANDARD S2 (least privilege): only application.snapshots.clients may import snap_cli_client. Put shared error or plan types in domain."
 
 [[tool.importlinter.contracts]]
+id = "S2-brocade-writer"
+name = "S2 least privilege: the Brocade zoning SSH writer is imported only by the factory that builds it"
+type = "protected"
+protected_modules = ["alletra_onboard.adapters.fabric.brocade_writer"]
+allowed_importers = ["alletra_onboard.application.provisioning.brocade_writer_factory"]
+unmatched_ignore_imports_alerting = "error"
+broken_contract_guidance = "STANDARD S2 (least privilege): only application.provisioning.brocade_writer_factory may import brocade_writer (ADR 0033). Use BrocadeClient (make_brocade) for reads."
+
+[[tool.importlinter.contracts]]
 id = "S2-wsapi-factory"
 name = "S2 least privilege: the WSAPI writer factory is imported only by the four apply modules"
 type = "protected"
@@ -168,6 +177,15 @@ protected_modules = ["alletra_onboard.application.snapshots.clients"]
 allowed_importers = ["alletra_onboard.application.snapshots.apply"]
 unmatched_ignore_imports_alerting = "error"
 broken_contract_guidance = "STANDARD S2 (least privilege): only application.snapshots.apply may import the snapshot SSH writer factory."
+
+[[tool.importlinter.contracts]]
+id = "S2-brocade-factory"
+name = "S2 least privilege: the Brocade zoning SSH writer factory is imported only by provisioning.zoning_apply"
+type = "protected"
+protected_modules = ["alletra_onboard.application.provisioning.brocade_writer_factory"]
+allowed_importers = ["alletra_onboard.application.provisioning.zoning_apply"]
+unmatched_ignore_imports_alerting = "error"
+broken_contract_guidance = "STANDARD S2 (least privilege): only application.provisioning.zoning_apply may import the Brocade zoning SSH writer factory (ADR 0033)."
 
 [[tool.importlinter.contracts]]
 id = "S2-wsapi-client"

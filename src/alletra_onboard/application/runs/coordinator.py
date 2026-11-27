@@ -15,6 +15,7 @@ import threading
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from types import MappingProxyType
 from typing import Any, overload
 from uuid import uuid4
 
@@ -25,9 +26,9 @@ from alletra_onboard.adapters import command_log, device_trust
 from alletra_onboard.application.runs.apply_record import (
     APPLY_RECORD_ARTIFACT,
     APPLY_RECORDS,
-    INTERRUPTED_APPLY_ERROR,
     PURPOSE_EVENT,
     TERMINAL_APPLY_EVENTS,
+    interrupted_error_for,
 )
 from alletra_onboard.application.runs.event_bus import ConsoleBus, InMemoryEventBus
 from alletra_onboard.application.runs.trust import RunTrustBook
@@ -47,7 +48,7 @@ from alletra_onboard.domain.models import (
 )
 from alletra_onboard.domain.ports import RunStore, StoredCredentialsUnreadableError
 from alletra_onboard.domain.provisioning import ProvisioningIntent
-from alletra_onboard.domain.shared import EndpointCreds
+from alletra_onboard.domain.shared import EndpointCreds, Fabric
 from alletra_onboard.domain.snapshots import SNAPSHOTS_TAB_NEEDED
 from alletra_onboard.domain.trust import DevicePin, TrustKind, retrust, retrusted_message
 from alletra_onboard.domain.workflow import NOT_BUILT_STEPS, enabled_steps, initial_phase
@@ -299,13 +300,18 @@ class RunCoordinator:
         return approval is not None and not approval.spent and approval is not ignoring
 
     def issue_approval(
-        self, run_id: str, purpose: Purpose, arrays: Mapping[Side, EndpointCreds],
+        self,
+        run_id: str,
+        purpose: Purpose,
+        arrays: Mapping[Side, EndpointCreds] = MappingProxyType({}),
+        *,
+        switches: Mapping[Fabric, EndpointCreds] = MappingProxyType({}),
     ) -> Approval:
         """Issue a single-use approval for `run_id` after verifying the run is idle."""
         self.get_run(run_id)
         if self.is_busy(run_id):
             raise RunBusyError(run_id)
-        approval = Approval(run_id=run_id, purpose=purpose, arrays=arrays)
+        approval = Approval(run_id=run_id, purpose=purpose, arrays=arrays, switches=switches)
         self._approvals[run_id] = approval
         return approval
 
@@ -365,7 +371,7 @@ class RunCoordinator:
             self.close_apply_record(run_id)
             return False
         payload.setdefault("error", None)
-        payload["error"] = payload["error"] or INTERRUPTED_APPLY_ERROR
+        payload["error"] = payload["error"] or interrupted_error_for(event_type)
         message = payload["error"]
         if event_type == "failover.failed" and payload.get("recovery_action"):
             message = f"{message} Way back: {payload['recovery_action']}"

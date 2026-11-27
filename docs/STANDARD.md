@@ -30,7 +30,7 @@ When two goals conflict, the higher one wins.
 
 | # | Quality goal | What it means here |
 |---|---|---|
-| Q1 | **Safe on customer equipment** | The tool changes an array only through a plan the operator approved, only on the objects that plan names, never writes to a SAN switch, and can always say how to undo what it did. |
+| Q1 | **Safe on customer equipment** | The tool changes an array or (when explicitly opted in for Brocade FOS, ADR 0033) a SAN switch only through a plan the operator approved, only on the objects that plan names, keeps all read clients read-only, and can always say how to undo what it did. |
 | Q2 | **Truthful** | Screens and documents report what the devices said when asked. A failure shows as a failure, an unknown as unknown, never as empty or done. |
 | Q3 | **Operable by a consultant on a jump box** | One download, both build profiles (full and initialisation-only) work, plain words on screen. |
 | Q4 | **Changeable without drift** | A person or an agent can add a step, a device read or a check without breaking the others and without copying a bad example. |
@@ -53,7 +53,7 @@ When two goals conflict, the higher one wins.
 
 ## 3. The rules
 
-### 3.1 Least privilege on customer equipment (Q1; SALTZER; ADR 0012, 0015, 0016, 0025)
+### 3.1 Least privilege on customer equipment (Q1; SALTZER; ADR 0012, 0015, 0016, 0025, 0033)
 
 | Rule | Statement | Check |
 |---|---|---|
@@ -62,7 +62,7 @@ When two goals conflict, the higher one wins.
 | S3 | A writer can only be built from an **approval**: the value the coordinator returns when the operator approved this run's current plan (or confirmed the failover test). No approval, a stale one or one from before a restart: no writer, so no write. | type of the writer factories' parameter; tests that a fake device receives zero writes without a valid approval |
 | S4 | A write-scoped SSH client acts only on the objects its plan names, writes each object's removal line before the command, and reads the object back before the next object. | existing per-client tests; a fake-device test per writer |
 | S5 | The undo of anything written is stored in the run before the write returns, so a crash leaves the removal set on record. A result says "possibly created, inspect first" when it cannot confirm. | test with a fake device that fails mid-apply, then reads the run's stored removal set |
-| S6 | The switch client has no method that changes the switch. | existing Brocade allowlist test |
+| S6 | The read-only switch client (`BrocadeClient`) has no method that changes the switch; opt-in Brocade zoning apply goes only through the separate, approval-gated `BrocadeZoneWriter` (ADR 0033, ADR 0025). | existing Brocade allowlist test; `S2-brocade-writer` and `S2-brocade-factory` import-linter contracts; `tests/unit/test_brocade_writer.py` |
 
 ### 3.2 Layers (HEX, APP)
 

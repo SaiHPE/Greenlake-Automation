@@ -123,6 +123,97 @@ def _add_fabric_zoning(
         add_mono(doc, commands[name])
 
 
+_REMOVAL_PREFIXES: tuple[tuple[str, str], ...] = (
+    ("cfgremove ", "cfgremove"),
+    ("zonedelete ", "zonedelete"),
+    ("alidelete ", "alidelete"),
+    ("cfgenable ", "cfgenable"),
+)
+
+
+def _removal_kind(line: str) -> str:
+    for prefix, kind in _REMOVAL_PREFIXES:
+        if line.startswith(prefix):
+            return kind
+    return "other"
+
+
+def _merge_switch_removals(applies: list[dict]) -> list[str]:
+    """Merge per-switch removal commands across all applies (newest first), keeping one closing `cfgenable -f`."""
+    per_switch: dict[tuple[str, str, str], dict[str, list[str]]] = {}
+    for res in reversed(applies):
+        for fab in res.get("fabrics") or []:
+            lines = fab.get("removals") or []
+            if not lines:
+                continue
+            label = "F1" if fab.get("fabric") == "odd" else "F2"
+            key = (label, fab.get("switch_host") or "switch", fab.get("active_cfg") or "—")
+            bucket = per_switch.setdefault(
+                key, {"cfgremove": [], "zonedelete": [], "alidelete": [], "other": [], "cfgenable": []},
+            )
+            for line in lines:
+                kind = _removal_kind(line)
+                if line not in bucket[kind]:
+                    bucket[kind].append(line)
+    out: list[str] = []
+    for (label, host, cfg), bucket in per_switch.items():
+        out.append(f"# {label} — {host} (cfg {cfg})")
+        for kind in ("cfgremove", "zonedelete", "alidelete", "other"):
+            out.extend(bucket[kind])
+        if bucket["cfgenable"]:
+            out.append(bucket["cfgenable"][0])
+    return out
+
+
+def _merged_fabric_outcomes(applies: list[dict]) -> list[dict]:
+    """Keep the newest outcome per fabric while retaining fabrics applied in earlier attempts."""
+    by_fabric: dict[str, dict] = {}
+    for res in applies:
+        for fab in res.get("fabrics") or []:
+            key = f"{fab.get('fabric')}:{fab.get('switch_host')}"
+            prev = by_fabric.get(key)
+            if prev is None or fab.get("status") != "skipped":
+                by_fabric[key] = fab
+    return list(by_fabric.values())
+
+
+def _zoning_apply_records(data: AsBuiltData) -> list[dict]:
+    if data.zoning_applies:
+        return list(data.zoning_applies)
+    return [data.zoning_apply] if data.zoning_apply else []
+
+
+def _add_zoning_apply_summary(doc, applies: list[dict]) -> None:
+    add_para(doc, "Switch zoning applied", bold=True)
+    latest = applies[-1]
+    if latest.get("error"):
+        add_para(doc, f"Opt-in switch zoning apply reported an error: {latest['error']}")
+    else:
+        add_para(doc, "The operator opted in to apply the approved Brocade zoning commands directly to the listed switch(es).")
+    for fab in _merged_fabric_outcomes(applies):
+        label = "F1" if fab.get("fabric") == "odd" else "F2"
+        host = fab.get("switch_host") or "switch"
+        cfg = fab.get("active_cfg") or "—"
+        status = fab.get("status") or "unknown"
+        verified = fab.get("verified_zones") or []
+        missing = fab.get("missing_zones") or []
+        bits = [f"{label} ({host}, cfg {cfg}): {status}"]
+        if verified:
+            bits.append(f"verified {len(verified)} zone(s): {', '.join(verified)}")
+        if missing:
+            bits.append(f"missing on read-back: {', '.join(missing)}")
+        if fab.get("transaction_aborted"):
+            bits.append("uncommitted transaction aborted")
+        if fab.get("error"):
+            bits.append(fab["error"])
+        add_para(doc, " · ".join(bits))
+    removal_lines = _merge_switch_removals(applies)
+    if removal_lines:
+        add_para(doc, "Switch removal command set", bold=True)
+        add_para(doc, "Reverses the aliases and zones this run created on the switch(es). The tool never runs these.")
+        add_mono(doc, removal_lines)
+
+
 def add_zoning_section(doc, data: AsBuiltData) -> None:
     add_h1(doc, "SAN zoning designed in this run")
     plan = data.zoning_plan
@@ -140,14 +231,22 @@ def add_zoning_section(doc, data: AsBuiltData) -> None:
     aliases: dict[str, str] = rendered.get("aliases") or {}
     delivered = {tuple(p) for p in rendered.get("selected_pairs") or []}
     commands: dict[str, list[str]] = rendered.get("commands") or {}
-    add_para(doc, "The tool designs zones and hands the SAN team a command set; it never writes to a switch. "
-                  "Rows marked 'already zoned' were found in the fabric's effective configuration.")
+    applies = _zoning_apply_records(data)
+    if applies:
+        add_para(doc, "The operator approved applying these zones to the Brocade switches; the switch apply "
+                      "record and removal command set are below. Rows marked 'already zoned' were found in "
+                      "the fabric's effective configuration.")
+    else:
+        add_para(doc, "The tool designs zones and hands the SAN team a command set; it never writes to a switch. "
+                      "Rows marked 'already zoned' were found in the fabric's effective configuration.")
     for fab in plan.get("fabrics", []):
         _add_fabric_zoning(doc, fab, aliases, delivered, commands)
     if plan.get("offline_hosts"):
         add_para(doc, "On no fabric (cable and power first): " + ", ".join(plan["offline_hosts"]))
     if not rendered:
         add_para(doc, "No command set was generated in this run.")
+    if applies:
+        _add_zoning_apply_summary(doc, applies)
     if report:
         add_para(doc, "Zoning check on the array: " + _zoning_check_text(report, check_only=False))
     else:
@@ -282,7 +381,10 @@ def _add_peer_port_zones(doc, data: AsBuiltData) -> None:
     add_para(doc, "Peer-port zones designed in this run", bold=True)
     zones = (data.zoning_rendered or {}).get("peer_commands") or {}
     if any(zones.values()):
-        add_para(doc, "The command set given to the SAN team; the tool never writes to a switch.")
+        if _zoning_apply_records(data):
+            add_para(doc, "The peer-port zone commands drafted for this run (see Switch zoning applied above).")
+        else:
+            add_para(doc, "The command set given to the SAN team; the tool never writes to a switch.")
         for fabric, commands in sorted(zones.items()):
             if commands:
                 add_mono(doc, [f"# {fabric}", *commands])

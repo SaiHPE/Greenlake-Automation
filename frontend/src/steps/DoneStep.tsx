@@ -7,6 +7,8 @@ import { ActivityTimeline } from '../ui/primitives';
 import { PlainPage, runDocuments, when } from '../ui/RunPages';
 import { NoValue } from '../ui/status';
 import { mergedRemovals, RemovalSet, RemovalSets } from '../ui/RemovalSets';
+import { SwitchRemovalBody } from '../ui/ZoningApplyView';
+import { zoningRemovalBlocks } from '../ui/zoningApplyHelpers';
 
 interface Props {
   runId: string | null;
@@ -49,6 +51,10 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
     isOf(e, 'replication.applied', 'replication.apply.failed') && e.data?.result ? [e.data.result] : [],
   );
   const replicationRemovals = mergedRemovals(replicationResults);
+  const zoningApplyResults = events.flatMap((e) =>
+    isOf(e, 'zoning.applied', 'zoning.apply.failed') && e.data?.result ? [e.data.result] : [],
+  );
+  const zoningRemovalCount = zoningRemovalBlocks(zoningApplyResults).reduce((sum, b) => sum + b.lines.length, 0);
   const pair = latestOf(events, 'replication.previewed')?.data?.report;
   const lines = (n: number) => `${n} line${n === 1 ? '' : 's'}`;
   const started = events.find((e) => e.event_type === 'run.created');
@@ -128,6 +134,15 @@ export function DoneStep({ runId, run, events, modeLabel, onRestart, onHome }: P
           </NameValuePair>
         </NameValueList>
       </Section>
+
+      {runId && zoningRemovalCount > 0 && (
+        <Section
+          title="SAN Zoning: removal command set"
+          summary={`${lines(zoningRemovalCount)} that undo the aliases and zones created on the switches`}
+        >
+          <SwitchRemovalBody results={zoningApplyResults} runId={runId} />
+        </Section>
+      )}
 
       {runId && storageResults.length > 0 && (
         <Section

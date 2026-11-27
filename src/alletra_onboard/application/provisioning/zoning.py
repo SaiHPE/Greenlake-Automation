@@ -102,10 +102,23 @@ def _resolve_zone_members(
     return resolved
 
 
-def parse_active_zones(cfgshow: str) -> tuple[dict[str, set[str]], str | None]:
-    """Parse `cfgshow` into {zone_name: {normalized WWPNs}} for the ACTIVE (effective) config, plus
-    the active config name. Aliases are resolved to WWPNs. Falls back to the defined config if no
-    effective section is present."""
+@dataclass(frozen=True)
+class CfgShowParsed:
+    """Strict separation of Defined and Effective sections from `cfgshow` (no fallback)."""
+
+    defined_cfg: str | None
+    defined_zones: dict[str, set[str]]
+    effective_cfg: str | None
+    effective_zones: dict[str, set[str]]
+    aliases: dict[str, set[str]]
+
+
+def parse_cfgshow_strict(cfgshow: str) -> CfgShowParsed:
+    """Parse `cfgshow` keeping Defined and Effective strictly separate (no Defined fallback).
+
+    Used by opt-in switch apply pre-flight and post-apply read-back (ADR 0033) so a switch with no
+    effective configuration can never be misread as having one active.
+    """
     state = _CfgShowState()
     section: str | None = None
     kind: str | None = None
@@ -133,8 +146,23 @@ def parse_active_zones(cfgshow: str) -> tuple[dict[str, set[str]], str | None]:
         if kind in ("alias", "zone") and name is not None:
             state.record_members(section, kind, name, stripped)
 
-    raw_zones = state.effective_zones or state.defined_zones
-    return _resolve_zone_members(raw_zones, state.aliases), (state.effective_cfg or state.defined_cfg)
+    return CfgShowParsed(
+        defined_cfg=state.defined_cfg,
+        defined_zones=_resolve_zone_members(state.defined_zones, state.aliases),
+        effective_cfg=state.effective_cfg,
+        effective_zones=_resolve_zone_members(state.effective_zones, state.aliases),
+        aliases=dict(state.aliases),
+    )
+
+
+def parse_active_zones(cfgshow: str) -> tuple[dict[str, set[str]], str | None]:
+    """Parse `cfgshow` into {zone_name: {normalized WWPNs}} for the ACTIVE (effective) config, plus
+    the active config name. Aliases are resolved to WWPNs. Falls back to the defined config if no
+    effective section is present."""
+    parsed = parse_cfgshow_strict(cfgshow)
+    zones = parsed.effective_zones or parsed.defined_zones
+    cfg = parsed.effective_cfg or parsed.defined_cfg
+    return zones, cfg
 
 
 def _index_fc_logins(

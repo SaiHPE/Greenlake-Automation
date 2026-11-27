@@ -1,10 +1,11 @@
 """Brocade Fabric OS (FOS) SSH client for SAN zoning — STRICTLY READ-ONLY.
 
-Reads the live fabric to build the zoning report + plan. **This client cannot write to a switch.**
-Every command goes through `_guard`, which rejects shell metacharacters and anything outside
-`ALLOWED_READ`, so there is no verb here that creates, deletes, commits or activates zoning — not
-`alicreate`, not `cfgsave`, not `cfgenable`. The zoning step's deliverable is the *command set*,
-which a consultant reviews and applies by hand (ADR 0012).
+Reads the live fabric to build the zoning report + plan. **This read-only client cannot write to a
+switch.** Every command goes through `_guard`, which rejects shell metacharacters and anything
+outside `ALLOWED_READ`, so there is no verb here that creates, deletes, commits or activates
+zoning — not `alicreate`, not `cfgsave`, not `cfgenable`. The default deliverable of the zoning
+step is the copy-paste *command set* (ADR 0012); opt-in, approval-gated Brocade FOS switch apply
+lives in the separate `BrocadeZoneWriter` (`adapters/fabric/brocade_writer.py`, ADR 0033).
 
 An additive write surface (`alicreate`/`zonecreate`/`cfgadd` + `cfgsave`) existed here in v0.14.0
 and v0.15.0 and was removed. It worked — it created a zone on a live production fabric on
@@ -137,12 +138,11 @@ class BrocadeClient:
         return out
 
     def _exec_status(self, command: str) -> tuple[int, str]:
-        """Run a read command and return (exit_status, combined output).
+        """Run a command and return (exit_status, combined output) without allocating a PTY or writing stdin.
 
-        Nothing is ever written to the channel's stdin. FOS prompts interactively for confirmation on
-        its config-changing verbs, so a client that cannot answer a prompt cannot complete one even if
-        a write verb were somehow reintroduced — the command would hang and time out rather than
-        silently commit. That is deliberate belt-and-braces behind `_guard` (ADR 0012)."""
+        Nothing is ever written to the channel's stdin. For reads (`BrocadeClient`), `_guard` restricts
+        commands to `ALLOWED_READ` and any interactive FOS prompt would time out rather than commit
+        (ADR 0012). Opt-in prompt-free writes (`BrocadeZoneWriter`, ADR 0033) inherit this transport."""
         if self._client is None:
             raise BrocadeError("not connected")
         try:
