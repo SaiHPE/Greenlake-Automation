@@ -101,7 +101,7 @@ You cannot push to `main`; github.hpe.com refuses it. Everything arrives through
 
 | Rule | Why |
 |---|---|
-| Never write to a SAN switch. Zoning is a command set the SAN team pastes. | A wrong zone takes a customer's production hosts off their storage. The tool proposes; people with change control apply. (ADR 0012) |
+| SAN zoning defaults to a copy-paste Brocade command set; opt-in Brocade FOS apply is approval-gated through `BrocadeZoneWriter` (ADR 0033). | A wrong zone takes a customer's production hosts off their storage. Copy-paste stays the default; opting in requires explicit approval, pre-flight guards, pre-write undo and post-apply read-back. (ADR 0012, amended by ADR 0033) |
 | Array SSH is read-only, through an allowlist. Writes go through WSAPI after the operator approves a plan on screen. SSH writes follow ADR 0025 (exact tested forms, built only inside an approved apply, plan-scoped objects, undo written first, read-back after): today `ArrayRcCliClient` (ADR 0015, Remote Copy ports and targets) and `ArraySnapCliClient` (ADR 0016, snapshot schedules). | Everything the tool does to an array must be something the operator saw and agreed to, with its undo on record before the write runs. |
 | Discovery, verification and the as-built never change anything. | They are run on live customer systems to report, not to fix. |
 | One array per run. | Credentials, plans and documents belong to one array; mixing them is how the wrong array gets changed. |

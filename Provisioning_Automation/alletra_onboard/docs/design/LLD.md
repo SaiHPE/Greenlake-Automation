@@ -211,9 +211,16 @@ assignment, region code mapping, 202 polling). Code-level mechanics:
   and forwards both `X-HP3PAR-WSAPI-SessionKey` and login cookies. `get()` returns
   `V3Answer` for any HTTP status; a refused login raises `WsapiV3LoginRefused`, and a transport or TLS
   failure raises `WsapiV3Error` / `WsapiV3TrustError`.
-- **Brocade switches (`adapters/fabric/brocade_client.py`):** Strictly read-only through
-  `ALLOWED_READ` with zero write verbs ([ADR 0012](../adr/0012-no-switch-writes-the-tool-emits-a-command-set.md)).
-  `paramiko` is pinned below major 4 in `pyproject.toml` for older FOS switch SSH algorithms.
+- **Brocade switches (`adapters/fabric/brocade_client.py`, `adapters/fabric/brocade_writer.py`):**
+  `BrocadeClient` stays strictly read-only through `ALLOWED_READ` with zero write verbs
+  ([ADR 0012](../adr/0012-no-switch-writes-the-tool-emits-a-command-set.md)). Opt-in Brocade FOS
+  zoning apply uses `BrocadeZoneWriter` ([ADR 0033](../adr/0033-opt-in-brocade-zoning-apply.md)),
+  built only via `application/provisioning/brocade_writer_factory.py` inside
+  `application/provisioning/zoning_apply.py`, requiring a live `"zoning"` `Approval` and
+  `ZoningPlanObjects`, accepting only five exact prompt-free forms (`alicreate`, `zonecreate`,
+  `cfgadd`, `cfgenable "<cfg>" -f`, `cfgtransabort`) with pre-flight `cfgtransshow`/`cfgshow`
+  guards, pre-write undo persistence and post-apply `cfgshow` read-back. `paramiko` is pinned below
+  major 4 in `pyproject.toml` for older FOS switch SSH algorithms.
 
 ---
 

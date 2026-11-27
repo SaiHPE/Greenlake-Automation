@@ -25,3 +25,12 @@ class SnapPlanObjects:
     """What the approved plan creates: the only schedules this client may write (ADR 0025 condition 3)."""
 
     schedules: frozenset[tuple[str, str]] = frozenset()    # (schedule name, source_ref) of the plan's creates
+
+
+@dataclass(frozen=True)
+class ZoningPlanObjects:
+    """What the approved zoning plan creates on one Brocade fabric switch (ADR 0025 condition 3, ADR 0033)."""
+
+    active_cfg: str
+    aliases: tuple[tuple[str, str], ...] = ()          # (alias_name, normalized_wwpn) pairs to alicreate
+    zones: tuple[tuple[str, str, str], ...] = ()       # (zone_name, member1, member2) triples to zonecreate

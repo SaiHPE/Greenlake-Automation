@@ -24,16 +24,30 @@ INTERRUPTED_APPLY_ERROR = (
     "Apply was interrupted before it finished. Inspect the array before retrying; "
     "the removal set and notes below record what was confirmed or in flight."
 )
+INTERRUPTED_ZONING_APPLY_ERROR = (
+    "Switch zoning apply was interrupted before it finished. Inspect the switch with "
+    "cfgtransshow (abort any open transaction with cfgtransabort) and cfgshow before retrying "
+    "or running the removal command set below."
+)
+
+
+def interrupted_error_for(event_type: str) -> str:
+    """Return device-appropriate recovery wording for an interrupted apply record."""
+    if event_type == "zoning.apply.failed":
+        return INTERRUPTED_ZONING_APPLY_ERROR
+    return INTERRUPTED_APPLY_ERROR
 ApplyResult = ProvisioningResult | ReplicationResult | SnapshotResult
 
 # Maps each failure event recorded in-flight to (phase, success_event, payload_key).
 APPLY_RECORDS: dict[str, tuple[WorkflowPhase, str, str]] = {
+    "zoning.apply.failed": (WorkflowPhase.STORAGE_ZONING, "zoning.applied", "result"),
     "storage.apply.failed": (WorkflowPhase.STORAGE_PROVISION, "storage.applied", "result"),
     "replication.apply.failed": (WorkflowPhase.STORAGE_REPLICATE, "replication.applied", "result"),
     "snapshots.apply.failed": (WorkflowPhase.STORAGE_SNAPSHOT, "snapshots.applied", "result"),
     "failover.failed": (WorkflowPhase.STORAGE_FAILOVER_TEST, "failover.completed", "record"),
 }
 PURPOSE_EVENT: dict[Purpose, str] = {
+    "zoning": "zoning.apply.failed",
     "storage": "storage.apply.failed",
     "rc_groups": "replication.apply.failed",
     "rc_partnership": "replication.apply.failed",

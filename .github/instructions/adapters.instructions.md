@@ -12,7 +12,9 @@ applyTo: "Provisioning_Automation/alletra_onboard/src/alletra_onboard/adapters/*
   `adapters/array/rc_cli_client.py`) and ADR 0016's `ArraySnapCliClient` (`SNAP_WRITE_FORMS` in
   `adapters/array/snap_cli_client.py`: one `createsched -f` form, the command inside its quotes checked
   as a form of its own). A new form needs a test pinned to the array's own help or a live answer, and a
-  new kind of write needs its own ADR. Never a switch write (ADR 0012).
+  new kind of write needs its own ADR. Brocade switch reads stay strictly read-only in
+  `adapters/fabric/brocade_client.py`; opt-in Brocade FOS zoning apply uses the separate
+  `BrocadeZoneWriter` (`adapters/fabric/brocade_writer.py`, ADR 0033) under ADR 0025.
 - Every command sent to a device is recorded with `command_log.record(...)`, with the client's
   secrets passed in so they are redacted.
 - Parse real output: capture it read-only on the lab, scrub it (no passwords, no customer data),

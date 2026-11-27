@@ -189,6 +189,11 @@ export const renderZoningCommands = (
 // stageZoning + the ZoningStageResult models were removed on 2026-09-02 (ADR 0012). They posted to
 // /runs/{id}/zoning/stage, which wrote zones to the switch. renderZoning above is the whole zoning
 // output now: the command set a consultant applies by hand.
+// Opt-in Brocade FOS apply (ADR 0033) uses the separate approval-gated endpoint below.
+export type FabricZoningApplyPlan = Wire<S['FabricZoningApplyPlan']>;
+export type ZoningApplyResult = Wire<S['ZoningApplyResult']>;
+export const applyZoning = (runId: string, approvedPlan: string | null) =>
+  request<{ run: RunRecord }>('POST', `/runs/${runId}/zoning/apply`, { approved_plan: approvedPlan });
 export type PlannedAction = Wire<S['PlannedAction']>;
 export type PlanState = PlannedAction['state'];
 // plan_id: the apply quotes it back, and the server refuses any other (an older event may lack it).

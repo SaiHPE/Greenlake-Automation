@@ -55,6 +55,8 @@ class AsBuiltData:
     zoning_plan: dict[str, Any] | None = None
     zoning_report: dict[str, Any] | None = None
     zoning_rendered: dict[str, Any] | None = None      # {commands: {fabric: [..]}, aliases, selected_pairs}
+    zoning_apply: dict[str, Any] | None = None         # ADR 0033: latest zoning.applied / zoning.apply.failed result
+    zoning_applies: list[dict[str, Any]] = field(default_factory=list)  # ADR 0033: every zoning apply in run order
     provisioning_plan: dict[str, Any] | None = None
     provisioning_result: dict[str, Any] | None = None
     provisioning_applied_at: str = ""

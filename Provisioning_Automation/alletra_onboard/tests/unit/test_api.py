@@ -754,6 +754,7 @@ _EXPECTED_OPENAPI_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("post", "/runs/{run_id}/ports/preview", "run_ports_preview_runs__run_id__ports_preview_post"),
     ("post", "/runs/{run_id}/zoning/preview", "run_zoning_preview_runs__run_id__zoning_preview_post"),
     ("post", "/runs/{run_id}/zoning/plan", "run_zoning_plan_runs__run_id__zoning_plan_post"),
+    ("post", "/runs/{run_id}/zoning/apply", "run_zoning_apply_runs__run_id__zoning_apply_post"),
     ("post", "/zoning/render", "zoning_render_zoning_render_post"),
     ("get", "/runs/{run_id}/storage/preflight", "storage_preflight_runs__run_id__storage_preflight_get"),
     ("get", "/runs/{run_id}/storage/objects", "storage_objects_runs__run_id__storage_objects_get"),

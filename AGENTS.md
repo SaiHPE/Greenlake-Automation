@@ -30,8 +30,15 @@ Everything lives under `Provisioning_Automation/alletra_onboard/` (called "the a
 
 ## Hard rules
 
-1. **Never write to a SAN switch** (ADR 0012). Zoning is a copy-paste Brocade command set for the
-   SAN team; `cfgenable` is shown separately. Do not add a switch write path.
+1. **SAN zoning defaults to copy-paste; opt-in Brocade apply follows ADR 0033 and ADR 0025**
+   (amending ADR 0012). The copy-paste Brocade command set (`cfgenable` shown separately) stays the
+   default deliverable and `BrocadeClient` (`adapters/fabric/brocade_client.py`) stays strictly
+   read-only. Direct switch writes are Brocade FOS only (Cisco MDS unsupported), opt-in and
+   approval-gated through `BrocadeZoneWriter` (`adapters/fabric/brocade_writer.py`) via
+   `application/provisioning/brocade_writer_factory.py` and `application/provisioning/zoning_apply.py`
+   only, with five exact prompt-free forms (`alicreate`, `zonecreate`, `cfgadd`, `cfgenable "<cfg>" -f`,
+   `cfgtransabort`), pre-flight `cfgtransshow`/`cfgshow` guards, pre-write undo persistence and
+   post-apply `cfgshow` read-back. Do not add any other switch write path.
 2. **Array SSH is read-only, and every write over it follows one rule** (ADR 0025). Every read goes
    through the allowlist in `adapters/array/cli_client.py` (`ALLOWED_COMMANDS`; acting options, shell
    and Tcl quoting characters refused). A write over SSH needs: exact command forms each with a test,

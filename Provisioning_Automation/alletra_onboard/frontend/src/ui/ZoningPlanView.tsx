@@ -1,9 +1,10 @@
 import { Box, Button, CheckBox, Text, TextInput } from 'grommet';
 import { StatusGood } from 'grommet-icons';
 import { ComponentProps, ReactNode, useState } from 'react';
-import { ZoningPlan, ZoningRenderResult, renderZoningCommands } from '../api';
+import { RunEvent, ZoningPlan, ZoningRenderResult, renderZoningCommands } from '../api';
 import { DoneList, Section } from './blocks';
 import { InlineNotification, NotesList, Surface } from './primitives';
+import { ZoningApplyView } from './ZoningApplyView';
 import {
   aliasProblem,
   aliasSuggestion,
@@ -295,7 +296,16 @@ function Drafted({ plan, selectedPairs, aliases }: { plan: ZoningPlan; selectedP
  * pairs and the names, or the command set), then what the switches hold, folded. The view keeps its
  * own state: it is keyed on the plan event, so the alias fields are seeded once per plan.
  */
-export function ZoningPlanView({ plan, runId, done = [] }: { plan: ZoningPlan; runId?: string; done?: DoneItem[] }) {
+export function ZoningPlanView({
+  plan, runId, done = [], events = [], running = false, onCheckAgain,
+}: {
+  plan: ZoningPlan;
+  runId?: string;
+  done?: DoneItem[];
+  events?: RunEvent[];
+  running?: boolean;
+  onCheckAgain?: () => void;
+}) {
   const [aliases, setAliases] = useState<Record<string, string>>(() => {
     const seed: Record<string, string> = {};
     plan.fabrics.forEach((f) => [...f.hosts, ...f.array_ports, ...(f.peer_ports ?? []), ...(f.sources ?? [])].forEach((w) => {
@@ -384,7 +394,7 @@ export function ZoningPlanView({ plan, runId, done = [] }: { plan: ZoningPlan; r
       {result && (
         <Surface
           title="Command set — give this to your SAN team"
-          description="This tool never writes to a switch. The SAN team reviews the paste block, applies it on the named switch, then saves and activates in a window. Re-check zoning afterwards: the array shows each new login."
+          description="Copy-paste stays the default deliverable: the SAN team reviews the paste block, applies it on the named switch, then saves and activates in a window. You can also opt in to direct Brocade apply below. Re-check zoning afterwards: the array shows each new login."
         >
           <Box gap="medium">
             {plan.fabrics.filter((fab) => selectedPairs.length > 0 || (result.commands[fab.fabric] ?? []).length > 0).map((fab) => (
@@ -413,6 +423,25 @@ export function ZoningPlanView({ plan, runId, done = [] }: { plan: ZoningPlan; r
             )}
           </Box>
         </Surface>
+      )}
+
+      {result && (result.warnings?.apply ?? []).length > 0 && (
+        <InlineNotification
+          tone="warning"
+          title="Direct switch apply unavailable"
+          message={<NotesList notes={result.warnings!.apply} />}
+        />
+      )}
+
+      {runId && (
+        <ZoningApplyView
+          runId={runId}
+          applyPlanId={result?.apply_plan_id ?? null}
+          applyFabrics={result?.apply_fabrics ?? []}
+          events={events}
+          running={running}
+          onCheckAgain={onCheckAgain}
+        />
       )}
 
       <Section

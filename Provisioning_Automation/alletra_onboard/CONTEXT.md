@@ -80,7 +80,8 @@ correctly zoned to the array (logged in on the expected fabric(s)), pruned of th
 unzoned / half-zoned hosts, storage & peer ports). Not new hardware — a curated *view* of the messy
 lab. Discovery classifies every host's HBAs by fabric + login state; the operator selects the good
 ones (the dropdown builder). Serves as the tier-2 green validation set for provisioning now, and the
-known-good reference for the zoning **command set** (the tool never writes to the switch — ADR 0012).
+known-good reference for the zoning **command set** (copy-paste by default; opt-in Brocade apply
+requires explicit approval — ADR 0012, amended by ADR 0033).
 _Avoid_: treating it as a separate "ideal lab" (it's a subset of the messy one).
 
 **Fabric (odd / even)**:
@@ -95,8 +96,8 @@ _Avoid_: treating fabric as a property of the port number alone (the switch cabl
 Two things: (1) the **current-connection map** — per host WWPN, the storage port WWPN(s) + `n:s:p` it
 is actually logged into (`showhost` + `showport`), host WWPN ↔ storage WWPN, both sides; and (2) the
 **operator-selected builder** — per host WWPN a parity-filtered dropdown of same-fabric storage ports
-the operator *selects*, which the tool turns into the **command set**. **The tool never writes to the
-switch.** See ADR 0004 and ADR 0012.
+the operator *selects*, which the tool turns into the **command set** (copy-paste by default, with an
+opt-in, approval-gated Brocade FOS apply path in ADR 0033). See ADR 0004, ADR 0012 and ADR 0033.
 _Avoid_: "remediation" (the tool produces a plan; it does not create zones), "auto-pair" (the operator selects), "staging" (see **Command set**).
 
 **Command set**:
@@ -177,7 +178,7 @@ The step between Discovery and SAN Zoning that sets the array's own ports up fro
 section per kind: the iSCSI VLAN interfaces (SPEC-024) and the peer ports (SPEC-025). It comes before
 zoning because the zoning check is what sees an iSCSI host's login on the new address, and the peer
 ports' zones use the WWPN read after the change. The switch side is a sentence for the network team
-or a command set for the SAN team; the tool never writes a switch.
+or a Brocade zoning command set (copy-paste by default; opt-in Brocade apply per ADR 0033).
 
 **Peer port**:
 An FC port of the array in connection mode `peer` (`showport -par` Connmode `peer`, `showport` Type

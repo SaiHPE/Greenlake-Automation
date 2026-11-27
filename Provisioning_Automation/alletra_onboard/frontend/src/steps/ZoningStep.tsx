@@ -172,6 +172,9 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
 
   const waiting = state === 'waiting';
   const renderedAt = [...events].reverse().find((event) => event.event_type === 'zoning.rendered')?.created_at;
+  const applyEvent = latestOf(events, 'zoning.applied', 'zoning.apply.failed');
+  const applyNewerThanReport =
+    !!applyEvent && (!reportEvent || events.indexOf(applyEvent) > events.indexOf(reportEvent));
   const hhmm = (iso?: string) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
   const check: FooterAction = {
     label: running ? 'Checking' : report ? 'Check zoning again' : 'Check zoning on the array',
@@ -188,6 +191,20 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
   let status: StepStatus | undefined;
   if (report?.error) {
     status = { state: 'failed', title: 'Zoning could not be checked', message: report.error };
+  } else if (applyNewerThanReport && applyEvent.event_type === 'zoning.apply.failed') {
+    status = {
+      state: 'failed',
+      title: 'Switch zoning apply stopped with an error',
+      time: hhmm(applyEvent.created_at),
+      message: applyEvent.data?.result?.error ?? applyEvent.message,
+    };
+  } else if (applyNewerThanReport && applyEvent.event_type === 'zoning.applied' && !report?.proper) {
+    status = {
+      state: 'action_required',
+      title: 'Switch zoning applied — check zoning again',
+      time: hhmm(applyEvent.created_at),
+      message: 'The approved Brocade zones are active on the switches. Click Check zoning again so the array confirms the new host logins.',
+    };
   } else if (report?.proper) {
     status = {
       state: 'complete',
@@ -269,7 +286,7 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
             },
             {
               title: 'The command set',
-              body: 'Build zoning plan also reads both switches (read-only), shows the hosts not yet zoned and drafts the zones you select. Your SAN team pastes the commands; activating the configuration is their call. The tool never writes to a switch.',
+              body: 'Build zoning plan reads both switches (read-only), shows the hosts not yet zoned and drafts the zones you select. Copy-paste stays the default for your SAN team; when opted in and approved on screen, the tool can also apply and activate those exact Brocade commands directly.',
             },
             {
               title: 'Per host',
@@ -289,7 +306,17 @@ export function ZoningStep({ runId, run, events, onDone }: Props) {
       {/* Keyed on the plan event: the alias fields are seeded once from the plan, so rebuilding must
           mount a fresh view. Otherwise new WWPNs show an empty alias field while the generated
           commands carry the suggested one; the SAN team would receive names shown nowhere. */}
-      {plan ? <ZoningPlanView key={planEvent?.event_id} plan={plan} runId={runId} done={done} /> : done.length > 0 && <DoneList items={done} />}
+      {plan ? (
+        <ZoningPlanView
+          key={planEvent?.event_id}
+          plan={plan}
+          runId={runId}
+          done={done}
+          events={events}
+          running={running}
+          onCheckAgain={call(() => zoningPreview(runId))}
+        />
+      ) : done.length > 0 && <DoneList items={done} />}
     </StepShell>
   );
 }

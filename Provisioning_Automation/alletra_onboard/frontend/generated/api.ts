@@ -864,6 +864,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{run_id}/zoning/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Zoning Apply */
+        post: operations["run_zoning_apply_runs__run_id__zoning_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{run_id}/zoning/plan": {
         parameters: {
             query?: never;
@@ -2214,6 +2231,71 @@ export interface components {
             zone_names?: {
                 [key: string]: string[];
             };
+        };
+        /**
+         * FabricZoningApplyPlan
+         * @description Opt-in Brocade FOS switch apply plan for one fabric (ADR 0033).
+         */
+        FabricZoningApplyPlan: {
+            /** Active Cfg */
+            active_cfg: string;
+            /** Aliases */
+            aliases?: {
+                [key: string]: string;
+            };
+            /** Commands */
+            commands?: string[];
+            /**
+             * Fabric
+             * @enum {string}
+             */
+            fabric: "odd" | "even";
+            /** Removals */
+            removals?: string[];
+            /** Switch Host */
+            switch_host: string;
+            /** Zones */
+            zones?: {
+                [key: string]: [
+                    string,
+                    string
+                ];
+            };
+        };
+        /**
+         * FabricZoningApplyResult
+         * @description Outcome of opt-in zoning apply on one Brocade fabric switch.
+         */
+        FabricZoningApplyResult: {
+            /** Active Cfg */
+            active_cfg: string;
+            /** Error */
+            error?: string | null;
+            /**
+             * Fabric
+             * @enum {string}
+             */
+            fabric: "odd" | "even";
+            /** Missing Zones */
+            missing_zones?: string[];
+            /** Outcomes */
+            outcomes?: components["schemas"]["ZoningCommandOutcome"][];
+            /** Removals */
+            removals?: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "applied" | "failed" | "skipped";
+            /** Switch Host */
+            switch_host: string;
+            /**
+             * Transaction Aborted
+             * @default false
+             */
+            transaction_aborted: boolean;
+            /** Verified Zones */
+            verified_zones?: string[];
         };
         /** FailoverData */
         FailoverData: {
@@ -3735,7 +3817,7 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            event_type: "asbuilt.failed" | "asbuilt.started" | "operator.credentials_ready" | "operator.review_ready" | "phase.progress" | "replication.apply.started" | "replication.link_check.started" | "replication.verify.started" | "run.completed" | "run.created" | "snapshots.apply.started" | "snapshots.verify.started" | "step.completed" | "step.crashed" | "step.failed" | "step.stalled" | "step.started" | "storage.apply.started" | "storage.paths.checking" | "verify.failed";
+            event_type: "asbuilt.failed" | "asbuilt.started" | "operator.credentials_ready" | "operator.review_ready" | "phase.progress" | "replication.apply.started" | "replication.link_check.started" | "replication.verify.started" | "run.completed" | "run.created" | "snapshots.apply.started" | "snapshots.verify.started" | "step.completed" | "step.crashed" | "step.failed" | "step.stalled" | "step.started" | "storage.apply.started" | "storage.paths.checking" | "verify.failed" | "zoning.apply.started";
             /** Message */
             message: string;
             phase: components["schemas"]["WorkflowPhase"];
@@ -4787,7 +4869,7 @@ export interface components {
         /** RunEventList */
         RunEventList: {
             /** Events */
-            events: (components["schemas"]["PlainEvent"] | components["schemas"]["VerifyEvent"] | components["schemas"]["AsBuiltResultEvent"] | components["schemas"]["DiscoveryEvent"] | components["schemas"]["ZoningCheckEvent"] | components["schemas"]["ZoningPlanEvent"] | components["schemas"]["ZoningRenderedEvent"] | components["schemas"]["PortsEvent"] | components["schemas"]["StoragePlanEvent"] | components["schemas"]["StorageResultEvent"] | components["schemas"]["PathsEvent"] | components["schemas"]["ReplicationPlanEvent"] | components["schemas"]["LinkCheckEvent"] | components["schemas"]["ReplicationResultEvent"] | components["schemas"]["ReplicationVerifyEvent"] | components["schemas"]["FailoverStartEvent"] | components["schemas"]["FailoverEvent"] | components["schemas"]["SnapshotPlanEvent"] | components["schemas"]["SnapshotResultEvent"] | components["schemas"]["SnapshotVerifyEvent"] | components["schemas"]["DeviceEvent"] | components["schemas"]["RetrustEvent"])[];
+            events: (components["schemas"]["PlainEvent"] | components["schemas"]["VerifyEvent"] | components["schemas"]["AsBuiltResultEvent"] | components["schemas"]["DiscoveryEvent"] | components["schemas"]["ZoningCheckEvent"] | components["schemas"]["ZoningPlanEvent"] | components["schemas"]["ZoningRenderedEvent"] | components["schemas"]["ZoningApplyEvent"] | components["schemas"]["PortsEvent"] | components["schemas"]["StoragePlanEvent"] | components["schemas"]["StorageResultEvent"] | components["schemas"]["PathsEvent"] | components["schemas"]["ReplicationPlanEvent"] | components["schemas"]["LinkCheckEvent"] | components["schemas"]["ReplicationResultEvent"] | components["schemas"]["ReplicationVerifyEvent"] | components["schemas"]["FailoverStartEvent"] | components["schemas"]["FailoverEvent"] | components["schemas"]["SnapshotPlanEvent"] | components["schemas"]["SnapshotResultEvent"] | components["schemas"]["SnapshotVerifyEvent"] | components["schemas"]["DeviceEvent"] | components["schemas"]["RetrustEvent"])[];
         };
         /** RunFromSheetRequest */
         RunFromSheetRequest: {
@@ -5444,6 +5526,55 @@ export interface components {
             /** Switch Host */
             switch_host: string;
         };
+        /** ZoningApplyData */
+        ZoningApplyData: {
+            result: components["schemas"]["ZoningApplyResult"];
+        };
+        /** ZoningApplyEvent */
+        ZoningApplyEvent: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at?: string;
+            data: components["schemas"]["ZoningApplyData"];
+            /** Event Id */
+            event_id?: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            event_type: "zoning.applied" | "zoning.apply.failed";
+            /** Message */
+            message: string;
+            phase: components["schemas"]["WorkflowPhase"];
+            /** Run Id */
+            run_id: string;
+        };
+        /**
+         * ZoningApplyRequest
+         * @description `approved_plan` is the `apply_plan_id` from `/zoning/render` that the operator ticked (ADR 0033).
+         *     The server refuses the apply without it, or when it does not match the held plan.
+         */
+        ZoningApplyRequest: {
+            /** Approved Plan */
+            approved_plan?: string | null;
+        };
+        /**
+         * ZoningApplyResult
+         * @description Outcome of opt-in Brocade FOS zoning apply across fabrics.
+         */
+        ZoningApplyResult: {
+            /** Error */
+            error?: string | null;
+            /** Fabrics */
+            fabrics?: components["schemas"]["FabricZoningApplyResult"][];
+            /**
+             * Plan Id
+             * @default
+             */
+            plan_id: string;
+        };
         /** ZoningCheckData */
         ZoningCheckData: {
             report: components["schemas"]["ZoningReport"];
@@ -5470,9 +5601,27 @@ export interface components {
             run_id: string;
         };
         /**
+         * ZoningCommandOutcome
+         * @description Outcome of one Brocade FOS write command sent during opt-in switch apply.
+         */
+        ZoningCommandOutcome: {
+            /** Command */
+            command: string;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "created" | "failed" | "aborted";
+        };
+        /**
          * ZoningPlan
          * @description The read-only assisted zoning plan (ADR 0004): per-fabric host↔array SIST pairs + aliases, for
-         *     the operator to name and the SAN team to apply. The tool never writes to the switch.
+         *     the operator to name and either copy-paste or apply via the opt-in Brocade apply path (ADR 0033).
          */
         "ZoningPlan-Input": {
             /** Active Zones */
@@ -5493,7 +5642,7 @@ export interface components {
         /**
          * ZoningPlan
          * @description The read-only assisted zoning plan (ADR 0004): per-fabric host↔array SIST pairs + aliases, for
-         *     the operator to name and the SAN team to apply. The tool never writes to the switch.
+         *     the operator to name and either copy-paste or apply via the opt-in Brocade apply path (ADR 0033).
          */
         "ZoningPlan-Output": {
             /** Error */
@@ -5561,6 +5710,10 @@ export interface components {
         };
         /** ZoningRenderResponse */
         ZoningRenderResponse: {
+            /** Apply Fabrics */
+            apply_fabrics?: components["schemas"]["FabricZoningApplyPlan"][];
+            /** Apply Plan Id */
+            apply_plan_id?: string | null;
             /** Commands */
             commands: {
                 [key: string]: string[];
@@ -5597,6 +5750,10 @@ export interface components {
             aliases: {
                 [key: string]: string;
             };
+            /** Apply Fabrics */
+            apply_fabrics?: components["schemas"]["FabricZoningApplyPlan"][];
+            /** Apply Plan Id */
+            apply_plan_id?: string | null;
             /** Commands */
             commands: {
                 [key: string]: string[];
@@ -7347,6 +7504,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["VerifyStepRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_zoning_apply_runs__run_id__zoning_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ZoningApplyRequest"] | null;
             };
         };
         responses: {
